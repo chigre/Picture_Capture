@@ -233,3 +233,26 @@ def test_phase6d_core_detect_entries_exposes_optional_left_edge_hook() -> None:
     signature = inspect.signature(processing._core.detect_entries)
     assert "left_edge_detector" in signature.parameters
     assert signature.parameters["left_edge_detector"].default is None
+
+
+def test_opt_in_unified_debug_trace_never_changes_real_ordinary_lines(monkeypatch) -> None:
+    """Full facade's production Entry list is identical with diagnostics on."""
+    understanding = _understanding(["body", "entry", "body", "entry"])
+    vb_calls: list[int] = []
+    _patch_ordinary_dependencies(monkeypatch, understanding, vb_calls=vb_calls)
+    image = Image.new("RGB", (800, 1000), "white")
+    settings = AppSettings(detection_method="left_edge")
+    normal, _ = processing.detect_entries(image, settings)
+    stages: dict = {}
+    audited, _ = processing.detect_entries(image, settings, debug_trace=stages)
+
+    def output(rows):
+        return [(item.x, item.y, item.ocr_source, item.issue_type)
+                for item in rows]
+
+    assert output(normal) == output(audited)
+    assert [entry.y for entry in audited] == [150, 210]
+    assert stages["stages"][0]["stage"] == "layout_role_materialization"
+    assert stages["stages"][-1]["stage"] == "final_reading_order"
+    assert output(normal) == output(audited)
+    assert vb_calls == []

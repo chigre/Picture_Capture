@@ -11443,7 +11443,11 @@ class PictureCaptureApp(tk.Tk):
             # Lens always follows the active headword OCR language, including
             # old projects that still carry a historical independent value.
             self.settings.paddle_lens_language = current_ocr_language
-            for name, var in self.quick_bool_vars.items(): setattr(self.settings, name, bool(var.get()))
+            # Diagnostic view flags live only in the UI; never attempt to
+            # persist an ad-hoc BooleanVar onto the slotted AppSettings model.
+            for name, var in self.quick_bool_vars.items():
+                if hasattr(self.settings, name):
+                    setattr(self.settings, name, bool(var.get()))
             for name, var in getattr(self, "quick_color_vars", {}).items():
                 value = str(var.get()).strip()
                 if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):

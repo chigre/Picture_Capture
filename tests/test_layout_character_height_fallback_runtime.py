@@ -100,6 +100,32 @@ def test_static_fallback_updates_only_character_height_and_method_provenance() -
     image.close()
 
 
+def test_multiple_fusion_fallbacks_still_trigger_observed_height() -> None:
+    # Real XDHYCD Layout diagnostics contained
+    # reliable_fusion+paddle+projection_fallback+...+fallback=gutter,character_height.
+    # Previously the literal substring fallback=character_height was missing.
+    image = _dense_rows_image()
+    raw = _fallback_estimate(
+        character_height=37,
+        method="reliable_fusion+paddle+projection_fallback+separator_anchor"
+               "+fallback=gutter,character_height",
+    )
+    updated = apply_character_height_fallback(
+        image, SimpleNamespace(), raw, _Backend,
+    )
+    assert updated.character_height == 58
+    assert "+observed_character_height=58(" in updated.method
+    assert raw.character_height == 37
+    image.close()
+
+
+def test_unrelated_multiple_fallbacks_do_not_change_estimate() -> None:
+    image = _dense_rows_image()
+    raw = _fallback_estimate(method="reliable_fusion+paddle+fallback=gutter,start_y")
+    assert apply_character_height_fallback(image, SimpleNamespace(), raw, _Backend) is raw
+    image.close()
+
+
 def test_static_fallback_leaves_non_fallback_estimate_by_identity() -> None:
     image = Image.new("RGB", (32, 32), "white")
     raw = _fallback_estimate(method="paddle")

@@ -90,10 +90,18 @@ def _line_family_candidate(
     runs = ops.line_runs(strip, reference)
     lines: list[base.LayoutLine] = []
     previous_end = 0
+    physical_projection = (
+        getattr(ops.line_runs, "__name__", "") == "projection_line_runs"
+    )
+    min_ratio = 0.26 if physical_projection else 0.45
+    max_ratio = 1.90 if physical_projection else 1.55
     for y0, y1 in runs:
         line = ops.line_feature(0, strip, y0, y1, reference, previous_end)
         previous_end = max(previous_end, y1)
-        if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
+        if (
+            line is not None
+            and reference * min_ratio <= line.height <= reference * max_ratio
+        ):
             lines.append(line)
     if len(lines) < 4:
         return None

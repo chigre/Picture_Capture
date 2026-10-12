@@ -241,6 +241,25 @@ def _refine_column_geometry(
     if rules.size:
         body[:, rules] = False
 
+    # A page-wide X histogram does not recognize tilted dividers because each
+    # X position sees the line only over part of its length. Suppress the
+    # persistent *moving* stroke inside the inter-column gutter as well, so
+    # it cannot redefine the next column's text start.
+    if len(starts) >= 2:
+        from .layout_gutter_rule import gutter_divider_right_edge
+        for index in range(1, len(starts)):
+            corridor_left = max(0, int(rights[index - 1]) + 1)
+            semantic_left = int(starts[index])
+            guarded = gutter_divider_right_edge(
+                page_ink,
+                body_top=top, body_bottom=bottom,
+                corridor_left=corridor_left,
+                corridor_right=semantic_left - max(2, round(reference * .12)),
+                reference=reference,
+            )
+            if guarded is not None:
+                body[:, corridor_left:min(semantic_left, guarded)] = False
+
     refined = list(starts)
     for index in range(len(starts)):
         if index == 0:
@@ -728,6 +747,15 @@ def infer_dictionary_page_layout(
     strips, raw_runs = column_strips(reference)
 
     indent_type = _indent_type(settings)
+    # The Physical Layout projector intentionally retains real row bands up
+    # to 1.90× the height prior. Rejecting them downstream at 1.55× silently
+    # drops most rows in dense small-print CJK scans (XDHYCD C2 had 17 rows
+    # out of ~100). Keep the producer/consumer height contract consistent.
+    physical_projection = (
+        getattr(resolved_ops.line_runs, "__name__", "") == "projection_line_runs"
+    )
+    min_height_ratio = 0.26 if physical_projection else 0.45
+    max_height_ratio = 1.90 if physical_projection else 1.55
     columns: list[ColumnDesign] = []
     for index, (left, right, gutter, strip, runs) in enumerate(
         zip(starts, rights, gutters, strips, raw_runs)
@@ -737,7 +765,10 @@ def infer_dictionary_page_layout(
         for y0, y1 in runs:
             line = resolved_ops.line_feature(index, strip, y0, y1, reference, previous_end)
             previous_end = max(previous_end, y1)
-            if line is not None and reference * 0.45 <= line.height <= reference * 1.55:
+            if (
+                line is not None
+                and reference * min_height_ratio <= line.height <= reference * max_height_ratio
+            ):
                 column.lines.append(line)
         column.indent_modes = resolved_ops.indent_modes(column.lines, reference)
         resolved_ops.assign_indent_semantics(column, indent_type, reference)

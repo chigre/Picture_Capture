@@ -125,7 +125,24 @@ def apply_character_height_fallback(
 ) -> Any:
     """Apply the established fallback correction without mutating raw estimates."""
     method = str(getattr(estimate, "method", "") or "")
-    if "fallback=character_height" not in method:
+    # Reliability fusion can serialize several fallbacks in a single segment,
+    # e.g. "fallback=gutter,character_height". A substring check for
+    # "fallback=character_height" silently skipped the observed-height repair.
+    fallback_fields = {
+        field.strip()
+        for segment in method.split("+")
+        if segment.startswith("fallback=")
+        for field in segment.partition("=")[2].split(",")
+    }
+    # A projection-only page has no independent Paddle character-height
+    # measurement, even though its method carries no "fallback=..." token.
+    # Otherwise the old 0.8%-of-page-height guess could still enter per-page
+    # auto layout unchanged when Paddle is unavailable.
+    projection_only = (
+        method.startswith("reliable_fusion+projection_only")
+        or method == "projection_fallback"
+    )
+    if "character_height" not in fallback_fields and not projection_only:
         return estimate
 
     observed, stats = observed_character_height(

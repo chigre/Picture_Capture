@@ -22,6 +22,7 @@ build_core_services()
 
 from picture_capture.formats import pdic_path, read_pdic
 from picture_capture.models import Entry, ProjectState
+from picture_capture.ordered_marker_matching import match_ordered_markers
 from picture_capture.page_sections import read_page_sections
 from picture_capture.performance_metrics import timing_summary_ms
 from picture_capture.processing import Geometry, column_index_for_click, detect_entries
@@ -55,15 +56,10 @@ def match_markers(
             delta = abs(pv - rv)
             if delta <= tolerance:
                 edges.append((delta, pi, ri))
-    edges.sort()
-
-    used_p: set[int] = set()
-    used_r: set[int] = set()
-    deltas: list[int] = []
-    for delta, pi, ri in edges:
-        if pi in used_p or ri in used_r:
-            continue
-        used_p.add(pi); used_r.add(ri); deltas.append(delta)
+    # Maximize real TP before minimizing Y error; greedy nearest-first can
+    # steal the only possible partner of a neighboring genuine headword.
+    pairs = match_ordered_markers(len(pred), len(ref), edges)
+    deltas = [abs(pred[pi][1] - ref[ri][1]) for pi, ri in pairs]
 
     tp = len(deltas)
     fp = len(pred) - tp
@@ -76,6 +72,9 @@ def match_markers(
         "predicted": len(pred),
         "reference": len(ref),
         "matched": tp,
+        "matching_algorithm": "ordered_max_cardinality_min_delta_v1",
+        "unmatched_predicted": [pred[i] for i in range(len(pred)) if i not in {p for p, _ in pairs}],
+        "unmatched_reference": [ref[i] for i in range(len(ref)) if i not in {q for _, q in pairs}],
         "false_positive": fp,
         "false_negative": fn,
         "precision": round(precision, 6),

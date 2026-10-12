@@ -73,11 +73,20 @@ def strict_candidate_starts_at_row_front(
         left_limit = target - reference * 0.35
         right_limit = target + reference * 0.85
 
-    if not (left_limit <= float(x0) <= right_limit):
-        return False
-
     height = max(0.0, float(y1) - float(box[1]))
     width = max(1.0, float(x1) - float(x0))
+    # Some multi-line large glyphs have an anchor_x on adjacent phonetic/
+    # definition ink, well to the right of their real first black pixel.
+    # Only a strong, nearly square glyph physically aligned with first_x may
+    # fall back from the anchor. Smaller/tall definition objects may not.
+    first_ink_large_square = (
+        height / reference >= 2.0
+        and 0.80 <= width / max(1.0, height) <= 1.20
+        and abs(float(x0) - first_x) <= reference * 0.35
+    )
+    if not (left_limit <= float(x0) <= right_limit) and not first_ink_large_square:
+        return False
+
     role = str(getattr(nearest, "role", "body") or "body").lower()
 
     # Existing entry rows do not create overdraw, so they may retain the base
@@ -90,7 +99,18 @@ def strict_candidate_starts_at_row_front(
         # Reject horizontal multi-character merges. A single CJK display glyph
         # may be broad, but a box much wider than its height is usually body text
         # or underline-connected fragments rather than one oversized head.
-        if width > reference * 2.25:
+        # Typical wide body runs must still fail. But a *very tall*, nearly
+        # square printed CJK head may be wider than 2.25 normal row-heights:
+        # page 2606 has a real 170x151px head with a 67px body reference.
+        # The historical absolute width bound rejected it despite clean
+        # row-front alignment and a 2.25x height signal.
+        normal_width = reference * 2.25
+        square_display_head = (
+            ratio >= 2.0
+            and 0.80 <= width / height <= 1.20
+            and width <= reference * 2.80
+        )
+        if width > normal_width and not square_display_head:
             return False
         if height / width < 0.60:
             return False

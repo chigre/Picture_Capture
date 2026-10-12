@@ -555,9 +555,11 @@ def infer_layout_from_boxes(
     start_y_source = body_top
     bottom_y_source = body_bottom
     character_height_source = max(1, round(float(np.median([box[3] - box[1] for box in filtered]))))
-    ordered_tops = sorted({box[1] for box in filtered})
-    top_steps = [b - a for a, b in zip(ordered_tops, ordered_tops[1:]) if b - a > character_height_source * 0.5]
-    row_padding_source = max(1, round((float(np.median(top_steps)) - character_height_source) / 2)) if top_steps else 1
+    from .layout_textbox_leading import estimate_row_padding_from_boxes
+    measured_padding, pitch_pairs = estimate_row_padding_from_boxes(
+        groups, character_height_source,
+    )
+    row_padding_source = measured_padding if measured_padding is not None else 1
     scale = max(0.01, float(display_scale))
     return LayoutEstimate(
         columns=len(starts),
@@ -569,7 +571,10 @@ def infer_layout_from_boxes(
         character_height=max(1, round(character_height_source * scale)),
         row_padding=max(1, round(row_padding_source * scale)),
         source_boxes=len(filtered),
-        method="paddle",
+        method=(
+            f"paddle+observed_row_padding={row_padding_source}(n={pitch_pairs})"
+            if measured_padding is not None else "paddle+unverified_row_padding"
+        ),
         separator_x=(round(float(np.median(separators)) * scale) if separators else None),
         canonical_width=int(width),
         column_starts=tuple(max(0, round(start * scale)) for start in starts),
@@ -754,6 +759,19 @@ def _projection_layout_estimate(source: Image.Image, settings: AppSettings) -> L
         widths[-1] = int(round(float(np.median(stable))))
 
     separator_centers: list[int] = []
+    if settings.layout_columns_policy != "fixed" and len(starts) > 1:
+        # Profile bootstrap always uses "detect". Previously separator_centers
+        # was only filled in the fixed-column branch below, so a ruled page
+        # could never produce separator_x during initial Profile analysis.
+        # Reuse the existing conservative pixel-evidence detector; unknown
+        # separator evidence is not equivalent to a declared absent rule.
+        for left, right in zip(starts, starts[1:]):
+            divider = _detect_persistent_vertical_rule(
+                ink, left, right, body_top, body_bottom,
+                settings.layout_column_separator_mode,
+            )
+            if divider is not None:
+                separator_centers.append(divider.center)
     if settings.layout_columns_policy == "fixed":
         count = max(1, min(12, int(settings.columns)))
         span = max(10.0, (page_right - page_left) / count)

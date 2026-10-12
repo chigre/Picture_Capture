@@ -32,6 +32,7 @@ def test_static_layout_draw_temporarily_unhides_and_restores(monkeypatch) -> Non
     seen = []
     app = SimpleNamespace(
         _layout_visualization_var=_Var(True),
+        _layout_display_density_var=_Var("详细"),
         hide_var=_Var(True),
     )
 

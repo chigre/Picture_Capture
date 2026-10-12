@@ -250,6 +250,76 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     denoise.pack(side="left", padx=0, pady=0)
     denoise.bind("<<ComboboxSelected>>", apply_denoise)
 
+    # Compact is the default: no long method text or yellow indentation
+    # blocks on top of the scanned dictionary.
+    row = line()
+    label(row, "Layout叠加")
+    from picture_capture.layout_visualization_ui_v3 import LAYOUT_DISPLAY_MODES
+    density = ttk.Combobox(
+        row, textvariable=app._layout_display_density_var,
+        values=LAYOUT_DISPLAY_MODES, state="readonly",
+        width=9, style="PC.Display.TCombobox",
+    )
+    density.pack(side="left", padx=(4, 0), pady=0)
+    from picture_capture.layout_visualization_ui_v3 import on_layout_density_change
+    density.bind(
+        "<<ComboboxSelected>>",
+        lambda _event: on_layout_density_change(app),
+    )
+
+    # Keep this diagnostic switch in the *actual* 280px display palette.
+    # The original quick-settings container is hidden in compact mode.
+    # Never add this session-only state to quick_bool_vars or AppSettings.
+    row = line()
+    large_var = app._large_head_visualization_var
+
+    def toggle_large_heads() -> None:
+        app._large_head_debug_snapshot_key = None
+        app._large_head_debug_snapshot = None
+        app.redraw()
+
+    check(row, "显示大字头检测", large_var, toggle_large_heads)
+
+    # Long Layout parameters are in a copyable dialog, never on the scan.
+    row = line()
+    from picture_capture.layout_details_window import show_layout_details_window
+    ttk.Button(
+        row, text="Layout详细诊断（复制）",
+        command=lambda: show_layout_details_window(app),
+    ).pack(side="left", padx=0, pady=0)
+
+    # Accessible inspector: do not rely on tiny painted canvas markers to
+    # discover a full candidate registry.
+    row = line()
+
+    def open_layout_inspector() -> None:
+        from picture_capture.ordinary_layout_inspector import show_unified_layout_inspector
+        show_unified_layout_inspector(app)
+
+    ttk.Button(
+        row, text="查看Layout候选/异常", command=open_layout_inspector,
+    ).pack(side="left", padx=0, pady=0)
+
+    # Both overlay modes export the *same* candidate evidence registry.
+    # Keep the action available even when the large-head overlay is off.
+    row = line()
+    def export_unified_layout() -> None:
+        from picture_capture.large_head_visualization_ui import export_large_head_debug_json
+        export_large_head_debug_json(app)
+
+    ttk.Button(
+        row, text="导出统一Layout诊断 JSON", command=export_unified_layout,
+    ).pack(side="left", padx=0, pady=0)
+
+    row = line()
+    def compare_unified_layout() -> None:
+        from picture_capture.large_head_visualization_ui import compare_large_head_debug_json
+        compare_large_head_debug_json(app)
+
+    ttk.Button(
+        row, text="对比旧诊断 JSON", command=compare_unified_layout,
+    ).pack(side="left", padx=0, pady=0)
+
     row = line()
     label(row, "切图预览标签:")
     font_style(row, "crop_preview_font_size",

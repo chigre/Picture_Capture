@@ -28,7 +28,7 @@ from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
 from .ordinary_postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
-from .page_understanding import PageUnderstanding, uses_cjk_role_model
+from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .page_understanding_fusion import apply_page_understanding
 from .profile_indent_ui import indent_type_label
 from .separator_y_refinement import refined_layout_entry_y_by_line
@@ -460,6 +460,39 @@ def _shared_detector_observations(
     return [], geometry, []
 
 
+def _record_ordinary_debug_stage(
+    trace: dict[str, Any] | None,
+    stage: str,
+    entries: list[Entry],
+    **details: Any,
+) -> None:
+    """Snapshot each materialized marker at the actual production seam.
+
+    Enabled ONLY for a user-initiated read-only diagnostic run. Never writes
+    project files, mutates role objects or changes detection decisions.
+    """
+    if trace is None:
+        return
+    rows = [{
+        "x": int(item.x), "y": int(item.y),
+        "source": str(getattr(item, "ocr_source", "") or ""),
+        "issue_type": str(getattr(item, "issue_type", "") or ""),
+        "oversized": bool(getattr(item, "ocr_oversized_cjk", False)),
+    } for item in entries]
+    stages = trace.setdefault("stages", [])
+    current_keys = {(item["x"], item["y"]) for item in rows}
+    previous = stages[-1]["entries"] if stages else []
+    previous_keys = {(item["x"], item["y"]) for item in previous}
+    stages.append({
+        "stage": stage, "count": len(rows), "entries": rows,
+        "added": [item for item in rows
+                  if (item["x"], item["y"]) not in previous_keys],
+        "removed": [item for item in previous
+                    if (item["x"], item["y"]) not in current_keys],
+        **details,
+    })
+
+
 def detect_entries(
     image: Image.Image,
     settings: AppSettings,
@@ -468,6 +501,7 @@ def detect_entries(
     paddle_filter_rules_path: Path | None = None,
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
+    debug_trace: dict[str, Any] | None = None,
 ) -> tuple[list[Entry], Any]:
     """Detect entries using shared denoised page analysis.
 
@@ -503,6 +537,9 @@ def detect_entries(
                 analysis_image,
                 page_index=profile_page_index,
             )
+            _record_ordinary_debug_stage(
+                debug_trace, "layout_role_materialization", entries,
+            )
             # Large ideographs may generate several spurious Layout entry
             # rows inside one glyph; veto only image-confirmed duplicates.
             if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
@@ -514,17 +551,56 @@ def detect_entries(
                     [int(column.right - column.left) for column in columns],
                     float(understanding.layout.ordinary_line_height),
                 )
+                _record_ordinary_debug_stage(
+                    debug_trace, "oversized_fragment_veto", entries,
+                )
+            # A page's printed large heads may sit one row above the Y
+            # assigned by dense body-row projection. Correct only when
+            # independent source-image ink gaps support a coherent page shift.
             if (
                 uses_cjk_role_model(effective)
-                and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
                 and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
+            ):
+                from .ordinary_crossing_separator import adjust_page_coherent_crossing_separators
+                entries, _visual_y_shift = adjust_page_coherent_crossing_separators(
+                    entries, analysis_image,
+                    float(understanding.layout.ordinary_line_height),
+                )
+                _record_ordinary_debug_stage(
+                    debug_trace, "coherent_separator_y_refinement", entries,
+                    shift=_visual_y_shift,
+                )
+            if (
+                uses_cjk_script(effective)
+                and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
             ):
                 from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
                 layout = understanding.layout
-                entries = recover_bracketed_ordinary_entries(
-                    entries, analysis_image, layout.columns,
-                    int(layout.body_top), int(layout.body_bottom),
-                    float(layout.ordinary_line_height),
+                rotated = str(getattr(layout.transform, "kind", "identity")) != "identity"
+                bracket_image = (
+                    layout.transform.canonical_image_for_analysis(analysis_image)
+                    if rotated else analysis_image
+                )
+                try:
+                    entries = recover_bracketed_ordinary_entries(
+                        entries, bracket_image, layout.columns,
+                        int(layout.body_top), int(layout.body_bottom),
+                        float(layout.ordinary_line_height),
+                        transform=layout.transform, source_size=layout.source_size,
+                    )
+                finally:
+                    if rotated:
+                        bracket_image.close()
+                _record_ordinary_debug_stage(
+                    debug_trace, "bracketed_headword_recovery", entries,
+                )
+            # Keep proven lemma-indentation evidence from a second physical
+            # analyzer when the primary normalization lost an entire column.
+            if not uses_cjk_role_model(effective):
+                from .ordinary_independent_indent_rescue import recover_depleted_indent_columns
+                entries = recover_depleted_indent_columns(
+                    analysis_image, effective, understanding, entries,
+                    page_index=profile_page_index,
                 )
             entries = _allowed_entries(
                 entries,
@@ -534,9 +610,58 @@ def detect_entries(
                 profile_page_index,
                 page_sections,
             )
-            return _core.sort_entries_reading_order(
+            _record_ordinary_debug_stage(
+                debug_trace, "page_template_section_filter", entries,
+            )
+            # The final separator Y differs from the raw physical LayoutLine.y0.
+            # Check an anomalous CJK page at its *actual* emitted coordinates;
+            # the earlier indent-mode detector cannot independently veto itself.
+            from .ordinary_final_visual_consistency import correct_anomalous_final_ordinary_entries
+            entries, last_mile = correct_anomalous_final_ordinary_entries(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "anomalous_final_visual_consistency", entries,
+                stats=dict(last_mile),
+            )
+            from .ordinary_final_visual_consistency import suppress_proven_bracket_body_continuations
+            entries, bracket_body_removed = suppress_proven_bracket_body_continuations(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "proven_bracket_body_continuation", entries,
+                removed_details=bracket_body_removed,
+            )
+            if bracket_body_removed:
+                understanding.layout.reason += (
+                    f"; bracket_body_continuations_removed={len(bracket_body_removed)}"
+                )
+            from .ordinary_final_visual_consistency import suppress_blank_layout_rows_before_proven_head
+            entries, removed_blank = suppress_blank_layout_rows_before_proven_head(
+                analysis_image, effective, understanding.layout, entries,
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "blank_before_proven_head", entries,
+                removed_blank=int(removed_blank),
+            )
+            if removed_blank:
+                understanding.layout.reason += (
+                    f"; final_blank_before_proven={removed_blank}"
+                )
+            if last_mile["repaired_columns"]:
+                understanding.layout.reason += (
+                    f"; final_visual_repaired={last_mile['repaired_columns']}"
+                    f" final_visual_rejected={last_mile['removed_false_entries']}"
+                    f" final_visual_glyph_fragments={last_mile['removed_glyph_fragments']}"
+                    f" final_visual_heads_added={last_mile['added_verified_heads']}"
+                )
+            sorted_entries = _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
-            ), geometry
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "final_reading_order", sorted_entries,
+            )
+            return sorted_entries, geometry
 
         return _ordinary_vb_fallback(
             analysis_image,

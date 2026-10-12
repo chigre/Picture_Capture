@@ -279,22 +279,100 @@ def _suppress_large_evidence_duplicate_entries(
     return removed
 
 
+def _debug_layout_role_snapshot(layout: Any) -> dict[int, dict[str, Any]]:
+    """Role and provenance of each physical row; diagnostics only."""
+    from .entry_classification import get_layout_line_classification
+
+    snapshot: dict[int, dict[str, Any]] = {}
+    for index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
+        for line in list(getattr(column, "lines", ()) or ()):
+            snapshot[id(line)] = {
+                "column": index,
+                "canonical_y": int(layout.body_top) + int(line.y0),
+                "role": str(getattr(line, "role", "") or ""),
+                "source": str(get_layout_line_classification(line).entry_source),
+            }
+    return snapshot
+
+
+def _debug_role_changes(
+    previous: dict[int, dict[str, Any]],
+    current: dict[int, dict[str, Any]],
+    stage: str,
+) -> list[dict[str, Any]]:
+    changes = []
+    for row_id, after in current.items():
+        before = previous.get(row_id)
+        if before is None:
+            changes.append({"stage": stage, "before": None, "after": after})
+        elif (
+            before["role"] != after["role"]
+            or before["source"] != after["source"]
+        ):
+            changes.append({
+                "stage": stage,
+                "before": before,
+                "after": after,
+            })
+    return changes
+
+
 def _apply_universal_ordinary_evidence(
     image: Image.Image,
     understanding: PageUnderstanding,
     settings: AppSettings,
+    *,
+    large_head_diagnostics: list[dict[str, Any]] | None = None,
+    large_head_debug_context: dict[str, Any] | None = None,
 ) -> tuple[int, int]:
     """OR-promote sampled-symbol and oversized-head evidence onto Layout rows."""
     symbol_entries = detect_ordinary_symbol_entries(image, understanding, settings)
-    large_entries = detect_ordinary_large_head_entries(image, understanding, settings)
+    large_entries = detect_ordinary_large_head_entries(
+        image, understanding, settings, diagnostics=large_head_diagnostics,
+    )
+    prior = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if large_head_debug_context is not None else None
+    )
     symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
+    after_symbol = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if prior is not None else None
+    )
     large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
+    after_large = (
+        _debug_layout_role_snapshot(understanding.layout)
+        if prior is not None else None
+    )
     # First retain the historical display-head safeguard, then consume the
     # current large-head evidence itself.  The latter closes the gap where the
     # newer detector sees a 2-3-row display glyph but layout.display_heads does
     # not cover its full vertical extent.
     _suppress_display_head_duplicate_entries(understanding.layout)
     _suppress_large_evidence_duplicate_entries(understanding.layout, large_entries)
+    if large_head_debug_context is not None:
+        final = _debug_layout_role_snapshot(understanding.layout)
+        large_head_debug_context["role_transitions"] = (
+            _debug_role_changes(prior or {}, after_symbol or {}, "symbol_evidence")
+            + _debug_role_changes(after_symbol or {}, after_large or {}, "large_head_fusion")
+            + _debug_role_changes(after_large or {}, final, "large_head_dedup")
+        )
+        large_head_debug_context["promotion_counts"] = {
+            "symbol_promoted": int(symbol_promoted),
+            "large_head_promoted": int(large_promoted),
+        }
+        large_head_debug_context["role_counts"] = {
+            stage: {
+                role: sum(row["role"] == role for row in snapshot.values())
+                for role in ("entry", "body", "unknown")
+            }
+            for stage, snapshot in (
+                ("before_symbol", prior or {}),
+                ("after_symbol", after_symbol or {}),
+                ("after_large", after_large or {}),
+                ("after_dedup", final),
+            )
+        }
     return symbol_promoted, large_promoted
 
 
@@ -314,17 +392,24 @@ def understand_layout_core(
     settings: AppSettings,
     *,
     page_index: int = 0,
+    large_head_diagnostics: list[dict[str, Any]] | None = None,
+    large_head_debug_context: dict[str, Any] | None = None,
 ) -> PageUnderstanding:
-    """Return physical Layout + final universal ordinary-mode line roles."""
+    """Return Layout roles, optionally tracing the *production* detector stage.
+
+    Debug traces bypass shared Layout caching and capture publication. An
+    isolated diagnostic run never mutates the normal cached Layout objects.
+    """
     key = (
         _image_fingerprint(image),
         _settings_fingerprint(settings),
         int(page_index),
     )
-    cached = _LAYOUT_CACHE.get(key)
-    if cached is not None:
-        _LAYOUT_CACHE.move_to_end(key)
-        return _publish_captured_result(cached, page_index)
+    if large_head_diagnostics is None and large_head_debug_context is None:
+        cached = _LAYOUT_CACHE.get(key)
+        if cached is not None:
+            _LAYOUT_CACHE.move_to_end(key)
+            return _publish_captured_result(cached, page_index)
 
     layout, page_settings, applied = infer_dictionary_page_layout(
         image,
@@ -334,6 +419,17 @@ def understand_layout_core(
     _apply_explicit_indent_semantics(layout, page_settings)
     normalize_layout_roles(layout)
     _resolve_directional_body_lanes(layout)
+    from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
+    visual_role_check = suppress_contradictory_cjk_body_lane_entries(
+        image, page_settings, layout,
+    )
+    # Keep the visible Layout and downstream ordinary drawings consistent:
+    # repair a near-empty indent family only when independently printed glyphs
+    # or a separate geometric Page Design pass proves real entry starts.
+    from .layout_column_indent_recovery import restore_proven_column_indents
+    restored_indents = restore_proven_column_indents(
+        image, page_settings, layout, page_index=int(page_index),
+    )
 
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
@@ -361,7 +457,22 @@ def understand_layout_core(
         image,
         result,
         page_settings,
+        large_head_diagnostics=large_head_diagnostics,
+        large_head_debug_context=large_head_debug_context,
     )
+    from .layout_verified_oversized_heads import recover_verified_oversized_heads
+    verified_heads = (
+        recover_verified_oversized_heads(
+            image, layout, visual_role_check["repaired_indices"],
+        )
+        if bool(getattr(page_settings, "profile_cjk_allow_single_headword", True))
+        else {"verified_glyphs": 0, "promoted_heads": 0, "demoted_fragments": 0}
+    )
+    # Keep a separate immutable record of why each final Layout role became an
+    # entry. Future confidence gates must be validated against real scans
+    # before changing this canonical ordinary-mode output.
+    from .boundary_evidence import proposed_layout_boundaries, serialize_proposals
+    result.boundary_proposals = serialize_proposals(proposed_layout_boundaries(result))
     layout.reason += (
         f"; page_understanding={role_model}:layout_core"
         f" physical_reliable={int(physical)}"
@@ -370,8 +481,17 @@ def understand_layout_core(
         f" indent_semantics={layout.indent_type}"
         f" ordinary_symbol_promoted={int(symbol_promoted)}"
         f" ordinary_large_head_promoted={int(large_promoted)}"
+        f" recovered_indent_columns={int(restored_indents['rescued_columns'])}"
+        f" recovered_indent_rows={int(restored_indents['rescued_rows'])}"
+        f" visual_body_lane_repaired={int(visual_role_check['repaired_columns'])}"
+        f" visual_body_lane_demoted={int(visual_role_check['demoted_rows'])}"
+        f" verified_oversized_glyphs={int(verified_heads['verified_glyphs'])}"
+        f" verified_oversized_promoted={int(verified_heads['promoted_heads'])}"
+        f" verified_oversized_demoted={int(verified_heads['demoted_fragments'])}"
     )
 
+    if large_head_diagnostics is not None or large_head_debug_context is not None:
+        return result
     _LAYOUT_CACHE[key] = result
     _LAYOUT_CACHE.move_to_end(key)
     while len(_LAYOUT_CACHE) > _CACHE_LIMIT:

@@ -263,24 +263,118 @@ def _split_stacked_heads(
     return output
 
 
+def _recover_oversized_front_lane(
+    ink: np.ndarray,
+    grouped: tuple[int, int, int, int],
+    line_height: float,
+) -> list[tuple[int, int, int, int]]:
+    """Rescue separate tall glyphs from an anomalously long/wide group.
+
+    Transitive fragment-neighbor grouping can link successive display heads
+    through adjacent brackets, phonetics and definition strokes. Split only
+    such rejected groups, using real blank horizontal bands inside a narrow
+    *leading single-glyph corridor*. Ordinary body glyphs do not pass the
+    unchanged single-head size filter, and the caller still applies the
+    original strict physical row-front authorization.
+    """
+    x0, y0, x1, y1 = grouped
+    reference = max(8.0, float(line_height))
+    # The first glyph has a finite width; do not let the bracket word or
+    # phonetic annotation hundreds of pixels farther right join its envelope.
+    strip_right = min(int(x1), int(x0) + max(16, round(reference * 3.40)))
+    if strip_right <= x0 or y1 <= y0:
+        return []
+    band = np.asarray(ink[y0:y1, x0:strip_right], dtype=bool)
+    if not band.size:
+        return []
+    active = np.flatnonzero(np.count_nonzero(band, axis=1) >= 2)
+    if active.size == 0:
+        return []
+
+    # Tiny blank gaps within a Han character must not split a radical into
+    # separate candidates. Printed spaces between consecutive headwords are
+    # much larger (~0.4 reference on the problematic dictionary page).
+    max_internal_gap = max(2, round(reference * 0.14))
+    ranges: list[tuple[int, int]] = []
+    start = last = int(active[0])
+    for at in active[1:]:
+        at = int(at)
+        if at - last > max_internal_gap + 1:
+            ranges.append((start, last + 1))
+            start = at
+        last = at
+    ranges.append((start, last + 1))
+
+    recovered: list[tuple[int, int, int, int]] = []
+    for start, end in ranges:
+        candidate = _trim_box_to_ink(
+            ink, (x0, y0 + start, strip_right, y0 + end),
+        )
+        if candidate is None:
+            continue
+        if _valid_single_head_box(ink, candidate, reference):
+            recovered.append(candidate)
+    return recovered
+
+
 def _candidate_boxes(
     ink: np.ndarray,
     line_height: float,
+    diagnostic_boxes: list[dict[str, Any]] | None = None,
 ) -> list[tuple[int, int, int, int]]:
     result: list[tuple[int, int, int, int]] = []
     for grouped in _group_fragments(_large_fragments(ink, line_height), line_height):
-        # A grouped region may contain two consecutive oversized heads. Permit a
-        # taller pre-split envelope, but only emit pieces that independently pass
-        # the original single-head geometry/density checks.
+        # A grouped region may contain successive oversized heads connected
+        # through their nearby text. Recover individual printed front glyphs
+        # *before* discarding the oversized envelope.
+        group_width = grouped[2] - grouped[0]
         group_height = grouped[3] - grouped[1]
-        if group_height > line_height * 7.20:
+        too_tall = group_height > line_height * 7.20
+        pieces = (
+            [] if too_tall else _split_stacked_heads(ink, grouped, line_height)
+        )
+        normal_valid = bool(
+            pieces and all(
+                _valid_single_head_box(ink, piece, line_height)
+                for piece in pieces
+            )
+        )
+        needs_recovery = too_tall or (
+            not normal_valid
+            and group_height >= line_height * 1.65
+            and group_width > line_height * 3.80
+        )
+        if needs_recovery:
+            recovered = _recover_oversized_front_lane(
+                ink, grouped, line_height,
+            )
+            if recovered:
+                if diagnostic_boxes is not None:
+                    diagnostic_boxes.append({
+                        "box": grouped, "reason": "split_parent",
+                        "recovered_count": len(recovered),
+                    })
+                    diagnostic_boxes.extend({
+                        "box": box, "reason": "geometry_pass",
+                        "parent": grouped,
+                    } for box in recovered)
+                result.extend(recovered)
+                continue
+        if too_tall:
+            if diagnostic_boxes is not None:
+                diagnostic_boxes.append({"box": grouped, "reason": "group_too_tall"})
             continue
-        pieces = _split_stacked_heads(ink, grouped, line_height)
         for box in pieces:
             trimmed = _trim_box_to_ink(ink, box)
             if trimmed is None:
                 continue
-            if not _valid_single_head_box(ink, trimmed, line_height):
+            valid = _valid_single_head_box(ink, trimmed, line_height)
+            if diagnostic_boxes is not None:
+                diagnostic_boxes.append({
+                    "box": trimmed,
+                    "reason": "geometry_pass" if valid else "size_or_density",
+                })
+            if not valid:
                 continue
             result.append(trimmed)
     return result
@@ -327,8 +421,15 @@ def detect_ordinary_large_head_entries(
     image: Image.Image,
     understanding: Any,
     settings: AppSettings,
+    *,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
-    """Detect only row-leading oversized CJK heads with a page-observed scale."""
+    """Detect row-leading oversized CJK heads; optional read-only candidate trace.
+
+    The default call path and emitted Entry list are unchanged. Diagnostics
+    records geometry/row-front/strong-evidence decisions before any Layout
+    role mutation; it is only populated when explicitly requested by the UI.
+    """
     from .layout_column_drift import _analysis_left_for_column
 
     if not _uses_cjk_large_heads(settings):
@@ -363,7 +464,60 @@ def detect_ordinary_large_head_entries(
             ink = gray <= _otsu(gray)
             local_shift = int(analysis_left - semantic_left)
 
-            for raw_box in _candidate_boxes(ink, line_height):
+            observed_boxes: list[dict[str, Any]] | None = (
+                [] if diagnostics is not None else None
+            )
+            candidates = _candidate_boxes(ink, line_height, observed_boxes)
+            if diagnostics is not None and observed_boxes is not None:
+                for observed in observed_boxes:
+                    x0, y0, x1, y1 = observed["box"]
+                    canonical_box = (
+                        analysis_left + int(x0), top + int(y0),
+                        analysis_left + int(x1), top + int(y1),
+                    )
+                    status = str(observed["reason"])
+                    if status == "geometry_pass":
+                        semantic_box = (
+                            int(x0 + local_shift), int(y0),
+                            int(x1 + local_shift), int(y1),
+                        )
+                        if not strict_candidate_starts_at_row_front(
+                            column, semantic_box, line_height,
+                        ):
+                            status = "rejected_row_front"
+                        elif float(y1-y0) / max(1.0, line_height) < 1.65:
+                            status = "rejected_weak"
+                        else:
+                            status = "accepted"
+                    record: dict[str, Any] = {
+                        "column": int(position),
+                        "canonical_box": canonical_box,
+                        "source_box": tuple(map(int,
+                            layout.transform.canonical_box_to_source(
+                                canonical_box, layout.source_size,
+                            ),
+                        )),
+                        "reference_height": round(float(line_height), 2),
+                        "height_ratio": round((y1-y0) / max(1.0, line_height), 3),
+                        "status": status,
+                        "detector_output": False,
+                    }
+                    if "recovered_count" in observed:
+                        record["recovered_count"] = int(observed["recovered_count"])
+                    if "parent" in observed:
+                        px0, py0, px1, py1 = observed["parent"]
+                        parent_canonical = (
+                            analysis_left + int(px0), top + int(py0),
+                            analysis_left + int(px1), top + int(py1),
+                        )
+                        record["parent_source_box"] = tuple(map(int,
+                            layout.transform.canonical_box_to_source(
+                                parent_canonical, layout.source_size,
+                            ),
+                        ))
+                    diagnostics.append(record)
+
+            for raw_box in candidates:
                 x0, y0, x1, y1 = raw_box
                 # Candidate X is local to the widened analysis band. Convert it
                 # back to semantic-column-local coordinates before comparing it
@@ -421,6 +575,27 @@ def detect_ordinary_large_head_entries(
         ):
             continue
         deduped.append(entry)
+    if diagnostics is not None:
+        # Provenance of what the detector actually returned after its own
+        # de-duplication. A weak size observation can be returned here yet
+        # subsequently rejected by strong_ordinary_large_head in role fusion.
+        for row in diagnostics:
+            if row["status"] not in {"accepted", "rejected_weak"}:
+                continue
+            box = row["source_box"]
+            for entry in deduped:
+                if (
+                    abs(int(entry.x) - int(layout.transform.canonical_to_source_point(
+                        layout.columns[int(row["column"])].left,
+                        row["canonical_box"][1], layout.source_size,
+                    )[0])) <= tolerance
+                    and abs(int(entry.y) - int(layout.transform.canonical_to_source_point(
+                        layout.columns[int(row["column"])].left,
+                        row["canonical_box"][1], layout.source_size,
+                    )[1])) <= tolerance
+                ):
+                    row["detector_output"] = True
+                    break
     return deduped
 
 

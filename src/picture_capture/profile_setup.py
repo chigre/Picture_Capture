@@ -22,7 +22,10 @@ from .dictionary_profile import (
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .image_utils import normalize_page_rgb
 from .layout_detection import aggregate_layout_estimates
-from .profile_layout_bootstrap import detect_profile_layout_parameters as detect_layout_parameters
+from .profile_layout_bootstrap import (
+    detect_profile_layout_parameters as detect_layout_parameters,
+    apply_profile_ink_height_suggestion,
+)
 from .models import AppSettings
 from .processing import derive_geometry, detect_entries
 from .profile_semantics import (
@@ -3016,8 +3019,6 @@ class ProjectProfileWizard(tk.Toplevel):
                 self.analysis_suggestion_var.set("代表页已更换，请重新分析当前代表页。")
                 self.apply_analysis_button.configure(state="disabled")
 
-            # A manual replacement changes exactly one representative-page
-            # slot. Do not rebuild or re-decode the other five thumbnails.
             self._start_sample_thumbnail_slot_load(slot)
 
             # The template preview is hidden while representative pages are
@@ -3154,14 +3155,16 @@ class ProjectProfileWizard(tk.Toplevel):
             self.apply_analysis_button.configure(state="disabled")
             return
         aggregate, consistency = aggregate_layout_estimates(estimates, columns_policy="detect")
-        separators = sum(1 for estimate in estimates if getattr(estimate, "separator_x", None) is not None)
-        separator = "present" if separators > len(estimates) / 2 else "absent"
+        height_note = apply_profile_ink_height_suggestion(aggregate, estimates)
+        separator = "present" if sum(
+            e.separator_x is not None for e in estimates
+        ) > len(estimates) / 2 else "auto"
         self._analysis_suggestion = {
             **{name: int(value) for name, value in aggregate.items()},
             "separator": separator,
         }
-        sep_text = "有中央分隔线" if separator == "present" else "无明确中央分隔线"
-        error_text = f"；{len(errors)} 页未参与" if errors else ""
+        sep_text = "有中央分隔线" if separator == "present" else "分隔线待判"
+        error_text = (f"；{len(errors)} 页未参与" if errors else "") + height_note
         self.analysis_suggestion_var.set(
             f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
         )

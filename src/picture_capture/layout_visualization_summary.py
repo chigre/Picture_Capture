@@ -19,7 +19,7 @@ from .layout_indent_visibility import (
 from .layout_lane_summary_extension import append_physical_lane_summary
 from .layout_role_provenance import add_entry_source_summary
 from .layout_visualization_readability import draw_layout_visualization_readable
-from .layout_visualization_ui import _snapshot_for_app
+from .layout_visualization_ui import _snapshot_for_app, draw_layout_visualization
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
@@ -147,6 +147,30 @@ def _format_summary(app: Any, snapshot: Any) -> str:
                 f"  {field}: used={used}   raw={raw}   {state}   switch={switch}"
             )
 
+    # This is the same read-only candidate registry used by the clickable
+    # Layout markers, large-head overlay and explicit JSON export.
+    try:
+        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        unified = get_large_head_debug_snapshot(app).get("unified_report", {})
+        review = unified.get("review_queue", [])
+        counts = unified.get("summary", {})
+        if unified:
+            lines.append(
+                "unified evidence: "
+                f"physical_rows={counts.get('physical_rows', 0)}   "
+                f"candidates={counts.get('candidates_total', 0)}   "
+                f"final_lines={counts.get('final_lines', 0)}   "
+                f"review={counts.get('review_items', 0)}"
+            )
+            lines.append("shadow=READ ONLY  （橙色!点开查看问题与各阶段证据）")
+            if review:
+                preview = ", ".join(
+                    f"{row['candidate_id']}:{'/'.join(row['codes'])}"
+                    for row in review[:3]
+                )
+                lines.append("review queue: " + preview)
+    except Exception as exc:
+        lines.append(f"unified evidence unavailable: {type(exc).__name__}")
     return _finalize_summary_text("\n".join(lines), app)
 
 
@@ -203,12 +227,49 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
     geometry = snapshot.geometry
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
-    if not blocks:
-        return
-
     line_height = max(1, int(getattr(snapshot, "used_values", {}).get("character_height", 1) or 1))
     strip_width = max(3, round(line_height * 0.12))
 
+    # The JSON and visible Layout role strips MUST use the same physical-row
+    # records. Historically this function painted a second cached Layout
+    # result, so red/blue roles could disagree with the exported diagnostics.
+    try:
+        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        actual_rows = get_large_head_debug_snapshot(app).get(
+            "layout_snapshot", {}
+        ).get("physical_rows", [])
+    except Exception:
+        actual_rows = []
+    if actual_rows:
+        for row in actual_rows:
+            x0 = float(row["source_x"])
+            x1 = float(row.get("source_x1", x0))
+            y0 = float(row["source_y"])
+            y1 = float(row.get("source_y1", y0+line_height))
+            left = (min(x0, x1) - strip_width - 2) * scale
+            right = (min(x0, x1) - 2) * scale
+            top = min(y0, y1) * scale
+            bottom = max(y0, y1) * scale
+            if bottom <= top:
+                bottom = top + max(3.0, strip_width * scale)
+            color, _label = _role_style(row.get("role", "unknown"))
+            try:
+                canvas.create_rectangle(
+                    left, top, right, bottom,
+                    fill=color, outline=color, width=1, tags=(_ROLE_TAG,),
+                )
+            except Exception:
+                continue
+        try:
+            canvas.tag_raise(_ROLE_TAG)
+        except Exception:
+            pass
+        return
+
+    # Failure-only fallback: preserve legacy visualization if a diagnostic
+    # report cannot be produced, without touching the detection pipeline.
+    if not blocks:
+        return
     for block in blocks:
         try:
             column = int(block.get("column", 0) or 0)
@@ -258,46 +319,39 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
         pass
 
 
-def draw_layout_visualization_detailed(app: Any) -> None:
-    """Draw readable Layout overlay with indents, line roles and summary."""
+def draw_layout_visualization_clean(app: Any) -> None:
+    """Compact geometry + physical roles, with no large on-image text box.
+
+    Detailed reasoning is in the candidate inspector / unified JSON. Normal
+    drawing and persisted settings remain untouched.
+    """
     canvas = getattr(app, "canvas", None)
     if canvas is None:
         return
-
+    draw_layout_visualization(app, minimal_text=True)
     try:
         snapshot = _snapshot_for_app(app)
     except Exception:
-        draw_layout_visualization_readable(app)
         return
-
-    summary_text = _format_summary(app, snapshot)
-    summary_x, summary_y, summary_width = _summary_box(app, snapshot)
-    original_create_text: Callable[..., Any] = canvas.create_text
-
-    def create_text_repositioned(*args: Any, **kwargs: Any) -> Any:
-        text = str(kwargs.get("text", "") or "")
-        if text.startswith("Layout "):
-            args = (summary_x, summary_y) + tuple(args[2:]) if len(args) >= 2 else args
-            if len(args) < 2:
-                kwargs["x"] = summary_x
-                kwargs["y"] = summary_y
-            kwargs["anchor"] = "n"
-            kwargs["justify"] = "left"
-            kwargs["width"] = summary_width
-            kwargs["text"] = summary_text
-            kwargs["tags"] = _append_tag(kwargs.get("tags", ()), _SUMMARY_TAG)
-        return original_create_text(*args, **kwargs)
-
-    canvas.create_text = create_text_repositioned
-    try:
-        draw_layout_visualization_readable(app)
-    finally:
-        canvas.create_text = original_create_text
-
-    _draw_indent_blocks(app, snapshot)
+    # The pale-yellow indent ranges, long method text, per-column coordinate
+    # labels and multi-page auto-field dump only appear in explicit Detailed.
     _draw_role_strips(app, snapshot)
 
+
+def draw_layout_visualization_detailed(app: Any) -> None:
+    """Detailed geometry/indent overlay, never a text report on the scan.
+
+    All the former detailed text (method, confidence, raw/used fields, physical
+    lanes and unified review counts) is now shown in the copyable separate
+    Layout details panel via _format_summary. No image-label interception.
+    """
+    canvas = getattr(app, "canvas", None)
+    if canvas is None:
+        return
+    draw_layout_visualization(app, minimal_text=True)
     try:
-        canvas.tag_raise(_SUMMARY_TAG)
+        snapshot = _snapshot_for_app(app)
     except Exception:
-        pass
+        return
+    _draw_indent_blocks(app, snapshot)
+    _draw_role_strips(app, snapshot)
