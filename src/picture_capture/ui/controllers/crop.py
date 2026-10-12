@@ -346,7 +346,7 @@ class CropController:
                 entry_right_padding=entry_right,
                 integrate_illustrations=integrate_illustrations,
                 profile_page_index=page_index,
-                transparent_background=bool(config.get("entry_transparent_background", False)),
+                **({"transparent_background": True} if config.get("entry_transparent_background", False) else {}),
             )
             append_crop_log(project.root, records)
             return len(records)
@@ -410,7 +410,7 @@ class CropController:
                 entry_right_padding=entry_right,
                 integrate_illustrations=integrate_illustrations,
                 profile_page_index=index,
-                transparent_background=bool(config.get("entry_transparent_background", False)),
+                **({"transparent_background": True} if config.get("entry_transparent_background", False) else {}),
             )
             append_crop_log(project.root, records)
             return len(records)
