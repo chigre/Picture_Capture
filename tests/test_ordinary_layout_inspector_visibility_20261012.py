@@ -128,8 +128,10 @@ def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch
     assert "C01-R001" in ids and "C01-R002" in ids
     assert len(canvas.bound) >= 2
     summary = " ".join(k["text"] for _a, k in canvas.texts)
-    assert "统一Layout候选 2" in summary
-    assert "待复核 1" in summary
+    # Full counters now live only in the off-image inspector and JSON.
+    assert "统一Layout候选" not in summary
+    assert "C01-R001" in summary and "C01-R002" in summary
+    assert report["summary"]["review_items"] == 1
 
 
 def test_markers_open_same_candidate_id_in_inspector(monkeypatch):
