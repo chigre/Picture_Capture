@@ -223,7 +223,7 @@ def test_real_compact_display_panel_contains_same_session_toggle():
         / "large_head_visualization_ui.py"
     ).read_text(encoding="utf-8")
     assert 'check(row, "显示大字头检测", large_var, toggle_large_heads)' in source
-    assert 'row, text="导出诊断 JSON", command=export_large_heads' in source
+    assert 'row, text="导出统一Layout诊断 JSON", command=export_unified_layout' in source
     assert "app._large_head_visualization_var" in source
     assert "app.quick_bool_vars[\"show_large_head_diagnostics\"]" not in helper
     assert "export_large_head_debug_json(app)" in source
