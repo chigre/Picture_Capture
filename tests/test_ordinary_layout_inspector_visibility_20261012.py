@@ -183,3 +183,66 @@ def test_actual_compact_palette_contains_inspector_button():
     ).read_text(encoding="utf-8")
     assert "draw_unified_candidate_overlay(app, layout_enabled=True)" in overlay
     assert "add_unified_layout_inspector_controls(app, section)" in overlay
+
+
+def test_real_inspector_window_renders_table_when_tk_is_available(monkeypatch):
+    """Integration check: an actual Treeview is visible in a real Toplevel."""
+    import tkinter as tk
+    from tkinter import ttk
+    import pytest
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no graphical Tk display in this pytest runner")
+    root.withdraw()
+    try:
+        import picture_capture.large_head_visualization_ui as ui
+        from picture_capture.ordinary_layout_inspector import (
+            show_unified_layout_inspector,
+        )
+
+        rows = [
+            _row("C01-R001", 100),
+            _row("C01-R002", 500, conflict=True, final=False),
+        ]
+        monkeypatch.setattr(
+            ui, "get_large_head_debug_snapshot",
+            lambda _app: {"unified_report": {
+                "registry": rows,
+                "review_queue": [{
+                    "candidate_id": "C01-R002",
+                    "codes": ["layout_entry_without_final_line"],
+                }],
+                "summary": {"physical_rows": 2, "candidates_total": 2,
+                            "final_lines": 1, "review_items": 1},
+            }},
+        )
+        canvas = _Canvas()
+        app = SimpleNamespace(
+            canvas=canvas, image=SimpleNamespace(width=1388, height=2156),
+            view_scale=1, root=root, current_index=8,
+        )
+        show_unified_layout_inspector(app, candidate_id="C01-R002")
+        root.update_idletasks()
+        window = app._ordinary_layout_inspector_window
+        assert window.winfo_exists()
+        assert "第9页" in window.title()
+
+        def descend(widget):
+            found = []
+            for child in widget.winfo_children():
+                found.append(child)
+                found.extend(descend(child))
+            return found
+
+        tables = [
+            widget for widget in descend(window)
+            if isinstance(widget, ttk.Treeview)
+        ]
+        assert len(tables) == 1
+        assert tables[0].get_children() == ("C01-R002",)
+        assert tables[0].selection() == ("C01-R002",)
+        window.destroy()
+    finally:
+        root.destroy()
