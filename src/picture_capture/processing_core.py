@@ -2451,7 +2451,7 @@ def ocr_existing_entry_words_from_markers(
 
     row_metrics = resolve_entry_ocr_row_metrics(
         image,
-        settings,
+        effective,
         page_index=profile_page_index,
     )
     profile = load_dictionary_profile(
