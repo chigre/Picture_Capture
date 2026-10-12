@@ -29,6 +29,7 @@ from .ocr_engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
+from .crop.export_output import prepare_crop_background
 from .crop_plan_formatting import (
     _normalized_crop_name,
     entry_crop_piece_filename,
@@ -2664,10 +2665,24 @@ def ocr_entries(
 
 
 
-def _save_crop(image: Image.Image, output: Path, box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+def _save_crop(
+    image: Image.Image, output: Path, box: tuple[int, int, int, int],
+    *, transparent_background: bool = False,
+) -> tuple[int, int, int, int]:
     box = clamp_box(box, image)
     output.parent.mkdir(parents=True, exist_ok=True)
-    image.crop(box).save(output, "PNG")
+    crop = image.crop(box)
+    try:
+        if transparent_background:
+            result = prepare_crop_background(crop, transparent=True)
+            try:
+                result.save(output, "PNG")
+            finally:
+                result.close()
+        else:
+            crop.save(output, "PNG")
+    finally:
+        crop.close()
     return box
 
 
@@ -2686,10 +2701,11 @@ def _stage_text_file(target: Path, text: str, *, encoding: str = "utf-8") -> Pat
 
 def _stage_crop(
     image: Image.Image, target: Path, box: tuple[int, int, int, int],
+    *, transparent_background: bool = False,
 ) -> tuple[tuple[int, int, int, int], Path]:
     temp = _publish_temp_path(target)
     try:
-        saved_box = _save_crop(image, temp, box)
+        saved_box = _save_crop(image, temp, box, transparent_background=transparent_background)
         return saved_box, temp
     except Exception:
         temp.unlink(missing_ok=True)
@@ -3149,7 +3165,7 @@ def _whitefill_polygons(image: Image.Image, polygons: list[PolygonRegion], skip:
     return out
 
 
-def _save_union_crop(image: Image.Image, path: Path, base_box: tuple[int,int,int,int], regions: list[PolygonRegion]) -> tuple[int,int,int,int]:
+def _save_union_crop(image: Image.Image, path: Path, base_box: tuple[int,int,int,int], regions: list[PolygonRegion], *, transparent_background: bool = False) -> tuple[int,int,int,int]:
     boxes=[base_box]+[b for r in regions if (b:=_polygon_bbox(r)) is not None]
     union=(min(b[0] for b in boxes),min(b[1] for b in boxes),max(b[2] for b in boxes),max(b[3] for b in boxes))
     union=clamp_box(union,image)
@@ -3158,8 +3174,14 @@ def _save_union_crop(image: Image.Image, path: Path, base_box: tuple[int,int,int
     d.rectangle((base_box[0]-union[0],base_box[1]-union[1],base_box[2]-union[0],base_box[3]-union[1]),fill=255)
     for region in regions:
         d.polygon([(x-union[0],y-union[1]) for x,y in region.points],fill=255)
-    white=Image.new("RGB",crop.size,"white"); white.paste(crop,(0,0),mask); path.parent.mkdir(parents=True,exist_ok=True); white.save(path, "PNG")
-    crop.close(); mask.close(); white.close()
+    white=Image.new("RGB",crop.size,"white"); white.paste(crop,(0,0),mask); path.parent.mkdir(parents=True,exist_ok=True)
+    result = prepare_crop_background(white, transparent=True) if transparent_background else white
+    try:
+        result.save(path, "PNG")
+    finally:
+        if result is not white:
+            result.close()
+        crop.close(); mask.close(); white.close()
     return union
 
 
@@ -3169,6 +3191,7 @@ def split_whole_entries(
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     integrate_illustrations: bool = True, profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
+    transparent_background: bool = False,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
@@ -3192,7 +3215,7 @@ def split_whole_entries(
             for piece in plan.entry_pieces:
                 filename = entry_crop_piece_filename(image_path.stem, piece)
                 target = output_dir / filename
-                saved, temp = _stage_crop(image, target, piece.box)
+                saved, temp = _stage_crop(image, target, piece.box, transparent_background=transparent_background)
                 staged.append(temp)
                 replacements.append((temp, target))
                 records.append(CropRecord(
@@ -3226,9 +3249,10 @@ def split_whole_entries(
                             if merge_regions:
                                 saved_box = _save_union_crop(
                                     source, temp, piece.box, merge_regions,
+                                    transparent_background=transparent_background,
                                 )
                             else:
-                                saved_box = _save_crop(source, temp, piece.box)
+                                saved_box = _save_crop(source, temp, piece.box, transparent_background=transparent_background)
                         except Exception:
                             temp.unlink(missing_ok=True)
                             raise
@@ -3249,7 +3273,7 @@ def split_whole_entries(
                         continue
                     filename = entry_crop_piece_filename(image_path.stem, piece)
                     target = output_dir / filename
-                    saved, temp = _stage_crop(cleaned, target, piece.box)
+                    saved, temp = _stage_crop(cleaned, target, piece.box, transparent_background=transparent_background)
                     staged.append(temp)
                     replacements.append((temp, target))
                     records.append(CropRecord(
@@ -3473,6 +3497,7 @@ def split_illustrations(
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
+    transparent_background: bool = False,
 ) -> IllustrationSplitResult:
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
@@ -3531,6 +3556,7 @@ def split_illustrations(
             draw = ImageDraw.Draw(mask)
             draw.polygon([(x-box[0], y-box[1]) for x, y in region.points], fill=255)
             crop.putalpha(mask)
+            formatted = prepare_crop_background(crop, transparent=transparent_background)
             if decision.associated_entry_index is not None:
                 ei = decision.associated_entry_index
                 p_counter[ei] = p_counter.get(ei, 0) + 1
@@ -3540,12 +3566,13 @@ def split_illustrations(
             target = output_dir / filename
             temp = _publish_temp_path(target)
             try:
-                crop.save(temp, "PNG")
+                formatted.save(temp, "PNG")
             except Exception:
                 temp.unlink(missing_ok=True)
                 raise
             finally:
                 crop.close()
+                formatted.close()
                 mask.close()
             staged.append(temp)
             replacements.append((temp, target))
@@ -3630,6 +3657,7 @@ def split_whole_entries_job(
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
+    transparent_background: bool = False,
 ) -> list[CropRecord]:
     """Spawn-safe worker: build the crop plan first, then execute it."""
     page = Path(image_path)
@@ -3640,6 +3668,7 @@ def split_whole_entries_job(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
+        transparent_background=transparent_background,
     )
 
 
@@ -3656,6 +3685,7 @@ def split_illustrations_job(
     entry_right_padding: int = 0,
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
+    transparent_background: bool = False,
 ) -> IllustrationSplitResult:
     """Spawn-safe worker: plan PPP/entry relations before exporting standalone PPPs."""
     page = Path(image_path)
@@ -3666,4 +3696,5 @@ def split_illustrations_job(
         entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
+        transparent_background=transparent_background,
     )

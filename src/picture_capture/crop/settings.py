@@ -35,6 +35,11 @@ def normalize_crop_settings_payload(
         "entry_right_padding_x": 0,
         "integrate_illustrations": True,
         "polygon_margin": 0,
+        "entry_width_mode": "auto",
+        "entry_fixed_width": 1350,
+        "illustration_pad_to_entry_width": True,
+        "entry_transparent_background": False,
+        "illustration_transparent_background": False,
         "parallel_workers": int(settings.crop_parallel_workers),
         SINGLE_LINE_MERGE_KEY: False,
         UNLINED_FILTER_ENABLED_KEY: False,
@@ -53,12 +58,21 @@ def normalize_crop_settings_payload(
     for key in (
         "general_top_y", "general_bottom_y",
         "entry_left_padding_x", "entry_right_padding_x",
-        "polygon_margin", "parallel_workers",
+        "polygon_margin", "parallel_workers", "entry_fixed_width",
     ):
         try:
             result[key] = max(0, int(raw.get(key, result[key]) or 0))
         except (TypeError, ValueError):
             pass
+    width_mode = str(raw.get("entry_width_mode", "auto"))
+    if width_mode in {"off", "auto", "fixed"}:
+        result["entry_width_mode"] = width_mode
+    for key, default in (
+        ("illustration_pad_to_entry_width", True),
+        ("entry_transparent_background", False),
+        ("illustration_transparent_background", False),
+    ):
+        result[key] = bool(raw.get(key, default))
     result["integrate_illustrations"] = bool(raw.get("integrate_illustrations", True))
     result[SINGLE_LINE_MERGE_KEY] = bool(raw.get(SINGLE_LINE_MERGE_KEY, False))
     result[UNLINED_FILTER_ENABLED_KEY] = bool(

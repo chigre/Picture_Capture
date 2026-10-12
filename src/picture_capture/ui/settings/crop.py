@@ -94,6 +94,11 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         "entry_right_padding_x": int(saved.get("entry_right_padding_x", 0)),
         "integrate_illustrations": bool(saved.get("integrate_illustrations", True)),
         "polygon_margin": int(saved.get("polygon_margin", 0)),
+        "entry_width_mode": str(saved.get("entry_width_mode", "auto")),
+        "entry_fixed_width": int(saved.get("entry_fixed_width", 1350)),
+        "illustration_pad_to_entry_width": bool(saved.get("illustration_pad_to_entry_width", True)),
+        "entry_transparent_background": bool(saved.get("entry_transparent_background", False)),
+        "illustration_transparent_background": bool(saved.get("illustration_transparent_background", False)),
         "parallel_workers": int(
             saved.get("parallel_workers", dialog.parent.settings.crop_parallel_workers)
         ),
@@ -327,6 +332,53 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         )
         sync_unlined_filter_state()
 
+
+    export_frame = ttk.LabelFrame(page, text="导出 PNG：宽度与透明背景", padding=(12, 10))
+    export_frame.pack(fill="x", pady=(0, 10))
+    width_var = dialog.crop_vars["entry_width_mode"]
+    ttk.Label(export_frame, text="词条统一宽度：").grid(row=0, column=0, sticky="w")
+    for column, value, label in (
+        (1, "auto", "全项目最宽（推荐）"),
+        (2, "fixed", "固定像素"),
+        (3, "off", "不补齐"),
+    ):
+        ttk.Radiobutton(
+            export_frame, text=label, value=value, variable=width_var,
+        ).grid(row=0, column=column, sticky="w", padx=(8, 0))
+    ttk.Label(export_frame, text="固定宽度 (px)：").grid(row=1, column=0, sticky="w", pady=(8, 2))
+    fixed_entry = ttk.Entry(
+        export_frame, textvariable=dialog.crop_vars["entry_fixed_width"], width=10,
+    )
+    fixed_entry.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 2))
+
+    def sync_fixed_width(*_args) -> None:
+        fixed_entry.configure(state="normal" if width_var.get() == "fixed" else "disabled")
+
+    width_var.trace_add("write", sync_fixed_width)
+    sync_fixed_width()
+    ttk.Label(
+        export_frame,
+        text="只向右侧补充画布，不缩放或裁剪；插图超出目标宽度时保留原宽。",
+        foreground="#666666",
+    ).grid(row=2, column=0, columnspan=4, sticky="w")
+    ttk.Checkbutton(
+        export_frame, text="插图宽度不足时补齐至词条宽度",
+        variable=dialog.crop_vars["illustration_pad_to_entry_width"],
+    ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(7, 2))
+    ttk.Checkbutton(
+        export_frame, text="词条：将纯白背景转透明",
+        variable=dialog.crop_vars["entry_transparent_background"],
+    ).grid(row=4, column=0, columnspan=2, sticky="w", pady=2)
+    ttk.Checkbutton(
+        export_frame, text="插图：将背景转透明",
+        variable=dialog.crop_vars["illustration_transparent_background"],
+    ).grid(row=4, column=2, columnspan=2, sticky="w", pady=2)
+    ttk.Label(
+        export_frame,
+        text="插图多边形始终抠出原 ROI；关闭透明时轮廓外为白色，开启时轮廓外及纯白像素透明。",
+        foreground="#666666",
+    ).grid(row=5, column=0, columnspan=4, sticky="w")
+
     section_info = ttk.LabelFrame(page, text="特殊页面范围", padding=(12, 10))
     section_info.pack(fill="x", pady=(0, 10))
     section_label = ttk.Label(
@@ -382,6 +434,18 @@ def crop_settings_payload(dialog) -> dict:
         MIN_UNLINED_BLANK_INK_PERCENT,
         min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
     )
+    width_mode = (
+        str(dialog.crop_vars["entry_width_mode"].get())
+        if "entry_width_mode" in dialog.crop_vars else "auto"
+    )
+    if width_mode not in {"off", "auto", "fixed"}:
+        raise ValueError("词条宽度模式无效")
+    fixed_width = crop_nonnegative_int(
+        dialog.crop_vars["entry_fixed_width"].get()
+        if "entry_fixed_width" in dialog.crop_vars else "1350", "手动词条宽度"
+    )
+    if width_mode == "fixed" and fixed_width < 1:
+        raise ValueError("手动词条宽度必须大于0")
     return {
         "version": CROP_SETTINGS_VERSION,
         "coordinate_space": SOURCE_COORDINATE_SPACE,
@@ -393,6 +457,11 @@ def crop_settings_payload(dialog) -> dict:
             dialog.crop_vars["integrate_illustrations"].get()
         ),
         "polygon_margin": margin,
+        "entry_width_mode": width_mode,
+        "entry_fixed_width": fixed_width,
+        "illustration_pad_to_entry_width": bool(dialog.crop_vars["illustration_pad_to_entry_width"].get()) if "illustration_pad_to_entry_width" in dialog.crop_vars else True,
+        "entry_transparent_background": bool(dialog.crop_vars["entry_transparent_background"].get()) if "entry_transparent_background" in dialog.crop_vars else False,
+        "illustration_transparent_background": bool(dialog.crop_vars["illustration_transparent_background"].get()) if "illustration_transparent_background" in dialog.crop_vars else False,
         "parallel_workers": workers,
         SINGLE_LINE_MERGE_KEY: bool(
             dialog.crop_vars[SINGLE_LINE_MERGE_KEY].get()

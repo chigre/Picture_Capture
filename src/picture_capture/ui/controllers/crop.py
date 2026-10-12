@@ -14,6 +14,7 @@ from typing import Any
 import tkinter as tk
 
 from ... import unlined_line_export as unlined_export
+from ...crop.export_output import normalize_project_crop_widths
 from ...formats import pdic_path, read_pdic, read_ppp
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...processing import (
@@ -26,6 +27,24 @@ from ...project_storage import ppp_read_path_for_image, qt_root
 from ...single_line_merge_settings import load_merge_by_page
 from ...single_line_parallel import configured_single_line_workers, single_line_page_job
 from ...unlined_export_filter_settings import load_unlined_filter_settings
+
+
+def _width_report(app: Any, root: Path, config: dict) -> str:
+    """Complete a batch with a stable project-wide entry width."""
+    try:
+        stats = normalize_project_crop_widths(root, config)
+    except Exception as exc:
+        app.show_error("切图宽度补齐失败", exc)
+        return "；宽度补齐失败"
+    if not stats["target_width"]:
+        return ""
+    suffix = (
+        f'；目标宽度 {stats["target_width"]} px'
+        f'，补齐词条 {stats["entries_padded"]}、插图 {stats["illustrations_padded"]} 张'
+    )
+    if stats["oversize"]:
+        suffix += f'；超宽保留 {stats["oversize"]} 张'
+    return suffix
 
 
 def _status(app: Any, text: str) -> None:
@@ -327,13 +346,15 @@ class CropController:
                 entry_right_padding=entry_right,
                 integrate_illustrations=integrate_illustrations,
                 profile_page_index=page_index,
+                **({"transparent_background": True} if config.get("entry_transparent_background", False) else {}),
             )
             append_crop_log(project.root, records)
             return len(records)
 
         def done(_completed, _total, stopped, results, error):
             if error is None and not stopped and results:
-                app.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条整体图")
+                suffix = _width_report(app, project.root, config)
+                app.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条整体图{suffix}")
 
         app._start_batch_task(
             "当前页整体切图",
@@ -389,6 +410,7 @@ class CropController:
                 entry_right_padding=entry_right,
                 integrate_illustrations=integrate_illustrations,
                 profile_page_index=index,
+                **({"transparent_background": True} if config.get("entry_transparent_background", False) else {}),
             )
             append_crop_log(project.root, records)
             return len(records)
@@ -397,12 +419,13 @@ class CropController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
+            suffix = _width_report(app, project.root, config)
             if stopped:
                 app.status_var.set(
-                    f"批量整体切图已停止：完成 {completed}/{total_pages} 页，共 {count} 张"
+                    f"批量整体切图已停止：完成 {completed}/{total_pages} 页，共 {count} 张{suffix}"
                 )
             else:
-                app.status_var.set(f"批量整体切图完成：{count} 张")
+                app.status_var.set(f"批量整体切图完成：{count} 张{suffix}")
 
         app._start_batch_task(
             "批量整体切图",
@@ -467,6 +490,7 @@ class CropController:
                 entry_right,
                 integrate_illustrations,
                 index,
+                *((True,) if config.get("entry_transparent_background", False) else ()),
             )
 
         def consume_result(_index: int, records):
@@ -477,12 +501,13 @@ class CropController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
+            suffix = _width_report(app, project.root, config)
             if stopped:
                 app.status_var.set(
-                    f"词条切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张"
+                    f"词条切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张{suffix}"
                 )
             else:
-                app.status_var.set(f"词条切图完成：{completed} 页，共 {count} 张")
+                app.status_var.set(f"词条切图完成：{completed} 页，共 {count} 张{suffix}")
 
         app._start_parallel_batch_task(
             "词条切图",
