@@ -271,6 +271,70 @@ def compose_ordinary_evidence_report(
             target = indexed[str(matched["id"])]
             target.setdefault("role_transitions", []).append(event)
 
+    # A separate, non-authoritative context pass audits the contradiction
+    # most often seen on real dictionary pages: a body-indented continuation
+    # was assigned entry after an otherwise bracket-confirmed headword.
+    # The actual role, candidate list and final PDIC remain untouched.
+    columns = list(layout_snapshot.get("columns", []) or [])
+    for item in indexed.values():
+        physical = item.get("physical_row")
+        if physical is None:
+            continue
+        index = int(item["column"])
+        if not 0 <= index < len(columns):
+            continue
+        column = columns[index]
+        body = column.get("body_mode")
+        modes = list(column.get("entry_modes", []) or [])
+        if (
+            not isinstance(body, dict)
+            or int(body.get("support", 0)) < 4
+            or not any(int(mode.get("support", 0)) >= 4 for mode in modes)
+        ):
+            continue
+        strong_modes = [
+            mode for mode in modes if int(mode.get("support", 0)) >= 4
+        ]
+        entry_center = min(float(mode["center"]) for mode in strong_modes)
+        body_center = float(body["center"])
+        diff = body_center - entry_center
+        if diff <= max(14.0, row_height * .70):
+            continue
+        corrected = float(physical.get("corrected_first_x", 0))
+        if corrected >= entry_center + .62 * diff:
+            _append_evidence(
+                item, "physical_body_indent", "per_column_indent",
+                "moderate", "本行真实行首位于重复正文缩进带",
+            )
+        elif corrected <= entry_center + .35 * diff:
+            _append_evidence(
+                item, "physical_entry_indent", "per_column_indent",
+                "moderate", "本行真实行首位于重复词条起始带",
+            )
+
+    by_column: dict[int, list[dict[str, Any]]] = {}
+    for item in indexed.values():
+        by_column.setdefault(int(item["column"]), []).append(item)
+    for group in by_column.values():
+        group.sort(key=lambda item: item["source_anchor"][1])
+        for index, item in enumerate(group):
+            types = {e["type"] for e in item["evidence"]}
+            if "physical_body_indent" not in types or index == 0:
+                continue
+            y = item["source_anchor"][1]
+            previous = group[index - 1]
+            gap = y - previous["source_anchor"][1]
+            prev_types = {e["type"] for e in previous["evidence"]}
+            if (
+                .8 * row_height <= gap <= 1.7 * row_height
+                and "verified_bracket" in prev_types
+            ):
+                _append_evidence(
+                    item, "post_bracket_continuation",
+                    "physical_context", "moderate",
+                    "紧接已确认括号词头的正文缩进续行候选",
+                )
+
     for target in indexed.values():
         types = {item["type"] for item in target["evidence"]}
         physical = target["physical_row"]
@@ -287,6 +351,14 @@ def compose_ordinary_evidence_report(
             target["issues"].append("final_line_on_body_without_strong_visual_proof")
         if "verified_large_head" in types and not has_final:
             target["issues"].append("accepted_large_head_without_final_line")
+        if (
+            has_final
+            and "physical_body_indent" in types
+            and not ({"verified_bracket", "verified_large_head"} & types)
+        ):
+            target["issues"].append("final_line_contradicts_body_indent")
+        if has_final and "post_bracket_continuation" in types:
+            target["issues"].append("possible_post_bracket_body_continuation")
         target["shadow_assessment"] = _shadow_assessment(target)
         target["has_final_line"] = has_final
 
