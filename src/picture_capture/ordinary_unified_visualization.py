@@ -128,6 +128,8 @@ def draw_unified_candidate_overlay(
         return
 
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
+    density_var = getattr(app, "_layout_display_density_var", None)
+    density = str(density_var.get()) if density_var is not None else "详细"
     for row in registry:
         x, y = (int(v) for v in row["source_anchor"])
         # Keep tiny click-targets outside printed text; the existing Layout
@@ -136,7 +138,12 @@ def draw_unified_candidate_overlay(
         label = str(shadow.get("label", "uncertain"))
         has_final = bool(row.get("has_final_line", False))
         flagged = bool(row.get("issues"))
-        if not (flagged or has_final or (
+        if density == "简洁":
+            # Only show genuinely suspicious decisions. Hundreds of green
+            # markers otherwise obscure the actual scanned dictionary.
+            if not flagged:
+                continue
+        elif not (flagged or has_final or (
             row.get("physical_row") and
             row["physical_row"].get("role") == "entry"
         )):
@@ -175,18 +182,20 @@ def draw_unified_candidate_overlay(
         if flagged:
             canvas.tag_bind(symbol_label, "<Button-1>", show)
 
-    # A compact heading shares the *same counts* exported in JSON.
-    label = (
-        f"统一Layout候选 {summary.get('candidates_total',0)}  "
-        f"最终线 {summary.get('final_lines',0)}  "
-        f"待复核 {summary.get('review_items',0)}"
-        "  （绿=词头 橙!=待复核，点标记打开诊断表）"
-    )
-    canvas.create_text(
-        12, 42, anchor="nw", text=label,
-        fill="#334155", font=("TkDefaultFont", 9),
-        tags=(_TAG,),
-    )
+    # Headline counters belong in the inspector, never over the page header.
+    # Preserve the historical text only in explicit Detailed mode.
+    if density == "详细":
+        label = (
+            f"统一Layout候选 {summary.get('candidates_total',0)}  "
+            f"最终线 {summary.get('final_lines',0)}  "
+            f"待复核 {summary.get('review_items',0)}"
+            "  （绿=词头 橙!=待复核，点标记打开诊断表）"
+        )
+        canvas.create_text(
+            12, 42, anchor="nw", text=label,
+            fill="#334155", font=("TkDefaultFont", 9),
+            tags=(_TAG,),
+        )
 
 
 __all__ = ["draw_unified_candidate_overlay", "format_candidate_detail"]
