@@ -129,7 +129,7 @@ def draw_unified_candidate_overlay(
 
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     density_var = getattr(app, "_layout_display_density_var", None)
-    density = str(density_var.get()) if density_var is not None else "候选"
+    density = str(density_var.get()) if density_var is not None else "详细"
     # Screen-space rectangles prevent dense candidate labels from colliding.
     # If two rows are very close at low zoom, alternate their label lanes.
     occupied: dict[int, list[tuple[float, float, float, float]]] = {}
