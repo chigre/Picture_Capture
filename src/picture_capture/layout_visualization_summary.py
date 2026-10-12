@@ -227,12 +227,49 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
     geometry = snapshot.geometry
     scale = float(getattr(app, "view_scale", 1.0) or 1.0)
     blocks = list(getattr(app, "_layout_visualization_indent_blocks", []) or [])
-    if not blocks:
-        return
-
     line_height = max(1, int(getattr(snapshot, "used_values", {}).get("character_height", 1) or 1))
     strip_width = max(3, round(line_height * 0.12))
 
+    # The JSON and visible Layout role strips MUST use the same physical-row
+    # records. Historically this function painted a second cached Layout
+    # result, so red/blue roles could disagree with the exported diagnostics.
+    try:
+        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        actual_rows = get_large_head_debug_snapshot(app).get(
+            "layout_snapshot", {}
+        ).get("physical_rows", [])
+    except Exception:
+        actual_rows = []
+    if actual_rows:
+        for row in actual_rows:
+            x0 = float(row["source_x"])
+            x1 = float(row.get("source_x1", x0))
+            y0 = float(row["source_y"])
+            y1 = float(row.get("source_y1", y0+line_height))
+            left = (min(x0, x1) - strip_width - 2) * scale
+            right = (min(x0, x1) - 2) * scale
+            top = min(y0, y1) * scale
+            bottom = max(y0, y1) * scale
+            if bottom <= top:
+                bottom = top + max(3.0, strip_width * scale)
+            color, _label = _role_style(row.get("role", "unknown"))
+            try:
+                canvas.create_rectangle(
+                    left, top, right, bottom,
+                    fill=color, outline=color, width=1, tags=(_ROLE_TAG,),
+                )
+            except Exception:
+                continue
+        try:
+            canvas.tag_raise(_ROLE_TAG)
+        except Exception:
+            pass
+        return
+
+    # Failure-only fallback: preserve legacy visualization if a diagnostic
+    # report cannot be produced, without touching the detection pipeline.
+    if not blocks:
+        return
     for block in blocks:
         try:
             column = int(block.get("column", 0) or 0)
