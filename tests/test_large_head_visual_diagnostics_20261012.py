@@ -254,3 +254,67 @@ def test_applying_settings_ignores_unknown_ui_only_debug_toggle():
     assert not errors
     assert not hasattr(settings, "show_large_head_diagnostics")
     assert settings.show_column_guides is False
+
+
+def test_group_parent_count_and_lineage_survive_to_exported_candidate_trace():
+    image, understanding, settings = _fixture()
+    # Replace isolated heads with adjacent ones that formerly formed a
+    # too-tall transitive group. No source scans are committed as fixtures.
+    image = Image.new("RGB", (460, 700), "white")
+    draw = ImageDraw.Draw(image)
+    for y in (100, 183, 266, 349):
+        draw.rectangle((25, y, 86, y+75), fill="black")
+    column = understanding.layout.columns[0]
+    column.lines = [
+        SimpleNamespace(y0=y, y1=y+29, first_x=5,
+                        anchor_x=5, role="entry")
+        for y in (100, 183, 266, 349)
+    ]
+    trace = []
+    detect_ordinary_large_head_entries(
+        image, understanding, settings, diagnostics=trace,
+    )
+    parents = [row for row in trace if row["status"] == "split_parent"]
+    assert parents
+    assert all(parent["recovered_count"] >= 2 for parent in parents)
+    assert any(
+        "parent_source_box" in item
+        and len(item["parent_source_box"]) == 4
+        for item in trace
+    )
+    assert all(
+        isinstance(item["recovered_count"], int)
+        for item in parents
+    )
+
+
+def test_ordinary_marker_stage_trace_snapshots_exact_provenance_without_mutation():
+    from picture_capture.processing import _record_ordinary_debug_stage
+    from picture_capture.models import Entry
+
+    rows = [
+        Entry("", 0, 100, ocr_source="page_understanding:ordinary_layout_role"),
+        Entry("", 0, 141, ocr_source="ordinary_bracket_pair"),
+    ]
+    trace = {}
+    _record_ordinary_debug_stage(trace, "before_filter", rows)
+    _record_ordinary_debug_stage(trace, "after_filter", rows[:1])
+    assert len(trace["stages"]) == 2
+    assert [stage["count"] for stage in trace["stages"]] == [2, 1]
+    assert [(e["x"], e["y"]) for e in trace["stages"][1]["removed"]] == [(0, 141)]
+    assert rows[1].ocr_source == "ordinary_bracket_pair"
+    assert _record_ordinary_debug_stage(None, "disabled", rows) is None
+
+
+def test_role_change_debug_trace_exposes_precise_source_and_role_transitions():
+    from picture_capture.layout_core_understanding import _debug_role_changes
+
+    original = {4: {"column": 0, "canonical_y": 204,
+                    "role": "body", "source": "indent"}}
+    changed = {4: {"column": 0, "canonical_y": 204,
+                   "role": "entry", "source": "large_head"}}
+    events = _debug_role_changes(original, changed, "large_head_fusion")
+    assert len(events) == 1
+    assert events[0]["stage"] == "large_head_fusion"
+    assert events[0]["before"]["role"] == "body"
+    assert events[0]["after"]["source"] == "large_head"
