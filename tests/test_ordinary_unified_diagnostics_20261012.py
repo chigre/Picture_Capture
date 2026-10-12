@@ -243,3 +243,70 @@ def test_layout_role_strips_are_directly_based_on_exported_physical_rows(monkeyp
     assert actual_colors.count("#d32f2f") == 3
     assert actual_colors.count("#1976d2") == 1
     assert report["summary"]["physical_rows"] == len(rectangles)
+
+
+def test_real_diagnostic_builder_and_layout_row_export_share_schema(monkeypatch):
+    """Integration boundary: detector trace, Layout snapshot and final PDIC."""
+    from PIL import Image
+    from picture_capture import large_head_visual_diagnostics as diag
+    from picture_capture.layout_transform import LayoutTransform
+    from picture_capture.models import AppSettings, Entry
+    from picture_capture import processing
+
+    lines = [
+        SimpleNamespace(y0=80, y1=108, first_x=3, role="entry"),
+        SimpleNamespace(y0=120, y1=149, first_x=41, role="body"),
+    ]
+    column = SimpleNamespace(
+        left=20, right=210, lines=lines,
+        body_mode=SimpleNamespace(center=41.0, support=5),
+        entry_modes=[SimpleNamespace(center=3.0, support=6)],
+    )
+    physical_layout = SimpleNamespace(
+        body_top=20, body_bottom=400,
+        ordinary_line_height=30.0, ordinary_line_pitch=43.0,
+        indent_type="body", reason="synthetic",
+        columns=[column], transform=LayoutTransform("identity"),
+        source_size=(460, 500),
+    )
+
+    def fake_understand(image, settings, *, page_index,
+                        large_head_diagnostics, large_head_debug_context):
+        large_head_diagnostics.append({
+            "column": 0, "canonical_box": (22, 100, 81, 171),
+            "source_box": (22, 100, 81, 171),
+            "reference_height": 30.0, "height_ratio": 2.36,
+            "status": "accepted", "detector_output": True,
+        })
+        large_head_debug_context["role_transitions"] = []
+        return SimpleNamespace(layout=physical_layout)
+
+    def fake_detect(image, settings, *, profile_page_index,
+                    page_sections, debug_trace):
+        debug_trace["stages"] = [{
+            "stage": "final_reading_order",
+            "entries": [_entry(100)],
+        }]
+        return [Entry("", 20, 100, ocr_source="ordinary_bracket_pair")], None
+
+    monkeypatch.setattr(diag, "understand_layout_core", fake_understand)
+    monkeypatch.setattr(diag, "build_analysis_image",
+                        lambda image, settings: image.copy())
+    monkeypatch.setattr(diag, "effective_page_settings",
+                        lambda settings, size, index: settings)
+    monkeypatch.setattr(processing, "detect_entries", fake_detect)
+    monkeypatch.setattr(
+        "picture_capture.ordinary_large_head_evidence._uses_cjk_large_heads",
+        lambda settings: True,
+    )
+    image = Image.new("RGB", (460, 500), "white")
+    report = diag.build_large_head_diagnostics(
+        image, AppSettings(ocr_language="chi_sim"), page_index=8,
+    )
+    assert report["schema"] == SCHEMA
+    assert report["unified_report"]["summary"]["physical_rows"] == 2
+    assert report["unified_report"]["summary"]["final_lines"] == 1
+    assert report["layout_snapshot"]["physical_rows"][0]["source_y"] == 100
+    assert report["candidate_registry"] is report["unified_report"]["registry"]
+    assert isinstance(report["ordinary_pipeline_stages"], list)
+    json.dumps(report, ensure_ascii=False)
