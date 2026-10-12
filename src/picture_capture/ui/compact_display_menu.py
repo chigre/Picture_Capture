@@ -250,6 +250,27 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     denoise.pack(side="left", padx=0, pady=0)
     denoise.bind("<<ComboboxSelected>>", apply_denoise)
 
+    # Keep this diagnostic switch in the *actual* 280px display palette.
+    # The original quick-settings container is hidden in compact mode.
+    # Never add this session-only state to quick_bool_vars or AppSettings.
+    row = line()
+    large_var = app._large_head_visualization_var
+
+    def toggle_large_heads() -> None:
+        app._large_head_debug_snapshot_key = None
+        app._large_head_debug_snapshot = None
+        app.redraw()
+
+    check(row, "显示大字头检测", large_var, toggle_large_heads)
+
+    def export_large_heads() -> None:
+        from picture_capture.large_head_visualization_ui import export_large_head_debug_json
+        export_large_head_debug_json(app)
+
+    ttk.Button(
+        row, text="导出诊断 JSON", command=export_large_heads,
+    ).pack(side="left", padx=(6, 0), pady=0)
+
     row = line()
     label(row, "切图预览标签:")
     font_style(row, "crop_preview_font_size",
