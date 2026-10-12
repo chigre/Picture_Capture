@@ -22,6 +22,8 @@ _ISSUES = {
     "final_line_without_matched_physical_row": "最终画线没有匹配到物理行",
     "final_line_on_body_without_strong_visual_proof": "最终线对应 body，但没有独立强视觉证据",
     "accepted_large_head_without_final_line": "大字候选通过，最终没有邻近分隔线",
+    "final_line_contradicts_body_indent": "最终线与可靠的正文缩进带相矛盾",
+    "possible_post_bracket_body_continuation": "疑似括号词头后的正文续行",
 }
 
 
@@ -174,7 +176,7 @@ def draw_unified_candidate_overlay(
         "  （绿=词头 蓝=正文 橙!=冲突，点击色块查看）"
     )
     canvas.create_text(
-        12, 12, anchor="nw", text=label,
+        12, 36, anchor="nw", text=label,
         fill="#334155", font=("TkDefaultFont", 9),
         tags=(_TAG,),
     )
