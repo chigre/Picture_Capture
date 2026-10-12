@@ -163,11 +163,13 @@ def draw_unified_candidate_overlay(
                 tags=(_TAG,),
             )
 
-        def show(_event: Any, record: dict[str, Any] = row) -> None:
+        def show(_event: Any, record: dict[str, Any] = row) -> str:
             from .ordinary_layout_inspector import show_unified_layout_inspector
             show_unified_layout_inspector(
                 app, candidate_id=str(record["id"]),
             )
+            # Never let a diagnostic click also trigger the canvas editor.
+            return "break"
 
         canvas.tag_bind(symbol, "<Button-1>", show)
         if flagged:
