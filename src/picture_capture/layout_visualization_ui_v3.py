@@ -186,6 +186,9 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
         if large_enabled:
             from .large_head_visualization_ui import draw_large_head_debug_overlay
             draw_large_head_debug_overlay(app)
+        if layout_enabled:
+            from .ordinary_unified_visualization import draw_unified_candidate_overlay
+            draw_unified_candidate_overlay(app, layout_enabled=True)
     finally:
         if hide is not None and previous is not None:
             try:
