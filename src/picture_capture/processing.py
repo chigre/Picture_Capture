@@ -460,6 +460,39 @@ def _shared_detector_observations(
     return [], geometry, []
 
 
+def _record_ordinary_debug_stage(
+    trace: dict[str, Any] | None,
+    stage: str,
+    entries: list[Entry],
+    **details: Any,
+) -> None:
+    """Snapshot each materialized marker at the actual production seam.
+
+    Enabled ONLY for a user-initiated read-only diagnostic run. Never writes
+    project files, mutates role objects or changes detection decisions.
+    """
+    if trace is None:
+        return
+    rows = [{
+        "x": int(item.x), "y": int(item.y),
+        "source": str(getattr(item, "ocr_source", "") or ""),
+        "issue_type": str(getattr(item, "issue_type", "") or ""),
+        "oversized": bool(getattr(item, "ocr_oversized_cjk", False)),
+    } for item in entries]
+    stages = trace.setdefault("stages", [])
+    current_keys = {(item["x"], item["y"]) for item in rows}
+    previous = stages[-1]["entries"] if stages else []
+    previous_keys = {(item["x"], item["y"]) for item in previous}
+    stages.append({
+        "stage": stage, "count": len(rows), "entries": rows,
+        "added": [item for item in rows
+                  if (item["x"], item["y"]) not in previous_keys],
+        "removed": [item for item in previous
+                    if (item["x"], item["y"]) not in current_keys],
+        **details,
+    })
+
+
 def detect_entries(
     image: Image.Image,
     settings: AppSettings,
@@ -468,6 +501,7 @@ def detect_entries(
     paddle_filter_rules_path: Path | None = None,
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
+    debug_trace: dict[str, Any] | None = None,
 ) -> tuple[list[Entry], Any]:
     """Detect entries using shared denoised page analysis.
 
@@ -503,6 +537,9 @@ def detect_entries(
                 analysis_image,
                 page_index=profile_page_index,
             )
+            _record_ordinary_debug_stage(
+                debug_trace, "layout_role_materialization", entries,
+            )
             # Large ideographs may generate several spurious Layout entry
             # rows inside one glyph; veto only image-confirmed duplicates.
             if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
@@ -513,6 +550,9 @@ def detect_entries(
                     [int(column.left) for column in columns],
                     [int(column.right - column.left) for column in columns],
                     float(understanding.layout.ordinary_line_height),
+                )
+                _record_ordinary_debug_stage(
+                    debug_trace, "oversized_fragment_veto", entries,
                 )
             # A page's printed large heads may sit one row above the Y
             # assigned by dense body-row projection. Correct only when
@@ -525,6 +565,10 @@ def detect_entries(
                 entries, _visual_y_shift = adjust_page_coherent_crossing_separators(
                     entries, analysis_image,
                     float(understanding.layout.ordinary_line_height),
+                )
+                _record_ordinary_debug_stage(
+                    debug_trace, "coherent_separator_y_refinement", entries,
+                    shift=_visual_y_shift,
                 )
             if (
                 uses_cjk_script(effective)
@@ -547,6 +591,9 @@ def detect_entries(
                 finally:
                     if rotated:
                         bracket_image.close()
+                _record_ordinary_debug_stage(
+                    debug_trace, "bracketed_headword_recovery", entries,
+                )
             # Keep proven lemma-indentation evidence from a second physical
             # analyzer when the primary normalization lost an entire column.
             if not uses_cjk_role_model(effective):
@@ -563,6 +610,9 @@ def detect_entries(
                 profile_page_index,
                 page_sections,
             )
+            _record_ordinary_debug_stage(
+                debug_trace, "page_template_section_filter", entries,
+            )
             # The final separator Y differs from the raw physical LayoutLine.y0.
             # Check an anomalous CJK page at its *actual* emitted coordinates;
             # the earlier indent-mode detector cannot independently veto itself.
@@ -570,9 +620,17 @@ def detect_entries(
             entries, last_mile = correct_anomalous_final_ordinary_entries(
                 analysis_image, effective, understanding.layout, entries,
             )
+            _record_ordinary_debug_stage(
+                debug_trace, "anomalous_final_visual_consistency", entries,
+                stats=dict(last_mile),
+            )
             from .ordinary_final_visual_consistency import suppress_proven_bracket_body_continuations
             entries, bracket_body_removed = suppress_proven_bracket_body_continuations(
                 analysis_image, effective, understanding.layout, entries,
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "proven_bracket_body_continuation", entries,
+                removed_details=bracket_body_removed,
             )
             if bracket_body_removed:
                 understanding.layout.reason += (
@@ -581,6 +639,10 @@ def detect_entries(
             from .ordinary_final_visual_consistency import suppress_blank_layout_rows_before_proven_head
             entries, removed_blank = suppress_blank_layout_rows_before_proven_head(
                 analysis_image, effective, understanding.layout, entries,
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "blank_before_proven_head", entries,
+                removed_blank=int(removed_blank),
             )
             if removed_blank:
                 understanding.layout.reason += (
@@ -593,9 +655,13 @@ def detect_entries(
                     f" final_visual_glyph_fragments={last_mile['removed_glyph_fragments']}"
                     f" final_visual_heads_added={last_mile['added_verified_heads']}"
                 )
-            return _core.sort_entries_reading_order(
+            sorted_entries = _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
-            ), geometry
+            )
+            _record_ordinary_debug_stage(
+                debug_trace, "final_reading_order", sorted_entries,
+            )
+            return sorted_entries, geometry
 
         return _ordinary_vb_fallback(
             analysis_image,
