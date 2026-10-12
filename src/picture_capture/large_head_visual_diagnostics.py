@@ -15,7 +15,7 @@ from PIL import Image
 
 from .image_utils import build_analysis_image
 from .models import AppSettings
-from .ordinary_large_head_evidence import detect_ordinary_large_head_entries
+from .layout_core_understanding import understand_layout_core
 from .profile_semantics import effective_page_settings
 
 
@@ -78,16 +78,10 @@ def build_large_head_diagnostics(
         result["ordinary_mode"] = ordinary_mode
         analysis = build_analysis_image(source, effective)
         try:
-            understanding = processing._understand_page_current(
-                analysis, effective, page_index=int(page_index),
-                page_sections=page_sections, layout_only=ordinary_mode,
-            )
-            if understanding is None:
-                result["message"] = "当前页不能生成 Layout"
-                return result
-
-            # If normal processing masks illustrations before Layout/detection,
-            # reproduce the same masked analysis page for the traced detector.
+            # Reproduce the exact masked input used by normal Layout. The
+            # independent diagnostic Layout runs the production detector once
+            # at its real pre-fusion stage; it does NOT consult or overwrite
+            # the normal shared Layout cache.
             candidate_image = analysis
             if bool(getattr(effective, "layout_mask_illustrations", False)):
                 from .layout_illustration_mask import mask_large_illustrations_for_layout
@@ -96,9 +90,9 @@ def build_large_head_diagnostics(
                 )
             try:
                 trace: list[dict[str, Any]] = []
-                detect_ordinary_large_head_entries(
-                    candidate_image, understanding, effective,
-                    diagnostics=trace,
+                understanding = understand_layout_core(
+                    candidate_image, effective,
+                    page_index=int(page_index), large_head_diagnostics=trace,
                 )
             finally:
                 if candidate_image is not analysis:
