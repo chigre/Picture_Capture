@@ -152,9 +152,7 @@ def build_large_head_diagnostics(
         effective = effective_page_settings(
             settings, source.size, int(page_index),
         )
-        if not _uses_cjk_large_heads(effective):
-            result["message"] = "此页面未启用 CJK 大字单字检测"
-            return result
+        large_head_enabled = bool(_uses_cjk_large_heads(effective))
         ordinary_mode = str(getattr(
             effective, "detection_method", "",
         ) or "").lower() not in {"paddleocr", "combined"}
@@ -211,6 +209,22 @@ def build_large_head_diagnostics(
                 "source": str(getattr(entry, "ocr_source", "") or ""),
                 "oversized": bool(getattr(entry, "ocr_oversized_cjk", False)),
             } for entry in final_entries]
+            from .ordinary_unified_diagnostics import (
+                SCHEMA, compose_ordinary_evidence_report,
+            )
+            unified = compose_ordinary_evidence_report(
+                result["layout_snapshot"],
+                trace,
+                result.get("ordinary_pipeline_stages", []),
+                result["layout_role_transitions"],
+                result["final_lines"],
+            )
+            result["schema"] = SCHEMA
+            result["unified_report"] = unified
+            result["review_queue"] = unified["review_queue"]
+            result["candidate_registry"] = unified["registry"]
+            result["summary_unified"] = unified["summary"]
+            result["large_head_detector_enabled"] = large_head_enabled
 
             for item in trace:
                 index = int(item["column"])
@@ -247,7 +261,7 @@ def build_large_head_diagnostics(
             result["message"] = (
                 "蓝线表示附近最终自动线；关联仅按位置，不代表因果。"
                 if ordinary_mode else
-                "当前不是普通画线模式，不显示普通画线最终线。"
+                "当前不是普通画线模式，仅提供 Layout 和大字候选证据。"
             )
             return result
         finally:
