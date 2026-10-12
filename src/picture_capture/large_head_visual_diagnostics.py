@@ -153,6 +153,10 @@ def build_large_head_diagnostics(
     }
     source = processing._core.normalize_page_rgb(image)
     try:
+        # Stable content fingerprint prevents accidental comparisons of
+        # distinct scanned pages that happen to have identical pixel sizes.
+        from hashlib import sha256
+        result["image_sha256"] = sha256(source.tobytes()).hexdigest()
         effective = effective_page_settings(
             settings, source.size, int(page_index),
         )
