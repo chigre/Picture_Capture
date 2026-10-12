@@ -105,3 +105,59 @@ def test_cropped_width_settings_are_additive_for_existing_v7_projects():
     assert upgraded["entry_transparent_background"] is False
     assert upgraded["illustration_transparent_background"] is False
     assert upgraded["illustration_pad_to_entry_width"] is True
+
+
+def test_polygon_png_export_switches_between_opaque_white_and_real_alpha(tmp_path, monkeypatch):
+    from picture_capture import processing_core as core
+    from picture_capture.models import PolygonRegion
+
+    image_path = tmp_path / "page.png"
+    source = Image.new("RGB", (12, 10), "white")
+    source.putpixel((5, 4), (0, 0, 0))
+    source.save(image_path)
+    polygon = PolygonRegion("drawing", [(2, 2), (8, 2), (5, 8)])
+    plan = core.PageCropPlan(
+        [], [core.IllustrationCropPlan(0, "drawing", None, "", "unassociated", True, (2, 2, 9, 9))],
+    )
+    monkeypatch.setattr(core, "build_page_crop_plan", lambda *_args, **_kwargs: plan)
+    output_dir = tmp_path / "QT" / "PIC"
+
+    core.split_illustrations(image_path, [polygon], output_dir, transparent_background=False)
+    with Image.open(output_dir / "page_PIC_001.png") as opaque:
+        assert opaque.mode == "RGB"
+        assert opaque.getpixel((0, 6)) == (255, 255, 255)
+        assert opaque.getpixel((3, 2)) == (0, 0, 0)
+
+    core.split_illustrations(image_path, [polygon], output_dir, transparent_background=True)
+    with Image.open(output_dir / "page_PIC_001.png") as transparent:
+        assert transparent.mode == "RGBA"
+        assert transparent.getpixel((0, 6))[3] == 0  # Outside the polygon.
+        assert transparent.getpixel((3, 2))[3] == 255  # Original black ink.
+        assert transparent.getpixel((3, 3))[3] == 0  # Pure-white interior.
+
+
+def test_union_word_crop_honors_alpha_without_changing_source_box(tmp_path, monkeypatch):
+    from picture_capture import processing_core as core
+    from picture_capture.models import PolygonRegion
+
+    image_path = tmp_path / "page.png"
+    Image.new("RGB", (15, 12), "white").save(image_path)
+    polygon = PolygonRegion("word", [(5, 2), (11, 2), (11, 7), (5, 7)])
+    piece = core.EntryCropPiecePlan(
+        0, 0, "word", (2, 2, 7, 8), "(1)",
+        source_mode="linked_original", merge_polygon_indices=(0,),
+    )
+    plan = core.PageCropPlan([piece], [
+        core.IllustrationCropPlan(0, "word", 0, "word", "partial", False, (5, 2, 12, 8))
+    ])
+    monkeypatch.setattr(core, "build_page_crop_plan", lambda *_args, **_kwargs: plan)
+    records = core.split_whole_entries(
+        image_path, [], AppSettings(), tmp_path / "QT" / "PWW",
+        polygons=[polygon], transparent_background=True,
+    )
+    assert len(records) == 1
+    assert records[0].box == (2, 2, 12, 8)
+    with Image.open(tmp_path / "QT" / "PWW" / records[0].filename) as result:
+        assert result.mode == "RGBA"
+        assert result.size == (10, 6)
+        assert result.getpixel((0, 0))[3] == 0
