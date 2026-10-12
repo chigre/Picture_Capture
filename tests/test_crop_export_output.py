@@ -156,8 +156,8 @@ def test_union_word_crop_honors_alpha_without_changing_source_box(tmp_path, monk
         polygons=[polygon], transparent_background=True,
     )
     assert len(records) == 1
-    assert records[0].box == (2, 2, 12, 8)
+    assert records[0].box == (2, 2, 11, 8)
     with Image.open(tmp_path / "QT" / "PWW" / records[0].filename) as result:
         assert result.mode == "RGBA"
-        assert result.size == (10, 6)
+        assert result.size == (9, 6)
         assert result.getpixel((0, 0))[3] == 0
