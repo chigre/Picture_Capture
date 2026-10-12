@@ -115,14 +115,17 @@ def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch
 
     # Even when column1 starts at x=3 and zoom is .27, neither icon is clipped
     # at negative x nor reduced to a non-clickable 1.6px mark.
-    assert len(canvas.rectangles) == 2
+    # One square + one matching-ID background for each candidate.
+    assert len(canvas.rectangles) == 4
     for coords, kwargs in canvas.rectangles:
         x0, y0, x1, y1 = coords
         assert x0 >= 0
         assert x1-x0 >= 16
         assert y1-y0 >= 16
         assert kwargs.get("tags")
-    assert canvas.rectangles[1][1]["outline"] == "#d97706"
+    assert canvas.rectangles[2][1]["outline"] == "#d97706"
+    ids = [props.get("text") for _pos, props in canvas.texts]
+    assert "C01-R001" in ids and "C01-R002" in ids
     assert len(canvas.bound) >= 2
     summary = " ".join(k["text"] for _a, k in canvas.texts)
     assert "统一Layout候选 2" in summary
