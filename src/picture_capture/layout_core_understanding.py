@@ -283,10 +283,14 @@ def _apply_universal_ordinary_evidence(
     image: Image.Image,
     understanding: PageUnderstanding,
     settings: AppSettings,
+    *,
+    large_head_diagnostics: list[dict[str, Any]] | None = None,
 ) -> tuple[int, int]:
     """OR-promote sampled-symbol and oversized-head evidence onto Layout rows."""
     symbol_entries = detect_ordinary_symbol_entries(image, understanding, settings)
-    large_entries = detect_ordinary_large_head_entries(image, understanding, settings)
+    large_entries = detect_ordinary_large_head_entries(
+        image, understanding, settings, diagnostics=large_head_diagnostics,
+    )
     symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
     large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
     # First retain the historical display-head safeguard, then consume the
@@ -314,17 +318,23 @@ def understand_layout_core(
     settings: AppSettings,
     *,
     page_index: int = 0,
+    large_head_diagnostics: list[dict[str, Any]] | None = None,
 ) -> PageUnderstanding:
-    """Return physical Layout + final universal ordinary-mode line roles."""
+    """Return Layout roles, optionally tracing the *production* detector stage.
+
+    Debug traces bypass shared Layout caching and capture publication. An
+    isolated diagnostic run never mutates the normal cached Layout objects.
+    """
     key = (
         _image_fingerprint(image),
         _settings_fingerprint(settings),
         int(page_index),
     )
-    cached = _LAYOUT_CACHE.get(key)
-    if cached is not None:
-        _LAYOUT_CACHE.move_to_end(key)
-        return _publish_captured_result(cached, page_index)
+    if large_head_diagnostics is None:
+        cached = _LAYOUT_CACHE.get(key)
+        if cached is not None:
+            _LAYOUT_CACHE.move_to_end(key)
+            return _publish_captured_result(cached, page_index)
 
     layout, page_settings, applied = infer_dictionary_page_layout(
         image,
@@ -372,6 +382,7 @@ def understand_layout_core(
         image,
         result,
         page_settings,
+        large_head_diagnostics=large_head_diagnostics,
     )
     from .layout_verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
@@ -403,6 +414,8 @@ def understand_layout_core(
         f" verified_oversized_demoted={int(verified_heads['demoted_fragments'])}"
     )
 
+    if large_head_diagnostics is not None:
+        return result
     _LAYOUT_CACHE[key] = result
     _LAYOUT_CACHE.move_to_end(key)
     while len(_LAYOUT_CACHE) > _CACHE_LIMIT:
