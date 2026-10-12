@@ -141,7 +141,7 @@ def build_large_head_diagnostics(
             result["candidates"] = trace
             result["enabled"] = True
             statuses = ("accepted", "rejected_weak", "rejected_row_front",
-                        "size_or_density", "group_too_tall")
+                        "size_or_density", "group_too_tall", "split_parent")
             result["summary"] = {
                 key: sum(1 for row in trace if row["status"] == key)
                 for key in statuses
