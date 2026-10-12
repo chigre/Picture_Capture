@@ -263,13 +263,16 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     check(row, "显示大字头检测", large_var, toggle_large_heads)
 
-    def export_large_heads() -> None:
+    # Both overlay modes export the *same* candidate evidence registry.
+    # Keep the action available even when the large-head overlay is off.
+    row = line()
+    def export_unified_layout() -> None:
         from picture_capture.large_head_visualization_ui import export_large_head_debug_json
         export_large_head_debug_json(app)
 
     ttk.Button(
-        row, text="导出诊断 JSON", command=export_large_heads,
-    ).pack(side="left", padx=(6, 0), pady=0)
+        row, text="导出统一Layout诊断 JSON", command=export_unified_layout,
+    ).pack(side="left", padx=0, pady=0)
 
     row = line()
     label(row, "切图预览标签:")
