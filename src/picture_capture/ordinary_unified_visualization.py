@@ -142,41 +142,46 @@ def draw_unified_candidate_overlay(
         )):
             continue
         color = _COLORS.get(label, "#71717a")
-        width = 9 if flagged else 6
+        # Original version painted a 6px box at (source_x-22)*zoom.
+        # Column 1 commonly starts at x=0-20; those icons disappeared to the
+        # left of the image and shrank below clickability when zoomed out.
+        # These 16-20 SCREEN-pixel markers remain visible at every zoom.
+        pos_x = max(26.0, x * scale + 14.0)
+        pos_y = max(10.0, y * scale)
+        radius = 10.0 if flagged else 8.0
         symbol = canvas.create_rectangle(
-            (x-22)*scale, (y-2)*scale,
-            (x-22+width)*scale, (y+4)*scale,
-            outline=color, fill="" if flagged else color,
-            width=2 if flagged else 1,
+            pos_x-radius, pos_y-radius, pos_x+radius, pos_y+radius,
+            outline=color, fill="#fff7ed" if flagged else color,
+            width=3 if flagged else 1,
             tags=(_TAG,),
         )
         if flagged:
-            canvas.create_text(
-                (x-25)*scale, (y-7)*scale,
-                text="!", anchor="s", fill="#d97706",
-                font=("TkDefaultFont", 9, "bold"),
+            symbol_label = canvas.create_text(
+                pos_x, pos_y,
+                text="!", anchor="center", fill="#9a3412",
+                font=("TkDefaultFont", 11, "bold"),
                 tags=(_TAG,),
             )
 
         def show(_event: Any, record: dict[str, Any] = row) -> None:
-            from tkinter import messagebox
-            messagebox.showinfo(
-                "Layout候选证据审计",
-                format_candidate_detail(record),
-                parent=getattr(app, "root", None),
+            from .ordinary_layout_inspector import show_unified_layout_inspector
+            show_unified_layout_inspector(
+                app, candidate_id=str(record["id"]),
             )
 
         canvas.tag_bind(symbol, "<Button-1>", show)
+        if flagged:
+            canvas.tag_bind(symbol_label, "<Button-1>", show)
 
     # A compact heading shares the *same counts* exported in JSON.
     label = (
         f"统一Layout候选 {summary.get('candidates_total',0)}  "
         f"最终线 {summary.get('final_lines',0)}  "
         f"待复核 {summary.get('review_items',0)}"
-        "  （绿=词头 蓝=正文 橙!=冲突，点击色块查看）"
+        "  （绿=词头 橙!=待复核，点标记打开诊断表）"
     )
     canvas.create_text(
-        12, 36, anchor="nw", text=label,
+        12, 42, anchor="nw", text=label,
         fill="#334155", font=("TkDefaultFont", 9),
         tags=(_TAG,),
     )
