@@ -180,3 +180,66 @@ def test_appsettings_never_receives_shadow_decision_setting():
     from picture_capture.models import AppSettings
     settings = AppSettings()
     assert not hasattr(settings, "unified_ordinary_shadow_mode")
+
+
+def test_shadow_flags_body_indent_after_verified_bracket_without_deleting_line():
+    layout = _layout()
+    layout["columns"][0].update({
+        "body_mode": {"center": 42.0, "support": 18},
+        "entry_modes": [{"center": 4.0, "support": 24}],
+    })
+    report = compose_ordinary_evidence_report(
+        layout, [], [{
+            "stage": "bracketed_headword_recovery",
+            "entries": [
+                _entry(100, "ordinary_bracket_pair"), _entry(141),
+            ],
+        }], [], [
+            _entry(100, "ordinary_bracket_pair"), _entry(141),
+        ],
+    )
+    row141 = next(item for item in report["registry"]
+                  if item["id"] == "C01-R002")
+    kinds = {e["type"] for e in row141["evidence"]}
+    assert "physical_body_indent" in kinds
+    assert "post_bracket_continuation" in kinds
+    assert "possible_post_bracket_body_continuation" in row141["issues"]
+    assert row141["shadow_assessment"]["label"] == "review_conflict"
+    assert row141["has_final_line"] is True
+    assert report["summary"]["final_lines"] == 2
+    assert report["policy"]["production_output_changed"] is False
+
+
+def test_layout_role_strips_are_directly_based_on_exported_physical_rows(monkeypatch):
+    from picture_capture.layout_visualization_summary import _draw_role_strips
+
+    import picture_capture.large_head_visualization_ui as ui
+    report = _report()
+    rows = _layout()["physical_rows"]
+    for row in rows:
+        row["source_x1"] = row["source_x"]
+        row["source_y1"] = row["source_y"] + 28
+    monkeypatch.setattr(ui, "get_large_head_debug_snapshot",
+                        lambda _app: {"layout_snapshot": {
+                            "physical_rows": rows,
+                        }})
+    canvas = _Canvas()
+    canvas.tag_raise = lambda *args, **kwargs: None
+    class Flag:
+        def get(self):
+            return True
+    app = SimpleNamespace(
+        canvas=canvas, _layout_visualization_var=Flag(),
+        view_scale=1,
+    )
+    layout_display = SimpleNamespace(
+        geometry=None, used_values={"character_height": 30},
+    )
+    _draw_role_strips(app, layout_display)
+    rectangles = [record for record in canvas.created
+                  if record[0] == "rectangle"]
+    assert len(rectangles) == len(rows)
+    actual_colors = [record[2]["fill"] for record in rectangles]
+    assert actual_colors.count("#d32f2f") == 3
+    assert actual_colors.count("#1976d2") == 1
+    assert report["summary"]["physical_rows"] == len(rectangles)
