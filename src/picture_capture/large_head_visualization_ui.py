@@ -172,36 +172,36 @@ def draw_large_head_debug_overlay(app: Any) -> None:
 
 def export_large_head_debug_json(app: Any) -> None:
     """User-triggered export shared by compact and quick display panels."""
-        from tkinter import filedialog, messagebox
+    from tkinter import filedialog, messagebox
 
-        if getattr(app, "image", None) is None:
-            return
-        try:
-            snapshot = get_large_head_debug_snapshot(app)
-        except Exception as exc:
-            messagebox.showerror("大字头诊断", str(exc), parent=getattr(app, "root", None))
-            return
-        filename = filedialog.asksaveasfilename(
-            title="导出大字头检测诊断（不修改 PDIC）",
-            defaultextension=".json",
-            filetypes=[("JSON", "*.json")],
-            parent=getattr(app, "root", None),
+    if getattr(app, "image", None) is None:
+        return
+    try:
+        snapshot = get_large_head_debug_snapshot(app)
+    except Exception as exc:
+        messagebox.showerror("大字头诊断", str(exc), parent=getattr(app, "root", None))
+        return
+    filename = filedialog.asksaveasfilename(
+        title="导出大字头检测诊断（不修改 PDIC）",
+        defaultextension=".json",
+        filetypes=[("JSON", "*.json")],
+        parent=getattr(app, "root", None),
+    )
+    if not filename:
+        return
+    document = {
+        "schema": "picture-capture-large-head-diagnostics-v1",
+        "page_index": max(0, int(getattr(app, "current_index", 0))),
+        "image_size": list(app.image.size),
+        **snapshot,
+    }
+    try:
+        Path(filename).write_text(
+            json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
         )
-        if not filename:
-            return
-        document = {
-            "schema": "picture-capture-large-head-diagnostics-v1",
-            "page_index": max(0, int(getattr(app, "current_index", 0))),
-            "image_size": list(app.image.size),
-            **snapshot,
-        }
-        try:
-            Path(filename).write_text(
-                json.dumps(document, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-        except OSError as exc:
-            messagebox.showerror("导出失败", str(exc), parent=getattr(app, "root", None))
+    except OSError as exc:
+        messagebox.showerror("导出失败", str(exc), parent=getattr(app, "root", None))
 
 
 
