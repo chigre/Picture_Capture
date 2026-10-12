@@ -48,6 +48,58 @@ def _nearest_layout_row(
     )
 
 
+def _diagnostic_settings(effective: AppSettings) -> dict[str, Any]:
+    """Parameters sufficient to compare two page diagnostics, not all settings."""
+    names = (
+        "detection_method", "ocr_language", "paddle_language",
+        "dictionary_profile_id", "character_height", "row_padding",
+        "layout_columns_policy", "ordinary_auto_columns",
+        "ordinary_auto_start_y", "ordinary_auto_manual_x",
+        "ordinary_auto_column_width", "ordinary_auto_gutter",
+        "ordinary_auto_character_height", "ordinary_auto_row_padding",
+        "profile_cjk_allow_single_headword",
+        "profile_cjk_allow_bracketed_headword",
+        "layout_mask_illustrations",
+        "ordinary_indent_type",
+    )
+    result = {}
+    for name in names:
+        if hasattr(effective, name):
+            value = getattr(effective, name)
+            if isinstance(value, (str, int, float, bool, type(None))):
+                result[name] = value
+    return result
+
+
+def _diagnostic_layout(layout: Any) -> dict[str, Any]:
+    return {
+        "body_top": int(layout.body_top),
+        "body_bottom": int(layout.body_bottom),
+        "ordinary_line_height": float(layout.ordinary_line_height),
+        "ordinary_line_pitch": float(getattr(layout, "ordinary_line_pitch", 0) or 0),
+        "indent_type": str(getattr(layout, "indent_type", "")),
+        "transform": str(getattr(layout.transform, "kind", "")),
+        "reason": str(getattr(layout, "reason", "")),
+        "columns": [{
+            "index": i, "left": int(col.left), "right": int(col.right),
+            "physical_lines": len(getattr(col, "lines", ()) or ()),
+            "entry_rows": sum(str(getattr(row, "role", "")) == "entry"
+                              for row in getattr(col, "lines", ()) or ()),
+            "body_rows": sum(str(getattr(row, "role", "")) == "body"
+                             for row in getattr(col, "lines", ()) or ()),
+            "body_mode": (
+                {"center": float(col.body_mode.center),
+                 "support": int(getattr(col.body_mode, "support", 0) or 0)}
+                if getattr(col, "body_mode", None) is not None else None
+            ),
+            "entry_modes": [{
+                "center": float(mode.center),
+                "support": int(getattr(mode, "support", 0) or 0),
+            } for mode in getattr(col, "entry_modes", ()) or ()],
+        } for i, col in enumerate(getattr(layout, "columns", ()) or ())],
+    }
+
+
 def build_large_head_diagnostics(
     image: Image.Image,
     settings: AppSettings,
@@ -90,13 +142,22 @@ def build_large_head_diagnostics(
                 )
             try:
                 trace: list[dict[str, Any]] = []
+                fusion_context: dict[str, Any] = {}
                 understanding = understand_layout_core(
                     candidate_image, effective,
-                    page_index=int(page_index), large_head_diagnostics=trace,
+                    page_index=int(page_index),
+                    large_head_diagnostics=trace,
+                    large_head_debug_context=fusion_context,
                 )
             finally:
                 if candidate_image is not analysis:
                     candidate_image.close()
+
+            result["effective_settings"] = _diagnostic_settings(effective)
+            result["layout_snapshot"] = _diagnostic_layout(understanding.layout)
+            result["layout_role_transitions"] = fusion_context.get("role_transitions", [])
+            result["layout_role_stage_counts"] = fusion_context.get("role_counts", {})
+            result["fusion_promotion_counts"] = fusion_context.get("promotion_counts", {})
 
             for item in trace:
                 item["layout_role"], item["layout_source"] = _nearest_layout_row(
@@ -107,10 +168,13 @@ def build_large_head_diagnostics(
             if ordinary_mode:
                 # Only an in-memory computation of automatic candidates. Unlike
                 # the user's saved PDIC lines this is the actual pipeline output.
+                pipeline_trace: dict[str, Any] = {}
                 final_entries, _geometry = processing.detect_entries(
                     image, settings, profile_page_index=int(page_index),
                     page_sections=page_sections,
+                    debug_trace=pipeline_trace,
                 )
+                result["ordinary_pipeline_stages"] = pipeline_trace.get("stages", [])
             result["final_lines"] = [{
                 "x": int(entry.x), "y": int(entry.y),
                 "source": str(getattr(entry, "ocr_source", "") or ""),
