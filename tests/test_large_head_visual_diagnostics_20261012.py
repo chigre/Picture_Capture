@@ -172,3 +172,58 @@ def test_large_overlay_can_display_with_layout_off_and_preserves_hide_state(monk
     v3.draw_layout_visualization_if_enabled(app)
     assert seen == [("large", False)]
     assert app.hide_var.get() is True
+
+
+def test_session_only_switch_never_becomes_an_appsettings_field(monkeypatch):
+    """Regression for AttributeError: no 'show_large_head_diagnostics'."""
+    import tkinter as tk
+    from tkinter import ttk
+    import picture_capture.layout_visualization_ui_v3 as layout_controls
+
+    class Widget:
+        def __init__(self, parent, **kwargs):
+            self.parent = parent
+            self.options = kwargs
+            self.command = kwargs.get("command")
+
+        def grid(self, **kwargs):
+            self.grid_options = kwargs
+
+    monkeypatch.setattr(tk, "BooleanVar", lambda value=False: _Flag(value))
+    monkeypatch.setattr(ttk, "Checkbutton", Widget)
+    monkeypatch.setattr(ttk, "Button", Widget)
+    monkeypatch.setattr(layout_controls, "_next_grid_row", lambda section: 4)
+    events = []
+    settings = AppSettings()
+    app = SimpleNamespace(
+        settings=settings, quick_bool_vars={"show_rulers": _Flag(True)},
+        redraw=lambda: events.append("redraw"),
+        _attach_tooltip=lambda *a, **k: None,
+    )
+    ui.add_large_head_debug_controls(app, object())
+    assert set(app.quick_bool_vars) == {"show_rulers"}
+    assert not hasattr(settings, "show_large_head_diagnostics")
+    assert app._large_head_debug_toggle_widget.options["text"] == "显示大字头检测"
+    app._large_head_visualization_var.set(True)
+    app._large_head_debug_toggle_widget.command()
+    assert events == ["redraw"]
+    assert app._large_head_debug_snapshot_key is None
+
+
+def test_real_compact_display_panel_contains_same_session_toggle():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root / "src" / "picture_capture" / "ui"
+        / "compact_display_menu.py"
+    ).read_text(encoding="utf-8")
+    helper = (
+        root / "src" / "picture_capture"
+        / "large_head_visualization_ui.py"
+    ).read_text(encoding="utf-8")
+    assert 'check(row, "显示大字头检测", large_var, toggle_large_heads)' in source
+    assert 'row, text="导出诊断 JSON", command=export_large_heads' in source
+    assert "app._large_head_visualization_var" in source
+    assert "app.quick_bool_vars[\"show_large_head_diagnostics\"]" not in helper
+    assert "export_large_head_debug_json(app)" in source
