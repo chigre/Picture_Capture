@@ -71,7 +71,7 @@ class LayoutStepTrace:
                  *, details: dict[str, Any] | None = None) -> None:
         self.stages.append({
             "key": key, "title": title, "description": description,
-            "details": dict(details or {}), "columns": [], "rows": [], "changes": [],
+            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [],
         })
 
     def add_policy(self, estimate: Any, used: Any,
@@ -101,6 +101,7 @@ class LayoutStepTrace:
         bottom = int(getattr(layout, "body_bottom", 0))
         columns: list[dict[str, Any]] = []
         rows: list[dict[str, Any]] = []
+        lanes: list[dict[str, Any]] = []
         for col_index, col in enumerate(getattr(layout, "columns", ()) or ()):
             left = int(getattr(col, "left", 0))
             right = int(getattr(col, "right", left))
@@ -109,6 +110,21 @@ class LayoutStepTrace:
             columns.append({"index": col_index, "source_start": list(p0),
                             "source_end": list(p1), "left": left,
                             "right": right, "top": top, "bottom": bottom})
+            # Indent modes are measured in local column X coordinates.
+            # Copy their evidence without retaining the mutable mode objects.
+            for lane_index, mode in enumerate(getattr(col, "indent_modes", ()) or ()):
+                center = float(getattr(mode, "center", 0) or 0)
+                tolerance = float(getattr(mode, "tolerance", 0) or 0)
+                lane_top = _source_point(layout, left + center, top)
+                lane_bottom = _source_point(layout, left + center, bottom)
+                lanes.append({
+                    "id": f"C{col_index+1}-L{lane_index+1}",
+                    "column": col_index, "center": center,
+                    "tolerance": tolerance,
+                    "support": int(getattr(mode, "support", 0) or 0),
+                    "role": str(getattr(mode, "role", "unknown")),
+                    "source_line": [*lane_top, *lane_bottom],
+                })
             for line in getattr(col, "lines", ()) or ():
                 y0 = top + int(getattr(line, "y0", 0))
                 y1 = top + int(getattr(line, "y1", 0))
@@ -125,7 +141,7 @@ class LayoutStepTrace:
         self.stages.append({
             "key": key, "title": title, "description": description,
             "details": dict(details or {}),
-            "columns": columns, "rows": rows, "changes": changes,
+            "columns": columns, "lanes": lanes, "rows": rows, "changes": changes,
         })
         self._last_rows = rows
 
