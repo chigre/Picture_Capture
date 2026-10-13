@@ -98,7 +98,7 @@ def markdown_quality_report(report: dict[str, Any]) -> str:
     for row in report["rows"]:
         def cell(key: str) -> str:
             value = row.get(key)
-            return "—" if value is None else str(value).replace("|", "/").replace("\\n", " ")
+            return "—" if value is None else str(value).replace("|", "/").replace(chr(10), " ")
         name = row.get("dictionary") or row.get("mode") or "—"
         lines.append(
             f"| {cell('source')} | {cell('run_type')} | {name} | "
@@ -106,4 +106,4 @@ def markdown_quality_report(report: dict[str, Any]) -> str:
             f"{cell('fn')} | {cell('f1')} |"
         )
     lines.extend(["", "See JSON `ground_truth_status` for whether labels were independently verified."])
-    return "\\n".join(lines) + "\\n"
+    return chr(10).join(lines) + chr(10)
