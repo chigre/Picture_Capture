@@ -47,6 +47,21 @@ def _width_report(app: Any, root: Path, config: dict) -> str:
     return suffix
 
 
+def _commit_current_entry_inputs(app: Any) -> bool:
+    """Ensure disk PDIC matches visible edits before workers read page sidecars."""
+    try:
+        flush = getattr(app, "_flush_deferred_page_save", None)
+        if callable(flush):
+            flush()
+        save = getattr(app, "save_pdic", None)
+        if callable(save):
+            save(silent=True)
+        return True
+    except Exception as exc:
+        app.show_error("切图前保存当前词条失败", exc)
+        return False
+
+
 def _status(app: Any, text: str) -> None:
     try:
         app.status_var.set(text)
@@ -317,6 +332,8 @@ class CropController:
             return
         if not app._guard_transformed_geometry("整体切图"):
             return
+        if not _commit_current_entry_inputs(app):
+            return
 
         project = app.project
         page = app.current_page
@@ -369,6 +386,8 @@ class CropController:
         if not app.project or app._batch_active:
             return
         if not app._guard_transformed_geometry("批量整体切图"):
+            return
+        if not _commit_current_entry_inputs(app):
             return
 
         project = app.project
