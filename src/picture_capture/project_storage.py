@@ -483,3 +483,31 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
         if stage.exists():
             shutil.rmtree(stage, ignore_errors=True)
         raise
+
+
+def project_activity_path(project_root: Path) -> Path:
+    """Cheap per-project edit clock, independent of nested directory mtimes."""
+    root = Path(project_root)
+    if is_managed_project(root):
+        return storage_root(root) / ".activity"
+    return root / "QT" / ".activity"
+
+
+def note_page_artifact_edit(path: Path) -> None:
+    """Update the project-card edit clock after a successful PDIC/PPP publication."""
+    import os
+    artifact = Path(path)
+    if artifact.suffix.lower() not in {".pdic", ".ppp"}:
+        return
+    parent = artifact.parent
+    if parent.name in {"PDIC", "PPP"} and parent.parent.name == "data":
+        marker = parent.parent.parent / ".activity"
+    else:
+        marker = parent / "QT" / ".activity"
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+        os.utime(marker, None)
+    except OSError:
+        # Edit metadata is best effort and must never prevent data publication.
+        pass
