@@ -675,6 +675,7 @@ OCR_ADVANCED_CHECKS = (
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+        ("实验：原图白缝核验横线Y（默认关）", "separator_y_ink_safe_gap"),
     )
 
 DISPLAY_STYLE_CHECKS = (
