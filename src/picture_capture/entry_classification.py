@@ -13,6 +13,8 @@ from typing import Any, Iterable
 import json
 import os
 import tempfile
+import weakref
+from collections import OrderedDict
 
 from .models import AppSettings, Entry
 
@@ -45,13 +47,16 @@ class EntryClassification:
         )
 
 
+# Preserve the public registry's per-entry classification contract while tracking
+# actual object identity. Coordinate signatures alone cannot prevent recycled ids.
 _ENTRY_META: dict[int, EntryClassification] = {}
-# ``id(obj)`` is reusable after an Entry is collected. Keep a tiny ownership
-# signature beside each id so a recycled id cannot inherit metadata from an old
-# marker. Coordinates/page are stable for one materialized marker during its
-# classification lifetime; moved/reloaded markers are restored from the sidecar.
-_ENTRY_OWNER: dict[int, tuple[int, int, str]] = {}
-_LINE_META: dict[int, EntryClassification] = {}
+_ENTRY_OWNER: dict[int, tuple[weakref.ReferenceType[Entry], tuple[int, int, str]]] = {}
+
+# Some layout-line adapters (including SimpleNamespace) are not weakrefable.
+# Hold non-weakrefable instances strongly in a small LRU, preventing both id
+# collisions and unbounded process-lifetime accumulation.
+_LINE_CACHE_LIMIT = 512
+_LINE_META: "OrderedDict[int, tuple[Any, EntryClassification]]" = OrderedDict()
 
 
 def _entry_owner_signature(entry: Entry) -> tuple[int, int, str]:
@@ -64,7 +69,8 @@ def _entry_owner_signature(entry: Entry) -> tuple[int, int, str]:
 
 def _stored_entry_meta(entry: Entry) -> EntryClassification | None:
     key = id(entry)
-    if _ENTRY_OWNER.get(key) != _entry_owner_signature(entry):
+    owner = _ENTRY_OWNER.get(key)
+    if owner is None or owner[0]() is not entry or owner[1] != _entry_owner_signature(entry):
         _ENTRY_META.pop(key, None)
         _ENTRY_OWNER.pop(key, None)
         return None
@@ -74,8 +80,50 @@ def _stored_entry_meta(entry: Entry) -> EntryClassification | None:
 def _store_entry_meta(entry: Entry, meta: EntryClassification) -> EntryClassification:
     normalized = meta.normalized()
     key = id(entry)
+
+    def cleanup(ref: weakref.ReferenceType[Entry]) -> None:
+        owner = _ENTRY_OWNER.get(key)
+        if owner is not None and owner[0] is ref:
+            _ENTRY_OWNER.pop(key, None)
+            _ENTRY_META.pop(key, None)
+
+    reference = weakref.ref(entry, cleanup)
     _ENTRY_META[key] = normalized
-    _ENTRY_OWNER[key] = _entry_owner_signature(entry)
+    _ENTRY_OWNER[key] = (reference, _entry_owner_signature(entry))
+    return normalized
+
+
+def _line_metadata(line: Any) -> EntryClassification | None:
+    key = id(line)
+    item = _LINE_META.get(key)
+    if item is None:
+        return None
+    owner, meta = item
+    actual = owner() if isinstance(owner, weakref.ReferenceType) else owner
+    if actual is not line:
+        _LINE_META.pop(key, None)
+        return None
+    _LINE_META.move_to_end(key)
+    return meta
+
+
+def _store_line_metadata(line: Any, meta: EntryClassification) -> EntryClassification:
+    key = id(line)
+
+    def cleanup(ref: weakref.ReferenceType[Any]) -> None:
+        item = _LINE_META.get(key)
+        if item is not None and item[0] is ref:
+            _LINE_META.pop(key, None)
+
+    try:
+        owner: Any = weakref.ref(line, cleanup)
+    except TypeError:
+        owner = line  # slotted/non-weakrefable line; bounded strong retention
+    normalized = meta.normalized()
+    _LINE_META[key] = (owner, normalized)
+    _LINE_META.move_to_end(key)
+    while len(_LINE_META) > _LINE_CACHE_LIMIT:
+        _LINE_META.popitem(last=False)
     return normalized
 
 
@@ -215,19 +263,18 @@ def classification_from_evidence(entry: Entry) -> EntryClassification:
 
 def register_layout_line_classification(line: Any, evidence: Entry) -> EntryClassification:
     incoming = classification_from_evidence(evidence)
-    prior = _LINE_META.get(id(line))
+    prior = _line_metadata(line)
     # Oversized evidence is structurally stronger for crop semantics than a
     # regular symbol/indent hit on the same physical row.
     if prior is None or incoming.entry_scale == "oversized" or prior.entry_source == "unknown":
         chosen = incoming
     else:
         chosen = prior
-    _LINE_META[id(line)] = chosen.normalized()
-    return _LINE_META[id(line)]
+    return _store_line_metadata(line, chosen)
 
 
 def get_layout_line_classification(line: Any) -> EntryClassification:
-    return _LINE_META.get(id(line), EntryClassification(
+    return (_line_metadata(line) or EntryClassification(
         entry_source="indent",
         entry_scale="regular",
         auto_entry_source="indent",
