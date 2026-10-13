@@ -8197,7 +8197,20 @@ def detect_paddle_headwords(
         }
         tess_entries: list[Entry] = []
         tess_diagnostics: list[dict[str, Any]] = []
-        if use_tesseract:
+        skip_secondary_diagnostic = False
+        if bool(getattr(settings, "ocr_lazy_tesseract_diagnostics", False)):
+            from .ocr_lazy_secondary import can_skip_tesseract_diagnostic_column
+            skip_secondary_diagnostic = can_skip_tesseract_diagnostic_column(
+                diagnostics, enabled=True, paddle_enabled=use_paddle,
+                tesseract_enabled=use_tesseract,
+                rescue_enabled=bool(settings.paddle_tesseract_rescue),
+                arbitration_enabled=bool(settings.paddle_dual_ocr_arbitration),
+                lens_mode=lens_mode,
+            )
+        if skip_secondary_diagnostic:
+            tess_payload["skipped"] = True
+            tess_payload["skip_reason"] = "diagnostic_only_high_trust_paddle_column"
+        if use_tesseract and not skip_secondary_diagnostic:
             if str(getattr(settings, "layout_writing_mode", "horizontal-tb")).startswith("vertical"):
                 psm_values = [5]
             else:
@@ -8279,6 +8292,8 @@ def detect_paddle_headwords(
             else:
                 tess_payload["error"] = " | ".join(errors) or str(tess_availability.get("error") or "Tesseract 不可用")
 
+        if skip_secondary_diagnostic:
+            tess_payload["accepted_count"] = 0
         compare_tolerance = max(
             4,
             round(
@@ -8468,6 +8483,10 @@ def detect_paddle_headwords(
     agreement = _agreement_summary(review_candidates)
     if not use_tesseract and lens_mode == "off":
         agreement["agreement"] = 1.0
+    agreement["secondary_diagnostic_columns_skipped"] = sum(
+        1 for col in report_columns
+        if bool((col.get("tesseract", {}) or {}).get("skipped"))
+    )
     agreement["selected"] = sum(1 for item in review_candidates if item.get("selected"))
     agreement["cjk_duplicates_merged"] = cjk_duplicates_merged
     agreement["original_y_fallbacks"] = original_y_fallbacks
