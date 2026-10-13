@@ -149,6 +149,8 @@ def _format_stage(
     selected: dict[str, Any] | None = None,
     history: list[dict[str, str]] | None = None,
     selected_candidate: dict[str, Any] | None = None,
+    selected_marker: dict[str, Any] | None = None,
+    marker_history: list[dict[str, str]] | None = None,
 ) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
@@ -176,6 +178,26 @@ def _format_stage(
         lines.extend(["", f"本阶段物理行：{len(rows)}", "行角色：" + "、".join(
             f"{k} {v}" for k, v in sorted(counts.items())
         )])
+    if "entries" in stage:
+        markers = stage["entries"]
+        marker_changes = stage.get("entry_changes", [])
+        lines.extend(["", f"当前真实普通画线候选：{len(markers)}",
+                      f"相对上一画线阶段的变化：{len(marker_changes)}"])
+        for item in marker_changes[:100]:
+            before = item.get("before") or {}
+            after = item.get("after") or {}
+            lines.append(
+                f"  ({item['x']}, {item['y']}): {item['kind']} "
+                f"{before.get('source', '—')} → {after.get('source', '—')}"
+            )
+        if len(marker_changes) > 100:
+            lines.append(f"  ……其余 {len(marker_changes)-100} 项")
+    if selected_marker is not None:
+        lines.extend(["", "点击自动画线候选：",
+                      f"坐标：({selected_marker['x']}, {selected_marker['y']})",
+                      f"来源：{selected_marker.get('source', 'unknown')}"])
+        for item in marker_history or []:
+            lines.append(f"  {item['stage']} → {item['role']}")
     changes = stage.get("changes", [])
     if changes:
         lines.extend(["", f"相对上一个行状态的变化：{len(changes)}"])
@@ -504,9 +526,21 @@ class LayoutStepReplayWindow:
                                              tags=_STEP_TAG)
         # Candidate geometry comes directly from the same detector's optional
         # diagnostic trace (including rejected candidates), not a second scan.
-        candidates = visual.get("candidates", [])
+        candidates = (
+            visual.get("candidates", [])
+            if visual is stage or self.before.get() else stage.get("candidates", [])
+        )
         for candidate in candidates:
             status = str(candidate.get("status", "unknown"))
+            polygon = candidate.get("source_polygon")
+            if polygon and len(polygon) >= 3:
+                points = [v*factor for p in polygon for v in p]
+                self.canvas.create_polygon(
+                    *points, fill="", width=3 if status == "masked" else 2,
+                    outline="#e63c32" if status == "masked" else "#df9c24",
+                    dash=() if status == "masked" else (5, 3), tags=_STEP_TAG,
+                )
+                continue
             box = candidate.get("source_box")
             if box and len(box) == 4:
                 x0, y0, x1, y1 = box
@@ -529,6 +563,39 @@ class LayoutStepReplayWindow:
                     )
         self._visual_candidates = candidates
         self._visual_rows = visual["rows"]
+        markers = _stage_entries_for_display(
+            self._trace.stages, self._stage_index, self.before.get(),
+        )
+        marker_changes = (
+            stage.get("entry_changes", []) if not self.before.get() else []
+        )
+        added = {
+            (x["x"], x["y"]): x for x in marker_changes
+            if x["kind"] in {"added", "provenance_changed"}
+        }
+        current_keys = {(x["x"], x["y"]) for x in markers}
+        for marker in markers:
+            x0, y0 = int(marker["x"]), int(marker["y"])
+            marked = (x0, y0) in added
+            self.canvas.create_oval(
+                x0*factor-5, y0*factor-5, x0*factor+5, y0*factor+5,
+                outline="#18a647" if marked else "#d63e3e",
+                width=3 if marked else 2, tags=_STEP_TAG,
+            )
+        if not self.before.get():
+            for event in marker_changes:
+                if event["kind"] != "removed":
+                    continue
+                x0, y0 = event["x"]*factor, event["y"]*factor
+                self.canvas.create_line(
+                    x0-6, y0-6, x0+6, y0+6, fill="#dd9423",
+                    width=2, tags=_STEP_TAG,
+                )
+                self.canvas.create_line(
+                    x0+6, y0-6, x0-6, y0+6, fill="#dd9423",
+                    width=2, tags=_STEP_TAG,
+                )
+        self._visual_markers = markers
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
             f"｜红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化｜点击行查看历程"
@@ -541,9 +608,27 @@ class LayoutStepReplayWindow:
         factor = max(0.01, getattr(self, "_render_scale", self._scale))
         x = int(self.canvas.canvasx(event.x) / factor)
         y = int(self.canvas.canvasy(event.y) / factor)
+        selected_marker = next((
+            item for item in getattr(self, "_visual_markers", [])
+            if abs(int(item["x"]) - x) <= 9 and abs(int(item["y"]) - y) <= 9
+        ), None)
+        if selected_marker is not None:
+            self._show_text(_format_stage(
+                self._trace.stages[self._stage_index],
+                selected_marker=selected_marker,
+                marker_history=self._trace.history_for_entry(
+                    int(selected_marker["x"]), int(selected_marker["y"]),
+                ),
+            ))
+            return
         candidate = next((
             item for item in getattr(self, "_visual_candidates", [])
             if (
+                item.get("source_polygon")
+                and len(item["source_polygon"]) >= 3
+                and min(p[0] for p in item["source_polygon"]) <= x <= max(p[0] for p in item["source_polygon"])
+                and min(p[1] for p in item["source_polygon"]) <= y <= max(p[1] for p in item["source_polygon"])
+            ) or (
                 item.get("source_box") and len(item["source_box"]) == 4
                 and min(item["source_box"][0], item["source_box"][2]) <= x <= max(item["source_box"][0], item["source_box"][2])
                 and min(item["source_box"][1], item["source_box"][3]) <= y <= max(item["source_box"][1], item["source_box"][3])
