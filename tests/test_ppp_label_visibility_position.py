@@ -24,7 +24,9 @@ def test_ppp_label_visibility_is_respected_in_edit_mode_and_applied_immediately(
     source = (ROOT / "app.py").read_text(encoding="utf-8")
     assert 'show_labels = bool(self.settings.show_illustration_labels)' in source
     assert 'show_illustration_labels or self.polygon_draw_var.get()' not in source
-    assert 'command=lambda: self._apply_overlay_visibility_toggle("show_illustration_labels", label_visible_var)' in source
+    display = (ROOT / "ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'app._apply_overlay_visibility_toggle(' in display
+    assert '"show_illustration_labels", qb["show_illustration_labels"]' in display
 
 
 def test_ppp_label_border_width_is_fixed_and_background_is_consistent():
