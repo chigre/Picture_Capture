@@ -129,5 +129,22 @@ class LayoutStepTrace:
         })
         self._last_rows = rows
 
+    def history_for_row(self, row_id: str) -> list[dict[str, str]]:
+        """Chronological role history from frozen, *actual* Layout stage data."""
+        history: list[dict[str, str]] = []
+        prior: str | None = None
+        for stage in self.stages:
+            if not stage["rows"]:
+                continue
+            current = next((r for r in stage["rows"] if r["id"] == row_id), None)
+            role = current["role"] if current is not None else "absent"
+            if role != prior:
+                history.append({
+                    "stage": stage["title"], "role": role,
+                    "reason": stage["description"],
+                })
+                prior = role
+        return history
+
     def final_roles(self) -> list[tuple[str, str]]:
         return [(row["id"], row["role"]) for row in self._last_rows]
