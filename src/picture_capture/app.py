@@ -1325,14 +1325,6 @@ class SettingsDialog(tk.Toplevel):
         )
         appearance_combo.pack(side="left", padx=(4, 0))
         appearance_combo.bind("<<ComboboxSelected>>", self.parent._appearance_mode_selected)
-        self._bind_help_widget(
-            appearance_combo,
-            lambda: self._show_settings_help(
-                "颜色模式",
-                "选择浅色、深色或跟随系统的界面外观。深色预览会同步各个工作窗口，"
-                "但不会修改原始扫描图片、OCR 输入、PDIC/PPP 数据或导出的文件。",
-            ),
-        )
         appearance_help = ttk.Label(
             appearance_group,
             text="浅色使用正常界面；深色同步主界面、校对/Profile/设置窗口及扫描图夜间预览；"
