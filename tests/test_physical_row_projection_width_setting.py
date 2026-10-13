@@ -5,6 +5,7 @@ import json
 from dataclasses import fields
 
 from PIL import Image, ImageDraw
+import pytest
 
 from picture_capture.dictionary_page_design import _leading_width
 from picture_capture.layout_composition import infer_composed_physical_page_layout
@@ -58,6 +59,16 @@ def test_persisted_project_json_round_trip_and_older_project(tmp_path):
     path.write_text(json.dumps(raw), encoding="utf-8")
     assert AppSettings.from_json(path).physical_row_projection_width_percent == 42.0
     assert NAME in {item.name for item in fields(AppSettings)}
+
+
+@pytest.mark.parametrize("bad", [0, 9.9, 100.1, 101, float("nan"), float("inf"), "invalid"])
+def test_invalid_percentage_is_rejected_before_project_persistence(bad):
+    settings = AppSettings()
+    with pytest.raises(ValueError, match="10–100%"):
+        settings.physical_row_projection_width_percent = bad
+    assert settings.physical_row_projection_width_percent == 42.0
+    with pytest.raises(ValueError, match="10–100%"):
+        AppSettings(physical_row_projection_width_percent=bad)
 
 
 def test_settings_center_ordinary_advanced_not_ocr():
