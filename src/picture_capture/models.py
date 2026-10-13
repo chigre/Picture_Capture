@@ -236,6 +236,11 @@ class AppSettings(metaclass=_AppSettingsMeta):
     right_ratio_percent_version: int = 1
     # VB.NET NumericUpDown10: separator analysis width = column_width / value * 0.98.
     ordinary_right_divisor: float = 1.0
+    # Horizontal ink-projection sampling extent used to reconstruct physical
+    # rows before semantic entry/body classification. Defaults to the previous
+    # hard-coded 42% of each column. A minimum glyph/absolute width is retained
+    # by _leading_width, and 100% always covers the full configured column.
+    physical_row_projection_width_percent: float = 42.0
     horizontal_tolerance: int = 13
     marker_height: int = 5
     guide_width: int = 2
