@@ -21,7 +21,7 @@ class ReviewController:
     def __init__(self, app: Any) -> None:
         self.app = app
 
-    def load_ocr_review_candidates(self) -> None:
+    def load_ocr_review_candidates(self, preloaded_candidates: list[dict] | None = None) -> None:
         app = self.app
         app.ocr_review_candidates = []
         app.ocr_final_only_entries = []
@@ -30,8 +30,11 @@ class ReviewController:
         if not path or not path.exists():
             return
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            candidates = list(payload.get("review_candidates") or [])
+            if preloaded_candidates is None:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                candidates = list(payload.get("review_candidates") or [])
+            else:
+                candidates = list(preloaded_candidates)
             from ...ocr_final_decisions import (
                 apply_final_review_annotations, load_current_final_decisions,
             )
