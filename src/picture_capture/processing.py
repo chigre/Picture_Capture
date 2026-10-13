@@ -635,18 +635,25 @@ def detect_entries(
                     layout.transform.canonical_image_for_analysis(analysis_image)
                     if rotated else analysis_image
                 )
+                bracket_visual_candidates: list[dict[str, Any]] | None = (
+                    [] if replay_trace is not None else None
+                )
                 try:
                     entries = recover_bracketed_ordinary_entries(
                         entries, bracket_image, layout.columns,
                         int(layout.body_top), int(layout.body_bottom),
                         float(layout.ordinary_line_height),
                         transform=layout.transform, source_size=layout.source_size,
+                        **({"candidate_debug": bracket_visual_candidates}
+                           if bracket_visual_candidates is not None else {}),
                     )
                 finally:
                     if rotated:
                         bracket_image.close()
                 _record_ordinary_debug_stage(
                     debug_trace, "bracketed_headword_recovery", entries,
+                    **({"candidates": bracket_visual_candidates}
+                       if bracket_visual_candidates is not None else {}),
                 )
             elif replay_trace is not None:
                 replay_trace.add_note(
