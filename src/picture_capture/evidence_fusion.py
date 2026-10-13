@@ -560,12 +560,14 @@ def filter_headword_records(
         engine_name=engine_name,
         profile=profile,
     )
-    peer_style_count = _rescue_local_peer_style_continuations(
-        entries, diagnostics, source_top=source_top,
-        source_column_x=source_column_x, settings=settings,
-        engine_name=engine_name,
-        trusted_anchors=trusted_before_rescues,
-    )
+    peer_style_count = 0
+    if bool(getattr(settings, "paddle_peer_style_rescue", False)):
+        peer_style_count = _rescue_local_peer_style_continuations(
+            entries, diagnostics, source_top=source_top,
+            source_column_x=source_column_x, settings=settings,
+            engine_name=engine_name,
+            trusted_anchors=trusted_before_rescues,
+        )
 
     entries.sort(key=lambda item: (int(item.y), int(item.x)))
     if diagnostics and isinstance(diagnostics[0], dict) and "meta" in diagnostics[0]:
