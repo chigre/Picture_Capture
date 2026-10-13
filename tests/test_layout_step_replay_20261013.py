@@ -62,14 +62,15 @@ def test_diagnostic_traces_actual_pipeline_and_does_not_pollute_normal_cache():
 def test_full_replay_builds_denoise_stage_but_does_not_edit_original():
     image, settings = sample_page()
     original = image.tobytes()
-    trace, thumbnail = _run_replay(image, settings, 0)
+    trace, previews = _run_replay(image, settings, 0)
     try:
         assert image.tobytes() == original
         assert trace.stages[0]["key"] == "image_preparation"
         assert trace.stages[-1]["key"] == "final"
-        assert thumbnail.size[0] <= 1400
+        assert previews["image_preparation"].size[0] <= 1400
     finally:
-        thumbnail.close()
+        for preview in previews.values():
+            preview.close()
         image.close()
 
 
@@ -89,6 +90,9 @@ def test_stage_snapshots_freeze_roles_and_report_transitions():
     assert trace.stages[1]["rows"][0]["role"] == "entry"
     assert trace.stages[1]["changes"] == [
         {"id": "C1-Y15-24", "kind": "role", "before": "body", "after": "entry"},
+    ]
+    assert [(v["stage"], v["role"]) for v in trace.history_for_row("C1-Y15-24")] == [
+        ("前", "body"), ("后", "entry"),
     ]
     assert _stage_rows_for_display(trace.stages, 1, True)["key"] == "before"
     assert _stage_rows_for_display(trace.stages, 1, False)["key"] == "after"
