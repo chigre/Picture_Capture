@@ -11,6 +11,7 @@ reuse exactly the same final role assignment.
 
 from collections import OrderedDict
 import hashlib
+import weakref
 import math
 from typing import Any, Iterable
 
@@ -41,10 +42,43 @@ _CACHE_LIMIT = 6
 _LAYOUT_CACHE: "OrderedDict[tuple[Any, ...], PageUnderstanding]" = OrderedDict()
 
 
+_READONLY_IMAGE_DIGESTS: "weakref.WeakKeyDictionary[Image.Image, tuple[Any, tuple[Any, ...]]]" = weakref.WeakKeyDictionary()
+_FINGERPRINT_CHUNK_BYTES = 4 * 1024 * 1024
+_FINGERPRINT_STREAM_THRESHOLD = 16 * 1024 * 1024
+
+
 def _image_fingerprint(image: Image.Image) -> tuple[Any, ...]:
-    """Content key that survives rebuilding the same denoised PIL image."""
-    digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
-    return (str(image.mode), tuple(image.size), digest)
+    """Content-accurate hash with bounded temporary memory for large scans.
+
+    Mutable PIL images must *always* rehash: paste/putpixel can modify the same
+    ImagingCore in-place. A readonly image instead has copy-on-write semantics
+    through public PIL methods, allowing a weak, identity-checked fast path.
+    """
+    immutable = bool(getattr(image, "readonly", 0))
+    if immutable:
+        hit = _READONLY_IMAGE_DIGESTS.get(image)
+        if hit is not None and hit[0] is image.im:
+            fingerprint = hit[1]
+            if fingerprint[:2] == (str(image.mode), tuple(image.size)):
+                return fingerprint
+
+    digest = hashlib.blake2b(digest_size=16)
+    estimated_size = image.width * image.height * max(1, len(image.getbands()))
+    if estimated_size < _FINGERPRINT_STREAM_THRESHOLD:
+        digest.update(image.tobytes())
+    else:
+        # The complete tobytes() copy can exceed 100 MB at 600 dpi.
+        rows = max(1, _FINGERPRINT_CHUNK_BYTES // max(1, image.width * len(image.getbands())))
+        for y in range(0, image.height, rows):
+            tile = image.crop((0, y, image.width, min(y + rows, image.height)))
+            try:
+                digest.update(tile.tobytes())
+            finally:
+                tile.close()
+    result = (str(image.mode), tuple(image.size), digest.digest())
+    if immutable:
+        _READONLY_IMAGE_DIGESTS[image] = (image.im, result)
+    return result
 
 
 def _settings_fingerprint(settings: AppSettings) -> str:
@@ -56,6 +90,7 @@ def _settings_fingerprint(settings: AppSettings) -> str:
 
 def clear_layout_understanding_cache() -> None:
     _LAYOUT_CACHE.clear()
+    _READONLY_IMAGE_DIGESTS.clear()
 
 
 def _mode_interval(mode: Any) -> tuple[float, float]:
