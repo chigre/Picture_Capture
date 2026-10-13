@@ -2267,25 +2267,22 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert '"manual_x": "width"' in helper_source
     assert '"body_indent": "width"' in helper_source
     assert '"horizontal_tolerance": "width"' in helper_source
-    quick_start = text.index("    def _build_quick_settings(")
-    quick_end = text.index("\n    def ", quick_start + 10)
-    quick = text[quick_start:quick_end]
-    for label in ("正文起始Y：", "首栏X：", "单栏宽：", "栏间空："):
-        assert label in quick
-    # More precise layout labels replaced the old ambiguous height/gap text.
-    # They still map to the same pixel-backed settings variables.
-    for label, variable in (
-        ("典型单行字高：", "character_height"),
-        ("典型行间空白：", "row_padding"),
-        ("正文缩进：", "body_indent"),
-    ):
-        assert f'"{label}", "{variable}"' in quick
-    assert quick.index('"单栏宽："') > quick.index('"首栏X："')
-    assert quick.index('"栏间空："') > quick.index('"单栏宽："')
-    assert "self.quick_pixel_vars: dict[str, tk.StringVar] = {}" in quick
-    assert 'ttk.Label(value_frame, text="%")' in quick
-    assert 'ttk.Label(value_frame, text="px")' in quick
-    assert '"若所选页面数量≥2，参数为稳健中位数"' in quick
+    quick = (
+        root / "src" / "picture_capture" / "ui" / "quick_state.py"
+    ).read_text(encoding="utf-8")
+    layout = (
+        root / "src" / "picture_capture" / "ui" / "compact_layout_profile_menu.py"
+    ).read_text(encoding="utf-8")
+    for field in ("start_y", "manual_x", "column_width", "gutter",
+                  "character_height", "row_padding", "body_indent",
+                  "horizontal_tolerance"):
+        assert f'"{field}": float' in quick
+        assert f'"{field}"' in layout or field in {"body_indent", "horizontal_tolerance"}
+    assert "app.quick_pixel_vars[name] = tk.StringVar(" in quick
+    assert "if name in LAYOUT_PERCENT_AXES:" in quick
+    assert 'ttk.Label(frame, text="% ", width=2)' in layout
+    assert 'ttk.Label(frame, text="px", width=2)' in layout
+    assert "_build_quick_settings(" not in text
     detect = (
         Path(__file__).resolve().parents[1] / "src" /
         "picture_capture" / "layout_detection_actions.py"
@@ -3405,14 +3402,15 @@ def test_ordinary_only_controls_stay_out_of_main_layout_section():
     assert '("自动精修横线 Y", "paddle_refine_separator_y")' in normal_checks
     assert '("使用自动版面参数", "ordinary_auto_layout")' in normal_checks
 
-    quick_start = source.index("    def _build_quick_settings(")
-    quick_end = source.index("\n    def ", quick_start + 10)
-    quick = source[quick_start:quick_end]
-    assert 'text="自动精修横线Y（通用）"' not in quick
-    assert 'self.quick_bool_vars["paddle_refine_separator_y"] = refine_y_var' not in quick
-    assert 'text="使用自动版面参数"' not in quick
-    for label in ("单行高%：", "行间空%：", "正文缩进%：", "微调判距%："):
-        assert label not in quick
+    # Ordinary-only controls belong in Settings Center, not the compact
+    # shared quick-state schema. No historical UI owner remains.
+    quick = (
+        Path(__file__).resolve().parents[1] /
+        "src" / "picture_capture" / "ui" / "quick_state.py"
+    ).read_text(encoding="utf-8")
+    assert "_build_quick_settings" not in source
+    assert "paddle_refine_separator_y" not in quick
+    assert "ordinary_auto_layout" not in quick
     for name in (
         "ordinary_auto_columns", "ordinary_auto_start_y", "ordinary_auto_manual_x",
         "ordinary_auto_column_width", "ordinary_auto_gutter",
@@ -3421,12 +3419,6 @@ def test_ordinary_only_controls_stay_out_of_main_layout_section():
         assert name not in quick
         assert name in normal_checks
     assert '"bottom_y"' not in quick
-
-    hide_line = 'option_row, text="隐藏线框(插图除外)", variable=self.hide_var'
-    hide_at = quick.index(hide_line)
-    hide_tail = quick[hide_at:hide_at + 260]
-    assert ').pack(side="left")' in hide_tail
-    assert 'padx=(8, 0)' not in hide_tail
 
 
 def test_ordinary_backup_checkbox_defaults_and_two_row_auto_layout_grid():
