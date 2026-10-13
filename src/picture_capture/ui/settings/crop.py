@@ -17,6 +17,7 @@ from ...crop.settings import (
     UNLINED_FILTER_ENABLED_KEY,
 )
 from ...project_storage import qt_root
+from ...formats import write_text_atomic
 from ...single_line_merge_settings import (
     MERGE_HELP,
     MERGE_LABEL,
@@ -484,7 +485,6 @@ def save_integrated_crop_settings(dialog) -> None:
         return
     path = qt_root(dialog.parent.project.root) / CropSettingsDialog.CONFIG_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    write_text_atomic(
+        path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
     )
