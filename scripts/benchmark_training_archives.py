@@ -177,6 +177,8 @@ def audit(paths: list[Path]) -> dict:
     recall = tp / (tp + fn) if tp + fn else 0.
     return {
         "format": "picture-capture-archive-audit-v1",
+        "run_type": "historic_cache",
+        "ground_truth_status": "saved_training_annotation_and_pdic",
         "algorithm": "ordered_max_cardinality_min_delta_v1",
         "evaluates": "historic_cached_final_entries_only",
         "all_archives": len(paths),
