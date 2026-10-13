@@ -10,6 +10,7 @@ import json
 import math
 import os
 import re
+import subprocess  # legacy paddle_headwords public test/monkeypatch hook
 import threading
 import unicodedata
 
