@@ -173,3 +173,48 @@ def test_narrow_real_bridge_marker_wins_click_over_its_parent_band():
     assert _candidate_at_source([parent, gap], 30, 25)["status"] == "bridged_gap"
     assert _candidate_at_source([parent, gap], 30, 28)["status"] == "bridged_gap"
     assert _candidate_at_source([parent, gap], 30, 50)["status"] == "connected_band"
+
+
+
+def test_runtime_diagnostics_exposes_loaded_paths_and_complete_stage_list():
+    from types import SimpleNamespace
+    from picture_capture.layout_step_replay_ui import LayoutStepReplayWindow
+
+    shown = []
+    trace = LayoutStepTrace()
+    for key, title in [
+        ("raw_estimate", "自动版面候选"),
+        ("projection_gap_bridge", "墨迹投影与短间隙连接"),
+        ("projection_tall_split", "过高墨迹带拆分与逻辑行恢复"),
+        ("physical_rows", "物理行检测"),
+    ]:
+        trace.add_note(key, title, "真实阶段")
+    fake = SimpleNamespace(
+        _trace=trace,
+        _show_text=lambda value: shown.append(value),
+    )
+    LayoutStepReplayWindow.show_runtime_diagnostics(fake)
+    assert len(shown) == 1
+    displayed = shown[0]
+    assert "实际加载的模块路径" in displayed
+    assert "layout_step_replay_ui.py" in displayed
+    assert "layout_composition.py" in displayed
+    assert "projection_gap_bridge=已记录" in displayed
+    assert "projection_tall_split=已记录" in displayed
+    assert "04  物理行检测" in displayed
+
+
+def test_runtime_diagnostics_reports_anomalous_missing_projection_stages():
+    from types import SimpleNamespace
+    from picture_capture.layout_step_replay_ui import LayoutStepReplayWindow
+
+    shown = []
+    trace = LayoutStepTrace()
+    trace.add_note("physical_rows", "物理行检测", "缺少投影记录")
+    fake = SimpleNamespace(
+        _trace=trace,
+        _show_text=lambda value: shown.append(value),
+    )
+    LayoutStepReplayWindow.show_runtime_diagnostics(fake)
+    assert "异常：存在物理行阶段但缺少投影阶段" in shown[0]
+    assert "projection_gap_bridge=缺失" in shown[0]
