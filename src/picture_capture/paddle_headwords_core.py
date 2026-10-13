@@ -6212,34 +6212,13 @@ def _image_cache_fingerprint(image: Image.Image) -> str:
 
 
 def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSettings) -> str:
-    # Only OCR-input-affecting settings belong here. Candidate rules are
-    # intentionally omitted so users can tune regex/weights and reuse cached
-    # raw OCR without re-running the model.
-    data = {
-        "version": 4,
-        "image_size": list(image.size),
-        "image_fingerprint": _image_cache_fingerprint(image),
-        "layout_transform": geometry.transform.kind,
-        "paths": [path.points for path in geometry.column_paths],
-        "geometry_top": int(geometry.top),
-        "geometry_bottom": int(geometry.bottom),
-        "column_widths": [int(value) for value in getattr(geometry, "column_widths", [])],
-        "configured_column_width": int(getattr(settings, "column_width", 0) or 0),
-        "band_width_semantics": "effective_column_ratio_v2",
-        "band_width_ratio": max(1.0, min(100.0, float(getattr(settings, "paddle_band_width_ratio", 100.0)))),
-        "band_left_margin": settings.paddle_band_left_margin,
-        "language": _paddle_language(settings),
-        "device": settings.paddle_device,
-        "ocr_version": settings.paddle_ocr_version,
-        "preprocessing": str(getattr(settings, "paddle_preprocessing", "original")),
-        "max_input_side": int(getattr(settings, "paddle_max_input_side", 2800)),
-        "use_textline_orientation": bool(getattr(settings, "paddle_use_textline_orientation", False)),
-        "raw_rec_threshold": _RAW_OCR_THRESHOLD,
-        "use_paddleocr": bool(getattr(settings, "paddle_use_paddleocr", True)),
-    }
-    encoded = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
+    from .paddle_raw_cache_signature import cache_signature
+    return cache_signature(
+        image, geometry, settings,
+        image_fingerprint=_image_cache_fingerprint,
+        paddle_language=_paddle_language,
+        raw_threshold=_RAW_OCR_THRESHOLD,
+    )
 
 
 def _records_as_merged_lines(records: list[OCRRecord], settings: AppSettings) -> list[OCRLine]:
