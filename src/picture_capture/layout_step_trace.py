@@ -175,6 +175,13 @@ class LayoutStepTrace:
             per_column.append({
                 "column": column + 1,
                 "sample_strip_width": int(item["strip_width"]),
+                "configured_column_width": int(item.get("column_width", item["strip_width"])),
+                "requested_width_percent": float(item.get("requested_percent", 42.0)),
+                "effective_width_percent": round(
+                    100.0 * int(item["strip_width"])
+                    / max(1, int(item.get("column_width", item["strip_width"]))),
+                    2,
+                ),
                 "projection_threshold": evidence["threshold"],
                 "row_height_reference": evidence["reference_height"],
                 "gap_limit_px": evidence["max_gap_px"],

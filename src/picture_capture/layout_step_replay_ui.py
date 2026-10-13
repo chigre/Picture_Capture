@@ -230,7 +230,10 @@ def _format_stage(
         for column in columns:
             lines.extend([
                 "",
-                f"第 {column['column']} 栏｜采样宽 {column['sample_strip_width']}px，"
+                f"第 {column['column']} 栏｜设置采样 {column['requested_width_percent']:.1f}% 栏宽，"
+                f"实际采样宽 {column['sample_strip_width']}px"
+                f" / {column['configured_column_width']}px"
+                f"（{column['effective_width_percent']:.1f}%），"
                 f"参考行高 {column['row_height_reference']:.1f}px",
                 f"阈值 {column['projection_threshold']:.1f} 墨迹像素/行；"
                 f"最多连接 {column['gap_limit_px']} 个空白像素行",

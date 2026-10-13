@@ -1693,6 +1693,7 @@ class SettingsDialog(tk.Toplevel):
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
         try:
+            _settings_lifecycle_ui.validate_projection_width(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)

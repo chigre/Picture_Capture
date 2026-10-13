@@ -234,7 +234,13 @@ def infer_dictionary_page_layout(
             column_width = max(1, right - left)
             strip = page_ink[
                 top:bounded_bottom,
-                left:min(canonical.width, left + base._leading_width(column_width, scale)),
+                left:min(
+                    canonical.width,
+                    left + base._leading_width(
+                        column_width, scale,
+                        getattr(effective, "physical_row_projection_width_percent", 42.0),
+                    ),
+                ),
             ]
             strips.append(strip)
             if (
@@ -249,6 +255,10 @@ def infer_dictionary_page_layout(
                     "column": int(column_index),
                     "left": int(left), "top": int(top),
                     "strip_width": int(strip.shape[1]), "scale": float(scale),
+                    "column_width": int(column_width),
+                    "requested_percent": float(getattr(
+                        effective, "physical_row_projection_width_percent", 42.0,
+                    )),
                     "evidence": evidence,
                 })
             else:

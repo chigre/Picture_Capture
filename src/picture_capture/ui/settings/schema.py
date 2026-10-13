@@ -21,6 +21,7 @@ FIELDS = [
         ("正文缩进", "body_indent", float), ("单行字高", "character_height", float),
         ("行间空白", "row_padding", float), ("向右比例 %", "right_ratio", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
+        ("物理行墨迹投影采样宽度（%栏宽）", "physical_row_projection_width_percent", float),
         ("微调判距", "horizontal_tolerance", float), ("标记线高", "marker_height", int),
         ("词头横线不透明度", "headword_marker_opacity", float),
         ("垂直线宽", "guide_width", int), ("栏左垂线不透明度", "guide_opacity", float),
@@ -213,6 +214,7 @@ SETTING_LABELS = {
         "darkness_threshold": "词头锚点黑度阈值",
         "dark_area_percent": "候选区域白度上限",
         "ordinary_right_divisor": "VB 向右比例 1/x",
+        "physical_row_projection_width_percent": "物理行墨迹投影采样宽度",
         "white_threshold_high": "VB 全白阈值上限",
         "white_threshold_low": "VB 白度阈值下限",
         "whitespace_adjustment": "VB 白带修正量",
@@ -280,6 +282,16 @@ SETTING_HELP = {
         "darkness_threshold": "作用：普通画线恢复 VB.NET 的固定词头黑色锚点门槛。RGB 和低于该值的像素才有资格成为栏左词头起点；默认 300 相当于灰度约 100。这个门槛跨页固定，不随每页 Otsu 分布漂移。\n\n调整：提高可接受更浅的印刷，但也更容易让灰噪声成为锚点；降低更严格。它只负责找到词头起点，随后还必须通过二维【候选区域白度上限】确认。",
         "dark_area_percent": "作用：对应 VB.NET IsPoint。找到栏左黑色锚点后，在原图上检查向正文方向【正文缩进 × 2×正文缩进】的二维区域，按原 VB 分母规则计算平均亮度；高于该百分比就拒绝。默认 90%。\n\n这一步与栏左锚点是两个独立门：前者限制起点位置，IsPoint 再确认附近确实存在一块词头文字。",
         "ordinary_right_divisor": "作用：这是恢复出来的 VB.NET【向右比例 1/x】，只服务普通画线的横向白带分析，和当前【向右比例 %】词条框宽度完全分离。实际分析宽度约为 单栏宽 / 本值 × 0.98；默认 1.0，即检查接近整栏的 98%。\n\n值越大，Y 分隔判断看的横向范围越窄。不要用它调词条切图宽度。",
+        "physical_row_projection_width_percent": (
+            "作用：控制 Layout 重建物理行前，对每栏左侧进行墨迹行投影的采样宽度，"
+            "单位为当前栏宽的百分比。范围 10–100%，默认 42%，旧项目保持原算法行为。"
+            "实际宽度还受至少 7 倍典型行高或 96px 的下限保护；"
+            "故较窄栏或较大字高时可能超过指定比例。100% 覆盖整栏。\n\n"
+            "调整：增大有助于捕获深缩进续行、栏首空白而右半栏有字的行；"
+            "过大可能纳入栏中插图、跨行笔画或长释义，导致邻行粘连。"
+            "仅影响 Layout 物理行采样，不改变扫描图或切图宽度。"
+            "在【LAYOUT 分析过程回放】可核对每栏的实际采样宽度。"
+        ),
         "white_threshold_high": "作用：VB 白带定位的上限阈值，采用原版 0–1000 行亮度尺度，默认 999。完全找不到第一阶段的无黑点横行时，第二阶段从这里开始逐级放宽。\n\n通常保持 999；降低会更早接受带少量墨迹的横行。",
         "white_threshold_low": "作用：VB 白带定位逐级放宽的下限，默认 700。算法按 999、997、995……一直降到本值，寻找窄行距、轻微歪斜或上下伸字符之间仍足够亮的分隔行。\n\n过低可能把文字内部亮带误当行间空白。",
         "whitespace_adjustment": "作用：对应 VB.NET 的白带修正量，默认 2 px。第一阶段找到白行后会检查其上方连续高白度行并向白带中部修正；第二阶段也用它处理极窄行间隙和局部歪斜。单位始终是原图像素。",
@@ -400,7 +412,8 @@ NORMAL_COMMON_FIELDS = (
 
 NORMAL_ADVANCED_FIELDS = (
         "analysis_threshold_mode", "darkness_threshold", "dark_area_percent",
-        "ordinary_right_divisor", "white_threshold_high", "white_threshold_low",
+        "ordinary_right_divisor", "physical_row_projection_width_percent",
+        "white_threshold_high", "white_threshold_low",
         "whitespace_adjustment", "upward_ratio", "row_step_multiplier",
         "analysis_left", "analysis_right",
         "column_track_radius", "column_track_block_height", "column_track_max_step",
@@ -454,7 +467,9 @@ SETTING_UNITS = {
         "column_width": "% 图宽", "gutter": "% 图宽", "body_indent": "% 图宽",
         "character_height": "% 图高", "row_padding": "% 图高", "horizontal_tolerance": "% 图宽",
         "darkness_threshold": "RGB 和", "dark_area_percent": "%",
-        "ordinary_right_divisor": "1/x", "white_threshold_high": "0–1000",
+        "ordinary_right_divisor": "1/x",
+        "physical_row_projection_width_percent": "% 单栏宽",
+        "white_threshold_high": "0–1000",
         "white_threshold_low": "0–1000", "whitespace_adjustment": "原图px",
         "upward_ratio": "1/x", "analysis_left": "% 图宽", "analysis_right": "% 图宽",
         "row_step_multiplier": "×行高", "column_track_radius": "% 单栏宽",
@@ -490,6 +505,7 @@ SETTING_SPIN = {
         "character_height": (0.01, 100.0, 0.05), "row_padding": (0.0, 100.0, 0.05),
         "horizontal_tolerance": (0.0, 100.0, 0.05), "darkness_threshold": (0, 765, 1),
         "dark_area_percent": (1.0, 100.0, 0.1), "ordinary_right_divisor": (1.0, 5.0, 0.1),
+        "physical_row_projection_width_percent": (10.0, 100.0, 1.0),
         "white_threshold_high": (0, 1000, 1), "white_threshold_low": (0, 1000, 1),
         "whitespace_adjustment": (0, 30, 1), "upward_ratio": (0.1, 10.0, 0.1),
         "row_step_multiplier": (0.5, 3.0, 0.1),
