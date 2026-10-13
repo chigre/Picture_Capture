@@ -42,7 +42,7 @@ _CACHE_LIMIT = 6
 _LAYOUT_CACHE: "OrderedDict[tuple[Any, ...], PageUnderstanding]" = OrderedDict()
 
 
-_READONLY_IMAGE_DIGESTS: "weakref.WeakKeyDictionary[Image.Image, tuple[Any, tuple[Any, ...]]]" = weakref.WeakKeyDictionary()
+_READONLY_IMAGE_DIGESTS: dict[int, tuple[weakref.ReferenceType[Image.Image], Any, tuple[Any, ...]]] = {}
 _FINGERPRINT_CHUNK_BYTES = 4 * 1024 * 1024
 _FINGERPRINT_STREAM_THRESHOLD = 16 * 1024 * 1024
 
@@ -56,9 +56,11 @@ def _image_fingerprint(image: Image.Image) -> tuple[Any, ...]:
     """
     immutable = bool(getattr(image, "readonly", 0))
     if immutable:
-        hit = _READONLY_IMAGE_DIGESTS.get(image)
-        if hit is not None and hit[0] is image.im:
-            fingerprint = hit[1]
+        # PIL Image is weakrefable but unhashable; keyed identity + live weakref
+        # avoids both WeakKeyDictionary TypeError and recycled-id stale hits.
+        hit = _READONLY_IMAGE_DIGESTS.get(id(image))
+        if hit is not None and hit[0]() is image and hit[1] is image.im:
+            fingerprint = hit[2]
             if fingerprint[:2] == (str(image.mode), tuple(image.size)):
                 return fingerprint
 
@@ -77,7 +79,14 @@ def _image_fingerprint(image: Image.Image) -> tuple[Any, ...]:
                 tile.close()
     result = (str(image.mode), tuple(image.size), digest.digest())
     if immutable:
-        _READONLY_IMAGE_DIGESTS[image] = (image.im, result)
+        key = id(image)
+
+        def on_gc(ref: weakref.ReferenceType[Image.Image]) -> None:
+            hit = _READONLY_IMAGE_DIGESTS.get(key)
+            if hit is not None and hit[0] is ref:
+                _READONLY_IMAGE_DIGESTS.pop(key, None)
+
+        _READONLY_IMAGE_DIGESTS[key] = (weakref.ref(image, on_gc), image.im, result)
     return result
 
 
