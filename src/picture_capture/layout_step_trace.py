@@ -183,14 +183,16 @@ class LayoutStepTrace:
             })
         details = {
             k: v for k, v in stage.items()
-            if k not in {"stage", "entries", "added", "removed"}
+            if k not in {"stage", "entries", "added", "removed", "candidates"}
         }
         self.stages.append({
             "key": stage["stage"], "title": description,
             "description": "来自 processing.detect_entries 真实普通画线阶段；"
                            "红点为当前画线候选，绿圈为新增或证据升级，橙叉为删除。",
             "details": details, "columns": [], "lanes": [], "rows": [],
-            "changes": [], "candidates": [], "entries": markers,
+            "changes": [], "candidates": [
+                dict(item) for item in stage.get("candidates", [])
+            ], "entries": markers,
             "entry_changes": changes,
         })
 
