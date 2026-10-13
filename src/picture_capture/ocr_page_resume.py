@@ -11,6 +11,8 @@ from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version as package_version
 import hashlib
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -18,28 +20,103 @@ from .formats import write_text_atomic
 
 
 RESUME_FORMAT = "picture-capture-ocr-page-resume-v1"
+# Increment this when changing fingerprint semantics or the source selection.
+ALGORITHM_FINGERPRINT_FORMAT = "picture-capture-detection-source-tree-v2"
 
 
 @lru_cache(maxsize=1)
 def _algorithm_environment_key() -> str:
-    """Reject checkpoints produced by older OCR/parser/layout source versions.
+    """Fingerprint the *whole* detection-capable package, not a brittle shortlist.
 
-    Each application run computes this only once. Source modules change during
-    upgrades, and major engine distributions may also change independently.
+    OCR, Layout, coordinate transforms, candidate scoring and shared Y refinement
+    span many modules and are regularly extracted into new helpers. A fixed list
+    silently reuses checkpoints after changes to a newly introduced module.
+    Conservatively invalidating after *any* package Python source change is
+    preferable to skipping a page whose drawing output might now be different.
+
+    Source bytes and stable relative paths are hashed once per process. When
+    package source is unavailable, raise OSError so validated_resume fails closed.
     """
+    root = Path(__file__).resolve().parent
+    sources = sorted(
+        (path for path in root.rglob("*.py") if path.is_file()),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+    if not sources:
+        raise OSError("Cannot verify OCR resume: no readable package sources")
+
     digest = hashlib.sha256()
+    digest.update(ALGORITHM_FINGERPRINT_FORMAT.encode("ascii"))
+    for path in sources:
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(bytes((0,)))
+        _digest_file(path, digest)
+
+    # Detection may depend on native image/OCR distributions, not only Python
+    # source. Missing optional packages have a stable sentinel, not an exception.
     for name in (
-        "processing.py", "paddle_headwords_core.py",
-        "evidence_fusion.py", "page_understanding_fusion.py",
+        "paddleocr", "paddlepaddle", "pytesseract", "Pillow", "numpy",
+        "opencv-python", "opencv-python-headless", "chrome-lens-py",
     ):
-        _digest_file(Path(__file__).with_name(name), digest)
-    for name in ("paddleocr", "paddlepaddle", "pytesseract", "Pillow"):
         try:
             value = package_version(name)
         except PackageNotFoundError:
             value = "<not installed>"
         digest.update(f"{name}={value}|".encode("utf-8"))
     return digest.hexdigest()
+
+
+
+@lru_cache(maxsize=16)
+def _tesseract_executable_key(executable_path: str) -> str:
+    """Version AND exact binary bytes, once per process; unavailable fails closed."""
+    executable = Path(executable_path)
+    if not executable.is_file():
+        raise OSError(f"Cannot verify Tesseract executable: {executable}")
+    digest = hashlib.sha256()
+    _digest_file(executable, digest)
+    try:
+        run = subprocess.run(
+            [str(executable), "--version"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise OSError("Cannot verify installed Tesseract version") from exc
+    if run.returncode != 0 or not (run.stdout or run.stderr):
+        raise OSError("Cannot verify installed Tesseract version")
+    digest.update(run.stdout)
+    digest.update(run.stderr)
+    return digest.hexdigest()
+
+
+def _runtime_ocr_engine_key(settings: Any, method: str) -> str:
+    """Include non-Python OCR executables; never trust unversionable remote OCR."""
+    lens_enabled = (
+        bool(getattr(settings, "paddle_enable_lens", False))
+        and str(getattr(settings, "paddle_lens_mode", "off") or "off") != "off"
+    )
+    if lens_enabled:
+        # Remote Lens results can change without a local source/version change.
+        raise OSError("Cannot safely resume pages using remote Google Lens")
+
+    needs_tesseract = (
+        bool(getattr(settings, "paddle_compare_tesseract", False))
+        or bool(getattr(settings, "paddle_tesseract_rescue", False))
+        or bool(getattr(settings, "paddle_dual_ocr_arbitration", False))
+        or (method == "combined" and getattr(settings, "ocr_engine", "") == "tesseract")
+    )
+    if not needs_tesseract:
+        return "tesseract-not-used"
+    configured = str(getattr(settings, "ocr_executable", "") or "").strip()
+    resolved = (
+        str(Path(configured).expanduser())
+        if configured and Path(configured).expanduser().is_file()
+        else shutil.which(configured or "tesseract")
+    )
+    if not resolved:
+        raise OSError("Cannot verify Tesseract executable for OCR resume")
+    return _tesseract_executable_key(str(Path(resolved).resolve()))
 
 
 def _digest_file(path: Path, hash_state: Any) -> None:
@@ -69,6 +146,7 @@ def input_fingerprint(
     digest.update(_algorithm_environment_key().encode("ascii"))
     digest.update(str(page_index).encode("ascii"))
     digest.update(str(method).encode("ascii"))
+    digest.update(_runtime_ocr_engine_key(settings, method).encode("ascii"))
     dump = json.dumps(asdict(settings), sort_keys=True, ensure_ascii=False, default=str)
     digest.update(dump.encode("utf-8"))
     for path in (Path(image_path), *dependencies):

@@ -22,20 +22,24 @@
     }
   },
   "current_state": {
-    "status": "planning_pr_open",
+    "status": "pr_open",
     "active_phase": "R0",
     "active_work_item": "R0.1",
     "work_in_progress": false,
-    "implementation_pr": null,
-    "implementation_head_sha": null,
-    "latest_verified_main_sha": "7134bf68cf2595f1db61d7d410d7ac51290318ca",
+    "implementation_pr": {
+      "number": 479,
+      "url": "https://github.com/chigre/Picture_Capture/pull/479",
+      "branch": "fix/pc-cq-r0-1-resume-code-fingerprint"
+    },
+    "implementation_head_sha": "2697e31fc79a1823573162d39513cdcae91b0ef4",
+    "latest_verified_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0",
     "last_completed_work_item": null,
     "blockers": [],
-    "required_next_action": "Verify GitHub CI and merge planning PR #478 to main; then start only R0.1 after GitHub reality check; no production changes have started.",
-    "last_test_evidence": "Starting main CI success; no new roadmap-related production tests have run."
+    "required_next_action": "Track PR #479 CI and review for regressions; fix only R0.1 if failures occur. Mark verified only after merge and green post-merge main CI; then set active R0.2.",
+    "last_test_evidence": "R0.1 regression tests committed first at b63a0c54; implementation committed later; full PR CI pending; main planning CI 38446047743 success."
   },
   "units": {
-    "R0.1": "todo",
+    "R0.1": "pr_open",
     "R0.2": "todo",
     "R1.1": "todo",
     "R1.2": "todo",
@@ -106,6 +110,14 @@
       "url": "https://github.com/chigre/Picture_Capture/pull/478",
       "status": "open",
       "note": "Plan-only branch; not yet merged to main."
+    },
+    {
+      "type": "r0_1_implementation_pr",
+      "url": "https://github.com/chigre/Picture_Capture/pull/479",
+      "status": "pr_open_ci_pending",
+      "regression_first_commit": "b63a0c54a55bc73a19d59405a5536247cb6e6c35",
+      "production_fix_sha": "2697e31fc79a1823573162d39513cdcae91b0ef4",
+      "summary": "Whole-package source tree fingerprint plus native Tesseract binary signature and fail-closed Lens. Production testing not yet confirmed."
     }
   ],
   "rules_for_updates": {
@@ -125,8 +137,9 @@
   "planning_pr": {
     "number": 478,
     "url": "https://github.com/chigre/Picture_Capture/pull/478",
-    "status": "open",
+    "status": "merged",
     "branch": "docs/core-quality-upgrade-plan-20261014",
-    "head_sha_at_creation": "f1ac45346721c24ba6a9cf13d29bb966d4dfba62"
+    "head_sha_at_creation": "f1ac45346721c24ba6a9cf13d29bb966d4dfba62",
+    "merged_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0"
   }
 }

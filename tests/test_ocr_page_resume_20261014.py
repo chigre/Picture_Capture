@@ -122,3 +122,129 @@ def test_force_refresh_bypasses_resume_but_can_write_a_new_checkpoint():
     assert "validated_resume(" in worker
     assert "write_page_resume(" in worker
     assert "if not resume_dependencies:" in worker
+
+
+@pytest.mark.parametrize("module_name", [
+    "separator_y_refinement.py",
+    "ink_safe_separator.py",
+    "ocr_tesseract_runner.py",
+    "ocr_lazy_secondary.py",
+    "models.py",
+    "new_detection_stage.py",
+    "future_subpackage/new_detector.py",
+])
+def test_resume_invalidates_when_detection_source_changes(
+    tmp_path, monkeypatch, module_name,
+):
+    """Even same-length edits to newly introduced modules must force OCR again."""
+    from picture_capture import ocr_page_resume as resume_module
+
+    fake_package = tmp_path / "fake_picture_capture"
+    fake_package.mkdir()
+    (fake_package / "ocr_page_resume.py").write_bytes(b"resume-v1")
+    algorithm = fake_package / module_name
+    algorithm.parent.mkdir(parents=True, exist_ok=True)
+    algorithm.write_bytes(b"version-A")
+
+    # Simulate installing an updated package, with otherwise identical image,
+    # settings, Profile, filter rules and saved PDIC.
+    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr_page_resume.py"))
+    resume_module._algorithm_environment_key.cache_clear()
+    try:
+        image, pdic, settings, deps = _case(tmp_path)
+        _write(tmp_path, image, pdic, settings, deps)
+        assert _load(tmp_path, image, pdic, settings, deps) == 1
+        algorithm.write_bytes(b"version-B")  # same size; different source bytes
+        resume_module._algorithm_environment_key.cache_clear()
+        assert _load(tmp_path, image, pdic, settings, deps) is None
+    finally:
+        resume_module._algorithm_environment_key.cache_clear()
+
+
+def test_resume_invalidates_after_a_new_detection_module_is_added(
+    tmp_path, monkeypatch,
+):
+    from picture_capture import ocr_page_resume as resume_module
+
+    fake_package = tmp_path / "fake_picture_capture"
+    fake_package.mkdir()
+    (fake_package / "ocr_page_resume.py").write_bytes(b"resume-v1")
+    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr_page_resume.py"))
+    resume_module._algorithm_environment_key.cache_clear()
+    try:
+        image, pdic, settings, deps = _case(tmp_path)
+        _write(tmp_path, image, pdic, settings, deps)
+        assert _load(tmp_path, image, pdic, settings, deps) == 1
+        (fake_package / "brand_new_scoring.py").write_bytes(b"new-logic")
+        resume_module._algorithm_environment_key.cache_clear()
+        assert _load(tmp_path, image, pdic, settings, deps) is None
+    finally:
+        resume_module._algorithm_environment_key.cache_clear()
+
+
+def test_resume_fails_closed_without_readable_detection_sources(
+    tmp_path, monkeypatch,
+):
+    from picture_capture import ocr_page_resume as resume_module
+
+    fake_package = tmp_path / "fake_picture_capture"
+    fake_package.mkdir()
+    source = fake_package / "ocr_page_resume.py"
+    source.write_bytes(b"resume-v1")
+    monkeypatch.setattr(resume_module, "__file__", str(source))
+    resume_module._algorithm_environment_key.cache_clear()
+    try:
+        image, pdic, settings, deps = _case(tmp_path)
+        _write(tmp_path, image, pdic, settings, deps)
+        source.unlink()
+        resume_module._algorithm_environment_key.cache_clear()
+        assert _load(tmp_path, image, pdic, settings, deps) is None
+    finally:
+        resume_module._algorithm_environment_key.cache_clear()
+
+
+def test_resume_invalidates_after_tesseract_binary_replacement(
+    tmp_path, monkeypatch,
+):
+    """A pip-level version check alone cannot detect replaced Tesseract binaries."""
+    import subprocess
+    from picture_capture import ocr_page_resume as resume_module
+
+    image, pdic, settings, deps = _case(tmp_path)
+    executable = tmp_path / "tesseract-for-test"
+    executable.write_bytes(b"tess-binary-1")
+    settings.paddle_compare_tesseract = True
+    settings.ocr_executable = str(executable)
+    monkeypatch.setattr(
+        resume_module.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout=b"Tesseract 5.0", stderr=b"",
+        ),
+    )
+    resume_module._tesseract_executable_key.cache_clear()
+    try:
+        _write(tmp_path, image, pdic, settings, deps)
+        assert _load(tmp_path, image, pdic, settings, deps) == 1
+        executable.write_bytes(b"tess-binary-2")  # same size, binary changed
+        resume_module._tesseract_executable_key.cache_clear()
+        assert _load(tmp_path, image, pdic, settings, deps) is None
+    finally:
+        resume_module._tesseract_executable_key.cache_clear()
+
+
+def test_resume_fails_closed_when_enabled_tesseract_version_unavailable(tmp_path):
+    image, pdic, settings, deps = _case(tmp_path)
+    settings.paddle_compare_tesseract = True
+    settings.ocr_executable = str(tmp_path / "missing-tesseract")
+    with pytest.raises(OSError, match="Tesseract"):
+        _write(tmp_path, image, pdic, settings, deps)
+    assert _load(tmp_path, image, pdic, settings, deps) is None
+
+
+def test_resume_does_not_skip_when_remote_lens_outputs_are_unversionable(tmp_path):
+    image, pdic, settings, deps = _case(tmp_path)
+    settings.paddle_enable_lens = True
+    settings.paddle_lens_mode = "full"
+    with pytest.raises(OSError, match="Lens"):
+        _write(tmp_path, image, pdic, settings, deps)
+    assert _load(tmp_path, image, pdic, settings, deps) is None
