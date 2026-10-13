@@ -392,7 +392,13 @@ def _apply_universal_ordinary_evidence(
                          "由括号、特殊视觉符号提出词头证据，并观察角色变化。",
                          understanding.layout,
                          details={"candidates": len(symbol_entries),
-                                  "promoted": int(symbol_promoted)})
+                                  "promoted": int(symbol_promoted)},
+                         candidates=[{
+                             "status": "symbol", "source_anchor": [
+                                 int(entry.x), int(entry.y),
+                             ],
+                             "word": str(getattr(entry, "word", "") or ""),
+                         } for entry in symbol_entries])
     after_symbol = (
         _debug_layout_role_snapshot(understanding.layout)
         if prior is not None else None
@@ -403,7 +409,13 @@ def _apply_universal_ordinary_evidence(
                          "实际大字头检测结果参与行角色调整；未达到条件的候选不会自动提升。",
                          understanding.layout,
                          details={"candidates": len(large_entries),
-                                  "promoted": int(large_promoted)})
+                                  "promoted": int(large_promoted)},
+                         candidates=[{
+                             "status": str(item.get("status", "unknown")),
+                             "source_box": list(item.get("source_box", ())),
+                             "height_ratio": float(item.get("height_ratio", 0) or 0),
+                             "detector_output": bool(item.get("detector_output", False)),
+                         } for item in (large_head_diagnostics or ())])
     after_large = (
         _debug_layout_role_snapshot(understanding.layout)
         if prior is not None else None
