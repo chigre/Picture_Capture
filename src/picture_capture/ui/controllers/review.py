@@ -21,16 +21,33 @@ class ReviewController:
     def __init__(self, app: Any) -> None:
         self.app = app
 
-    def load_ocr_review_candidates(self) -> None:
+    def load_ocr_review_candidates(self, preloaded_candidates: list[dict] | None = None) -> None:
         app = self.app
         app.ocr_review_candidates = []
+        app.ocr_final_only_entries = []
+        app.ocr_final_decision_summary = {}
         path = app._paddle_cache_path()
         if not path or not path.exists():
             return
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            app.ocr_review_candidates = list(payload.get("review_candidates") or [])
-        except Exception:
+            if preloaded_candidates is None:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                candidates = list(payload.get("review_candidates") or [])
+            else:
+                candidates = list(preloaded_candidates)
+            from ...ocr_final_decisions import (
+                apply_final_review_annotations, load_current_final_decisions,
+            )
+            page = getattr(app, "current_page", None)
+            audit = (
+                load_current_final_decisions(path, pdic_path(page))
+                if page is not None else None
+            )
+            app.ocr_review_candidates = apply_final_review_annotations(candidates, audit)
+            if audit is not None:
+                app.ocr_final_only_entries = list(audit.get("final_only") or [])
+                app.ocr_final_decision_summary = dict(audit.get("summary") or {})
+        except (OSError, ValueError, TypeError, KeyError):
             app.ocr_review_candidates = []
 
     def get_review_candidate(self, candidate_id: str) -> dict | None:

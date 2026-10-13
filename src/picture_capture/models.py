@@ -568,6 +568,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     paddle_boldness_ratio: float = 1.12
     paddle_gap_ratio: float = 0.7
     paddle_min_candidate_score: float = 1.0
+    # Experimental Latin continuation rescue; OFF unless explicitly enabled.
+    # Safe to disable without changing OCR text recognition or other rescues.
+    paddle_peer_style_rescue: bool = False
     paddle_require_visual_cue: bool = True
     # For ordinary dictionary pages, a nearby POS label (or an explicit entry
     # symbol) is the safest way to reject indented definition lines.
