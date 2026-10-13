@@ -88,8 +88,17 @@ def natural_text_key(value: object) -> tuple:
     return tuple((0, int(part)) if part.isdigit() else (1, part) for part in parts if part)
 
 
+class _WeakrefableEntry:
+    """Support lifetime-safe sidecar metadata even on Python 3.10.
+
+    Dataclass weakref_slot was only added in Python 3.11; using a slotted base
+    adds weak references without giving each Entry an instance __dict__.
+    """
+    __slots__ = ("__weakref__",)
+
+
 @dataclass(slots=True)
-class Entry:
+class Entry(_WeakrefableEntry):
     """A dictionary headword marker in original-image pixel coordinates."""
 
     word: str
