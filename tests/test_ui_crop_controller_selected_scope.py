@@ -285,4 +285,5 @@ def test_phase4l_leaves_parallel_runner_illustration_and_runtime_paths_in_app() 
 
 def test_postproduction_button_still_targets_app_compatibility_method() -> None:
     app_text = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    assert '("词条切图", self.split_entries_selected_scope)' in app_text
+    menu = (ROOT / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("词条切图", "split_entries_selected_scope")' in menu
