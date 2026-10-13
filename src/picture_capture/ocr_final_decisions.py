@@ -100,6 +100,11 @@ def build_final_decisions(
     for i, cand in enumerate(ocr_candidates):
         if i in links:
             continue
+        # Quantized IDs may collide on dense pages or between refined/anchor
+        # variants. Never guess which of those checkboxes inherited a PDIC row.
+        cid = str(cand.get("candidate_id", "") or "")
+        if cid and candidate_id_counts[cid] > 1:
+            continue
         x, y = _safe_int(cand.get("source_x")), _safe_int(cand.get("source_y"))
         word = str(cand.get("word", "") or "").strip()
         matches: list[tuple[int, int]] = []
@@ -218,6 +223,13 @@ def load_current_final_decisions(cache_path: Path, pdic_file: Path) -> dict[str,
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if data.get("format") != "picture-capture-final-ocr-decisions-v1":
+            return None
+        # A forced OCR refresh can regenerate proposals without changing the
+        # PDIC. Do not attach old decisions to a different source OCR run.
+        if not cache_path.exists():
+            return None
+        source_cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        if not isinstance(source_cache, dict) or str(source_cache.get("signature", "")) != str(data.get("ocr_cache_signature", "")):
             return None
         saved_rows = pdic_snapshot(read_pdic(pdic_file))
         if data.get("pdic_snapshot_sha256") != _snapshot_digest(saved_rows):
