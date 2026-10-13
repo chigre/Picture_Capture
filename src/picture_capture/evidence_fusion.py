@@ -455,6 +455,7 @@ def _rescue_local_peer_style_continuations(
     source_column_x: int,
     settings: AppSettings,
     engine_name: str,
+    trusted_anchors: list[dict[str, Any]],
 ) -> int:
     """Additional Latin continuation rescue requiring independently strong peers.
 
@@ -466,8 +467,9 @@ def _rescue_local_peer_style_continuations(
     from .ocr_peer_style import peer_style_continuation_evidence
 
     rescued = 0
-    # Freeze anchor population: a newly promoted row must never justify another.
-    trusted = [row for row in diagnostics if row.get("accepted")]
+    # Only original core-accepted anchors count: earlier rescue decisions
+    # cannot recursively justify later rescue decisions in the same band.
+    trusted = list(trusted_anchors)
     for row in diagnostics:
         if row.get("accepted") or "meta" in row:
             continue
@@ -546,6 +548,9 @@ def filter_headword_records(
         engine_name=engine_name,
         profile=profile,
     )
+    trusted_before_rescues = [
+        row for row in diagnostics if row.get("accepted") and "meta" not in row
+    ]
     continuation_count = _rescue_false_continuation_rows(
         entries,
         diagnostics,
@@ -559,6 +564,7 @@ def filter_headword_records(
         entries, diagnostics, source_top=source_top,
         source_column_x=source_column_x, settings=settings,
         engine_name=engine_name,
+        trusted_anchors=trusted_before_rescues,
     )
 
     entries.sort(key=lambda item: (int(item.y), int(item.x)))
