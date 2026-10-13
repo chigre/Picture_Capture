@@ -17,7 +17,7 @@ from .compact_display_menu import build_compact_display_menu
 from .compact_headword_profile_menu import build_headword_profile_menu
 from .compact_task_menus import (
     build_preprocess_menu, build_layout_menu, build_ocr_menu,
-    build_drawing_menu,
+    build_drawing_menu, build_postproduction_menu,
 )
 from .simple_page_controls import (
     install_simple_page_controls, install_simple_page_tree_actions,
@@ -130,78 +130,6 @@ def _create_macaron_action_button(
 
 
 
-def _stack_tool_menu_controls(root: ttk.Frame) -> None:
-    """Reflow the existing quick-settings widgets into one vertical column.
-
-    This changes geometry managers *without recreating controls*, so Tk
-    variables, command callbacks, focus bindings and external widget
-    references all remain intact.  The original quick-settings layout was
-    designed for a broad sidebar and contains many multi-column grid rows
-    and packed horizontal toolbars; both must be stacked for a 280px menu.
-    """
-    containers = (tk.Frame, tk.LabelFrame, ttk.Frame, ttk.LabelFrame)
-
-    def stack(container: tk.Misc) -> None:
-        if not isinstance(container, containers):
-            return
-        children = tuple(container.winfo_children())
-        gridded = [child for child in children if child.winfo_manager() == "grid"]
-        if gridded:
-            ordered = sorted(
-                gridded,
-                key=lambda child: (
-                    int(child.grid_info()["row"]),
-                    int(child.grid_info()["column"]),
-                ),
-            )
-            columns = max(
-                int(child.grid_info()["column"]) +
-                int(child.grid_info().get("columnspan", 1))
-                for child in ordered
-            )
-            # Reset weights from the legacy wide/multi-column grid.
-            for col in range(columns):
-                container.columnconfigure(col, weight=0, minsize=0, uniform="")
-            container.columnconfigure(0, weight=1)
-            for child in ordered:
-                child.grid_forget()
-            for row, child in enumerate(ordered):
-                child.grid(
-                    row=row, column=0, sticky="ew",
-                    padx=(3, 3), pady=(2, 2),
-                )
-        else:
-            packed = [child for child in children if child.winfo_manager() == "pack"]
-            if len(packed) > 1 and any(
-                child.pack_info().get("side") in ("left", "right")
-                for child in packed
-            ):
-                for child in packed:
-                    child.pack_forget()
-                for child in packed:
-                    # Keep small colour swatches and unit labels intrinsic,
-                    # while buttons, selectors and other inputs use the width.
-                    intrinsic = isinstance(child, (tk.Label, ttk.Label)) or (
-                        isinstance(child, tk.Button) and
-                        str(child.cget("text")) == ""
-                    )
-                    child.pack(
-                        side="top", anchor="w",
-                        fill="none" if intrinsic else "x",
-                        padx=(3, 3), pady=(2, 2),
-                    )
-        for child in children:
-            if isinstance(child, (tk.Label, ttk.Label)):
-                # A long description should wrap rather than set a wide
-                # requested size in the narrow task palette.
-                child.configure(wraplength=204)
-            stack(child)
-
-    for section in root.winfo_children():
-        if getattr(section, "_collapse_title", None):
-            stack(section)
-
-
 def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
     """Use Tk vector geometry instead of inconsistent platform Unicode glyphs."""
     ink = "#455265"
@@ -259,6 +187,41 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
         circle(4, 4, 22, 22)
         canvas.create_text(13, 13, text="?", fill=ink, font=("TkDefaultFont", 12, "bold"))
 
+
+
+def retire_superseded_quick_panels(app: Any, sections: dict[str, ttk.Frame]) -> None:
+    """Remove replaced legacy widget trees, not the shared Tk setting variables.
+
+    _build_quick_settings still owns the initial quick_vars/trace wiring.
+    The compact panels now own every visible task menu and action.
+    Destroying the *other* old panels avoids keeping duplicate hidden Tk
+    widgets throughout a long image-editing session. Do not touch the saved
+    project fields, quick_vars, quick_bool_vars or callback registrations.
+    """
+    replaced = {
+        "preprocess": "图片预处理(前置)",
+        "normal": "一、版面参数",
+        "aux": "二、显示设置",
+        "ocr": "三、共享 OCR 通道 / OCR画线",
+        "actions": "四、画线 / OCR / 插图 / 校对",
+        "postproduction": "五、后期词典制作",
+    }
+    old_sections = getattr(app, "_collapsible_sections", {})
+    for key, title in replaced.items():
+        old = old_sections.get(key)
+        replacement = sections.get(title)
+        if old is None or replacement is None or old is replacement:
+            continue
+        # Destroy only after replacement construction: all new controls are
+        # already wired to the exact same persistent Tk variables.
+        old.destroy()
+        old_sections.pop(key, None)
+    # The hidden controls used to supply these widget pointers, which must
+    # never reference destroyed widgets after this cleanup.
+    getattr(app, "quick_field_labels", {}).clear()
+    getattr(app, "quick_color_buttons", {}).clear()
+    if "图片预处理(前置)" in sections:
+        app.preprocess_panel = sections["图片预处理(前置)"]
 
 
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
@@ -381,22 +344,24 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.bind_all("<MouseWheel>", scroll_menu_wheel, add="+")
     app.bind_all("<Button-4>", lambda event: scroll_menu(event, -3), add="+")
     app.bind_all("<Button-5>", lambda event: scroll_menu(event, 3), add="+")
+    # Legacy builder still initializes shared Tk quick variables and traces;
+    # none of its visual panels survive replacement below.
     app._build_quick_settings(content)
-    _stack_tool_menu_controls(content)
     sections = {
         str(section._collapse_title): section
         for section in content.winfo_children()
         if getattr(section, "_collapse_title", None)
     }
-    # The old display section still owns its already-bound quick variables,
-    # but it is never shown. A purpose-built, 280px display panel presents
-    # exactly the requested order without duplicating variable state.
+    # State variables remain shared; every visible task panel is rebuilt
+    # once in the compact format instead of displaying legacy UI rows.
     sections["图片预处理(前置)"] = build_preprocess_menu(app, content)
     sections["一、版面参数"] = build_layout_menu(app, content)
     sections["二、显示设置"] = build_compact_display_menu(app, content)
     sections["三、共享 OCR 通道 / OCR画线"] = build_ocr_menu(app, content)
     sections["三之一、OCR画线设置"] = build_headword_profile_menu(app, content)
     sections["四、画线 / OCR / 插图 / 校对"] = build_drawing_menu(app, content)
+    sections["五、后期词典制作"] = build_postproduction_menu(app, content)
+    retire_superseded_quick_panels(app, sections)
     app.workspace_tools_sections = sections
     app.workspace_tools_scrollbar_refresh = refresh_scrollbar
     app.workspace_tools_content = content

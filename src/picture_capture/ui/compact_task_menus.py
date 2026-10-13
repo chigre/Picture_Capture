@@ -314,8 +314,48 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     return panel
 
 
+# All seven workspace panels now have a purpose-built compact presentation.
+# Keep the original app methods and progress-state widget references intact.
+POSTPRODUCTION_ACTIONS = (
+    (("画线行导出", "split_single_lines_selected_scope"),
+     ("未画线行导出", "export_unlined_rows_selected_scope")),
+    (("词条切图", "split_entries_selected_scope"),
+     ("插图切图", "split_illustrations_selected_scope")),
+    (("项目详情", "open_project_details"),
+     ("导出PicDic索引", "export_picdic_index")),
+    (("PicDic制作", "build_picdic"),
+     ("导出训练标记包", "export_training_package")),
+)
+
+POSTPRODUCTION_HELP = {
+    "画线行导出": "将选定范围内已画线的行按校对单行裁切逻辑导出到 QT/PSW。可在【设置中心 → 切图】配置按页合并和并行数。",
+    "未画线行导出": "从 Layout 恢复但未被 PDIC 横线覆盖的文字行导出到 QT/PSW_UNLINED；可在切图页配置空白过滤。",
+    "词条切图": "按照所选范围和【设置中心 → 切图】的参数导出完整词条 PNG。",
+    "插图切图": "按所选范围导出 PPP 标注的独立插图 PNG。",
+    "项目详情": "编辑词典名称、语言、正文页码范围等项目级元数据。",
+    "导出PicDic索引": "从已保存的 PDIC 导出词条文字、X/Y 百分比和页码索引。",
+    "PicDic制作": "从生成的切图创建 PicDic DSL 与图片包。",
+    "导出训练标记包": "导出已确认的 PDIC、PPP、OCR 候选和坐标上下文。",
+}
+
+
+def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
+    """New compact export menu; no visual or state dependency on legacy rows."""
+    panel = _panel(parent)
+    for group in POSTPRODUCTION_ACTIONS:
+        row = _row(panel)
+        for caption, method in group:
+            button = _button(row, caption, getattr(app, method))
+            if caption == "画线行导出":
+                app._pc_single_line_crop_button = button
+            elif caption == "未画线行导出":
+                app._pc_unlined_export_button = button
+            app._attach_tooltip(button, POSTPRODUCTION_HELP[caption])
+    return panel
+
+
 __all__ = [
     "LAYOUT_ROWS", "ACTION_GROUPS",
     "build_preprocess_menu", "build_layout_menu",
-    "build_ocr_menu", "build_drawing_menu",
+    "build_ocr_menu", "build_drawing_menu", "build_postproduction_menu",
 ]

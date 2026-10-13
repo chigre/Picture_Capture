@@ -127,17 +127,18 @@ def test_all_compact_task_menus_share_regular_row_spacing_and_label_alignment():
     assert "ACTION_GROUPS" in task
 
 
-def test_legacy_postproduction_menu_reflow_has_matching_spacing():
-    text = Path(workspace_tools.__file__).read_text(encoding="utf-8")
-    reflow = text.split("def _stack_tool_menu_controls(", 1)[1].split(
-        "def _draw_rail_icon(", 1
-    )[0]
-    assert 'padx=(3, 3), pady=(2, 2)' in reflow
-    assert 'container.columnconfigure(0, weight=1)' in reflow
-    assert 'child.grid(' in reflow and 'child.pack(' in reflow
-    # Postproduction stays the one legacy panel and keeps its original actions.
-    assert 'sections["五、后期词典制作"]' not in text
-    assert 'app._build_quick_settings(content)' in text
+def test_postproduction_is_rebuilt_as_compact_menu_and_legacy_reflow_removed():
+    tools = Path(workspace_tools.__file__).read_text(encoding="utf-8")
+    task = (ROOT / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
+    assert 'sections["五、后期词典制作"] = build_postproduction_menu(app, content)' in tools
+    assert 'app._build_quick_settings(content)' in tools  # Tk vars/traces bootstrap.
+    assert "_stack_tool_menu_controls" not in tools
+    assert '"postproduction": "五、后期词典制作"' in tools
+    for name in ("画线行导出", "未画线行导出", "词条切图", "插图切图",
+                 "项目详情", "导出PicDic索引", "PicDic制作", "导出训练标记包"):
+        assert f'"{name}"' in task
+    assert "app._pc_single_line_crop_button = button" in task
+    assert "app._pc_unlined_export_button = button" in task
 
 
 def test_display_integer_field_casts_and_loaded_value_formatting():
