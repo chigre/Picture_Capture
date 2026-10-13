@@ -5266,9 +5266,10 @@ def test_v21110_backup_skips_unrelated_full_page_metadata_refresh():
 
 def test_v21111_illustration_button_is_renamed_to_edit_only():
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("编辑插图", self.toggle_polygon_drawing)' in app_text
+    task = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("编辑插图", "toggle_polygon_drawing")' in task
     assert '绘制/编辑插图' not in app_text
-    assert 'text="结束编辑插图"' in app_text
+    assert 'button.configure(text="结束编辑插图"' in task
 
 
 def test_v21111_picdic_index_export_is_background_streaming_and_exact_format():
@@ -5281,7 +5282,8 @@ def test_v21111_picdic_index_export_is_background_streaming_and_exact_format():
     start = controller_text.index("    def export_picdic_index(self) -> None:")
     end = controller_text.index("    def backup_pdic(self) -> None:", start)
     body = controller_text[start:end]
-    assert '("导出PicDic索引", self.export_picdic_index)' in app_text
+    task = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("导出PicDic索引", "export_picdic_index")' in task
     assert "self._export_controller_for_call().export_picdic_index()" in wrapper
     assert 'read_picdic_index_records(' in body
     assert 'pdic_path(page), fallback_page=page.stem' in body
@@ -5415,13 +5417,16 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
+    state = (Path(__file__).parents[1] / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     for token in (
         '"illustration_outline_width"', '"illustration_label_border_width"',
         '"illustration_label_font_family"', '"illustration_label_font_size"',
         '"illustration_label_font_bold"', '"illustration_label_font_italic"',
     ):
-        assert token in app_text
-    assert 'self.quick_bool_vars["show_illustration_labels"]' in app_text
+        assert token in state
+    assert '"show_illustration_labels"' in state
+    assert 'qb["show_illustration_labels"]' in display
     assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in app_text
     assert 'show_labels = bool(self.settings.show_illustration_labels)' in app_text
 
@@ -5484,7 +5489,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
     assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
     assert '"review_simplified_font_family"' in app_text
-    assert "values=content_font_values" in app_text
+    display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'values=families' in display
     assert "review_families = (AUTO_FONT_FAMILY" in app_text
 
 
@@ -6324,8 +6330,9 @@ def test_main_ocr_visibility_controls_apply_immediately_and_candidate_boxes_are_
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    assert 'command=lambda n=name, v=var: self._apply_overlay_visibility_toggle(n, v)' in text
-    assert '"paddle_show_candidate_checkboxes", candidate_var' in text
+    display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'app._apply_overlay_visibility_toggle(setting, qb[setting])' in display
+    assert '"paddle_show_candidate_checkboxes"' in display
     start = text.index("        show_candidates = (")
     end = text.index("        show_shapes =", start)
     candidate_block = text[start:end]
@@ -6362,8 +6369,11 @@ def test_v21122_hotfix3_main_actions_put_compare_before_review():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "dialogs" / "old_new_comparison.py"
     ).read_text(encoding="utf-8")
-    row = '(("清除画线", self.clear_entries), ("清除文本", self.clear_text), ("精修画线", self.refine_lines_selected_scope), ("新旧比较", self.compare_old_new_selected_scope), ("词条校对", self.open_review))'
-    assert row in text
+    task = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    for label, action in (("新旧比较", "compare_old_new_selected_scope"),
+                          ("词条校对", "open_review"),
+                          ("精修画线", "refine_lines_selected_scope")):
+        assert f'("{label}", "{action}")' in task
     assert "from .ui.dialogs.old_new_comparison import OldNewComparisonWindow" in text
     assert "class OldNewComparisonWindow" in dialog_text
     assert 'notebook.add(diff_tab, text="差异")' in dialog_text
@@ -8007,13 +8017,13 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    aux=text.split('self._section_frame(parent, "二、显示设置"',1)[1].split('ocr = self._section_frame(parent, "三、共享 OCR 通道 / OCR画线"',1)[0]
-    assert 'text="显示标尺"' in aux
+    aux=(root / "ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert '"显示标尺"' in aux
     assert '"ruler_color"' in aux
-    assert 'text="显示Section"' in aux
+    assert '"显示区块"' in aux
     assert '"page_section_color"' in aux
     assert '"page_section_width"' in aux
-    assert aux.index('text="显示Section"') < aux.index('text="栏左垂线"')
+    assert aux.index('"显示区块"') < aux.index('"栏左垂线"')
     assert '"review_main_show_ocr_background"' in aux
     assert 'fill="#ffffff"' in text
     assert 'overlay_scale = self.view_scale / parameter_scale(self.image, self.settings)' in text
@@ -8152,14 +8162,14 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     helper_text = helper_source.read_text(encoding="utf-8")
     overlay = (root / "ui" / "entry_overlay_builder.py").read_text(encoding="utf-8")
 
-    assert '"一、版面参数"' in text
+    workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    compact_ocr = (root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '"一、版面参数"' in workspace
     assert "页眉Y(原图)" not in text
     assert "页尾Y(原图)" not in text
     assert "正文起始Y(原图)" not in text
     assert "正文结束Y(原图)" not in text
-    assert 'text="  Y安全空间："' in text
-    safety = text.index('text="  Y安全空间："')
-    assert 'text="px"' in text[safety:safety + 900]
+    assert '"横线与文字安全距离px"' in compact_ocr
 
     assert 'text="校对模式："' in text
     assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in text
