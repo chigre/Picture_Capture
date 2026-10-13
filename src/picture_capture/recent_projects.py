@@ -264,6 +264,10 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         return details
     try:
         candidates = [root.stat().st_mtime]
+        from .project_storage import project_activity_path
+        activity = project_activity_path(root)
+        if activity.is_file():
+            candidates.append(activity.stat().st_mtime)
     except OSError:
         return details
     metadata = project_settings.parent
