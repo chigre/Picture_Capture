@@ -3299,6 +3299,18 @@ def split_whole_entries(
         manifest_temp = _stage_text_file(manifest_target, manifest)
         staged.append(manifest_temp)
         replacements.append((manifest_temp, manifest_target))
+
+        # Natural widths must not be inferred later from already-padded PNGs.
+        width_target = output_dir / f"{image_path.stem}.PWWWidths.json"
+        width_temp = _stage_text_file(
+            width_target,
+            json.dumps({
+                record.filename: max(1, record.box[2] - record.box[0])
+                for record in ordered_records
+            }, ensure_ascii=False, sort_keys=True),
+        )
+        staged.append(width_temp)
+        replacements.append((width_temp, width_target))
         plan_temp, plan_target = _stage_page_crop_plan(
             image_path.parent, image_path.stem, plan,
         )
