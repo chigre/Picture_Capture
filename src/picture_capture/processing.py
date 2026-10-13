@@ -608,9 +608,12 @@ def detect_entries(
                 _record_ordinary_debug_stage(
                     debug_trace, "oversized_fragment_veto", entries,
                 )
-            # A page's printed large heads may sit one row above the Y
-            # assigned by dense body-row projection. Correct only when
-            # independent source-image ink gaps support a coherent page shift.
+            # This is an EARLY correction of EXISTING Layout candidates,
+            # not a final global Y adjustment. Bracket recovery will inspect
+            # actual print gaps and may add independently anchored separators;
+            # shifting those late-added positions by this offset is unsafe.
+            # A coherent page shift is supported only by real ink gaps.
+            _visual_y_shift = 0
             if (
                 uses_cjk_role_model(effective)
                 and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
@@ -623,6 +626,8 @@ def detect_entries(
                 _record_ordinary_debug_stage(
                     debug_trace, "coherent_separator_y_refinement", entries,
                     shift=_visual_y_shift,
+                    scope="已有 Layout 候选（【】恢复之前）；并非最终全部画线",
+                    rationale="先纠正穿过大字的初始线，供后续【】匹配去重",
                 )
             if (
                 uses_cjk_script(effective)
@@ -729,6 +734,18 @@ def detect_entries(
                     f" final_visual_glyph_fragments={last_mile['removed_glyph_fragments']}"
                     f" final_visual_heads_added={last_mile['added_verified_heads']}"
                 )
+            # All candidate additions, source upgrades, vetoes and Y
+            # refinements are complete at this point. Final reading-order
+            # sorting does NOT move Y. Recording this boundary is important:
+            # the early coherent adjustment cannot safely be applied to
+            # bracket separators located independently from print gaps.
+            _record_ordinary_debug_stage(
+                debug_trace, "final_y_coordinates_locked", entries,
+                move_y=False,
+                layout_initial_page_shift=int(_visual_y_shift),
+                scope="最终剩余全部候选，含后续【】及大字头来源；只读核对",
+                rationale="后续仅排序，不再对所有来源执行统一 Y 平移",
+            )
             sorted_entries = _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
             )
