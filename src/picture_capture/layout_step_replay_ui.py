@@ -172,6 +172,46 @@ def _row_at_position(rows: list[dict[str, Any]], x: int, y: int) -> dict[str, An
     return min(matches, key=lambda item: item[0])[1] if matches else None
 
 
+def _candidate_at_source(
+    candidates: list[dict[str, Any]], x: int, y: int, *,
+    tolerance: int = 6,
+) -> dict[str, Any] | None:
+    """Hit-test smallest true candidate first, even inside its parent band.
+
+    A 1px valley/gap is contained by a large connected ink band. Selecting
+    the first containing box would make the actual bridge/split unclickable.
+    """
+    matches: list[tuple[float, dict[str, Any]]] = []
+    for item in candidates:
+        box = item.get("source_box")
+        if box and len(box) == 4:
+            x0, y0, x1, y1 = (float(v) for v in box)
+            left, right = sorted((x0, x1))
+            top, bottom = sorted((y0, y1))
+            # Narrow gap/split lines need hit tolerance at preview zoom, but
+            # regular row bands should not swallow clicks on adjacent rows.
+            narrow = bottom - top <= 3
+            margin = tolerance if narrow else 0
+            if left - margin <= x <= right + margin and top - margin <= y <= bottom + margin:
+                area = max(1.0, right-left) * max(1.0, bottom-top)
+                distance = max(0, top-y, y-bottom)
+                matches.append((area + distance, item))
+            continue
+        polygon = item.get("source_polygon")
+        if polygon and len(polygon) >= 3:
+            pxs = [float(p[0]) for p in polygon]
+            pys = [float(p[1]) for p in polygon]
+            if min(pxs) <= x <= max(pxs) and min(pys) <= y <= max(pys):
+                matches.append(((max(pxs)-min(pxs))*(max(pys)-min(pys)), item))
+            continue
+        anchor = item.get("source_anchor")
+        if anchor and len(anchor) == 2:
+            dx, dy = float(anchor[0])-x, float(anchor[1])-y
+            if abs(dx) <= tolerance and abs(dy) <= tolerance:
+                matches.append((dx*dx + dy*dy, item))
+    return min(matches, key=lambda record: record[0])[1] if matches else None
+
+
 def _format_stage(
     stage: dict[str, Any], *,
     selected: dict[str, Any] | None = None,
@@ -705,23 +745,10 @@ class LayoutStepReplayWindow:
                 ),
             ))
             return
-        candidate = next((
-            item for item in getattr(self, "_visual_candidates", [])
-            if (
-                item.get("source_polygon")
-                and len(item["source_polygon"]) >= 3
-                and min(p[0] for p in item["source_polygon"]) <= x <= max(p[0] for p in item["source_polygon"])
-                and min(p[1] for p in item["source_polygon"]) <= y <= max(p[1] for p in item["source_polygon"])
-            ) or (
-                item.get("source_box") and len(item["source_box"]) == 4
-                and min(item["source_box"][0], item["source_box"][2]) <= x <= max(item["source_box"][0], item["source_box"][2])
-                and min(item["source_box"][1], item["source_box"][3]) <= y <= max(item["source_box"][1], item["source_box"][3])
-            ) or (
-                item.get("source_anchor") and
-                abs(item["source_anchor"][0] - x) <= 10 and
-                abs(item["source_anchor"][1] - y) <= 10
-            )
-        ), None)
+        candidate = _candidate_at_source(
+            getattr(self, "_visual_candidates", []), x, y,
+            tolerance=max(6, int(round(4 / factor))),
+        )
         if candidate is not None:
             self._show_text(_format_stage(
                 self._trace.stages[self._stage_index], selected_candidate=candidate,
