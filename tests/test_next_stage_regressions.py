@@ -1209,7 +1209,7 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     assert 'widget.grid(row=0, column=0, sticky="ew")' in settings
     assert "wraplength=0 if single_line_labels else 180" in settings
     assert 'justify="left"' in settings
-    assert "self._settings_help_body_label = help_body" in settings
+    # All tabs must display the currently selected parameter description, not a snapshot.\n    assert "textvariable=self._settings_help_body_var" in settings\n    assert "text=self._settings_help_body_var.get()" not in settings\n    assert "_settings_help_body_label" not in settings
     assert 'style="PC.Settings.TNotebook"' in settings
     assert '"PC.Settings.TNotebook.Tab"' in window_source
     assert 'padding=(13, 7)' in window_source

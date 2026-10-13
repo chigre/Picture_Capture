@@ -69,3 +69,82 @@ def test_settings_help_extraction_keeps_dialog_wrappers_and_behavior_boundary():
     assert "label_width = int(label.winfo_width())" in helper
     assert "themed_display_image(rendered, dialog.parent.appearance_mode)" in helper
     assert 'container.bind("<Configure>", schedule, add="+")' in helper
+
+
+def test_help_body_is_live_bound_in_every_tab_not_snapshotted_at_construction():
+    """Regression: selecting ⓘ changed titles but left most tabs on intro text."""
+    source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    panel_start = source.index("    def _scrollable_settings_page(", source.index("class SettingsDialog"))
+    panel_end = source.index("    def _settings_intro(", panel_start)
+    panel = source[panel_start:panel_end]
+    assert "textvariable=self._settings_help_title_var" in panel
+    assert "textvariable=self._settings_help_body_var" in panel
+    assert "text=self._settings_help_body_var.get()" not in panel
+    assert "_settings_help_body_label" not in source
+
+    # The responsive label binder must recognize textvariable-backed widgets
+    # so switching among longer/shorter parameter explanations still wraps.
+    binder = Path(settings_help.__file__).read_text(encoding="utf-8")
+    assert 'label.cget("textvariable")' in binder
+    assert "label.configure(wraplength=available)" in binder
+
+
+def test_parameter_and_checkbox_info_show_individual_help_on_all_observers():
+    from picture_capture.ui.settings import schema
+
+    class ObservableVar:
+        def __init__(self):
+            self.value = ""
+            self.observers = []
+
+        def set(self, value):
+            self.value = value
+            for observer in self.observers:
+                observer.append(value)
+
+        def get(self):
+            return self.value
+
+    class Dialog:
+        SETTING_LABELS = schema.SETTING_LABELS
+        SETTING_HELP = schema.SETTING_HELP
+        SETTING_UNITS = schema.SETTING_UNITS
+        SETTING_HELP_IMAGES = schema.SETTING_HELP_IMAGES
+        CHECK_HELP = schema.CHECK_HELP
+
+        def __init__(self):
+            self._settings_help_title_var = ObservableVar()
+            self._settings_help_body_var = ObservableVar()
+            self._settings_help_current_image = None
+            self._field_meta = {}
+            self.render_requests = 0
+
+        def _show_settings_help(self, title, body, image_name=None):
+            settings_help.show_settings_help(self, title, body, image_name)
+
+        def _schedule_settings_help_image_render(self):
+            self.render_requests += 1
+
+    dialog = Dialog()
+    # Simulate separate tab help panes observing one StringVar.
+    normal_panel, advanced_panel = [], []
+    dialog._settings_help_body_var.observers.extend([normal_panel, advanced_panel])
+    settings_help.show_setting_help(dialog, "body_indent")
+    first = dialog._settings_help_body_var.get()
+    assert dialog._settings_help_title_var.get() == "正文缩进"
+    assert "普通画线" in first
+    assert "单位：" in first
+    settings_help.show_setting_help(dialog, "row_padding")
+    second = dialog._settings_help_body_var.get()
+    assert second != first
+    assert "单位：" in second
+    assert dialog._settings_help_title_var.get() != "正文缩进"
+
+    settings_help.show_check_help(dialog, "自动检测栏数", "ordinary_auto_columns")
+    third = dialog._settings_help_body_var.get()
+    assert third != second
+    assert third == schema.CHECK_HELP["ordinary_auto_columns"]
+    assert normal_panel == advanced_panel == [first, second, third]
+    assert dialog.render_requests == 3

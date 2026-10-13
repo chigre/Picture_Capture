@@ -21,16 +21,10 @@ def show_settings_help(
         dialog._settings_help_title_var.set(str(title or "设置说明"))
     if hasattr(dialog, "_settings_help_body_var"):
         raw_body = str(body or "不确定时保持当前值即可。")
-        dialog._settings_help_body_var.set(raw_body)
-        help_body = getattr(dialog, "_settings_help_body_label", None)
-        if help_body is not None:
-            normalized = _normalize_ui_paragraphs(raw_body)
-            help_body._pc_wrap_source = normalized
-            help_body.configure(text=normalized, wraplength=0)
-            try:
-                dialog.after_idle(lambda w=help_body: w.event_generate("<Configure>"))
-            except tk.TclError:
-                pass
+        # Every tab owns a help Label, all bound to the same StringVar. Updating
+        # it refreshes whichever tab is visible, rather than only the final
+        # tab's Label as the former single-widget pointer did.
+        dialog._settings_help_body_var.set(_normalize_ui_paragraphs(raw_body))
     dialog._settings_help_current_image = image_name
     dialog._schedule_settings_help_image_render()
 
