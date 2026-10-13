@@ -188,6 +188,7 @@ def infer_dictionary_page_layout(
     page_index: int = 0,
     ops: base.LayoutPrimitiveOps | None = None,
     policy_resolver: Any = None,
+    projection_trace: list[list[dict[str, Any]]] | None = None,
 ) -> tuple[base.DictionaryPageLayout, AppSettings, dict[str, int]]:
     """Infer one page instance while respecting project fixed/auto field policy."""
     resolver = resolve_page_layout_policy if policy_resolver is None else policy_resolver
@@ -228,14 +229,36 @@ def infer_dictionary_page_layout(
         strips: list[np.ndarray] = []
         runs: list[list[tuple[int, int]]] = []
         bounded_bottom = max(top + 1, min(canonical.height, int(limit_bottom)))
-        for left, right in zip(starts, rights):
+        stage = [] if projection_trace is not None else None
+        for column_index, (left, right) in enumerate(zip(starts, rights)):
             column_width = max(1, right - left)
             strip = page_ink[
                 top:bounded_bottom,
                 left:min(canonical.width, left + base._leading_width(column_width, scale)),
             ]
             strips.append(strip)
-            runs.append(resolved_ops.line_runs(strip, scale))
+            if (
+                stage is not None
+                and getattr(resolved_ops.line_runs, "__name__", "") == "projection_line_runs"
+            ):
+                # Only the real projector accepts this optional diagnostic.
+                # Never re-project the image afterwards for the replay UI.
+                evidence: dict[str, Any] = {}
+                result = resolved_ops.line_runs(strip, scale, debug=evidence)
+                stage.append({
+                    "column": int(column_index),
+                    "left": int(left), "top": int(top),
+                    "strip_width": int(strip.shape[1]), "scale": float(scale),
+                    "evidence": evidence,
+                })
+            else:
+                result = resolved_ops.line_runs(strip, scale)
+            runs.append(result)
+        if projection_trace is not None:
+            # Includes initial seed/scale runs and the FINAL body-bounded run.
+            # The caller displays only the final batch, because that is the
+            # same batch consumed by the actual LayoutLine builder.
+            projection_trace.append(stage or [])
         return strips, runs
 
     # First infer line scale without accepting projection_bottom as a hard crop.
