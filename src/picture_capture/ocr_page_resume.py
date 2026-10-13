@@ -49,7 +49,7 @@ def _algorithm_environment_key() -> str:
     digest.update(ALGORITHM_FINGERPRINT_FORMAT.encode("ascii"))
     for path in sources:
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        digest.update(b"\\0")
+        digest.update(bytes((0,)))
         _digest_file(path, digest)
 
     # Detection may depend on native image/OCR distributions, not only Python
