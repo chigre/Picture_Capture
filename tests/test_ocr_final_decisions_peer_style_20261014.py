@@ -212,3 +212,35 @@ def test_peer_style_promotes_real_lexical_candidate_once_and_records_provenance(
         entries, [cand], source_top=0, source_column_x=10,
         settings=settings, engine_name="paddle", trusted_anchors=peers,
     ) == 0
+
+
+def test_production_filter_hook_freezes_peer_anchors_before_existing_rescues(monkeypatch):
+    from PIL import Image
+    import picture_capture.evidence_fusion as fusion
+
+    candidate = _continuation()
+    initial_peers = [_peer(25), _peer(115)]  # Inadequate on its own.
+    later_peer = _peer(55)
+    diagnostics = initial_peers + [candidate]
+    seen = {}
+
+    def fake_filter(*args, **kwargs):
+        return [], diagnostics
+
+    def fake_existing_rescue(*args, **kwargs):
+        # A prior (possibly mistaken) rescue must not count as an independent
+        # trusted anchor for the new peer-style algorithm.
+        diagnostics.append(later_peer)
+        return 1
+
+    monkeypatch.setattr(fusion, "_original_filter_headword_records", fake_filter)
+    monkeypatch.setattr(fusion, "_rescue_cjk_parser_failed_rows", lambda *a, **k: 0)
+    monkeypatch.setattr(fusion, "_rescue_false_continuation_rows", fake_existing_rescue)
+    monkeypatch.setattr(fusion._core, "_is_chinese_ocr", lambda _s: False)
+    monkeypatch.setattr(fusion._core, "_is_japanese_ocr", lambda _s: False)
+    entries, output = fusion.filter_headword_records(
+        [], Image.new("RGB", (120, 220), "white"), 0, 10, AppSettings(),
+    )
+    assert entries == []
+    assert not candidate["accepted"]
+    assert len(output) == 4
