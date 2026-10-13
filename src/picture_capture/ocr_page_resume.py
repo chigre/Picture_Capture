@@ -7,6 +7,8 @@ structure and saved PDIC bytes still match the previous successful run.
 from __future__ import annotations
 
 from dataclasses import asdict
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version as package_version
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +18,28 @@ from .formats import write_text_atomic
 
 
 RESUME_FORMAT = "picture-capture-ocr-page-resume-v1"
+
+
+@lru_cache(maxsize=1)
+def _algorithm_environment_key() -> str:
+    """Reject checkpoints produced by older OCR/parser/layout source versions.
+
+    Each application run computes this only once. Source modules change during
+    upgrades, and major engine distributions may also change independently.
+    """
+    digest = hashlib.sha256()
+    for name in (
+        "processing.py", "paddle_headwords_core.py",
+        "evidence_fusion.py", "page_understanding_fusion.py",
+    ):
+        _digest_file(Path(__file__).with_name(name), digest)
+    for name in ("paddleocr", "paddlepaddle", "pytesseract", "Pillow"):
+        try:
+            value = package_version(name)
+        except PackageNotFoundError:
+            value = "<not installed>"
+        digest.update(f"{name}={value}|".encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _digest_file(path: Path, hash_state: Any) -> None:
@@ -42,6 +66,7 @@ def input_fingerprint(
     """Strict content hash for the actual inputs (no mtime-only shortcut)."""
     digest = hashlib.sha256()
     digest.update(RESUME_FORMAT.encode("ascii"))
+    digest.update(_algorithm_environment_key().encode("ascii"))
     digest.update(str(page_index).encode("ascii"))
     digest.update(str(method).encode("ascii"))
     dump = json.dumps(asdict(settings), sort_keys=True, ensure_ascii=False, default=str)
