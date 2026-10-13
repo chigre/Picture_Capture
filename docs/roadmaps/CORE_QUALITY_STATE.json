@@ -37,7 +37,7 @@
     "latest_verified_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0",
     "last_completed_work_item": null,
     "blockers": [],
-    "required_next_action": "Confirm #479 post-merge main CI run 38451627304 succeeded. Then mark B0/R0.1 verified, and implement B1 (R0.2+R1.1+R1.2+R1.3) in one cohesive PR where reviewable, otherwise split B1a/B1b explicitly.",
+    "required_next_action": "Check PR #480 CI and merge docs; verify #479 post-merge main CI 38451627304; after both gates green mark B0/R0.1 verified, start B1 quality gates covering R0.2+R1.1+R1.2+R1.3 in one reviewable PR.",
     "last_test_evidence": "PR #479 all PR checks passed (CI 38447239706 plus CodeQL), merged at a47e8a00; post-merge main CI 38451627304 was QUEUED at last check; B0 not verified.",
     "active_batch": "B0",
     "next_batch": "B1"
@@ -275,5 +275,12 @@
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null
     }
+  },
+  "policy_revision_pr": {
+    "number": 480,
+    "url": "https://github.com/chigre/Picture_Capture/pull/480",
+    "status": "open",
+    "branch": "docs/pc-cq-grouped-pr-policy-20261014",
+    "version": "1.1.0"
   }
 }
