@@ -135,6 +135,12 @@ def initialize_quick_state(app: Any) -> None:
     app._layout_visualization_var = tk.BooleanVar(master=app, value=False)
     app._layout_display_density_var = tk.StringVar(master=app, value="简洁")
     app._layout_step_replay_var = tk.BooleanVar(master=app, value=False)
+    # The compact display menu also needs the transient large-head diagnostic
+    # toggle previously created inside the discarded legacy UI builder.
+    # Never put this in quick_bool_vars: it is not a persisted AppSettings key.
+    app._large_head_visualization_var = tk.BooleanVar(master=app, value=False)
+    app._large_head_debug_snapshot_key = None
+    app._large_head_debug_snapshot = None
     denoise = normalize_denoise_strength(os.environ.get(DENOISE_ENV, "auto"))
     app._analysis_denoise_strength_var = tk.StringVar(
         master=app, value=_DENOISE_VALUE_TO_LABEL.get(denoise, "自动"),
