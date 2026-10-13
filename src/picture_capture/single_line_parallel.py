@@ -8,7 +8,7 @@ page-unique files.  Shared ``QT/_file_log.txt`` remains coordinator-owned so
 multiple processes never append to it concurrently.
 """
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, CancelledError, ProcessPoolExecutor, wait
 from multiprocessing import get_context
 from pathlib import Path
 import json
@@ -73,6 +73,8 @@ def run_single_line_pages(
     indices: tuple[int, ...],
     settings: Any,
     progress: Callable[[int, int, str, int, bool, int], None],
+    *,
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> tuple[int, int, Path, bool, int]:
     """Run selected pages serially or in a spawn-based process pool.
 
@@ -102,6 +104,8 @@ def run_single_line_pages(
 
     if workers <= 1:
         for index in indices:
+            if cancel_requested is not None and cancel_requested():
+                raise CancelledError("单行切图已取消，已完成的页面保留")
             consume(single_line_page_job(
                 project_root,
                 images[index],
@@ -112,15 +116,23 @@ def run_single_line_pages(
             ))
         return total, total_records, output_dir, merge_by_page, 1
 
-    # Spawn avoids inheriting Tk/Paddle GUI state and matches Windows packaged
-    # execution.  Only small paths/settings are queued; each worker opens exactly
-    # one page at a time, so memory use is bounded by the worker count.
+    # Only workers*2 futures are ever submitted. Queuing all selected pages
+    # retains one Future/argument payload per page and delays cancellation.
     context = get_context("spawn")
     executor = ProcessPoolExecutor(max_workers=workers, mp_context=context)
-    futures = []
-    try:
-        for index in indices:
-            futures.append(executor.submit(
+    next_page = iter(indices)
+    in_flight = set()
+    inflight_limit = min(total, max(workers, workers * 2))
+
+    def submit_ready() -> None:
+        while len(in_flight) < inflight_limit:
+            if cancel_requested is not None and cancel_requested():
+                return
+            try:
+                index = next(next_page)
+            except StopIteration:
+                return
+            in_flight.add(executor.submit(
                 single_line_page_job,
                 str(project_root),
                 str(images[index]),
@@ -129,10 +141,23 @@ def run_single_line_pages(
                 str(output_dir),
                 bool(merge_by_page),
             ))
-        for future in as_completed(futures):
-            consume(future.result())
-    except Exception:
-        for future in futures:
+
+    try:
+        submit_ready()
+        while in_flight:
+            if cancel_requested is not None and cancel_requested():
+                raise CancelledError("单行切图已取消，已完成的页面保留")
+            completed_futures, _ = wait(
+                in_flight, timeout=0.1, return_when=FIRST_COMPLETED,
+            )
+            for future in completed_futures:
+                in_flight.remove(future)
+                consume(future.result())
+            submit_ready()
+    except BaseException:
+        # Finish already-running page-level transactions safely. Stop accepting
+        # new pages, and cancel queued work before returning control to the GUI.
+        for future in in_flight:
             future.cancel()
         executor.shutdown(wait=True, cancel_futures=True)
         raise
