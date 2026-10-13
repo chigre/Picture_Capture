@@ -97,7 +97,8 @@ class LayoutStepTrace:
 
     def add_layout(self, key: str, title: str, description: str,
                    layout: Any, *, details: dict[str, Any] | None = None,
-                   candidates: list[dict[str, Any]] | None = None) -> None:
+                   candidates: list[dict[str, Any]] | None = None,
+                   provisional_no_indent: bool = False) -> None:
         """Freeze source-aligned rectangles at exactly one production boundary."""
         top = int(getattr(layout, "body_top", 0))
         bottom = int(getattr(layout, "body_bottom", 0))
@@ -124,7 +125,9 @@ class LayoutStepTrace:
                     "column": col_index, "center": center,
                     "tolerance": tolerance,
                     "support": int(getattr(mode, "support", 0) or 0),
-                    "role": str(getattr(mode, "role", "unknown")),
+                    "role": ("unclassified" if provisional_no_indent else
+                             str(getattr(mode, "role", "unknown"))),
+                    "raw_provisional_role": str(getattr(mode, "role", "unknown")),
                     "source_line": [*lane_top, *lane_bottom],
                 })
             for line in getattr(col, "lines", ()) or ():
@@ -136,13 +139,17 @@ class LayoutStepTrace:
                 rows.append({
                     "id": row_id, "column": col_index,
                     "source_box": [p0[0], p0[1], p1[0], p1[1]],
-                    "canonical_y": y0, "role": str(getattr(line, "role", "unknown")),
+                    "canonical_y": y0,
+                    "role": ("unclassified" if provisional_no_indent else
+                             str(getattr(line, "role", "unknown"))),
+                    "raw_provisional_role": str(getattr(line, "role", "unknown")),
                     "first_x": float(getattr(line, "first_x", 0) or 0),
                 })
         changes = diff_rows(self._last_rows, rows) if self._last_rows else []
         self.stages.append({
             "key": key, "title": title, "description": description,
             "details": dict(details or {}),
+            "provisional_no_indent": bool(provisional_no_indent),
             "columns": columns, "lanes": lanes, "rows": rows, "changes": changes,
             "candidates": [dict(item) for item in (candidates or ())],
         })
