@@ -155,6 +155,24 @@ class LayoutStepTrace:
         })
         self._last_rows = rows
 
+    def adopt_unshown_role_baseline(self, layout: Any) -> None:
+        """Update row-diff baseline after a mandatory but non-semantic reset.
+
+        In explicit no-indent mode, the Page Design provisional roles must be
+        cleared to 'body' so downstream independent detectors have a neutral
+        starting state. That administrative normalization is intentionally not
+        a user-visible stage; without resetting the baseline here, the next
+        visual-check stage would falsely claim 140 role promotions.
+        """
+        before = len(self.stages)
+        self.add_layout(
+            "__internal_neutral_baseline__", "内部中性角色初始化",
+            "无明显缩进：仅将物理行的历史临时标签归零，不参与词头推断。",
+            layout,
+        )
+        self.stages.pop()
+        assert len(self.stages) == before
+
     def add_entries(
         self, stage: dict[str, Any], *, description: str,
     ) -> None:
