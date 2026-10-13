@@ -130,6 +130,7 @@ def build_final_decisions(
         j = links.get(i)
         original = bool(cand.get("selected", False))
         final = saved[j] if j is not None else None
+        final_origin = source_by_saved.get(j) if j is not None else None
         moved = bool(
             final is not None
             and (int(final.x) != _safe_int(cand.get("source_x"))
@@ -143,6 +144,10 @@ def build_final_decisions(
             "final_source_x": int(final.x) if final is not None else None,
             "final_source_y": int(final.y) if final is not None else None,
             "final_word": str(final.word) if final is not None else None,
+            "final_entry_source": str(getattr(final_origin, "ocr_source", "") or "") if final is not None else None,
+            "final_issue_type": str(getattr(final_origin, "issue_type", "") or "") if final is not None else None,
+            "final_manually_selected": bool(getattr(final_origin, "manually_selected", False)) if final is not None else None,
+            "ocr_manual_override": bool(cand.get("manual_override", False)),
             "final_status": (
                 "moved_by_post_ocr" if moved else "retained"
             ) if j is not None else ("removed_after_ocr" if original else "rejected"),
