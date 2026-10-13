@@ -49,7 +49,11 @@ def test_diagnostic_traces_actual_pipeline_and_does_not_pollute_normal_cache():
         assert replay is not ordinary
         assert _roles(replay.layout) == _roles(ordinary.layout)
         keys = [stage["key"] for stage in trace.stages]
-        assert keys[:4] == ["raw_estimate", "effective_parameters", "physical_rows", "initial_roles"]
+        assert keys[:6] == [
+            "raw_estimate", "effective_parameters",
+            "projection_gap_bridge", "projection_tall_split",
+            "physical_rows", "initial_roles",
+        ]
         assert keys[-1] == "final"
         assert {"body_lanes", "symbol_evidence", "large_head_evidence", "duplicate_suppression"} <= set(keys)
         assert trace.stages[-1]["rows"]
