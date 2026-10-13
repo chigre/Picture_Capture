@@ -633,6 +633,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     paddle_show_candidate_checkboxes: bool = True
     # Opt-in across-process OCR/combined batch checkpoint verification.
     ocr_resume_completed_pages: bool = False
+    # Experimental engine-scoped raw PSM recognition reuse; disabled by default.
+    ocr_cache_tesseract_raw: bool = False
     # Page-level dual-OCR agreement thresholds used by list/status colouring.
     paddle_agreement_good: float = 0.95
     paddle_agreement_warn: float = 0.85
