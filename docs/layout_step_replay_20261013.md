@@ -31,8 +31,10 @@ SECTION 过滤及末端误线清理。本版改为**直接调用真实
 3. 自动版面估计、应用后的参数、物理行及 Layout Core 缩进/角色判定；
 4. `layout_role_materialization`：实际转换成画线候选；
 5. 条件性大字碎片过滤和全页相干 Y 微调；
-6. **`bracketed_headword_recovery`【】词头恢复**：新增的坐标与
-   `ordinary_bracket_pair` 证据来源升级分开记录，点击候选可回溯来源；
+6. **`bracketed_headword_recovery`【】词头恢复**：真正的左右【】候选字形及
+   成对匹配状态标在原图上（绿色实框=成功配对，黄色虚框=未配对）。
+   新增的画线坐标与 `ordinary_bracket_pair` 来源升级分别记录，点击可回溯来源；
+   若因非 CJK 或 Profile 开关被跳过，会明确标注“未执行”及原因；
 7. Profile/SECTION 区域过滤、最后视觉一致性检查、
    `proven_bracket_body_continuation`【】后正文续行误线过滤、空白行过滤；
 8. `final_reading_order`：实际普通画线最终输出（与诊断模式下
