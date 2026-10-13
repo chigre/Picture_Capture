@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "plan_id": "PC-CQ-20261014",
+  "plan_version": "1.0.0",
+  "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
+  "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
+  "updated_at_utc": "2026-10-14",
+  "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
+  "repository": "chigre/Picture_Capture",
+  "starting_baseline": {
+    "branch": "main",
+    "sha": "7134bf68cf2595f1db61d7d410d7ac51290318ca",
+    "merged_prs": [
+      475,
+      476,
+      477
+    ],
+    "ci": {
+      "run_id": 38443534599,
+      "conclusion": "success",
+      "url": "https://github.com/chigre/Picture_Capture/actions/runs/38443534599"
+    }
+  },
+  "current_state": {
+    "status": "planning_pr_open",
+    "active_phase": "R0",
+    "active_work_item": "R0.1",
+    "work_in_progress": false,
+    "implementation_pr": null,
+    "implementation_head_sha": null,
+    "latest_verified_main_sha": "7134bf68cf2595f1db61d7d410d7ac51290318ca",
+    "last_completed_work_item": null,
+    "blockers": [],
+    "required_next_action": "Verify GitHub CI and merge planning PR #478 to main; then start only R0.1 after GitHub reality check; no production changes have started.",
+    "last_test_evidence": "Starting main CI success; no new roadmap-related production tests have run."
+  },
+  "units": {
+    "R0.1": "todo",
+    "R0.2": "todo",
+    "R1.1": "todo",
+    "R1.2": "todo",
+    "R1.3": "todo",
+    "R2.1": "todo",
+    "R2.2": "todo",
+    "R2.3": "todo",
+    "R3.1": "todo",
+    "R3.2": "todo",
+    "R4.1": "todo",
+    "R4.2": "todo",
+    "R5.1": "todo",
+    "R5.2": "todo",
+    "R6.1": "todo",
+    "R6.2": "todo",
+    "R6.3": "todo",
+    "R7.1": "todo",
+    "R7.2": "todo",
+    "R7.3": "todo",
+    "R8.1": "deferred_by_user",
+    "R8.2": "deferred_by_user",
+    "R8.3": "deferred_by_user",
+    "AC-GAP-AUDIT": "todo"
+  },
+  "explicit_constraints": {
+    "real_scan_PR_B": "deferred_by_user",
+    "do_not_claim_historic_cache_f1_is_current": true,
+    "never_overwrite_manual_pdic_silently": true,
+    "never_relax_architecture_ratchets_for_ci": true,
+    "only_one_work_unit_per_iteration": true,
+    "new_experiments_default_off": true,
+    "do_not_train_from_unverified_inferred_labels": true,
+    "do_not_modify_existing_architecture_refactor_checkpoint": true
+  },
+  "experimental_defaults": {
+    "paddle_peer_style_rescue": false,
+    "separator_y_ink_safe_gap": false,
+    "ocr_resume_completed_pages": false,
+    "ocr_cache_tesseract_raw": false,
+    "ocr_lazy_tesseract_diagnostics": false
+  },
+  "pending_decisions": [
+    {
+      "id": "A-C-definitions",
+      "status": "unresolved",
+      "note": "A/C feature gaps named in prior user planning require a source-grounded inventory; do not invent requirements."
+    },
+    {
+      "id": "real-scan-data",
+      "status": "deferred_by_user",
+      "note": "No current-main P/R/F1 claims until complete annotated scans are rerun."
+    }
+  ],
+  "evidence_log": [
+    {
+      "type": "github_actions",
+      "url": "https://github.com/chigre/Picture_Capture/actions/runs/38443534599",
+      "main_sha": "7134bf68cf2595f1db61d7d410d7ac51290318ca",
+      "status": "success"
+    },
+    {
+      "type": "source_audit",
+      "status": "proposed_not_executed",
+      "note": "The R0.1 fingerprint coverage risk is inferred from inspected source, not yet confirmed by a failing test."
+    },
+    {
+      "type": "planning_pr",
+      "url": "https://github.com/chigre/Picture_Capture/pull/478",
+      "status": "open",
+      "note": "Plan-only branch; not yet merged to main."
+    }
+  ],
+  "rules_for_updates": {
+    "permitted_unit_statuses": [
+      "todo",
+      "in_progress",
+      "blocked",
+      "pr_open",
+      "merged",
+      "verified",
+      "deferred_by_user"
+    ],
+    "mark_verified_only_after_main_ci_success": true,
+    "if_conflict_stop_and_record_blocker": true,
+    "update_with_pr_sha_and_ci_url": "required"
+  },
+  "planning_pr": {
+    "number": 478,
+    "url": "https://github.com/chigre/Picture_Capture/pull/478",
+    "status": "open",
+    "branch": "docs/core-quality-upgrade-plan-20261014",
+    "head_sha_at_creation": "f1ac45346721c24ba6a9cf13d29bb966d4dfba62"
+  }
+}
