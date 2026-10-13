@@ -12616,6 +12616,9 @@ class PictureCaptureApp(tk.Tk):
             ocr_payload = preloaded.get("ocr_payload") if isinstance(preloaded.get("ocr_payload"), dict) else {}
             self.ocr_review_candidates = list(ocr_payload.get("review_candidates") or [])
             self._restore_entry_ocr_metadata(ocr_payload)
+            self._review_controller_for_call().load_ocr_review_candidates(
+                preloaded_candidates=self.ocr_review_candidates,
+            )
             self.polygons = list(preloaded.get("polygons") or [])
         else:
             with Image.open(self.current_page) as opened:
