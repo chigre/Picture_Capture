@@ -39,65 +39,85 @@ def _app_key(app: Any) -> tuple[Any, ...]:
     )
 
 
-def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
-    """Collect stages by running the actual production Layout Core once.
+def _run_replay(
+    source: Image.Image, settings: Any, page_index: int,
+    page_sections: list[Any] | None = None,
+) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
+    """Run the *actual* ordinary-drawing facade, not a reduced Layout imitation.
 
-    This is a separate *read-only diagnostic run*: no layouts, Entry metadata,
-    output files or project caches are mutated by playback.
+    The same call records shared preprocessing, optional mask, Layout Core,
+    【】 recovery and final candidate filtering. It never publishes a PDIC.
     """
-    from .image_utils import build_analysis_image
-    from .layout_core_understanding import understand_layout_core
+    from .processing import detect_entries
+
+    # The normal 普通画线 button overrides the method for its worker. Replay
+    # must do the same on a *copy*, regardless of the GUI's OCR selection.
+    # Never silently run the OCR/combined pipeline and call it Layout replay.
+    ordinary_settings = copy.deepcopy(settings)
+    ordinary_settings.detection_method = "left_edge"
 
     trace = LayoutStepTrace()
-    analysis = build_analysis_image(source, settings)
     previews: dict[str, Image.Image] = {}
-    try:
-        profile = dict(analysis.info.get("analysis_denoise_profile") or {})
-        trace.add_note(
-            "image_preparation", "分析图与去噪",
-            "原图未改动。该阶段显示实际送入 Layout 的共享分析图；"
-            "去噪只改变分析副本，不改变原图坐标。",
-            details={"denoise": profile, "source_size": list(source.size)},
-        )
-        analysis_thumb = analysis.copy()
-        analysis_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
-        previews["image_preparation"] = analysis_thumb
-        masked = None
-        if bool(getattr(settings, "layout_mask_illustrations", False)):
-            from .layout_illustration_mask import mask_large_illustrations_for_layout
-            try:
-                masked, _stats = mask_large_illustrations_for_layout(
-                    analysis, settings, profile_page_index=int(page_index),
-                )
-            except Exception:
-                masked = None
-        actual = masked if masked is not None else analysis
-        if masked is not None and masked is not analysis:
-            trace.add_note(
-                "illustration_mask", "插图区域掩膜",
-                "本阶段显示实际进入 Layout 的插图白化分析图（不改动原图）。",
-            )
-        # Only the two meaningful analysis-image transitions keep bounded
-        # thumbnails; all geometric intermediate states remain coordinate data.
+
+    def capture(key: str, image: Image.Image) -> None:
+        preview = image.copy()
         try:
-            if masked is not None and masked is not analysis:
-                mask_thumb = masked.copy()
-                mask_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
-                previews["illustration_mask"] = mask_thumb
-            understand_layout_core(
-                actual, settings, page_index=page_index, trace=trace,
-                large_head_diagnostics=[],
-            )
-            return trace, previews
-        finally:
-            if masked is not None and masked is not analysis:
-                masked.close()
+            preview.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
+            prior = previews.pop(key, None)
+            if prior is not None:
+                prior.close()
+            previews[key] = preview
+        except BaseException:
+            preview.close()
+            raise
+
+    try:
+        pipeline: dict[str, Any] = {
+            "_layout_replay_trace": trace,
+            "_layout_replay_preview": capture,
+        }
+        # Uses the same effective settings, sections, actual entry algorithms
+        # and stage records as the 普通画线 button, once per requested page.
+        detect_entries(
+            source, ordinary_settings, profile_page_index=int(page_index),
+            page_sections=page_sections, debug_trace=pipeline,
+        )
+        if not trace.stages:
+            raise RuntimeError("普通画线未提供任何可回放阶段")
+        return trace, previews
     except BaseException:
         for preview in previews.values():
             preview.close()
         raise
-    finally:
-        analysis.close()
+
+
+def _preview_at_stage(
+    stages: list[dict[str, Any]], index: int, previous: bool,
+    previews: dict[str, Image.Image], original: Image.Image,
+) -> Image.Image:
+    """Use the *latest actual* preprocessed raster, not the raw scan after mask.
+
+    The before toggle at masking previews the analysis input; the first stage
+    toggles between original and cleaned raster.
+    """
+    target = max(-1, index - int(previous))
+    for position in range(target, -1, -1):
+        candidate = previews.get(stages[position]["key"])
+        if candidate is not None:
+            return candidate
+    return original
+
+
+def _stage_entries_for_display(
+    stages: list[dict[str, Any]], index: int, previous: bool,
+) -> list[dict[str, Any]]:
+    """Return the last recorded production marker list at/before this stage."""
+    target = index - int(previous)
+    for position in range(target, -1, -1):
+        stage = stages[position]
+        if "entries" in stage:
+            return stage["entries"]
+    return []
 
 
 def _stage_rows_for_display(
@@ -126,6 +146,8 @@ def _format_stage(
     selected: dict[str, Any] | None = None,
     history: list[dict[str, str]] | None = None,
     selected_candidate: dict[str, Any] | None = None,
+    selected_marker: dict[str, Any] | None = None,
+    marker_history: list[dict[str, str]] | None = None,
 ) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
@@ -153,6 +175,26 @@ def _format_stage(
         lines.extend(["", f"本阶段物理行：{len(rows)}", "行角色：" + "、".join(
             f"{k} {v}" for k, v in sorted(counts.items())
         )])
+    if "entries" in stage:
+        markers = stage["entries"]
+        marker_changes = stage.get("entry_changes", [])
+        lines.extend(["", f"当前真实普通画线候选：{len(markers)}",
+                      f"相对上一画线阶段的变化：{len(marker_changes)}"])
+        for item in marker_changes[:100]:
+            before = item.get("before") or {}
+            after = item.get("after") or {}
+            lines.append(
+                f"  ({item['x']}, {item['y']}): {item['kind']} "
+                f"{before.get('source', '—')} → {after.get('source', '—')}"
+            )
+        if len(marker_changes) > 100:
+            lines.append(f"  ……其余 {len(marker_changes)-100} 项")
+    if selected_marker is not None:
+        lines.extend(["", "点击自动画线候选：",
+                      f"坐标：({selected_marker['x']}, {selected_marker['y']})",
+                      f"来源：{selected_marker.get('source', 'unknown')}"])
+        for item in marker_history or []:
+            lines.append(f"  {item['stage']} → {item['role']}")
     changes = stage.get("changes", [])
     if changes:
         lines.extend(["", f"相对上一个行状态的变化：{len(changes)}"])
@@ -179,9 +221,12 @@ def _format_stage(
         for item in history:
             lines.append(f"  {item['stage']} → {item['role']}")
             lines.append("    依据：" + item["reason"])
-    lines.extend(["", "注意：此窗口只回放 Layout Core 的判定。",
-                  "后续普通画线还有独立的裁决与过滤步骤；"
-                  "相邻位置不代表某个证据是该线的唯一原因。"])
+    lines.extend([
+        "", "时间轴包含 Layout Core 与实际普通画线的候选处理阶段。",
+        "候选位置的空间邻近关系不能单独证明因果；"
+        "最终显示的坐标来自普通画线真实阶段记录。",
+        "仅用于诊断，不写入 PDIC/PPP。",
+    ])
     return "\n".join(lines)
 
 
@@ -323,9 +368,12 @@ class LayoutStepReplayWindow:
         self.step_var.set("计算中")
         self.status.set(f"正在分析第 {int(getattr(self.app, 'current_index', 0))+1} 页，记录真实阶段……")
         self.render()
-        settings = copy.deepcopy(self.app._current_effective_profile_settings())
+        settings = copy.deepcopy(self.app.settings)
         page_index = int(getattr(self.app, "current_index", 0))
-        future = self._executor.submit(_run_replay, source, settings, page_index)
+        page_sections = copy.deepcopy(list(getattr(self.app, "page_sections", []) or []))
+        future = self._executor.submit(
+            _run_replay, source, settings, page_index, page_sections,
+        )
         self._pending = future
 
         def completed(result: Any) -> None:
@@ -402,8 +450,13 @@ class LayoutStepReplayWindow:
             return
         source = self._source
         stage = self._trace.stages[self._stage_index] if self._trace else None
-        preview = (self._previews.get(stage["key"]) if stage and not self.before.get() else None)
-        original = preview if preview is not None else source
+        original = (
+            _preview_at_stage(
+                self._trace.stages, self._stage_index, self.before.get(),
+                self._previews, source,
+            )
+            if self._trace else source
+        )
         target = (
             max(1, int(source.width * self._scale)),
             max(1, int(source.height * self._scale)),
@@ -473,9 +526,24 @@ class LayoutStepReplayWindow:
                                              tags=_STEP_TAG)
         # Candidate geometry comes directly from the same detector's optional
         # diagnostic trace (including rejected candidates), not a second scan.
-        candidates = visual.get("candidates", [])
+        # Mask polygons belong to the AFTER state. They must disappear in
+        # Before mode even when the current note has no physical rows.
+        candidates = (
+            stage.get("candidates", []) if not self.before.get()
+            else (self._trace.stages[self._stage_index-1].get("candidates", [])
+                  if self._stage_index > 0 else [])
+        )
         for candidate in candidates:
             status = str(candidate.get("status", "unknown"))
+            polygon = candidate.get("source_polygon")
+            if polygon and len(polygon) >= 3:
+                points = [v*factor for p in polygon for v in p]
+                self.canvas.create_polygon(
+                    *points, fill="", width=3 if status == "masked" else 2,
+                    outline="#e63c32" if status == "masked" else "#df9c24",
+                    dash=() if status == "masked" else (5, 3), tags=_STEP_TAG,
+                )
+                continue
             box = candidate.get("source_box")
             if box and len(box) == 4:
                 x0, y0, x1, y1 = box
@@ -498,6 +566,39 @@ class LayoutStepReplayWindow:
                     )
         self._visual_candidates = candidates
         self._visual_rows = visual["rows"]
+        markers = _stage_entries_for_display(
+            self._trace.stages, self._stage_index, self.before.get(),
+        )
+        marker_changes = (
+            stage.get("entry_changes", []) if not self.before.get() else []
+        )
+        added = {
+            (x["x"], x["y"]): x for x in marker_changes
+            if x["kind"] in {"added", "provenance_changed"}
+        }
+        current_keys = {(x["x"], x["y"]) for x in markers}
+        for marker in markers:
+            x0, y0 = int(marker["x"]), int(marker["y"])
+            marked = (x0, y0) in added
+            self.canvas.create_oval(
+                x0*factor-5, y0*factor-5, x0*factor+5, y0*factor+5,
+                outline="#18a647" if marked else "#d63e3e",
+                width=3 if marked else 2, tags=_STEP_TAG,
+            )
+        if not self.before.get():
+            for event in marker_changes:
+                if event["kind"] != "removed":
+                    continue
+                x0, y0 = event["x"]*factor, event["y"]*factor
+                self.canvas.create_line(
+                    x0-6, y0-6, x0+6, y0+6, fill="#dd9423",
+                    width=2, tags=_STEP_TAG,
+                )
+                self.canvas.create_line(
+                    x0+6, y0-6, x0-6, y0+6, fill="#dd9423",
+                    width=2, tags=_STEP_TAG,
+                )
+        self._visual_markers = markers
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
             f"｜红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化｜点击行查看历程"
@@ -510,9 +611,27 @@ class LayoutStepReplayWindow:
         factor = max(0.01, getattr(self, "_render_scale", self._scale))
         x = int(self.canvas.canvasx(event.x) / factor)
         y = int(self.canvas.canvasy(event.y) / factor)
+        selected_marker = next((
+            item for item in getattr(self, "_visual_markers", [])
+            if abs(int(item["x"]) - x) <= 9 and abs(int(item["y"]) - y) <= 9
+        ), None)
+        if selected_marker is not None:
+            self._show_text(_format_stage(
+                self._trace.stages[self._stage_index],
+                selected_marker=selected_marker,
+                marker_history=self._trace.history_for_entry(
+                    int(selected_marker["x"]), int(selected_marker["y"]),
+                ),
+            ))
+            return
         candidate = next((
             item for item in getattr(self, "_visual_candidates", [])
             if (
+                item.get("source_polygon")
+                and len(item["source_polygon"]) >= 3
+                and min(p[0] for p in item["source_polygon"]) <= x <= max(p[0] for p in item["source_polygon"])
+                and min(p[1] for p in item["source_polygon"]) <= y <= max(p[1] for p in item["source_polygon"])
+            ) or (
                 item.get("source_box") and len(item["source_box"]) == 4
                 and min(item["source_box"][0], item["source_box"][2]) <= x <= max(item["source_box"][0], item["source_box"][2])
                 and min(item["source_box"][1], item["source_box"][3]) <= y <= max(item["source_box"][1], item["source_box"][3])

@@ -68,10 +68,11 @@ class LayoutStepTrace:
     _last_rows: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     def add_note(self, key: str, title: str, description: str,
-                 *, details: dict[str, Any] | None = None) -> None:
+                 *, details: dict[str, Any] | None = None,
+                 candidates: list[dict[str, Any]] | None = None) -> None:
         self.stages.append({
             "key": key, "title": title, "description": description,
-            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [], "candidates": [],
+            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [], "candidates": [dict(x) for x in (candidates or ())],
         })
 
     def add_policy(self, estimate: Any, used: Any,
@@ -146,6 +147,68 @@ class LayoutStepTrace:
             "candidates": [dict(item) for item in (candidates or ())],
         })
         self._last_rows = rows
+
+    def add_entries(
+        self, stage: dict[str, Any], *, description: str,
+    ) -> None:
+        """Freeze *actual* ordinary-drawing marker states, including provenance.
+
+        Position-only diffs miss upgrades to ordinary_bracket_pair at the same
+        coordinates. Keep those separate from physical-row role changes.
+        """
+        markers = [dict(item) for item in stage.get("entries", [])]
+        earlier = next((
+            item["entries"] for item in reversed(self.stages)
+            if "entries" in item
+        ), [])
+        old = {(m["x"], m["y"]): m for m in earlier}
+        new = {(m["x"], m["y"]): m for m in markers}
+        changes = []
+        for anchor in sorted(set(old) | set(new)):
+            before, after = old.get(anchor), new.get(anchor)
+            if before is None:
+                kind = "added"
+            elif after is None:
+                kind = "removed"
+            elif (before.get("source"), before.get("issue_type"), before.get("oversized")) != (
+                after.get("source"), after.get("issue_type"), after.get("oversized")
+            ):
+                kind = "provenance_changed"
+            else:
+                continue
+            changes.append({
+                "x": anchor[0], "y": anchor[1], "kind": kind,
+                "before": dict(before) if before else None,
+                "after": dict(after) if after else None,
+            })
+        details = {
+            k: v for k, v in stage.items()
+            if k not in {"stage", "entries", "added", "removed", "candidates"}
+        }
+        self.stages.append({
+            "key": stage["stage"], "title": description,
+            "description": "来自 processing.detect_entries 真实普通画线阶段；"
+                           "红点为当前画线候选，绿圈为新增或证据升级，橙叉为删除。",
+            "details": details, "columns": [], "lanes": [], "rows": [],
+            "changes": [], "candidates": [
+                dict(item) for item in stage.get("candidates", [])
+            ], "entries": markers,
+            "entry_changes": changes,
+        })
+
+    def history_for_entry(self, x: int, y: int) -> list[dict[str, str]]:
+        history: list[dict[str, str]] = []
+        previous = None
+        for stage in self.stages:
+            if "entries" not in stage:
+                continue
+            item = next((m for m in stage["entries"]
+                         if m["x"] == x and m["y"] == y), None)
+            state = str(item["source"]) if item else "absent"
+            if state != previous:
+                history.append({"stage": stage["title"], "role": state})
+                previous = state
+        return history
 
     def history_for_row(self, row_id: str) -> list[dict[str, str]]:
         """Chronological role history from frozen, *actual* Layout stage data."""

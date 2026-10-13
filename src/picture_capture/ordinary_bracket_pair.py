@@ -254,6 +254,7 @@ def recover_bracketed_ordinary_entries(
     *,
     transform=None,
     source_size: tuple[int, int] | None = None,
+    candidate_debug: list[dict[str, object]] | None = None,
 ) -> list[Entry]:
     """Supplement entries only from matching opening/closing print glyphs.
 
@@ -301,6 +302,27 @@ def recover_bracketed_ordinary_entries(
                 and abs(c[1] - o[1]) <= .5 * pitch
                 and abs((c[3] - c[1]) - (o[3] - o[1])) <= .7 * pitch
             ]
+            if candidate_debug is not None:
+                paired_openings = {tuple(o) for o, _c in paired}
+                paired_closings = {tuple(c) for _o, c in paired}
+                for label, boxes, paired_boxes in (
+                    ("opening", openings, paired_openings),
+                    ("closing", closings, paired_closings),
+                ):
+                    for box in boxes:
+                        source_box = (
+                            transform.canonical_box_to_source(box, source_size)
+                            if transform is not None and source_size is not None
+                            else box
+                        )
+                        proven = tuple(box) in paired_boxes
+                        candidate_debug.append({
+                            "source_box": [int(v) for v in source_box],
+                            "status": "accepted" if proven else "unpaired",
+                            "bracket_side": label,
+                            "reason": ("括号笔画方向、距离及高度共同满足成对匹配"
+                                       if proven else "该括号外形未构成有效的完整配对"),
+                        })
             proven_rows = [(int(o[0]), int(o[1])) for o, _c in paired]
             proven_rows.extend(_sticky_pairs_from_printed_template(
                 ink, openings, closings, paired,

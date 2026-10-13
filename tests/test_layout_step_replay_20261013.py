@@ -11,6 +11,7 @@ from picture_capture import layout_core_understanding as core
 from picture_capture.layout_step_trace import LayoutStepTrace, diff_rows
 from picture_capture.layout_step_replay_ui import (
     _format_stage, _row_at_position, _run_replay, _stage_rows_for_display,
+    _preview_at_stage, _stage_entries_for_display,
 )
 from picture_capture.models import AppSettings
 
@@ -66,7 +67,9 @@ def test_full_replay_builds_denoise_stage_but_does_not_edit_original():
     try:
         assert image.tobytes() == original
         assert trace.stages[0]["key"] == "image_preparation"
-        assert trace.stages[-1]["key"] == "final"
+        assert trace.stages[-1]["key"] == "final_reading_order"
+        assert "illustration_mask" in [stage["key"] for stage in trace.stages]
+        assert "layout_role_materialization" in [stage["key"] for stage in trace.stages]
         assert previews["image_preparation"].size[0] <= 1400
     finally:
         for preview in previews.values():
