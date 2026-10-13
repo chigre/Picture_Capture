@@ -13,6 +13,7 @@ import re
 
 from .formats import write_pdic
 from .models import Entry as WordEntry
+from .project_storage import note_page_artifact_edit
 
 
 def build_page_lookup(
@@ -127,6 +128,7 @@ def write_pdic_atomic(
     try:
         write_pdic(temp, entries, image_width, pages)
         os.replace(temp, target)
+        note_page_artifact_edit(target)
     finally:
         try:
             if temp.exists():
