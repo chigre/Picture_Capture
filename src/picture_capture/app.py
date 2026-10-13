@@ -15180,7 +15180,7 @@ class PictureCaptureApp(tk.Tk):
                 from .ocr_page_resume import write_page_resume
                 try:
                     write_page_resume(
-                        ocr_cache_root(project.root), page, saved_pdic,
+                        ocr_cache_root(project.root), page, pdic_path(page),
                         page_index=index, method=method, settings=settings,
                         marker_count=len(entries), dependencies=resume_dependencies,
                     )
