@@ -1709,12 +1709,8 @@ class SettingsDialog(tk.Toplevel):
                     setattr(self.parent.settings, name, cast(raw_value))
                 elif name in self._casts:
                     if name == "physical_row_projection_width_percent":
-                        percent = float(value)
-                        if not 10.0 <= percent <= 100.0:
-                            raise ValueError(
-                                "物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。"
-                            )
-                        self.parent.settings.physical_row_projection_width_percent = percent
+                        setattr(self.parent.settings, name,
+                                _settings_lifecycle_ui.physical_row_projection_width_percent(value))
                     elif name == "paddle_left_tolerance":
                         percent = float(value)
                         if not 0.0 <= percent <= 100.0:
