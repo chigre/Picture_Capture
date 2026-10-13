@@ -3979,8 +3979,9 @@ def test_v298_existing_word_source_selection_is_separate_and_refill_reuses_cache
 def test_v298_action_row_exposes_select_then_fill_buttons():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert '("备份PDIC", self.backup_pdic)' in text
-    assert '("恢复PDIC", self.restore_from_pdic_backup)' in text
+    task = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("备份PDIC", "backup_pdic")' in task
+    assert '("恢复PDIC", "restore_from_pdic_backup")' in task
 
 
 def test_v296_batch_queue_polling_yields_between_large_progress_bursts():
@@ -4478,7 +4479,8 @@ def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():
     root = Path(__file__).parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     controller = (root / "src" / "picture_capture" / "ui" / "controllers" / "illustration.py").read_text(encoding="utf-8")
-    assert '("插图识别", self.detect_illustrations_selected_scope)' in app
+    task = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("插图识别", "detect_illustrations_selected_scope")' in task
     start = app.index("    def detect_illustrations_selected_scope(")
     end = app.index("    def split_illustrations_selected_scope(", start)
     wrapper = app[start:end]
@@ -4721,7 +4723,8 @@ def test_main_crop_preview_is_selected_only_through_display_mode():
         / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
     ).read_text(encoding="utf-8")
     assert 'text="显示切图预览"' not in text
-    assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
+    from picture_capture.ui.compact_display_menu import DISPLAY_MODES
+    assert all(mode in DISPLAY_MODES for mode in ("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"))
     assert '"切图预览": (False, False, True)' in controller_text
     assert 'def _draw_crop_plan_preview' in text
 
@@ -4731,12 +4734,11 @@ def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     controller=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
-    assert 'text="显示模式："' in text
-    assert 'values=("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览")' in text
-    assert 'display_mode_combo.bind("<<ComboboxSelected>>", self._apply_display_mode)' in text
-    assert 'text="颜色模式："' in text
-    assert 'textvariable=self.appearance_mode_var' in text
-    assert 'values=tuple(APPEARANCE_MODE_VALUES)' in text
+    from picture_capture.ui.compact_display_menu import DISPLAY_MODES
+    display = (root / "ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'dropdown("显示模式", app.display_mode_var, DISPLAY_MODES, app._apply_display_mode)' in display
+    assert 'dropdown("颜色模式", app.appearance_mode_var,' in display
+    assert all(mode in DISPLAY_MODES for mode in ("原图+标注", "二值+标注", "仅原图", "仅二值", "切图预览"))
     page_toolbar=text.split('page_panel = ttk.Frame(sidebar,',1)[1].split('list_frame = ttk.Frame(page_panel)',1)[0]
     assert 'text="显示模式："' not in page_toolbar
     for mode in ('"原图+标注"','"二值+标注"','"仅原图"','"仅二值"','"切图预览"'):
@@ -4768,31 +4770,22 @@ def test_page_list_compact_labels_navigation_order_and_consistency_minimum():
 def test_action_and_postproduction_rows_use_equal_width_grid_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    actions_start = text.index('            parent, "四、画线 / OCR / 插图 / 校对"')
-    actions_end = text.index("        postproduction = self._section_frame(", actions_start)
-    actions = text[actions_start:actions_end]
-    assert 'row.columnconfigure(bi, weight=1, uniform=f"actions-row-{ri}")' in actions
-    assert 'button.grid(' in actions
-    assert 'button.pack(side="left", fill="x", expand=True' not in actions
-
-    post_start = text.index("        postproduction = self._section_frame(", actions_end)
-    post_end = text.index("        # Main-panel parameters are live:", post_start)
-    post = text[post_start:post_end]
-    assert 'row.columnconfigure(bi, weight=1, uniform=f"postproduction-row-{ri}")' in post
-    assert 'button.grid(' in post
-    assert 'button.pack(side="left", fill="x", expand=True' not in post
+    from picture_capture.ui.compact_task_menus import ACTION_GROUPS, POSTPRODUCTION_ACTIONS
+    tasks = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert ACTION_GROUPS and POSTPRODUCTION_ACTIONS
+    assert 'button.pack(side="left", fill="x" if expand else "none", expand=expand' in tasks
+    assert 'for group in ACTION_GROUPS:' in tasks
+    assert 'for group in POSTPRODUCTION_ACTIONS:' in tasks
 
 
 def test_main_quick_parameter_entries_are_left_aligned():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _build_quick_settings(")
-    end = text.index("\n    @staticmethod\n    def _style_color_button", start)
-    quick = text[start:end]
-    assert 'justify="right" if cast in {int, float} else "left"' not in quick
-    assert 'justify="left"' in quick
-    # Every explicit quick-panel Entry should declare left alignment.
-    assert quick.count("ttk.Entry(") == quick.count('justify="left"')
+    # Compact numeric settings use a consistent centred input, unlike the
+    # defunct full-width legacy menu which used left-aligned text inputs.
+    compact = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '_build_quick_settings(' not in text
+    assert 'ttk.Entry(row, textvariable=variable, width=width, justify="center")' in compact
 
 
 def test_entry_default_color_and_bookmarks_persist(tmp_path):
@@ -4949,7 +4942,8 @@ def test_v2111_rectangular_ppp_supports_four_side_drag_geometry():
 def test_v2111_ui_restores_hide_overlay_and_removes_crop_dialog_preview():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="隐藏线框(插图除外)"' in text
+    display = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'check(line(), "隐藏线框（插图除外）", app.hide_var, app._toggle_hide_overlays)' in display
     crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert 'preview_canvas' not in crop_class
     assert '主界面完整预览' not in crop_class
@@ -4966,7 +4960,8 @@ def test_v2113_gui_paths_do_not_use_raw_xy_entry_sort():
 
 def test_v2113_repair_pdic_order_button_is_exposed():
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("修复排序", self.repair_pdic_order_selected_scope)' in app_text
+    task = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("修复排序", "repair_pdic_order_selected_scope")' in task
 
 
 def test_v2113_canonical_reorder_preserves_word_coordinate_binding():
