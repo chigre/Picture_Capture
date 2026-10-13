@@ -49,7 +49,11 @@ def normalize_crop_settings_payload(
     }
     if not isinstance(raw, dict):
         return defaults
-    if int(raw.get("version", 0) or 0) != CROP_SETTINGS_VERSION:
+    try:
+        version = int(raw.get("version", 0) or 0)
+    except (TypeError, ValueError, OverflowError):
+        return defaults
+    if version != CROP_SETTINGS_VERSION:
         return defaults
     if str(raw.get("coordinate_space") or "") != SOURCE_COORDINATE_SPACE:
         return defaults
