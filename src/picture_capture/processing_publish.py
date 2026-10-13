@@ -128,8 +128,14 @@ def _publish_file_transaction(
             os.replace(temp, target)
         os.replace(journal, committed)
     except Exception:
-        # Preserve the journal if rollback fails; startup recovery is idempotent.
-        _recover_journal(journal)
+        # Preserve the journal and .bak files if rollback itself fails; the next
+        # project open will retry. Keep the historical RuntimeError contract.
+        try:
+            _recover_journal(journal)
+        except Exception as restore_exc:
+            raise RuntimeError(
+                "切图发布失败，且回滚旧文件时发生错误；已保留隐藏 .bak 恢复副本。"
+            ) from restore_exc
         raise
     finally:
         if committed.exists():
