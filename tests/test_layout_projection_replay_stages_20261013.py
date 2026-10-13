@@ -14,7 +14,7 @@ from picture_capture.layout_physical_indent import (
 )
 from picture_capture.layout_step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import (
-    _projection_candidates_for_display, _format_stage,
+    _projection_candidates_for_display, _format_stage, _candidate_at_source,
 )
 from picture_capture.layout_core_understanding import (
     understand_layout_core, clear_layout_understanding_cache,
@@ -160,3 +160,16 @@ def test_split_stage_before_after_only_shows_real_computational_state():
     assert [x["status"] for x in _projection_candidates_for_display(fake, False)] == [
         "retained_row", "split_valley", "fallback_slot", "ignored_short",
     ]
+
+
+
+def test_narrow_real_bridge_marker_wins_click_over_its_parent_band():
+    parent = {
+        "status": "connected_band", "source_box": [10, 5, 70, 70],
+    }
+    gap = {
+        "status": "bridged_gap", "source_box": [10, 25, 70, 26],
+    }
+    assert _candidate_at_source([parent, gap], 30, 25)["status"] == "bridged_gap"
+    assert _candidate_at_source([parent, gap], 30, 28)["status"] == "bridged_gap"
+    assert _candidate_at_source([parent, gap], 30, 50)["status"] == "connected_band"
