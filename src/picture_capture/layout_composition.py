@@ -80,22 +80,24 @@ def infer_composed_physical_page_layout(
              "Page Design 原始物理行与正文栏范围；"
              "此时的 entry/body 为临时标签，尚未完成 Profile 语义和视觉复核。"),
             layout,
-            details={"profile_indent_mode": indent_type_label(page_settings),
-                     "role_status": "not_classified" if neutral else "provisional"},
+            details={
+                "profile_indent_mode": indent_type_label(page_settings),
+                "role_status": "not_classified" if neutral else "provisional",
+                **({"skipped_semantic_stages": [
+                    "基础行角色", "缩进语义判定", "正文缩进族调整",
+                ], "next_visible_stage": "视觉一致性复核"} if neutral else {}),
+            },
             provisional_no_indent=neutral,
         )
     normalize_layout_roles(layout)
-    if trace is not None:
+    if trace is not None and not neutral:
         trace.add_layout(
             "initial_roles", "基础行角色",
-            ("在真正应用 Profile 缩进语义前的物理行候选；"
-             "【无明显缩进】下不应把孤立行首位置解释为词条。" if neutral else
-             "由物理行和初步缩进族得到的临时角色；"
-             "尚未合并大字头和符号证据。"),
+            "由物理行和初步缩进族得到的临时角色；"
+            "尚未合并大字头和符号证据。",
             layout,
             details={"profile_indent_mode": indent_type_label(page_settings),
-                     "role_status": "not_classified" if neutral else "provisional"},
-            provisional_no_indent=neutral,
+                     "role_status": "provisional"},
         )
     return layout, page_settings, applied
 
