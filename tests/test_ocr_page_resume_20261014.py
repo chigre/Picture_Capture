@@ -108,3 +108,17 @@ def test_project_setting_defaults_off_and_is_explained(tmp_path):
     p = tmp_path / "settings.json"
     AppSettings(ocr_resume_completed_pages=True).to_json(p)
     assert AppSettings.from_json(p).ocr_resume_completed_pages is True
+
+
+def test_force_refresh_bypasses_resume_but_can_write_a_new_checkpoint():
+    source = (Path(__file__).resolve().parents[1] /
+              "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    start = source.index("        def worker(index:", source.index("    def _detect_pages("))
+    end = source.index("        def done(", start)
+    worker = source[start:end]
+    # A user-requested forced refresh must never be satisfied by yesterday's
+    # otherwise-identical successful checkpoint.
+    assert "and not force_refresh" in worker
+    assert "validated_resume(" in worker
+    assert "write_page_resume(" in worker
+    assert "if not resume_dependencies:" in worker
