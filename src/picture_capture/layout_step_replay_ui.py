@@ -111,7 +111,11 @@ def _row_at_position(rows: list[dict[str, Any]], x: int, y: int) -> dict[str, An
     return min(matches, key=lambda item: item[0])[1] if matches else None
 
 
-def _format_stage(stage: dict[str, Any], *, selected: dict[str, Any] | None = None) -> str:
+def _format_stage(
+    stage: dict[str, Any], *,
+    selected: dict[str, Any] | None = None,
+    history: list[dict[str, str]] | None = None,
+) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
     for k, value in details.items():
@@ -146,6 +150,11 @@ def _format_stage(stage: dict[str, Any], *, selected: dict[str, Any] | None = No
             "物理行 Y：" + str(selected["canonical_y"]),
             "检测到的 first_x：" + str(selected["first_x"]),
         ])
+    if history:
+        lines.append("该行的完整角色变化：")
+        for item in history:
+            lines.append(f"  {item['stage']} → {item['role']}")
+            lines.append("    依据：" + item["reason"])
     lines.extend(["", "注意：此窗口只回放 Layout Core 的判定。",
                   "后续普通画线还有独立的裁决与过滤步骤；"
                   "相邻位置不代表某个证据是该线的唯一原因。"])
@@ -405,15 +414,30 @@ class LayoutStepReplayWindow:
             x1, y1 = col["source_end"]
             self.canvas.create_rectangle(x0*factor, y0*factor, x1*factor, y1*factor,
                                          outline="#129567", width=2, tags=_STEP_TAG)
+        changes = {item["id"]: item for item in stage.get("changes", [])}
         for row in visual["rows"]:
             x0, y0, x1, y1 = row["source_box"]
-            color = _ROLE_COLORS.get(row["role"], "#999999")
+            changed = changes.get(row["id"]) if visual is stage else None
+            # Role changes are outlined in vivid green. Removed rows are drawn
+            # from their actual preceding stage, not guessed from final output.
+            color = "#18ab42" if changed is not None else _ROLE_COLORS.get(row["role"], "#999999")
+            width = 3 if changed is not None else 1
             self.canvas.create_rectangle(x0*factor, y0*factor, x1*factor, y1*factor,
-                                         outline=color, width=1, tags=_STEP_TAG)
+                                         outline=color, width=width, tags=_STEP_TAG)
+        if visual is stage and any(item["kind"] == "removed" for item in changes.values()):
+            prior = _stage_rows_for_display(self._trace.stages, self._stage_index, True)
+            by_id = {row["id"]: row for row in prior["rows"]}
+            for key, change in changes.items():
+                if change["kind"] != "removed" or key not in by_id:
+                    continue
+                x0, y0, x1, y1 = by_id[key]["source_box"]
+                self.canvas.create_rectangle(x0*factor, y0*factor, x1*factor, y1*factor,
+                                             outline="#e59a22", width=2, dash=(5, 3),
+                                             tags=_STEP_TAG)
         self._visual_rows = visual["rows"]
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
-            f"｜红=词条 / 蓝=正文 / 灰=未知 / 绿=栏框｜点击物理行查看详情"
+            f"｜红=词条 / 蓝=正文 / 绿粗框=本阶段变化 / 橙虚框=移除｜点击行查看历程"
         )
         self._show_text(_format_stage(stage))
 
@@ -425,7 +449,10 @@ class LayoutStepReplayWindow:
         y = int(self.canvas.canvasy(event.y) / factor)
         row = _row_at_position(getattr(self, "_visual_rows", []), x, y)
         if row is not None:
-            self._show_text(_format_stage(self._trace.stages[self._stage_index], selected=row))
+            self._show_text(_format_stage(
+                self._trace.stages[self._stage_index], selected=row,
+                history=self._trace.history_for_row(row["id"]),
+            ))
 
 
 def show_layout_step_replay(app: Any) -> None:
