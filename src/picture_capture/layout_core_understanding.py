@@ -16,6 +16,7 @@ import math
 from typing import Any, Iterable
 
 from PIL import Image
+from .layout_step_trace import LayoutStepTrace
 
 # Keep the old local name for downstream monkeypatch and cache tests, but
 # obtain physical policy/layout through the explicit composition boundary.
@@ -374,6 +375,7 @@ def _apply_universal_ordinary_evidence(
     *,
     large_head_diagnostics: list[dict[str, Any]] | None = None,
     large_head_debug_context: dict[str, Any] | None = None,
+    trace: LayoutStepTrace | None = None,
 ) -> tuple[int, int]:
     """OR-promote sampled-symbol and oversized-head evidence onto Layout rows."""
     symbol_entries = detect_ordinary_symbol_entries(image, understanding, settings)
@@ -385,11 +387,23 @@ def _apply_universal_ordinary_evidence(
         if large_head_debug_context is not None else None
     )
     symbol_promoted = promote_evidence_to_layout_roles(understanding, symbol_entries)
+    if trace is not None:
+        trace.add_layout("symbol_evidence", "符号证据融合",
+                         "由括号、特殊视觉符号提出词头证据，并观察角色变化。",
+                         understanding.layout,
+                         details={"candidates": len(symbol_entries),
+                                  "promoted": int(symbol_promoted)})
     after_symbol = (
         _debug_layout_role_snapshot(understanding.layout)
         if prior is not None else None
     )
     large_promoted = promote_evidence_to_layout_roles(understanding, large_entries)
+    if trace is not None:
+        trace.add_layout("large_head_evidence", "大字头证据融合",
+                         "实际大字头检测结果参与行角色调整；未达到条件的候选不会自动提升。",
+                         understanding.layout,
+                         details={"candidates": len(large_entries),
+                                  "promoted": int(large_promoted)})
     after_large = (
         _debug_layout_role_snapshot(understanding.layout)
         if prior is not None else None
@@ -400,6 +414,9 @@ def _apply_universal_ordinary_evidence(
     # not cover its full vertical extent.
     _suppress_display_head_duplicate_entries(understanding.layout)
     _suppress_large_evidence_duplicate_entries(understanding.layout, large_entries)
+    if trace is not None:
+        trace.add_layout("duplicate_suppression", "大字碎片去重",
+                         "防止大字内部的碎片行变成重复词条起点。", understanding.layout)
     if large_head_debug_context is not None:
         final = _debug_layout_role_snapshot(understanding.layout)
         large_head_debug_context["role_transitions"] = (
@@ -444,35 +461,52 @@ def understand_layout_core(
     page_index: int = 0,
     large_head_diagnostics: list[dict[str, Any]] | None = None,
     large_head_debug_context: dict[str, Any] | None = None,
+    trace: LayoutStepTrace | None = None,
 ) -> PageUnderstanding:
     """Return Layout roles, optionally tracing the *production* detector stage.
 
     Debug traces bypass shared Layout caching and capture publication. An
     isolated diagnostic run never mutates the normal cached Layout objects.
     """
-    key = (
-        _image_fingerprint(image),
-        _settings_fingerprint(settings),
-        int(page_index),
-    )
-    if large_head_diagnostics is None and large_head_debug_context is None:
+    # Diagnostic replay records a separate production pass, never publishes
+    # LayoutRows and never mutates/reuses the shared normal result cache.
+    key = None
+    if trace is None and large_head_diagnostics is None and large_head_debug_context is None:
+        key = (
+            _image_fingerprint(image),
+            _settings_fingerprint(settings),
+            int(page_index),
+        )
         cached = _LAYOUT_CACHE.get(key)
         if cached is not None:
             _LAYOUT_CACHE.move_to_end(key)
             return _publish_captured_result(cached, page_index)
 
     layout, page_settings, applied = infer_dictionary_page_layout(
-        image,
-        settings,
-        page_index=int(page_index),
+        image, settings, page_index=int(page_index),
+        **({"trace": trace} if trace is not None else {}),
     )
     _apply_explicit_indent_semantics(layout, page_settings)
     normalize_layout_roles(layout)
+    if trace is not None:
+        trace.add_layout("indent_semantics", "缩进语义判定",
+                         "应用 Project/Profile 缩进语义并重新归一化行角色。", layout,
+                         details={"indent_type": str(layout.indent_type)})
     _resolve_directional_body_lanes(layout)
+    if trace is not None:
+        trace.add_layout("body_lanes", "正文缩进族调整",
+                         "调整正文缩进带对词条行与正文行的判定。", layout)
     from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
     visual_role_check = suppress_contradictory_cjk_body_lane_entries(
         image, page_settings, layout,
     )
+    if trace is not None:
+        trace.add_layout("visual_consistency", "视觉一致性复核",
+                         "检查可见墨迹与缩进带的冲突，撤销无独立证据的错误词头。",
+                         layout, details={
+                             "demoted_rows": int(visual_role_check["demoted_rows"]),
+                             "repaired_columns": int(visual_role_check["repaired_columns"]),
+                         })
     # Keep the visible Layout and downstream ordinary drawings consistent:
     # repair a near-empty indent family only when independently printed glyphs
     # or a separate geometric Page Design pass proves real entry starts.
@@ -480,6 +514,13 @@ def understand_layout_core(
     restored_indents = restore_proven_column_indents(
         image, page_settings, layout, page_index=int(page_index),
     )
+    if trace is not None:
+        trace.add_layout("indent_recovery", "缺失缩进恢复",
+                         "只有独立的字形/几何证据充分时才恢复未识别的词头起点。",
+                         layout, details={
+                             "rescued_columns": int(restored_indents["rescued_columns"]),
+                             "rescued_rows": int(restored_indents["rescued_rows"]),
+                         })
 
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
@@ -509,6 +550,7 @@ def understand_layout_core(
         page_settings,
         large_head_diagnostics=large_head_diagnostics,
         large_head_debug_context=large_head_debug_context,
+        trace=trace,
     )
     from .layout_verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
@@ -518,6 +560,10 @@ def understand_layout_core(
         if bool(getattr(page_settings, "profile_cjk_allow_single_headword", True))
         else {"verified_glyphs": 0, "promoted_heads": 0, "demoted_fragments": 0}
     )
+    if trace is not None:
+        trace.add_layout("verified_oversized", "大字头最终复核",
+                         "再次核实大字形与物理行对应关系；移除无效的大字碎片。",
+                         layout, details=dict(verified_heads))
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
     # before changing this canonical ordinary-mode output.
@@ -540,6 +586,15 @@ def understand_layout_core(
         f" verified_oversized_demoted={int(verified_heads['demoted_fragments'])}"
     )
 
+    if trace is not None:
+        trace.add_layout("final", "最终 Layout 结果",
+                         "本次真实 Layout Core 最终采用的列与行角色；之后的普通画线仍可能有单独的过滤阶段。",
+                         layout, details={
+                             "boundary_proposals": len(result.boundary_proposals),
+                             "physical_reliable": bool(physical),
+                             "role_model": role_model,
+                         })
+        return result
     if large_head_diagnostics is not None or large_head_debug_context is not None:
         return result
     _LAYOUT_CACHE[key] = result
