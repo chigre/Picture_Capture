@@ -8067,6 +8067,21 @@ def detect_paddle_headwords(
     use_tesseract = bool(settings.paddle_compare_tesseract or settings.paddle_tesseract_rescue)
     tess_language = resolved_tesseract_language(settings)
     tess_availability = tesseract_status(settings.ocr_executable, tess_language) if use_tesseract else {}
+    raw_tesseract_cache = None
+    if (
+        use_tesseract and cache_path is not None
+        and bool(getattr(settings, "ocr_cache_tesseract_raw", False))
+    ):
+        from .tesseract_raw_cache import TesseractRawCache
+        raw_tesseract_cache = TesseractRawCache(
+            cache_path, signature, language=tess_language,
+            executable=str(settings.ocr_executable),
+            auto_psm=bool(settings.paddle_tesseract_auto_psm),
+            fixed_psm=int(settings.paddle_tesseract_psm),
+            vertical=str(getattr(settings, "layout_writing_mode", "")).startswith("vertical"),
+            engine_status=tess_availability,
+            force_refresh=force_refresh,
+        )
     lens_mode = str(settings.paddle_lens_mode or "off").strip().lower()
     if not bool(getattr(settings, "paddle_enable_lens", False)):
         lens_mode = "off"
@@ -8191,12 +8206,38 @@ def detect_paddle_headwords(
             errors: list[str] = []
             for psm in dict.fromkeys(psm_values):
                 try:
-                    source_candidate_records, candidate_text = run_tesseract_band_records(
-                        band, settings, psm_override=psm
+                    cached_tess = (
+                        raw_tesseract_cache.read(col, psm)
+                        if raw_tesseract_cache is not None else None
                     )
-                    candidate_records = _records_to_canonical_band(
-                        source_candidate_records, band.size, transform_kind
-                    )
+                    if cached_tess is None:
+                        source_candidate_records, candidate_text = run_tesseract_band_records(
+                            band, settings, psm_override=psm
+                        )
+                        candidate_records = _records_to_canonical_band(
+                            source_candidate_records, band.size, transform_kind
+                        )
+                        if raw_tesseract_cache is not None:
+                            raw_tesseract_cache.record(
+                                col, psm, [asdict(record) for record in candidate_records],
+                                candidate_text,
+                            )
+                    else:
+                        raw_records, candidate_text = cached_tess
+                        candidate_records = [
+                            OCRRecord(
+                                text=str(raw["text"]),
+                                confidence=float(raw["confidence"]),
+                                box=tuple(int(v) for v in raw["box"]),
+                                recovery=str(raw.get("recovery", "") or ""),
+                                recovery_source_text=str(raw.get("recovery_source_text", "") or ""),
+                                parent_box=(
+                                    tuple(int(v) for v in raw["parent_box"])
+                                    if raw.get("parent_box") else None
+                                ),
+                            )
+                            for raw in raw_records
+                        ]
                     candidate_entries, candidate_diagnostics = filter_records(
                         candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
@@ -8487,5 +8528,12 @@ def detect_paddle_headwords(
         for obsolete in _regenerable_sidecars(cache_path):
             obsolete.unlink(missing_ok=True)
         _update_project_quality_summary(cache_path, agreement, review_candidates)
+        if raw_tesseract_cache is not None:
+            try:
+                raw_tesseract_cache.save()
+            except OSError:
+                # A failed *optional* engine cache must never discard a valid
+                # final OCR detection or saved primary cache.
+                pass
 
     return all_entries
