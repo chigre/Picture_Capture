@@ -13,6 +13,9 @@ from .cc_cedict import DOWNLOAD_PAGE_URL as CC_CEDICT_DOWNLOAD_PAGE_URL, lookup 
 
 
 USER_AGENT = "PictureCapture/2.13.2 dictionary-proofreading"
+MAX_JSON_RESPONSE_BYTES = 1024 * 1024
+# Shared bounded workers avoid creating/shutting down a pool for each query.
+_LOOKUP_EXECUTOR = ThreadPoolExecutor(max_workers=3, thread_name_prefix="lexical-lookup")
 
 
 @dataclass(frozen=True)
@@ -41,7 +44,10 @@ class LexicalLookupResult:
 def _read_json(url: str, timeout: float) -> object:
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urlopen(request, timeout=max(1.0, float(timeout))) as response:
-        return json.loads(response.read().decode("utf-8"))
+        payload = response.read(MAX_JSON_RESPONSE_BYTES + 1)
+        if len(payload) > MAX_JSON_RESPONSE_BYTES:
+            raise ValueError("Network dictionary response exceeds 1 MiB limit")
+        return json.loads(payload.decode("utf-8"))
 
 
 
@@ -110,8 +116,8 @@ def lookup_word_free(word: str, timeout: float = 4.0) -> LexicalLookupResult:
         jobs.append(lambda: _lookup_cc_cedict(value, timeout))
         jobs.append(lambda: _lookup_moedict(value, timeout))
     jobs.append(lambda: _lookup_wiktionary(value, timeout))
-    with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="lexical-lookup") as pool:
-        sources = tuple(future.result() for future in [pool.submit(job) for job in jobs])
+    futures = [_LOOKUP_EXECUTOR.submit(job) for job in jobs]
+    sources = tuple(future.result() for future in futures)
     return LexicalLookupResult(value, sources)
 
 

@@ -58,7 +58,7 @@ _INDEX_LOCK = threading.Lock()
 _INDEX_CACHE: set[str] | None = None
 _INDEX_TRAD_TO_SIMP: dict[str, tuple[str, ...]] | None = None
 _INDEX_SIMP_TO_TRAD: dict[str, tuple[str, ...]] | None = None
-_INDEX_MTIME_NS: int | None = None
+_INDEX_SIGNATURE: tuple[int, int, int, int, int] | None = None
 _INDEX_COUNT = 0
 _INDEX_ERROR = ""
 
@@ -104,16 +104,20 @@ def _parse_entry_words(line: str) -> tuple[str, str] | None:
 
 def _load_index() -> tuple[set[str] | None, int, str]:
     global _INDEX_CACHE, _INDEX_TRAD_TO_SIMP, _INDEX_SIMP_TO_TRAD
-    global _INDEX_MTIME_NS, _INDEX_COUNT, _INDEX_ERROR
+    global _INDEX_SIGNATURE, _INDEX_COUNT, _INDEX_ERROR
     path = data_path()
     if not path.is_file():
         return None, 0, "未安装"
     try:
-        mtime = path.stat().st_mtime_ns
+        stat = path.stat()
+        signature = (
+            int(stat.st_dev), int(stat.st_ino), int(stat.st_size),
+            int(stat.st_mtime_ns), int(stat.st_ctime_ns),
+        )
     except OSError as exc:
         return None, 0, str(exc)
     with _INDEX_LOCK:
-        if _INDEX_CACHE is not None and _INDEX_MTIME_NS == mtime:
+        if _INDEX_CACHE is not None and _INDEX_SIGNATURE == signature:
             return _INDEX_CACHE, _INDEX_COUNT, _INDEX_ERROR
         words: set[str] = set()
         trad_to_simp_sets: dict[str, set[str]] = {}
@@ -138,14 +142,14 @@ def _load_index() -> tuple[set[str] | None, int, str]:
             _INDEX_CACHE = None
             _INDEX_TRAD_TO_SIMP = None
             _INDEX_SIMP_TO_TRAD = None
-            _INDEX_MTIME_NS = mtime
+            _INDEX_SIGNATURE = signature
             _INDEX_COUNT = 0
             _INDEX_ERROR = str(exc)
             return None, 0, _INDEX_ERROR
         _INDEX_CACHE = words
         _INDEX_TRAD_TO_SIMP = {key: tuple(sorted(values)) for key, values in trad_to_simp_sets.items()}
         _INDEX_SIMP_TO_TRAD = {key: tuple(sorted(values)) for key, values in simp_to_trad_sets.items()}
-        _INDEX_MTIME_NS = mtime
+        _INDEX_SIGNATURE = signature
         _INDEX_COUNT = count
         _INDEX_ERROR = ""
         return words, count, ""
@@ -158,7 +162,7 @@ def clear_cache() -> None:
         _INDEX_CACHE = None
         _INDEX_TRAD_TO_SIMP = None
         _INDEX_SIMP_TO_TRAD = None
-        _INDEX_MTIME_NS = None
+        _INDEX_SIGNATURE = None
         _INDEX_COUNT = 0
         _INDEX_ERROR = ""
 

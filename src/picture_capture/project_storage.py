@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 import hashlib
+from functools import lru_cache
 import json
 import shutil
 
@@ -39,21 +40,38 @@ def manifest_path(project_root: Path) -> Path:
     return storage_root(project_root) / MANIFEST_FILENAME
 
 
+@lru_cache(maxsize=256)
+def _parse_managed_manifest_cached(path_string: str, identity: tuple[int, ...]) -> bool:
+    """Parse once per observed filesystem version; never infer from path alone."""
+    del identity
+    try:
+        payload = json.loads(Path(path_string).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("format") != PROJECT_FORMAT:
+            return False
+        version = int(payload.get("format_version", 0) or 0)
+        return version >= PROJECT_FORMAT_VERSION
+    except (OSError, TypeError, ValueError, OverflowError):
+        return False
+
+
 def is_managed_project(project_root: Path) -> bool:
     path = manifest_path(project_root)
+    try:
+        stat = path.stat()
+    except OSError:
+        return False
     if not path.is_file():
         return False
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    if not isinstance(payload, dict) or payload.get("format") != PROJECT_FORMAT:
-        return False
-    try:
-        version = int(payload.get("format_version", 0) or 0)
-    except (TypeError, ValueError, OverflowError):
-        return False
-    return version >= PROJECT_FORMAT_VERSION
+    # File IDs detect atomic replace. ctime catches edits where mtime was reset.
+    identity = (
+        int(stat.st_dev), int(stat.st_ino), int(stat.st_size),
+        int(stat.st_mtime_ns), int(stat.st_ctime_ns),
+    )
+    return _parse_managed_manifest_cached(str(path), identity)
+
+
+def clear_managed_manifest_cache() -> None:
+    _parse_managed_manifest_cached.cache_clear()
 
 
 def settings_path(project_root: Path) -> Path:
@@ -286,6 +304,7 @@ def ensure_project_storage(project_root: Path, software_version: str) -> Path:
     else:
         payload = _manifest_payload(root, software_version)
     _write_json_atomic(manifest, payload)
+    clear_managed_manifest_cache()
     return target
 
 
