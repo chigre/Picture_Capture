@@ -568,6 +568,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     paddle_boldness_ratio: float = 1.12
     paddle_gap_ratio: float = 0.7
     paddle_min_candidate_score: float = 1.0
+    # Experimental Latin continuation rescue; OFF unless explicitly enabled.
+    # Safe to disable without changing OCR text recognition or other rescues.
+    paddle_peer_style_rescue: bool = False
     paddle_require_visual_cue: bool = True
     # For ordinary dictionary pages, a nearby POS label (or an explicit entry
     # symbol) is the safest way to reject indented definition lines.
@@ -592,6 +595,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # and chooses the centre of the local low-ink valley, so descenders from
     # the preceding line (g/j/p/q/y) are not cut by the marker.
     paddle_refine_separator_y: bool = True
+    # Experimental ink-safe Y verification after the standard refiner; OFF by default.
+    separator_y_ink_safe_gap: bool = False
     paddle_separator_search_ratio: float = 0.30
     paddle_separator_band_radius: int = 2
     # Downward-biased Y-refinement safety clearance in original-image pixels.
