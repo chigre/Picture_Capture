@@ -648,6 +648,19 @@ def detect_entries(
                 _record_ordinary_debug_stage(
                     debug_trace, "bracketed_headword_recovery", entries,
                 )
+            elif replay_trace is not None:
+                replay_trace.add_note(
+                    "bracketed_headword_not_run", "【】词头恢复：本页未执行",
+                    "实际普通画线流程跳过了此步骤：当前页面不是 CJK 脚本，"
+                    "或 Profile 的【】词头恢复开关未开启。"
+                    "这不代表检测到候选后被拒绝。",
+                    details={
+                        "cjk_script": bool(uses_cjk_script(effective)),
+                        "profile_cjk_allow_bracketed_headword": bool(
+                            getattr(effective, "profile_cjk_allow_bracketed_headword", True)
+                        ),
+                    },
+                )
             # Keep proven lemma-indentation evidence from a second physical
             # analyzer when the primary normalization lost an entire column.
             if not uses_cjk_role_model(effective):
