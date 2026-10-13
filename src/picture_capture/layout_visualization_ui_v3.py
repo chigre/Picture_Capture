@@ -110,6 +110,38 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     checkbox.grid(row=row, column=0, columnspan=4, sticky="w", pady=(3, 0))
     app._layout_visualization_toggle_widget = checkbox
 
+    # Independent inspection mode. It does not toggle or modify normal Layout
+    # visibility, user settings, PDIC, or any drawing/export result.
+    replay_var = tk.BooleanVar(value=False)
+    app._layout_step_replay_var = replay_var
+
+    def toggle_replay() -> None:
+        from .layout_step_replay_ui import show_layout_step_replay
+        if bool(replay_var.get()):
+            try:
+                show_layout_step_replay(app)
+            except Exception:
+                replay_var.set(False)
+                raise
+        else:
+            window = getattr(app, "_layout_step_replay_window", None)
+            if window is not None:
+                window.close()
+
+    replay_widget = ttk.Checkbutton(
+        section, text="查看 LAYOUT 分析过程", variable=replay_var, command=toggle_replay,
+    )
+    replay_widget.grid(row=row+1, column=0, columnspan=4, sticky="w", pady=(2, 3))
+    app._layout_step_replay_widget = replay_widget
+    try:
+        app._attach_tooltip(
+            replay_widget,
+            "打开独立的只读分析回放窗口，可逐步查看实际物理行、缩进、"
+            "符号和大字头证据及最终行角色。关闭时不额外运行诊断。",
+        )
+    except Exception:
+        pass
+
     try:
         app._attach_tooltip(
             checkbox,
