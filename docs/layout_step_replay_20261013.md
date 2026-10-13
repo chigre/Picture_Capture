@@ -15,6 +15,39 @@
 
 初始化窗口后，显示原始图像，后台对本页另做一次与正式流程相同的 Layout Core 计算。界面仅在回放结束后允许步进。若计算失败，窗口显示错误，不影响原有检测。
 
+## 2026-10-13 过程一致性补充（PR #467）
+
+早期版本仅调用 `understand_layout_core()`，因此实际上只有 Layout Core
+角色判断，不能代表点击【普通画线】后经过的 Y 精修、【】成对词头恢复、
+SECTION 过滤及末端误线清理。本版改为**直接调用真实
+`processing.detect_entries(..., debug_trace=...)` 一次**。时间轴接在原有
+`_record_ordinary_debug_stage` 的实际计算节点，而不是重构虚构的模拟步骤。
+
+真实步骤顺序：
+
+1. 当前页有效 Project/Profile → 共享分析图去噪；
+2. **Layout 前自动插图检测及白化**（开关关/未检出/未通过/已白化均显示，
+   包含检测数、头字形保留数、小尺寸拒绝数和每个候选多边形；查看修正前显示去噪图）；
+3. 自动版面估计、应用后的参数、物理行及 Layout Core 缩进/角色判定；
+4. `layout_role_materialization`：实际转换成画线候选；
+5. 条件性大字碎片过滤和全页相干 Y 微调；
+6. **`bracketed_headword_recovery`【】词头恢复**：新增的坐标与
+   `ordinary_bracket_pair` 证据来源升级分开记录，点击候选可回溯来源；
+7. Profile/SECTION 区域过滤、最后视觉一致性检查、
+   `proven_bracket_body_continuation`【】后正文续行误线过滤、空白行过滤；
+8. `final_reading_order`：实际普通画线最终输出（与诊断模式下
+   `processing.detect_entries` 一致）。
+
+部分步骤由实际条件控制，例如非 CJK 页面未启用【】恢复，不应伪造一个
+“检测失败”步骤。对于 OCR/融合识别，当前这个入口不会声称完整流程
+等价；会明确提示这是普通模式专属，避免混淆。
+
+每个前处理预览按真实源图坐标绘制，掩膜通过的多边形为红色实线，
+被拒绝的多边形为黄色虚线。进入 Layout 后的步骤继续使用**实际
+已去噪/白化**的分析图背景；原图不被修改。普通画线点位红色，新增
+或来源升级绿色，已删除的点位橙色叉。所有快照仍只在主动回放时采集，
+普通运行的算法、阈值、缓存和 PDIC 保存逻辑不变。
+
 ## 真实阶段与边界
 
 回放由正常 `layout_composition.infer_composed_physical_page_layout` 与 `layout_core_understanding.understand_layout_core` 中的可选追踪节点产生。每次生成的步骤包括：
