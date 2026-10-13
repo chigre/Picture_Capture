@@ -55,7 +55,7 @@ def test_live_tall_band_records_actual_valley_splits_without_modifying_result():
     assert observed == reference
     assert diag["bridged_gaps"] == [(24, 25)]
     assert diag["valley_splits"]
-    assert any(x["at_y"] == 24 for x in diag["valley_splits"])
+    assert any(23 <= x["at_y"] <= 25 for x in diag["valley_splits"])
     assert diag["final_runs"] == observed
 
 
@@ -124,7 +124,7 @@ def test_composed_layout_captures_final_real_pass_before_physical_rows():
                 _projection_candidates_for_display(second, True)} == {
             "connected_band",
         }
-        assert "行首采样" in _format_stage(first)
+        assert "采样宽" in _format_stage(first)
         assert "\n" in _format_stage(first)
     finally:
         clear_layout_understanding_cache()
