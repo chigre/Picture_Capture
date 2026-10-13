@@ -120,6 +120,37 @@ def _stage_entries_for_display(
     return []
 
 
+_PROJECTION_STAGES = {"projection_gap_bridge", "projection_tall_split"}
+
+
+def _projection_candidates_for_display(
+    stage: dict[str, Any], before: bool,
+) -> list[dict[str, Any]]:
+    """Before/after always compares the *same* captured projector pass."""
+    kind = stage.get("key")
+    candidates = stage.get("candidates", [])
+    if kind == "projection_gap_bridge":
+        statuses = {"raw_band"} if before else {"connected_band", "bridged_gap"}
+    elif kind == "projection_tall_split":
+        statuses = {"connected_band"} if before else {
+            "retained_row", "split_valley", "fallback_slot", "ignored_short",
+        }
+    else:
+        return candidates
+    return [item for item in candidates if item.get("status") in statuses]
+
+
+_PROJECTION_STYLE = {
+    "raw_band": ("#999999", (5, 3), 1),
+    "connected_band": ("#3785cb", (5, 3), 1),
+    "bridged_gap": ("#ef8823", (), 3),
+    "retained_row": ("#10a55b", (), 2),
+    "split_valley": ("#ae44bd", (), 3),
+    "fallback_slot": ("#d8a322", (3, 3), 2),
+    "ignored_short": ("#a0a0a0", (2, 4), 1),
+}
+
+
 def _stage_rows_for_display(
     stages: list[dict[str, Any]], index: int, previous: bool,
 ) -> dict[str, Any]:
@@ -151,6 +182,26 @@ def _format_stage(
 ) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
+    if stage.get("key") in _PROJECTION_STAGES:
+        lines.append("显示的是最终正文范围内、真正用于构造物理行的一次投影。")
+        lines.append("注意：投影连接的是行方向的短空白，不修改像素或连通域。")
+        lines.append("切换「查看修正前」可比较本阶段真实的输入和输出。")
+        columns = details.get("columns", [])
+        for column in columns:
+            lines.extend([
+                "",
+                f"第 {column['column']} 栏｜采样宽 {column['sample_strip_width']}px，"
+                f"参考行高 {column['row_height_reference']:.1f}px",
+                f"阈值 {column['projection_threshold']:.1f} 墨迹像素/行；"
+                f"最多连接 {column['gap_limit_px']} 个空白像素行",
+                f"原始带 {column['raw_bands']} → 已连带 {column['connected_bands']}；"
+                f"连接 {column['bridged_gaps']} 处",
+                f"墨迹谷拆分 {column['valley_splits']} 处，"
+                f"逻辑槽 {column['logical_slots']} 个，"
+                f"过短剔除 {column['short_rejected']} 个，"
+                f"输出行段 {column['output_rows']} 个",
+            ])
+        return "\\n".join(lines)
     for k, value in details.items():
         if isinstance(value, dict):
             lines.append(k + ":")
@@ -546,9 +597,11 @@ class LayoutStepReplayWindow:
         # Mask polygons belong to the AFTER state. They must disappear in
         # Before mode even when the current note has no physical rows.
         candidates = (
-            stage.get("candidates", []) if not self.before.get()
-            else (self._trace.stages[self._stage_index-1].get("candidates", [])
-                  if self._stage_index > 0 else [])
+            _projection_candidates_for_display(stage, self.before.get())
+            if stage["key"] in _PROJECTION_STAGES else
+            (stage.get("candidates", []) if not self.before.get()
+             else (self._trace.stages[self._stage_index-1].get("candidates", [])
+                   if self._stage_index > 0 else []))
         )
         for candidate in candidates:
             status = str(candidate.get("status", "unknown"))
@@ -564,12 +617,16 @@ class LayoutStepReplayWindow:
             box = candidate.get("source_box")
             if box and len(box) == 4:
                 x0, y0, x1, y1 = box
-                color = ("#16853c" if status == "accepted" else
-                         "#c43d33" if "row_front" in status or "tall" in status
-                         else "#d99523")
+                color, dash, width = _PROJECTION_STYLE.get(
+                    status,
+                    ("#16853c", (), 2) if status == "accepted" else
+                    ("#c43d33", (4, 3), 2)
+                    if "row_front" in status or "tall" in status else
+                    ("#d99523", (4, 3), 2),
+                )
                 self.canvas.create_rectangle(
                     x0*factor, y0*factor, x1*factor, y1*factor,
-                    outline=color, width=2, dash=() if status == "accepted" else (4, 3),
+                    outline=color, width=width, dash=dash,
                     tags=_STEP_TAG,
                 )
             else:
@@ -616,9 +673,16 @@ class LayoutStepReplayWindow:
                     width=2, tags=_STEP_TAG,
                 )
         self._visual_markers = markers
+        legend = (
+            "灰=原始带 / 蓝=已连接带 / 橙=补足短空白"
+            if stage["key"] == "projection_gap_bridge" else
+            "蓝=拆分前 / 绿=输出段 / 紫=拆分点 / 黄=逻辑槽"
+            if stage["key"] == "projection_tall_split" else
+            "红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化"
+        )
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
-            f"｜红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化｜点击行查看历程"
+            f"｜{legend}｜点击标记查看详情"
         )
         self._show_text(_format_stage(stage))
 
