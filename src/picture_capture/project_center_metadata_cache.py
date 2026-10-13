@@ -12,7 +12,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from .project_storage import settings_path
+from .project_storage import project_activity_path, settings_path
 from .runtime_environment import user_config_root
 
 VERSION = 1
@@ -37,6 +37,7 @@ def identity(root: Path) -> dict[str, object]:
         "root": _stat_signature(root),
         "settings": _stat_signature(settings_path(root)),
         "qt": _stat_signature(settings_path(root).parent),
+        "activity": _stat_signature(project_activity_path(root)),
     }
 
 
