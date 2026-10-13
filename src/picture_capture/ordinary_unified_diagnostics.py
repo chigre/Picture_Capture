@@ -15,12 +15,13 @@ SCHEMA = "picture-capture-ordinary-evidence-v2"
 STAGE_DESCRIPTIONS = {
     "layout_role_materialization": "Layout entry 行转换为候选线",
     "oversized_fragment_veto": "大字内部碎片重复线过滤",
-    "coherent_separator_y_refinement": "分隔线 Y 坐标统一修正",
+    "coherent_separator_y_refinement": "Layout 初始候选页面级 Y 偏移修正（前置）",
     "bracketed_headword_recovery": "【】词头恢复和来源升级",
     "page_template_section_filter": "Profile/SECTION 区域过滤",
     "anomalous_final_visual_consistency": "异常批量视觉复核",
     "proven_bracket_body_continuation": "括号词头相邻正文误线复核",
     "blank_before_proven_head": "已确认词头之前空白误线复核",
+    "final_y_coordinates_locked": "最终候选 Y 坐标确认（不额外平移）",
     "final_reading_order": "最终按阅读顺序排序",
 }
 
