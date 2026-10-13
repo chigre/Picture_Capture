@@ -110,3 +110,18 @@ def test_ocr_performance_toggles_default_off_and_project_persisted(tmp_path):
     ).to_json(project)
     reloaded = AppSettings.from_json(project)
     assert reloaded.ocr_cache_tesseract_raw and reloaded.ocr_lazy_tesseract_diagnostics
+
+
+def test_performance_controls_are_not_misplaced_in_profile_checks():
+    from picture_capture.ui.settings import schema
+
+    keys = {
+        "ocr_resume_completed_pages",
+        "ocr_cache_tesseract_raw",
+        "ocr_lazy_tesseract_diagnostics",
+    }
+    advanced = {name for _title, name in schema.OCR_ADVANCED_CHECKS}
+    profile = {name for _title, name in schema.PROFILE_CHECKS}
+    assert keys <= advanced
+    assert keys.isdisjoint(profile)
+    assert all(key in schema.CHECK_HELP for key in keys)
