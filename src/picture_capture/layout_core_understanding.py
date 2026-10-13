@@ -499,15 +499,24 @@ def understand_layout_core(
         **({"trace": trace} if trace is not None else {}),
     )
     _apply_explicit_indent_semantics(layout, page_settings)
+    # Even when the user explicitly chose no indentation, the low-level
+    # physical detector has to be neutralized once. This is state
+    # normalization, *not* an inferred entry/body decision, and must happen
+    # before the next evidence family examines the physical rows.
     normalize_layout_roles(layout)
-    if trace is not None:
-        trace.add_layout("indent_semantics", "缩进语义判定",
-                         "应用 Project/Profile 缩进语义并重新归一化行角色。", layout,
-                         details={"indent_type": str(layout.indent_type)})
-    _resolve_directional_body_lanes(layout)
-    if trace is not None:
-        trace.add_layout("body_lanes", "正文缩进族调整",
-                         "调整正文缩进带对词条行与正文行的判定。", layout)
+    if layout.indent_type != "none":
+        if trace is not None:
+            trace.add_layout("indent_semantics", "缩进语义判定",
+                             "应用 Project/Profile 缩进语义并重新归一化行角色。", layout,
+                             details={"indent_type": str(layout.indent_type)})
+        _resolve_directional_body_lanes(layout)
+        if trace is not None:
+            trace.add_layout("body_lanes", "正文缩进族调整",
+                             "调整正文缩进带对词条行与正文行的判定。", layout)
+    # For 'none', normalize_layout_roles has already set every provisional
+    # physical line and lane to body and cleared entry_modes. The no-indent
+    # arm of _resolve_directional_body_lanes would repeat exactly that reset.
+    # Bypass the redundant operation as well as its misleading replay stages.
     from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
     visual_role_check = suppress_contradictory_cjk_body_lane_entries(
         image, page_settings, layout,
