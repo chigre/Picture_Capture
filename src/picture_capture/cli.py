@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 
@@ -18,7 +17,7 @@ from .formats import pdic_path, read_pdic, read_ppp, write_pdic
 from .image_utils import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
-from .crop.settings import normalize_crop_settings_payload
+from .crop.settings import load_crop_settings
 from .crop.export_output import normalize_project_crop_widths
 from .project_storage import (
     ppp_read_path_for_image, headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
@@ -86,11 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         pages = _pages(project, args.page)
         crop_config = None
         if args.command == "split-whole":
-            crop_path = qt_root(project.root) / "_CropSettings.json"
-            saved = {}
-            if crop_path.is_file():
-                saved = json.loads(crop_path.read_text(encoding="utf-8"))
-            crop_config = normalize_crop_settings_payload(saved, project.settings)
+            crop_config = load_crop_settings(project.root, project.settings)
         for number, page in enumerate(pages, 1):
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
