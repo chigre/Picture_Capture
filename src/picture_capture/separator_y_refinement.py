@@ -55,6 +55,15 @@ def refine_separator_y(
         **kwargs,
     )
     payload = dict(details or {})
+    # A fully reversible, opt-in safety check: verify that a proposed marker
+    # does not cross dark ink when a nearby 3-row white valley exists.
+    if bool(getattr(settings, "separator_y_ink_safe_gap", False)):
+        from .ink_safe_separator import refine_to_verified_white_gap
+        refined_y, gap_details = refine_to_verified_white_gap(
+            gray, int(refined_y), int(coarse_y),
+            max(2, int(round(float(line_height or 0)))),
+        )
+        payload.update(gap_details)
     payload.setdefault("refiner", "shared_separator_y")
     payload.setdefault("enabled", True)
     payload.setdefault(

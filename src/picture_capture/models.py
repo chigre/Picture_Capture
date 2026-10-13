@@ -595,6 +595,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # and chooses the centre of the local low-ink valley, so descenders from
     # the preceding line (g/j/p/q/y) are not cut by the marker.
     paddle_refine_separator_y: bool = True
+    # Experimental ink-safe Y verification after the standard refiner; OFF by default.
+    separator_y_ink_safe_gap: bool = False
     paddle_separator_search_ratio: float = 0.30
     paddle_separator_band_radius: int = 2
     # Downward-biased Y-refinement safety clearance in original-image pixels.

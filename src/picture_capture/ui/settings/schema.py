@@ -603,6 +603,7 @@ CHECK_HELP = {
         "paddle_require_visual_cue": "名称是历史遗留。当前实现并不是“必须有纯视觉证据”，而是要求候选至少有一个结构或视觉 fallback cue：POS/变形/描述符/特殊符号，或字高/粗体/行前空白之一。\n\n开启可抑制只有合法字母形态、却没有任何词条特征的正文行；关闭会放宽候选门槛，除非 diagnostics 明确显示真实词头因此被拒，否则不建议关闭。",
         "paddle_require_pos_or_symbol": "开启：普通词头候选必须具有至少一个强结构提示：POS、变形、结构描述符或可作为新词条证据的特殊符号。能显著抑制栏左正文误检。\n\n关闭：允许仅靠位置/视觉分数通过，召回更高但假阳性更多。对结构化拉丁词典通常建议开启；CJK/特殊 Profile 还会有自己的专用接受逻辑。",
         "paddle_refine_separator_y": "开启：OCR画线仍按原流程精修；普通画线则先完整执行 VB.NET 的向上白带定位，已经得到一个 VB 分隔 Y 后，才把现有局部墨迹谷算法作为最后的小范围二次修正，并限制最大移动量。它不再负责替代 VB 的初始 Y 定位。\n\n关闭：普通画线直接使用 VB 分隔 Y；OCR画线保留其未精修的粗定位。",
+        "separator_y_ink_safe_gap": "实验性横线 Y 安全检查，默认关闭。先执行现有横线精修，再在原图灰度 ROI 中核验该位置是否穿过明显墨迹；只有附近存在连续至少三行的可信白缝且位移不超过字高约四分之一时才改到更安全的 Y。不会新增或删除词头。\n\n对跨栏插图、极窄行距或无白缝的页面不强制修正。尚未做多词典真实图像对照，打开后如定位异常可随时关闭，恢复原定位行为。",
         "paddle_compare_tesseract": (
             "开启：把 Tesseract 加入共享 OCR 通道，与 PaddleOCR 在同一图像/候选带上运行。"
             "【仅OCR】可据此比较或选择文字；【OCR画线】则把相同 OCR 证据交给成熟 parser/边界判定。\n\n"
@@ -675,6 +676,7 @@ OCR_ADVANCED_CHECKS = (
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+        ("实验：原图白缝核验横线Y（默认关）", "separator_y_ink_safe_gap"),
         ("实验：同栏词头样式救回续行（默认关）", "paddle_peer_style_rescue"),
     )
 
