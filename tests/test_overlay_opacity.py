@@ -192,8 +192,11 @@ def test_app_and_bootstrap_have_direct_static_line_opacity_ownership():
     guard = (root / "scripts/architecture_guard.py").read_text(encoding="utf-8")
     illustration = (root / "src/picture_capture/illustration_fill_opacity.py").read_text(encoding="utf-8")
     assert "create_alpha_canvas_line" in app
-    assert 'add_quick_opacity_control(self, line_row, name="guide_opacity")' in app
-    assert 'add_quick_opacity_control(self, marker_row, name="headword_marker_opacity")' in app
+    state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    display = (root / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert '"guide_opacity": int' in state and '"headword_marker_opacity": int' in state
+    assert 'value(row, "透%:", "guide_opacity", 3)' in display
+    assert 'value(row, "透%:", "headword_marker_opacity", 3)' in display
     assert "install_overlay_opacity_runtime" not in gui
     assert not (root / "src/picture_capture/overlay_opacity_runtime.py").exists()
     assert '"overlay_opacity_runtime.py"' not in guard

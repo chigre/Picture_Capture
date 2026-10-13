@@ -270,14 +270,12 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     assert "install_unlined_export_filter_settings_ui(app_module)" not in composition
     assert "install_unlined_fast_path" not in composition
     assert "unlined_fast_path_runtime" not in composition
-    assert (
-        '(("画线行导出", self.split_single_lines_selected_scope), '
-        '("未画线行导出", self.export_unlined_rows_selected_scope), '
-        '("词条切图", self.split_entries_selected_scope), '
-        '("插图切图", self.split_illustrations_selected_scope))'
-    ) in app_source
-    assert "self._pc_single_line_crop_button = button" in app_source
-    assert "self._pc_unlined_export_button = button" in app_source
+    tasks = (root / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    for action in ("split_single_lines_selected_scope", "export_unlined_rows_selected_scope",
+                   "split_entries_selected_scope", "split_illustrations_selected_scope"):
+        assert action in tasks
+    assert "app._pc_single_line_crop_button = button" in tasks
+    assert "app._pc_unlined_export_button = button" in tasks
     assert "def export_unlined_rows_selected_scope(self)" in app_source
     assert "def export_unlined_rows_selected_scope(self)" in controller
     assert "app._start_parallel_batch_task(" in controller

@@ -332,7 +332,8 @@ def test_build_picdic_wiring_moves_only_action_orchestration_to_export_controlle
     assert "from .picdic import PicDicBuildCancelled, build_picdic_package" not in imports
     assert "from ...picdic import PicDicBuildCancelled, build_picdic_package" in controller
     assert "    def build_picdic(self) -> None:" in controller
-    assert '("PicDic制作", self.build_picdic)' in app
+    menu = (ROOT / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("PicDic制作", "build_picdic")' in menu
     assert "    def export_picdic_index(self) -> None:" in app
     assert "    def export_picdic_index(self) -> None:" in controller
 
@@ -580,7 +581,8 @@ def test_export_picdic_index_wiring_keeps_app_wrapper_and_format_boundaries() ->
     assert "from ...project_storage import exports_root, qt_root" in controller
     assert "    def export_picdic_index(self) -> None:" in controller
     assert "os.replace(temp, target)" in controller
-    assert '("导出PicDic索引", self.export_picdic_index)' in app
+    menu = (ROOT / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("导出PicDic索引", "export_picdic_index")' in menu
 
 
 def _prepare_backup_files(tmp_path: Path, names=("001.jpg", "002.jpg")):
@@ -758,5 +760,6 @@ def test_export_controller_wiring_owns_backup_and_restore_after_phase4s() -> Non
     assert "    def restore_from_pdic_backup(self) -> None:" in controller
     assert "    def restore_from_merged_pdic(self) -> None:" in app
     assert 'self.restore_from_pdic_backup()' in app[alias_start:]
-    assert '("备份PDIC", self.backup_pdic)' in app
-    assert '("恢复PDIC", self.restore_from_pdic_backup)' in app
+    menu = (ROOT / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("备份PDIC", "backup_pdic")' in menu
+    assert '("恢复PDIC", "restore_from_pdic_backup")' in menu

@@ -131,9 +131,9 @@ def test_postproduction_is_rebuilt_as_compact_menu_and_legacy_reflow_removed():
     tools = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     task = (ROOT / "ui" / "compact_task_menus.py").read_text(encoding="utf-8")
     assert 'sections["五、后期词典制作"] = build_postproduction_menu(app, content)' in tools
-    assert 'app._build_quick_settings(content)' in tools  # Tk vars/traces bootstrap.
+    assert 'initialize_quick_state(app)' in tools  # Pure Tk vars/traces bootstrap.
     assert "_stack_tool_menu_controls" not in tools
-    assert '"postproduction": "五、后期词典制作"' in tools
+    assert "retire_superseded_quick_panels" not in tools
     for name in ("画线行导出", "未画线行导出", "词条切图", "插图切图",
                  "项目详情", "导出PicDic索引", "PicDic制作", "导出训练标记包"):
         assert f'"{name}"' in task
@@ -142,16 +142,15 @@ def test_postproduction_is_rebuilt_as_compact_menu_and_legacy_reflow_removed():
 
 
 def test_display_integer_field_casts_and_loaded_value_formatting():
-    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
-    opacity = (ROOT / "overlay_opacity.py").read_text(encoding="utf-8")
-    fill = (ROOT / "illustration_fill_opacity.py").read_text(encoding="utf-8")
-    assert 'self.quick_field_casts["batch_interval"] = int' in app_source
-    assert 'self.quick_field_casts["right_ratio"] = float' in app_source
-    assert 'self.quick_field_casts[name] = int  # Both width and displayed offset%' in app_source
-    assert '"batch_interval", "guide_opacity", "headword_marker_opacity",' in app_source
-    assert 'value = round(float(value) * 100)' in app_source
-    assert 'value = float(value) / 100.0' in app_source
-    assert 'app.quick_field_casts[name] = int' in opacity
-    assert 'app.quick_field_casts[name] = int' in fill
-    assert 'rendered = str(round(current))' in opacity
-    assert 'tk.StringVar(value=str(round(current)))' in fill
+    from picture_capture.ui.quick_state import QUICK_FIELD_TYPES, _initial_field_text
+    from picture_capture.models import AppSettings
+
+    assert QUICK_FIELD_TYPES["batch_interval"] is int
+    assert QUICK_FIELD_TYPES["right_ratio"] is float
+    assert QUICK_FIELD_TYPES["main_entry_x_ratio"] is int
+    assert QUICK_FIELD_TYPES["guide_opacity"] is int
+    assert _initial_field_text(AppSettings(main_entry_x_ratio=0.43),
+                               "main_entry_x_ratio") == "43"
+    assert _initial_field_text(AppSettings(batch_interval=12.5),
+                               "batch_interval") == "12"
+

@@ -71,7 +71,8 @@ def test_layout_percent_and_pixel_fields_use_shared_traces():
     for name in ("columns", "start_y", "manual_x", "column_width", "gutter",
                  "character_height", "row_padding", "body_indent", "horizontal_tolerance"):
         assert f'"{name}"' in text
-    assert 'add_field(normal, field_row, 0, caption, name, float)' in app
+    state = (ROOT / "ui/quick_state.py").read_text(encoding="utf-8")
+    assert '"body_indent": float' in state
     assert "app.quick_pixel_vars[name]" in text
     assert 'app.quick_bool_vars["ordinary_auto_layout"] = master' in text
     assert 'return build_layout_profile_menu(app, parent)' in source(compact_task_menus)
@@ -138,10 +139,10 @@ def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess()
 
 
 def test_postproduction_menu_is_renamed_but_export_callback_unchanged():
-    app = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert '("画线行导出", self.split_single_lines_selected_scope)' in app
-    assert 'if text == "画线行导出":' in app
-    assert '("未画线行导出", self.export_unlined_rows_selected_scope)' in app
+    task = source(compact_task_menus)
+    assert '("画线行导出", "split_single_lines_selected_scope")' in task
+    assert 'if caption == "画线行导出":' in task
+    assert '("未画线行导出", "export_unlined_rows_selected_scope")' in task
 
 
 def test_ocr_visible_labels_do_not_change_runtime_codes():

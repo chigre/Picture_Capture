@@ -58,7 +58,10 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
         root / "src" / "picture_capture" / "layout_visualization_ui_v3.py"
     ).read_text(encoding="utf-8")
 
-    assert "add_layout_visualization_controls(self, aux)" in app
+    state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    compact = (root / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert 'app._layout_visualization_var = tk.BooleanVar(' in state
+    assert 'check(row, "显示Layout", layout_var, toggle_layout)' in compact
     assert app.count("draw_layout_visualization_if_enabled(self)") >= 4
     assert (
         "draw_ocr_crop_preview(self)\n"

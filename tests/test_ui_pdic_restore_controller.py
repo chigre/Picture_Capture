@@ -369,7 +369,8 @@ def test_restore_wiring_keeps_app_wrapper_alias_and_ui_binding() -> None:
     assert "filedialog.askopenfilename" not in block
     assert "_start_batch_task" not in block
     assert "    def restore_from_pdic_backup(self) -> None:" in controller
-    assert '("恢复PDIC", self.restore_from_pdic_backup)' in app
+    menu = (root / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("恢复PDIC", "restore_from_pdic_backup")' in menu
     assert "self.restore_from_pdic_backup()" in app[end:]
     assert "def _parse_merged_pdic_text(" not in app
     assert "def _write_pdic_atomic(" not in app

@@ -49,7 +49,7 @@ def test_page_index_visibility_is_mode_only_and_tools_unchanged():
     assert 'app.sidebar_canvas.pack_forget()' in tools
     assert 'simple_slot = ttk.Frame(' in tools
     assert '_set_simple_page_visible(app, compact)' in tools
-    assert 'app._build_quick_settings(content)' in tools
+    assert 'initialize_quick_state(app)' in tools
     assert 'popup.place(x=left, y=top, width=width, height=height)' in tools
     assert 'popup.place_forget()' in tools
     assert 'tk.Toplevel(' not in tools
@@ -372,16 +372,17 @@ def test_each_tool_menu_is_280px_and_vertically_scrollable():
     assert "width = min(TOOL_MENU_WIDTH, max(1, root_width - 12))" in tools
     assert "canvas.itemconfigure(item, width=max(1, event.width))" in tools
     assert "horizontal = ttk.Scrollbar(scroller" not in tools
-    assert "app._build_quick_settings(content)" in tools
-    assert "retire_superseded_quick_panels(app, sections)" in tools
+    assert "initialize_quick_state(app)" in tools
+    assert "sections: dict[str, ttk.Frame] = {}" in tools
     assert 'app.bind_all("<MouseWheel>", scroll_menu_wheel, add="+")' in tools
     assert "popup.place(x=left, y=top, width=width, height=height)" in tools
 
 
-def test_retired_legacy_reflow_is_not_used_by_compact_menus():
+def test_legacy_builder_and_reflow_are_gone_from_compact_menus():
     _, tools = sources()
     assert "_stack_tool_menu_controls" not in tools
-    assert "def retire_superseded_quick_panels(" in tools
+    assert "def retire_superseded_quick_panels(" not in tools
+    assert "app._build_quick_settings(" not in tools
     assert 'sections["五、后期词典制作"] = build_postproduction_menu(app, content)' in tools
 
 

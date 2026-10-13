@@ -43,7 +43,9 @@ def test_ocr_crop_preview_is_wired_statically():
     preview_source = Path(preview.__file__).read_text(encoding="utf-8")
 
     assert "install_ocr_crop_preview(app_module)" not in composition
-    assert "add_ocr_crop_preview_control(self, section_row)" in app_source
+    state = (root / "picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    assert 'app.ocr_crop_preview_var = tk.BooleanVar(' in state
+    assert 'toggle_workspace_display_preview' in (root / "picture_capture/ui/workspace_tools.py").read_text(encoding="utf-8")
     assert app_source.count("draw_ocr_crop_preview(self)") == 2
     assert "def add_ocr_crop_preview_control(" in preview_source
     assert "def draw_ocr_crop_preview(" in preview_source

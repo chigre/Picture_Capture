@@ -100,40 +100,52 @@ def test_crop_input_controls_dispatch_distinct_right_panel_explanations():
     assert recorded[0] != recorded[1]
 
 
-def test_retirement_destroys_all_replaced_legacy_widgets_not_shared_state():
-    class Widget:
-        def __init__(self):
-            self.destroyed = False
-
-        def destroy(self):
-            self.destroyed = True
-
-    old = {name: Widget() for name in (
-        "preprocess", "normal", "aux", "ocr", "actions", "postproduction",
-    )}
-    replacements = {
-        title: Widget() for title in (
-            "图片预处理(前置)", "一、版面参数", "二、显示设置",
-            "三、共享 OCR 通道 / OCR画线",
-            "四、画线 / OCR / 插图 / 校对",
-            "五、后期词典制作",
-        )
-    }
-    quick = {"body_indent": object()}
-    booleans = {"show_rulers": object()}
-    old_labels = {"body_indent": object()}
-    old_buttons = {"ruler_color": object()}
-    app = SimpleNamespace(
-        _collapsible_sections=old,
-        quick_vars=quick,
-        quick_bool_vars=booleans,
-        quick_field_labels=old_labels,
-        quick_color_buttons=old_buttons,
-        preprocess_panel=None,
+def test_state_initialization_requires_no_visual_widgets_and_binds_traces_once():
+    import tkinter as tk
+    from picture_capture.models import AppSettings
+    from picture_capture.ui.quick_state import (
+        QUICK_FIELD_TYPES, QUICK_BOOLEAN_FIELDS, QUICK_COLOR_FIELDS,
+        initialize_quick_state,
     )
-    workspace_tools.retire_superseded_quick_panels(app, replacements)
-    assert old == {}  # No hidden legacy quick-menu tree remains.
-    assert all(not widget.destroyed for widget in replacements.values())
-    assert app.preprocess_panel is replacements["图片预处理(前置)"]
-    assert app.quick_vars is quick and app.quick_bool_vars is booleans
-    assert old_labels == {} and old_buttons == {}
+
+    interp = tk.Tcl()  # No display server / Tk widgets required.
+    calls = []
+    app = SimpleNamespace(
+        tk=interp.tk,
+        _root=lambda: interp,
+        settings=AppSettings(),
+        _quick_percent_parameter_changed=lambda key: calls.append(("percent", key)),
+        _quick_pixel_parameter_changed=lambda key: calls.append(("pixel", key)),
+        _quick_parameter_changed=lambda: calls.append(("plain", None)),
+    )
+    initialize_quick_state(app)
+    assert set(QUICK_FIELD_TYPES) <= set(app.quick_vars)
+    assert set(QUICK_BOOLEAN_FIELDS) <= set(app.quick_bool_vars)
+    assert set(QUICK_COLOR_FIELDS) == set(app.quick_color_vars)
+    assert "manual_x" in app.quick_pixel_vars
+    # Session-only controls used in the compact Display menu must exist
+    # before widgets are constructed (regression for the GUI smoke failure).
+    assert app._layout_visualization_var.get() is False
+    assert app._layout_step_replay_var.get() is False
+    assert app._large_head_visualization_var.get() is False
+    assert "_large_head_visualization_var" not in app.quick_bool_vars
+    assert app._large_head_debug_snapshot is None
+    assert app.quick_field_labels == {}
+    assert app.quick_color_buttons == {}
+    assert app._quick_trace_ready
+
+    # Reopening compact menus must never install duplicate callbacks.
+    old_var = app.quick_vars["columns"]
+    initialize_quick_state(app)
+    assert app.quick_vars["columns"] is old_var
+    app.quick_vars["columns"].set("2")
+    assert calls == [("plain", None)]
+    calls.clear()
+    app.quick_vars["manual_x"].set("12")
+    assert calls == [("percent", "manual_x")]
+    calls.clear()
+    app.quick_pixel_vars["manual_x"].set("250")
+    assert calls == [("pixel", "manual_x")]
+    calls.clear()
+    app.quick_bool_vars["show_rulers"].set(False)
+    assert calls == [("plain", None)]

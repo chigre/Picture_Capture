@@ -165,11 +165,11 @@ def test_phase5e_normal_ui_and_app_wrappers_are_explicit():
     app = (root / "app.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     bootstrap=(root / "bootstrap/gui.py").read_text(encoding="utf-8")
-    broad=app.split("        postproduction = self._section_frame(",1)[1].split("        postproduction.columnconfigure(",1)[0]
+    broad=(root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
     for method in ("split_single_lines_selected_scope","export_unlined_rows_selected_scope","split_entries_selected_scope","split_illustrations_selected_scope"):
         assert method in broad
-    assert 'elif text == "未画线行导出":' in broad
-    assert "self._pc_unlined_export_button = button" in broad
+    assert 'elif caption == "未画线行导出":' in broad
+    assert "app._pc_unlined_export_button = button" in broad
     assert "def export_unlined_rows_selected_scope(self)" in app
     assert "self._crop_controller_for_call().export_unlined_rows_selected_scope()" in app
     for removed_installer in ("install_unlined_line_export_ui","unlined_line_export_ui","install_unlined_fast_path","unlined_fast_path_runtime"):

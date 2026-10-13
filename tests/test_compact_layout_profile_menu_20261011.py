@@ -81,9 +81,11 @@ def test_per_field_percent_and_px_rows_reuse_quick_settings():
     app_source = (BASE / "app.py").read_text(encoding="utf-8")
     assert 'textvariable=app.quick_vars[name]' in source
     assert 'textvariable=app.quick_pixel_vars[name]' in source
-    assert 'add_field(normal, field_row, 0, caption, name, float)' in app_source
-    assert "lambda *_args, n=_name: self._quick_pixel_parameter_changed(n)" in app_source
-    assert "lambda *_args, n=_name: self._quick_percent_parameter_changed(n)" in app_source
+    state = (BASE / "ui/quick_state.py").read_text(encoding="utf-8")
+    assert '"body_indent": float' in state
+    assert 'app.quick_pixel_vars[name] = tk.StringVar(' in state
+    assert 'app._quick_pixel_parameter_changed(field)' in state
+    assert 'app._quick_percent_parameter_changed(field)' in state
     assert "return build_layout_profile_menu(app, parent)" in Path(
         compact_task_menus.__file__
     ).read_text(encoding="utf-8")
@@ -118,7 +120,8 @@ def test_right_ratio_returns_above_ordinary_visual_evidence_and_reuses_live_floa
     assert 'width=8, justify="center"' in source
     assert 'tk.StringVar(value=str(app.settings.right_ratio))' not in source
     app = (BASE / "app.py").read_text(encoding="utf-8")
-    assert 'self.quick_field_casts["right_ratio"] = float' in app
+    from picture_capture.ui.quick_state import QUICK_FIELD_TYPES
+    assert QUICK_FIELD_TYPES["right_ratio"] is float
     assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in app
 
 
