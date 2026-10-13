@@ -201,3 +201,50 @@ def test_resume_fails_closed_without_readable_detection_sources(
         assert _load(tmp_path, image, pdic, settings, deps) is None
     finally:
         resume_module._algorithm_environment_key.cache_clear()
+
+
+def test_resume_invalidates_after_tesseract_binary_replacement(
+    tmp_path, monkeypatch,
+):
+    """A pip-level version check alone cannot detect replaced Tesseract binaries."""
+    import subprocess
+    from picture_capture import ocr_page_resume as resume_module
+
+    image, pdic, settings, deps = _case(tmp_path)
+    executable = tmp_path / "tesseract-for-test"
+    executable.write_bytes(b"tess-binary-1")
+    settings.paddle_compare_tesseract = True
+    settings.ocr_executable = str(executable)
+    monkeypatch.setattr(
+        resume_module.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout=b"Tesseract 5.0", stderr=b"",
+        ),
+    )
+    resume_module._tesseract_executable_key.cache_clear()
+    try:
+        _write(tmp_path, image, pdic, settings, deps)
+        assert _load(tmp_path, image, pdic, settings, deps) == 1
+        executable.write_bytes(b"tess-binary-2")  # same size, binary changed
+        resume_module._tesseract_executable_key.cache_clear()
+        assert _load(tmp_path, image, pdic, settings, deps) is None
+    finally:
+        resume_module._tesseract_executable_key.cache_clear()
+
+
+def test_resume_fails_closed_when_enabled_tesseract_version_unavailable(tmp_path):
+    image, pdic, settings, deps = _case(tmp_path)
+    settings.paddle_compare_tesseract = True
+    settings.ocr_executable = str(tmp_path / "missing-tesseract")
+    with pytest.raises(OSError, match="Tesseract"):
+        _write(tmp_path, image, pdic, settings, deps)
+    assert _load(tmp_path, image, pdic, settings, deps) is None
+
+
+def test_resume_does_not_skip_when_remote_lens_outputs_are_unversionable(tmp_path):
+    image, pdic, settings, deps = _case(tmp_path)
+    settings.paddle_enable_lens = True
+    settings.paddle_lens_mode = "full"
+    with pytest.raises(OSError, match="Lens"):
+        _write(tmp_path, image, pdic, settings, deps)
+    assert _load(tmp_path, image, pdic, settings, deps) is None
