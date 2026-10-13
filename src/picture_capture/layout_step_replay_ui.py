@@ -201,7 +201,7 @@ def _format_stage(
                 f"过短剔除 {column['short_rejected']} 个，"
                 f"输出行段 {column['output_rows']} 个",
             ])
-        return "\\n".join(lines)
+        return "\n".join(lines)
     for k, value in details.items():
         if isinstance(value, dict):
             lines.append(k + ":")
