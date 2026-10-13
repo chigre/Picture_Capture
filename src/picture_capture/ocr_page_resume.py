@@ -11,6 +11,8 @@ from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version as package_version
 import hashlib
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +66,59 @@ def _algorithm_environment_key() -> str:
     return digest.hexdigest()
 
 
+
+@lru_cache(maxsize=16)
+def _tesseract_executable_key(executable_path: str) -> str:
+    """Version AND exact binary bytes, once per process; unavailable fails closed."""
+    executable = Path(executable_path)
+    if not executable.is_file():
+        raise OSError(f"Cannot verify Tesseract executable: {executable}")
+    digest = hashlib.sha256()
+    _digest_file(executable, digest)
+    try:
+        run = subprocess.run(
+            [str(executable), "--version"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise OSError("Cannot verify installed Tesseract version") from exc
+    if run.returncode != 0 or not (run.stdout or run.stderr):
+        raise OSError("Cannot verify installed Tesseract version")
+    digest.update(run.stdout)
+    digest.update(run.stderr)
+    return digest.hexdigest()
+
+
+def _runtime_ocr_engine_key(settings: Any, method: str) -> str:
+    """Include non-Python OCR executables; never trust unversionable remote OCR."""
+    lens_enabled = (
+        bool(getattr(settings, "paddle_enable_lens", False))
+        and str(getattr(settings, "paddle_lens_mode", "off") or "off") != "off"
+    )
+    if lens_enabled:
+        # Remote Lens results can change without a local source/version change.
+        raise OSError("Cannot safely resume pages using remote Google Lens")
+
+    needs_tesseract = (
+        bool(getattr(settings, "paddle_compare_tesseract", False))
+        or bool(getattr(settings, "paddle_tesseract_rescue", False))
+        or bool(getattr(settings, "paddle_dual_ocr_arbitration", False))
+        or (method == "combined" and getattr(settings, "ocr_engine", "") == "tesseract")
+    )
+    if not needs_tesseract:
+        return "tesseract-not-used"
+    configured = str(getattr(settings, "ocr_executable", "") or "").strip()
+    resolved = (
+        str(Path(configured).expanduser())
+        if configured and Path(configured).expanduser().is_file()
+        else shutil.which(configured or "tesseract")
+    )
+    if not resolved:
+        raise OSError("Cannot verify Tesseract executable for OCR resume")
+    return _tesseract_executable_key(str(Path(resolved).resolve()))
+
+
 def _digest_file(path: Path, hash_state: Any) -> None:
     path = Path(path)
     if not path.is_file():
@@ -91,6 +146,7 @@ def input_fingerprint(
     digest.update(_algorithm_environment_key().encode("ascii"))
     digest.update(str(page_index).encode("ascii"))
     digest.update(str(method).encode("ascii"))
+    digest.update(_runtime_ocr_engine_key(settings, method).encode("ascii"))
     dump = json.dumps(asdict(settings), sort_keys=True, ensure_ascii=False, default=str)
     digest.update(dump.encode("utf-8"))
     for path in (Path(image_path), *dependencies):
