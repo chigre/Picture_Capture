@@ -71,7 +71,7 @@ class LayoutStepTrace:
                  *, details: dict[str, Any] | None = None) -> None:
         self.stages.append({
             "key": key, "title": title, "description": description,
-            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [],
+            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [], "candidates": [],
         })
 
     def add_policy(self, estimate: Any, used: Any,
@@ -95,7 +95,8 @@ class LayoutStepTrace:
                       })
 
     def add_layout(self, key: str, title: str, description: str,
-                   layout: Any, *, details: dict[str, Any] | None = None) -> None:
+                   layout: Any, *, details: dict[str, Any] | None = None,
+                   candidates: list[dict[str, Any]] | None = None) -> None:
         """Freeze source-aligned rectangles at exactly one production boundary."""
         top = int(getattr(layout, "body_top", 0))
         bottom = int(getattr(layout, "body_bottom", 0))
@@ -142,6 +143,7 @@ class LayoutStepTrace:
             "key": key, "title": title, "description": description,
             "details": dict(details or {}),
             "columns": columns, "lanes": lanes, "rows": rows, "changes": changes,
+            "candidates": [dict(item) for item in (candidates or ())],
         })
         self._last_rows = rows
 
