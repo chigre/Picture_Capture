@@ -49,15 +49,12 @@ def _run_replay(
     【】 recovery and final candidate filtering. It never publishes a PDIC.
     """
     from .processing import detect_entries
-    from .profile_semantics import effective_page_settings
 
-    effective = effective_page_settings(settings, source.size, int(page_index))
-    method = str(getattr(effective, "detection_method", "") or "").strip().lower()
-    if method in {"paddleocr", "combined"}:
-        raise ValueError(
-            "当前为 OCR/融合识别模式；普通画线过程回放只适用于普通模式，"
-            "不能把 Layout Core 冒充完整 OCR/融合流水线。"
-        )
+    # The normal 普通画线 button overrides the method for its worker. Replay
+    # must do the same on a *copy*, regardless of the GUI's OCR selection.
+    # Never silently run the OCR/combined pipeline and call it Layout replay.
+    ordinary_settings = copy.deepcopy(settings)
+    ordinary_settings.detection_method = "left_edge"
 
     trace = LayoutStepTrace()
     previews: dict[str, Image.Image] = {}
@@ -82,7 +79,7 @@ def _run_replay(
         # Uses the same effective settings, sections, actual entry algorithms
         # and stage records as the 普通画线 button, once per requested page.
         detect_entries(
-            source, settings, profile_page_index=int(page_index),
+            source, ordinary_settings, profile_page_index=int(page_index),
             page_sections=page_sections, debug_trace=pipeline,
         )
         if not trace.stages:
