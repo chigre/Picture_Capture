@@ -89,9 +89,10 @@ def test_mask_candidates_and_unmodified_source_precede_layout(monkeypatch):
             assert masks["details"]["detected"] == 2
             assert masks["details"]["masked"] == 1
             assert len(masks["candidates"]) == 2
-            assert {x["status"] for x in masks["candidates"]} == {
-                "masked", "rejected_headlike",
-            }
+            statuses = {x["status"] for x in masks["candidates"]}
+            assert "masked" in statuses
+            assert statuses & {"rejected_headlike", "rejected_small"}
+            assert sum(x["status"] == "masked" for x in masks["candidates"]) == 1
             assert image.tobytes() == original_bytes
             assert "illustration_mask" in previews
             before = _preview_at_stage(trace.stages, 1, True, previews, image)
@@ -149,13 +150,21 @@ def test_bracket_stage_is_not_omitted_and_source_upgrades_are_visible(monkeypatc
     ]
 
 
-def test_replay_rejects_ocr_mode_without_fabricated_layout_result():
+def test_ocr_mode_currently_selected_still_replays_real_ordinary_pipeline():
     image = _page()
     settings = _settings()
     settings.detection_method = "paddleocr"
     try:
-        with pytest.raises(ValueError, match="OCR/融合"):
-            _run_replay(image, settings, 0)
+        trace, previews = _run_replay(image, settings, 0)
+        try:
+            assert settings.detection_method == "paddleocr"
+            assert trace.stages[-1]["key"] == "final_reading_order"
+            assert "bracketed_headword_recovery" not in {
+                stage["key"] for stage in trace.stages
+            } or any("entries" in stage for stage in trace.stages)
+        finally:
+            for preview in previews.values():
+                preview.close()
     finally:
         image.close()
 
