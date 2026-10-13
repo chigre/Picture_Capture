@@ -1,7 +1,7 @@
 """Minimal icon rail and an overlay tool palette that never resizes the page.
 
-Quick-setting widgets are built exactly once, preserving existing commands and
-variables. A temporary popover can be pinned for image-and-parameter work.
+Quick-setting Tk variables are initialized once, independently of all visual
+menus. A compact task popover can be pinned for image-and-parameter work.
 """
 from __future__ import annotations
 
@@ -189,41 +189,6 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 
 
 
-def retire_superseded_quick_panels(app: Any, sections: dict[str, ttk.Frame]) -> None:
-    """Remove replaced legacy widget trees, not the shared Tk setting variables.
-
-    _build_quick_settings still owns the initial quick_vars/trace wiring.
-    The compact panels now own every visible task menu and action.
-    Destroying the *other* old panels avoids keeping duplicate hidden Tk
-    widgets throughout a long image-editing session. Do not touch the saved
-    project fields, quick_vars, quick_bool_vars or callback registrations.
-    """
-    replaced = {
-        "preprocess": "图片预处理(前置)",
-        "normal": "一、版面参数",
-        "aux": "二、显示设置",
-        "ocr": "三、共享 OCR 通道 / OCR画线",
-        "actions": "四、画线 / OCR / 插图 / 校对",
-        "postproduction": "五、后期词典制作",
-    }
-    old_sections = getattr(app, "_collapsible_sections", {})
-    for key, title in replaced.items():
-        old = old_sections.get(key)
-        replacement = sections.get(title)
-        if old is None or replacement is None or old is replacement:
-            continue
-        # Destroy only after replacement construction: all new controls are
-        # already wired to the exact same persistent Tk variables.
-        old.destroy()
-        old_sections.pop(key, None)
-    # The hidden controls used to supply these widget pointers, which must
-    # never reference destroyed widgets after this cleanup.
-    getattr(app, "quick_field_labels", {}).clear()
-    getattr(app, "quick_color_buttons", {}).clear()
-    if "图片预处理(前置)" in sections:
-        app.preprocess_panel = sections["图片预处理(前置)"]
-
-
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place a 120px icon rail beside the 260px normal-mode page index."""
     app.workspace_rail_width = DEFAULT_RAIL_WIDTH
@@ -344,16 +309,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     app.bind_all("<MouseWheel>", scroll_menu_wheel, add="+")
     app.bind_all("<Button-4>", lambda event: scroll_menu(event, -3), add="+")
     app.bind_all("<Button-5>", lambda event: scroll_menu(event, 3), add="+")
-    # Legacy builder still initializes shared Tk quick variables and traces;
-    # none of its visual panels survive replacement below.
-    app._build_quick_settings(content)
-    sections = {
-        str(section._collapse_title): section
-        for section in content.winfo_children()
-        if getattr(section, "_collapse_title", None)
-    }
-    # State variables remain shared; every visible task panel is rebuilt
-    # once in the compact format instead of displaying legacy UI rows.
+    # All shared quick variables/traces are created without any hidden Tk
+    # widgets. No old tool sections are constructed, packed or destroyed.
+    from .quick_state import initialize_quick_state
+    initialize_quick_state(app)
+    sections: dict[str, ttk.Frame] = {}
     sections["图片预处理(前置)"] = build_preprocess_menu(app, content)
     sections["一、版面参数"] = build_layout_menu(app, content)
     sections["二、显示设置"] = build_compact_display_menu(app, content)
@@ -361,7 +321,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     sections["三之一、OCR画线设置"] = build_headword_profile_menu(app, content)
     sections["四、画线 / OCR / 插图 / 校对"] = build_drawing_menu(app, content)
     sections["五、后期词典制作"] = build_postproduction_menu(app, content)
-    retire_superseded_quick_panels(app, sections)
+    app.preprocess_panel = sections["图片预处理(前置)"]
     app.workspace_tools_sections = sections
     app.workspace_tools_scrollbar_refresh = refresh_scrollbar
     app.workspace_tools_content = content
