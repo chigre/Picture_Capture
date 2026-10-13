@@ -677,6 +677,13 @@ class AppSettings(metaclass=_AppSettingsMeta):
         # both normalized immediately rather than only at render/save time.
         if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
             value = _normalize_display_opacity(value)
+        if name == "physical_row_projection_width_percent":
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
+            if not 10.0 <= value <= 100.0:  # also rejects NaN/infinity
+                raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
         object.__setattr__(self, name, value)
 
     @property
