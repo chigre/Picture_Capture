@@ -64,6 +64,12 @@ def _image_fingerprint(image: Image.Image) -> tuple[Any, ...]:
             if fingerprint[:2] == (str(image.mode), tuple(image.size)):
                 return fingerprint
 
+    if not immutable:
+        previous = _READONLY_IMAGE_DIGESTS.get(id(image))
+        if previous is not None and previous[0]() is image:
+            # Release an old copy-on-write ImagingCore promptly after mutation.
+            _READONLY_IMAGE_DIGESTS.pop(id(image), None)
+
     digest = hashlib.blake2b(digest_size=16)
     estimated_size = image.width * image.height * max(1, len(image.getbands()))
     if estimated_size < _FINGERPRINT_STREAM_THRESHOLD:
