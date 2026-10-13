@@ -110,6 +110,10 @@ def test_legacy_raw_entry_label_is_recorded_but_not_presented_as_valid_entry():
     assert len(trace.stages) == 2
     assert trace.stages[1]["rows"][0]["role"] == "body"
     assert trace.stages[1]["changes"] == []  # neutralization is NOT visual inference
+    history = trace.history_for_row("C1-Y10-20")
+    assert [item["role"] for item in history] == ["unclassified", "body"]
+    assert "内部中性角色初始化" in history[1]["stage"]
+    assert not any(item["stage"] == "符号证据融合" for item in history)
 
 
 def test_indented_profiles_still_retain_true_semantic_stages():
