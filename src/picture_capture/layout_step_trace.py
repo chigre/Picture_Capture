@@ -250,6 +250,19 @@ class LayoutStepTrace:
                     "reason": stage["description"],
                 })
                 prior = role
+            if stage.get("provisional_no_indent") and current is not None:
+                # A no-indent page has an invisible, *mandatory* administrative
+                # role reset before actual visual evidence. Show it in a
+                # clicked row's history so 'unclassified -> body' cannot be
+                # falsely attributed to symbol evidence, without making it a
+                # numbered, interactive Layout inference stage.
+                history.append({
+                    "stage": "内部中性角色初始化（非词头识别步骤）",
+                    "role": "body",
+                    "reason": "无明显缩进：清除 Page Design 临时词头标签；"
+                              "物理行全部以中性 body 开始，不能据缩进推断词条。",
+                })
+                prior = "body"
         return history
 
     def final_roles(self) -> list[tuple[str, str]]:
