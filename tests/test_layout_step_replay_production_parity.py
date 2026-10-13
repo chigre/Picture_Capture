@@ -68,11 +68,13 @@ def test_mask_candidates_and_unmodified_source_precede_layout(monkeypatch):
     from picture_capture import layout_illustration_mask as masks
 
     image = _page()
+    ImageDraw.Draw(image).rectangle((145, 90, 220, 145), fill="black")
     original_bytes = image.tobytes()
     settings = _settings(layout_mask_illustrations=True)
-    # Both rejected large-head-sized glyph and accepted large illustration.
+    settings.character_height = 20
+    # Square 80px resembles a display head; 155x160px safely counts as illustration.
     candidates = [
-        SimpleNamespace(points=[(3, 5), (37, 5), (37, 39), (3, 39)]),
+        SimpleNamespace(points=[(3, 5), (83, 5), (83, 85), (3, 85)]),
         SimpleNamespace(points=[(110, 30), (265, 30), (265, 190), (110, 190)]),
     ]
     monkeypatch.setattr(
@@ -95,7 +97,7 @@ def test_mask_candidates_and_unmodified_source_precede_layout(monkeypatch):
             before = _preview_at_stage(trace.stages, 1, True, previews, image)
             after = _preview_at_stage(trace.stages, 1, False, previews, image)
             # Downscaled preview keeps the page's dimensions for this fixture.
-            assert before.getpixel((170, 100)) != (255, 255, 255) or after.getpixel((170,100)) == (255,255,255)
+            assert before.getpixel((170, 100)) != (255, 255, 255)
             assert after.getpixel((170, 100)) == (255, 255, 255)
         finally:
             for item in previews.values():
