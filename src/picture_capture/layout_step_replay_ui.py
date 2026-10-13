@@ -125,6 +125,15 @@ def _format_stage(
                 lines.append(f"  {item}: {v}")
         else:
             lines.append(f"{k}: {value}")
+    lanes = stage.get("lanes", ())
+    if lanes:
+        lines.append(f"缩进群：{len(lanes)}")
+        for lane in lanes:
+            lines.append(
+                f"  {lane['id']}：中心 {lane['center']:.1f}px，"
+                f"容差 ±{lane['tolerance']:.1f}px，"
+                f"支持 {lane['support']} 行，角色 {lane['role']}"
+            )
     rows = stage["rows"]
     if rows:
         counts: dict[str, int] = {}
@@ -414,6 +423,15 @@ class LayoutStepReplayWindow:
             x1, y1 = col["source_end"]
             self.canvas.create_rectangle(x0*factor, y0*factor, x1*factor, y1*factor,
                                          outline="#129567", width=2, tags=_STEP_TAG)
+        # Magenta dashed lines show actual per-column indent families, rather
+        # than inventing sample rows from the final result.
+        if visual["key"] in {"initial_roles", "indent_semantics", "body_lanes", "indent_recovery"}:
+            for lane in visual.get("lanes", ()):
+                x0, y0, x1, y1 = lane["source_line"]
+                self.canvas.create_line(
+                    x0*factor, y0*factor, x1*factor, y1*factor,
+                    fill="#b63faa", width=2, dash=(4, 5), tags=_STEP_TAG,
+                )
         changes = {item["id"]: item for item in stage.get("changes", [])}
         for row in visual["rows"]:
             x0, y0, x1, y1 = row["source_box"]
@@ -437,7 +455,7 @@ class LayoutStepReplayWindow:
         self._visual_rows = visual["rows"]
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
-            f"｜红=词条 / 蓝=正文 / 绿粗框=本阶段变化 / 橙虚框=移除｜点击行查看历程"
+            f"｜红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化｜点击行查看历程"
         )
         self._show_text(_format_stage(stage))
 
