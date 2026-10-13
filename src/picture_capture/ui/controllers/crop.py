@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 import tkinter as tk
+import threading
 
 from ... import unlined_line_export as unlined_export
 from ...crop.export_output import normalize_project_crop_widths
@@ -45,6 +46,69 @@ def _width_report(app: Any, root: Path, config: dict) -> str:
     if stats["oversize"]:
         suffix += f'；超宽保留 {stats["oversize"]} 张'
     return suffix
+
+
+def complete_crop_widths(app: Any, root: Path, config: dict, prefix: str) -> None:
+    """Finish a crop in the background without blocking Tk on large PNG projects."""
+    starter = getattr(app, "_start_ui_worker", None)
+    if not callable(starter):
+        app.status_var.set(prefix + _width_report(app, root, config))
+        return
+
+    cancel = threading.Event()
+    app._crop_width_cancel_event = cancel
+    progress = [0, 0]
+
+    def progress_callback(done: int, total: int) -> None:
+        progress[:] = [done, total]
+
+    def worker():
+        return normalize_project_crop_widths(
+            root, config, progress=progress_callback, cancelled=cancel.is_set,
+        )
+
+    def finish(result) -> None:
+        if getattr(app, "_crop_width_cancel_event", None) is cancel:
+            app._crop_width_cancel_event = None
+        app.batch_stop_button.configure(state="disabled")
+        suffix = (
+            f'；目标宽度 {result["target_width"]} px'
+            f'，补齐词条 {result["entries_padded"]}、插图 {result["illustrations_padded"]} 张'
+            if result["target_width"] else ""
+        )
+        app.status_var.set(prefix + suffix)
+        app.after(1800, app._hide_batch_bar_if_idle)
+
+    def failed(exc, detail) -> None:
+        if getattr(app, "_crop_width_cancel_event", None) is cancel:
+            app._crop_width_cancel_event = None
+        app.batch_stop_button.configure(state="disabled")
+        if isinstance(exc, InterruptedError):
+            app.status_var.set(prefix + "；宽度标准化已取消，已完成的 PNG 保留")
+        else:
+            if detail:
+                print(detail)
+            app.show_error("切图宽度标准化失败", exc)
+        app.after(1800, app._hide_batch_bar_if_idle)
+
+    app.status_var.set(prefix + "；后台统一 PNG 宽度中（可停止）")
+    app.batch_stop_button.configure(state="normal")
+    token = starter(
+        "crop-width-normalization", worker, finish, failed, wait_on_close=True,
+    )
+    if token == -1:
+        cancel.set()
+        app.batch_stop_button.configure(state="disabled")
+        return
+
+    def poll() -> None:
+        active = getattr(app, "_ui_worker_key_active", None)
+        if not callable(active) or not active("crop-width-normalization"):
+            return
+        app.batch_text_var.set(f"PNG 宽度标准化：{progress[0]}/{progress[1]} 张")
+        app.after(250, poll)
+
+    app.after(250, poll)
 
 
 def _commit_current_entry_inputs(app: Any) -> bool:
@@ -370,8 +434,8 @@ class CropController:
 
         def done(_completed, _total, stopped, results, error):
             if error is None and not stopped and results:
-                suffix = _width_report(app, project.root, config)
-                app.status_var.set(f"已导出 {int(results[-1] or 0)} 张词条整体图{suffix}")
+                complete_crop_widths(app, project.root, config,
+                                     f"已导出 {int(results[-1] or 0)} 张词条整体图")
 
         app._start_batch_task(
             "当前页整体切图",
@@ -438,13 +502,13 @@ class CropController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
-            suffix = _width_report(app, project.root, config)
             if stopped:
                 app.status_var.set(
-                    f"批量整体切图已停止：完成 {completed}/{total_pages} 页，共 {count} 张{suffix}"
+                    f"批量整体切图已停止：完成 {completed}/{total_pages} 页，共 {count} 张"
                 )
             else:
-                app.status_var.set(f"批量整体切图完成：{count} 张{suffix}")
+                complete_crop_widths(app, project.root, config,
+                                     f"批量整体切图完成：{count} 张")
 
         app._start_batch_task(
             "批量整体切图",
@@ -520,13 +584,13 @@ class CropController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
-            suffix = _width_report(app, project.root, config)
             if stopped:
                 app.status_var.set(
-                    f"词条切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张{suffix}"
+                    f"词条切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张"
                 )
             else:
-                app.status_var.set(f"词条切图完成：{completed} 页，共 {count} 张{suffix}")
+                complete_crop_widths(app, project.root, config,
+                                     f"词条切图完成：{completed} 页，共 {count} 张")
 
         app._start_parallel_batch_task(
             "词条切图",
