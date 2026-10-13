@@ -169,6 +169,24 @@ def test_ocr_mode_currently_selected_still_replays_real_ordinary_pipeline():
         image.close()
 
 
+def test_bracket_disabled_is_explicitly_labeled_as_skipped():
+    image = _page()
+    settings = _settings()
+    settings.profile_cjk_allow_bracketed_headword = False
+    trace, previews = _run_replay(image, settings, 0)
+    try:
+        keys = [s["key"] for s in trace.stages]
+        assert "bracketed_headword_recovery" not in keys
+        assert "bracketed_headword_not_run" in keys
+        skipped = next(s for s in trace.stages
+                       if s["key"] == "bracketed_headword_not_run")
+        assert skipped["details"]["profile_cjk_allow_bracketed_headword"] is False
+    finally:
+        for preview in previews.values():
+            preview.close()
+        image.close()
+
+
 def test_optional_mask_diagnostics_do_not_change_default_pixels_or_decisions():
     image = Image.new("RGB", (320, 280), (120, 120, 120))
     settings = AppSettings(layout_mask_illustrations=True, character_height=20, column_width=300)
