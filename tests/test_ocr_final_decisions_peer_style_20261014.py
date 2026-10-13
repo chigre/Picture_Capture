@@ -297,3 +297,42 @@ def test_default_disabled_state_does_not_mutate_preexisting_ocr_diagnostics(monk
     )
     assert result == [] and rows[0] is diagnostic
     assert "peer_style_evidence" not in rows[0]["features"]
+
+
+def test_ocr_prewrite_backups_are_lossless_deduplicated_and_preserve_edits(tmp_path):
+    from picture_capture.ocr_pdic_preservation import preserve_prior_pdic
+    project = tmp_path / "Dictionary"
+    project.mkdir()
+    page = project / "p001.tif"
+    pdic = project / "p001.pdic"
+    original = b"Original#11#42#1#3#p001#@#@\r\n"
+    pdic.write_bytes(original)
+    first = preserve_prior_pdic(project, page, pdic)
+    assert first is not None and first.read_bytes() == original
+    second = preserve_prior_pdic(project, page, pdic)
+    assert second == first
+    assert len(list(first.parent.glob("*.pdic"))) == 1
+
+    pdic.write_bytes(b"Human-edit#15#44#1#3#p001#@#@\n")
+    third = preserve_prior_pdic(project, page, pdic)
+    assert third != first
+    assert first.read_bytes() == original
+    assert third.read_bytes() == pdic.read_bytes()
+    assert len(list(first.parent.glob("*.pdic"))) == 2
+
+    pdic.unlink()
+    assert preserve_prior_pdic(project, page, pdic) is None
+
+
+def test_ocr_prewrite_snapshot_failure_must_not_overwrite_existing_pdic(tmp_path, monkeypatch):
+    import picture_capture.ocr_pdic_preservation as backup
+    page = tmp_path / "p001.tif"
+    pdic = tmp_path / "p001.pdic"
+    pdic.write_bytes(b"confirmed original annotations")
+    monkeypatch.setattr(backup, "data_root", lambda _root: tmp_path / "inaccessible")
+    # A directory replaced by a regular file is not writable. The original
+    # must survive the error, so the batch worker can stop safely.
+    (tmp_path / "inaccessible").write_text("occupied", encoding="utf-8")
+    with pytest.raises(OSError):
+        backup.preserve_prior_pdic(tmp_path, page, pdic)
+    assert pdic.read_bytes() == b"confirmed original annotations"
