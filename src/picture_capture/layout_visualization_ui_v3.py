@@ -85,6 +85,28 @@ def on_layout_density_change(app: Any) -> None:
         show_layout_details_window(app)
 
 
+def toggle_layout_step_replay(app: Any) -> None:
+    """Single session-only callback shared by legacy and compact panels.
+
+    Both widgets bind to app._layout_step_replay_var. Opening/closing the
+    modeless replay window never changes display modes or persisted settings.
+    """
+    replay_var = getattr(app, "_layout_step_replay_var", None)
+    if replay_var is None:
+        return
+    if bool(replay_var.get()):
+        from .layout_step_replay_ui import show_layout_step_replay
+        try:
+            show_layout_step_replay(app)
+        except Exception:
+            replay_var.set(False)
+            raise
+    else:
+        window = getattr(app, "_layout_step_replay_window", None)
+        if window is not None:
+            window.close()
+
+
 def _add_layout_toggle(app: Any, section: Any) -> None:
     if getattr(app, "_layout_visualization_toggle_widget", None) is not None:
         return
@@ -115,21 +137,9 @@ def _add_layout_toggle(app: Any, section: Any) -> None:
     replay_var = tk.BooleanVar(value=False)
     app._layout_step_replay_var = replay_var
 
-    def toggle_replay() -> None:
-        from .layout_step_replay_ui import show_layout_step_replay
-        if bool(replay_var.get()):
-            try:
-                show_layout_step_replay(app)
-            except Exception:
-                replay_var.set(False)
-                raise
-        else:
-            window = getattr(app, "_layout_step_replay_window", None)
-            if window is not None:
-                window.close()
-
     replay_widget = ttk.Checkbutton(
-        section, text="查看 LAYOUT 分析过程", variable=replay_var, command=toggle_replay,
+        section, text="查看 LAYOUT 分析过程", variable=replay_var,
+        command=lambda: toggle_layout_step_replay(app),
     )
     replay_widget.grid(row=row+1, column=0, columnspan=4, sticky="w", pady=(2, 3))
     app._layout_step_replay_widget = replay_widget
