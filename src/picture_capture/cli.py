@@ -13,12 +13,14 @@ from .bootstrap.core import build_core_services
 # as GUI and spawn workers before importing formats/processing callables by value.
 build_core_services()
 
-from .formats import pdic_path, read_pdic, write_pdic
+from .formats import pdic_path, read_pdic, read_ppp, write_pdic
 from .image_utils import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
+from .crop.settings import load_crop_settings
+from .crop.export_output import normalize_project_crop_widths
 from .project_storage import (
-    headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
+    ppp_read_path_for_image, headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
     qt_root, replace_rules_path,
 )
 from .page_sections import read_page_sections
@@ -81,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         pages = _pages(project, args.page)
+        crop_config = None
+        if args.command == "split-whole":
+            crop_config = load_crop_settings(project.root, project.settings)
         for number, page in enumerate(pages, 1):
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
@@ -143,9 +148,24 @@ def main(argv: list[str] | None = None) -> int:
                 append_crop_log(project.root, records)
                 print(f"[{number}/{len(pages)}] {page.name}: 导出 {len(records)} 张单行图")
             elif args.command == "split-whole":
-                records = split_whole_entries(page, entries, project.settings, qt_root(project.root) / "PWW")
+                assert crop_config is not None
+                special = crop_config.get("special_pages", {}).get(page.stem, {})
+                records = split_whole_entries(
+                    page, entries, project.settings, qt_root(project.root) / "PWW",
+                    top_y=int(special.get("top_y", crop_config["general_top_y"])),
+                    bottom_y=int(special.get("bottom_y", crop_config["general_bottom_y"])),
+                    polygons=read_ppp(ppp_read_path_for_image(page)),
+                    entry_left_padding=int(crop_config["entry_left_padding_x"]),
+                    entry_right_padding=int(crop_config["entry_right_padding_x"]),
+                    integrate_illustrations=bool(crop_config["integrate_illustrations"]),
+                    profile_page_index=project.images.index(page),
+                    transparent_background=bool(crop_config["entry_transparent_background"]),
+                )
                 append_crop_log(project.root, records)
                 print(f"[{number}/{len(pages)}] {page.name}: 导出 {len(records)} 张词条图")
+        if crop_config is not None:
+            normalized = normalize_project_crop_widths(project.root, crop_config)
+            print(f"宽度标准化：{normalized['target_width']} px，补齐词条 {normalized['entries_padded']} 张")
         return 0
     except Exception as exc:
         print(f"错误：{exc}", file=sys.stderr)

@@ -14,6 +14,7 @@ functions below choose the legacy locations until a v2 manifest exists.
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
+import hashlib
 import json
 import shutil
 
@@ -334,7 +335,16 @@ def _iter_files(path: Path) -> Iterable[Path]:
 
 def _same_file_payload(source: Path, target: Path) -> bool:
     try:
-        return source.is_file() and target.is_file() and source.stat().st_size == target.stat().st_size
+        if not source.is_file() or not target.is_file() or source.stat().st_size != target.stat().st_size:
+            return False
+        # Size-only verification can accept a corrupt copy, then delete the only good source.
+        def digest(path: Path) -> bytes:
+            checksum = hashlib.sha256()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    checksum.update(block)
+            return checksum.digest()
+        return digest(source) == digest(target)
     except OSError:
         return False
 
@@ -362,12 +372,22 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
         raise RuntimeError(f"发现上次未完成的迁移目录：{stage.name}。请先检查或删除后重试。")
 
     copied_pairs: list[tuple[Path, Path]] = []
+    destination_keys: dict[str, Path] = {}
     cleanup_files: list[Path] = []
     cleanup_dirs: list[Path] = []
+
+    def check_destination(source: Path, destination: Path) -> None:
+        # Guard case-folded collisions on Windows/macOS as well as exact collisions on Linux.
+        key = destination.relative_to(stage).as_posix().casefold()
+        previous = destination_keys.get(key)
+        if previous is not None:
+            raise RuntimeError(f"迁移目标名称冲突：{previous} 与 {source}。原文件未删除。")
+        destination_keys[key] = source
 
     def copy_file(source: Path, destination: Path) -> None:
         if not source.is_file():
             return
+        check_destination(source, destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
         copied_pairs.append((source, destination))
@@ -394,6 +414,8 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
         legacy_qt = case_insensitive_child(root, "QT") or (root / "QT")
         if legacy_qt.is_dir():
             target_qt = stage / "QT"
+            for source in _iter_files(legacy_qt):
+                check_destination(source, target_qt / source.relative_to(legacy_qt))
             shutil.copytree(legacy_qt, target_qt, dirs_exist_ok=True, copy_function=shutil.copy2)
             for source in _iter_files(legacy_qt):
                 rel = source.relative_to(legacy_qt)
@@ -403,6 +425,8 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
         legacy_training = case_insensitive_child(root, "TrainingExports") or (root / "TrainingExports")
         if legacy_training.is_dir():
             target_training = stage / "output" / "TrainingExports"
+            for source in _iter_files(legacy_training):
+                check_destination(source, target_training / source.relative_to(legacy_training))
             shutil.copytree(legacy_training, target_training, dirs_exist_ok=True, copy_function=shutil.copy2)
             for source in _iter_files(legacy_training):
                 rel = source.relative_to(legacy_training)
@@ -459,3 +483,31 @@ def migrate_legacy_project(project_root: Path, software_version: str) -> Migrati
         if stage.exists():
             shutil.rmtree(stage, ignore_errors=True)
         raise
+
+
+def project_activity_path(project_root: Path) -> Path:
+    """Cheap per-project edit clock, independent of nested directory mtimes."""
+    root = Path(project_root)
+    if is_managed_project(root):
+        return storage_root(root) / ".activity"
+    return root / "QT" / ".activity"
+
+
+def note_page_artifact_edit(path: Path) -> None:
+    """Update the project-card edit clock after a successful PDIC/PPP publication."""
+    import os
+    artifact = Path(path)
+    if artifact.suffix.lower() not in {".pdic", ".ppp"}:
+        return
+    parent = artifact.parent
+    if parent.name in {"PDIC", "PPP"} and parent.parent.name == "data":
+        marker = parent.parent.parent / ".activity"
+    else:
+        marker = parent / "QT" / ".activity"
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+        os.utime(marker, None)
+    except OSError:
+        # Edit metadata is best effort and must never prevent data publication.
+        pass

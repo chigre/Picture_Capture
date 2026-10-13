@@ -11954,6 +11954,9 @@ class PictureCaptureApp(tk.Tk):
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
+        if self._ui_worker_key_active("crop-width-normalization"):
+            self.status_var.set("PNG 宽度标准化仍在运行；请先完成或停止。")
+            return False
         if self._ui_worker_key_active("project-load"):
             self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
             return False
@@ -12063,6 +12066,9 @@ class PictureCaptureApp(tk.Tk):
         """ start parallel batch task."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
+            return False
+        if self._ui_worker_key_active("crop-width-normalization"):
+            self.status_var.set("PNG 宽度标准化仍在运行；请先完成或停止。")
             return False
         if self._ui_worker_key_active("project-load"):
             self.status_var.set("项目仍在后台打开；完成后再启动批量任务。")
@@ -12336,7 +12342,7 @@ class PictureCaptureApp(tk.Tk):
             self.after_idle(self.on_close)
 
     def _hide_batch_bar_if_idle(self) -> None:
-        if not self._batch_active and self.batch_bar.winfo_manager():
+        if not self._batch_active and not self._ui_worker_key_active("crop-width-normalization") and self.batch_bar.winfo_manager():
             self.batch_bar.pack_forget()
 
     def _toggle_batch_pause(self) -> None:
@@ -12362,6 +12368,11 @@ class PictureCaptureApp(tk.Tk):
 
     def _request_batch_stop(self) -> None:
         if not self._batch_active:
+            cancel = getattr(self, "_crop_width_cancel_event", None)
+            if cancel is not None:
+                cancel.set()
+                self.batch_stop_button.configure(state="disabled")
+                self.status_var.set("PNG 宽度标准化：已请求取消，当前图片完成后停止")
             return
         self._batch_stop_event.set()
         # Wake a task that is currently paused so the worker can observe stop.
@@ -16238,33 +16249,13 @@ class PictureCaptureApp(tk.Tk):
         self._crop_controller_for_call().split_whole_current()
 
     def _crop_settings_defaults(self) -> dict:
-        default_bottom = self.settings.bottom_y if self.settings.crop_to_bottom_y else 0
-        return {
-            "version": CROP_SETTINGS_VERSION,
-            "coordinate_space": SOURCE_COORDINATE_SPACE,
-            "general_top_y": int(self.settings.start_y),
-            "general_bottom_y": int(default_bottom),
-            "entry_left_padding_x": 0,
-            "entry_right_padding_x": 0,
-            "integrate_illustrations": True,
-            "polygon_margin": 0,
-            "parallel_workers": int(self.settings.crop_parallel_workers),
-            "special_pages": {},
-        }
+        return _normalize_crop_settings_payload(None, self.settings)
 
     def _load_crop_settings(self) -> dict:
         if not self.project:
             return self._crop_settings_defaults()
-        path = qt_root(self.project.root) / CropSettingsDialog.CONFIG_NAME
-        raw: dict = {}
-        if path.exists():
-            try:
-                candidate = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(candidate, dict):
-                    raw = candidate
-            except (OSError, ValueError, TypeError):
-                raw = {}
-        return _normalize_crop_settings_payload(raw, self.settings)
+        from .crop.settings import load_crop_settings
+        return load_crop_settings(self.project.root, self.settings)
 
 
     def open_crop_settings(self) -> None:

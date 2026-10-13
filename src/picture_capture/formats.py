@@ -6,7 +6,7 @@ import tempfile
 
 from .models import Entry, PolygonRegion
 from .text_encoding import read_text_detected
-from .project_storage import pdic_path_for_image
+from .project_storage import pdic_path_for_image, note_page_artifact_edit
 
 
 def pdic_path(image_path: Path) -> Path:
@@ -54,6 +54,7 @@ def write_text_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> 
     except FileNotFoundError:
         pass
     write_text_atomic(target, text, encoding=encoding)
+    note_page_artifact_edit(target)
     return True
 
 

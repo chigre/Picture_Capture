@@ -7404,7 +7404,10 @@ def test_review_highlight_uses_the_same_geometry_as_review_crop():
 
 
 def test_v2132_declares_cpu_and_gpu_ocr_profiles():
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10: pytest depends on tomli here.
+        import tomli as tomllib
     from pathlib import Path
 
     data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
@@ -7422,7 +7425,10 @@ def test_v2132_declares_cpu_and_gpu_ocr_profiles():
 
 def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     import importlib.util
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10: pytest depends on tomli here.
+        import tomli as tomllib
     from pathlib import Path
 
     batch = Path("install_ocr_windows.bat").read_text(encoding="utf-8")

@@ -13,7 +13,7 @@ from dataclasses import replace
 from tkinter import messagebox
 from typing import Any
 
-from ...crop.export_output import normalize_project_crop_widths
+from .crop import complete_crop_widths
 from ...formats import pdic_path, read_ppp, write_ppp
 from ...processing import (
     append_crop_log, append_illustration_crop_log, detect_illustrations_job,
@@ -48,6 +48,18 @@ class IllustrationController:
         if not indices:
             return
 
+        # A PPP decision may depend on the current entry text and geometry.
+        # Commit visible PDIC edits before child workers load sidecars.
+        try:
+            flush = getattr(app, "_flush_deferred_page_save", None)
+            if callable(flush):
+                flush()
+            save = getattr(app, "save_pdic", None)
+            if callable(save):
+                save(silent=True)
+        except Exception as exc:
+            app.show_error("插图切图前保存当前词条失败", exc)
+            return
         app._sync_polygon_label_texts()
         write_ppp(
             app._ppp_write_path(app.current_page),
@@ -98,19 +110,11 @@ class IllustrationController:
             if error is not None:
                 return
             count = sum(int(v or 0) for v in results)
-            try:
-                widths = normalize_project_crop_widths(project.root, config)
-                suffix = (
-                    f'；目标宽度 {widths["target_width"]} px，补齐插图 {widths["illustrations_padded"]} 张'
-                    if widths["target_width"] else ""
-                )
-            except Exception as exc:
-                app.show_error("插图宽度补齐失败", exc)
-                suffix = "；宽度补齐失败"
             if stopped:
-                app.status_var.set(f"插图切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张{suffix}")
+                app.status_var.set(f"插图切图已停止：完成 {completed}/{total_pages} 页，共导出 {count} 张")
             else:
-                app.status_var.set(f"插图切图完成：{completed} 页，共 {count} 张{suffix}")
+                complete_crop_widths(app, project.root, config,
+                                     f"插图切图完成：{completed} 页，共 {count} 张")
 
         app._start_parallel_batch_task(
             "插图切图", indices, split_illustrations_job, job_builder, consume_result, done,

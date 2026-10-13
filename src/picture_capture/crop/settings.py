@@ -7,6 +7,9 @@ use the same version/normalization contract without depending on one another.
 """
 
 from ..coordinate_space import SOURCE_COORDINATE_SPACE
+from ..project_storage import qt_root
+import json
+from pathlib import Path
 from ..models import AppSettings
 
 
@@ -49,7 +52,11 @@ def normalize_crop_settings_payload(
     }
     if not isinstance(raw, dict):
         return defaults
-    if int(raw.get("version", 0) or 0) != CROP_SETTINGS_VERSION:
+    try:
+        version = int(raw.get("version", 0) or 0)
+    except (TypeError, ValueError, OverflowError):
+        return defaults
+    if version != CROP_SETTINGS_VERSION:
         return defaults
     if str(raw.get("coordinate_space") or "") != SOURCE_COORDINATE_SPACE:
         return defaults
@@ -121,3 +128,15 @@ __all__ = [
     "MAX_UNLINED_BLANK_INK_PERCENT",
     "normalize_crop_settings_payload",
 ]
+
+
+def load_crop_settings(project_root: Path, settings: AppSettings) -> dict:
+    """Read the shared GUI/CLI crop configuration through one contract."""
+    path = qt_root(Path(project_root)) / "_CropSettings.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raw = None
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"切图设置文件损坏，请先检查或恢复 {path}") from exc
+    return normalize_crop_settings_payload(raw, settings)
