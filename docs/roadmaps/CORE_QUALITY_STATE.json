@@ -22,7 +22,7 @@
     }
   },
   "current_state": {
-    "status": "plan_proposed",
+    "status": "planning_pr_open",
     "active_phase": "R0",
     "active_work_item": "R0.1",
     "work_in_progress": false,
@@ -31,7 +31,7 @@
     "latest_verified_main_sha": "7134bf68cf2595f1db61d7d410d7ac51290318ca",
     "last_completed_work_item": null,
     "blockers": [],
-    "required_next_action": "Read the plan + resume protocol, reconcile GitHub live status, then implement only R0.1 as a small PR after planning documentation is accepted.",
+    "required_next_action": "Verify GitHub CI and merge planning PR #478 to main; then start only R0.1 after GitHub reality check; no production changes have started.",
     "last_test_evidence": "Starting main CI success; no new roadmap-related production tests have run."
   },
   "units": {
@@ -100,6 +100,12 @@
       "type": "source_audit",
       "status": "proposed_not_executed",
       "note": "The R0.1 fingerprint coverage risk is inferred from inspected source, not yet confirmed by a failing test."
+    },
+    {
+      "type": "planning_pr",
+      "url": "https://github.com/chigre/Picture_Capture/pull/478",
+      "status": "open",
+      "note": "Plan-only branch; not yet merged to main."
     }
   ],
   "rules_for_updates": {
@@ -115,5 +121,12 @@
     "mark_verified_only_after_main_ci_success": true,
     "if_conflict_stop_and_record_blocker": true,
     "update_with_pr_sha_and_ci_url": "required"
+  },
+  "planning_pr": {
+    "number": 478,
+    "url": "https://github.com/chigre/Picture_Capture/pull/478",
+    "status": "open",
+    "branch": "docs/core-quality-upgrade-plan-20261014",
+    "head_sha_at_creation": "f1ac45346721c24ba6a9cf13d29bb966d4dfba62"
   }
 }
