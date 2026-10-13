@@ -16,7 +16,7 @@ import threading
 
 from ... import unlined_line_export as unlined_export
 from ...crop.export_output import normalize_project_crop_widths
-from ...formats import pdic_path, read_pdic, read_ppp
+from ...formats import pdic_path, read_pdic, read_ppp, write_ppp
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...processing import (
     append_crop_log,
@@ -120,6 +120,14 @@ def _commit_current_entry_inputs(app: Any) -> bool:
         save = getattr(app, "save_pdic", None)
         if callable(save):
             save(silent=True)
+        # Selected-range workers also read PPP from disk, not from app.polygons.
+        page = getattr(app, "current_page", None)
+        ppp_path = getattr(app, "_ppp_write_path", None)
+        if page is not None and callable(ppp_path) and hasattr(app, "polygons"):
+            sync_labels = getattr(app, "_sync_polygon_label_texts", None)
+            if callable(sync_labels):
+                sync_labels()
+            write_ppp(ppp_path(page), app.polygons, page.stem)
         return True
     except Exception as exc:
         app.show_error("切图前保存当前词条失败", exc)
@@ -535,7 +543,8 @@ class CropController:
         if not app._guard_transformed_geometry("词条切图"):
             return
 
-        app.save_pdic(silent=True)
+        if not _commit_current_entry_inputs(app):
+            return
         project = app.project
         settings = replace(app.settings)
         config = app._load_crop_settings()
