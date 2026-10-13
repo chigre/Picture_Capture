@@ -116,4 +116,7 @@ def test_app_source_uses_direct_static_polygon_opacity_path():
     assert "create_alpha_canvas_polygon(" in source
     assert "opacity=self.settings.illustration_fill_opacity" in source
     assert "refresh_alpha_polygon_fill(self, region_index)" in source
-    assert "add_quick_illustration_fill_opacity_control(self, line_row)" in source
+    state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    display = (root / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
+    assert '"illustration_fill_opacity": int' in state
+    assert 'value(row, "透%:", "illustration_fill_opacity", 3)' in display
