@@ -1693,14 +1693,7 @@ class SettingsDialog(tk.Toplevel):
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
         try:
-            # Validate this independent 10–100% column-relative control before
-            # mutating any project settings. Tk Spinbox's limits do not stop a
-            # user from typing arbitrary values, NaN, or Infinity.
-            projection_width = self.vars.get("physical_row_projection_width_percent")
-            if projection_width is not None:
-                requested_percent = float(projection_width.get())
-                if not 10.0 <= requested_percent <= 100.0:
-                    raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
+            _settings_lifecycle_ui.validate_projection_width(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)
