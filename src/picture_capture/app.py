@@ -15156,8 +15156,21 @@ class PictureCaptureApp(tk.Tk):
                     raise RuntimeError(
                         f"{page.name} 融合画线自动补字意外修改了画线坐标"
                     )
-            write_pdic(pdic_path(page), entries, image.width, pages_info[index])
+            saved_pdic = pdic_path(page)
+            write_pdic(saved_pdic, entries, image.width, pages_info[index])
             result = {"index": int(index), "count": len(entries)}
+            if method in {"paddleocr", "combined"} and cache_path is not None:
+                # The OCR cache is pre-Layout. Read the *actual saved PDIC*
+                # and record final moves/removals/rescues separately. This
+                # audit never modifies PDIC and failure must not lose a page.
+                try:
+                    from .ocr_final_decisions import record_final_decisions
+                    result["final_audit"] = record_final_decisions(
+                        cache_path, saved_pdic, entries,
+                        tolerance=max(5, round(settings.character_height * 0.45)),
+                    )
+                except (OSError, ValueError, TypeError) as exc:
+                    result["final_audit_error"] = f"{type(exc).__name__}: {exc}"
             if text_stats:
                 result.update({
                     "text_filled": int(text_stats.get("filled", 0)),
@@ -15177,6 +15190,22 @@ class PictureCaptureApp(tk.Tk):
             if method in {"paddleocr", "combined"}:
                 self._refresh_page_quality_colors()
                 quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
+                final_stats = [
+                    row.get("final_audit")
+                    for row in results
+                    if isinstance(row, dict) and isinstance(row.get("final_audit"), dict)
+                ]
+                if final_stats:
+                    quality_text += (
+                        f"；最终PDIC对齐 {sum(int(v.get('linked', 0)) for v in final_stats)} 条"
+                        f"，Layout等独立候选 {sum(int(v.get('unmatched_final', 0)) for v in final_stats)} 条"
+                    )
+                audit_errors = sum(
+                    1 for row in results
+                    if isinstance(row, dict) and row.get("final_audit_error")
+                )
+                if audit_errors:
+                    quality_text += f"；{audit_errors} 页最终决策记录未能保存（PDIC已保存）"
                 if method == "combined":
                     filled = sum(
                         int((row or {}).get("text_filled", 0))
