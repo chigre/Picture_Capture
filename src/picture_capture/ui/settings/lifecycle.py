@@ -4,6 +4,25 @@ from typing import Any
 import tkinter as tk
 
 
+def validate_projection_width(values: dict[str, Any]) -> None:
+    """Reject invalid values before the Settings Center mutates the project.
+
+    Spinbox endpoints are advisory: typed strings, nonfinite floats and
+    out-of-range values must be rejected before any other field is assigned.
+    """
+    field = values.get("physical_row_projection_width_percent")
+    if field is None:
+        return
+    try:
+        requested = float(field.get())
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise ValueError(
+            "物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。"
+        ) from exc
+    if not 10.0 <= requested <= 100.0:
+        raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
+
+
 def schedule_autosave(dialog: Any) -> None:
     if not getattr(dialog, "_autosave_ready", False):
         return
