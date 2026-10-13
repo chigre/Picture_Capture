@@ -261,6 +261,40 @@ def _draw_rail_icon(canvas: tk.Canvas, kind: str) -> None:
 
 
 
+def retire_superseded_quick_panels(app: Any, sections: dict[str, ttk.Frame]) -> None:
+    """Remove replaced legacy widget trees, not the shared Tk setting variables.
+
+    _build_quick_settings still owns the initial quick_vars/trace wiring and
+    the postproduction actions. The compact panels now own visible controls.
+    Destroying the *other* old panels avoids keeping duplicate hidden Tk
+    widgets throughout a long image-editing session. Do not touch the saved
+    project fields, quick_vars, quick_bool_vars or callback registrations.
+    """
+    replaced = {
+        "preprocess": "图片预处理(前置)",
+        "normal": "一、版面参数",
+        "aux": "二、显示设置",
+        "ocr": "三、共享 OCR 通道 / OCR画线",
+        "actions": "四、画线 / OCR / 插图 / 校对",
+    }
+    old_sections = getattr(app, "_collapsible_sections", {})
+    for key, title in replaced.items():
+        old = old_sections.get(key)
+        replacement = sections.get(title)
+        if old is None or replacement is None or old is replacement:
+            continue
+        # Destroy only after replacement construction: all new controls are
+        # already wired to the exact same persistent Tk variables.
+        old.destroy()
+        old_sections.pop(key, None)
+    # The hidden controls used to supply these widget pointers, which must
+    # never reference destroyed widgets after this cleanup.
+    getattr(app, "quick_field_labels", {}).clear()
+    getattr(app, "quick_color_buttons", {}).clear()
+    if "图片预处理(前置)" in sections:
+        app.preprocess_panel = sections["图片预处理(前置)"]
+
+
 def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Frame) -> None:
     """Place a 120px icon rail beside the 260px normal-mode page index."""
     app.workspace_rail_width = DEFAULT_RAIL_WIDTH
@@ -397,6 +431,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     sections["三、共享 OCR 通道 / OCR画线"] = build_ocr_menu(app, content)
     sections["三之一、OCR画线设置"] = build_headword_profile_menu(app, content)
     sections["四、画线 / OCR / 插图 / 校对"] = build_drawing_menu(app, content)
+    retire_superseded_quick_panels(app, sections)
     app.workspace_tools_sections = sections
     app.workspace_tools_scrollbar_refresh = refresh_scrollbar
     app.workspace_tools_content = content
