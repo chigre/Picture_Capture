@@ -39,7 +39,7 @@ def _app_key(app: Any) -> tuple[Any, ...]:
     )
 
 
-def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[LayoutStepTrace, Image.Image | None]:
+def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
     """Collect stages by running the actual production Layout Core once.
 
     This is a separate *read-only diagnostic run*: no layouts, Entry metadata,
@@ -50,6 +50,7 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
 
     trace = LayoutStepTrace()
     analysis = build_analysis_image(source, settings)
+    previews: dict[str, Image.Image] = {}
     try:
         profile = dict(analysis.info.get("analysis_denoise_profile") or {})
         trace.add_note(
@@ -58,6 +59,9 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
             "去噪只改变分析副本，不改变原图坐标。",
             details={"denoise": profile, "source_size": list(source.size)},
         )
+        analysis_thumb = analysis.copy()
+        analysis_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
+        previews["image_preparation"] = analysis_thumb
         masked = None
         if bool(getattr(settings, "layout_mask_illustrations", False)):
             from .layout_illustration_mask import mask_large_illustrations_for_layout
@@ -73,19 +77,22 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
                 "illustration_mask", "插图区域掩膜",
                 "本阶段显示实际进入 Layout 的插图白化分析图（不改动原图）。",
             )
-        # Only one downsized analysis preview is retained, rather than an
-        # expensive RGB copy at each stage.
-        cleaned = actual.copy()
+        # Only the two meaningful analysis-image transitions keep bounded
+        # thumbnails; all geometric intermediate states remain coordinate data.
         try:
-            cleaned.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
+            if masked is not None and masked is not analysis:
+                mask_thumb = masked.copy()
+                mask_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
+                previews["illustration_mask"] = mask_thumb
             understand_layout_core(actual, settings, page_index=page_index, trace=trace)
-            return trace, cleaned
-        except BaseException:
-            cleaned.close()
-            raise
+            return trace, previews
         finally:
             if masked is not None and masked is not analysis:
                 masked.close()
+    except BaseException:
+        for preview in previews.values():
+            preview.close()
+        raise
     finally:
         analysis.close()
 
@@ -179,7 +186,7 @@ class LayoutStepReplayWindow:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="layout-replay")
         self._snapshot_key: tuple[Any, ...] | None = None
         self._source: Image.Image | None = None
-        self._cleaned: Image.Image | None = None
+        self._previews: dict[str, Image.Image] = {}
         self._photo: ImageTk.PhotoImage | None = None
         self._photo_key: tuple[Any, ...] | None = None
         self._trace: LayoutStepTrace | None = None
@@ -256,7 +263,9 @@ class LayoutStepReplayWindow:
             self._pending.cancel()
         self._executor.shutdown(wait=False, cancel_futures=True)
         self._photo = None
-        self._cleaned = None
+        for preview in self._previews.values():
+            preview.close()
+        self._previews.clear()
         self._source = None
         self.app._layout_step_replay_window = None
         flag = getattr(self.app, "_layout_step_replay_var", None)
@@ -294,7 +303,9 @@ class LayoutStepReplayWindow:
             self._pending.cancel()
         self._source = source
         self._trace = None
-        self._cleaned = None
+        for preview in self._previews.values():
+            preview.close()
+        self._previews.clear()
         self._photo = None
         self._photo_key = None
         self._stage_index = 0
@@ -311,12 +322,13 @@ class LayoutStepReplayWindow:
 
         def completed(result: Any) -> None:
             if self.closed or token != self.generation:
-                if isinstance(result, tuple) and isinstance(result[1], Image.Image):
-                    result[1].close()
+                if isinstance(result, tuple) and isinstance(result[1], dict):
+                    for preview in result[1].values():
+                        preview.close()
                 return
-            trace, cleaned = result
+            trace, previews = result
             self._trace = trace
-            self._cleaned = cleaned
+            self._previews = previews
             self._stage_index = len(trace.stages) - 1
             self.step_combo.configure(values=[
                 f"{i+1:02d}  {stage['title']}" for i, stage in enumerate(trace.stages)
@@ -339,8 +351,8 @@ class LayoutStepReplayWindow:
             try:
                 self.window.after(0, completed, result)
             except (RuntimeError, tk.TclError):
-                if isinstance(result[1], Image.Image):
-                    result[1].close()
+                for preview in result[1].values():
+                    preview.close()
 
         future.add_done_callback(report)
 
@@ -382,9 +394,8 @@ class LayoutStepReplayWindow:
             return
         source = self._source
         stage = self._trace.stages[self._stage_index] if self._trace else None
-        show_cleaned = bool(stage and stage["key"] in {"image_preparation", "illustration_mask"}
-                            and self._cleaned is not None and not self.before.get())
-        original = self._cleaned if show_cleaned else source
+        preview = (self._previews.get(stage["key"]) if stage and not self.before.get() else None)
+        original = preview if preview is not None else source
         target = (
             max(1, int(source.width * self._scale)),
             max(1, int(source.height * self._scale)),
