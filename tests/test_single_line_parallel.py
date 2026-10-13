@@ -79,7 +79,10 @@ def test_single_line_parallel_source_keeps_page_files_independent_and_log_coordi
     assert "append_crop_log(" not in page_job
     assert "append_crop_log(project_root, records)" in coordinator
     assert "max_workers=workers" in coordinator
-    assert "as_completed(futures)" in coordinator
+    assert "wait(" in coordinator
+    assert "inflight_limit" in coordinator
+    assert "cancel_requested" in coordinator
+    assert "as_completed(futures)" not in coordinator
 
 
 def test_main_single_line_controller_reports_effective_parallelism_through_shared_runner():
