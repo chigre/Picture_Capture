@@ -447,6 +447,64 @@ def _rescue_false_continuation_rows(
     return rescued
 
 
+def _rescue_local_peer_style_continuations(
+    entries: list[Entry],
+    diagnostics: list[dict[str, Any]],
+    *,
+    source_top: int,
+    source_column_x: int,
+    settings: AppSettings,
+    engine_name: str,
+    trusted_anchors: list[dict[str, Any]],
+) -> int:
+    """Additional Latin continuation rescue requiring independently strong peers.
+
+    Runs AFTER existing conservative glue/POS recovery. This does not relax
+    explicit Profile reject rules and never auto-promotes a CJK continuation.
+    """
+    if _core._is_chinese_ocr(settings) or _core._is_japanese_ocr(settings):
+        return 0
+    from .ocr_peer_style import peer_style_continuation_evidence
+
+    rescued = 0
+    # Only original core-accepted anchors count: earlier rescue decisions
+    # cannot recursively justify later rescue decisions in the same band.
+    trusted = list(trusted_anchors)
+    for row in diagnostics:
+        if row.get("accepted") or "meta" in row:
+            continue
+        if _user_rule_rejected(row) or _hard_negative_feature(row):
+            continue
+        word = str(row.get("normalized_headword", "") or "").strip()
+        if len(word.strip("-'’")) < 3:
+            continue
+        style = peer_style_continuation_evidence(row, trusted)
+        if not style["supported"]:
+            continue
+        if not _append_promoted_entry(
+            entries, row, word=word, source_column_x=source_column_x,
+            source_top=source_top, engine_name=engine_name, settings=settings,
+        ):
+            continue
+        original_continuation = str(row.get("continuation_reason", "") or "")
+        row["looks_like_continuation"] = False
+        row["continuation_reason"] = ""
+        features = row.get("features", {})
+        if isinstance(features, dict):
+            features["looks_like_continuation"] = False
+            features["peer_style_independent_gap_rescue"] = True
+            features["peer_style_evidence"] = dict(style)
+        row["continuation_original_reason"] = original_continuation
+        _mark_promoted_row(
+            row, word=word, stage=str(row.get("parser_stage", "") or "lemma"),
+            trace_marker="peer_style_independent_gap_rescue",
+            bug_marker="PEER_STYLE_CONTINUATION_RESCUE",
+            source_top=source_top,
+        )
+        rescued += 1
+    return rescued
+
+
 def filter_headword_records(
     records: list[OCRRecord],
     band: Image.Image,
@@ -490,6 +548,9 @@ def filter_headword_records(
         engine_name=engine_name,
         profile=profile,
     )
+    trusted_before_rescues = [
+        row for row in diagnostics if row.get("accepted") and "meta" not in row
+    ]
     continuation_count = _rescue_false_continuation_rows(
         entries,
         diagnostics,
@@ -499,6 +560,14 @@ def filter_headword_records(
         engine_name=engine_name,
         profile=profile,
     )
+    peer_style_count = 0
+    if bool(getattr(settings, "paddle_peer_style_rescue", False)):
+        peer_style_count = _rescue_local_peer_style_continuations(
+            entries, diagnostics, source_top=source_top,
+            source_column_x=source_column_x, settings=settings,
+            engine_name=engine_name,
+            trusted_anchors=trusted_before_rescues,
+        )
 
     entries.sort(key=lambda item: (int(item.y), int(item.x)))
     if diagnostics and isinstance(diagnostics[0], dict) and "meta" in diagnostics[0]:
@@ -506,6 +575,7 @@ def filter_headword_records(
         if isinstance(meta, dict):
             meta["supervised_cjk_parser_rescue_count"] = int(cjk_count)
             meta["supervised_continuation_rescue_count"] = int(continuation_count)
+            meta["peer_style_continuation_rescue_count"] = int(peer_style_count)
     return entries, diagnostics
 
 
