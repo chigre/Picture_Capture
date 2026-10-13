@@ -1453,7 +1453,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     drawing=(root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
     for method in ("run_normal_draw_action","ocr_ordinary_lines_text_selected_scope","run_combined_draw_action","run_ocr_draw_action","backup_pdic","restore_from_pdic_backup"):
         assert method in drawing
-    assert 'self._sidebar_action_button(row, text, command, role=role)' in app
+    assert 'button = _button(row, caption, getattr(app, method))' in drawing
     assert 'relief="flat"' in app
     assert 'highlightthickness=1' in app
     assert '"primary": "#4F7CAC"' in styles
@@ -2041,7 +2041,8 @@ def test_decimal_percentage_settings_preserve_runtime_precision(tmp_path):
 def test_decimal_percentage_ui_paths_do_not_integer_cast_values():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'add_field(ocr, 1, 2, "识别带宽%：", "paddle_band_width_ratio", float, 7)' in text
+    state = (source.parent / "ui/quick_state.py").read_text(encoding="utf-8")
+    assert '"paddle_band_width_ratio": float' in state
     assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in text
     assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in text
     assert "def _stored_review_zoom_percent(self) -> float:" in text
@@ -3257,12 +3258,14 @@ def test_main_ocr_drawing_defaults_to_cache_reuse_and_paddle_only():
     guide_text = (
         root / "src" / "picture_capture" / "ui" / "dialogs" / "usage_guide.py"
     ).read_text(encoding="utf-8")
-    assert 'self.ocr_refresh_var = tk.StringVar(value="reuse")' in app_text
-    assert "使用有效缓存（推荐）" in app_text
-    assert "重新OCR（模型/图像改变时）" in app_text
+    quick_state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
+    compact_ocr = (root / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert 'value="reuse"' in quick_state
+    assert '"使用有效缓存": "reuse"' in compact_ocr
+    assert '"重新OCR": "force"' in compact_ocr
     assert "共享 OCR 通道默认只启用 PaddleOCR；Tesseract 与 Google Lens 可同时启用" in guide_text
     assert "【仅OCR】与【OCR画线】共用这些选择" in guide_text
-    assert 'LENS_MODE_LABELS["off"]' in app_text
+    assert 'LENS_MODE_LABELS["off"]' in quick_state
 
     settings = AppSettings()
     assert settings.paddle_use_paddleocr is True
