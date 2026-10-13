@@ -85,6 +85,7 @@ def mask_large_illustrations_for_layout(
     *,
     profile_page_index: int = 0,
     detector: Callable[..., list[Any]] | None = None,
+    candidate_debug: list[dict[str, Any]] | None = None,
 ) -> tuple[Image.Image, IllustrationMaskStats]:
     """Return a disposable white-filled Layout image plus diagnostics."""
     if not bool(getattr(settings, SETTING_NAME, DEFAULT_ENABLED)):
@@ -131,6 +132,16 @@ def mask_large_illustrations_for_layout(
             character_height=character_height,
             column_width=column_width,
         )
+        if candidate_debug is not None:
+            points = [[int(p[0]), int(p[1])] for p in
+                      list(getattr(region, "points", []) or []) if len(p) >= 2]
+            candidate_debug.append({
+                "status": "masked" if allowed else f"rejected_{reason}",
+                "source_polygon": points,
+                "reason": "面积/形状满足安全白化条件" if allowed
+                          else ("疑似大字头，保留墨迹" if reason == "headlike"
+                                else "尺寸不足或形状不可靠，保留墨迹"),
+            })
         if allowed:
             accepted.append(region)
         elif reason == "headlike":
