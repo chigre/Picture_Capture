@@ -15160,6 +15160,12 @@ class PictureCaptureApp(tk.Tk):
                         f"{page.name} 融合画线自动补字意外修改了画线坐标"
                     )
             saved_pdic = pdic_path(page)
+            if method in {"paddleocr", "combined"}:
+                # Mandatory lossless snapshot BEFORE replacing an existing
+                # PDIC. If preservation fails, abort this page rather than
+                # silently overwrite the user's only manual corrections.
+                from .ocr_pdic_preservation import preserve_prior_pdic
+                preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
             result = {"index": int(index), "count": len(entries)}
             if method in {"paddleocr", "combined"} and cache_path is not None:
