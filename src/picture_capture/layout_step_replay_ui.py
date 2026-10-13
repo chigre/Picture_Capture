@@ -231,7 +231,7 @@ def _format_stage(
             lines.extend([
                 "",
                 f"第 {column['column']} 栏｜设置采样 {column['requested_width_percent']:.1f}% 栏宽，"
-                f"实际 {column['sample_strip_width']}px"
+                f"实际采样宽 {column['sample_strip_width']}px"
                 f" / {column['configured_column_width']}px"
                 f"（{column['effective_width_percent']:.1f}%），"
                 f"参考行高 {column['row_height_reference']:.1f}px",
