@@ -11,6 +11,7 @@ import time
 from .models import project_cover_path, project_page_images
 from .project_storage import settings_path
 from .runtime_environment import legacy_user_config_files, user_config_root
+from .recent_project_locking import recent_registry_lock
 
 
 def default_recent_projects_path() -> Path:
@@ -68,7 +69,7 @@ def save_recent_projects(rows: list[dict[str, object]], path: Path | None = None
             temp.unlink(missing_ok=True)
 
 
-def touch_recent_project(
+def _touch_recent_project_unlocked(
     root: Path,
     path: Path | None = None,
     *,
@@ -100,7 +101,7 @@ def touch_recent_project(
     return rows
 
 
-def set_recent_project_pinned(
+def _set_recent_project_pinned_unlocked(
     root: Path, pinned: bool, path: Path | None = None,
 ) -> list[dict[str, object]]:
     """Keep pinned projects above other recent entries without deleting data."""
@@ -116,7 +117,7 @@ def set_recent_project_pinned(
     return rows
 
 
-def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str, object]]:
+def _remove_recent_project_unlocked(root: Path, path: Path | None = None) -> list[dict[str, object]]:
     """Remove only the registry row. No project path is ever unlinked."""
     resolved = root.expanduser().resolve()
     rows = [row for row in load_recent_projects(path) if Path(str(row["path"])).expanduser() != resolved]
@@ -124,6 +125,30 @@ def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str
         row.pop("card_cache", None)
     save_recent_projects(rows, path)
     return rows
+
+
+
+def touch_recent_project(
+    root: Path, path: Path | None = None, *,
+    last_page: str | None = None, last_page_index: int | None = None,
+) -> list[dict[str, object]]:
+    """Serialize complete cross-process read/modify/write transactions."""
+    with recent_registry_lock(path or default_recent_projects_path()):
+        return _touch_recent_project_unlocked(
+            root, path, last_page=last_page, last_page_index=last_page_index,
+        )
+
+
+def set_recent_project_pinned(
+    root: Path, pinned: bool, path: Path | None = None,
+) -> list[dict[str, object]]:
+    with recent_registry_lock(path or default_recent_projects_path()):
+        return _set_recent_project_pinned_unlocked(root, pinned, path)
+
+
+def remove_recent_project(root: Path, path: Path | None = None) -> list[dict[str, object]]:
+    with recent_registry_lock(path or default_recent_projects_path()):
+        return _remove_recent_project_unlocked(root, path)
 
 
 def _display_recent_timestamp(value: object) -> str:
