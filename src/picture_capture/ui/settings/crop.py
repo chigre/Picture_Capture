@@ -36,6 +36,57 @@ from ...unlined_export_filter_settings import (
 from ..dialogs.crop_settings import CropSettingsDialog
 
 
+# The integrated crop tab uses custom controls instead of SETTING_HELP fields.
+# Every editable control needs a dedicated right-side explanation. The merge
+# and unlined-filter controls retain their existing dedicated HELP texts.
+CROP_CONTROL_HELP = {
+    "general_top_y": ("一般页切图上边界 Y", "作用：Section=0 的普通页面开始切图的原图 Y 像素位置。Section>0 的页面使用本页 Section 上界而不是此值。调整：上移可能包含页眉，下移可能截掉最上方的词条。"),
+    "general_bottom_y": ("一般页切图下边界 Y", "作用：Section=0 页面切图结束的原图 Y 像素位置。0 表示整页底部；非零值必须大于上边界。调整：上移可能截断最后的正文，下移可能包含页脚。"),
+    "entry_left_padding_x": ("词条 X 左侧额外留白", "作用：在现有词条矩形左边额外保留的原图像素，不随 GUI 缩放变化。调大可保留突出栏左的符号，过大会纳入页边噪声或邻栏。"),
+    "entry_right_padding_x": ("词条 X 右侧额外留白", "作用：在词条矩形右侧额外保留的原图像素。调大有利于保留词头末尾和标记，但也会增加邻栏或插图进入输出范围的风险。"),
+    "integrate_illustrations": ("综合插图计算词条切图信息", "作用：允许已标注的 PPP 插图参与词条范围扩展、联合和输出顺序。关闭后词条按自身矩形处理，PPP 不再参与词条框调整；独立插图切图功能不受影响。"),
+    "polygon_margin": ("PPP 多边形外扩", "作用：插图 ROI 外沿额外增加的原图像素距离，避免图案贴边被切掉。增加会保留更多外部空白或邻近文字；并非缩放整张插图。"),
+    "parallel_workers": ("切图并行进程", "作用：决定词条/插图 PNG 导出时同时处理的页面数。0 为自动，1 为串行，最多 8；高分辨率页面开更多进程会增加内存压力和磁盘写入峰值，资源不足时优先用 1–2。它不是插图自动识别的并行设置。"),
+    "entry_width_mode": ("词条统一宽度模式", "作用：全项目最宽＝按实际生成的词条 PNG 最大宽度补齐；固定像素＝按下方目标宽度补齐；不补齐＝各输出保持自己的宽度。补齐仅向右增加画布，不压缩或裁剪原内容。"),
+    "entry_fixed_width": ("词条固定宽度", "作用：仅在词条宽度模式选择【固定像素】时生效。目标值采用导出 PNG 像素；实际词条比目标值宽时保留原内容，不把图像强行缩小。"),
+    "illustration_pad_to_entry_width": ("插图宽度补齐至词条宽度", "作用：启用后，较窄插图 PNG 以词条输出目标宽度补齐空白；比目标更宽的插图不缩小。关闭时插图保持实际 ROI 宽度。"),
+    "entry_transparent_background": ("词条白色背景转透明", "作用：导出词条 PNG 时把纯白背景像素转换为透明，不会修改扫描原图或 PDIC。适合透明底词典；关闭则保留白底。浅灰、噪声和非白色像素不保证透明。"),
+    "illustration_transparent_background": ("插图背景转透明", "作用：插图多边形 ROI 外部在导出 PNG 时使用透明背景，并处理纯白像素；关闭时多边形外为白色。不会改变 PPP 顶点或原始扫描图。"),
+}
+
+
+def bind_crop_control_help(dialog, container: ttk.Frame) -> None:
+    """Attach field-specific help to all custom crop widgets via their Tk vars.
+
+    Variables are allocated before controls. Avoid manually wrapping every
+    Entry/Radio/Checkbutton, and do not overwrite the four dedicated unlined
+    filter/merge help bindings.
+    """
+    keys_by_tkvar = {
+        str(dialog.crop_vars[name]): name
+        for name in CROP_CONTROL_HELP if name in dialog.crop_vars
+    }
+    def visit(widget) -> None:
+        if widget is not container:
+            for option in ("textvariable", "variable"):
+                try:
+                    tkvar = str(widget.cget(option) or "")
+                except (tk.TclError, KeyError):
+                    continue
+                name = keys_by_tkvar.get(tkvar)
+                if name is not None:
+                    title, body = CROP_CONTROL_HELP[name]
+                    dialog._bind_help_widget(
+                        widget,
+                        lambda title=title, body=body:
+                            dialog._show_settings_help(title, body),
+                    )
+                    break
+        for child in widget.winfo_children():
+            visit(child)
+    visit(container)
+
+
 def crop_nonnegative_int(value: object, label: str) -> int:
     try:
         number = int(str(value).strip() or "0")
@@ -398,6 +449,8 @@ def build_crop_settings_tab(dialog, tab: ttk.Frame) -> None:
         text="本页签与设置中心其他设置一样自动保存；不再弹出独立【切图设置】窗口。",
         foreground="#666666",
     ).pack(anchor="w", pady=(0, 4))
+
+    bind_crop_control_help(dialog, page)
 
 
 def crop_settings_payload(dialog) -> dict:
