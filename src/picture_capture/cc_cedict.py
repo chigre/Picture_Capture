@@ -149,7 +149,7 @@ def _load_index() -> tuple[set[str] | None, int, str]:
         _INDEX_CACHE = words
         _INDEX_TRAD_TO_SIMP = {key: tuple(sorted(values)) for key, values in trad_to_simp_sets.items()}
         _INDEX_SIMP_TO_TRAD = {key: tuple(sorted(values)) for key, values in simp_to_trad_sets.items()}
-        _INDEX_MTIME_NS = mtime
+        _INDEX_SIGNATURE = signature
         _INDEX_COUNT = count
         _INDEX_ERROR = ""
         return words, count, ""
