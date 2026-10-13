@@ -48,6 +48,18 @@ class IllustrationController:
         if not indices:
             return
 
+        # A PPP decision may depend on the current entry text and geometry.
+        # Commit visible PDIC edits before child workers load sidecars.
+        try:
+            flush = getattr(app, "_flush_deferred_page_save", None)
+            if callable(flush):
+                flush()
+            save = getattr(app, "save_pdic", None)
+            if callable(save):
+                save(silent=True)
+        except Exception as exc:
+            app.show_error("插图切图前保存当前词条失败", exc)
+            return
         app._sync_polygon_label_texts()
         write_ppp(
             app._ppp_write_path(app.current_page),
