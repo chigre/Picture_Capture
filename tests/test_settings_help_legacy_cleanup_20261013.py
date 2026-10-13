@@ -123,6 +123,13 @@ def test_state_initialization_requires_no_visual_widgets_and_binds_traces_once()
     assert set(QUICK_BOOLEAN_FIELDS) <= set(app.quick_bool_vars)
     assert set(QUICK_COLOR_FIELDS) == set(app.quick_color_vars)
     assert "manual_x" in app.quick_pixel_vars
+    # Session-only controls used in the compact Display menu must exist
+    # before widgets are constructed (regression for the GUI smoke failure).
+    assert app._layout_visualization_var.get() is False
+    assert app._layout_step_replay_var.get() is False
+    assert app._large_head_visualization_var.get() is False
+    assert "_large_head_visualization_var" not in app.quick_bool_vars
+    assert app._large_head_debug_snapshot is None
     assert app.quick_field_labels == {}
     assert app.quick_color_buttons == {}
     assert app._quick_trace_ready
