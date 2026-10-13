@@ -68,10 +68,11 @@ class LayoutStepTrace:
     _last_rows: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     def add_note(self, key: str, title: str, description: str,
-                 *, details: dict[str, Any] | None = None) -> None:
+                 *, details: dict[str, Any] | None = None,
+                 candidates: list[dict[str, Any]] | None = None) -> None:
         self.stages.append({
             "key": key, "title": title, "description": description,
-            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [], "candidates": [],
+            "details": dict(details or {}), "columns": [], "lanes": [], "rows": [], "changes": [], "candidates": [dict(x) for x in (candidates or ())],
         })
 
     def add_policy(self, estimate: Any, used: Any,
