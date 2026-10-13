@@ -120,6 +120,37 @@ def _stage_entries_for_display(
     return []
 
 
+_PROJECTION_STAGES = {"projection_gap_bridge", "projection_tall_split"}
+
+
+def _projection_candidates_for_display(
+    stage: dict[str, Any], before: bool,
+) -> list[dict[str, Any]]:
+    """Before/after always compares the *same* captured projector pass."""
+    kind = stage.get("key")
+    candidates = stage.get("candidates", [])
+    if kind == "projection_gap_bridge":
+        statuses = {"raw_band"} if before else {"connected_band", "bridged_gap"}
+    elif kind == "projection_tall_split":
+        statuses = {"connected_band"} if before else {
+            "retained_row", "split_valley", "fallback_slot", "ignored_short",
+        }
+    else:
+        return candidates
+    return [item for item in candidates if item.get("status") in statuses]
+
+
+_PROJECTION_STYLE = {
+    "raw_band": ("#999999", (5, 3), 1),
+    "connected_band": ("#3785cb", (5, 3), 1),
+    "bridged_gap": ("#ef8823", (), 3),
+    "retained_row": ("#10a55b", (), 2),
+    "split_valley": ("#ae44bd", (), 3),
+    "fallback_slot": ("#d8a322", (3, 3), 2),
+    "ignored_short": ("#a0a0a0", (2, 4), 1),
+}
+
+
 def _stage_rows_for_display(
     stages: list[dict[str, Any]], index: int, previous: bool,
 ) -> dict[str, Any]:
@@ -141,6 +172,46 @@ def _row_at_position(rows: list[dict[str, Any]], x: int, y: int) -> dict[str, An
     return min(matches, key=lambda item: item[0])[1] if matches else None
 
 
+def _candidate_at_source(
+    candidates: list[dict[str, Any]], x: int, y: int, *,
+    tolerance: int = 6,
+) -> dict[str, Any] | None:
+    """Hit-test smallest true candidate first, even inside its parent band.
+
+    A 1px valley/gap is contained by a large connected ink band. Selecting
+    the first containing box would make the actual bridge/split unclickable.
+    """
+    matches: list[tuple[float, dict[str, Any]]] = []
+    for item in candidates:
+        box = item.get("source_box")
+        if box and len(box) == 4:
+            x0, y0, x1, y1 = (float(v) for v in box)
+            left, right = sorted((x0, x1))
+            top, bottom = sorted((y0, y1))
+            # Narrow gap/split lines need hit tolerance at preview zoom, but
+            # regular row bands should not swallow clicks on adjacent rows.
+            narrow = bottom - top <= 3
+            margin = tolerance if narrow else 0
+            if left - margin <= x <= right + margin and top - margin <= y <= bottom + margin:
+                area = max(1.0, right-left) * max(1.0, bottom-top)
+                distance = max(0, top-y, y-bottom)
+                matches.append((area + distance, item))
+            continue
+        polygon = item.get("source_polygon")
+        if polygon and len(polygon) >= 3:
+            pxs = [float(p[0]) for p in polygon]
+            pys = [float(p[1]) for p in polygon]
+            if min(pxs) <= x <= max(pxs) and min(pys) <= y <= max(pys):
+                matches.append(((max(pxs)-min(pxs))*(max(pys)-min(pys)), item))
+            continue
+        anchor = item.get("source_anchor")
+        if anchor and len(anchor) == 2:
+            dx, dy = float(anchor[0])-x, float(anchor[1])-y
+            if abs(dx) <= tolerance and abs(dy) <= tolerance:
+                matches.append((dx*dx + dy*dy, item))
+    return min(matches, key=lambda record: record[0])[1] if matches else None
+
+
 def _format_stage(
     stage: dict[str, Any], *,
     selected: dict[str, Any] | None = None,
@@ -151,6 +222,26 @@ def _format_stage(
 ) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
+    if stage.get("key") in _PROJECTION_STAGES:
+        lines.append("显示的是最终正文范围内、真正用于构造物理行的一次投影。")
+        lines.append("注意：投影连接的是行方向的短空白，不修改像素或连通域。")
+        lines.append("切换「查看修正前」可比较本阶段真实的输入和输出。")
+        columns = details.get("columns", [])
+        for column in columns:
+            lines.extend([
+                "",
+                f"第 {column['column']} 栏｜采样宽 {column['sample_strip_width']}px，"
+                f"参考行高 {column['row_height_reference']:.1f}px",
+                f"阈值 {column['projection_threshold']:.1f} 墨迹像素/行；"
+                f"最多连接 {column['gap_limit_px']} 个空白像素行",
+                f"原始带 {column['raw_bands']} → 已连带 {column['connected_bands']}；"
+                f"连接 {column['bridged_gaps']} 处",
+                f"墨迹谷拆分 {column['valley_splits']} 处，"
+                f"逻辑槽 {column['logical_slots']} 个，"
+                f"过短剔除 {column['short_rejected']} 个，"
+                f"输出行段 {column['output_rows']} 个",
+            ])
+        return "\n".join(lines)
     for k, value in details.items():
         if isinstance(value, dict):
             lines.append(k + ":")
@@ -279,7 +370,12 @@ class LayoutStepReplayWindow:
         self.previous_button = ttk.Button(toolbar, text="◀ 上一步", command=lambda: self.step(-1))
         self.previous_button.pack(side="left")
         self.step_var = tk.StringVar()
-        self.step_combo = ttk.Combobox(toolbar, textvariable=self.step_var, state="readonly", width=30)
+        # Tk's default popdown is only ~10 rows; when the final stage is
+        # selected the pre-physical projector stages are scrolled out of view.
+        self.step_combo = ttk.Combobox(
+            toolbar, textvariable=self.step_var, state="readonly",
+            width=37, height=28,
+        )
         self.step_combo.pack(side="left", padx=5)
         self.step_combo.bind("<<ComboboxSelected>>", self.select_step)
         self.next_button = ttk.Button(toolbar, text="下一步 ▶", command=lambda: self.step(1))
@@ -290,6 +386,8 @@ class LayoutStepReplayWindow:
         ttk.Button(toolbar, text="－", width=3, command=lambda: self.zoom(0.8)).pack(side="left")
         ttk.Button(toolbar, text="＋", width=3, command=lambda: self.zoom(1.25)).pack(side="left")
         ttk.Button(toolbar, text="适应宽度", command=self.fit).pack(side="left", padx=3)
+        ttk.Button(toolbar, text="运行版本／阶段清单",
+                   command=self.show_runtime_diagnostics).pack(side="right", padx=3)
         ttk.Button(toolbar, text="刷新", command=lambda: self.refresh(force=True)).pack(side="right")
 
         self.status = tk.StringVar(value="正在准备当前页……")
@@ -356,6 +454,56 @@ class LayoutStepReplayWindow:
         except tk.TclError:
             self.close()
 
+    def show_runtime_diagnostics(self) -> None:
+        """Show the *executing* module paths and every collected stage.
+
+        Downloading a branch ZIP does not switch an older desktop shortcut or
+        a different installed source tree. Report resolved imports instead of
+        assuming the downloaded files are the ones currently running.
+        """
+        from . import layout_composition, dictionary_page_layout_policy
+        from . import layout_physical_indent
+        modules = [
+            ("回放窗口", __file__),
+            ("阶段采集器", __import__(
+                "picture_capture.layout_step_trace",
+                fromlist=["__file__"],
+            ).__file__),
+            ("Layout 组装", layout_composition.__file__),
+            ("真实投影", layout_physical_indent.__file__),
+            ("逐栏 Page Design", dictionary_page_layout_policy.__file__),
+        ]
+        lines = [
+            "LAYOUT 回放运行版本／全部阶段",
+            "",
+            "功能标识：#469 真实投影连接与过高墨迹带拆分",
+            "以下均为当前进程实际加载的模块路径，不是下载目录推测。",
+            "",
+        ]
+        for label, file_path in modules:
+            lines.append(f"{label}：{Path(file_path).resolve()}")
+        lines.append("")
+        if self._trace is None:
+            lines.append("状态：尚未生成当前页阶段记录，可能仍在计算或已失败。")
+        else:
+            keys = [stage["key"] for stage in self._trace.stages]
+            lines.append(f"当前完整阶段总数：{len(keys)}")
+            lines.append("所需阶段：" + "、".join(
+                f"{key}={'已记录' if key in keys else '缺失'}"
+                for key in ("projection_gap_bridge", "projection_tall_split", "physical_rows")
+            ))
+            for i, stage in enumerate(self._trace.stages, 1):
+                lines.append(f"  {i:02d}  {stage['title']} [{stage['key']}]")
+            if "physical_rows" in keys and not (
+                "projection_gap_bridge" in keys and "projection_tall_split" in keys
+            ):
+                lines.extend([
+                    "",
+                    "异常：存在物理行阶段但缺少投影阶段。"
+                    "请核对上面的实际加载路径并刷新回放。",
+                ])
+        self._show_text("\n".join(lines))
+
     def refresh(self, *, force: bool = False) -> None:
         if self.closed:
             return
@@ -402,7 +550,10 @@ class LayoutStepReplayWindow:
             trace, previews = result
             self._trace = trace
             self._previews = previews
-            self._stage_index = len(trace.stages) - 1
+            # Replay starts at the beginning, not at the final ordinary-drawing
+            # result. The old default positioned Tk's small combobox list at
+            # the bottom and concealed the new stages 03/04.
+            self._stage_index = 0
             self.step_combo.configure(values=[
                 f"{i+1:02d}  {stage['title']}" for i, stage in enumerate(trace.stages)
             ])
@@ -546,9 +697,11 @@ class LayoutStepReplayWindow:
         # Mask polygons belong to the AFTER state. They must disappear in
         # Before mode even when the current note has no physical rows.
         candidates = (
-            stage.get("candidates", []) if not self.before.get()
-            else (self._trace.stages[self._stage_index-1].get("candidates", [])
-                  if self._stage_index > 0 else [])
+            _projection_candidates_for_display(stage, self.before.get())
+            if stage["key"] in _PROJECTION_STAGES else
+            (stage.get("candidates", []) if not self.before.get()
+             else (self._trace.stages[self._stage_index-1].get("candidates", [])
+                   if self._stage_index > 0 else []))
         )
         for candidate in candidates:
             status = str(candidate.get("status", "unknown"))
@@ -564,12 +717,16 @@ class LayoutStepReplayWindow:
             box = candidate.get("source_box")
             if box and len(box) == 4:
                 x0, y0, x1, y1 = box
-                color = ("#16853c" if status == "accepted" else
-                         "#c43d33" if "row_front" in status or "tall" in status
-                         else "#d99523")
+                color, dash, width = _PROJECTION_STYLE.get(
+                    status,
+                    ("#16853c", (), 2) if status == "accepted" else
+                    ("#c43d33", (4, 3), 2)
+                    if "row_front" in status or "tall" in status else
+                    ("#d99523", (4, 3), 2),
+                )
                 self.canvas.create_rectangle(
                     x0*factor, y0*factor, x1*factor, y1*factor,
-                    outline=color, width=2, dash=() if status == "accepted" else (4, 3),
+                    outline=color, width=width, dash=dash,
                     tags=_STEP_TAG,
                 )
             else:
@@ -616,9 +773,16 @@ class LayoutStepReplayWindow:
                     width=2, tags=_STEP_TAG,
                 )
         self._visual_markers = markers
+        legend = (
+            "灰=原始带 / 蓝=已连接带 / 橙=补足短空白"
+            if stage["key"] == "projection_gap_bridge" else
+            "蓝=拆分前 / 绿=输出段 / 紫=拆分点 / 黄=逻辑槽"
+            if stage["key"] == "projection_tall_split" else
+            "红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化"
+        )
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
-            f"｜红=词条 / 蓝=正文 / 紫虚线=缩进群 / 绿粗框=变化｜点击行查看历程"
+            f"｜{legend}｜点击标记查看详情"
         )
         self._show_text(_format_stage(stage))
 
@@ -641,23 +805,10 @@ class LayoutStepReplayWindow:
                 ),
             ))
             return
-        candidate = next((
-            item for item in getattr(self, "_visual_candidates", [])
-            if (
-                item.get("source_polygon")
-                and len(item["source_polygon"]) >= 3
-                and min(p[0] for p in item["source_polygon"]) <= x <= max(p[0] for p in item["source_polygon"])
-                and min(p[1] for p in item["source_polygon"]) <= y <= max(p[1] for p in item["source_polygon"])
-            ) or (
-                item.get("source_box") and len(item["source_box"]) == 4
-                and min(item["source_box"][0], item["source_box"][2]) <= x <= max(item["source_box"][0], item["source_box"][2])
-                and min(item["source_box"][1], item["source_box"][3]) <= y <= max(item["source_box"][1], item["source_box"][3])
-            ) or (
-                item.get("source_anchor") and
-                abs(item["source_anchor"][0] - x) <= 10 and
-                abs(item["source_anchor"][1] - y) <= 10
-            )
-        ), None)
+        candidate = _candidate_at_source(
+            getattr(self, "_visual_candidates", []), x, y,
+            tolerance=max(6, int(round(4 / factor))),
+        )
         if candidate is not None:
             self._show_text(_format_stage(
                 self._trace.stages[self._stage_index], selected_candidate=candidate,

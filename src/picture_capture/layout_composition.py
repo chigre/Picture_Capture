@@ -36,6 +36,9 @@ def infer_composed_physical_page_layout(
     normalization at the legacy policy-finalizer boundary.
     """
     selected_ops = explicit_physical_layout_ops() if ops is None else ops
+    projection_batches: list[list[dict[str, Any]]] | None = (
+        [] if trace is not None else None
+    )
 
     def anchored_policy(
         page_image: Image.Image,
@@ -64,8 +67,15 @@ def infer_composed_physical_page_layout(
         page_index=page_index,
         ops=selected_ops,
         policy_resolver=anchored_policy,
+        **({"projection_trace": projection_batches} if trace is not None else {}),
     )
     if trace is not None:
+        # The final bounded projection pass, not the seed/reference scans,
+        # supplies the exact segments consumed to create the following rows.
+        trace.add_projection_stages(
+            projection_batches[-1] if projection_batches else [], layout,
+            pass_count=len(projection_batches or []),
+        )
         # Page Design's historical two-polarity builder emits temporary entry
         # labels even for a Profile explicitly configured as "no indent". The
         # real semantic reset happens in Layout Core after this composition

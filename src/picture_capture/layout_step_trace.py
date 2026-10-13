@@ -95,6 +95,120 @@ class LayoutStepTrace:
                           "applied": dict(applied),
                       })
 
+    def add_projection_stages(
+        self, column_runs: list[dict[str, Any]], layout: Any, *,
+        pass_count: int,
+    ) -> None:
+        """Replay the FINAL real policy projection pass in source coordinates.
+
+        Early seed/reference passes are used to choose line scale and body
+        extent; only the last body-bounded pass actually feeds LayoutLine.
+        No pixels, image copies, or fabricated recomputations are retained.
+        """
+        if not column_runs:
+            self.add_note(
+                "projection_unavailable", "物理行投影阶段未记录",
+                "当前 Layout 使用的不是可追踪的物理投影原语；"
+                "不能根据最终物理行伪造连接或拆分历史。",
+            )
+            return
+
+        gap_candidates: list[dict[str, Any]] = []
+        split_candidates: list[dict[str, Any]] = []
+        per_column: list[dict[str, Any]] = []
+
+        for item in column_runs:
+            evidence = item["evidence"]
+            left = int(item["left"])
+            right = left + int(item["strip_width"])
+            top = int(item["top"])
+            column = int(item["column"])
+
+            def rectangle(y0: int, y1: int) -> list[int]:
+                # The projector samples only the leading text strip of each
+                # column, not the whole column/word bounding box.
+                start = _source_point(layout, left, top + int(y0))
+                stop = _source_point(layout, right, top + int(y1))
+                return [*start, *stop]
+
+            def record(
+                target: list[dict[str, Any]], kind: str, values: Any,
+                message: str, *,
+                extra: dict[str, Any] | None = None,
+            ) -> None:
+                for y0, y1 in values:
+                    target.append({
+                        "status": kind,
+                        "column": column + 1,
+                        "source_box": rectangle(y0, y1),
+                        "canonical_y": [int(top+y0), int(top+y1)],
+                        "reason": message,
+                        **(extra or {}),
+                    })
+
+            record(gap_candidates, "raw_band", evidence["original_runs"],
+                   "达到投影墨迹阈值、尚未连接的原始连续墨迹带")
+            record(gap_candidates, "connected_band", evidence["connected_runs"],
+                   "原始墨迹带经过允许的短空白行连接之后的结果")
+            record(gap_candidates, "bridged_gap", evidence["bridged_gaps"],
+                   "原始墨迹间的短空白段，被投影算法连接（没有修改图像像素）")
+            record(split_candidates, "connected_band", evidence["connected_runs"],
+                   "拆分前的连续墨迹带")
+            record(split_candidates, "retained_row", evidence["final_runs"],
+                   "本次投影实际输出的逻辑行段；仍需经过后续物理行特征筛选")
+            record(split_candidates, "ignored_short", evidence["ignored_short"],
+                   "高度小于行高下限，投影未保留")
+            for event in evidence["valley_splits"]:
+                at = int(event["at_y"])
+                record(split_candidates, "split_valley", [(at, at+1)],
+                       "过高墨迹带在真实墨迹密度低谷处拆分",
+                       extra={
+                           "parent_y": list(event["parent"]),
+                           "valley_ink": event["valley_ink"],
+                           "limit": event["limit"],
+                       })
+            for event in evidence["logical_slots"]:
+                record(split_candidates, "fallback_slot", event["slots"],
+                       "未能用明显墨迹谷分开，按高度约束生成的逻辑槽位",
+                       extra={"parent_y": list(event["parent"])})
+
+            per_column.append({
+                "column": column + 1,
+                "sample_strip_width": int(item["strip_width"]),
+                "projection_threshold": evidence["threshold"],
+                "row_height_reference": evidence["reference_height"],
+                "gap_limit_px": evidence["max_gap_px"],
+                "raw_bands": len(evidence["original_runs"]),
+                "connected_bands": len(evidence["connected_runs"]),
+                "bridged_gaps": len(evidence["bridged_gaps"]),
+                "valley_splits": len(evidence["valley_splits"]),
+                "logical_slots": sum(len(e["slots"]) for e in evidence["logical_slots"]),
+                "short_rejected": len(evidence["ignored_short"]),
+                "output_rows": len(evidence["final_runs"]),
+            })
+
+        shared = {
+            "projection_pass_count": int(pass_count),
+            "shown_pass": "最后一轮：已确定正文范围及行高先验",
+            "columns": per_column,
+            "sample_domain": "每栏行首采样条带，不是全栏笔画连通或图像膨胀",
+        }
+        self.add_note(
+            "projection_gap_bridge", "墨迹投影与短间隙连接",
+            "从真实的行首条带墨迹投影得到原始带；只连接阈值以内的"
+            "连续空白扫描行，不改变图像像素。橙色表示实际连接的间隙。",
+            details=shared,
+            candidates=gap_candidates,
+        )
+        self.add_note(
+            "projection_tall_split", "过高墨迹带拆分与逻辑行恢复",
+            "从刚才连接的墨迹带中，按真实墨迹谷拆分过高带；"
+            "仍未分开的过高带可能按行高生成逻辑槽位。"
+            "绿色为输出行，紫色为墨迹谷拆分，黄色为逻辑槽位。",
+            details=shared,
+            candidates=split_candidates,
+        )
+
     def add_layout(self, key: str, title: str, description: str,
                    layout: Any, *, details: dict[str, Any] | None = None,
                    candidates: list[dict[str, Any]] | None = None,

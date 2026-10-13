@@ -49,6 +49,11 @@ def test_replay_runs_exact_ordinary_stage_sequence():
             assert keys.index("illustration_mask") < keys.index("raw_estimate")
             assert keys.index("final") < keys.index("layout_role_materialization")
             assert keys[-1] == "final_reading_order"
+            assert keys[-2] == "final_y_coordinates_locked"
+            final_boundary = timeline.stages[-2]
+            assert final_boundary["details"]["move_y"] is False
+            assert final_boundary["entries"] == timeline.stages[-1]["entries"]
+            assert "不额外平移" in final_boundary["title"]
             emitted = [item["key"] for item in timeline.stages
                        if "entries" in item]
             assert emitted == [step["stage"] for step in pipeline["stages"]]
@@ -61,6 +66,38 @@ def test_replay_runs_exact_ordinary_stage_sequence():
             for item in previews.values():
                 item.close()
     finally:
+        image.close()
+
+
+def test_cjk_replay_keeps_early_layout_only_shift_before_bracket_and_final_y_lock():
+    image = _page()
+    settings = _settings(dictionary_profile_id="cjk_visual", ocr_language="ch")
+    trace, previews = _run_replay(image, settings, 0)
+    try:
+        keys = [stage["key"] for stage in trace.stages]
+        assert "coherent_separator_y_refinement" in keys
+        assert keys.index("layout_role_materialization") < keys.index(
+            "coherent_separator_y_refinement"
+        )
+        assert keys.index("coherent_separator_y_refinement") < keys.index(
+            "bracketed_headword_recovery"
+        )
+        assert keys.index("bracketed_headword_recovery") < keys.index(
+            "final_y_coordinates_locked"
+        ) < keys.index("final_reading_order")
+        early = next(s for s in trace.stages
+                     if s["key"] == "coherent_separator_y_refinement")
+        assert early["details"]["scope"].startswith("已有 Layout 候选")
+        assert "前置" in early["title"]
+        final = next(s for s in trace.stages
+                     if s["key"] == "final_y_coordinates_locked")
+        assert final["details"]["layout_initial_page_shift"] == (
+            early["details"]["shift"]
+        )
+        assert final["details"]["move_y"] is False
+    finally:
+        for p in previews.values():
+            p.close()
         image.close()
 
 

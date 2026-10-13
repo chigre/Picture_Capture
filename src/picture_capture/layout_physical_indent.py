@@ -22,6 +22,8 @@ _BASE_LINE_FEATURE: Callable[..., Any] | None = None
 def _raw_projection_runs(
     ink: np.ndarray,
     scale: float,
+    *,
+    debug: dict[str, Any] | None = None,
 ) -> tuple[list[tuple[int, int]], np.ndarray, float]:
     from .ordinary_visual import _runs
 
@@ -32,6 +34,14 @@ def _raw_projection_runs(
     row_ink = np.asarray(ink, dtype=np.uint8).sum(axis=1).astype(np.float64)
     threshold = max(2.0, float(width) * 0.003)
     active = row_ink >= threshold
+    if debug is not None:
+        debug["original_runs"] = [
+            (int(a), int(b)) for a, b in _runs(active)
+        ]
+        debug["threshold"] = float(threshold)
+        debug["strip_width"] = int(width)
+        debug["strip_height"] = int(ink.shape[0])
+        debug["bridged_gaps"] = []
 
     max_gap = max(0, min(2, int(round(max(6.0, float(scale)) * 0.035))))
     if max_gap > 0:
@@ -40,9 +50,15 @@ def _raw_projection_runs(
             for left, right in zip(indices, indices[1:]):
                 gap = int(right - left - 1)
                 if 0 < gap <= max_gap:
+                    if debug is not None:
+                        debug["bridged_gaps"].append((int(left + 1), int(right)))
                     active[left:right + 1] = True
 
-    return [(int(a), int(b)) for a, b in _runs(active)], row_ink, threshold
+    runs = [(int(a), int(b)) for a, b in _runs(active)]
+    if debug is not None:
+        debug["max_gap_px"] = int(max_gap)
+        debug["connected_runs"] = list(runs)
+    return runs, row_ink, threshold
 
 
 def _split_tall_run(
@@ -51,6 +67,8 @@ def _split_tall_run(
     row_ink: np.ndarray,
     threshold: float,
     reference: float,
+    *,
+    debug: dict[str, Any] | None = None,
 ) -> list[tuple[int, int]]:
     height = int(y1 - y0)
     ref = max(6.0, float(reference))
@@ -88,9 +106,18 @@ def _split_tall_run(
     if left[1] - left[0] < minimum or right[1] - right[0] < minimum:
         return [(int(y0), int(y1))]
 
+    if debug is not None:
+        debug.setdefault("valley_splits", []).append({
+            "parent": (int(y0), int(y1)),
+            "at_y": int(best_y),
+            "valley_ink": float(best_cost),
+            "limit": float(valley_limit),
+        })
     result: list[tuple[int, int]] = []
     for part0, part1 in (left, right):
-        result.extend(_split_tall_run(part0, part1, row_ink, threshold, ref))
+        result.extend(_split_tall_run(
+            part0, part1, row_ink, threshold, ref, debug=debug,
+        ))
     return result
 
 
@@ -134,9 +161,22 @@ def _logical_slots_for_oversized_run(
     return slots or ([(start, stop)] if stop > start else [])
 
 
-def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]:
-    """Detect rows from observed ink runs, including oversized logical rows."""
-    raw, row_ink, threshold = _raw_projection_runs(ink, scale)
+def projection_line_runs(
+    ink: np.ndarray, scale: float, *,
+    debug: dict[str, Any] | None = None,
+) -> list[tuple[int, int]]:
+    """Detect rows from observed ink runs, including oversized logical rows.
+
+    Debug is an optional, pure-numeric record of the same computation;
+    no extra projection or second image pass is performed.
+    """
+    raw, row_ink, threshold = _raw_projection_runs(ink, scale, debug=debug)
+    if debug is not None:
+        debug["reference_height"] = float(scale)
+        debug["valley_splits"] = []
+        debug["logical_slots"] = []
+        debug["ignored_short"] = []
+        debug["final_runs"] = []
     if not raw:
         return []
 
@@ -148,9 +188,13 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
     for y0, y1 in raw:
         height = y1 - y0
         if height < minimum:
+            if debug is not None:
+                debug["ignored_short"].append((int(y0), int(y1)))
             continue
         parts = (
-            _split_tall_run(y0, y1, row_ink, threshold, ref)
+            _split_tall_run(
+                y0, y1, row_ink, threshold, ref, debug=debug,
+            )
             if height > maximum_single
             else [(y0, y1)]
         )
@@ -160,13 +204,21 @@ def projection_line_runs(ink: np.ndarray, scale: float) -> list[tuple[int, int]]
                 result.append((int(part0), int(part1)))
                 continue
             if part_height > maximum_single:
-                for slot0, slot1 in _logical_slots_for_oversized_run(
-                    part0, part1, ref
-                ):
+                slots = _logical_slots_for_oversized_run(part0, part1, ref)
+                if debug is not None:
+                    debug["logical_slots"].append({
+                        "parent": (int(part0), int(part1)),
+                        "slots": list(slots),
+                    })
+                for slot0, slot1 in slots:
                     slot_height = slot1 - slot0
                     if minimum <= slot_height <= maximum_single:
                         result.append((int(slot0), int(slot1)))
 
+    if debug is not None:
+        debug["final_runs"] = list(result)
+        debug["min_accepted_height"] = float(minimum)
+        debug["max_accepted_height"] = float(maximum_single)
     return result
 
 
