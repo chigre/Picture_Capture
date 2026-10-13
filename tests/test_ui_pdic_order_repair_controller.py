@@ -224,4 +224,5 @@ def test_repair_wiring_is_app_wrapper_with_existing_ui_binding() -> None:
     assert 'settings = app.settings' in repair_method
     assert 'settings = replace(app.settings)' not in repair_method
     assert 'write_pdic_atomic(' in repair_method
-    assert '("修复排序", self.repair_pdic_order_selected_scope)' in app
+    menu = (root / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
+    assert '("修复排序", "repair_pdic_order_selected_scope")' in menu
