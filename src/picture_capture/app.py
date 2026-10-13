@@ -917,16 +917,15 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         )
         help_title.pack(anchor="w", fill="x", padx=(0, 6))
+        # Each tab has its own help panel. Bind every panel's body to the
+        # shared variable, just as the help title already is; a one-time
+        # text=... snapshot silently leaves all but the last tab stale.
         help_body = ttk.Label(
             help_box,
-            text=self._settings_help_body_var.get(),
+            textvariable=self._settings_help_body_var,
             foreground="#555b63",
             justify="left",
         )
-        help_body._pc_wrap_source = _normalize_ui_paragraphs(
-            self._settings_help_body_var.get()
-        )
-        self._settings_help_body_label = help_body
         help_body.pack(anchor="w", fill="x", padx=(0, 8), pady=(7, 0))
         help_image = ttk.Label(help_box, anchor="center")
         help_separator = ttk.Separator(help_box, orient="horizontal")
