@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_id": "PC-CQ-20261014",
-  "plan_version": "1.0.0",
+  "plan_version": "1.1.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
   "updated_at_utc": "2026-10-14",
@@ -22,24 +22,28 @@
     }
   },
   "current_state": {
-    "status": "pr_open",
+    "status": "merged",
     "active_phase": "R0",
     "active_work_item": "R0.1",
     "work_in_progress": false,
     "implementation_pr": {
       "number": 479,
       "url": "https://github.com/chigre/Picture_Capture/pull/479",
-      "branch": "fix/pc-cq-r0-1-resume-code-fingerprint"
+      "branch": "fix/pc-cq-r0-1-resume-code-fingerprint",
+      "status": "merged",
+      "merge_sha": "a47e8a00ac136ed7d4912e569c43a8ddf18350b0"
     },
     "implementation_head_sha": "2697e31fc79a1823573162d39513cdcae91b0ef4",
     "latest_verified_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0",
     "last_completed_work_item": null,
     "blockers": [],
-    "required_next_action": "Track PR #479 CI and review for regressions; fix only R0.1 if failures occur. Mark verified only after merge and green post-merge main CI; then set active R0.2.",
-    "last_test_evidence": "R0.1 regression tests committed first at b63a0c54; implementation committed later; full PR CI pending; main planning CI 38446047743 success."
+    "required_next_action": "Confirm #479 post-merge main CI run 38451627304 succeeded. Then mark B0/R0.1 verified, and implement B1 (R0.2+R1.1+R1.2+R1.3) in one cohesive PR where reviewable, otherwise split B1a/B1b explicitly.",
+    "last_test_evidence": "PR #479 all PR checks passed (CI 38447239706 plus CodeQL), merged at a47e8a00; post-merge main CI 38451627304 was QUEUED at last check; B0 not verified.",
+    "active_batch": "B0",
+    "next_batch": "B1"
   },
   "units": {
-    "R0.1": "pr_open",
+    "R0.1": "merged",
     "R0.2": "todo",
     "R1.1": "todo",
     "R1.2": "todo",
@@ -118,6 +122,20 @@
       "regression_first_commit": "b63a0c54a55bc73a19d59405a5536247cb6e6c35",
       "production_fix_sha": "2697e31fc79a1823573162d39513cdcae91b0ef4",
       "summary": "Whole-package source tree fingerprint plus native Tesseract binary signature and fail-closed Lens. Production testing not yet confirmed."
+    },
+    {
+      "type": "policy_revision",
+      "version": "1.1.0",
+      "description": "User requested faster delivery via 2–4 cohesive related units per PR; do not sacrifice checks or create parallel production PRs.",
+      "status": "documentation_PR_pending"
+    },
+    {
+      "type": "r0_1_merged",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/479",
+      "merge_sha": "a47e8a00ac136ed7d4912e569c43a8ddf18350b0",
+      "pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38447239706",
+      "post_merge_main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38451627304",
+      "post_merge_main_ci_at_last_check": "queued"
     }
   ],
   "rules_for_updates": {
@@ -141,5 +159,121 @@
     "branch": "docs/core-quality-upgrade-plan-20261014",
     "head_sha_at_creation": "f1ac45346721c24ba6a9cf13d29bb966d4dfba62",
     "merged_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0"
+  },
+  "execution_policy": {
+    "version": "1.1.0",
+    "unit_of_delivery": "cohesive_subject_PR",
+    "target_units_per_pr": "2-4 when tightly related; never force bundle by count",
+    "max_active_production_prs": 1,
+    "allow_several_related_units_per_run": true,
+    "all_units_need_acceptance_evidence": true,
+    "can_split_oversized_bundle": true,
+    "splitting_requires_state_update": true,
+    "post_merge_main_ci_for_verified": true
+  },
+  "batches": {
+    "B0": {
+      "units": [
+        "R0.1"
+      ],
+      "status": "merged",
+      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/479",
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": "Post-merge main CI 38451627304 pending at last verification"
+    },
+    "B1": {
+      "units": [
+        "R0.2",
+        "R1.1",
+        "R1.2",
+        "R1.3"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B2": {
+      "units": [
+        "R2.1",
+        "R2.2",
+        "R2.3"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B3": {
+      "units": [
+        "R3.1",
+        "R3.2"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B4": {
+      "units": [
+        "R4.1",
+        "R4.2"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B5": {
+      "units": [
+        "R5.1",
+        "R5.2"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B6": {
+      "units": [
+        "R6.1",
+        "R6.2",
+        "R6.3"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B7a": {
+      "units": [
+        "R7.1",
+        "R7.2"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B7b": {
+      "units": [
+        "R7.3"
+      ],
+      "status": "todo",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    },
+    "B8": {
+      "units": [
+        "R8.1",
+        "R8.2",
+        "R8.3"
+      ],
+      "status": "deferred_by_user",
+      "implementation_pr": null,
+      "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
+      "blocker": null
+    }
   }
 }
