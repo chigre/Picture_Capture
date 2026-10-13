@@ -293,10 +293,30 @@ def _refine_column_geometry(
     return refined, fixed_rights, gutters
 
 
-def _leading_width(column_width: int, scale: float) -> int:
+def _leading_width(
+    column_width: int, scale: float,
+    percent: float = 42.0,
+) -> int:
+    """Actual leading ink strip width used by physical-row projection.
+
+    The percentage defaults to the previous hard-coded 42%. The historic
+    seven-glyph/96px safeguards remain; 100% genuinely means a full column.
+    """
+    import math
+
+    try:
+        requested = float(percent)
+    except (TypeError, ValueError, OverflowError):
+        requested = 42.0
+    if not math.isfinite(requested):
+        requested = 42.0
+    requested = max(10.0, min(100.0, requested))
     return max(
         24,
-        min(column_width, max(round(column_width * 0.42), round(scale * 7.0), 96)),
+        min(column_width, max(
+            round(column_width * requested / 100.0),
+            round(scale * 7.0), 96,
+        )),
     )
 
 
@@ -734,7 +754,13 @@ def infer_dictionary_page_layout(
         runs: list[list[tuple[int, int]]] = []
         for left, right in zip(starts, rights):
             width = max(1, right - left)
-            strip = page_ink[top:bottom, left:left + _leading_width(width, scale)]
+            strip = page_ink[
+                top:bottom,
+                left:left + _leading_width(
+                    width, scale,
+                    getattr(effective, "physical_row_projection_width_percent", 42.0),
+                ),
+            ]
             strips.append(strip)
             runs.append(resolved_ops.line_runs(strip, scale))
         return strips, runs
