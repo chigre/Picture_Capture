@@ -80,6 +80,18 @@ def test_actual_production_rows_and_replay_strip_follow_setting():
         high, _, _ = infer_composed_physical_page_layout(
             image, _settings(100.0), trace=high_trace,
         )
+        # Diagnostics must not change the actual production rows or roles.
+        low_plain, _, _ = infer_composed_physical_page_layout(
+            image, _settings(42.0),
+        )
+        high_plain, _, _ = infer_composed_physical_page_layout(
+            image, _settings(100.0),
+        )
+        def rows(layout):
+            return [(int(line.y0), int(line.y1), str(line.role))
+                    for col in layout.columns for line in col.lines]
+        assert rows(low) == rows(low_plain)
+        assert rows(high) == rows(high_plain)
         def sample(trace):
             return next(item for item in trace.stages
                         if item["key"] == "projection_gap_bridge")["details"]["columns"][0]
