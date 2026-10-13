@@ -18,22 +18,44 @@ from .formats import write_text_atomic
 
 
 RESUME_FORMAT = "picture-capture-ocr-page-resume-v1"
+# Increment this when changing fingerprint semantics or the source selection.
+ALGORITHM_FINGERPRINT_FORMAT = "picture-capture-detection-source-tree-v2"
 
 
 @lru_cache(maxsize=1)
 def _algorithm_environment_key() -> str:
-    """Reject checkpoints produced by older OCR/parser/layout source versions.
+    """Fingerprint the *whole* detection-capable package, not a brittle shortlist.
 
-    Each application run computes this only once. Source modules change during
-    upgrades, and major engine distributions may also change independently.
+    OCR, Layout, coordinate transforms, candidate scoring and shared Y refinement
+    span many modules and are regularly extracted into new helpers. A fixed list
+    silently reuses checkpoints after changes to a newly introduced module.
+    Conservatively invalidating after *any* package Python source change is
+    preferable to skipping a page whose drawing output might now be different.
+
+    Source bytes and stable relative paths are hashed once per process. When
+    package source is unavailable, raise OSError so validated_resume fails closed.
     """
+    root = Path(__file__).resolve().parent
+    sources = sorted(
+        (path for path in root.rglob("*.py") if path.is_file()),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+    if not sources:
+        raise OSError("Cannot verify OCR resume: no readable package sources")
+
     digest = hashlib.sha256()
+    digest.update(ALGORITHM_FINGERPRINT_FORMAT.encode("ascii"))
+    for path in sources:
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\\0")
+        _digest_file(path, digest)
+
+    # Detection may depend on native image/OCR distributions, not only Python
+    # source. Missing optional packages have a stable sentinel, not an exception.
     for name in (
-        "processing.py", "paddle_headwords_core.py",
-        "evidence_fusion.py", "page_understanding_fusion.py",
+        "paddleocr", "paddlepaddle", "pytesseract", "Pillow", "numpy",
+        "opencv-python", "opencv-python-headless", "chrome-lens-py",
     ):
-        _digest_file(Path(__file__).with_name(name), digest)
-    for name in ("paddleocr", "paddlepaddle", "pytesseract", "Pillow"):
         try:
             value = package_version(name)
         except PackageNotFoundError:
