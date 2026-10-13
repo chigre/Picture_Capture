@@ -612,6 +612,7 @@ CHECK_HELP = {
         "paddle_tesseract_auto_psm": "开启：程序自动比较 Tesseract PSM 4 与 PSM 6，选择更适合当前候选带的结果；减少手动猜 Page Segmentation Mode。\n\n关闭：固定使用【Tesseract 对照 PSM】。只有已验证某本词典某个 PSM 明显更稳定、且自动选择反复选错时才关闭。",
         "paddle_dual_ocr_arbitration": "开启：对 Paddle/Tesseract（以及可投票的 Lens）候选按 原图位置、lemma 相似度、结构与质量做融合/仲裁，而不是让某个引擎简单覆盖另一个。\n\n关闭：更接近单引擎/诊断式工作流。正常多 OCR 项目建议开启；需要复现实验性的单引擎结果时再关闭。",
         "paddle_show_candidate_checkboxes": "开启：主图为栏左 OCR 候选显示人工复选框，可把自动拒绝但合理的候选手工加入，也可取消自动接受结果；人工决定保存到独立 sidecar，便于追溯。\n\n关闭：界面更干净，但失去逐候选快速覆盖入口。只影响人工复核 UI，不重新运行 OCR。",
+        "paddle_peer_style_rescue": "实验性选项，默认关闭。仅用于拉丁词典的词头/正文续行仲裁：当被误判为续行的候选同时有明确语法、真实图像空白边界及同栏已接受词头的字号、粗度和左缘支持时，保守补回词头。\n\n开启会改变 OCR画线结果，尚未完成真实整页 FP/FN 对照验证；如出现额外误线，关闭后可恢复原有算法行为。关闭不会影响其他已存在的词头救回规则，也不会删除人工修正。",
         "ocr_replace": "开启：普通文本 OCR 完成后执行项目替换规则，用于已知 OCR 拼写/字符归一化。这里说的是“已有词条线后的文本 OCR”，不是 OCR画线的词头 parser。\n\n关闭：保留 OCR 原始文本。排查替换规则是否误改内容时可暂时关闭。",
         "lowercase_ocr": "开启：普通文本 OCR 输出统一转为小写。只影响文本内容，不改变词头横线、坐标或 OCR画线候选。\n\n注意：专名、缩写或大小写具有词典意义的项目不应开启。它不是排序时的大小写折叠选项。",
         "review_main_show_ocr_choices": "开启：校对窗口打开时，主界面仍保留多 OCR 候选/选择控件，便于一边看校对行一边核对不同引擎结果。\n\n关闭：校对期间隐藏这些控件，使主界面更简洁。只影响显示，不清除候选数据。",
@@ -674,6 +675,7 @@ OCR_ADVANCED_CHECKS = (
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
+        ("实验：同栏词头样式救回续行（默认关）", "paddle_peer_style_rescue"),
     )
 
 DISPLAY_STYLE_CHECKS = (
