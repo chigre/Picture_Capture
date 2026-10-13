@@ -244,3 +244,56 @@ def test_production_filter_hook_freezes_peer_anchors_before_existing_rescues(mon
     assert entries == []
     assert not candidate["accepted"]
     assert len(output) == 4
+
+
+def test_peer_style_is_explicitly_opt_in_and_can_be_rolled_back(tmp_path, monkeypatch):
+    from PIL import Image
+    import picture_capture.evidence_fusion as fusion
+    from picture_capture.ui.settings import schema
+
+    default = AppSettings()
+    assert default.paddle_peer_style_rescue is False
+    assert ("实验：同栏词头样式救回续行（默认关）", "paddle_peer_style_rescue") in schema.OCR_ADVANCED_CHECKS
+    assert "默认关闭" in schema.CHECK_HELP["paddle_peer_style_rescue"]
+    settings_path = tmp_path / "settings.json"
+    default.paddle_peer_style_rescue = True
+    default.to_json(settings_path)
+    assert AppSettings.from_json(settings_path).paddle_peer_style_rescue is True
+
+    called = []
+    monkeypatch.setattr(fusion, "_original_filter_headword_records", lambda *a, **k: ([], []))
+    monkeypatch.setattr(fusion, "_rescue_cjk_parser_failed_rows", lambda *a, **k: 0)
+    monkeypatch.setattr(fusion, "_rescue_false_continuation_rows", lambda *a, **k: 0)
+    monkeypatch.setattr(
+        fusion, "_rescue_local_peer_style_continuations",
+        lambda *a, **k: called.append(True) or 0,
+    )
+    band = Image.new("RGB", (50, 50), "white")
+    default.paddle_peer_style_rescue = False
+    fusion.filter_headword_records([], band, 0, 0, default)
+    assert called == []
+    default.paddle_peer_style_rescue = True
+    fusion.filter_headword_records([], band, 0, 0, default)
+    assert called == [True]
+    default.paddle_peer_style_rescue = False
+    fusion.filter_headword_records([], band, 0, 0, default)
+    assert called == [True]
+
+
+def test_default_disabled_state_does_not_mutate_preexisting_ocr_diagnostics(monkeypatch):
+    from PIL import Image
+    import picture_capture.evidence_fusion as fusion
+
+    diagnostic = {"accepted": False, "reject_reason": "continuation_fragment",
+                  "text": "ordinary example", "features": {}}
+    monkeypatch.setattr(
+        fusion, "_original_filter_headword_records",
+        lambda *a, **k: ([], [diagnostic]),
+    )
+    monkeypatch.setattr(fusion, "_rescue_cjk_parser_failed_rows", lambda *a, **k: 0)
+    monkeypatch.setattr(fusion, "_rescue_false_continuation_rows", lambda *a, **k: 0)
+    result, rows = fusion.filter_headword_records(
+        [], Image.new("RGB", (50, 50), "white"), 0, 0, AppSettings(),
+    )
+    assert result == [] and rows[0] is diagnostic
+    assert "peer_style_evidence" not in rows[0]["features"]
