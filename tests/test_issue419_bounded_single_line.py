@@ -27,6 +27,7 @@ class _ThreadPoolLikeProcessPool(ThreadPoolExecutor):
 
 
 def _stub_runtime(monkeypatch):
+    _ThreadPoolLikeProcessPool.last = None
     monkeypatch.setattr(parallel, "configured_single_line_workers", lambda *_: 2)
     monkeypatch.setattr(parallel, "load_merge_by_page", lambda *_: False)
     monkeypatch.setattr(parallel, "ProcessPoolExecutor", _ThreadPoolLikeProcessPool)
