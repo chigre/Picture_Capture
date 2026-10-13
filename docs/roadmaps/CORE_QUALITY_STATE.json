@@ -22,7 +22,7 @@
     }
   },
   "current_state": {
-    "status": "pr_open",
+    "status": "blocked",
     "active_phase": "R1",
     "active_work_item": "R0.2",
     "work_in_progress": false,
@@ -38,21 +38,38 @@
         "R1.3"
       ]
     },
-    "implementation_head_sha": "ff478facf49a9b524fda57d7fc02df87e9598d6b",
+    "implementation_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
     "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
     "last_completed_work_item": "R0.1",
-    "blockers": [],
-    "required_next_action": "Follow PR #481 CI; fix failing tests within B1 without creating duplicate PR; verify all four unit contracts; merge only after PR checks green; after post-merge main CI success mark B1 verified and proceed to B2.",
-    "last_test_evidence": "B1 tests and explicit quality gate written; not yet CI-verified. R0.1 #479 PR CI 38447239706 passed; immediately post-merge CI 38451627304 cancelled macOS and marked failure; later main CI 38453555971 passed all; docs #480 merged.",
+    "blockers": [
+      {
+        "type": "ci_regression_failure",
+        "pr": "https://github.com/chigre/Picture_Capture/pull/481",
+        "run": "https://github.com/chigre/Picture_Capture/actions/runs/38454078389",
+        "details": [
+          "R1.3 test_existing_benchmark_runners_declare_separate_sources: missing literal test_kind actual_detection_regenerated in complete archive runner",
+          "R1.1 existing test_real_benchmark_uses_identical_production_matching_primitive: benchmark no longer calls match_ordered_markers directly"
+        ],
+        "affected_jobs": [
+          "ubuntu-latest",
+          "windows-latest",
+          "macos-latest",
+          "python310-compat"
+        ],
+        "write_policy": "No production code changes until CI failures resolved per user stop gate"
+      }
+    ],
+    "required_next_action": "B1 ONLY: inspect two failed assertions and reconcile test/implementation semantics under user-approved code-write gate; keep PR #481 as sole active production PR; rerun full 3-platform+3.10 CI; do not start B2.",
+    "last_test_evidence": "CI 38454078389: golden step 18 passed/1 failed; Python 3.10 full pytest 2045 passed, 2 failed, 2 skipped. Architecture guard passed Ubuntu; Windows/macOS guard skipped by workflow. No new tests run locally in this automation.",
     "active_batch": "B1",
-    "next_batch": "B2"
+    "next_batch": "B1"
   },
   "units": {
     "R0.1": "verified",
     "R0.2": "pr_open",
-    "R1.1": "pr_open",
+    "R1.1": "blocked",
     "R1.2": "pr_open",
-    "R1.3": "pr_open",
+    "R1.3": "blocked",
     "R2.1": "todo",
     "R2.2": "todo",
     "R2.3": "todo",
@@ -154,6 +171,35 @@
       ],
       "main_base_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
       "note": "Production code + synthetic fixtures + regressions; full CI result pending; PR-B not run"
+    },
+    {
+      "type": "b1_ci_failure_audit",
+      "observed_at_utc": "2026-10-13T23:07:32Z",
+      "main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
+      "pr_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/481",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38454078389",
+      "conclusion": "failure",
+      "unit_evidence": {
+        "R0.2": {
+          "status": "pr_open",
+          "evidence": "Merged OCR safety tests included in targeted golden suite; full PR CI blocked; no independent green main validation"
+        },
+        "R1.1": {
+          "status": "blocked",
+          "evidence": "Existing tests/test_ordered_marker_matching.py::test_real_benchmark_uses_identical_production_matching_primitive fails (direct call string no longer present)"
+        },
+        "R1.2": {
+          "status": "pr_open",
+          "evidence": "Synthetic fixtures included in targeted CI; no real-scan accuracy claim; overall targeted gate 18 passed/1 failed"
+        },
+        "R1.3": {
+          "status": "blocked",
+          "evidence": "tests/test_b1_benchmark_provenance_20261014.py::test_existing_benchmark_runners_declare_separate_sources fails (missing test_kind literal)"
+        }
+      },
+      "blocker": "Two test assertions failed; no production code writes this turn",
+      "next_batch": "B1"
     }
   ],
   "rules_for_updates": {
@@ -211,10 +257,44 @@
         "R1.2",
         "R1.3"
       ],
-      "status": "pr_open",
+      "status": "blocked",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/481",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "GitHub CI pending"
+      "blocker": "CI 38454078389 failure: two assertions in benchmark provenance and ordered matching tests; four jobs red.",
+      "implementation_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
+      "ci": {
+        "run_id": 38454078389,
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38454078389",
+        "status": "completed",
+        "conclusion": "failure",
+        "failed_jobs": [
+          "test (windows-latest)",
+          "test (ubuntu-latest)",
+          "test (macos-latest)",
+          "python310-compat"
+        ],
+        "golden": "18 passed, 1 failed",
+        "python310": "2045 passed, 2 failed, 2 skipped",
+        "architecture_guard": "Ubuntu success; Windows/macOS skipped"
+      },
+      "unit_evidence": {
+        "R0.2": {
+          "status": "pr_open",
+          "evidence": "Merged OCR safety tests included in targeted golden suite; full PR CI blocked; no independent green main validation"
+        },
+        "R1.1": {
+          "status": "blocked",
+          "evidence": "Existing tests/test_ordered_marker_matching.py::test_real_benchmark_uses_identical_production_matching_primitive fails (direct call string no longer present)"
+        },
+        "R1.2": {
+          "status": "pr_open",
+          "evidence": "Synthetic fixtures included in targeted CI; no real-scan accuracy claim; overall targeted gate 18 passed/1 failed"
+        },
+        "R1.3": {
+          "status": "blocked",
+          "evidence": "tests/test_b1_benchmark_provenance_20261014.py::test_existing_benchmark_runners_declare_separate_sources fails (missing test_kind literal)"
+        }
+      }
     },
     "B2": {
       "units": [
