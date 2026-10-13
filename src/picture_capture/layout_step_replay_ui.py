@@ -58,10 +58,6 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
             "去噪只改变分析副本，不改变原图坐标。",
             details={"denoise": profile, "source_size": list(source.size)},
         )
-        # Only one downsized cleaned image per requested replay, never one
-        # full-resolution screenshot per algorithm stage.
-        cleaned = analysis.copy()
-        cleaned.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
         masked = None
         if bool(getattr(settings, "layout_mask_illustrations", False)):
             from .layout_illustration_mask import mask_large_illustrations_for_layout
@@ -72,12 +68,24 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
             except Exception:
                 masked = None
         actual = masked if masked is not None else analysis
+        if masked is not None and masked is not analysis:
+            trace.add_note(
+                "illustration_mask", "插图区域掩膜",
+                "本阶段显示实际进入 Layout 的插图白化分析图（不改动原图）。",
+            )
+        # Only one downsized analysis preview is retained, rather than an
+        # expensive RGB copy at each stage.
+        cleaned = actual.copy()
         try:
+            cleaned.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
             understand_layout_core(actual, settings, page_index=page_index, trace=trace)
+            return trace, cleaned
+        except BaseException:
+            cleaned.close()
+            raise
         finally:
             if masked is not None and masked is not analysis:
                 masked.close()
-        return trace, cleaned
     finally:
         analysis.close()
 
@@ -155,6 +163,7 @@ class LayoutStepReplayWindow:
         self._source: Image.Image | None = None
         self._cleaned: Image.Image | None = None
         self._photo: ImageTk.PhotoImage | None = None
+        self._photo_key: tuple[Any, ...] | None = None
         self._trace: LayoutStepTrace | None = None
         self._stage_index = 0
         self._scale = 1.0
@@ -269,6 +278,7 @@ class LayoutStepReplayWindow:
         self._trace = None
         self._cleaned = None
         self._photo = None
+        self._photo_key = None
         self._stage_index = 0
         self._scale = min(1.0, 790.0 / max(1, source.width))
         self._size = source.size
@@ -299,9 +309,10 @@ class LayoutStepReplayWindow:
             try:
                 result = finished.result()
             except Exception as exc:
+                error_text = f"{type(exc).__name__}: {exc}"
                 def failed() -> None:
                     if not self.closed and token == self.generation:
-                        self.status.set(f"回放诊断失败（原始 LAYOUT 不受影响）：{type(exc).__name__}: {exc}")
+                        self.status.set(f"回放诊断失败（原始 LAYOUT 不受影响）：{error_text}")
                 try:
                     self.window.after(0, failed)
                 except (RuntimeError, tk.TclError):
@@ -353,7 +364,7 @@ class LayoutStepReplayWindow:
             return
         source = self._source
         stage = self._trace.stages[self._stage_index] if self._trace else None
-        show_cleaned = bool(stage and stage["key"] == "image_preparation"
+        show_cleaned = bool(stage and stage["key"] in {"image_preparation", "illustration_mask"}
                             and self._cleaned is not None and not self.before.get())
         original = self._cleaned if show_cleaned else source
         target = (
@@ -364,11 +375,16 @@ class LayoutStepReplayWindow:
         bound = min(1.0, 3000 / max(target), (15_000_000 / max(1, target[0] * target[1])) ** 0.5)
         target = (max(1, int(target[0] * bound)), max(1, int(target[1] * bound)))
         self._render_scale = target[0] / max(1, source.width)
-        display = original.resize(target, Image.Resampling.LANCZOS)
-        try:
-            self._photo = ImageTk.PhotoImage(display, master=self.window)
-        finally:
-            display.close()
+        # Step changes repaint only overlay geometry; the expensive full-page
+        # image resize is reused at a constant zoom and page.
+        photo_key = (id(original), target)
+        if self._photo is None or self._photo_key != photo_key:
+            display = original.resize(target, Image.Resampling.LANCZOS)
+            try:
+                self._photo = ImageTk.PhotoImage(display, master=self.window)
+            finally:
+                display.close()
+            self._photo_key = photo_key
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self._photo, anchor="nw")
         self.canvas.configure(scrollregion=(0, 0, *target))
