@@ -224,9 +224,12 @@ def _format_stage(
         for item in history:
             lines.append(f"  {item['stage']} → {item['role']}")
             lines.append("    依据：" + item["reason"])
-    lines.extend(["", "注意：此窗口只回放 Layout Core 的判定。",
-                  "后续普通画线还有独立的裁决与过滤步骤；"
-                  "相邻位置不代表某个证据是该线的唯一原因。"])
+    lines.extend([
+        "", "时间轴包含 Layout Core 与实际普通画线的候选处理阶段。",
+        "候选位置的空间邻近关系不能单独证明因果；"
+        "最终显示的坐标来自普通画线真实阶段记录。",
+        "仅用于诊断，不写入 PDIC/PPP。",
+    ])
     return "\n".join(lines)
 
 
@@ -526,9 +529,12 @@ class LayoutStepReplayWindow:
                                              tags=_STEP_TAG)
         # Candidate geometry comes directly from the same detector's optional
         # diagnostic trace (including rejected candidates), not a second scan.
+        # Mask polygons belong to the AFTER state. They must disappear in
+        # Before mode even when the current note has no physical rows.
         candidates = (
-            visual.get("candidates", [])
-            if visual is stage or self.before.get() else stage.get("candidates", [])
+            stage.get("candidates", []) if not self.before.get()
+            else (self._trace.stages[self._stage_index-1].get("candidates", [])
+                  if self._stage_index > 0 else [])
         )
         for candidate in candidates:
             status = str(candidate.get("status", "unknown"))
