@@ -48,7 +48,11 @@ def test_live_gap_trace_and_default_produce_identical_runs():
 def test_live_tall_band_records_actual_valley_splits_without_modifying_result():
     ink = np.zeros((105, 30), dtype=bool)
     ink[5:65, :9] = True
-    ink[24, :] = False       # 1px valley, joined by the same projector
+    ink[23, :] = False
+    ink[23, :2] = True       # sparse shoulders retain active row projection
+    ink[24, :] = False       # 1px blank valley, joined by the same projector
+    ink[25, :] = False
+    ink[25, :2] = True       # 3-row mean now passes the actual valley gate
     diag = {}
     observed = projection_line_runs(ink, 20, debug=diag)
     reference = projection_line_runs(ink, 20)
