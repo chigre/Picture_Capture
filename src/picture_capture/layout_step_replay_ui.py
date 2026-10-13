@@ -370,7 +370,12 @@ class LayoutStepReplayWindow:
         self.previous_button = ttk.Button(toolbar, text="◀ 上一步", command=lambda: self.step(-1))
         self.previous_button.pack(side="left")
         self.step_var = tk.StringVar()
-        self.step_combo = ttk.Combobox(toolbar, textvariable=self.step_var, state="readonly", width=30)
+        # Tk's default popdown is only ~10 rows; when the final stage is
+        # selected the pre-physical projector stages are scrolled out of view.
+        self.step_combo = ttk.Combobox(
+            toolbar, textvariable=self.step_var, state="readonly",
+            width=37, height=28,
+        )
         self.step_combo.pack(side="left", padx=5)
         self.step_combo.bind("<<ComboboxSelected>>", self.select_step)
         self.next_button = ttk.Button(toolbar, text="下一步 ▶", command=lambda: self.step(1))
@@ -381,6 +386,8 @@ class LayoutStepReplayWindow:
         ttk.Button(toolbar, text="－", width=3, command=lambda: self.zoom(0.8)).pack(side="left")
         ttk.Button(toolbar, text="＋", width=3, command=lambda: self.zoom(1.25)).pack(side="left")
         ttk.Button(toolbar, text="适应宽度", command=self.fit).pack(side="left", padx=3)
+        ttk.Button(toolbar, text="运行版本／阶段清单",
+                   command=self.show_runtime_diagnostics).pack(side="right", padx=3)
         ttk.Button(toolbar, text="刷新", command=lambda: self.refresh(force=True)).pack(side="right")
 
         self.status = tk.StringVar(value="正在准备当前页……")
@@ -447,6 +454,56 @@ class LayoutStepReplayWindow:
         except tk.TclError:
             self.close()
 
+    def show_runtime_diagnostics(self) -> None:
+        """Show the *executing* module paths and every collected stage.
+
+        Downloading a branch ZIP does not switch an older desktop shortcut or
+        a different installed source tree. Report resolved imports instead of
+        assuming the downloaded files are the ones currently running.
+        """
+        from . import layout_composition, dictionary_page_layout_policy
+        from . import layout_physical_indent
+        modules = [
+            ("回放窗口", __file__),
+            ("阶段采集器", __import__(
+                "picture_capture.layout_step_trace",
+                fromlist=["__file__"],
+            ).__file__),
+            ("Layout 组装", layout_composition.__file__),
+            ("真实投影", layout_physical_indent.__file__),
+            ("逐栏 Page Design", dictionary_page_layout_policy.__file__),
+        ]
+        lines = [
+            "LAYOUT 回放运行版本／全部阶段",
+            "",
+            "功能标识：#469 真实投影连接与过高墨迹带拆分",
+            "以下均为当前进程实际加载的模块路径，不是下载目录推测。",
+            "",
+        ]
+        for label, file_path in modules:
+            lines.append(f"{label}：{Path(file_path).resolve()}")
+        lines.append("")
+        if self._trace is None:
+            lines.append("状态：尚未生成当前页阶段记录，可能仍在计算或已失败。")
+        else:
+            keys = [stage["key"] for stage in self._trace.stages]
+            lines.append(f"当前完整阶段总数：{len(keys)}")
+            lines.append("所需阶段：" + "、".join(
+                f"{key}={'已记录' if key in keys else '缺失'}"
+                for key in ("projection_gap_bridge", "projection_tall_split", "physical_rows")
+            ))
+            for i, stage in enumerate(self._trace.stages, 1):
+                lines.append(f"  {i:02d}  {stage['title']} [{stage['key']}]")
+            if "physical_rows" in keys and not (
+                "projection_gap_bridge" in keys and "projection_tall_split" in keys
+            ):
+                lines.extend([
+                    "",
+                    "异常：存在物理行阶段但缺少投影阶段。"
+                    "请核对上面的实际加载路径并刷新回放。",
+                ])
+        self._show_text("\n".join(lines))
+
     def refresh(self, *, force: bool = False) -> None:
         if self.closed:
             return
@@ -493,7 +550,10 @@ class LayoutStepReplayWindow:
             trace, previews = result
             self._trace = trace
             self._previews = previews
-            self._stage_index = len(trace.stages) - 1
+            # Replay starts at the beginning, not at the final ordinary-drawing
+            # result. The old default positioned Tk's small combobox list at
+            # the bottom and concealed the new stages 03/04.
+            self._stage_index = 0
             self.step_combo.configure(values=[
                 f"{i+1:02d}  {stage['title']}" for i, stage in enumerate(trace.stages)
             ])
