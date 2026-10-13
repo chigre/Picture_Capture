@@ -635,6 +635,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     ocr_resume_completed_pages: bool = False
     # Experimental engine-scoped raw PSM recognition reuse; disabled by default.
     ocr_cache_tesseract_raw: bool = False
+    # Only skip Tesseract *diagnostic-only* passes in high-trust Paddle columns.
+    ocr_lazy_tesseract_diagnostics: bool = False
     # Page-level dual-OCR agreement thresholds used by list/status colouring.
     paddle_agreement_good: float = 0.95
     paddle_agreement_warn: float = 0.85
