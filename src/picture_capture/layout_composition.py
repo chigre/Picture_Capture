@@ -85,7 +85,8 @@ def infer_composed_physical_page_layout(
                 "role_status": "not_classified" if neutral else "provisional",
                 **({"skipped_semantic_stages": [
                     "基础行角色", "缩进语义判定", "正文缩进族调整",
-                ], "next_visible_stage": "视觉一致性复核"} if neutral else {}),
+                    "视觉一致性复核", "缺失缩进恢复",
+                ], "next_visible_stage": "符号证据融合"} if neutral else {}),
             },
             provisional_no_indent=neutral,
         )
