@@ -100,7 +100,7 @@ def test_crop_input_controls_dispatch_distinct_right_panel_explanations():
     assert recorded[0] != recorded[1]
 
 
-def test_retirement_destroys_only_replaced_legacy_widgets_not_shared_state():
+def test_retirement_destroys_all_replaced_legacy_widgets_not_shared_state():
     class Widget:
         def __init__(self):
             self.destroyed = False
@@ -132,9 +132,8 @@ def test_retirement_destroys_only_replaced_legacy_widgets_not_shared_state():
         preprocess_panel=None,
     )
     workspace_tools.retire_superseded_quick_panels(app, replacements)
-    assert set(old) == {"postproduction"}
-    assert all(not old[name].destroyed for name in old)
-    assert not replacements["一、版面参数"].destroyed
+    assert old == {}  # No hidden legacy quick-menu tree remains.
+    assert all(not widget.destroyed for widget in replacements.values())
     assert app.preprocess_panel is replacements["图片预处理(前置)"]
     assert app.quick_vars is quick and app.quick_bool_vars is booleans
     assert old_labels == {} and old_buttons == {}
