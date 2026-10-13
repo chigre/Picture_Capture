@@ -15120,7 +15120,11 @@ class PictureCaptureApp(tk.Tk):
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
             resume_dependencies = ()
-            if method in {"paddleocr", "combined"} and settings.ocr_resume_completed_pages:
+            if (
+                method in {"paddleocr", "combined"}
+                and settings.ocr_resume_completed_pages
+                and not force_refresh
+            ):
                 from .project_storage import page_sections_read_path_for_image
                 from .ocr_page_resume import validated_resume
                 resume_dependencies = (
@@ -15177,6 +15181,16 @@ class PictureCaptureApp(tk.Tk):
             write_pdic(pdic_path(page), entries, image.width, pages_info[index])
             result = {"index": int(index), "count": len(entries)}
             if method in {"paddleocr", "combined"} and settings.ocr_resume_completed_pages:
+                if not resume_dependencies:
+                    # A forced OCR rerun bypasses prior checkpoints but still
+                    # writes a *new* completed checkpoint for later resumption.
+                    from .project_storage import page_sections_read_path_for_image
+                    resume_dependencies = (
+                        filter_path,
+                        project_profile_path(project.root),
+                        page_sections_read_path_for_image(page),
+                        *((replace_rules_path(project.root),) if method == "combined" else ()),
+                    )
                 from .ocr_page_resume import write_page_resume
                 try:
                     write_page_resume(
