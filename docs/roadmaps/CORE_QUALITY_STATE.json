@@ -22,32 +22,37 @@
     }
   },
   "current_state": {
-    "status": "merged",
-    "active_phase": "R0",
-    "active_work_item": "R0.1",
+    "status": "pr_open",
+    "active_phase": "R1",
+    "active_work_item": "R0.2",
     "work_in_progress": false,
     "implementation_pr": {
-      "number": 479,
-      "url": "https://github.com/chigre/Picture_Capture/pull/479",
-      "branch": "fix/pc-cq-r0-1-resume-code-fingerprint",
-      "status": "merged",
-      "merge_sha": "a47e8a00ac136ed7d4912e569c43a8ddf18350b0"
+      "number": 481,
+      "url": "https://github.com/chigre/Picture_Capture/pull/481",
+      "branch": "feat/pc-cq-b1-quality-gates-20261014",
+      "status": "open",
+      "units": [
+        "R0.2",
+        "R1.1",
+        "R1.2",
+        "R1.3"
+      ]
     },
-    "implementation_head_sha": "2697e31fc79a1823573162d39513cdcae91b0ef4",
-    "latest_verified_main_sha": "9d610ff8919de1e1f6f5507a4472da20b193b7c0",
-    "last_completed_work_item": null,
+    "implementation_head_sha": "ff478facf49a9b524fda57d7fc02df87e9598d6b",
+    "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
+    "last_completed_work_item": "R0.1",
     "blockers": [],
-    "required_next_action": "Check PR #480 CI and merge docs; verify #479 post-merge main CI 38451627304; after both gates green mark B0/R0.1 verified, start B1 quality gates covering R0.2+R1.1+R1.2+R1.3 in one reviewable PR.",
-    "last_test_evidence": "PR #479 all PR checks passed (CI 38447239706 plus CodeQL), merged at a47e8a00; post-merge main CI 38451627304 was QUEUED at last check; B0 not verified.",
-    "active_batch": "B0",
-    "next_batch": "B1"
+    "required_next_action": "Follow PR #481 CI; fix failing tests within B1 without creating duplicate PR; verify all four unit contracts; merge only after PR checks green; after post-merge main CI success mark B1 verified and proceed to B2.",
+    "last_test_evidence": "B1 tests and explicit quality gate written; not yet CI-verified. R0.1 #479 PR CI 38447239706 passed; immediately post-merge CI 38451627304 cancelled macOS and marked failure; later main CI 38453555971 passed all; docs #480 merged.",
+    "active_batch": "B1",
+    "next_batch": "B2"
   },
   "units": {
-    "R0.1": "merged",
-    "R0.2": "todo",
-    "R1.1": "todo",
-    "R1.2": "todo",
-    "R1.3": "todo",
+    "R0.1": "verified",
+    "R0.2": "pr_open",
+    "R1.1": "pr_open",
+    "R1.2": "pr_open",
+    "R1.3": "pr_open",
     "R2.1": "todo",
     "R2.2": "todo",
     "R2.3": "todo",
@@ -136,6 +141,19 @@
       "pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38447239706",
       "post_merge_main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38451627304",
       "post_merge_main_ci_at_last_check": "queued"
+    },
+    {
+      "type": "b1_pr",
+      "status": "pr_open_ci_pending",
+      "url": "https://github.com/chigre/Picture_Capture/pull/481",
+      "units": [
+        "R0.2",
+        "R1.1",
+        "R1.2",
+        "R1.3"
+      ],
+      "main_base_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
+      "note": "Production code + synthetic fixtures + regressions; full CI result pending; PR-B not run"
     }
   ],
   "rules_for_updates": {
@@ -176,10 +194,15 @@
       "units": [
         "R0.1"
       ],
-      "status": "merged",
+      "status": "verified",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/479",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Post-merge main CI 38451627304 pending at last verification"
+      "blocker": null,
+      "verification": {
+        "main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
+        "ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38453555971",
+        "caveat": "Earlier run 38451627304 failed due cancelled macOS job; next main CI succeeded."
+      }
     },
     "B1": {
       "units": [
@@ -188,10 +211,10 @@
         "R1.2",
         "R1.3"
       ],
-      "status": "todo",
-      "implementation_pr": null,
+      "status": "pr_open",
+      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/481",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": "GitHub CI pending"
     },
     "B2": {
       "units": [
