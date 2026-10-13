@@ -17,6 +17,7 @@ from .layout_physical_indent import (
     normalize_layout_roles,
 )
 from .layout_profile_anchor import anchor_resolved_layout_to_profile
+from .layout_step_trace import LayoutStepTrace
 
 
 def infer_composed_physical_page_layout(
@@ -25,6 +26,7 @@ def infer_composed_physical_page_layout(
     *,
     page_index: int = 0,
     ops: base.LayoutPrimitiveOps | None = None,
+    trace: LayoutStepTrace | None = None,
 ) -> tuple[base.DictionaryPageLayout, Any, dict[str, int]]:
     """Infer anchored physical page layout without installed policy wrappers.
 
@@ -51,6 +53,8 @@ def infer_composed_physical_page_layout(
             profile_settings, resolved, applied,
             estimate=estimate,
         )
+        if trace is not None:
+            trace.add_policy(estimate, anchored, selected)
         return anchored, estimate, selected
 
     layout, page_settings, applied = policy._RAW_INFER_DICTIONARY_PAGE_LAYOUT(
@@ -60,7 +64,13 @@ def infer_composed_physical_page_layout(
         ops=selected_ops,
         policy_resolver=anchored_policy,
     )
+    if trace is not None:
+        trace.add_layout("physical_rows", "物理行检测",
+                         "Page Design 原始物理行与正文栏范围；角色尚未经过后续完整修正。", layout)
     normalize_layout_roles(layout)
+    if trace is not None:
+        trace.add_layout("initial_roles", "基础行角色",
+                         "由物理行和初步缩进族得到的角色；尚未合并大字头和符号证据。", layout)
     return layout, page_settings, applied
 
 
