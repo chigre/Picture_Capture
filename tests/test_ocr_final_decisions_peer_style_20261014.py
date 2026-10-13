@@ -58,7 +58,8 @@ def test_ambiguous_quantized_candidate_id_is_not_silently_inherited():
     ]
     report = build_final_decisions(detected, detected, candidates, tolerance=12)
     selected = [r for r in report["candidate_decisions"] if r["final_selected"]]
-    assert len(selected) <= 1  # Never link both checkboxes to one PDIC marker.
+    assert not selected  # Never guess between two colliding candidate identities.
+    assert report["summary"]["unmatched_final"] == 1
 
 
 def test_final_manifest_uses_readback_and_refuses_stale_after_manual_edit(tmp_path):
@@ -82,6 +83,17 @@ def test_final_manifest_uses_readback_and_refuses_stale_after_manual_edit(tmp_pa
     )
     assert augmented[0]["final_decision"]["final_selected"] is True
     assert final_decisions_path(cache).name == "p001_final_decisions.json"
+
+    # A regenerated OCR cache invalidates the old proposal provenance even
+    # if PDIC text and coordinates have not yet changed.
+    cache.write_text('{"signature":"sig2","review_candidates":[]}', encoding="utf-8")
+    assert load_current_final_decisions(cache, pdic) is None
+    cache.write_text(
+        '{"signature":"sig1","review_candidates":['
+        '{"candidate_id":"c1-y80","selected":true,"source_x":10,"source_y":80,"word":"abandonar"}'
+        ']}', encoding="utf-8",
+    )
+    assert load_current_final_decisions(cache, pdic) is not None
 
     # Manual edits (including text-only corrections) invalidate old automatic
     # position/status claims; never overwrite the manually changed PDIC.
