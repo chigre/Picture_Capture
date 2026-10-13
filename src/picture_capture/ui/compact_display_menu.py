@@ -250,6 +250,27 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     denoise.pack(side="left", padx=0, pady=0)
     denoise.bind("<<ComboboxSelected>>", apply_denoise)
 
+    # The visible 280px palette is a separate widget tree from the legacy
+    # quick-settings owner.  Reuse its session-only variable/callback; merely
+    # adding the checkbox to the hidden owner leaves users without an entry.
+    from picture_capture.layout_visualization_ui_v3 import toggle_layout_step_replay
+    replay_var = app._layout_step_replay_var
+    row = line()
+
+    def toggle_replay() -> None:
+        toggle_layout_step_replay(app)
+
+    replay_widget = check(row, "查看 LAYOUT 分析过程", replay_var, toggle_replay)
+    app._layout_step_replay_compact_widget = replay_widget
+    try:
+        app._attach_tooltip(
+            replay_widget,
+            "逐步回看当前扫描页实际 Layout 推理，包括缩进、候选与角色变化；"
+            "只影响显示，不修改项目数据。",
+        )
+    except Exception:
+        pass
+
     # Compact is the default: no long method text or yellow indentation
     # blocks on top of the scanned dictionary.
     row = line()
