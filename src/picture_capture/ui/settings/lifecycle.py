@@ -47,18 +47,3 @@ def close_validated(dialog: Any) -> None:
             pass
         dialog._autosave_job = None
     dialog.save(close=True, show_errors=True)
-
-
-def physical_row_projection_width_percent(value: object) -> float:
-    """Validate the project-persisted percent of column width.
-
-    A native Spinbox does not prevent arbitrary pasted text, so reject values
-    outside its range on save instead of silently clamping project settings.
-    """
-    try:
-        percent = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
-    if not 10.0 <= percent <= 100.0:  # also rejects nan and infinities
-        raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
-    return percent
