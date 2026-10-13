@@ -84,7 +84,10 @@ def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[La
                 mask_thumb = masked.copy()
                 mask_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
                 previews["illustration_mask"] = mask_thumb
-            understand_layout_core(actual, settings, page_index=page_index, trace=trace)
+            understand_layout_core(
+                actual, settings, page_index=page_index, trace=trace,
+                large_head_diagnostics=[],
+            )
             return trace, previews
         finally:
             if masked is not None and masked is not analysis:
@@ -122,6 +125,7 @@ def _format_stage(
     stage: dict[str, Any], *,
     selected: dict[str, Any] | None = None,
     history: list[dict[str, str]] | None = None,
+    selected_candidate: dict[str, Any] | None = None,
 ) -> str:
     lines = [stage["title"], "", stage["description"], ""]
     details = stage.get("details", {})
@@ -158,6 +162,10 @@ def _format_stage(
             lines.append(f"  {c['id']}: {before} → {after} ({c['kind']})")
         if len(changes) > 100:
             lines.append(f"  ……其余 {len(changes)-100} 行可在图中查看")
+    if selected_candidate is not None:
+        lines.extend(["", "点击视觉候选详情："])
+        for key, value in selected_candidate.items():
+            lines.append(f"  {key}: {value}")
     if selected is not None:
         lines.extend([
             "", "点击行详情：", selected["id"],
@@ -463,6 +471,32 @@ class LayoutStepReplayWindow:
                 self.canvas.create_rectangle(x0*factor, y0*factor, x1*factor, y1*factor,
                                              outline="#e59a22", width=2, dash=(5, 3),
                                              tags=_STEP_TAG)
+        # Candidate geometry comes directly from the same detector's optional
+        # diagnostic trace (including rejected candidates), not a second scan.
+        candidates = visual.get("candidates", [])
+        for candidate in candidates:
+            status = str(candidate.get("status", "unknown"))
+            box = candidate.get("source_box")
+            if box and len(box) == 4:
+                x0, y0, x1, y1 = box
+                color = ("#16853c" if status == "accepted" else
+                         "#c43d33" if "row_front" in status or "tall" in status
+                         else "#d99523")
+                self.canvas.create_rectangle(
+                    x0*factor, y0*factor, x1*factor, y1*factor,
+                    outline=color, width=2, dash=() if status == "accepted" else (4, 3),
+                    tags=_STEP_TAG,
+                )
+            else:
+                anchor = candidate.get("source_anchor")
+                if anchor and len(anchor) == 2:
+                    x0, y0 = anchor
+                    r = 6
+                    self.canvas.create_oval(
+                        x0*factor-r, y0*factor-r, x0*factor+r, y0*factor+r,
+                        outline="#d99523", width=2, tags=_STEP_TAG,
+                    )
+        self._visual_candidates = candidates
         self._visual_rows = visual["rows"]
         self.status.set(
             f"{self._stage_index+1}/{len(self._trace.stages)}  {stage['title']}  "
@@ -476,6 +510,23 @@ class LayoutStepReplayWindow:
         factor = max(0.01, getattr(self, "_render_scale", self._scale))
         x = int(self.canvas.canvasx(event.x) / factor)
         y = int(self.canvas.canvasy(event.y) / factor)
+        candidate = next((
+            item for item in getattr(self, "_visual_candidates", [])
+            if (
+                item.get("source_box") and len(item["source_box"]) == 4
+                and min(item["source_box"][0], item["source_box"][2]) <= x <= max(item["source_box"][0], item["source_box"][2])
+                and min(item["source_box"][1], item["source_box"][3]) <= y <= max(item["source_box"][1], item["source_box"][3])
+            ) or (
+                item.get("source_anchor") and
+                abs(item["source_anchor"][0] - x) <= 10 and
+                abs(item["source_anchor"][1] - y) <= 10
+            )
+        ), None)
+        if candidate is not None:
+            self._show_text(_format_stage(
+                self._trace.stages[self._stage_index], selected_candidate=candidate,
+            ))
+            return
         row = _row_at_position(getattr(self, "_visual_rows", []), x, y)
         if row is not None:
             self._show_text(_format_stage(
