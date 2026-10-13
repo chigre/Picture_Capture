@@ -129,9 +129,6 @@ PROFILE_CHECKS = [
         ("候选必须具有结构/视觉提示", "paddle_require_visual_cue"),
         ("候选必须有词性/变形/词条符号", "paddle_require_pos_or_symbol"),
         ("去除词头音节分隔点", "paddle_remove_syllable_separators"),
-        ("批量 OCR 启用断点恢复（默认关）", "ocr_resume_completed_pages"),
-        ("实验：Tesseract 分层缓存（默认关）", "ocr_cache_tesseract_raw"),
-        ("实验：按需 Tesseract 诊断（默认关）", "ocr_lazy_tesseract_diagnostics"),
         ("自动忽略页眉横线以上", "paddle_auto_header_rule"),
         ("词头横线 Y 按栏内墨迹谷精修", "paddle_refine_separator_y"),
     ]
@@ -675,6 +672,9 @@ OCR_COMMON_CHECKS = (
 
 OCR_ADVANCED_CHECKS = (
         ("启用文字行方向识别", "paddle_use_textline_orientation"),
+        ("批量 OCR 启用断点恢复（默认关）", "ocr_resume_completed_pages"),
+        ("实验：Tesseract 分层缓存（默认关）", "ocr_cache_tesseract_raw"),
+        ("实验：按需 Tesseract 诊断（默认关）", "ocr_lazy_tesseract_diagnostics"),
         ("自动忽略页眉横线以上", "paddle_auto_header_rule"),
         ("去除词头音节分隔点", "paddle_remove_syllable_separators"),
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
