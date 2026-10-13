@@ -17,6 +17,31 @@
 | Online lexical lookup | `network_lookup.lookup_word_free` | Previous fresh thread pool on every lookup; `response.read()` had no explicit limit. | #463 shares three lazily instantiated workers and caps JSON payload at 1 MiB. Bound keeps at most three network operations concurrent; queue latency during burst lookup needs profiling. |
 | Review focused filters | `app.py:_cache_filter_batch_payload` | Cache retains up to four batches of crop payloads; size depends on high-DPI word images. | Existing cap of four; instrument retained byte totals and inspect if GUI retains old tkinter photos when swapping batches. |
 
+## Preliminary synthetic reference (not genuine dictionary measurements)
+
+An independent local Pillow run repeated the two hash algorithms five times on a
+**synthetic** 3000×4200 RGB page (12.6 megapixels; 36.0 MiB raw RGB).
+Median timings and Python peak tracked by `tracemalloc` were:
+
+| Hash strategy | Median duration (5 repeats) | Median peak tracked allocation |
+| --- | ---: | ---: |
+| Monolithic `image.tobytes()` + BLAKE2b | 73.1 ms | 72.2 MiB |
+| 4 MiB-tiled, same BLAKE2b digest | 80.6 ms | 8.0 MiB |
+
+This demonstration suggests an **~89% drop in Python-tracked temporary
+allocation at the expense of ~10% more hash time on this synthetic image**.
+Numbers are not from repository CI, not true OS peak RSS, and not an estimate
+of GUI throughput. End-to-end page decoding and native PIL allocations are
+excluded; benchmark supplied real user scans before tuning thresholds.
+
+Other operational findings: `app.py:_start_network_lookup` currently creates
+a separate daemon thread per uncached request; the 550 ms normal debounce and
+serial result filtering reduce unnecessary work but do not cap concurrent outer
+threads during rapid forced lookups. `_network_lookup_cache` retains entries
+for the review-window lifetime without an explicit count limit. Investigate
+request coalescing and LRU bounds with GUI interaction tests; these are *new
+follow-up candidates*, not treated as solved by the shared inner pool in #463.
+
 ## Scope and validity of fixes
 
 - #462: registry object identity + cleanup and cross-instance lost updates are correctness issues; tests must cover GC and concurrent mutations.
