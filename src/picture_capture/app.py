@@ -15122,6 +15122,28 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
+            resume_dependencies = ()
+            if (
+                method in {"paddleocr", "combined"}
+                and settings.ocr_resume_completed_pages
+                and not force_refresh
+            ):
+                from .project_storage import page_sections_read_path_for_image
+                from .ocr_page_resume import validated_resume
+                resume_dependencies = (
+                    filter_path,
+                    project_profile_path(project.root),
+                    page_sections_read_path_for_image(page),
+                    *( (replace_rules_path(project.root),) if method == "combined" else () ),
+                )
+                saved = pdic_path(page)
+                previous_count = validated_resume(
+                    ocr_cache_root(project.root), page, saved,
+                    page_index=index, method=method, settings=settings,
+                    dependencies=resume_dependencies,
+                )
+                if previous_count is not None:
+                    return {"index": int(index), "count": previous_count, "resumed": True}
             if normal_executor is not None:
                 count = normal_executor.submit(
                     detect_entries_job, str(page), settings, pages_info[index], index
@@ -15180,6 +15202,26 @@ class PictureCaptureApp(tk.Tk):
                     )
                 except (OSError, ValueError, TypeError) as exc:
                     result["final_audit_error"] = f"{type(exc).__name__}: {exc}"
+            if method in {"paddleocr", "combined"} and settings.ocr_resume_completed_pages:
+                if not resume_dependencies:
+                    # A forced OCR rerun bypasses prior checkpoints but still
+                    # writes a *new* completed checkpoint for later resumption.
+                    from .project_storage import page_sections_read_path_for_image
+                    resume_dependencies = (
+                        filter_path,
+                        project_profile_path(project.root),
+                        page_sections_read_path_for_image(page),
+                        *((replace_rules_path(project.root),) if method == "combined" else ()),
+                    )
+                from .ocr_page_resume import write_page_resume
+                try:
+                    write_page_resume(
+                        ocr_cache_root(project.root), page, pdic_path(page),
+                        page_index=index, method=method, settings=settings,
+                        marker_count=len(entries), dependencies=resume_dependencies,
+                    )
+                except (OSError, ValueError, TypeError) as exc:
+                    result["resume_checkpoint_error"] = f"{type(exc).__name__}: {exc}"
             if text_stats:
                 result.update({
                     "text_filled": int(text_stats.get("filled", 0)),
@@ -15199,6 +15241,17 @@ class PictureCaptureApp(tk.Tk):
             if method in {"paddleocr", "combined"}:
                 self._refresh_page_quality_colors()
                 quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
+                resumed = sum(
+                    1 for row in results if isinstance(row, dict) and row.get("resumed")
+                )
+                if resumed:
+                    quality_text += f"；经完整校验断点跳过 {resumed} 页"
+                checkpoint_failures = sum(
+                    1 for row in results
+                    if isinstance(row, dict) and row.get("resume_checkpoint_error")
+                )
+                if checkpoint_failures:
+                    quality_text += f"；{checkpoint_failures} 页无法记录恢复点"
                 final_stats = [
                     row.get("final_audit")
                     for row in results

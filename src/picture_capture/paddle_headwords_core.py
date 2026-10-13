@@ -10,10 +10,9 @@ import json
 import math
 import os
 import re
-import subprocess
+import subprocess  # legacy paddle_headwords public test/monkeypatch hook
 import threading
 import unicodedata
-from io import BytesIO
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -1119,62 +1118,12 @@ def run_tesseract_band_records(
     settings: AppSettings,
     psm_override: int | None = None,
 ) -> tuple[list[OCRRecord], str]:
-    """Run Tesseract TSV on the same candidate band used by PaddleOCR.
-
-    This is deliberately optional.  A missing/broken Tesseract installation must
-    never prevent the primary PaddleOCR pass from completing; callers catch and
-    record the exception in the diagnostics report.
-    """
-    resolved = _tesseract_executable(settings.ocr_executable)
-    if not resolved:
-        raise RuntimeError("未找到 Tesseract OCR；请在环境中心选择 Tesseract 可执行程序或查看安装帮助。")
-    payload = BytesIO()
-    normalize_page_rgb(band).save(payload, format="PNG")
-    command = [
-        resolved, "stdin", "stdout", "-l", resolved_tesseract_language(settings),
-        "--psm", str(max(3, int(psm_override if psm_override is not None else settings.paddle_tesseract_psm))), "tsv",
-    ]
-    try:
-        proc = subprocess.run(
-            command, input=payload.getvalue(), stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, check=False, timeout=120,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Tesseract OCR 超时（120 秒）；本栏已放弃 Tesseract 结果。") from exc
-    if proc.returncode:
-        detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"Tesseract OCR 失败：{detail}")
-    tsv = proc.stdout.decode("utf-8", errors="replace")
-    records: list[OCRRecord] = []
-    lines = tsv.splitlines()
-    if not lines:
-        return records, ""
-    header = lines[0].split("\t")
-    index = {name: i for i, name in enumerate(header)}
-    required = {"level", "left", "top", "width", "height", "conf", "text"}
-    if not required.issubset(index):
-        raise RuntimeError("Tesseract TSV 缺少必要字段")
-    for row in lines[1:]:
-        cells = row.split("\t")
-        if len(cells) < len(header):
-            cells += [""] * (len(header) - len(cells))
-        try:
-            if int(cells[index["level"]]) != 5:
-                continue
-            text = cells[index["text"]].strip()
-            if not text:
-                continue
-            conf = float(cells[index["conf"]]) / 100.0
-            left = int(cells[index["left"]]); top = int(cells[index["top"]])
-            width = int(cells[index["width"]]); height = int(cells[index["height"]])
-        except (ValueError, IndexError):
-            continue
-        if width <= 0 or height <= 0:
-            continue
-        records.append(OCRRecord(text, max(0.0, conf), (left, top, left + width, top + height)))
-    records.sort(key=lambda item: (item.box[1], item.box[0]))
-    full_text = "\n".join(line.text for line in group_ocr_records(records, settings.paddle_line_merge_y_ratio))
-    return records, full_text
+    """Legacy public adapter; execution lives in an independent OCR module."""
+    from .ocr_tesseract_runner import run_tesseract_band_records_impl
+    return run_tesseract_band_records_impl(
+        band, settings, psm_override,
+        resolve_fn=_tesseract_executable, group_fn=group_ocr_records,
+    )
 
 
 def _repair_headword_ocr(text: str) -> tuple[str, tuple[str, ...]]:
@@ -6264,34 +6213,13 @@ def _image_cache_fingerprint(image: Image.Image) -> str:
 
 
 def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSettings) -> str:
-    # Only OCR-input-affecting settings belong here. Candidate rules are
-    # intentionally omitted so users can tune regex/weights and reuse cached
-    # raw OCR without re-running the model.
-    data = {
-        "version": 4,
-        "image_size": list(image.size),
-        "image_fingerprint": _image_cache_fingerprint(image),
-        "layout_transform": geometry.transform.kind,
-        "paths": [path.points for path in geometry.column_paths],
-        "geometry_top": int(geometry.top),
-        "geometry_bottom": int(geometry.bottom),
-        "column_widths": [int(value) for value in getattr(geometry, "column_widths", [])],
-        "configured_column_width": int(getattr(settings, "column_width", 0) or 0),
-        "band_width_semantics": "effective_column_ratio_v2",
-        "band_width_ratio": max(1.0, min(100.0, float(getattr(settings, "paddle_band_width_ratio", 100.0)))),
-        "band_left_margin": settings.paddle_band_left_margin,
-        "language": _paddle_language(settings),
-        "device": settings.paddle_device,
-        "ocr_version": settings.paddle_ocr_version,
-        "preprocessing": str(getattr(settings, "paddle_preprocessing", "original")),
-        "max_input_side": int(getattr(settings, "paddle_max_input_side", 2800)),
-        "use_textline_orientation": bool(getattr(settings, "paddle_use_textline_orientation", False)),
-        "raw_rec_threshold": _RAW_OCR_THRESHOLD,
-        "use_paddleocr": bool(getattr(settings, "paddle_use_paddleocr", True)),
-    }
-    encoded = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
+    from .paddle_raw_cache_signature import cache_signature
+    return cache_signature(
+        image, geometry, settings,
+        image_fingerprint=_image_cache_fingerprint,
+        paddle_language=_paddle_language,
+        raw_threshold=_RAW_OCR_THRESHOLD,
+    )
 
 
 def _records_as_merged_lines(records: list[OCRRecord], settings: AppSettings) -> list[OCRLine]:
@@ -8067,6 +7995,21 @@ def detect_paddle_headwords(
     use_tesseract = bool(settings.paddle_compare_tesseract or settings.paddle_tesseract_rescue)
     tess_language = resolved_tesseract_language(settings)
     tess_availability = tesseract_status(settings.ocr_executable, tess_language) if use_tesseract else {}
+    raw_tesseract_cache = None
+    if (
+        use_tesseract and cache_path is not None
+        and bool(getattr(settings, "ocr_cache_tesseract_raw", False))
+    ):
+        from .tesseract_raw_cache import TesseractRawCache
+        raw_tesseract_cache = TesseractRawCache(
+            cache_path, signature, language=tess_language,
+            executable=str(settings.ocr_executable),
+            auto_psm=bool(settings.paddle_tesseract_auto_psm),
+            fixed_psm=int(settings.paddle_tesseract_psm),
+            vertical=str(getattr(settings, "layout_writing_mode", "")).startswith("vertical"),
+            engine_status=tess_availability,
+            force_refresh=force_refresh,
+        )
     lens_mode = str(settings.paddle_lens_mode or "off").strip().lower()
     if not bool(getattr(settings, "paddle_enable_lens", False)):
         lens_mode = "off"
@@ -8182,7 +8125,20 @@ def detect_paddle_headwords(
         }
         tess_entries: list[Entry] = []
         tess_diagnostics: list[dict[str, Any]] = []
-        if use_tesseract:
+        skip_secondary_diagnostic = False
+        if bool(getattr(settings, "ocr_lazy_tesseract_diagnostics", False)):
+            from .ocr_lazy_secondary import can_skip_tesseract_diagnostic_column
+            skip_secondary_diagnostic = can_skip_tesseract_diagnostic_column(
+                diagnostics, enabled=True, paddle_enabled=use_paddle,
+                tesseract_enabled=use_tesseract,
+                rescue_enabled=bool(settings.paddle_tesseract_rescue),
+                arbitration_enabled=bool(settings.paddle_dual_ocr_arbitration),
+                lens_mode=lens_mode,
+            )
+        if skip_secondary_diagnostic:
+            tess_payload["skipped"] = True
+            tess_payload["skip_reason"] = "diagnostic_only_high_trust_paddle_column"
+        if use_tesseract and not skip_secondary_diagnostic:
             if str(getattr(settings, "layout_writing_mode", "horizontal-tb")).startswith("vertical"):
                 psm_values = [5]
             else:
@@ -8191,12 +8147,38 @@ def detect_paddle_headwords(
             errors: list[str] = []
             for psm in dict.fromkeys(psm_values):
                 try:
-                    source_candidate_records, candidate_text = run_tesseract_band_records(
-                        band, settings, psm_override=psm
+                    cached_tess = (
+                        raw_tesseract_cache.read(col, psm)
+                        if raw_tesseract_cache is not None else None
                     )
-                    candidate_records = _records_to_canonical_band(
-                        source_candidate_records, band.size, transform_kind
-                    )
+                    if cached_tess is None:
+                        source_candidate_records, candidate_text = run_tesseract_band_records(
+                            band, settings, psm_override=psm
+                        )
+                        candidate_records = _records_to_canonical_band(
+                            source_candidate_records, band.size, transform_kind
+                        )
+                        if raw_tesseract_cache is not None:
+                            raw_tesseract_cache.record(
+                                col, psm, [asdict(record) for record in candidate_records],
+                                candidate_text,
+                            )
+                    else:
+                        raw_records, candidate_text = cached_tess
+                        candidate_records = [
+                            OCRRecord(
+                                text=str(raw["text"]),
+                                confidence=float(raw["confidence"]),
+                                box=tuple(int(v) for v in raw["box"]),
+                                recovery=str(raw.get("recovery", "") or ""),
+                                recovery_source_text=str(raw.get("recovery_source_text", "") or ""),
+                                parent_box=(
+                                    tuple(int(v) for v in raw["parent_box"])
+                                    if raw.get("parent_box") else None
+                                ),
+                            )
+                            for raw in raw_records
+                        ]
                     candidate_entries, candidate_diagnostics = filter_records(
                         candidate_records, analysis_band, source_top, canonical_u, settings,
                         separator_band=analysis_separator_band, user_rules=user_rules,
@@ -8238,6 +8220,8 @@ def detect_paddle_headwords(
             else:
                 tess_payload["error"] = " | ".join(errors) or str(tess_availability.get("error") or "Tesseract 不可用")
 
+        if skip_secondary_diagnostic:
+            tess_payload["accepted_count"] = 0
         compare_tolerance = max(
             4,
             round(
@@ -8427,6 +8411,10 @@ def detect_paddle_headwords(
     agreement = _agreement_summary(review_candidates)
     if not use_tesseract and lens_mode == "off":
         agreement["agreement"] = 1.0
+    agreement["secondary_diagnostic_columns_skipped"] = sum(
+        1 for col in report_columns
+        if bool((col.get("tesseract", {}) or {}).get("skipped"))
+    )
     agreement["selected"] = sum(1 for item in review_candidates if item.get("selected"))
     agreement["cjk_duplicates_merged"] = cjk_duplicates_merged
     agreement["original_y_fallbacks"] = original_y_fallbacks
@@ -8487,5 +8475,12 @@ def detect_paddle_headwords(
         for obsolete in _regenerable_sidecars(cache_path):
             obsolete.unlink(missing_ok=True)
         _update_project_quality_summary(cache_path, agreement, review_candidates)
+        if raw_tesseract_cache is not None:
+            try:
+                raw_tesseract_cache.save()
+            except OSError:
+                # A failed *optional* engine cache must never discard a valid
+                # final OCR detection or saved primary cache.
+                pass
 
     return all_entries

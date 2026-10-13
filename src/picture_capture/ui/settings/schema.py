@@ -595,6 +595,9 @@ CHECK_HELP = {
         ),
         "paddle_use_textline_orientation": "开启：让 PaddleOCR 额外处理文字行方向/旋转信息，适合文字行方向不稳定、局部旋转或特殊扫描。\n\n代价：通常增加计算并可能改变模型路径。普通已经规范化的横排/竖排页面不需要为了“更准”而默认开启，优先让 Project Profile 的页面变换处理整体方向。",
         "paddle_remove_syllable_separators": "开启：最终 lemma 归一化时去掉音节分隔点（如 ·、•、∙、‧），并对部分 OCR 分隔符误识别做保守清理；真正的单个词内连字符原则上保留。\n\n关闭：保留词头中的这些分隔符，适合词典索引本身就要求保留音节标记的项目。它改变输出 lemma 文本，不改变词头 Y。",
+        "ocr_resume_completed_pages": "可选的 OCR画线/融合画线跨程序断点恢复，默认关闭。开启后按页保存已成功写出的 PDIC 摘要；同一项目再次批量运行时，仅对原图完整内容、设置、Profile、过滤规则、SECTION 结构和 PDIC 文件内容全部一致的页面跳过 OCR，任何差异都会重新检测。\n\n这不是自动恢复人工修改：人工编辑了 PDIC 的页面不满足已完成校验，重新画线仍需按原流程确认覆盖。缓存摘要不是永久备份。",
+        "ocr_cache_tesseract_raw": "实验性分层缓存，默认关闭。开启后，按原图/几何/语言/二次引擎版本及 PSM 参数分别保存 Tesseract 原始文字框；修改词头规则时可重用 OCR 文字而重新仲裁，避免每次运行两个 PSM。\n\n切换模型、语言、原图或版面会自动失效；强制重新识别会跳过旧缓存。此选项不会关闭 Tesseract，也不改变词头接受算法。",
+        "ocr_lazy_tesseract_diagnostics": "实验性按需二次 OCR，默认关闭。只在 Tesseract 仅作诊断对照、没有补漏或双引擎仲裁权、Lens 关闭，并且该栏至少两条 Paddle 候选全部通过高可信语法/置信度检查时，才跳过该栏的 Tesseract 调用。\n\n启用会减少部分候选对照证据，不能保证发现仅 Tesseract 识别到的漏词；需要完整 OCR 诊断或对照测量时应关闭。不会在 Tesseract 有补漏/融合作用时跳过。",
         "paddle_auto_header_rule": "开启：在页面顶部指定范围内寻找高横向墨迹占比的页眉横线，并把其上方内容排除出候选区。可减少 running header、页码等误词头。\n\n关闭：不做这套自动横线截断。若 Project Profile 已明确提供页眉模板，优先相信模板；第一条正文被误裁时检查搜索高度、墨迹比例和页眉后余量。",
         "paddle_enable_lens": (
             "开启：允许 Google Lens 进入共享 OCR 通道；是否真的调用以及是否参与结果，由【Lens 运行模式】决定。\n\n"
@@ -671,6 +674,9 @@ OCR_COMMON_CHECKS = (
 
 OCR_ADVANCED_CHECKS = (
         ("启用文字行方向识别", "paddle_use_textline_orientation"),
+        ("批量 OCR 启用断点恢复（默认关）", "ocr_resume_completed_pages"),
+        ("实验：Tesseract 分层缓存（默认关）", "ocr_cache_tesseract_raw"),
+        ("实验：按需 Tesseract 诊断（默认关）", "ocr_lazy_tesseract_diagnostics"),
         ("自动忽略页眉横线以上", "paddle_auto_header_rule"),
         ("去除词头音节分隔点", "paddle_remove_syllable_separators"),
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
