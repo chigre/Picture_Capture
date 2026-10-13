@@ -55,7 +55,9 @@ def test_two_worker_pool_submits_at_most_four_before_completion(tmp_path, monkey
             # Ensure the coordinator has queued its first window.
             for _ in range(300):
                 pool = _ThreadPoolLikeProcessPool.last
-                if pool is not None and pool.initial_window_submitted.wait(0.01):
+                if pool is None:
+                    threading.Event().wait(0.01)
+                elif pool.initial_window_submitted.wait(0.01):
                     break
             assert pool is not None and pool.initial_window_submitted.is_set()
             assert len(pool.submitted) == 4
