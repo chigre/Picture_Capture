@@ -19,11 +19,9 @@ def recent_registry_lock(path: Path, *, timeout: float = 15.0) -> Iterator[None]
     lock.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + timeout
     with lock.open("a+b") as handle:
-        handle.seek(0)
-        if handle.read(1) != b"0":
-            handle.seek(0)
-            handle.write(b"0")
-            handle.flush()
+        # Never read/write the byte while another Windows process owns its
+        # lock: reading a locked region raises PermissionError on Windows.
+        # Windows and POSIX byte-range locking allow a region beyond EOF.
         handle.seek(0)
         if os.name == "nt":
             import msvcrt
