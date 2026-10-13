@@ -8,6 +8,7 @@ from tkinter import messagebox, ttk
 from ...coordinate_space import SOURCE_COORDINATE_SPACE
 from ...crop.settings import CROP_SETTINGS_VERSION
 from ...project_storage import qt_root
+from ...formats import write_text_atomic
 from ...ui_compat import fit_window_to_work_area
 from .common import _build_modern_dialog_heading
 
@@ -178,7 +179,7 @@ class CropSettingsDialog(tk.Toplevel):
             path = self._config_path
             if path:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             # Keep legacy AppSettings mirrors synchronized for backward compatibility,
             # but all user-facing crop controls live exclusively in 【切图设置】.
             self.parent.settings.crop_parallel_workers = int(payload["parallel_workers"])
