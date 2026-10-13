@@ -39,65 +39,88 @@ def _app_key(app: Any) -> tuple[Any, ...]:
     )
 
 
-def _run_replay(source: Image.Image, settings: Any, page_index: int) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
-    """Collect stages by running the actual production Layout Core once.
+def _run_replay(
+    source: Image.Image, settings: Any, page_index: int,
+    page_sections: list[Any] | None = None,
+) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
+    """Run the *actual* ordinary-drawing facade, not a reduced Layout imitation.
 
-    This is a separate *read-only diagnostic run*: no layouts, Entry metadata,
-    output files or project caches are mutated by playback.
+    The same call records shared preprocessing, optional mask, Layout Core,
+    【】 recovery and final candidate filtering. It never publishes a PDIC.
     """
-    from .image_utils import build_analysis_image
-    from .layout_core_understanding import understand_layout_core
+    from .processing import detect_entries
+    from .profile_semantics import effective_page_settings
+
+    effective = effective_page_settings(settings, source.size, int(page_index))
+    method = str(getattr(effective, "detection_method", "") or "").strip().lower()
+    if method in {"paddleocr", "combined"}:
+        raise ValueError(
+            "当前为 OCR/融合识别模式；普通画线过程回放只适用于普通模式，"
+            "不能把 Layout Core 冒充完整 OCR/融合流水线。"
+        )
 
     trace = LayoutStepTrace()
-    analysis = build_analysis_image(source, settings)
     previews: dict[str, Image.Image] = {}
-    try:
-        profile = dict(analysis.info.get("analysis_denoise_profile") or {})
-        trace.add_note(
-            "image_preparation", "分析图与去噪",
-            "原图未改动。该阶段显示实际送入 Layout 的共享分析图；"
-            "去噪只改变分析副本，不改变原图坐标。",
-            details={"denoise": profile, "source_size": list(source.size)},
-        )
-        analysis_thumb = analysis.copy()
-        analysis_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
-        previews["image_preparation"] = analysis_thumb
-        masked = None
-        if bool(getattr(settings, "layout_mask_illustrations", False)):
-            from .layout_illustration_mask import mask_large_illustrations_for_layout
-            try:
-                masked, _stats = mask_large_illustrations_for_layout(
-                    analysis, settings, profile_page_index=int(page_index),
-                )
-            except Exception:
-                masked = None
-        actual = masked if masked is not None else analysis
-        if masked is not None and masked is not analysis:
-            trace.add_note(
-                "illustration_mask", "插图区域掩膜",
-                "本阶段显示实际进入 Layout 的插图白化分析图（不改动原图）。",
-            )
-        # Only the two meaningful analysis-image transitions keep bounded
-        # thumbnails; all geometric intermediate states remain coordinate data.
+
+    def capture(key: str, image: Image.Image) -> None:
+        preview = image.copy()
         try:
-            if masked is not None and masked is not analysis:
-                mask_thumb = masked.copy()
-                mask_thumb.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
-                previews["illustration_mask"] = mask_thumb
-            understand_layout_core(
-                actual, settings, page_index=page_index, trace=trace,
-                large_head_diagnostics=[],
-            )
-            return trace, previews
-        finally:
-            if masked is not None and masked is not analysis:
-                masked.close()
+            preview.thumbnail((1400, 1800), Image.Resampling.LANCZOS)
+            prior = previews.pop(key, None)
+            if prior is not None:
+                prior.close()
+            previews[key] = preview
+        except BaseException:
+            preview.close()
+            raise
+
+    try:
+        pipeline: dict[str, Any] = {
+            "_layout_replay_trace": trace,
+            "_layout_replay_preview": capture,
+        }
+        # Uses the same effective settings, sections, actual entry algorithms
+        # and stage records as the 普通画线 button, once per requested page.
+        detect_entries(
+            source, settings, profile_page_index=int(page_index),
+            page_sections=page_sections, debug_trace=pipeline,
+        )
+        if not trace.stages:
+            raise RuntimeError("普通画线未提供任何可回放阶段")
+        return trace, previews
     except BaseException:
         for preview in previews.values():
             preview.close()
         raise
-    finally:
-        analysis.close()
+
+
+def _preview_at_stage(
+    stages: list[dict[str, Any]], index: int, previous: bool,
+    previews: dict[str, Image.Image], original: Image.Image,
+) -> Image.Image:
+    """Use the *latest actual* preprocessed raster, not the raw scan after mask.
+
+    The before toggle at masking previews the analysis input; the first stage
+    toggles between original and cleaned raster.
+    """
+    target = max(-1, index - int(previous))
+    for position in range(target, -1, -1):
+        candidate = previews.get(stages[position]["key"])
+        if candidate is not None:
+            return candidate
+    return original
+
+
+def _stage_entries_for_display(
+    stages: list[dict[str, Any]], index: int, previous: bool,
+) -> list[dict[str, Any]]:
+    """Return the last recorded production marker list at/before this stage."""
+    target = index - int(previous)
+    for position in range(target, -1, -1):
+        stage = stages[position]
+        if "entries" in stage:
+            return stage["entries"]
+    return []
 
 
 def _stage_rows_for_display(
@@ -323,9 +346,12 @@ class LayoutStepReplayWindow:
         self.step_var.set("计算中")
         self.status.set(f"正在分析第 {int(getattr(self.app, 'current_index', 0))+1} 页，记录真实阶段……")
         self.render()
-        settings = copy.deepcopy(self.app._current_effective_profile_settings())
+        settings = copy.deepcopy(self.app.settings)
         page_index = int(getattr(self.app, "current_index", 0))
-        future = self._executor.submit(_run_replay, source, settings, page_index)
+        page_sections = copy.deepcopy(list(getattr(self.app, "page_sections", []) or []))
+        future = self._executor.submit(
+            _run_replay, source, settings, page_index, page_sections,
+        )
         self._pending = future
 
         def completed(result: Any) -> None:
@@ -402,8 +428,13 @@ class LayoutStepReplayWindow:
             return
         source = self._source
         stage = self._trace.stages[self._stage_index] if self._trace else None
-        preview = (self._previews.get(stage["key"]) if stage and not self.before.get() else None)
-        original = preview if preview is not None else source
+        original = (
+            _preview_at_stage(
+                self._trace.stages, self._stage_index, self.before.get(),
+                self._previews, source,
+            )
+            if self._trace else source
+        )
         target = (
             max(1, int(source.width * self._scale)),
             max(1, int(source.height * self._scale)),
