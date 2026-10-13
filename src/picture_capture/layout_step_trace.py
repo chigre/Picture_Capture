@@ -97,7 +97,8 @@ class LayoutStepTrace:
 
     def add_layout(self, key: str, title: str, description: str,
                    layout: Any, *, details: dict[str, Any] | None = None,
-                   candidates: list[dict[str, Any]] | None = None) -> None:
+                   candidates: list[dict[str, Any]] | None = None,
+                   provisional_no_indent: bool = False) -> None:
         """Freeze source-aligned rectangles at exactly one production boundary."""
         top = int(getattr(layout, "body_top", 0))
         bottom = int(getattr(layout, "body_bottom", 0))
@@ -124,7 +125,9 @@ class LayoutStepTrace:
                     "column": col_index, "center": center,
                     "tolerance": tolerance,
                     "support": int(getattr(mode, "support", 0) or 0),
-                    "role": str(getattr(mode, "role", "unknown")),
+                    "role": ("unclassified" if provisional_no_indent else
+                             str(getattr(mode, "role", "unknown"))),
+                    "raw_provisional_role": str(getattr(mode, "role", "unknown")),
                     "source_line": [*lane_top, *lane_bottom],
                 })
             for line in getattr(col, "lines", ()) or ():
@@ -136,17 +139,39 @@ class LayoutStepTrace:
                 rows.append({
                     "id": row_id, "column": col_index,
                     "source_box": [p0[0], p0[1], p1[0], p1[1]],
-                    "canonical_y": y0, "role": str(getattr(line, "role", "unknown")),
+                    "canonical_y": y0,
+                    "role": ("unclassified" if provisional_no_indent else
+                             str(getattr(line, "role", "unknown"))),
+                    "raw_provisional_role": str(getattr(line, "role", "unknown")),
                     "first_x": float(getattr(line, "first_x", 0) or 0),
                 })
         changes = diff_rows(self._last_rows, rows) if self._last_rows else []
         self.stages.append({
             "key": key, "title": title, "description": description,
             "details": dict(details or {}),
+            "provisional_no_indent": bool(provisional_no_indent),
             "columns": columns, "lanes": lanes, "rows": rows, "changes": changes,
             "candidates": [dict(item) for item in (candidates or ())],
         })
         self._last_rows = rows
+
+    def adopt_unshown_role_baseline(self, layout: Any) -> None:
+        """Update row-diff baseline after a mandatory but non-semantic reset.
+
+        In explicit no-indent mode, the Page Design provisional roles must be
+        cleared to 'body' so downstream independent detectors have a neutral
+        starting state. That administrative normalization is intentionally not
+        a user-visible stage; without resetting the baseline here, the next
+        visual-check stage would falsely claim 140 role promotions.
+        """
+        before = len(self.stages)
+        self.add_layout(
+            "__internal_neutral_baseline__", "内部中性角色初始化",
+            "无明显缩进：仅将物理行的历史临时标签归零，不参与词头推断。",
+            layout,
+        )
+        self.stages.pop()
+        assert len(self.stages) == before
 
     def add_entries(
         self, stage: dict[str, Any], *, description: str,
@@ -225,6 +250,19 @@ class LayoutStepTrace:
                     "reason": stage["description"],
                 })
                 prior = role
+            if stage.get("provisional_no_indent") and current is not None:
+                # A no-indent page has an invisible, *mandatory* administrative
+                # role reset before actual visual evidence. Show it in a
+                # clicked row's history so 'unclassified -> body' cannot be
+                # falsely attributed to symbol evidence, without making it a
+                # numbered, interactive Layout inference stage.
+                history.append({
+                    "stage": "内部中性角色初始化（非词头识别步骤）",
+                    "role": "body",
+                    "reason": "无明显缩进：清除 Page Design 临时词头标签；"
+                              "物理行全部以中性 body 开始，不能据缩进推断词条。",
+                })
+                prior = "body"
         return history
 
     def final_roles(self) -> list[tuple[str, str]]:

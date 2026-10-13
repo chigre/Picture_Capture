@@ -17,6 +17,7 @@ from .layout_physical_indent import (
     normalize_layout_roles,
 )
 from .layout_profile_anchor import anchor_resolved_layout_to_profile
+from .profile_indent_ui import indent_type_label
 from .layout_step_trace import LayoutStepTrace
 
 
@@ -65,12 +66,40 @@ def infer_composed_physical_page_layout(
         policy_resolver=anchored_policy,
     )
     if trace is not None:
-        trace.add_layout("physical_rows", "物理行检测",
-                         "Page Design 原始物理行与正文栏范围；角色尚未经过后续完整修正。", layout)
+        # Page Design's historical two-polarity builder emits temporary entry
+        # labels even for a Profile explicitly configured as "no indent". The
+        # real semantic reset happens in Layout Core after this composition
+        # boundary; show geometry without falsely presenting those temporary
+        # labels as meaningful headword decisions.
+        neutral = indent_type_label(page_settings) == "无明显缩进"
+        trace.add_layout(
+            "physical_rows", "物理行检测",
+            ("物理行与行首位置聚类，仅反映几何观察。当前为【无明显缩进】，"
+             "临时 entry/body 不具词条含义，统一显示为未分类；"
+             "原始临时标签保留在诊断数据中。" if neutral else
+             "Page Design 原始物理行与正文栏范围；"
+             "此时的 entry/body 为临时标签，尚未完成 Profile 语义和视觉复核。"),
+            layout,
+            details={
+                "profile_indent_mode": indent_type_label(page_settings),
+                "role_status": "not_classified" if neutral else "provisional",
+                **({"skipped_semantic_stages": [
+                    "基础行角色", "缩进语义判定", "正文缩进族调整",
+                    "视觉一致性复核", "缺失缩进恢复",
+                ], "next_visible_stage": "符号证据融合"} if neutral else {}),
+            },
+            provisional_no_indent=neutral,
+        )
     normalize_layout_roles(layout)
-    if trace is not None:
-        trace.add_layout("initial_roles", "基础行角色",
-                         "由物理行和初步缩进族得到的角色；尚未合并大字头和符号证据。", layout)
+    if trace is not None and not neutral:
+        trace.add_layout(
+            "initial_roles", "基础行角色",
+            "由物理行和初步缩进族得到的临时角色；"
+            "尚未合并大字头和符号证据。",
+            layout,
+            details={"profile_indent_mode": indent_type_label(page_settings),
+                     "role_status": "provisional"},
+        )
     return layout, page_settings, applied
 
 

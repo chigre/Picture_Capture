@@ -159,20 +159,37 @@ def _format_stage(
         else:
             lines.append(f"{k}: {value}")
     lanes = stage.get("lanes", ())
+    provisional_no_indent = bool(stage.get("provisional_no_indent", False))
     if lanes:
-        lines.append(f"缩进群：{len(lanes)}")
+        lines.append(
+            f"物理行首位置聚类：{len(lanes)} 组（非词条类别）"
+            if provisional_no_indent else f"缩进群：{len(lanes)}"
+        )
         for lane in lanes:
             lines.append(
                 f"  {lane['id']}：中心 {lane['center']:.1f}px，"
                 f"容差 ±{lane['tolerance']:.1f}px，"
-                f"支持 {lane['support']} 行，角色 {lane['role']}"
+                f"支持 {lane['support']} 行，"
+                + ("语义 未分类" if provisional_no_indent
+                   else f"角色 {lane['role']}")
             )
+        if provisional_no_indent:
+            singleton = sum(int(lane["support"]) == 1 for lane in lanes)
+            lines.extend([
+                "",
+                "【无明显缩进】不允许以行首 X 差异推断词条。",
+                "历史底层实现会暂时给某些行标记 entry，"
+                "但此阶段尚未应用 Profile；这些标签不是有效词头。",
+                f"单行离群位置：{singleton} 组；可能来自异常行、插图或大字形，"
+                "不能仅凭该聚类认定词头。",
+            ])
     rows = stage["rows"]
     if rows:
         counts: dict[str, int] = {}
         for row in rows:
             counts[row["role"]] = counts.get(row["role"], 0) + 1
-        lines.extend(["", f"本阶段物理行：{len(rows)}", "行角色：" + "、".join(
+        lines.extend(["", f"本阶段物理行：{len(rows)}",
+                      ("语义状态（尚未分类）：" if provisional_no_indent else "行角色：") + "、".join(
             f"{k} {v}" for k, v in sorted(counts.items())
         )])
     if "entries" in stage:
