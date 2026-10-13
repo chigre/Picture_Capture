@@ -67,12 +67,19 @@ def _understand_page_current(
     page_index: int,
     page_sections: list[PageSection] | None,
     layout_only: bool = False,
+    layout_trace: Any | None = None,
+    replay_preview: Any | None = None,
 ) -> PageUnderstanding | None:
     """Resolve Page Understanding with optional static illustration masking."""
     analysis_image = image
     mask_stats = None
     append_reason = None
-    if bool(getattr(settings, "layout_mask_illustrations", False)):
+    mask_candidates: list[dict[str, Any]] | None = (
+        [] if layout_trace is not None else None
+    )
+    masking_enabled = bool(getattr(settings, "layout_mask_illustrations", False))
+    mask_error = None
+    if masking_enabled:
         from .layout_illustration_mask import (
             IllustrationMaskStats,
             append_mask_reason,
@@ -86,10 +93,34 @@ def _understand_page_current(
                 image,
                 settings,
                 profile_page_index=int(page_index),
+                **({"candidate_debug": mask_candidates}
+                   if mask_candidates is not None else {}),
             )
-        except Exception:
+        except Exception as exc:
             analysis_image = image
             mask_stats = IllustrationMaskStats()
+            mask_error = f"{type(exc).__name__}: {exc}"
+
+    if layout_trace is not None:
+        # A disabled/no-candidates/no-mask/failure result is still an explicit
+        # stage: the user must not infer that masking was skipped silently.
+        stats = mask_stats
+        layout_trace.add_note(
+            "illustration_mask", "Layout 前插图区域检测／白化",
+            ("启用后先筛选自动插图候选，只有安全通过的多边形才填白。"
+             if masking_enabled else "当前项目已关闭 Layout 前插图掩膜。"),
+            details={
+                "enabled": masking_enabled,
+                "detected": int(stats.detected) if stats else 0,
+                "masked": int(stats.masked) if stats else 0,
+                "rejected_small": int(stats.rejected_small) if stats else 0,
+                "rejected_headlike": int(stats.rejected_headlike) if stats else 0,
+                "failure_fallback_to_unmasked": mask_error,
+            },
+            candidates=mask_candidates,
+        )
+        if replay_preview is not None and masking_enabled:
+            replay_preview("illustration_mask", analysis_image)
 
     try:
         # Both the layout-only and enriched Page Understanding branches use
@@ -102,6 +133,7 @@ def _understand_page_current(
                 analysis_image,
                 settings,
                 page_index=page_index,
+                **({"trace": layout_trace} if layout_trace is not None else {}),
             )
         else:
             from .layout_composition import understand_composed_page
@@ -491,6 +523,12 @@ def _record_ordinary_debug_stage(
                     if (item["x"], item["y"]) not in current_keys],
         **details,
     })
+    replay_trace = trace.get("_layout_replay_trace")
+    if replay_trace is not None:
+        from .ordinary_unified_diagnostics import STAGE_DESCRIPTIONS
+        replay_trace.add_entries(
+            stages[-1], description=STAGE_DESCRIPTIONS.get(stage, stage),
+        )
 
 
 def detect_entries(
@@ -516,6 +554,20 @@ def detect_entries(
     method = str(getattr(effective, "detection_method", "") or "").strip().lower()
     analysis_image = build_analysis_image(source, effective)
     ordinary_mode = method not in {"paddleocr", "combined"}
+    replay_trace = debug_trace.get("_layout_replay_trace") if debug_trace else None
+    replay_preview = debug_trace.get("_layout_replay_preview") if debug_trace else None
+    if replay_trace is not None:
+        replay_trace.add_note(
+            "image_preparation", "共享分析图与去噪",
+            "按当前页实际有效 Profile 生成共享分析图；以下插图掩膜发生在 Layout 前。",
+            details={
+                "source_size": list(source.size),
+                "denoise": dict(analysis_image.info.get("analysis_denoise_profile") or {}),
+                "effective_detection_method": method,
+            },
+        )
+        if replay_preview is not None:
+            replay_preview("image_preparation", analysis_image)
 
     understanding = _understand_page_current(
         analysis_image,
@@ -523,6 +575,8 @@ def detect_entries(
         page_index=profile_page_index,
         page_sections=page_sections,
         layout_only=ordinary_mode,
+        layout_trace=replay_trace if ordinary_mode else None,
+        replay_preview=replay_preview if ordinary_mode else None,
     )
 
     # Ordinary drawing is a direct materialization of final Layout Core roles.
@@ -663,6 +717,12 @@ def detect_entries(
             )
             return sorted_entries, geometry
 
+        if replay_trace is not None:
+            replay_trace.add_note(
+                "vb_fallback", "Layout 物理行不可用：使用 VB 备用通道",
+                "该页未产生可用 Layout 列，实际画线走 VB 备用路径，"
+                "不是正常 Layout Core／【】恢复阶段。",
+            )
         return _ordinary_vb_fallback(
             analysis_image,
             source,
