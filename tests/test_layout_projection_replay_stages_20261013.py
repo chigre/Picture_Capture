@@ -1,0 +1,158 @@
+"""The 2 pre-physical stages are produced by the live Page Design projector.
+
+These tests compare diagnostic/on-off output, stage order, original source
+coordinates, and actual short-gap/valley changes. They do not simulate rows
+from the final rectangles and do not require a running Tk display.
+"""
+from __future__ import annotations
+
+from PIL import Image, ImageDraw
+import numpy as np
+
+from picture_capture.layout_physical_indent import (
+    _raw_projection_runs, projection_line_runs,
+)
+from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout_step_replay_ui import (
+    _projection_candidates_for_display, _format_stage,
+)
+from picture_capture.layout_core_understanding import (
+    understand_layout_core, clear_layout_understanding_cache,
+)
+from picture_capture.models import AppSettings
+from picture_capture.profile_indent_ui import apply_indent_type_label
+
+
+def _ink_with_gap():
+    ink = np.zeros((115, 35), dtype=bool)
+    ink[5:20, :8] = True
+    ink[22:40, :8] = True    # exactly 2 blank scan-lines between
+    ink[66:74, :8] = True
+    return ink
+
+
+def test_live_gap_trace_and_default_produce_identical_runs():
+    ink = _ink_with_gap()
+    raw_debug = {}
+    with_debug = projection_line_runs(ink, 60, debug=raw_debug)
+    ordinary = projection_line_runs(ink, 60)
+    assert with_debug == ordinary
+    assert raw_debug["original_runs"] == [(5, 20), (22, 40), (66, 74)]
+    assert raw_debug["bridged_gaps"] == [(20, 22)]
+    assert raw_debug["connected_runs"] == [(5, 40), (66, 74)]
+    assert raw_debug["max_gap_px"] == 2
+    assert raw_debug["final_runs"] == ordinary
+    assert raw_debug["threshold"] == 2.0
+
+
+def test_live_tall_band_records_actual_valley_splits_without_modifying_result():
+    ink = np.zeros((105, 30), dtype=bool)
+    ink[5:65, :9] = True
+    ink[24, :] = False       # 1px valley, joined by the same projector
+    diag = {}
+    observed = projection_line_runs(ink, 20, debug=diag)
+    reference = projection_line_runs(ink, 20)
+    assert observed == reference
+    assert diag["bridged_gaps"] == [(24, 25)]
+    assert diag["valley_splits"]
+    assert any(x["at_y"] == 24 for x in diag["valley_splits"])
+    assert diag["final_runs"] == observed
+
+
+def _page():
+    page = Image.new("RGB", (420, 340), "white")
+    draw = ImageDraw.Draw(page)
+    for n in range(11):
+        y = 19 + n * 26
+        draw.rectangle((25, y, 40, y + 15), fill="black")
+        draw.rectangle((52, y, 162, y + 15), fill="black")
+    return page
+
+
+def _roles(understanding):
+    return [
+        (column.index, line.y0, line.y1, line.role, float(line.first_x))
+        for column in understanding.layout.columns for line in column.lines
+    ]
+
+
+def test_composed_layout_captures_final_real_pass_before_physical_rows():
+    page = _page()
+    settings = AppSettings(
+        columns=1, manual_x=20, column_width=250,
+        start_y=8, character_height=17, ordinary_auto_layout=False,
+    )
+    apply_indent_type_label(settings, "无明显缩进")
+    clear_layout_understanding_cache()
+    try:
+        ordinary = understand_layout_core(page, settings, page_index=0)
+        trace = LayoutStepTrace()
+        traced = understand_layout_core(
+            page, settings, page_index=0, trace=trace,
+        )
+        assert _roles(ordinary) == _roles(traced)
+        keys = [stage["key"] for stage in trace.stages]
+        i = keys.index("projection_gap_bridge")
+        assert keys[i + 1] == "projection_tall_split"
+        assert keys[i + 2] == "physical_rows"
+        assert keys.index("effective_parameters") < i
+        assert keys[i + 3] == "symbol_evidence"  # no-indent shortcut
+        first = trace.stages[i]
+        second = trace.stages[i + 1]
+        assert first["details"]["projection_pass_count"] == 3
+        assert second["details"]["shown_pass"].startswith("最后一轮")
+        assert first["details"]["columns"][0]["sample_strip_width"] > 0
+        assert first["details"]["columns"][0]["output_rows"] > 0
+        assert sum(c["status"] == "retained_row" for c in second["candidates"]) == (
+            first["details"]["columns"][0]["output_rows"]
+        )
+        assert len(trace.stages[i + 2]["rows"]) > 0
+        assert any(c["status"] == "raw_band" for c in first["candidates"])
+        assert all(
+            0 <= coord <= (page.width if k % 2 == 0 else page.height)
+            for c in first["candidates"]
+            for k, coord in enumerate(c["source_box"])
+        )
+        original = _projection_candidates_for_display(first, True)
+        bridged = _projection_candidates_for_display(first, False)
+        assert original and bridged
+        assert {x["status"] for x in original} == {"raw_band"}
+        assert {x["status"] for x in bridged} <= {
+            "connected_band", "bridged_gap",
+        }
+        assert {x["status"] for x in
+                _projection_candidates_for_display(second, True)} == {
+            "connected_band",
+        }
+        assert "行首采样" in _format_stage(first)
+        assert "\n" in _format_stage(first)
+    finally:
+        clear_layout_understanding_cache()
+        page.close()
+
+
+def test_empty_projection_preserves_normal_run_output_and_no_fake_changes():
+    empty = np.zeros((90, 40), dtype=bool)
+    debug = {}
+    assert projection_line_runs(empty, 22, debug=debug) == []
+    assert projection_line_runs(empty, 22) == []
+    assert debug["original_runs"] == []
+    assert debug["bridged_gaps"] == []
+    assert debug["final_runs"] == []
+
+
+def test_split_stage_before_after_only_shows_real_computational_state():
+    fake = {
+        "key": "projection_tall_split",
+        "candidates": [
+            {"status": "connected_band"}, {"status": "retained_row"},
+            {"status": "split_valley"}, {"status": "fallback_slot"},
+            {"status": "ignored_short"},
+        ],
+    }
+    assert [x["status"] for x in _projection_candidates_for_display(fake, True)] == [
+        "connected_band",
+    ]
+    assert [x["status"] for x in _projection_candidates_for_display(fake, False)] == [
+        "retained_row", "split_valley", "fallback_slot", "ignored_short",
+    ]
