@@ -521,37 +521,46 @@ def understand_layout_core(
         # Internal role neutralization is not a visual-evidence change.
         # Update the diff baseline without emitting another step.
         trace.adopt_unshown_role_baseline(layout)
-    from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
-    visual_role_check = suppress_contradictory_cjk_body_lane_entries(
-        image, page_settings, layout,
-    )
-    if trace is not None:
-        trace.add_layout(
-            "visual_consistency", "视觉一致性复核",
-            ("【无明显缩进】模式：从物理行直接进入视觉检查；"
-             "下游以中性 body 为初始角色，不以行首 X 差异识别词头。"
-             if layout.indent_type == "none" else
-             "检查可见墨迹与缩进带的冲突，撤销无独立证据的错误词头。"),
-            layout, details={
-                "indent_type": str(layout.indent_type),
-                "demoted_rows": int(visual_role_check["demoted_rows"]),
-                "repaired_columns": int(visual_role_check["repaired_columns"]),
-            },
+    if layout.indent_type == "none":
+        # Both consumers below guard on indent_type == 'body' and return only
+        # zeros for no-indent. Their names would misleadingly suggest an
+        # analysis took place. Skip the actual no-op calls and their replay
+        # frames; the next real operation is symbol/large-head evidence.
+        visual_role_check = {
+            "checked_columns": 0, "repaired_columns": 0,
+            "demoted_rows": 0, "repaired_indices": [],
+        }
+        restored_indents = {
+            "rescued_columns": 0, "rescued_rows": 0, "cjk_bracket_rows": 0,
+        }
+    else:
+        from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
+        visual_role_check = suppress_contradictory_cjk_body_lane_entries(
+            image, page_settings, layout,
         )
-    # Keep the visible Layout and downstream ordinary drawings consistent:
-    # repair a near-empty indent family only when independently printed glyphs
-    # or a separate geometric Page Design pass proves real entry starts.
-    from .layout_column_indent_recovery import restore_proven_column_indents
-    restored_indents = restore_proven_column_indents(
-        image, page_settings, layout, page_index=int(page_index),
-    )
-    if trace is not None:
-        trace.add_layout("indent_recovery", "缺失缩进恢复",
-                         "只有独立的字形/几何证据充分时才恢复未识别的词头起点。",
-                         layout, details={
-                             "rescued_columns": int(restored_indents["rescued_columns"]),
-                             "rescued_rows": int(restored_indents["rescued_rows"]),
-                         })
+        if trace is not None:
+            trace.add_layout(
+                "visual_consistency", "视觉一致性复核",
+                "检查可见墨迹与缩进带的冲突，撤销无独立证据的错误词头。",
+                layout, details={
+                    "indent_type": str(layout.indent_type),
+                    "demoted_rows": int(visual_role_check["demoted_rows"]),
+                    "repaired_columns": int(visual_role_check["repaired_columns"]),
+                },
+            )
+        # Keep visible Layout and downstream ordinary drawings consistent:
+        # restore only when a separate observation proves actual entry starts.
+        from .layout_column_indent_recovery import restore_proven_column_indents
+        restored_indents = restore_proven_column_indents(
+            image, page_settings, layout, page_index=int(page_index),
+        )
+        if trace is not None:
+            trace.add_layout("indent_recovery", "缺失缩进恢复",
+                             "只有独立的字形/几何证据充分时才恢复未识别的词头起点。",
+                             layout, details={
+                                 "rescued_columns": int(restored_indents["rescued_columns"]),
+                                 "rescued_rows": int(restored_indents["rescued_rows"]),
+                             })
 
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
