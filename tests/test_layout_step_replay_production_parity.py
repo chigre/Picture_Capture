@@ -169,6 +169,42 @@ def test_ocr_mode_currently_selected_still_replays_real_ordinary_pipeline():
         image.close()
 
 
+def test_matched_bracket_shapes_are_frozen_without_changing_detector_output():
+    from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
+
+    image = Image.new("L", (760, 660), 255)
+    pen = ImageDraw.Draw(image)
+    # Same physical orientation as real paired 【...】 detector tests.
+    for y in (170, 330):
+        for closing, base in ((False, 115), (True, 265)):
+            if closing:
+                pen.rectangle((base+15, y, base+21, y+55), fill=0)
+                pen.polygon([(base,y),(base+21,y),(base+21,y+9)], fill=0)
+                pen.polygon([(base,y+55),(base+21,y+55),
+                             (base+21,y+46)], fill=0)
+            else:
+                pen.rectangle((base,y,base+6,y+55), fill=0)
+                pen.polygon([(base,y),(base+21,y),(base,y+9)],fill=0)
+                pen.polygon([(base,y+55),(base+21,y+55),(base,y+46)],fill=0)
+    columns = [SimpleNamespace(left=20, right=660)]
+    first = recover_bracketed_ordinary_entries([], image, columns, 40, 610, 35)
+    evidence = []
+    second = recover_bracketed_ordinary_entries(
+        [], image, columns, 40, 610, 35, candidate_debug=evidence,
+    )
+    try:
+        assert [(x.x,x.y,x.ocr_source) for x in first] == [
+            (x.x,x.y,x.ocr_source) for x in second
+        ]
+        assert len(first) == 2
+        assert any(item["status"] == "accepted" for item in evidence)
+        assert {item["bracket_side"] for item in evidence
+                if item["status"] == "accepted"} == {"opening", "closing"}
+        assert all(len(item["source_box"]) == 4 for item in evidence)
+    finally:
+        image.close()
+
+
 def test_bracket_disabled_is_explicitly_labeled_as_skipped():
     image = _page()
     settings = _settings()
