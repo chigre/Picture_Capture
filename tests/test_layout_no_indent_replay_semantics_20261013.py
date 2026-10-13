@@ -41,27 +41,33 @@ def test_actual_no_indent_snapshot_is_unclassified_until_profile_semantics():
         stages = {item["key"]: item for item in trace.stages}
         keys = [item["key"] for item in trace.stages]
         # Skip semantic interpretation entirely in replay for explicit no-indent.
-        assert keys[keys.index("physical_rows") + 1] == "visual_consistency"
-        assert not {"initial_roles", "indent_semantics", "body_lanes"} & set(keys)
+        assert keys[keys.index("physical_rows") + 1] == "symbol_evidence"
+        assert not {
+            "initial_roles", "indent_semantics", "body_lanes",
+            "visual_consistency", "indent_recovery",
+        } & set(keys)
         stage = stages["physical_rows"]
         assert stage["provisional_no_indent"] is True
         assert stage["details"]["profile_indent_mode"] == "无明显缩进"
         assert stage["details"]["skipped_semantic_stages"] == [
             "基础行角色", "缩进语义判定", "正文缩进族调整",
+            "视觉一致性复核", "缺失缩进恢复",
         ]
+        assert stage["details"]["next_visible_stage"] == "符号证据融合"
         assert {r["role"] for r in stage["rows"]} <= {"unclassified"}
         assert {m["role"] for m in stage["lanes"]} <= {"unclassified"}
         assert all("raw_provisional_role" in row for row in stage["rows"])
         assert "不允许以行首 X 差异推断词条" in _format_stage(stage)
-        visible = stages["visual_consistency"]
-        assert visible["details"]["indent_type"] == "none"
-        assert all(row["role"] == "body" for row in visible["rows"])
-        assert all(mode["role"] == "body" for mode in visible["lanes"])
-        # Internal initial role clearing cannot be attributed to visual checks.
+        visible = stages["symbol_evidence"]
+        # The only visible transitions are genuine symbol promotions.
         assert not any(
             item["kind"] == "role"
             and item["before"] == "unclassified"
             and item["after"] == "body"
+            for item in visible["changes"]
+        )
+        assert all(
+            item["kind"] != "role" or item["after"] != "body"
             for item in visible["changes"]
         )
         assert result.layout.indent_type == "none"
@@ -100,7 +106,7 @@ def test_legacy_raw_entry_label_is_recorded_but_not_presented_as_valid_entry():
     line.role = "body"
     mode.role = "body"
     trace.adopt_unshown_role_baseline(layout)
-    trace.add_layout("visual_consistency", "视觉一致性复核", "生效", layout)
+    trace.add_layout("symbol_evidence", "符号证据融合", "生效", layout)
     assert len(trace.stages) == 2
     assert trace.stages[1]["rows"][0]["role"] == "body"
     assert trace.stages[1]["changes"] == []  # neutralization is NOT visual inference
@@ -122,6 +128,41 @@ def test_indented_profiles_still_retain_true_semantic_stages():
         assert keys.index("initial_roles") < keys.index("indent_semantics")
         assert keys.index("indent_semantics") < keys.index("body_lanes")
         assert keys.index("body_lanes") < keys.index("visual_consistency")
+    finally:
+        clear_layout_understanding_cache()
+        image.close()
+
+
+def test_no_indent_skips_actual_no_op_consumers(monkeypatch):
+    from picture_capture import (
+        layout_column_indent_recovery, layout_role_visual_consistency,
+    )
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no-indent must not call body-indent-only consumers")
+
+    monkeypatch.setattr(
+        layout_role_visual_consistency, "suppress_contradictory_cjk_body_lane_entries",
+        forbidden,
+    )
+    monkeypatch.setattr(
+        layout_column_indent_recovery, "restore_proven_column_indents", forbidden,
+    )
+    image = _page()
+    settings = AppSettings(
+        columns=1, manual_x=22, column_width=220,
+        start_y=6, character_height=14, ordinary_auto_layout=False,
+    )
+    apply_indent_type_label(settings, "无明显缩进")
+    clear_layout_understanding_cache()
+    try:
+        normal = understand_layout_core(image, settings, page_index=0)
+        trace = LayoutStepTrace()
+        traced = understand_layout_core(image, settings, page_index=0, trace=trace)
+        assert normal.layout.indent_type == traced.layout.indent_type == "none"
+        def roles(result):
+            return [(int(line.y0), int(line.y1), line.role)
+                    for column in result.layout.columns for line in column.lines]
+        assert roles(normal) == roles(traced)
     finally:
         clear_layout_understanding_cache()
         image.close()
