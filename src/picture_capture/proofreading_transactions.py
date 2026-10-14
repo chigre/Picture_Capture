@@ -114,16 +114,23 @@ def _undoable_committed_change(before: SavedSnapshot, after: SavedSnapshot) -> b
     left, right = before.rows(), after.rows()
     if left.keys() != right.keys():
         return False
+    word_changed = False
     for identifier, old in left.items():
         new = right[identifier]
         if old[0] is not new[0] or old[2:] != new[2:]:
             return False
-    # Both pure text and simplified text changes are user-owned in this open
-    # review session; manual OCR override decisions are deliberately excluded.
-    return (
-        before.pdic_bytes != after.pdic_bytes
-        or before.simplified_bytes != after.simplified_bytes
-    )
+        if old[1] != new[1]:
+            # Candidate-linked text belongs to the OCR/manual-selection owner.
+            # Its reversible multi-file decision must be proven separately.
+            if getattr(old[0], "candidate_id", None):
+                return False
+            word_changed = True
+    # Never relabel a PDIC metadata/geometry rewrite as a word edit.
+    if before.pdic_bytes != after.pdic_bytes and not word_changed:
+        return False
+    # PDIC word and simplified companion snapshots can be reverted as one
+    # in-flight recoverable transaction; no OCR override/candidate guessing.
+    return word_changed or before.simplified_bytes != after.simplified_bytes
 
 
 def _atomic_bytes(path: Path, data: bytes) -> None:
@@ -262,6 +269,13 @@ def _publish_restored_snapshot(
         return False
     if (not _undoable_committed_change(expected, target)
             or _recovery_path(page).exists()):
+        return False
+    # Revalidate exact bytes immediately before staging. An intervening writer
+    # cannot be silently overwritten by a stale Undo snapshot.
+    if (sha256_file(page) != expected.image_sha
+            or _bytes_or_absent(pdic_path(page)) != expected.pdic_bytes
+            or _bytes_or_absent(simplified_review_path_for_image(page))
+               != expected.simplified_bytes):
         return False
     # One-file restore is already atomic. Two files require short-lived
     # write-ahead recovery so crash/restart cannot silently mis-pair them.
