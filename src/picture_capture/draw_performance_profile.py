@@ -89,7 +89,8 @@ def summarize(records: list[dict]) -> dict[str, float]:
 
 
 def export_batch_report(records: list[dict], *, label: str,
-                        elapsed_seconds: float, completed: int) -> Path | None:
+                        elapsed_seconds: float, completed: int,
+                        settings=None) -> Path | None:
     """Write human-readable Markdown and per-page CSV beside JSONL logs."""
     import csv
     from datetime import datetime
@@ -113,6 +114,29 @@ def export_batch_report(records: list[dict], *, label: str,
                                  item.get("pid"), item.get("stage_group"),
                                  *(metrics.get(k, "") for k in keys)])
         totals = summarize(records)
+        configuration = {}
+        if settings is not None:
+            from .layout_scale_experiment import FLAG, choose_layout_scale
+            from .adaptive_denoise import resolve_denoise_strength
+            properties = (
+                "draw_performance_profile", "reuse_prepared_analysis",
+                "analysis_denoise_enabled", "analysis_denoise_strength",
+                "layout_denoise_enabled", "layout_scale_enabled",
+                "layout_scale_columns", "layout_scale_column_width",
+                "layout_scale_gutter", "layout_scale_start_y",
+                "layout_scale_manual_x", "layout_scale_character_height",
+                "layout_scale_row_padding", "layout_mask_illustrations",
+                "layout_mask_illustrations_use_existing",
+            )
+            configuration = {
+                name: getattr(settings, name, None) for name in properties
+            }
+            configuration["resolved_shared_denoise"] = resolve_denoise_strength(settings)
+            configuration["scale_environment_override"] = os.environ.get(FLAG)
+            configuration["prepared_reuse_environment"] = os.environ.get(
+                "PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS"
+            )
+            configuration["profiling_environment"] = os.environ.get(_ENV)
         report = [
             f"# Picture Capture — {label} 性能诊断",
             "",
@@ -120,6 +144,25 @@ def export_batch_report(records: list[dict], *, label: str,
             f"- 批次实际耗时：{elapsed_seconds:.3f} 秒",
             f"- 吞吐量：{completed / max(0.001, elapsed_seconds):.3f} 页/秒",
             f"- 计时事件数：{len(records)}",
+            "",
+            "## 运行配置快照",
+            "",
+            "以下设置记录本批次启动时的项目设置及运行时环境；"
+            "若使用环境变量覆盖缩图选择，以环境变量为准。",
+            "",
+            "```json",
+            json.dumps(configuration, ensure_ascii=False, indent=2),
+            "```",
+            "",
+            "## 本批次实际缩图比例",
+            "",
+        ] + [
+            f"- {group.removeprefix('layout_scale_')}: {sum(1 for item in records if item.get('stage_group') == group)} 页"
+            for group in sorted({
+                str(item.get("stage_group", "")) for item in records
+                if str(item.get("stage_group", "")).startswith("layout_scale_")
+            })
+        ] + [
             "",
             "## 各阶段累计耗时",
             "",
