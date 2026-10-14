@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import json
 import re
 from tkinter import simpledialog
 
@@ -53,6 +54,16 @@ def _relocation_allowed(app, entry, target: tuple[int, int]) -> bool:
     # can update both files atomically. Never leave a stale simplified key.
     sidecar = simplified_review_path_for_image(page)
     if sidecar.is_file():
+        # Legacy reader intentionally converts damaged JSON to an empty map,
+        # but relocation must not treat unreadable human edits as absent.
+        try:
+            payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError):
+            return False
+        if (not isinstance(payload, dict)
+                or payload.get("format") != "picture_capture_simplified_review"
+                or not isinstance(payload.get("entries"), list)):
+            return False
         old_key = entry_key(entry.x, entry.y)
         if old_key in read_records(sidecar):
             return False
@@ -167,6 +178,7 @@ def move_entry_via_dialog(app, entry):
             else:
                 report("PDIC 已改变但后续保存阶段失败；不回滚磁盘，未确认操作证据。")
             return "break"
+        evidence_warning = None
         if bool(getattr(app.settings, "proofreading_event_capture", False)):
             try:
                 from ..proofreading_capture import capture_saved_explicit_marker_move
@@ -178,12 +190,12 @@ def move_entry_via_dialog(app, entry):
                     prior_image_sha256=image_sha,
                 )
                 if not captured:
-                    report("画线已保存，但身份证据未能证明唯一操作；没有追加日志。")
+                    evidence_warning = "画线已保存，但身份证据未能证明唯一操作；没有追加日志。"
             except (OSError, ValueError, TypeError):
-                report("画线已保存，但校对证据写入失败；PDIC 为准。")
+                evidence_warning = "画线已保存，但校对证据写入失败；PDIC 为准。"
         app._sort_entries_reading_order()
         app.redraw()
-        report(f"已移动词条画线到原图 X,Y={target[0]},{target[1]}。")
+        report(evidence_warning or f"已移动词条画线到原图 X,Y={target[0]},{target[1]}。")
     except (OSError, ValueError, TypeError, RuntimeError) as exc:
         report(f"无法移动词条：{exc}")
     return "break"
