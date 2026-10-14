@@ -634,7 +634,12 @@ def detect_entries(
                          "coarse_y": x.get("coarse_y"),
                          "raw_refined_y": x.get("raw_refined_y"),
                          "clamped_y": x.get("clamped_y"),
-                         "shift": x.get("shift")}
+                         "shift": x.get("shift"),
+                         "roi_x0": x.get("roi_x0"), "roi_x1": x.get("roi_x1"),
+                         "search_top": x.get("search_top"),
+                         "search_bottom": x.get("search_bottom"),
+                         "clamped": x.get("clamped"),
+                         "error": x.get("error")}
                         for x in y_refine_diagnostics if x.get("column")
                     ],
                 )
