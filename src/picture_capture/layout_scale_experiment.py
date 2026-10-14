@@ -62,7 +62,10 @@ def restore_source_estimate(estimate, factor: float, source_width: int):
 
 
 def detect_at_scale(image: Image.Image, settings, backend, detector):
-    factor = choose_layout_scale(image.size)
+    configured = os.environ.get(FLAG)
+    if configured is None:
+        configured = "auto" if bool(getattr(settings, "layout_scale_enabled", False)) else "off"
+    factor = choose_layout_scale(image.size, mode=configured)
     if factor == 1.0 or str(getattr(settings, "layout_transform", "identity")) != "identity":
         return detector(image, settings, backend), 1.0
     # Keep downsampling confined to this temporary detector image. The rest
@@ -76,4 +79,27 @@ def detect_at_scale(image: Image.Image, settings, backend, detector):
         estimate = detector(reduced, scaled_layout_settings(settings, factor), backend)
     finally:
         reduced.close()
-    return restore_source_estimate(estimate, factor, image.width), factor
+    original = restore_source_estimate(estimate, factor, image.width)
+    # Only approved macroscopic fields may come from the reduced estimate.
+    # The remaining scalar fields retain the original-resolution project
+    # priors; fine line/role analysis already uses the original image.
+    values = {}
+    for field, enabled_name in (
+        ("columns", "layout_scale_columns"),
+        ("column_width", "layout_scale_column_width"),
+        ("gutter", "layout_scale_gutter"),
+        ("start_y", "layout_scale_start_y"),
+        ("manual_x", "layout_scale_manual_x"),
+        ("character_height", "layout_scale_character_height"),
+        ("row_padding", "layout_scale_row_padding"),
+    ):
+        if not bool(getattr(settings, enabled_name, False)):
+            values[field] = getattr(settings, field)
+    if not bool(getattr(settings, "layout_scale_manual_x", False)):
+        # The returned detected lane boundaries must not carry downsampled
+        # horizontal offsets into a manually anchored layout.
+        values["column_starts"] = ()
+        values["column_rights"] = ()
+        values["separator_x"] = None
+    original = replace(original, **values)
+    return original, factor
