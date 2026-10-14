@@ -71,3 +71,100 @@ def test_headword_indent_uses_outer_stable_lane_not_sparse_outlier() -> None:
     assert outer_body.role == "body"
     assert inner_entry.role == "entry"
     assert sparse_far.role == "entry"
+
+
+def test_two_column_headword_indent_rejects_outside_column_phantom_body_lane() -> None:
+    """An independently measured gutter/neighbor band cannot own right body.
+
+    Anonymized structural counts from the 080176 role snapshot (no scan
+    pixels or dictionary text): left 42 body/11 head; right 14 outside,
+    31 body, 8 head. The old minimum-X stable-mode policy chose -96 and
+    incorrectly promoted all 31 right body rows to entry.
+    """
+    left_body = _mode(7.75, 42, 4.0)
+    left_head = _mode(137.04, 11, 4.0)
+    left = SimpleNamespace(
+        indent_modes=[left_body, left_head],
+        lines=left_body.lines + left_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+
+    outside_right = _mode(-96.76, 14, 4.0)
+    actual_right_body = _mode(7.65, 31, 4.0)
+    right_head = _mode(135.96, 8, 4.0)
+    right = SimpleNamespace(
+        indent_modes=[outside_right, actual_right_body, right_head],
+        lines=outside_right.lines + actual_right_body.lines + right_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword",
+        ordinary_line_height=52.65,
+        columns=[left, right], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert left.body_mode is left_body
+    assert [m for m in left.entry_modes] == [left_head]
+    assert all(r.role == "body" for r in left_body.lines)
+    assert all(r.role == "entry" for r in left_head.lines)
+    assert right.body_mode is actual_right_body
+    assert right.entry_modes == [right_head]
+    assert all(r.role == "body" for r in actual_right_body.lines)
+    assert all(r.role == "body" for r in outside_right.lines)
+    assert all(r.role == "entry" for r in right_head.lines)
+
+
+def test_outside_column_filter_abstains_without_two_plausible_supported_lanes() -> None:
+    """An uncertain geometry must not reinterpret a genuine offset page."""
+    left_body = _mode(0.0, 22, 3.0)
+    left_head = _mode(70.0, 10, 3.0)
+    left = SimpleNamespace(
+        indent_modes=[left_body, left_head],
+        lines=left_body.lines + left_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    true_outside_body = _mode(-95.0, 14, 3.0)
+    inner_head = _mode(110.0, 8, 3.0)
+    right = SimpleNamespace(
+        indent_modes=[true_outside_body, inner_head],
+        lines=true_outside_body.lines + inner_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword",
+        ordinary_line_height=53.0, columns=[left, right], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert right.body_mode is true_outside_body
+    assert right.entry_modes == [inner_head]
+
+
+def test_moderate_negative_column_indent_is_not_dropped() -> None:
+    """Ordinary printed margin slant/offset is not a phantom band."""
+    left_body = _mode(-14.0, 20, 3.0)
+    left_head = _mode(45.0, 8, 3.0)
+    left = SimpleNamespace(
+        indent_modes=[left_body, left_head],
+        lines=left_body.lines + left_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    right_body = _mode(-18.0, 25, 3.0)
+    right_head = _mode(50.0, 10, 3.0)
+    right = SimpleNamespace(
+        indent_modes=[right_body, right_head],
+        lines=right_body.lines + right_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53.0,
+        columns=[left, right], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert right.body_mode is right_body
+    assert right.entry_modes == [right_head]
