@@ -65,6 +65,7 @@ def _foreign_column_tail_replacement(
     semantic_left: int,
     previous_right: int,
     reference: float,
+    previous_column_tail: np.ndarray,
 ) -> int | None:
     """Find real in-column text behind a disconnected neighboring-column tail.
 
@@ -88,6 +89,17 @@ def _foreign_column_tail_replacement(
         return None
     boundary = semantic_left - analysis_left
     if boundary <= 0 or boundary >= row.shape[1]:
+        return None
+    # The allegedly foreign fragment must actually be backed by printed
+    # previous-column text on this SAME physical row. Do not drop a legitimate
+    # isolated outdented bullet/label solely because it is far from body text.
+    if previous_column_tail.ndim != 2 or previous_column_tail.size == 0:
+        return None
+    prior_columns = np.asarray(previous_column_tail, dtype=bool).any(axis=0)
+    if (
+        int(prior_columns.sum()) < max(4, round(reference * .12))
+        or int(np.count_nonzero(previous_column_tail)) < max(10, round(reference * .50))
+    ):
         return None
 
     right_onset = _credible_first_ink_x(row[:, boundary:], reference)
@@ -191,6 +203,14 @@ def remeasure_layout_indents_from_ink(
                     semantic_left=semantic_left,
                     previous_right=int(columns[position - 1].right),
                     reference=reference,
+                    previous_column_tail=page_ink[
+                        y0:y1,
+                        max(
+                            0,
+                            int(columns[position - 1].right)
+                            - max(12, round(reference * .80)),
+                        ):analysis_left,
+                    ],
                 )
                 if inside_x is not None:
                     absolute_x = inside_x
