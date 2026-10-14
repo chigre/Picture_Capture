@@ -455,9 +455,7 @@ OCR_ADVANCED_FIELDS = (
         "paddle_height_ratio", "paddle_boldness_ratio", "paddle_gap_ratio",
         "paddle_min_candidate_score", "paddle_header_search_height",
         "paddle_header_rule_ink_ratio", "paddle_header_rule_margin",
-        "paddle_pos_search_chars", "paddle_separator_search_ratio",
-"paddle_separator_roi_width_ratio",
-"paddle_tesseract_psm",
+        "paddle_pos_search_chars", "paddle_tesseract_psm",
         "paddle_alignment_y_tolerance_ratio", "paddle_alignment_min_similarity",
         "paddle_conflict_review_margin",
     )
