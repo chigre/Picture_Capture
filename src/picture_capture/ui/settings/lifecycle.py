@@ -23,6 +23,27 @@ def validate_projection_width(values: dict[str, Any]) -> None:
         raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
 
 
+def validate_separator_gap_controls(values: dict[str, Any]) -> None:
+    """Validate all controls before any project setting is mutated."""
+    limits = {
+        "separator_y_ink_safe_max_fraction": (0.01, 0.30),
+        "separator_y_ink_safe_ink_threshold": (0.0, 255.0),
+        "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20),
+        "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10),
+    }
+    for name, (lower, upper) in limits.items():
+        if name not in values:
+            continue
+        try:
+            numeric = float(values[name].get())
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{name} 只能输入数字。") from exc
+        if not lower <= numeric <= upper:
+            raise ValueError(f"{name} 必须在 {lower}–{upper} 之间。")
+        if name == "separator_y_ink_safe_ink_threshold" and not numeric.is_integer():
+            raise ValueError(f"{name} 必须为整数。")
+
+
 def schedule_autosave(dialog: Any) -> None:
     if not getattr(dialog, "_autosave_ready", False):
         return
