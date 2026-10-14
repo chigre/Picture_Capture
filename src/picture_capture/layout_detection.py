@@ -89,12 +89,26 @@ def detect_text_polygons(image, settings, *, limit_side_len: int = 2400):
 
 
 def detect_layout_parameters(image, settings):
+    from time import perf_counter
+    from .draw_performance_profile import enabled, record_page
+    tracking = enabled()
+    tick = perf_counter() if tracking else 0.0
+    stages = {}
+    def mark(stage):
+        nonlocal tick
+        if tracking:
+            now = perf_counter()
+            stages[stage] = now - tick
+            tick = now
     from .layout_character_height import apply_character_height_fallback
     from .layout_reliability import detect_layout_parameters_reliable
 
     analysis_image = build_analysis_image(image, settings)
+    mark("facade_analysis_image")
     key = _layout_estimate_cache_key(analysis_image, settings)
+    mark("facade_cache_fingerprint")
     raw = _LAYOUT_ESTIMATE_CACHE.get(key)
+    cache_hit = raw is not None
     if raw is not None:
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
     else:
@@ -106,15 +120,21 @@ def detect_layout_parameters(image, settings):
         while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
             _LAYOUT_ESTIMATE_CACHE.popitem(last=False)
 
+    mark("facade_reliable_detect_or_cache")
     # Preserve the historical two-layer cache contract: the reliable/raw
     # estimate is cached, while observed character-height correction is replayed
     # after every cache lookup and is never written back into the raw cache.
-    return apply_character_height_fallback(
+    corrected = apply_character_height_fallback(
         image,
         settings,
         raw,
         sys.modules[__name__],
     )
+    mark("facade_character_height_fallback")
+    if tracking:
+        record_page("<substage>", -1, stages,
+                    stage_group="detector_facade_cache_hit" if cache_hit else "detector_facade_cache_miss")
+    return corrected
 
 
 # Historical source-contract markers retained for compatibility tests/tools.
