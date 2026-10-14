@@ -510,6 +510,8 @@ class SettingsDialog(tk.Toplevel):
     SETTING_HELP_IMAGES = _settings_schema.SETTING_HELP_IMAGES
     SETTING_CHOICES = _settings_schema.SETTING_CHOICES
     CHECK_HELP = _settings_schema.CHECK_HELP
+    SEPARATOR_Y_FIELDS = _settings_schema.SEPARATOR_Y_FIELDS
+    SEPARATOR_Y_CHECKS = _settings_schema.SEPARATOR_Y_CHECKS
     NORMAL_CHECKS = _settings_schema.NORMAL_CHECKS
     OCR_COMMON_CHECKS = _settings_schema.OCR_COMMON_CHECKS
     OCR_ADVANCED_CHECKS = _settings_schema.OCR_ADVANCED_CHECKS
@@ -1029,6 +1031,7 @@ class SettingsDialog(tk.Toplevel):
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
         performance_tab = ttk.Frame(notebook)
+        separator_y_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
         display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1040,6 +1043,7 @@ class SettingsDialog(tk.Toplevel):
             (common_tab, "常用"),
             (ocr_tab, "OCR画线"),
             (normal_tab, "普通画线"),
+            (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
             (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
@@ -1054,6 +1058,7 @@ class SettingsDialog(tk.Toplevel):
         self._settings_tabs = {
             "common": common_tab,
             "normal": normal_tab,
+            "separator_y": separator_y_tab,
             "illustration": illustration_tab,
             "performance": performance_tab,
             "ocr": ocr_tab,
@@ -1241,6 +1246,23 @@ class SettingsDialog(tk.Toplevel):
             normal,
             "高级设置（普通画线异常时再展开）",
             self.NORMAL_ADVANCED_FIELDS,
+        )
+
+        # Cross-cutting feature, not an OCR-only or ordinary-only option.
+        separator_y_page = self._scrollable_settings_page(separator_y_tab)
+        self._settings_intro(
+            separator_y_page, "横线 Y 精修（所有画线共用）",
+            "集中控制 OCR 与普通画线共享的局部墨迹谷精修。"
+            "横向分析范围对新项目默认 100%；老项目已保存的取值保持不变。",
+        )
+        self._add_check_group(
+            separator_y_page, "启用与安全检查", self.SEPARATOR_Y_CHECKS,
+            intro="白缝安全核验为实验性功能，默认关闭。",
+        )
+        self._add_setting_group(
+            separator_y_page, "精修参数", self.SEPARATOR_Y_FIELDS,
+            intro="横向范围 100% 表示在扣除栏边余量后的整栏可用宽度内寻找空白带；"
+            "并非保证每条线均不穿字。",
         )
 
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
