@@ -107,3 +107,53 @@ def test_ambiguous_owned_identity_is_not_replaced_by_xy_guess(tmp_path):
         prior_pdic_entries=previous, prior_pdic_sha256=digest,
     )
     assert journal.read_bytes() == snapshot
+
+
+def test_review_window_passes_real_precommit_snapshot_to_owned_id_replay(tmp_path):
+    from types import SimpleNamespace
+    from picture_capture.app import ReviewWindow
+    from picture_capture.models import AppSettings
+
+    page, pdic, journal = _owned_move(tmp_path)
+    parent = SimpleNamespace(
+        current_page=page, project=SimpleNamespace(root=tmp_path),
+        settings=AppSettings(proofreading_event_capture=True),
+        _paddle_cache_path=lambda: None,
+        status_var=SimpleNamespace(set=lambda _: None),
+    )
+    review = SimpleNamespace(parent=parent)
+    previous = ReviewWindow._review_evidence_before_save(review)
+    assert review.__dict__["_review_evidence_prior_pdic_sha256"] == sha256_file(pdic)
+    write_pdic(pdic, [Entry("alpha-edited", 11, 27), Entry("beta", 50, 80)],
+               100, ("page", "@", "@"))
+    ReviewWindow._review_evidence_after_save(review, previous)
+    assert load_events(journal)[-1]["entry_id"] == "owned-alpha-event"
+
+
+def test_review_window_never_attaches_pre_edit_snapshot_to_other_page(tmp_path):
+    from types import SimpleNamespace
+    from picture_capture.app import ReviewWindow
+    from picture_capture.models import AppSettings
+
+    page, pdic, journal = _owned_move(tmp_path)
+    parent = SimpleNamespace(
+        current_page=page, project=SimpleNamespace(root=tmp_path),
+        settings=AppSettings(proofreading_event_capture=True),
+        _paddle_cache_path=lambda: None,
+        status_var=SimpleNamespace(set=lambda _: None),
+    )
+    review = SimpleNamespace(parent=parent)
+    previous = ReviewWindow._review_evidence_before_save(review)
+    source_journal = journal.read_bytes()
+    other = tmp_path / "second.png"
+    other.write_bytes(b"different page")
+    write_pdic(pdic_path(other), [Entry("alpha-edited", 11, 27),
+                                 Entry("beta", 50, 80)], 100,
+               ("second", "page", "@"))
+    parent.current_page = other
+    ReviewWindow._review_evidence_after_save(review, previous)
+    assert journal.read_bytes() == source_journal
+    other_journal = data_root(tmp_path) / "ProofreadingEvidence" / (
+        uuid5(NAMESPACE_URL, "second.png").hex + ".json"
+    )
+    assert not other_journal.exists()
