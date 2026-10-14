@@ -111,8 +111,8 @@ def _app(tmp_path, *, enabled=True):
         settings=AppSettings(proofreading_event_capture=enabled),
         status_var=SimpleNamespace(set=messages.append),
         _batch_active=False,
-     )
-     app._claim_page_for_manual_edit = lambda: True
+    )
+    app._claim_page_for_manual_edit = lambda: True
     app._guard_transformed_geometry = lambda _: True
     app._sync_entry_editor_texts = lambda: None
     app._sort_entries_reading_order = lambda: None
