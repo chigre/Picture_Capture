@@ -36,11 +36,12 @@ def test_24_cpu_workers_and_threads_bounded_independently():
     assert cpu_pool_config(30, cpus=24, requested_workers="") == (2, 4)
     assert cpu_pool_config(30, cpus=24, requested_workers="4") == (4, 4)
     assert cpu_pool_config(30, cpus=24, requested_workers="6") == (6, 4)
+    assert cpu_pool_config(30, cpus=24, requested_workers="12") == (12, 2)
     assert cpu_pool_config(30, cpus=24, requested_workers="6",
                            requested_threads="3") == (6, 3)
     assert cpu_pool_config(30, cpus=8, requested_workers="6") == (6, 1)
-    assert cpu_pool_config(30, cpus=24, requested_workers="100") == (2, 4)
-    assert cpu_pool_config(30, cpus=24, requested_workers="3") == (2, 4)
+    assert cpu_pool_config(30, cpus=24, requested_workers="100") == (24, 1)
+    assert cpu_pool_config(30, cpus=24, requested_workers="3") == (3, 4)
     assert cpu_pool_config(1, cpus=24, requested_workers="6") == (1, 4)
     assert cpu_pool_config(100, cpus=4, requested_workers="6",
                            requested_threads="99") == (4, 1)
