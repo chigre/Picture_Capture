@@ -4197,9 +4197,11 @@ class ReviewWindow(tk.Toplevel):
             return True
         if not dirty:
             return True
+        evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(silent=True, sync_editors=False)
+        self._review_evidence_after_save(evidence_before)
         self._persist_simplified_page(current_stem)
         return True
 
@@ -4746,6 +4748,40 @@ class ReviewWindow(tk.Toplevel):
     def _commit_edits(self) -> None:
         from .review_main_editor_sync import commit_proofread_entries
         commit_proofread_entries(self)
+
+    def _review_evidence_before_save(self) -> list[WordEntry] | None:
+        """Read the pre-edit on-disk PDIC only for explicit project-local opt-in."""
+        if not bool(getattr(
+            getattr(self.parent, "settings", None), "proofreading_event_capture", False
+        )):
+            return None
+        page = getattr(self.parent, "current_page", None)
+        if page is None or getattr(self.parent, "project", None) is None:
+            return None
+        try:
+            return read_pdic(pdic_path(page))
+        except (OSError, ValueError):
+            # No trustworthy previous bytes: a saved edit cannot be classified.
+            return None
+
+    def _review_evidence_after_save(self, previous: list[WordEntry] | None) -> None:
+        """Supplement a committed PDIC, never modify or roll back user edits."""
+        if previous is None:
+            return
+        page = getattr(self.parent, "current_page", None)
+        project = getattr(self.parent, "project", None)
+        if page is None or project is None:
+            return
+        try:
+            from .proofreading_capture import capture_saved_review_rename
+            capture_saved_review_rename(
+                project_root=project.root, page=page, prior_pdic_entries=previous,
+            )
+        except (OSError, ValueError, TypeError):
+            self.parent.status_var.set(
+                "校对内容已保存，但本地校对操作日志写入失败，请检查磁盘权限。"
+            )
+
 
     def _bound_row_entries(self) -> list[WordEntry]:
         """Return stable rendered-row bindings, with compatibility fallback."""
@@ -6583,9 +6619,11 @@ class ReviewWindow(tk.Toplevel):
                 return
             if not self.parent._claim_page_for_manual_edit():
                 return
+        evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(sync_editors=False)
+        self._review_evidence_after_save(evidence_before)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
         if self.parent.project:

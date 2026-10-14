@@ -91,3 +91,56 @@ def capture_saved_review_deletion(
     journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
     append_event(journal, event, pdic_file=new_file)
     return True
+
+
+def capture_saved_review_rename(
+    *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+) -> bool:
+    """Log exactly one committed text-only edit, never inferred edits in bulk.
+
+    Both prior and after snapshots come from the on-disk PDIC. Unique original
+    XY positions are the stable identity across word changes and SECTION
+    reorder; ambiguous duplicate coordinates or changed coordinates are
+    rejected. OCR ancestry is deliberately unknown until independently linked.
+    """
+    project_root, page = Path(project_root), Path(page)
+    old = _triples(prior_pdic_entries)
+    saved_file = pdic_path(page)
+    current = _triples(read_pdic(saved_file))
+    if len(old) != len(current) or not old:
+        return False
+    if len({(x, y) for _, x, y in old}) != len(old):
+        return False
+    if len({(x, y) for _, x, y in current}) != len(current):
+        return False
+    old_map = {(x, y): word for word, x, y in old}
+    new_map = {(x, y): word for word, x, y in current}
+    if old_map.keys() != new_map.keys():
+        return False
+    changed = [
+        ((x, y), old_word, new_map[(x, y)])
+        for (x, y), old_word in old_map.items()
+        if old_word != new_map[(x, y)]
+    ]
+    if len(changed) != 1:
+        return False
+    ((x, y), before_word, after_word), = changed
+    project_id = _project_identity(project_root)
+    relative_page = page.resolve().relative_to(project_root.resolve()).as_posix()
+    page_id = f"{project_id}/{relative_page}"
+    # Stable through renames and list reordering, but never claim an OCR ID.
+    entry_id = uuid5(NAMESPACE_URL, f"{page_id}|xy|{x}|{y}").hex
+    saved_hash = sha256_file(saved_file)
+    if saved_hash is None:
+        raise OSError("PDIC disappeared after saved review rename")
+    event = make_event(
+        page_id=page_id, action="rename",
+        before={"word": before_word, "x": x, "y": y},
+        after={"word": after_word, "x": x, "y": y},
+        pdic_sha256=saved_hash, entry_id=entry_id,
+        image_sha256=sha256_file(page),
+    )
+    page_key = uuid5(NAMESPACE_URL, relative_page).hex
+    journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
+    append_event(journal, event, pdic_file=saved_file)
+    return True

@@ -47,3 +47,7 @@ uv run --locked python scripts/architecture_guard.py
 uv run --locked python scripts/change_architecture_guard.py --base origin/main
 uv run --locked pytest
 ```
+
+### Additional R2.1 text-edit capture (pending CI)
+
+`ReviewWindow.save` and `autosave_commit` now inspect prior PDIC bytes only if recording was explicitly enabled. They invoke `capture_saved_review_rename` strictly **after the PDIC write succeeded**. The journal accepts just one unique XY-preserving word edit; multiword saves, XY moves, duplicates and no-change saves generate no event. Namespaced UUID5 keyed to project/page/original XY is stable across text changes and reordered review rows; this does **not** establish a reliable identity for moved or coincident entries. Logging errors never override the successful PDIC save. This remains a draft; no claims about other edit actions, UI integration smoke or verified labels.

@@ -111,3 +111,102 @@ def test_review_delete_only_attempts_capture_after_successful_save():
     )
     assert "proofreading_event_capture" in block
     assert "capture_failed = True" in block
+
+
+def test_single_saved_rename_is_recorded_after_pdic_commit_without_touching_bytes(tmp_path):
+    from picture_capture.proofreading_capture import capture_saved_review_rename
+
+    page, old = _page(tmp_path)
+    updated = [Entry(word="FIRST EDITED", x=10, y=20), old[1]]
+    write_pdic(pdic_path(page), updated, 100, ("page", "@", "@"))
+    after_bytes = pdic_path(page).read_bytes()
+    assert capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=old,
+    )
+    assert pdic_path(page).read_bytes() == after_bytes
+    journal = next(
+        p for p in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if p.name != "project_identity.json"
+    )
+    saved = load_events(journal)
+    assert len(saved) == 1
+    assert saved[0]["action"] == "rename"
+    assert saved[0]["before"]["word"] == "first"
+    assert saved[0]["after"]["word"] == "FIRST EDITED"
+    assert saved[0]["verification_status"] == "explicit_action_unverified_page"
+    assert saved[0]["candidate_id"] is None
+    assert saved[0]["entry_id"] is not None
+    # The next unchanged save does not manufacture a duplicate action.
+    assert capture_saved_review_rename(
+        project_root=tmp_path, page=page,
+        prior_pdic_entries=read_pdic(pdic_path(page)),
+    ) is False
+    assert len(load_events(journal)) == 1
+
+
+def test_rename_identity_is_stable_across_session_reopen_and_row_reorder(tmp_path):
+    from picture_capture.proofreading_capture import capture_saved_review_rename
+
+    page, previous = _page(tmp_path)
+    first = Entry(word="first edit", x=10, y=20)
+    write_pdic(pdic_path(page), [previous[1], first], 100, ("page", "@", "@"))
+    assert capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=previous,
+    )
+    journal = next(
+        p for p in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if p.name != "project_identity.json"
+    )
+    stable_id = load_events(journal)[0]["entry_id"]
+    reopened = read_pdic(pdic_path(page))
+    write_pdic(
+        pdic_path(page),
+        [Entry(word="second edit", x=10, y=20), previous[1]],
+        100, ("page", "@", "@"),
+    )
+    assert capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=reopened,
+    )
+    events = load_events(journal)
+    assert [e["entry_id"] for e in events] == [stable_id, stable_id]
+
+
+def test_coedited_words_or_changed_xy_never_guessed_as_rename(tmp_path):
+    from picture_capture.proofreading_capture import capture_saved_review_rename
+
+    page, previous = _page(tmp_path)
+    write_pdic(
+        pdic_path(page),
+        [Entry(word="one", x=10, y=20), Entry(word="two", x=10, y=60)],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=previous,
+    )
+    assert not (tmp_path / "ProofreadingEvidence").exists()
+    write_pdic(
+        pdic_path(page),
+        [Entry(word="first", x=12, y=20), previous[1]],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=previous,
+    )
+
+
+def test_review_rename_capture_hooks_follow_both_save_paths():
+    app = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    review = app.split("class ReviewWindow(", 1)[1].split("class PictureCaptureApp(", 1)[0]
+    for name in ("save(self, *, redraw_main: bool = True)", "autosave_commit(self)"):
+        begin = review.index("    def " + name)
+        end = review.find("\n    def ", begin + 8)
+        snippet = review[begin:end if end != -1 else None]
+        assert snippet.index("_review_evidence_before_save()") < snippet.index(
+            "self._commit_edits()"
+        )
+        assert snippet.index("self.parent.save_pdic(") < snippet.index(
+            "_review_evidence_after_save(evidence_before)"
+        )
+    assert "proofreading_event_capture" in review
