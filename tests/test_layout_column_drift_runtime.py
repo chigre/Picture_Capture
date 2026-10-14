@@ -280,7 +280,8 @@ def test_neighbour_tail_bleed_cannot_define_right_body_lane():
             # Gutter analysis starts X=395, only 5px past previous.right=390.
             # The LEFT column's protruding line ending is disconnected from
             # genuine right-column glyphs by over 30px of completely blank ink.
-            ink[y:y + 15, 395:403] = True
+            ink[y:y + 15, 380:395] = True  # preceding printed C1 row tail
+            ink[y:y + 15, 395:403] = True  # same glyph extends into C2 margin
         right.lines.append(_line(y, y + 18))
 
     layout = SimpleNamespace(
@@ -315,7 +316,8 @@ def test_cross_boundary_continuous_genuine_negative_overhang_is_preserved():
     right = base.ColumnDesign(1, 430, 660, 0)
     # Starts in the slant-safety band, but continuous ink runs THROUGH
     # column.left. Unlike a neighbor's tail, there is no blank separation.
-    ink[12:28, 395:457] = True
+    ink[12:28, 380:395] = True  # even with nearby prior-column ink
+    ink[12:28, 395:457] = True  # continuous through the right semantic edge
     right.lines = [_line(12, 28)]
     layout = SimpleNamespace(
         columns=[left, right], body_top=0,
@@ -360,6 +362,7 @@ def test_finalizer_diagnostic_counts_foreign_neighbour_tails_without_moving_geom
 
     img = Image.new("L", (680, 100), color=255)
     ink = np.zeros((100, 680), dtype=bool)
+    ink[10:27, 380:395] = True
     ink[10:27, 395:403] = True
     ink[10:27, 433:457] = True
     left = base.ColumnDesign(0, 40, 390, 40)
@@ -376,3 +379,29 @@ def test_finalizer_diagnostic_counts_foreign_neighbour_tails_without_moving_geom
     assert "foreign_column_tail_rejected=C2:1" in layout.reason
     assert (left.left, left.right, right.left, right.right) == (40, 390, 430, 660)
     assert right.lines[0].first_x == 3
+
+
+def test_isolated_outdented_marker_is_not_called_previous_column_text():
+    """A genuine detached left-prefix survives without prior-column support."""
+    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+
+    ink = np.zeros((100, 680), dtype=bool)
+    left = base.ColumnDesign(0, 40, 390, 40)
+    right = base.ColumnDesign(1, 430, 660, 0)
+    # Printed C2 marker near the previous column's right edge plus separate
+    # indented C2 body, but no pixels whatsoever from C1 to substantiate
+    # a claimed foreign origin.
+    ink[12:28, 395:403] = True
+    ink[12:28, 433:460] = True
+    right.lines = [_line(12, 28)]
+    layout = SimpleNamespace(
+        columns=[left, right], body_top=0,
+        ordinary_line_height=20., indent_type="headword",
+    )
+    rejected = {}
+    remeasure_layout_indents_from_ink(
+        layout, ink, ops=explicit_physical_layout_ops(),
+        foreign_tail_rejections=rejected,
+    )
+    assert right.lines[0].first_x < 0
+    assert rejected == {}
