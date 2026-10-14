@@ -203,6 +203,33 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             first.configure(state="readonly" if app.settings.profile_page_pair_mode == "alternate"
                             else "disabled")
 
+    # Shared, persisted Layout controls appear immediately above the
+    # per-page automatic geometry master switch.
+    denoise_row = row()
+    for label, name in (
+        ("共享分析图去噪", "analysis_denoise_enabled"),
+        ("Layout专用去噪", "layout_denoise_enabled"),
+    ):
+        variable = app.quick_bool_vars.get(name)
+        if variable is None:
+            variable = tk.BooleanVar(value=bool(getattr(app.settings, name, True)))
+            app.quick_bool_vars[name] = variable
+        ttk.Checkbutton(
+            denoise_row, text=label, variable=variable,
+            command=app._quick_parameter_changed,
+        ).pack(side="left", padx=(0, 9))
+    scale_row = row()
+    for label, name in (
+        ("按图片大小缩图(实验)", "layout_scale_enabled"),
+    ):
+        variable = app.quick_bool_vars.get(name)
+        if variable is None:
+            variable = tk.BooleanVar(value=bool(getattr(app.settings, name, False)))
+            app.quick_bool_vars[name] = variable
+        ttk.Checkbutton(
+            scale_row, text=label, variable=variable,
+            command=app._quick_parameter_changed,
+        ).pack(side="left")
     auto_row = row()
     ttk.Checkbutton(
         auto_row, text="使用自动版面参数", variable=master,
