@@ -124,6 +124,11 @@ def _get_text_detector(settings: AppSettings) -> Any:
     detection models.  Layout detection values compatibility over peak speed,
     so explicitly disable that acceleration path here.
     """
+    from .ordinary_gpu_pipeline import reject_cpu_worker_detector
+
+    # An opt-in staged ordinary CPU worker may never instantiate a second
+    # GPU model, even through an unexpected fallback or call-site drift.
+    reject_cpu_worker_detector()
     device = resolve_paddle_device()
     key = f"{device}|nomkldnn"
     if key in _TEXT_DETECTION_CACHE:
