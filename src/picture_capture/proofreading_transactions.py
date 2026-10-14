@@ -346,7 +346,11 @@ class ReviewSessionHistory:
         frame = stack[-1]
         expected, target = (frame.before, frame.after) if redo else (frame.after, frame.before)
         current = snapshot_review(review)
-        if current is None or not _same_live_state(current, expected):
+        if current is None:
+            # Async Tk row reconstruction can temporarily leave stale widget
+            # bindings. Do not destroy a valid history while repaint is pending.
+            return False
+        if not _same_live_state(current, expected):
             self.invalidate()
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):

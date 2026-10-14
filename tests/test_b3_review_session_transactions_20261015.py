@@ -346,3 +346,87 @@ def test_external_edit_between_preflight_and_publish_refuses_undo(tmp_path, monk
     assert not history.undo(review)
     assert pdic_path(page).read_bytes() == b"concurrently altered PDIC"
     assert rows[0].word == "ONE"
+
+
+
+def test_single_row_deletion_undo_redo_restores_original_entry_object(tmp_path):
+    page, rows, review = _case(tmp_path)
+    original_ids = {id(e) for e in rows}
+    before = snapshot_review(review)
+    assert before
+    removed = rows.pop(0)
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    # GUI row widgets are intentionally stale until async re-render.
+    after = snapshot_review(review, allow_unbound=True)
+    assert after
+    history = ReviewSessionHistory()
+    assert history.record(before, after)
+    # GUI async repaint now catches up with persisted parent.entries.
+    review.vars = [Var(rows[0].word)]
+    assert history.undo(review)
+    assert {id(e) for e in review.parent.entries} == original_ids
+    assert any(e is removed for e in review.parent.entries)
+    assert len(read_pdic(pdic_path(page))) == 2
+    review.vars = [Var(e.word) for e in review.parent.entries]
+    assert history.redo(review)
+    assert len(review.parent.entries) == 1
+    assert removed not in review.parent.entries
+    assert len(read_pdic(pdic_path(page))) == 1
+
+
+def test_delete_last_row_can_undo_from_empty_saved_pdic(tmp_path):
+    page, rows, review = _case(tmp_path)
+    rows.pop()
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    before = snapshot_review(review)
+    assert before
+    deleted = rows.pop()
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review, allow_unbound=True)
+    assert after and not after.entries
+    history = ReviewSessionHistory()
+    assert history.record(before, after)
+    review.vars = []
+    assert history.undo(review)
+    assert review.parent.entries == [deleted]
+    assert len(read_pdic(pdic_path(page))) == 1
+
+
+def test_candidate_linked_deletion_refuses_deselection_rollback(tmp_path):
+    page, rows, review = _case(tmp_path)
+    rows[0].candidate_id = "candidate"
+    before = snapshot_review(review)
+    assert before
+    rows.pop(0)
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review, allow_unbound=True)
+    assert after
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+    assert not history.undo_stack
+
+
+def test_two_row_delete_or_geometry_move_is_not_undoable(tmp_path):
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    rows.clear()
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review, allow_unbound=True)
+    assert after
+    assert not ReviewSessionHistory().record(before, after)
+
+
+def test_unrendered_row_bindings_do_not_destroy_history_before_repaint(tmp_path):
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    rows.pop()
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review, allow_unbound=True)
+    history = ReviewSessionHistory()
+    assert after and history.record(before, after)
+    assert not history.undo(review)  # widgets still bound to deleted row
+    assert len(history.undo_stack) == 1
+    review.vars = [Var(rows[0].word)]
+    assert history.undo(review)
