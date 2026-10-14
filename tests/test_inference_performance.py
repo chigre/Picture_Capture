@@ -50,9 +50,9 @@ def test_small_batch_limits_auto_workers():
 def test_workers_can_exceed_six():
     settings = {"paddle_mkldnn": "auto", "paddle_cpu_workers": "12"}
     with patch("picture_capture.inference_performance.runtime_setting",
-               side_effect=lambda key, fallback: settings.get(key, fallback)), \\
-         patch("picture_capture.inference_performance.resolve_paddle_device", return_value="cpu"), \\
-         patch("picture_capture.inference_performance.os.cpu_count", return_value=24), \\
+               side_effect=lambda key, fallback: settings.get(key, fallback)), \
+         patch("picture_capture.inference_performance.resolve_paddle_device", return_value="cpu"), \
+         patch("picture_capture.inference_performance.os.cpu_count", return_value=24), \
          patch.dict("os.environ", {}, clear=True):
         policy = resolve_inference_policy(page_count=20)
     assert policy.cpu_workers == 12
