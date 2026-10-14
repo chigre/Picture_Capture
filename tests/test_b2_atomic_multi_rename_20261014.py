@@ -115,6 +115,43 @@ def test_batch_failure_never_publishes_half_of_the_same_save(tmp_path, monkeypat
     assert len(load_events(_journal(tmp_path))) == 2
 
 
+def test_failed_batch_preserves_existing_journal_bytes(tmp_path, monkeypatch):
+    from picture_capture import proofreading_events
+
+    page, original = _case(tmp_path)
+    # First save and journal record remain readable after a later failed batch.
+    write_pdic(
+        pdic_path(page),
+        [Entry("edited-a", 16, 24), original[1], original[2]],
+        56, ("page", "@", "@"),
+    )
+    assert capture_saved_review_rename(
+        project_root=tmp_path, page=page, prior_pdic_entries=original,
+    )
+    journal = _journal(tmp_path)
+    journal_before = journal.read_bytes()
+    prior = read_pdic(pdic_path(page))
+    write_pdic(
+        pdic_path(page),
+        [Entry("edited-again", 16, 24), Entry("edited-b", 16, 68), original[2]],
+        56, ("page", "@", "@"),
+    )
+    saved_pdic = pdic_path(page).read_bytes()
+    with monkeypatch.context() as m:
+        m.setattr(
+            proofreading_events, "write_text_atomic",
+            lambda *_a, **_kw: (_ for _ in ()).throw(OSError("disk full")),
+        )
+        with pytest.raises(OSError, match="disk full"):
+            capture_saved_review_rename(
+                project_root=tmp_path, page=page, prior_pdic_entries=prior,
+            )
+    assert journal.read_bytes() == journal_before
+    assert pdic_path(page).read_bytes() == saved_pdic
+    assert not journal.with_name(journal.name + ".lock").exists()
+    assert len(load_events(journal)) == 1
+
+
 def test_changed_coordinates_duplicates_and_co_saved_other_actions_are_unknown(tmp_path):
     page, original = _case(tmp_path)
     combos = [
