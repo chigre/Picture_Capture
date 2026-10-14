@@ -2552,6 +2552,10 @@ class ReviewWindow(tk.Toplevel):
         self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
         self._review_flat_button(row1, "撤销保存", self.undo_saved_review).pack(side="left", padx=(4, 0))
         self._review_flat_button(row1, "重做保存", self.redo_saved_review).pack(side="left", padx=(4, 0))
+        # Add non-conflicting session-save shortcuts. Plain Ctrl+Z/Y remain
+        # owned by the focused text editor / platform, never hijacked here.
+        self.bind("<Control-Alt-z>", lambda _event: self.undo_saved_review())
+        self.bind("<Control-Alt-y>", lambda _event: self.redo_saved_review())
         self._sync_autosave_label()
         ttk.Checkbutton(
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
