@@ -419,6 +419,8 @@ def test_two_row_delete_or_geometry_move_is_not_undoable(tmp_path):
 
 def test_unrendered_row_bindings_do_not_destroy_history_before_repaint(tmp_path):
     page, rows, review = _case(tmp_path)
+    stale_widgets = list(rows)  # Real Tk rows are not refreshed synchronously.
+    review._bound_row_entries = lambda: stale_widgets
     before = snapshot_review(review)
     assert before
     rows.pop()
@@ -428,5 +430,6 @@ def test_unrendered_row_bindings_do_not_destroy_history_before_repaint(tmp_path)
     assert after and history.record(before, after)
     assert not history.undo(review)  # widgets still bound to deleted row
     assert len(history.undo_stack) == 1
+    review._bound_row_entries = lambda: rows
     review.vars = [Var(rows[0].word)]
     assert history.undo(review)
