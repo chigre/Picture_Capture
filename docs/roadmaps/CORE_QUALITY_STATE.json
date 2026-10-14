@@ -4,7 +4,7 @@
   "plan_version": "1.1.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-14",
+  "updated_at_utc": "2026-10-14T09:30:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -27,9 +27,9 @@
     "active_work_item": "R2.1",
     "work_in_progress": false,
     "implementation_pr": {
-      "number": 482,
-      "url": "https://github.com/chigre/Picture_Capture/pull/482",
-      "branch": "feat/pc-cq-b2-proofreading-evidence-20261014",
+      "number": 486,
+      "url": "https://github.com/chigre/Picture_Capture/pull/486",
+      "branch": "feat/pc-cq-b2-tk-proofreading-gui-smoke-20261014",
       "status": "draft",
       "units": [
         "R2.1",
@@ -37,31 +37,32 @@
         "R2.3"
       ]
     },
-    "implementation_head_sha": "a07447101350602f8bcf7192cc50cb6aff1c3617",
-    "latest_verified_main_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
+    "implementation_head_sha": "772772692d468e8910e00705fc9faae21fb9accd",
+    "latest_verified_main_sha": "fb1521316eb644b8b21b4a03ca204f69642a6b88",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "latest_ci_pending",
-        "message": "B2 source image/OCR-cache concurrent replacement and unsaved ReviewWindow visual gate regression tests added; newest commit CI pending.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38535652194"
+        "message": "#486 synthetic Tk end-to-end dialog tests submitted; Windows/macOS/Linux, Python310, CodeQL and architecture jobs pending.",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38541438880"
       },
       {
         "type": "incomplete_B2",
-        "message": "Actual Windows GUI smoke and arbitrary manually moved XY/multi-row persistent identity still unverified; cannot close B2 or merge #482."
+        "message": "Issue #483 still blocks durable arbitrary XY/multi-row identity and genuine operator Windows FocusOut/autosave/navigation/crash-reopen smoke. Synthetic widget tests alone cannot prove those flows.",
+        "url": "https://github.com/chigre/Picture_Capture/issues/483"
       }
     ],
-    "required_next_action": "Read GitHub CI for current #482 head; repair real regressions in same Draft PR. Validate the Windows source-image preview and ReviewWindow FocusOut/saved-PDIC readback on genuine GUI; avoid deriving arbitrary moved marker IDs from coordinates or row ordering. Once B2 gates are genuinely met, review and merge, then verify post-merge main CI before starting B3.",
-    "last_test_evidence": "Prior PR head 4a7dd62 CI run 38531134450 fully successful (Windows/macOS/Ubuntu/Python3.10+CodeQL). Current B2 additions: 205485e7 regression first, 84893486 journal source rehash, c3821ecf verification commit binding, cc751143 unsaved-editor tests, 928d1bec UI fail-closed, a0744710 exact mid-write drift test. Latest CI 38535652194 pending, no local real GUI test claim.",
+    "required_next_action": "Inspect fixed-head PR #486 CI and repair any platform GUI failures in the same Draft PR; after green CI consider merge, then verify main CI. Keep B2 in progress until #483 identity and genuine Windows user-workflow gates are independently validated. Do not begin B3.",
+    "last_test_evidence": "#482 merged as 74aced55; postmerge main CI 38536954048 and CodeQL 38536955228 success. #485 right-column role fix merged into main fb152131 and user confirmed solved; main runs 38540839501, 38540840204 success. #486 adds standalone real-Tk synthetic image/PDIC consent, cancel, stale-source refusal, two judgment outcomes, reopen smoke on three platforms, not a human acceptance test; CI pending.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
   "units": {
     "R0.1": "verified",
-    "R0.2": "merged",
-    "R1.1": "merged",
-    "R1.2": "merged",
-    "R1.3": "merged",
+    "R0.2": "verified",
+    "R1.1": "verified",
+    "R1.2": "verified",
+    "R1.3": "verified",
     "R2.1": "in_progress",
     "R2.2": "in_progress",
     "R2.3": "in_progress",
@@ -315,6 +316,30 @@
       "runbook": "700a8bacab61196b07f658068e97f44058981078",
       "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38535652194",
       "notes": "Target is local visual verification source integrity only; no PDIC/SECTION/Profile schema changes, no automatic training, and no claimed desktop UI acceptance."
+    },
+    {
+      "type": "b1_and_b2_postmerge_reconciliation",
+      "status": "observed_main_success",
+      "b1_pr": "https://github.com/chigre/Picture_Capture/pull/481",
+      "b2_pr": "https://github.com/chigre/Picture_Capture/pull/482",
+      "role_bug_pr": "https://github.com/chigre/Picture_Capture/pull/485",
+      "main_sha": "fb1521316eb644b8b21b4a03ca204f69642a6b88",
+      "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38540839501",
+      "main_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/38540840204",
+      "note": "Previously stale B2 draft checkpoint reconciled. B1 verified retrospectively via successful full main CI; B2 partial foundation merged but remains not verified. User reports #485 real right-column issue fixed; no private scans in public GitHub."
+    },
+    {
+      "type": "b2_real_tk_synthetic_integration",
+      "status": "draft_ci_pending",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/486",
+      "head_before_checkpoint": "772772692d468e8910e00705fc9faae21fb9accd",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38541438880",
+      "files": [
+        "scripts/gui_proofreading_evidence_smoke.py",
+        ".github/workflows/ci.yml",
+        "docs/roadmaps/CORE_QUALITY_STATE.json"
+      ],
+      "note": "Real Tk widget (not genuine human acceptance) synthetic scan crop, consent disabled by default, cancellation preserves journal bytes, two explicit judgments, source drift failure, reopen, PDIC untouched. #483 remains blocked."
     }
   ],
   "rules_for_updates": {
@@ -372,10 +397,10 @@
         "R1.2",
         "R1.3"
       ],
-      "status": "merged",
+      "status": "verified",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/481",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Postmerge full CI not observed; PR CI passed 38504973658 and main CodeQL success 38509067455",
+      "blocker": null,
       "implementation_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
       "ci": {
         "run_id": 38454078389,
@@ -394,23 +419,29 @@
       },
       "unit_evidence": {
         "R0.2": {
-          "status": "pr_open",
-          "evidence": "Merged OCR safety tests included in targeted golden suite; full PR CI blocked; no independent green main validation"
+          "status": "verified",
+          "evidence": "Merged OCR safety tests included in targeted golden suite; full PR CI blocked; no independent green main validation Later main@fb152131 full CI success: runs 38540839501 and 38540840204; no real scan accuracy claim."
         },
         "R1.1": {
-          "status": "blocked",
-          "evidence": "Existing tests/test_ordered_marker_matching.py::test_real_benchmark_uses_identical_production_matching_primitive fails (direct call string no longer present)"
+          "status": "verified",
+          "evidence": "Existing tests/test_ordered_marker_matching.py::test_real_benchmark_uses_identical_production_matching_primitive fails (direct call string no longer present) Later main@fb152131 full CI success: runs 38540839501 and 38540840204; no real scan accuracy claim."
         },
         "R1.2": {
-          "status": "pr_open",
-          "evidence": "Synthetic fixtures included in targeted CI; no real-scan accuracy claim; overall targeted gate 18 passed/1 failed"
+          "status": "verified",
+          "evidence": "Synthetic fixtures included in targeted CI; no real-scan accuracy claim; overall targeted gate 18 passed/1 failed Later main@fb152131 full CI success: runs 38540839501 and 38540840204; no real scan accuracy claim."
         },
         "R1.3": {
-          "status": "blocked",
-          "evidence": "tests/test_b1_benchmark_provenance_20261014.py::test_existing_benchmark_runners_declare_separate_sources fails (missing test_kind literal)"
+          "status": "verified",
+          "evidence": "tests/test_b1_benchmark_provenance_20261014.py::test_existing_benchmark_runners_declare_separate_sources fails (missing test_kind literal) Later main@fb152131 full CI success: runs 38540839501 and 38540840204; no real scan accuracy claim."
         }
       },
-      "merge_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2"
+      "merge_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
+      "verification": {
+        "main_sha": "fb1521316eb644b8b21b4a03ca204f69642a6b88",
+        "ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38540839501",
+        "codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/38540840204",
+        "note": "Previous postmerge CI failure from #481 was not ignored; later full main CI is green, with B1 regressions retained. No real scan F1 claim."
+      }
     },
     "B2": {
       "units": [
@@ -421,20 +452,28 @@
       "status": "pr_open",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Full latest cross-platform CI pending; actual Windows desktop GUI smoke + general moved/multi-row stable identities remain blocked. Do not merge draft.",
+      "blocker": "Initial conservative B2 #482 is merged and validated on main. New Draft #486 tests real Tk widgets against synthetic assets; pending CI. Full B2 remains in progress: arbitrary moved/multi-row stable Entry identity and true Windows operator workflow at #483.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Settings default OFF; saved event journals for delete/rename/add/select/deselect/narrow OCR grouped move. New ReviewWindow button allows user to select only fresh actionable records and visually confirm original scan crop. Exclusive per-journal local lock added. General XY move and real GUI smoke not verified. Additional synthetic failure-path tests assert no journal evidence if manual-selection override saving fails after PDIC commit; awaiting CI. UI now blocks visual verification if save silently leaves edited text or unstable row bindings; headless tests committed, latest CI pending."
+          "evidence": "Default-OFF narrow opt-in event capture and Tk human verification UI merged in #482; read-only source crop, no auto consent, journal locking. #486 adds real widget integration smoke across Windows/macOS/Linux, CI pending. Arbitrary XY moved/multi-edit stable Entry IDs and real operator GUI acceptance remain open (#483)."
         },
         "R2.2": {
           "status": "in_progress",
-          "evidence": "Pre-human OCR/final-PDIC source fingerprints propagated; ambiguous/stale OCR links unknown. Visual verification rechecks current PDIC/image/OCR hashes; no inferred labels. Image bytes and linked OCR cache bytes are checked while the exclusive journal lock is held; concurrent source changes abort verified append. Tests include mid-lock changes; CI pending."
+          "evidence": "Conservative pre-edit OCR ancestry/PDIC/image binding, in-lock source digest checks and SECTION provenance merged in #482 with green main CI. Unlinked/ambiguous candidate mapping remains unknown; broadened durable identity not yet verified."
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Local aggregate audit with explicit user positive/negative decisions; source/image/SECTION transform and sidecar digest; no training exports. GUI smoke, concurrency/write failure tests awaiting CI. Exclusive lock now checks same reviewed_operation_id for duplicate verified judgments and rejects mismatched linked-source identity even if pre-lock reads were stale; tests added, CI pending. Existing local provenance/training_export=0 policy unchanged. Verified journal remains atomic and source-bound."
+          "evidence": "Local aggregate verification counts, explicit user positive/negative records, zero training/export pixels and no uploads merged in #482. #486 tests positive/negative confirmation/cancel/stale scans/reopening with synthetic real Tk widgets. CI pending and genuine operator acceptance outstanding."
         }
+      },
+      "merge_sha": "74aced55d60fd413cf7723e4ff0cdf6c5e9ca1ad",
+      "followup_pr": "https://github.com/chigre/Picture_Capture/pull/486",
+      "base_ci": {
+        "main_sha": "74aced55d60fd413cf7723e4ff0cdf6c5e9ca1ad",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38536954048",
+        "status": "success",
+        "codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/38536955228"
       }
     },
     "B3": {
