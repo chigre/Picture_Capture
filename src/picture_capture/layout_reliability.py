@@ -498,7 +498,9 @@ def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings,
         result = backend._legacy_detect_layout_parameters(source, settings)
         return finish(result, "legacy_transform")
 
-    cleaned = clean_layout_speckles(source, settings, backend)
+    cleaned = (clean_layout_speckles(source, settings, backend)
+               if bool(getattr(settings, "layout_denoise_enabled", True))
+               else source.copy())
     mark("reliable_speck_cleanup")
     paddle_error: Exception | None = None
     projection_error: Exception | None = None
