@@ -15514,6 +15514,10 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
+            from .draw_performance_profile import enabled as profile_enabled, record_page
+            tracing = profile_enabled() and method in {"paddleocr", "combined"}
+            stages = {}
+            trace_tick = time.perf_counter()
             resume_dependencies = ()
             if (
                 method in {"paddleocr", "combined"}
@@ -15550,6 +15554,9 @@ class PictureCaptureApp(tk.Tk):
                 return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
+            if tracing:
+                stages["ocr_image_load"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method in {"paddleocr", "combined"} else None
             sections = read_page_sections(page)
             entries, _geometry = detect_entries(
@@ -15559,6 +15566,9 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=index,
                 page_sections=sections,
             )
+            if tracing:
+                stages["ocr_detect_entries"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             text_stats = None
             if method == "combined":
                 original_coords = [
@@ -15580,6 +15590,9 @@ class PictureCaptureApp(tk.Tk):
                     raise RuntimeError(
                         f"{page.name} 融合画线自动补字意外修改了画线坐标"
                     )
+            if tracing:
+                stages["ocr_marker_text_fill"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             saved_pdic = pdic_path(page)
             if method in {"paddleocr", "combined"}:
                 # Mandatory lossless snapshot BEFORE replacing an existing
@@ -15588,6 +15601,9 @@ class PictureCaptureApp(tk.Tk):
                 from .ocr_pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
+            if tracing:
+                stages["ocr_preserve_and_pdic"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             result = {"index": int(index), "count": len(entries)}
             if method in {"paddleocr", "combined"} and cache_path is not None:
                 # The OCR cache is pre-Layout. Read the *actual saved PDIC*
@@ -15628,6 +15644,9 @@ class PictureCaptureApp(tk.Tk):
                     "text_large": int(text_stats.get("large", 0)),
                     "text_failed": int(text_stats.get("failed", 0)),
                 })
+            if tracing:
+                stages["ocr_audit_resume"] = time.perf_counter() - trace_tick
+                record_page(page, index, stages, mode=method)
             return result
 
         def done(completed, total, stopped, results, error):
