@@ -197,9 +197,13 @@ def _paddle_estimate(cleaned_source: Image.Image, settings: AppSettings, backend
         results = list(detector.predict(np.asarray(analysis)))
     mark("paddle_predict")
     if not results:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_paddle_empty")
         raise RuntimeError("PaddleOCR 整页版面检测没有返回结果。")
     boxes = backend._boxes_from_detection(results[0], analysis.width, analysis.height)
     if not boxes:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_paddle_no_boxes")
         raise RuntimeError("PaddleOCR 整页版面检测没有返回文本框。")
     mark("paddle_boxes_decode")
     gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
@@ -493,6 +497,8 @@ def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings,
 
     mark("reliable_projection_total")
     if primary is None and secondary is None:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_both_failed")
         raise RuntimeError(
             f"PaddleOCR 整页版面检测失败：{paddle_error}\n"
             f"投影版面检测也失败：{projection_error}"
