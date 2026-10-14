@@ -253,11 +253,12 @@ def remeasure_layout_indents_from_ink(
                                 # Genuine printed outdent, measured directly
                                 # from actual first ink, not an assumed skew.
                                 absolute_x = candidate
-                                accepted_outdents += 1
-                                largest_outdent = max(
-                                    largest_outdent,
-                                    semantic_left - candidate,
-                                )
+                                if position > 0:
+                                    accepted_outdents += 1
+                                    largest_outdent = max(
+                                        largest_outdent,
+                                        semantic_left - candidate,
+                                    )
 
             if absolute_x is None:
                 continue
