@@ -547,6 +547,17 @@ def detect_entries(
     never allowed to modify, veto, add to, or replace a usable Layout role
     assignment. OCR/combined retain the full enriched Page Understanding path.
     """
+    from time import perf_counter as _pc
+    from .draw_performance_profile import enabled as _profile_on
+    _timing = _profile_on() and str(getattr(settings, "detection_method", "")).lower() == "left_edge"
+    _nested = {}
+    _tick = _pc() if _timing else 0.0
+    def _mark(name):
+        nonlocal _tick
+        if _timing:
+            now = _pc()
+            _nested[name] = _nested.get(name, 0.0) + now - _tick
+            _tick = now
     source = _core.normalize_page_rgb(image)
     effective = _core.effective_page_settings(
         settings, source.size, profile_page_index,
@@ -569,6 +580,7 @@ def detect_entries(
         if replay_preview is not None:
             replay_preview("image_preparation", analysis_image)
 
+    _mark("inner_image_prepare")
     understanding = _understand_page_current(
         analysis_image,
         effective,
@@ -579,6 +591,7 @@ def detect_entries(
         replay_preview=replay_preview if ordinary_mode else None,
     )
 
+    _mark("inner_page_understanding")
     # Ordinary drawing is a direct materialization of final Layout Core roles.
     if ordinary_mode:
         if (
@@ -594,6 +607,7 @@ def detect_entries(
             _record_ordinary_debug_stage(
                 debug_trace, "layout_role_materialization", entries,
             )
+            _mark("inner_role_materialization")
             # Large ideographs may generate several spurious Layout entry
             # rows inside one glyph; veto only image-confirmed duplicates.
             if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
@@ -681,6 +695,7 @@ def detect_entries(
                     analysis_image, effective, understanding, entries,
                     page_index=profile_page_index,
                 )
+            _mark("inner_entry_recovery")
             entries = _allowed_entries(
                 entries,
                 source,
@@ -746,12 +761,18 @@ def detect_entries(
                 scope="最终剩余全部候选，含后续【】及大字头来源；只读核对",
                 rationale="后续仅排序，不再对所有来源执行统一 Y 平移",
             )
+            _mark("inner_final_filter_and_corrections")
             sorted_entries = _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
             )
             _record_ordinary_debug_stage(
                 debug_trace, "final_reading_order", sorted_entries,
             )
+            _mark("inner_sort")
+            if _timing:
+                from .draw_performance_profile import record_page
+                record_page("<substage>", profile_page_index, _nested,
+                            stage_group="detect_entries_inner")
             return sorted_entries, geometry
 
         if replay_trace is not None:
