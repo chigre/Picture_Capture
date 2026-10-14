@@ -447,7 +447,6 @@ NORMAL_ADVANCED_FIELDS = (
 OCR_COMMON_FIELDS = (
         "ocr_language", "paddle_preprocessing",
         "paddle_band_width_ratio", "paddle_left_tolerance",
-        "paddle_separator_safety_px",
     )
 
 OCR_ADVANCED_FIELDS = (
@@ -457,8 +456,8 @@ OCR_ADVANCED_FIELDS = (
         "paddle_min_candidate_score", "paddle_header_search_height",
         "paddle_header_rule_ink_ratio", "paddle_header_rule_margin",
         "paddle_pos_search_chars", "paddle_separator_search_ratio",
-        "paddle_separator_band_radius", "paddle_separator_roi_width_ratio",
-        "paddle_separator_column_margin", "paddle_tesseract_psm",
+"paddle_separator_roi_width_ratio",
+"paddle_tesseract_psm",
         "paddle_alignment_y_tolerance_ratio", "paddle_alignment_min_similarity",
         "paddle_conflict_review_margin",
     )
@@ -702,7 +701,6 @@ NORMAL_CHECKS = (
         ("50% 可用：首栏 X", "layout_scale_manual_x"),
         ("50% 可用：字高", "layout_scale_character_height"),
         ("50% 可用：行间空", "layout_scale_row_padding"),
-        ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
         ("分栏数", "ordinary_auto_columns"),
@@ -720,7 +718,6 @@ OCR_COMMON_CHECKS = (
         ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
         ("要求结构/视觉提示", "paddle_require_visual_cue"),
         ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
-        ("自动精修横线 Y", "paddle_refine_separator_y"),
     )
 
 OCR_ADVANCED_CHECKS = (
@@ -733,9 +730,21 @@ OCR_ADVANCED_CHECKS = (
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
-        ("实验：原图白缝核验横线Y（默认关）", "separator_y_ink_safe_gap"),
         ("实验：同栏词头样式救回续行（默认关）", "paddle_peer_style_rescue"),
     )
+
+SEPARATOR_Y_FIELDS = (
+    "paddle_separator_search_ratio",
+    "paddle_separator_band_radius",
+    "paddle_separator_safety_px",
+    "paddle_separator_roi_width_ratio",
+    "paddle_separator_column_margin",
+)
+
+SEPARATOR_Y_CHECKS = (
+    ("自动精修横线 Y（普通画线与 OCR 共用）", "paddle_refine_separator_y"),
+    ("实验：原图白缝核验横线 Y", "separator_y_ink_safe_gap"),
+)
 
 DISPLAY_STYLE_CHECKS = (
         ("主界面词条粗体", "main_entry_font_bold"),
@@ -766,6 +775,7 @@ __all__ = [
     "OCR_COMMON_FIELDS",
     "OCR_ADVANCED_FIELDS",
     "DISPLAY_FIELDS",
+    "SEPARATOR_Y_FIELDS", "SEPARATOR_Y_CHECKS",
     "PROJECT_RUNTIME_FIELDS",
     "EXPERT_FIELDS",
     "SETTING_UNITS",
