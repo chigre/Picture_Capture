@@ -136,6 +136,47 @@ def test_previous_verified_label_is_stale_after_following_pdic_update(tmp_path):
     ) == {"correct_headword": 0, "not_headword": 0}
 
 
+
+def test_two_stale_verification_writers_cannot_publish_duplicate_judgments(tmp_path):
+    """Both callers can pass an old pre-lock read; append must recheck under lock."""
+    pdic, image, journal, source = _source(tmp_path)
+    base = dict(
+        page_id=source["page_id"], action="verify",
+        before={"reviewed_operation_id": source["operation_id"]},
+        after={"judgment": "correct_headword"},
+        entry_id=source["entry_id"], pdic_sha256=sha256_file(pdic),
+        image_sha256=sha256_file(image),
+        verification_status="verified", explicitly_verified=True,
+    )
+    first = make_event(**base)
+    second = make_event(**base)
+    assert first["operation_id"] != second["operation_id"]
+    append_event(journal, first, pdic_file=pdic)
+    before_second_write = journal.read_bytes()
+    with pytest.raises(ValueError, match="already verified"):
+        append_event(journal, second, pdic_file=pdic)
+    assert journal.read_bytes() == before_second_write
+    assert len(load_events(journal)) == 2
+    assert explicit_verification_counts(
+        load_events(journal), pdic_sha256=sha256_file(pdic),
+        image_sha256=sha256_file(image),
+    )["correct_headword"] == 1
+
+
+def test_verification_journal_rejects_wrong_source_identity(tmp_path):
+    pdic, image, journal, source = _source(tmp_path)
+    impostor = make_event(
+        page_id=source["page_id"], action="verify",
+        before={"reviewed_operation_id": source["operation_id"]},
+        after={"judgment": "not_headword"},
+        entry_id="different-entry", pdic_sha256=sha256_file(pdic),
+        image_sha256=sha256_file(image),
+        verification_status="verified", explicitly_verified=True,
+    )
+    with pytest.raises(ValueError, match="entry identity"):
+        append_event(journal, impostor, pdic_file=pdic)
+    assert len(load_events(journal)) == 1
+
 def test_cli_is_explicit_not_training_and_no_visual_auto_approval():
     content = (
         Path(__file__).resolve().parents[1] / "scripts" /
