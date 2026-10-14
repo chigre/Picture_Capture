@@ -61,6 +61,8 @@ def resolve_denoise_strength(settings: Any | None = None) -> str:
     settings model, and is inherited by spawned ordinary-drawing workers.
     """
     if settings is not None:
+        if not bool(getattr(settings, "analysis_denoise_enabled", True)):
+            return "off"
         configured = getattr(settings, "analysis_denoise_strength", None)
         if configured not in (None, ""):
             return normalize_denoise_strength(configured)
