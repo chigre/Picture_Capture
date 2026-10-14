@@ -15744,6 +15744,22 @@ class PictureCaptureApp(tk.Tk):
                 if observed_dnn:
                     monitor_text += f"；oneDNN 配置 {'/'.join(observed_dnn)}"
             quality_text += monitor_text
+            from .draw_performance_profile import (
+                enabled as profiling_enabled, recent_profiles, summarize,
+            )
+            if profiling_enabled():
+                page_names = {str(project.images[i]) for i in indices}
+                stage_rows = recent_profiles(batch_started_at, pages=page_names)
+                sums = summarize(stage_rows)
+                if sums:
+                    ordered = sorted(sums.items(), key=lambda item: -item[1])
+                    detail = " / ".join(
+                        f"{name}={milliseconds / 1000:.2f}s"
+                        for name, milliseconds in ordered
+                    )
+                    quality_text += f"；阶段累计[{detail}]"
+                    # Each phase is summed over workers. CPU/GPU stages overlap,
+                    # and must NOT be equated with end-to-end batch elapsed time.
             suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
