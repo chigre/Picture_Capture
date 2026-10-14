@@ -90,6 +90,7 @@ def refined_layout_entry_y_by_line(
     understanding: Any,
     *,
     page_index: int = 0,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[int, int]:
     """Apply the shared refiner to rows already classified as Layout entries.
 
@@ -107,7 +108,9 @@ def refined_layout_entry_y_by_line(
             int(page_index),
         )
         gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
-    except Exception:
+    except Exception as exc:
+        if diagnostics is not None:
+            diagnostics.append({"status": "page_preparation_error", "error": f"{type(exc).__name__}: {exc}"})
         return {}
 
     line_height = max(
@@ -121,7 +124,7 @@ def refined_layout_entry_y_by_line(
     height, width = gray.shape[:2]
     result: dict[int, int] = {}
 
-    for column in list(getattr(layout, "columns", []) or []):
+    for col_index, column in enumerate(list(getattr(layout, "columns", []) or []), start=1):
         left = max(0, min(width - 1, int(getattr(column, "left", 0) or 0)))
         right = max(left + 1, min(width, int(getattr(column, "right", width) or width)))
         if right - left < 4:
@@ -134,16 +137,20 @@ def refined_layout_entry_y_by_line(
                 getattr(line, "y0", 0) or 0
             )
             coarse = max(0, min(height - 1, coarse))
+            details: dict[str, Any] = {}
+            error = None
             try:
-                refined, _details = refine_separator_y(
+                refined, details = refine_separator_y(
                     band,
                     coarse,
                     line_height,
                     effective,
                     pixel_scale=1.0,
                 )
-            except Exception:
+            except Exception as exc:
                 refined = coarse
+                error = f"{type(exc).__name__}: {exc}"
+            raw_refined = int(refined)
 
             # The shared engine already has its own safety controls. Retain an
             # adapter-level guard as well so a Layout entry can never jump to a
@@ -151,6 +158,31 @@ def refined_layout_entry_y_by_line(
             max_move = max(3, int(round(line_height * 0.45)))
             refined = max(coarse - max_move, min(coarse + max_move, int(refined)))
             result[id(line)] = max(0, min(height - 1, int(refined)))
+            if diagnostics is not None:
+                from .paddle_headwords_core import _separator_analysis_x_bounds
+                local_x0, local_x1 = _separator_analysis_x_bounds(
+                    band.shape[1], effective, 1.0,
+                )
+                source_x, source_y = layout.transform.canonical_to_source_point(
+                    left, result[id(line)], layout.source_size,
+                )
+                diagnostics.append({
+                    "column": col_index, "line_id": id(line),
+                    "coarse_y": coarse, "raw_refined_y": raw_refined,
+                    "clamped_y": result[id(line)], "source_x": int(source_x),
+                    "source_y": int(source_y), "shift": result[id(line)] - coarse,
+                    "max_move": max_move, "clamped": raw_refined != int(refined),
+                    "roi_x0": left + local_x0, "roi_x1": left + local_x1,
+                    "roi_width": local_x1 - local_x0,
+                    "column_left": left, "column_right": right,
+                    "search_top": details.get("search_top"),
+                    "search_bottom": details.get("search_bottom"),
+                    "reason": details.get("reason", "exception" if error else "unknown"),
+                    "error": error, "line_height": line_height,
+                    "settings_roi_percent": float(effective.paddle_separator_roi_width_ratio),
+                    "details": {key: value for key, value in details.items()
+                                if isinstance(value, (str, int, float, bool, type(None)))},
+                })
 
     return result
 
