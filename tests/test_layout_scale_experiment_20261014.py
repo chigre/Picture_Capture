@@ -26,6 +26,8 @@ def test_original_geometry_is_restored_after_half_size_detection(monkeypatch):
     settings = AppSettings(
         columns=2, column_width=1498, gutter=76,
         character_height=64, start_y=120, manual_x=84,
+        layout_scale_start_y=True, layout_scale_manual_x=True,
+        layout_scale_character_height=True, layout_scale_row_padding=True,
     )
     observed = []
     def mock_detector(image, candidate, backend):
@@ -63,3 +65,30 @@ def test_off_preserves_exact_original_detector_path(monkeypatch):
     estimate, scale = detect_at_scale(original, settings, None, mock_detector)
     assert calls == [(True, True)]
     assert scale == 1.0
+
+
+def test_safe_default_scaled_fields(monkeypatch):
+    monkeypatch.setenv("PICTURE_CAPTURE_LAYOUT_SCALE_EXPERIMENT", "auto")
+    source = Image.new("RGB", (3240, 4600), "white")
+    settings = AppSettings(
+        columns=2, column_width=1498, gutter=76,
+        character_height=64, start_y=120, manual_x=84, row_padding=11,
+    )
+    def detector(image, candidate, backend):
+        return LayoutEstimate(
+            columns=3, start_y=30, column_width=740, gutter=40,
+            manual_x=55, bottom_y=120, character_height=21,
+            row_padding=2, source_boxes=60,
+            canonical_width=1620, column_starts=(55, 835),
+            column_rights=(790, 1580),
+        )
+    result, scale = detect_at_scale(source, settings, None, detector)
+    assert scale == 0.5
+    assert result.columns == 3
+    assert result.column_width == 1480
+    assert result.gutter == 80
+    assert result.manual_x == 84
+    assert result.start_y == 120
+    assert result.character_height == 64
+    assert result.row_padding == 11
+    assert result.column_starts == ()
