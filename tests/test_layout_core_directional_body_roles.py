@@ -199,8 +199,12 @@ def test_peer_supported_body_lane_with_sparse_true_headwords() -> None:
         columns=[left, right], display_heads=[],
     )
 
-    _resolve_directional_body_lanes(layout)
+    details = {}
+    _resolve_directional_body_lanes(layout, diagnostics=details)
 
+    assert details["column_seed_decisions"][1]["selection_reason"] == "independent_peer_corrob"
+    assert details["column_seed_decisions"][1]["prior_seed_center"] == -96.8
+    assert details["column_seed_decisions"][1]["chosen_body_center"] == 7.7
     assert right.body_mode is actual_body
     assert right.entry_modes == [actual_head]
     assert all(row.role == "body" for row in actual_body.lines + gutter.lines)
