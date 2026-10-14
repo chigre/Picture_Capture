@@ -14511,7 +14511,9 @@ class PictureCaptureApp(tk.Tk):
         if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
             return
         project = getattr(self, "project", None)
-        if project is None:
+        # A deferred callback must never attribute a previous page's click
+        # after navigation has already changed the active page.
+        if project is None or getattr(self, "current_page", None) != page:
             return
         try:
             from .proofreading_capture import (
