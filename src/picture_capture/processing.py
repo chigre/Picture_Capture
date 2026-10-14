@@ -94,7 +94,8 @@ def _understand_page_current(
                 image,
                 settings,
                 profile_page_index=int(page_index),
-                source_image_path=source_image_path,
+                **({"source_image_path": source_image_path}
+                   if source_image_path is not None else {}),
                 **({"candidate_debug": mask_candidates}
                    if mask_candidates is not None else {}),
             )
@@ -907,7 +908,8 @@ def detect_entries_job(
                     current,
                     profile_page_index=profile_page_index,
                     page_sections=sections,
-                    source_image_path=page,
+                    **({"source_image_path": page}
+                       if getattr(current, "layout_mask_illustrations", False) else {}),
                 )
             if preflight_state is not None:
                 # An optional internal fallback must not turn a missing GPU
