@@ -6400,8 +6400,31 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent._claim_page_for_manual_edit():
             return "break"
 
+        # Only explicitly enabled, project-local evidence capture. Save the
+        # *previous on-disk* PDIC before mutating any shared Entry objects.
+        capture_requested = bool(getattr(
+            self.parent.settings, "proofreading_event_capture", False
+        ))
+        prior_pdic_rows = None
+        if capture_requested and self.parent.current_page is not None:
+            try:
+                prior_pdic_rows = read_pdic(pdic_path(self.parent.current_page))
+            except (OSError, ValueError):
+                # Invalid PDIC must never be silently converted into labels.
+                pass
+
         self._commit_edits()
         entry = row_entries[int(index)]
+        deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
+        deleted_candidate_id = str(entry.candidate_id or "")
+        candidate_id_unique = (
+            bool(deleted_candidate_id)
+            and sum(
+                str(row.get("candidate_id", "")) == deleted_candidate_id
+                for row in getattr(self.parent, "ocr_review_candidates", ())
+                if isinstance(row, dict)
+            ) == 1
+        )
         simplified_key = simplified_entry_key(entry.x, entry.y)
         rendered_stem = getattr(self, "_rendered_page_stem", "")
         if rendered_stem and hasattr(self, "_simplified_page_cache"):
@@ -6429,6 +6452,22 @@ class ReviewWindow(tk.Toplevel):
         # Do not sync stale main-canvas Entry widgets back into the shared model:
         # the proofreading text above is the newest source of truth.
         self.parent.save_pdic(silent=True, sync_editors=False)
+        capture_failed = False
+        if prior_pdic_rows is not None:
+            try:
+                from .proofreading_capture import capture_saved_review_deletion
+                capture_saved_review_deletion(
+                    project_root=self.parent.project.root,
+                    page=self.parent.current_page,
+                    prior_pdic_entries=prior_pdic_rows,
+                    expected_deleted=deleted_identity,
+                    deleted_candidate_id=deleted_candidate_id,
+                    candidate_id_unique=candidate_id_unique,
+                )
+            except (OSError, ValueError, TypeError):
+                # PDIC and manual overrides were saved successfully. Evidence
+                # errors must neither undo that save nor silently claim success.
+                capture_failed = True
         if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
             self._persist_simplified_page(self._rendered_page_stem)
         self.parent.redraw()
@@ -6440,7 +6479,10 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent.entries:
             self._show_ocr_options(None)
             self._update_title()
-        self.parent.status_var.set(f"已删除词条：{deleted_word}")
+        self.parent.status_var.set(
+            f"已删除词条：{deleted_word}"
+            + ("（本地操作日志保存失败，PDIC 已保存）" if capture_failed else "")
+        )
         return "break"
 
     def _save_digit_map(self) -> None:
