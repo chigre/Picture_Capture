@@ -199,6 +199,7 @@ OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra",
 
 SETTING_LABELS = {
         "layout_mask_illustrations": "Layout前白化插图",
+        "layout_mask_illustrations_use_existing": "使用已有的插图数据",
         "columns": "正文栏数",
         "start_y": "正文起始 Y",
         "bottom_y": "正文结束 Y",
@@ -261,6 +262,12 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+        "layout_mask_illustrations_use_existing": (
+            "依赖【Layout 分析前白化插图】。勾选后只读取当前页 PPP 中已经保存的插图多边形，"
+            "直接对白化分析副本进行处理，不运行插图自动识别，也不改写 PPP。"
+            "未勾选时由自动检测产生候选，并按原有安全阈值筛选。"
+            "PPP 缺失时不应默默改为重新检测或认为本页没有插图。"
+        ),
         "layout_mask_illustrations": (
             "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
             "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
@@ -647,6 +654,7 @@ ILLUSTRATION_APPEARANCE_FIELDS = (
 
 ILLUSTRATION_CHECKS = (
     ("Layout 分析前白化插图", "layout_mask_illustrations"),
+    ("使用已有的插图数据", "layout_mask_illustrations_use_existing"),
     ("显示插图区域标签", "show_illustration_labels"),
     ("插图标签粗体", "illustration_label_font_bold"),
     ("插图标签斜体", "illustration_label_font_italic"),
