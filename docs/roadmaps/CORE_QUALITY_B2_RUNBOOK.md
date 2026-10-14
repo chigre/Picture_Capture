@@ -1,6 +1,6 @@
-# PC-CQ/B2 — Human proofreading evidence (work in progress)
+# PC-CQ/B2 — Human proofreading evidence (partial merge; remaining acceptance underway)
 
-This PR is **draft**: limited opt-in UI capture now exists, but the full human-feedback contract remains incomplete. A green CI only validates tested slices, not a fully activated human-feedback loop.
+**Live status (2026-10-14):** The conservative default-OFF local evidence foundation merged via [#482](https://github.com/chigre/Picture_Capture/pull/482) at `74aced55`; the post-merge main CI and CodeQL passed. Follow-up [#486](https://github.com/chigre/Picture_Capture/pull/486) adds real Tk-widget synthetic interaction tests. **B2 is NOT fully verified**, because durable arbitrary XY/multi-row Entry identity and human-run Windows workflow acceptance remain open in [#483](https://github.com/chigre/Picture_Capture/issues/483). Historical subsections below describe work-in-progress states at the time they were authored; they are not the current PR status.
 
 ## Source-of-truth chain
 
@@ -119,3 +119,10 @@ Two additional headless regressions address narrow evidence corruption risks wit
 Tests simulate an image/OCR cache change between the preflight check and the append call, preservation of the existing journal on rejection, a no-op save with dirty text, mismatched row bindings, and a normal committed save. The new source validation applies to independent human verification events only; ordinary unverified action logging retains the previous contract.
 
 **Remaining gates unchanged**: arbitrary marker movement requires actual stable Entry identity beyond geometric proximity; Windows real-GUI FocusOut/navigation/reopen/crop smoke remains outstanding. Do not treat green CI as evidence of these unperformed tests. The PR stays Draft; no remote submission of local images or patient/dictionary content.
+
+
+### Incremental Tk interaction gate — PR #486 (2026-10-14)
+
+The previous `scripts/gui_smoke.py` verifies only application-window construction; mocked widget unit tests also cannot establish that Tk selection events, cropped pixels, button enablement and journal writes are wired correctly. `scripts/gui_proofreading_evidence_smoke.py` exercises actual Tk widgets on a fully synthetic page in CI (Windows/macOS GUI sessions and Linux Xvfb). It checks initial disabled/no-selection state, rendering actual PNG crop after Treeview selection, explicit checkbutton, cancellation without byte changes, positive and negative human-*simulated* judgments, stale-source rejection between preview and acceptance, and re-opening the verification dialog without repeated actionable events. Both synthetic input PNG and PDIC are generated into disposable private temp storage; only generic code is committed. This is **not** a user-operated Windows acceptance or a real dictionary-scanner test.
+
+**Remaining #483:** interactive FocusOut/autosave/navigation/SECTION/crash-reopen with a real operator; durable identity across arbitrary marker drag and multi-row transactions without row index/proximity inference. Keep B2 in progress, do not start B3 from synthetic CI alone. For current SHA/CI check `CORE_QUALITY_STATE.json` and GitHub, not historical pending paragraphs above.
