@@ -1028,6 +1028,7 @@ class SettingsDialog(tk.Toplevel):
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
+        performance_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
         display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1040,6 +1041,7 @@ class SettingsDialog(tk.Toplevel):
             (ocr_tab, "OCR画线"),
             (normal_tab, "普通画线"),
             (illustration_tab, "插图"),
+            (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
             (crop_tab, "切图"),
@@ -1053,6 +1055,7 @@ class SettingsDialog(tk.Toplevel):
             "common": common_tab,
             "normal": normal_tab,
             "illustration": illustration_tab,
+            "performance": performance_tab,
             "ocr": ocr_tab,
             "display": display_tab,
             "project": project_tab,
@@ -1241,6 +1244,20 @@ class SettingsDialog(tk.Toplevel):
         )
 
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
+        performance_page = self._scrollable_settings_page(performance_tab)
+        self._settings_intro(
+            performance_page, "性能测试与诊断",
+            "本页管理运行时测试开关和性能报告；项目设置会自动保存，"
+            "新启动的普通画线子进程继承对应选项。",
+        )
+        self._add_check_group(
+            performance_page, "分析图与性能日志",
+            (
+                ("启用普通画线性能诊断（导出 Markdown/CSV）", "draw_performance_profile"),
+                ("复用已处理的分析图（实验）", "reuse_prepared_analysis"),
+            ),
+            intro="复用功能可能改变重复去噪语义，务必先比较完整 PDIC。",
+        )
 
         ocr_page = self._scrollable_settings_page(ocr_tab)
         self._settings_intro(
@@ -15503,6 +15520,14 @@ class PictureCaptureApp(tk.Tk):
             )
         self.settings.detection_method = method
         settings = replace(self.settings)
+        # Set the process environment *before* spawning workers. Snapshot the
+        # values at the start of this batch to keep child processes consistent.
+        os.environ["PICTURE_CAPTURE_DRAW_PROFILE"] = (
+            "1" if bool(getattr(settings, "draw_performance_profile", False)) else "0"
+        )
+        os.environ["PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS"] = (
+            "1" if bool(getattr(settings, "reuse_prepared_analysis", False)) else "0"
+        )
         project = self.project
         pages_info = {i: self.pages_tuple(i) for i in indices}
         filter_path = headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
@@ -15796,7 +15821,7 @@ class PictureCaptureApp(tk.Tk):
                 try:
                     report_path = export_batch_report(
                         stage_rows, label=label, elapsed_seconds=elapsed_seconds,
-                        completed=completed,
+                        completed=completed, settings=settings,
                     )
                 except Exception as exc:
                     quality_text += f"；性能报告导出失败：{exc}"
