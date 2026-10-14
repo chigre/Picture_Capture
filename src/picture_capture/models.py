@@ -283,6 +283,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # Optional Layout-only preprocessing. Source scans, PPP annotations, OCR
     # input and crop outputs remain untouched; default preserves legacy behavior.
     layout_mask_illustrations: bool = False
+    layout_mask_illustrations_use_existing: bool = False
     # Automatic PPP illustration detection intentionally adds a little context
     # around dark connected components. The right side gets a larger default
     # because classic dictionary illustrations often extend into the gutter.
