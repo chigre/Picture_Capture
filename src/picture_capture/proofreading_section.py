@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 from .layout_transform import LayoutTransform
 from .page_sections import read_page_sections
@@ -34,8 +34,18 @@ def section_snapshot_for_source_point(
         sections = read_page_sections(image_path)
         if not sections or len(sections) != len(raw.get("sections", [])):
             return None
+        # Read header/EXIF only; fully transposing a large scanned page here
+        # would decode its pixels during every single proofreading action.
         with Image.open(image_path) as opened:
-            size = ImageOps.exif_transpose(opened).size
+            raw_width, raw_height = opened.size
+            orientation = int(opened.getexif().get(274, 1) or 1)
+            size = (
+                (raw_height, raw_width)
+                if orientation in (5, 6, 7, 8)
+                else (raw_width, raw_height)
+            )
+        if size != (int(raw.get("source_width", -1)), int(raw.get("source_height", -1))):
+            return None
         x, y = int(x), int(y)
         if not (0 <= x < size[0] and 0 <= y < size[1]):
             return None
