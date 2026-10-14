@@ -37,18 +37,22 @@
         "R2.3"
       ]
     },
-    "implementation_head_sha": "0e56cd3105850033fcb22b7f7c7d080e6838b658",
+    "implementation_head_sha": "d9f294f243327adccbd5aa61a90ba937a0589783",
     "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
-        "type": "verification_pending",
-        "message": "B1 full postmerge pytest CI not yet independently observed; PR CI passed and main CodeQL successful.",
-        "run": "https://github.com/chigre/Picture_Capture/actions/runs/38509067455"
+        "type": "b2_scope_incomplete",
+        "message": "B2 still draft: capture rename/move/add/select/deselect/verify; durable identity mapping across sessions; manual override rollback and page/SECTION navigation; consent and privacy integration smoke tests not yet covered."
+      },
+      {
+        "type": "latest_ci_pending",
+        "message": "Latest post-implementation head PR CI pending; do not claim latest tests green.",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38516725540"
       }
     ],
-    "required_next_action": "Continue draft PR #482; implement safe post-save UI event capture & human consent/opt-in, stable entry identities, failure/reopen cases and GUI integration; run cross-platform CI; do not merge before complete R2.1–R2.3 acceptance. Check main postmerge B1 CI facts.",
-    "last_test_evidence": "B1 PR #481 checks passed CI 38504973658, merged de257754217520b64c8bbf4c6c4547dc1a0136b2; postmerge Push on main CodeQL run 38509067455 success; no postmerge full pytest CI run confirmed. B2 foundation tests committed, not run yet.",
+    "required_next_action": "Track #482 CI for the latest head; repair failures on same PR, no duplicate PR. Audit newly added opt-in deletion journaling, license-bound local aggregate audit and R2.2 stale-link gate. Finish missing capture operations, stable manual-entry IDs, SECTION/override lifecycle and GUI regression tests before taking #482 out of draft; do not merge solely for green CI.",
+    "last_test_evidence": "Base PR #482 CI 38512909349 attempt 2 passed all 4 jobs at fdcff7f. New opt-in UI deletion capture and local audit were added afterward; earlier interim CI runs failed old ReviewWindow SimpleNamespace mock (missing settings), fixed 75d4556; CI for latest head d9f294f 38516725540 queued at checkpoint.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
@@ -215,6 +219,14 @@
       "url": "https://github.com/chigre/Picture_Capture/pull/482",
       "status": "draft_incomplete",
       "note": "Foundation event journal and conservative read-only linkage only; UI wiring and real CI validation pending."
+    },
+    {
+      "type": "b2_optin_implementation",
+      "status": "draft_ci_pending",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/482",
+      "head_at_last_check": "d9f294f243327adccbd5aa61a90ba937a0589783",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38516725540",
+      "summary": "Default-off Settings checkbox, proved saved ReviewWindow deletion events, image provenance, stale OCR/PDIC linkage guards, privacy-minimal license-aware local audit, synthetic tests. CI pending. No training or uploads."
     }
   ],
   "rules_for_updates": {
@@ -321,7 +333,21 @@
       "status": "pr_open",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "UI capture and integration tests missing; foundation only"
+      "blocker": "Draft incomplete: only delete UI integration plus core event foundations and local aggregate export. Latest full PR CI pending.",
+      "unit_evidence": {
+        "R2.1": {
+          "status": "in_progress",
+          "evidence": "Opt-in setting default off, saved delete journaling, source image/project ID; other edit actions and cross-session identity not implemented."
+        },
+        "R2.2": {
+          "status": "in_progress",
+          "evidence": "Conservative OCR/final PDIC fingerprints and stale/ambiguous fail-closed linker, but most manual overrides unlinked."
+        },
+        "R2.3": {
+          "status": "in_progress",
+          "evidence": "Read-only local aggregate+license/hash export CLI; not yet full SECTION/verified positive-negative label audit or real workflow smoke."
+        }
+      }
     },
     "B3": {
       "units": [
