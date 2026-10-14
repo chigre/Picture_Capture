@@ -15477,6 +15477,23 @@ class PictureCaptureApp(tk.Tk):
         import time
         batch_started_at = time.time()
         self.save_pdic(silent=True)
+        # Auto illustration detection persists PPP in workers. Flush any
+        # foreground manual edits first so the worker's AUTO merge preserves
+        # them. PPP-reuse mode is read-only and must never fabricate a missing
+        # PPP file.
+        if (
+            method == "left_edge"
+            and bool(getattr(self.settings, "layout_mask_illustrations", False))
+            and not bool(getattr(self.settings, "layout_mask_illustrations_use_existing", False))
+            and self.current_page is not None
+        ):
+            from .formats import write_ppp
+            self._sync_polygon_label_texts()
+            write_ppp(
+                self._ppp_write_path(self.current_page),
+                self.polygons,
+                self.current_page.stem,
+            )
         self.settings.detection_method = method
         settings = replace(self.settings)
         project = self.project
