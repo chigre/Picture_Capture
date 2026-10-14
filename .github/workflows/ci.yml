@@ -63,6 +63,14 @@ jobs:
         if: runner.os != 'Linux'
         run: uv run --locked python scripts/gui_smoke.py
 
+      - name: B2 proofreading evidence Tk integration (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked python scripts/gui_proofreading_evidence_smoke.py
+
+      - name: B2 proofreading evidence Tk integration (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked python scripts/gui_proofreading_evidence_smoke.py
+
       - name: Run compatibility test runner
         run: uv run --locked python run_tests.py
 
