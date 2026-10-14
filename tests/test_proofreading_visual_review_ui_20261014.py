@@ -157,3 +157,89 @@ def test_explicit_confirmation_ui_controls_have_no_automatic_approval():
     assert "proofreading_event_capture" in source
     assert 'text="核验记录"' in app
     assert "command=self._open_proofreading_visual_verification" in app
+
+
+def test_visual_verification_does_not_open_after_noop_review_save(tmp_path, monkeypatch):
+    """The user cannot confirm an old record over still-unsaved editor text."""
+    from types import SimpleNamespace
+    from picture_capture import proofreading_verify_ui as ui
+
+    page, pdic, journal, event = _project(tmp_path)
+    opened = []
+    messages = []
+    row = Entry("saved", 30, 55)
+    parent = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path), current_page=page,
+        settings=SimpleNamespace(proofreading_event_capture=True),
+        current_index=0, _foreground_batch_state=lambda index: "idle",
+        _paddle_cache_path=lambda: None,
+    )
+    review = SimpleNamespace(
+        parent=parent, _filter_rows_active=False,
+        vars=[SimpleNamespace(get=lambda: "not yet saved")],
+        _bound_row_entries=lambda: [row],
+        save=lambda **kwargs: None,  # simulated refusal to claim pending page
+    )
+    monkeypatch.setattr(ui.messagebox, "showinfo",
+                        lambda title, message, **kwargs: messages.append(message))
+    monkeypatch.setattr(ui, "ProofreadingVisualVerificationDialog",
+                        lambda *args, **kwargs: opened.append(kwargs))
+    ui.open_visual_verification(review)
+    assert not opened
+    assert messages
+    assert len(load_events(journal)) == 1
+
+
+def test_visual_verification_opens_after_provably_committed_review(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from picture_capture import proofreading_verify_ui as ui
+
+    page, pdic, journal, event = _project(tmp_path)
+    opened = []
+    row = Entry("saved", 30, 55)
+    parent = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path), current_page=page,
+        settings=SimpleNamespace(proofreading_event_capture=True),
+        current_index=0, _foreground_batch_state=lambda index: "idle",
+        _paddle_cache_path=lambda: None,
+    )
+    def commit(**kwargs):
+        row.word = "committed"
+    review = SimpleNamespace(
+        parent=parent, _filter_rows_active=False,
+        vars=[SimpleNamespace(get=lambda: "committed")],
+        _bound_row_entries=lambda: [row], save=commit,
+    )
+    monkeypatch.setattr(ui, "ProofreadingVisualVerificationDialog",
+                        lambda *args, **kwargs: opened.append(kwargs))
+    ui.open_visual_verification(review)
+    assert len(opened) == 1
+    assert opened[0]["page"] == page
+    assert len(load_events(journal)) == 1
+
+
+def test_visual_verification_fails_closed_on_unstable_row_bindings(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from picture_capture import proofreading_verify_ui as ui
+
+    page, pdic, journal, event = _project(tmp_path)
+    opened = []
+    messages = []
+    parent = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path), current_page=page,
+        settings=SimpleNamespace(proofreading_event_capture=True),
+        current_index=0, _foreground_batch_state=lambda index: "idle",
+        _paddle_cache_path=lambda: None,
+    )
+    review = SimpleNamespace(
+        parent=parent, _filter_rows_active=False, vars=[],
+        _bound_row_entries=lambda: [Entry("saved", 30, 55)],
+        save=lambda **kwargs: None,
+    )
+    monkeypatch.setattr(ui.messagebox, "showinfo",
+                        lambda title, message, **kwargs: messages.append(message))
+    monkeypatch.setattr(ui, "ProofreadingVisualVerificationDialog",
+                        lambda *args, **kwargs: opened.append(kwargs))
+    ui.open_visual_verification(review)
+    assert not opened
+    assert messages
