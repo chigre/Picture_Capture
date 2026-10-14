@@ -89,7 +89,11 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
 
     paddle_module.PaddleOCR = FakePaddleOCR
     monkeypatch.setitem(sys.modules, "paddleocr", paddle_module)
-    monkeypatch.setattr(channel, "resolve_paddle_device", lambda: "cpu")
+    from picture_capture.inference_performance import InferencePolicy
+    monkeypatch.setattr(
+        channel, "resolve_inference_policy",
+        lambda: InferencePolicy("cpu", "auto", 1, 2),
+    )
     monkeypatch.setenv("FLAGS_enable_pir_api", "1")
 
     channel.clear_ocr_channel_paddle_engine_cache()
@@ -112,7 +116,8 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
     assert engine.kwargs["lang"] == "en"
     assert engine.kwargs["device"] == "cpu"
     assert engine.kwargs["ocr_version"] == "PP-OCRv5"
-    assert engine.kwargs["enable_mkldnn"] is False
+    assert engine.kwargs["enable_mkldnn"] is True
+    assert engine.kwargs["cpu_threads"] == 2
     channel.clear_ocr_channel_paddle_engine_cache()
 
 
