@@ -24,7 +24,7 @@
   "current_state": {
     "status": "pr_open",
     "active_phase": "R2",
-    "active_work_item": "R2.2",
+    "active_work_item": "R2.3",
     "work_in_progress": false,
     "implementation_pr": {
       "number": 482,
@@ -38,21 +38,21 @@
       ]
     },
     "implementation_head_sha": "02e31b46989db2d362ea87fe2c851d57d20c4c16",
-    "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
+    "latest_verified_main_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "ci_pending",
-        "message": "Latest B2 pre-human OCR lineage commit 02e31b4 CI pending; follow same PR; do not merge on intermediate green checks.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38523847902"
+        "message": "New explicit verification, SECTION snapshot tests and image header optimization are pending latest cross-platform CI.",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38527018680"
       },
       {
-        "type": "scope_remaining",
-        "message": "B2 still draft: explicit user-verified label action/consent, SECTION attribution, general manual move/coordinate persistent identity, GUI FocusOut/crash/sidecar failure/rollback smoke and hardening. No training labels exported."
+        "type": "b2_scope_incomplete",
+        "message": "Explicit visual confirmation currently CLI-only; general moved-entry ID, save failure/rollback UI smoke, concurrent write gate and complete integration still missing."
       }
     ],
-    "required_next_action": "Check latest PR #482 CI after source lineage commit and state checkpoint, fix actual regressions. Validate pre-edit OCR audit/candidate linkage, add explicit human verification UI/CLI and no-auto-training guard, trustworthy SECTION attribution and GUI lifecycle failure/cross-platform tests. Keep this same draft PR until R2.1/R2.2/R2.3 acceptance complete; do not merge merely because CI is green.",
-    "last_test_evidence": "B2 PR #482: CI 38523323899 (manual add) green, 38523487045 (position switch) green, 38523565129 (cross-page UI boundary tests) green, all four jobs each. Pre-human OCR ancestry commit 02e31b4 CI 38523847902 in progress at checkpoint; its green status must not be presumed.",
+    "required_next_action": "Follow latest PR #482 CI for explicit verification/SECTION. Fix any test or integration regressions within same draft PR. Complete negative UI save-failure and rollback/SECTION tests, cross-session stable identity and user-facing confirmation workflow; do not create a duplicate PR or merge until acceptance and full required checks complete.",
+    "last_test_evidence": "B2 previous stable head 5c2e9e6 CI 38523977278 succeeded cross-platform; explicit verification and real SECTION attribution added later. 38526758684 passed source-attached section capture tests; intermediate Windows 38526731055 failure is intermittent Python 3.13 Tcl/Tk init.tcl read error. Latest source head CI (newer than bcccae9) is pending, not verified.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
@@ -252,6 +252,20 @@
       "lineage_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38523847902",
       "lineage_status": "pending",
       "notes": "No B2 merge. Only source-verified OCR ancestry. Real scan benchmarking R8 postponed."
+    },
+    {
+      "type": "b2_explicit_review_and_section",
+      "status": "draft_ci_pending",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/482",
+      "verify_file": "src/picture_capture/proofreading_verification.py",
+      "verify_cli": "scripts/verify_proofreading_action.py",
+      "section_file": "src/picture_capture/proofreading_section.py",
+      "tests": [
+        "tests/test_proofreading_verification_20261014.py",
+        "tests/test_proofreading_section_20261014.py"
+      ],
+      "run": "https://github.com/chigre/Picture_Capture/actions/runs/38527018680",
+      "note": "CLI-only explicit manual judgement; source/digest-guarded SECTION classification. No automatic training. B2 unfinished."
     }
   ],
   "rules_for_updates": {
@@ -358,19 +372,19 @@
       "status": "pr_open",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Latest CI pending; still lacks explicit human verification, reliable SECTION, generalized coordinate move identity, crash/rollback/gui acceptance.",
+      "blocker": "Latest CI pending; CLI-only verification and SECTION provenance tests not yet validated. GUI verification and lifecycle hardening remain.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Default OFF Settings option + immutable versioned journal; saved-pdic single-row deletion, single-word rename, one original-image XY manual canvas add, unique OCR checkbox select/deselect, and verified same-word same-group original/refined-Y switch. All ambiguous/coalesced changes intentionally unknown; identity stable for distinct coordinates or explicit OCR groups; general moved-entry continuity incomplete."
+          "evidence": "Opt-in local post-save delete, rename, canvas add, OCR candidate select/deselect and narrow grouped original/refined-Y move; a local CLI can explicitly verify a saved action via image+PDIC/optional OCR hashes. UI confirmation and general moves incomplete."
         },
         "R2.2": {
           "status": "in_progress",
-          "evidence": "Stale/ambiguous candidate links fail-closed. Latest code snapshots provenance only from load_current_final_decisions before human modification; current latest commit 02e31b4 awaiting CI. No inferred ground truth."
+          "evidence": "Validated pre-human OCR/final PDIC snapshots propagate to post-save event. Source and OCR mismatch fail closed; no auto labels. Latest explicit verification test CI pending."
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Read-only explicit local aggregate export with version/hash/license, no words/automatic uploads or training labels; explicit verified positive/negative and reliable SECTION distribution pending."
+          "evidence": "Offline aggregate exporter includes only explicit source-valid positive/negative judgment counts, not training labels; SECTION attribution from original-image XY, persisted transform and SHA, invalidated by section edits. Latest full CI pending."
         }
       }
     },

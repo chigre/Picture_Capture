@@ -67,3 +67,31 @@ Choosing a candidate's original/anchor versus refined-Y alternative uses a physi
 ### R2.2 verified pre-human OCR decision ancestry (pending CI)
 
 OCR source lineage is copied into an event only if `load_current_final_decisions` verifies the original OCR cache signature and the exact untouched saved-PDIC snapshot **before the user edit**. The UI queues this pair at the beginning of a click/review save, then only persists it after the PDIC/manual override commit succeeds. A stale cache, modified PDIC or missing final snapshot leaves ancestry unknown. Even linked events are not training labels.
+
+
+### Explicit visual judgment (opt-in CLI; pending latest CI)
+
+An explicit, user-invoked local command now records a separate `verify` event only after the operator has personally inspected the original scanned page, selected an existing `operation_id`, chosen `correct_headword` or `not_headword`, and supplied `--confirm-visual-review`. The source operation must have a stable entry identity and match the exact current on-disk PDIC SHA-256 and source-image SHA-256. An OCR-linked operation additionally requires the original matching `--ocr-cache` signature. The journal refuses duplicate verification, missing/changed source files, and stale actions; all writes remain atomic and local.
+
+```bash
+uv run --locked python scripts/verify_proofreading_action.py \
+  --journal /project/ProofreadingEvidence/<page-id>.json \
+  --pdic /project/page.pdic --image /project/page.png \
+  --operation-id <actual-id-from-journal> \
+  --judgment correct_headword --confirm-visual-review \
+  --ocr-cache /project/path/to/original_ocr_cache.json
+```
+
+`--ocr-cache` is required only for OCR-linked events. These explicit judgments are *separate user confirmations*, not implied by a manual rename, checkbox click or a unique candidate link. Read-only aggregate export counts only fresh, referentially valid confirmed positive/negative judgments. **No raw words, OCR proposals, images, or training labels are exported and no model is trained.** The interface is currently CLI-only; UI verification controls remain missing.
+
+### SECTION provenance from original-image geometry (pending latest CI)
+
+New post-save events resolve SECTION using the persisted `page_sections` original-image boundary segments, the saved page-layout transform and original image X/Y. Classification only succeeds when the point lies strictly within one SECTION; gap points and cross-SECTION moves are unknown, not assigned to the nearest segment. Each attribution includes the actual sidecar digest. Local aggregate export only counts an attribution if the source-image and SECTION sidecar digests still match; it reports unknown/stale counts for missing or changed SECTION data. Rotated pages, two-SECTION pages and a gap are covered by synthetic tests. The implementation reads only the image header/EXIF to avoid decoding large dictionary scans.
+
+### Remaining acceptance gates
+
+- Extend explicit verification into user-facing proofreading UI with reliable event selection and visual comparison (CLI-only is not final UX)
+- Improve durable identity for arbitrary marker movement outside explicitly grouped OCR position switches; support crash/reopen and multi-row transactions without guessing
+- Add UI integration tests for save failure, manual override write failure, page navigation during active deferred saves, and SECTION/PDIC rollback
+- Review local evidence-log privacy, malformed journal recovery and multi-process concurrent writers
+- Confirm latest cross-platform PR CI + CodeQL and post-merge main CI; **do not merge a draft PR or mark B2 verified only from synthetic tests**
