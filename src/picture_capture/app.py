@@ -11435,8 +11435,9 @@ class PictureCaptureApp(tk.Tk):
         on_done=None, item_label=None, max_workers: int = 0,
         *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
+        gpu_preflight_func=None, gpu_job_builder=None,
     ) -> bool:
-        """Run bounded independent page jobs while protecting manual PDIC edits."""
+        """Run bounded page jobs; optional one-process GPU preflight before CPU."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11463,7 +11464,7 @@ class PictureCaptureApp(tk.Tk):
         workers = resolve_crop_worker_count(max_workers)
         # A one-worker request is intentionally routed through the existing
         # sequential runner, useful for low-memory machines and diagnostics.
-        if workers <= 1:
+        if workers <= 1 and gpu_preflight_func is None:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -11501,7 +11502,10 @@ class PictureCaptureApp(tk.Tk):
         if not self.batch_bar.winfo_manager():
             self.batch_bar.pack(side="top", fill="x")
         self.status_var.set(
-            f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。暂停/停止不会再派发新页面。"
+            (f"{title}开始：一个 GPU 预检进程 + {workers} 个 CPU 处理进程；"
+             if gpu_preflight_func is not None else
+             f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。")
+            + "暂停/停止不会再派发新页面。"
             + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
         )
 
@@ -11528,6 +11532,10 @@ class PictureCaptureApp(tk.Tk):
             futures = {}
             context = multiprocessing.get_context("spawn")
             executor = ProcessPoolExecutor(max_workers=workers, mp_context=context)
+            gpu_executor = (
+                ProcessPoolExecutor(max_workers=1, mp_context=context)
+                if gpu_preflight_func is not None else None
+            )
             try:
                 while True:
                     # Fill only the currently free worker slots. This is what
@@ -11561,6 +11569,19 @@ class PictureCaptureApp(tk.Tk):
                                 "item", position, total, label, item_index
                             ))
                         args = job_builder(item, position, total)
+                        if gpu_executor is not None:
+                            if gpu_job_builder is None:
+                                raise RuntimeError("Missing GPU preflight job builder")
+                            # Exactly ONE long-lived model-owning spawn process
+                            # does each full Layout detector preflight. Never
+                            # initialize CUDA/Paddle inside the CPU workers.
+                            # This synchronous handoff intentionally bounds
+                            # in-flight pages to 1 GPU + <= workers CPU.
+                            gpu_args = gpu_job_builder(item, position, total)
+                            prepared = gpu_executor.submit(
+                                gpu_preflight_func, *gpu_args
+                            ).result()
+                            args = (*args, prepared)
                         future = executor.submit(worker_func, *args)
                         futures[future] = (item, position, label, item_index)
                         self._batch_queue.put((
@@ -11602,6 +11623,8 @@ class PictureCaptureApp(tk.Tk):
                 ))
             finally:
                 executor.shutdown(wait=True, cancel_futures=True)
+                if gpu_executor is not None:
+                    gpu_executor.shutdown(wait=True, cancel_futures=True)
 
         self._batch_thread = threading.Thread(
             target=runner, name=f"PictureCapture-{title}-parallel", daemon=True
@@ -15446,6 +15469,15 @@ class PictureCaptureApp(tk.Tk):
         ordinary_workers = (
             ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
         )
+        from .ordinary_gpu_pipeline import staged_pipeline_enabled
+        gpu_staged = bool(
+            method == "left_edge"
+            and staged_pipeline_enabled(settings, len(indices))
+        )
+        if gpu_staged:
+            # Memory-conservative trial: ONE reusable GPU detector and at
+            # most two CPU page allocations; never six CUDA model copies.
+            ordinary_workers = 2
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
             if method == "left_edge" and ordinary_workers <= 1 else None
@@ -15663,10 +15695,32 @@ class PictureCaptureApp(tk.Tk):
                     f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
                 )
 
-        if method == "left_edge" and ordinary_workers > 1:
-            # Each spawn job writes only its own page's PDIC and automatic
-            # baseline. The parallel coordinator claims pages under the same
-            # foreground/manual-lock contract as the existing serial runner.
+        if gpu_staged:
+            from .ordinary_gpu_pipeline import (
+                prepare_gpu_layout_job, detect_entries_staged_job,
+            )
+            started = self._start_parallel_batch_task(
+                label, indices, detect_entries_staged_job,
+                lambda index, _position, _total: (
+                    str(project.images[index]), settings, pages_info[index], index,
+                ),
+                result_consumer=lambda index, count: {
+                    "index": int(index), "count": int(count),
+                },
+                on_done=done,
+                item_label=lambda index: project.images[index].name,
+                max_workers=ordinary_workers,
+                foreground_page_edit=True,
+                page_indexer=lambda index: int(index),
+                gpu_preflight_func=prepare_gpu_layout_job,
+                gpu_job_builder=lambda index, _position, _total: (
+                    str(project.images[index]), settings, index,
+                ),
+            )
+        elif method == "left_edge" and ordinary_workers > 1:
+            # Dormant legacy parallel path: the ordinary_draw_workers safety
+            # policy always returns 1 unless a separately validated design
+            # deliberately changes it. No duplicate GPU inference permitted.
             started = self._start_parallel_batch_task(
                 label, indices, detect_entries_job,
                 lambda index, _position, _total: (
