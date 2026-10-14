@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, audit/settings-contract-thresholds-help-scroll-20261015]
   pull_request:
     branches: [main, feat/integrated-ocr-runtime-monitor-20261014]
 
