@@ -37,23 +37,24 @@ def cpu_pool_config(
 ) -> tuple[int, int]:
     """Return (processes, inference threads per process).
 
-    Auto uses 2 independent pages, never CPU-count-many by default. Users may
-    explicitly test 2, 4, or 6 workers. Never allow worker*inference thread
+    Auto uses 2 independent pages conservatively. Explicit worker counts
+    can exceed six when hardware permits. Never allow worker*inference thread
     count to exceed available logical CPUs; reserve additional capacity for
     decoding/NumPy/OS work by using <=4 inference threads per process.
     """
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
     if requested_workers is None:
-        requested_workers = os.environ.get(_WORKERS, "")
+        from .runtime_environment import runtime_setting
+        requested_workers = (os.environ.get(_WORKERS)
+                             or os.environ.get("PICTURE_CAPTURE_PADDLE_CPU_WORKERS")
+                             or str(runtime_setting("paddle_cpu_workers", "auto")))
     if requested_threads is None:
         requested_threads = os.environ.get(_THREADS, "")
     try:
         selected = int(requested_workers)
     except (ValueError, TypeError):
         selected = 2
-    if selected not in {1, 2, 4, 6}:
-        selected = 2
-    count = max(1, min(int(pages), available, selected, 6))
+    count = max(1, min(int(pages), available, selected))
     auto_threads = max(1, min(4, available // count))
     try:
         per = int(requested_threads)
