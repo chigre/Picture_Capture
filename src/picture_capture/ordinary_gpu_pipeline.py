@@ -132,6 +132,11 @@ def prepare_gpu_layout_job(
     from .profile_semantics import effective_page_settings
     from .layout_detection import detect_layout_parameters
 
+    from time import perf_counter
+    from .draw_performance_profile import enabled as profile_enabled, record_page
+    profiling = profile_enabled()
+    tick = perf_counter()
+    stages = {}
     source_path = Path(image_path)
     before = source_path.stat()
     if not staged_pipeline_enabled(settings, 2, flag="1"):
@@ -139,6 +144,9 @@ def prepare_gpu_layout_job(
 
     with Image.open(source_path) as opened:
         source = normalize_page_rgb(opened)
+    if profiling:
+        stages["gpu_read_normalize"] = perf_counter() - tick
+        tick = perf_counter()
     try:
         effective = effective_page_settings(settings, source.size, int(page_index))
         if not bool(getattr(effective, "ordinary_auto_layout", False)):
@@ -150,7 +158,13 @@ def prepare_gpu_layout_job(
             detector_settings = replace(effective)
             if bool(getattr(detector_settings, "ordinary_auto_columns", False)):
                 detector_settings.layout_columns_policy = "detect"
+            if profiling:
+                stages["gpu_prepare"] = perf_counter() - tick
+                tick = perf_counter()
             estimate = detect_layout_parameters(analysis, detector_settings)
+            if profiling:
+                stages["gpu_layout_detection"] = perf_counter() - tick
+                tick = perf_counter()
             expected_size = tuple(analysis.size)
             expected_settings = repr(detector_settings)
         finally:
@@ -161,6 +175,9 @@ def prepare_gpu_layout_job(
     after = source_path.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise RuntimeError("Image changed during GPU Layout preflight")
+    if profiling:
+        stages["gpu_finalize"] = perf_counter() - tick
+        record_page(source_path, page_index, stages, stage_group="gpu_preflight")
     return PreparedLayoutEstimate(
         value=estimate,
         page_size=expected_size,
