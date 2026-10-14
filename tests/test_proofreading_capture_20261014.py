@@ -447,3 +447,64 @@ def test_position_switch_rejects_partial_manual_override_or_multiple_edits(tmp_p
     )
     assert not capture_saved_position_switch(**kwargs)
     assert not (tmp_path / "ProofreadingEvidence").exists()
+
+
+def test_only_verified_pre_edit_final_ocr_audit_can_annotate_candidate_lineage(tmp_path):
+    import json
+    from picture_capture.proofreading_capture import (
+        verified_ocr_preedit_fingerprints, capture_saved_candidate_selection,
+    )
+    from picture_capture.ocr_final_decisions import (
+        final_decisions_path, pdic_snapshot, _snapshot_digest,
+    )
+    from picture_capture.proofreading_evidence import link_event_to_final
+
+    page, old = _page(tmp_path)
+    cache = tmp_path / "ocr_cache.json"
+    cache.write_text(json.dumps({"signature": "ocr-v1"}), encoding="utf-8")
+    original_rows = pdic_snapshot(read_pdic(pdic_path(page)))
+    fingerprint = _snapshot_digest(original_rows)
+    final = {
+        "format": "picture-capture-final-ocr-decisions-v1",
+        "ocr_cache_signature": "ocr-v1",
+        "pdic_snapshot_sha256": fingerprint, "pdic_rows": original_rows,
+        "candidate_decisions": [
+            {"candidate_id": "cid-1", "final_status": "removed_after_ocr",
+             "final_selected": False},
+        ],
+    }
+    final_decisions_path(cache).write_text(json.dumps(final), encoding="utf-8")
+    source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+    assert source == ("ocr-v1", fingerprint)
+    cache.write_text(json.dumps({"signature": "new-ocr"}), encoding="utf-8")
+    assert verified_ocr_preedit_fingerprints(cache, pdic_path(page)) is None
+    cache.write_text(json.dumps({"signature": "ocr-v1"}), encoding="utf-8")
+    selected = Entry("new lemma", 30, 120)
+    write_pdic(pdic_path(page), old + [selected], 100, ("page", "@", "@"))
+    assert verified_ocr_preedit_fingerprints(cache, pdic_path(page)) is None
+    override = tmp_path / "page_manual_selection.json"
+    override.write_text(json.dumps({
+        "page": "page", "overrides": {
+            "cid-1": {"selected": True, "word": "new lemma",
+                      "engine": "manual_checkbox"},
+        }
+    }), encoding="utf-8")
+    assert capture_saved_candidate_selection(
+        project_root=tmp_path, page=page,
+        prior_pdic_entries=old, expected_entry=("new lemma", 30, 120),
+        candidate_id="cid-1", selected=True, candidate_id_unique=True,
+        manual_selection_path=override, source_fingerprints=source,
+    )
+    journal = next(
+        p for p in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if p.name != "project_identity.json"
+    )
+    event = load_events(journal)[0]
+    assert event["ocr_signature"] == "ocr-v1"
+    assert event["final_snapshot_sha256"] == fingerprint
+    assert link_event_to_final(
+        event, final, current_ocr_signature="ocr-v1",
+    )["status"] == "matched"
+    assert link_event_to_final(
+        event, final, current_ocr_signature="ocr-v1",
+    )["training_label"] is None

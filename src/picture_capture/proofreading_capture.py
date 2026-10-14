@@ -14,6 +14,34 @@ from .formats import pdic_path, read_pdic
 from .project_storage import data_root
 from .proofreading_events import append_event, make_event, sha256_file
 
+def verified_ocr_preedit_fingerprints(
+    cache_path: Path | None, pdic_file: Path,
+) -> tuple[str, str] | None:
+    """Only attach OCR lineage from a validated pre-human final-PDIC snapshot."""
+    if cache_path is None:
+        return None
+    from .ocr_final_decisions import load_current_final_decisions
+    report = load_current_final_decisions(Path(cache_path), Path(pdic_file))
+    if not isinstance(report, dict):
+        return None
+    signature = report.get("ocr_cache_signature")
+    final_sha = report.get("pdic_snapshot_sha256")
+    if not isinstance(signature, str) or not signature:
+        return None
+    if not isinstance(final_sha, str) or len(final_sha) != 64:
+        return None
+    if any(c not in "0123456789abcdef" for c in final_sha):
+        return None
+    return (signature, final_sha)
+
+
+def _ocr_fields(pair: tuple[str, str] | None) -> dict[str, str | None]:
+    return {
+        "ocr_signature": pair[0] if pair else None,
+        "final_snapshot_sha256": pair[1] if pair else None,
+    }
+
+
 IDENTITY_FORMAT = "picture-capture-proofreading-project-identity-v1"
 
 
@@ -48,6 +76,7 @@ def capture_saved_review_deletion(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
     expected_deleted: tuple[str, int, int],
     deleted_candidate_id: str | None, candidate_id_unique: bool,
+    source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
     """Capture a just-saved deletion only if disk proves exactly one row removed.
 
@@ -85,6 +114,7 @@ def capture_saved_review_deletion(
         before={"word": word, "x": x, "y": y}, after=None,
         pdic_sha256=sha, candidate_id=candidate or None, entry_id=entry_id,
         image_sha256=sha256_file(page),
+        **_ocr_fields(source_fingerprints),
     )
     # Namespace journal by full relative page name, not just its stem.
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
@@ -95,6 +125,7 @@ def capture_saved_review_deletion(
 
 def capture_saved_review_rename(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+    source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
     """Log exactly one committed text-only edit, never inferred edits in bulk.
 
@@ -139,6 +170,7 @@ def capture_saved_review_rename(
         after={"word": after_word, "x": x, "y": y},
         pdic_sha256=saved_hash, entry_id=entry_id,
         image_sha256=sha256_file(page),
+        **_ocr_fields(source_fingerprints),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
@@ -150,6 +182,7 @@ def capture_saved_candidate_selection(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
     expected_entry: tuple[str, int, int], candidate_id: str,
     selected: bool, candidate_id_unique: bool, manual_selection_path: Path,
+    source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
     """Persist a unique explicit checkbox action after BOTH source files commit.
 
@@ -204,6 +237,7 @@ def capture_saved_candidate_selection(
         after=row_data if selected else None,
         pdic_sha256=sha, entry_id=entry_id, candidate_id=candidate_id,
         image_sha256=sha256_file(page),
+        **_ocr_fields(source_fingerprints),
     )
     key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(
@@ -216,6 +250,7 @@ def capture_saved_candidate_selection(
 def capture_saved_manual_addition(
     *, project_root: Path, page: Path,
     prior_pdic_entries: list[object], expected_xy: tuple[int, int],
+    source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
     """Prove a unique manual canvas insertion from one saved PDIC row delta.
 
@@ -255,6 +290,7 @@ def capture_saved_manual_addition(
         after={"word": word, "x": x, "y": y},
         pdic_sha256=sha, entry_id=entry_id,
         image_sha256=sha256_file(page),
+        **_ocr_fields(source_fingerprints),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(
@@ -270,6 +306,7 @@ def capture_saved_position_switch(
     added_entry: tuple[str, int, int],
     removed_candidate_id: str, added_candidate_id: str,
     position_group_id: str, manual_selection_path: Path,
+    source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
     """Prove a user-selected original/refined Y switch of the SAME headword.
 
@@ -331,6 +368,7 @@ def capture_saved_position_switch(
         after={"word": word, "x": x1, "y": y1},
         pdic_sha256=fingerprint, entry_id=entry_id,
         candidate_id=added_candidate_id, image_sha256=sha256_file(page),
+        **_ocr_fields(source_fingerprints),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(

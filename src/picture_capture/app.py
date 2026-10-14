@@ -4758,10 +4758,17 @@ class ReviewWindow(tk.Toplevel):
         page = getattr(self.parent, "current_page", None)
         if page is None or getattr(self.parent, "project", None) is None:
             return None
+        self.__dict__["_review_evidence_source_fingerprints"] = None
         try:
-            return read_pdic(pdic_path(page))
-        except (OSError, ValueError):
-            # No trustworthy previous bytes: a saved edit cannot be classified.
+            previous = read_pdic(pdic_path(page))
+            from .proofreading_capture import verified_ocr_preedit_fingerprints
+            cache_fn = getattr(self.parent, "_paddle_cache_path", None)
+            cache = cache_fn() if callable(cache_fn) else None
+            self.__dict__["_review_evidence_source_fingerprints"] = (
+                verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+            )
+            return previous
+        except (OSError, ValueError, TypeError):
             return None
 
     def _review_evidence_after_save(self, previous: list[WordEntry] | None) -> None:
@@ -4774,8 +4781,10 @@ class ReviewWindow(tk.Toplevel):
             return
         try:
             from .proofreading_capture import capture_saved_review_rename
+            source = self.__dict__.pop("_review_evidence_source_fingerprints", None)
             capture_saved_review_rename(
                 project_root=project.root, page=page, prior_pdic_entries=previous,
+                source_fingerprints=source,
             )
         except (OSError, ValueError, TypeError):
             self.parent.status_var.set(
@@ -6442,12 +6451,18 @@ class ReviewWindow(tk.Toplevel):
             getattr(self.parent, "settings", None), "proofreading_event_capture", False
         ))
         prior_pdic_rows = None
+        prior_ocr_fingerprints = None
         if capture_requested and self.parent.current_page is not None:
             try:
                 prior_pdic_rows = read_pdic(pdic_path(self.parent.current_page))
-            except (OSError, ValueError):
-                # Invalid PDIC must never be silently converted into labels.
-                pass
+                from .proofreading_capture import verified_ocr_preedit_fingerprints
+                cache_fn = getattr(self.parent, "_paddle_cache_path", None)
+                cache = cache_fn() if callable(cache_fn) else None
+                prior_ocr_fingerprints = verified_ocr_preedit_fingerprints(
+                    cache, pdic_path(self.parent.current_page),
+                )
+            except (OSError, ValueError, TypeError):
+                prior_pdic_rows = None
 
         self._commit_edits()
         entry = row_entries[int(index)]
@@ -6499,6 +6514,7 @@ class ReviewWindow(tk.Toplevel):
                     expected_deleted=deleted_identity,
                     deleted_candidate_id=deleted_candidate_id,
                     candidate_id_unique=candidate_id_unique,
+                    source_fingerprints=prior_ocr_fingerprints,
                 )
             except (OSError, ValueError, TypeError):
                 # PDIC and manual overrides were saved successfully. Evidence
@@ -14389,7 +14405,11 @@ class PictureCaptureApp(tk.Tk):
             old = read_pdic(pdic_path(page))
         except (OSError, ValueError):
             return
-        state["_pending_evidence_add"] = (page, old, (int(x), int(y)))
+        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        cache_fn = getattr(self, "_paddle_cache_path", None)
+        cache = cache_fn() if callable(cache_fn) else None
+        source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+        state["_pending_evidence_add"] = (page, old, (int(x), int(y)), source)
 
     def _flush_proofreading_add_evidence(self) -> None:
         """Record the manual click only after a successfully saved PDIC."""
@@ -14398,7 +14418,9 @@ class PictureCaptureApp(tk.Tk):
             return
         if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
             return
-        page, old, xy = snapshot
+        if len(snapshot) != 4:
+            return
+        page, old, xy, source = snapshot
         project = getattr(self, "project", None)
         if project is None or getattr(self, "current_page", None) != page:
             return
@@ -14407,6 +14429,7 @@ class PictureCaptureApp(tk.Tk):
             capture_saved_manual_addition(
                 project_root=project.root, page=page,
                 prior_pdic_entries=old, expected_xy=xy,
+                source_fingerprints=source,
             )
         except (OSError, ValueError, TypeError):
             status = getattr(self, "status_var", None)
@@ -14468,9 +14491,13 @@ class PictureCaptureApp(tk.Tk):
                     if isinstance(row, dict)
                 ) == 1:
                     position_switch = (removed_id, removed_row, group_id)
+        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        cache_fn = getattr(self, "_paddle_cache_path", None)
+        cache = cache_fn() if callable(cache_fn) else None
+        source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
         state["_pending_evidence_toggle"] = (
             page, before, expected, candidate_id, bool(selected), override,
-            position_switch,
+            position_switch, source,
         )
 
     def _flush_proofreading_candidate_evidence(self) -> None:
@@ -14478,9 +14505,9 @@ class PictureCaptureApp(tk.Tk):
         snapshot = self.__dict__.pop("_pending_evidence_toggle", None)
         if not isinstance(snapshot, tuple):
             return
-        if len(snapshot) != 7:
+        if len(snapshot) != 8:
             return
-        page, before, expected, candidate_id, selected, override, position_switch = snapshot
+        page, before, expected, candidate_id, selected, override, position_switch, source = snapshot
         if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
             return
         project = getattr(self, "project", None)
@@ -14496,6 +14523,7 @@ class PictureCaptureApp(tk.Tk):
                 prior_pdic_entries=before, expected_entry=expected,
                 candidate_id=candidate_id, candidate_id_unique=True,
                 selected=selected, manual_selection_path=override,
+                source_fingerprints=source,
             )
             if not recorded and selected and position_switch is not None:
                 old_candidate_id, old_entry, group_id = position_switch
@@ -14507,6 +14535,7 @@ class PictureCaptureApp(tk.Tk):
                     added_candidate_id=candidate_id,
                     position_group_id=group_id,
                     manual_selection_path=override,
+                    source_fingerprints=source,
                 )
         except (OSError, ValueError, TypeError):
             # Journal failure must not roll back user PDIC or overrides.

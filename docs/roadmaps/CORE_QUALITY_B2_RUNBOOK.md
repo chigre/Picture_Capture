@@ -63,3 +63,7 @@ A real canvas click now stages a pre-save PDIC snapshot and canonical-to-origina
 ### Narrow OCR candidate position-switch move (pending CI)
 
 Choosing a candidate's original/anchor versus refined-Y alternative uses a physical `position_group_id`. After the deferred PDIC and manual-selection override files **both** commit, a `move` event is allowed only if the prior and saved PDIC differ by exactly one removed and one added identical word at different source XY, both candidate IDs are unique and same-group, and the old/new override records unambiguously show `position_switch` and `manual_checkbox`. Stable identity is derived from the explicit group ID. Any text change, duplicate candidates, simultaneous edits, failed sidecar write or missing group link remains unknown. This is **not** unrestricted visual marker dragging support.
+
+### R2.2 verified pre-human OCR decision ancestry (pending CI)
+
+OCR source lineage is copied into an event only if `load_current_final_decisions` verifies the original OCR cache signature and the exact untouched saved-PDIC snapshot **before the user edit**. The UI queues this pair at the beginning of a click/review save, then only persists it after the PDIC/manual override commit succeeds. A stale cache, modified PDIC or missing final snapshot leaves ancestry unknown. Even linked events are not training labels.
