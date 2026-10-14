@@ -155,7 +155,7 @@ def refined_layout_entry_y_by_line(
             # The shared engine already has its own safety controls. Retain an
             # adapter-level guard as well so a Layout entry can never jump to a
             # neighboring row because of an unusual scan artifact.
-            max_move = max(3, int(round(line_height * 0.45)))
+            max_move = max(3, int(round(line_height * max(0.0, min(1.5, float(getattr(effective, "separator_y_max_shift_ratio", 0.45)))))))
             refined = max(coarse - max_move, min(coarse + max_move, int(refined)))
             result[id(line)] = max(0, min(height - 1, int(refined)))
             if diagnostics is not None:
