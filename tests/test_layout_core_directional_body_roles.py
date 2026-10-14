@@ -263,3 +263,61 @@ def test_peer_consensus_needs_independent_proven_headword_family() -> None:
 
     # Without at least three consistent true head-like rows, abstain.
     assert second.body_mode is outside_body
+
+
+def test_second_page_sparse_headword_family_080182_analog() -> None:
+    """An independent 43/44 ordinary-row page with sparse true heads."""
+    peer_body = _mode(5.99, 43, 5)
+    peer_head = _mode(133.98, 7, 5)
+    first = SimpleNamespace(
+        indent_modes=[peer_body, peer_head],
+        lines=peer_body.lines + peer_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    ghost = _mode(-96, 14, 4)
+    real_body = _mode(5.66, 44, 5)
+    real_head = _mode(135.34, 6, 5)
+    second = SimpleNamespace(
+        indent_modes=[ghost, real_body, real_head],
+        lines=ghost.lines + real_body.lines + real_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53,
+        columns=[first, second], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert second.body_mode is real_body
+    assert second.entry_modes == [real_head]
+    assert all(line.role == "body" for line in ghost.lines + real_body.lines)
+    assert all(line.role == "entry" for line in real_head.lines)
+
+
+def test_two_simultaneously_corrupt_columns_must_not_corrobate_one_another() -> None:
+    """An untrusted peer cannot be used as the authority for a rescue."""
+    first_ghost = _mode(-96, 14, 4)
+    first_real_body = _mode(7.8, 30, 4)
+    first_head = _mode(136, 3, 4)
+    first = SimpleNamespace(
+        indent_modes=[first_ghost, first_real_body, first_head],
+        lines=first_ghost.lines + first_real_body.lines + first_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    second_ghost = _mode(-93, 14, 4)
+    second_real_body = _mode(7.7, 30, 4)
+    second_head = _mode(137, 3, 4)
+    second = SimpleNamespace(
+        indent_modes=[second_ghost, second_real_body, second_head],
+        lines=second_ghost.lines + second_real_body.lines + second_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53,
+        columns=[first, second], display_heads=[],
+    )
+    _resolve_directional_body_lanes(layout)
+
+    assert first.body_mode is first_ghost
+    assert second.body_mode is second_ghost
