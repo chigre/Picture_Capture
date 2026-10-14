@@ -39,13 +39,15 @@ GROUP_TO_PATH = {
     "PROJECT_RUNTIME_FIELDS": "设置中心/项目与批量/运行",
     "EXPERT_FIELDS": "设置中心/高级/版面与后端",
     "ILLUSTRATION_CHECKS": "设置中心/插图/行为",
+    "ILLUSTRATION_DETECTION_FIELDS": "设置中心/插图/自动识别",
+    "ILLUSTRATION_APPEARANCE_FIELDS": "设置中心/插图/外观",
+    "PROFILE_FIELD_GROUPS": "设置中心/Project Profile/参数",
+    "PROFILE_CHECKS": "设置中心/Project Profile/行为",
     # Deprecated/indirect registries are retained as *reference* evidence,
     # but cannot alone be taken as proof of a visible user control.
 }
 REGISTRY_ONLY = {
     "FIELDS", "FIELD_GROUPS", "CHECK_GROUPS",
-    "PROFILE_FIELD_GROUPS", "PROFILE_CHECKS",
-    "ILLUSTRATION_APPEARANCE_FIELDS", "ILLUSTRATION_DETECTION_FIELDS",
 }
 PRODUCTION_RUNTIME_PREFIX = "src/picture_capture/"
 
@@ -109,8 +111,10 @@ def schema_help_keys():
     return found
 
 
-def user_ui_path(groups_for_field):
+def user_ui_path(groups_for_field, field_name=None):
     paths = [GROUP_TO_PATH[name] for name in groups_for_field if name in GROUP_TO_PATH]
+    if field_name == "crop_parallel_workers":
+        paths.append("设置中心/切图/并行处理（自定义控件）")
     if paths:
         return ";".join(sorted(set(paths))), "static_schema_location"
     if any(name in REGISTRY_ONLY for name in groups_for_field):
@@ -222,7 +226,7 @@ def main():
     rows = []
     for name, default in fields.items():
         evidence = refs[name]
-        ui_path, ui_evidence = user_ui_path(groups.get(name, ()))
+        ui_path, ui_evidence = user_ui_path(groups.get(name, ()), name)
         live_reads = source_runtime_refs(evidence["reads"])
         rows.append({
             "name": name,
