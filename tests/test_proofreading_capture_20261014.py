@@ -171,7 +171,7 @@ def test_rename_identity_is_stable_across_session_reopen_and_row_reorder(tmp_pat
     assert [e["entry_id"] for e in events] == [stable_id, stable_id]
 
 
-def test_coedited_words_or_changed_xy_never_guessed_as_rename(tmp_path):
+def test_two_proven_word_edits_are_recorded_but_mixed_coordinate_changes_refused(tmp_path):
     from picture_capture.proofreading_capture import capture_saved_review_rename
 
     page, previous = _page(tmp_path)
@@ -180,10 +180,19 @@ def test_coedited_words_or_changed_xy_never_guessed_as_rename(tmp_path):
         [Entry(word="one", x=10, y=20), Entry(word="two", x=10, y=60)],
         100, ("page", "@", "@"),
     )
-    assert not capture_saved_review_rename(
+    assert capture_saved_review_rename(
         project_root=tmp_path, page=page, prior_pdic_entries=previous,
     )
-    assert not (tmp_path / "ProofreadingEvidence").exists()
+    journal = next(
+        item for item in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if item.name != "project_identity.json"
+    )
+    events = load_events(journal)
+    assert len(events) == 2
+    assert {event["before"]["word"] for event in events} == {"first", "second"}
+    assert all(event["verification_status"] == "explicit_action_unverified_page"
+               for event in events)
+    original_journal = journal.read_bytes()
     write_pdic(
         pdic_path(page),
         [Entry(word="first", x=12, y=20), previous[1]],
@@ -192,6 +201,7 @@ def test_coedited_words_or_changed_xy_never_guessed_as_rename(tmp_path):
     assert not capture_saved_review_rename(
         project_root=tmp_path, page=page, prior_pdic_entries=previous,
     )
+    assert journal.read_bytes() == original_journal
 
 
 def test_review_rename_capture_hooks_follow_both_save_paths():
