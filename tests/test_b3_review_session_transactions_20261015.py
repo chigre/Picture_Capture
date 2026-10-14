@@ -192,7 +192,7 @@ def test_opted_in_r2_evidence_and_background_batch_do_not_undo(tmp_path):
     assert snapshot_review(review) is None
 
 
-def test_unrelated_row_deletion_is_not_a_pure_text_transaction(tmp_path):
+def test_single_unlinked_deleted_row_is_undoable(tmp_path):
     page, rows, review = _case(tmp_path)
     before = snapshot_review(review)
     rows.pop()
@@ -200,8 +200,9 @@ def test_unrelated_row_deletion_is_not_a_pure_text_transaction(tmp_path):
     write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
     after = snapshot_review(review)
     history = ReviewSessionHistory()
-    assert not history.record(before, after)
-    assert not history.undo_stack
+    assert history.record(before, after)
+    assert history.undo(review)
+    assert len(read_pdic(pdic_path(page))) == 2
 
 
 def test_ui_wiring_exposes_explicit_review_save_undo_redo():
@@ -210,7 +211,7 @@ def test_ui_wiring_exposes_explicit_review_save_undo_redo():
     assert 'self._review_flat_button(row1, "撤销保存"' in source
     assert 'self._review_flat_button(row1, "重做保存"' in source
     assert "record_review_after(self, transaction_before)" in source
-    assert "invalidate_review_history(self)" in source
+    assert "record_review_after(self, transaction_before, allow_unbound=True)" in source
 
 
 

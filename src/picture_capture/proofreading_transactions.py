@@ -354,8 +354,18 @@ class ReviewSessionHistory:
         expected, target = (frame.before, frame.after) if redo else (frame.after, frame.before)
         current = snapshot_review(review)
         if current is None:
-            # Async Tk row reconstruction can temporarily leave stale widget
-            # bindings. Do not destroy a valid history while repaint is pending.
+            # A genuine changed source is stale forever and must invalidate
+            # history; only unchanged saved bytes with temporarily stale Tk
+            # bindings are allowed to retry after async repaint.
+            page = getattr(review.parent, "current_page", None)
+            if (
+                page != expected.page
+                or sha256_file(expected.page) != expected.image_sha
+                or _bytes_or_absent(pdic_path(expected.page)) != expected.pdic_bytes
+                or _bytes_or_absent(simplified_review_path_for_image(expected.page))
+                   != expected.simplified_bytes
+            ):
+                self.invalidate()
             return False
         if not _same_live_state(current, expected):
             self.invalidate()
