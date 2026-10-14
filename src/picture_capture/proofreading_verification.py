@@ -51,6 +51,10 @@ def verify_saved_action(
         raise ValueError("Stale saved PDIC: recheck the latest page and action")
     if not current_image or current_image != target.get("image_sha256"):
         raise ValueError("Missing or changed source image")
+    # Bind both the scanned pixels and any linked OCR cache to the
+    # journal's exclusive-write section. Checking once before the lock
+    # would allow the scan to change after the visual decision.
+    source_checks: dict[Path, str] = {Path(image_file): current_image}
     signature = target.get("ocr_signature")
     if signature is not None:
         if ocr_cache is None or not Path(ocr_cache).is_file():
@@ -61,6 +65,10 @@ def verify_saved_action(
             raise ValueError("Invalid OCR cache") from exc
         if not isinstance(payload, dict) or payload.get("signature") != signature:
             raise ValueError("OCR source changed; cannot verify stale ancestry")
+        cache_digest = sha256_file(ocr_cache)
+        if cache_digest is None:
+            raise ValueError("OCR cache disappeared before verification")
+        source_checks[Path(ocr_cache)] = cache_digest
     if any(
         e.get("action") == "verify"
         and isinstance(e.get("before"), dict)
@@ -84,7 +92,9 @@ def verify_saved_action(
         verification_status="verified",
         explicitly_verified=True,
     )
-    append_event(journal, review, pdic_file=pdic_file)
+    append_event(
+        journal, review, pdic_file=pdic_file, source_checks=source_checks
+    )
     return review
 
 
