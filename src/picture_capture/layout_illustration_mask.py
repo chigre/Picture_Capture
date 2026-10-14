@@ -3,6 +3,7 @@ from __future__ import annotations
 """Pure illustration masking policy shared by Layout and training diagnostics."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from PIL import Image, ImageDraw
@@ -86,6 +87,7 @@ def mask_large_illustrations_for_layout(
     profile_page_index: int = 0,
     detector: Callable[..., list[Any]] | None = None,
     candidate_debug: list[dict[str, Any]] | None = None,
+    source_image_path: Path | None = None,
 ) -> tuple[Image.Image, IllustrationMaskStats]:
     """Return a disposable white-filled Layout image plus diagnostics."""
     if not bool(getattr(settings, SETTING_NAME, DEFAULT_ENABLED)):
@@ -106,6 +108,48 @@ def mask_large_illustrations_for_layout(
         character_height * 6.0,
         float(getattr(effective, "column_width", image.width) or image.width),
     )
+    reuse_existing = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
+    if reuse_existing:
+        if source_image_path is None:
+            raise ValueError(
+                "已启用使用已有的插图数据，但当前 Layout 入口没有对应图片路径，"
+                "无法确定 PPP 文件。"
+            )
+        from .project_storage import ppp_read_path_for_image
+        from .formats import read_ppp
+        ppp_file = ppp_read_path_for_image(Path(source_image_path))
+        if not ppp_file.is_file():
+            raise FileNotFoundError(
+                f"当前页缺少 PPP 插图数据：{ppp_file}；"
+                "复用模式不会重新检测。请先运行插图识别，或关闭复用。"
+            )
+        regions = read_ppp(ppp_file)
+        if candidate_debug is not None:
+            for region in regions:
+                candidate_debug.append({
+                    "status": "masked_existing_ppp",
+                    "source_polygon": [
+                        [int(x), int(y)] for x, y in
+                        (getattr(region, "points", []) or [])
+                    ],
+                    "reason": "直接使用已经保存的 PPP 多边形，不重复分析",
+                })
+        if not regions:
+            return image, IllustrationMaskStats(detected=0)
+        masked = image.convert("RGB")
+        draw = ImageDraw.Draw(masked)
+        count = 0
+        for region in regions:
+            points = [
+                (int(x), int(y)) for x, y in
+                (getattr(region, "points", []) or [])
+            ]
+            if len(points) >= 3:
+                draw.polygon(points, fill=(255, 255, 255))
+                count += 1
+        return masked, IllustrationMaskStats(
+            detected=len(regions), masked=count,
+        )
     if detector is None:
         from .processing_core import detect_illustration_regions_from_image
 
@@ -120,6 +164,16 @@ def mask_large_illustrations_for_layout(
         )
         or []
     )
+    # The detection already ran for the Layout mask. Persist those very same
+    # candidates using the existing AUTO/manual merge semantics, not a second
+    # costly image analysis. No PPP writes are performed in reuse mode.
+    if source_image_path is not None and detector is None:
+        from .processing_core import detect_illustrations_to_ppp
+        detect_illustrations_to_ppp(
+            Path(source_image_path), settings,
+            profile_page_index=int(profile_page_index),
+            detected_regions=regions,
+        )
     if not regions:
         return image, IllustrationMaskStats(detected=0)
 
