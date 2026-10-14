@@ -168,6 +168,8 @@ def _get_text_detector(settings: AppSettings) -> Any:
         except Exception as exc:
             last_exc = exc
             continue
+        from .inference_monitor import record_model_event
+        record_model_event("TextDetection", policy.device, policy.mkldnn, policy.cpu_threads)
         _TEXT_DETECTION_CACHE.clear()
         _TEXT_DETECTION_CACHE[key] = detector
         return detector
