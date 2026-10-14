@@ -2492,6 +2492,14 @@ class ReviewWindow(tk.Toplevel):
             row1, text="排序检查", width=7, command=self.run_order_check,
             style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
+        if getattr(self.parent.settings, "proofreading_event_capture", False):
+            # Explicit, second-stage source-image review; never an autosave
+            # action or implicit approval of a PDIC correction.
+            ttk.Button(
+                row1, text="核验记录", width=8,
+                command=self._open_proofreading_visual_verification,
+                style="PCR.Compact.TButton",
+            ).pack(side="left", padx=(6, 0))
         ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
         focused = ttk.Frame(
@@ -4197,9 +4205,11 @@ class ReviewWindow(tk.Toplevel):
             return True
         if not dirty:
             return True
+        evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(silent=True, sync_editors=False)
+        self._review_evidence_after_save(evidence_before)
         self._persist_simplified_page(current_stem)
         return True
 
@@ -4746,6 +4756,54 @@ class ReviewWindow(tk.Toplevel):
     def _commit_edits(self) -> None:
         from .review_main_editor_sync import commit_proofread_entries
         commit_proofread_entries(self)
+
+    def _open_proofreading_visual_verification(self) -> None:
+        """User-initiated scan preview and independent judgment, never OCR."""
+        from .proofreading_verify_ui import open_visual_verification
+        open_visual_verification(self)
+
+    def _review_evidence_before_save(self) -> list[WordEntry] | None:
+        """Read the pre-edit on-disk PDIC only for explicit project-local opt-in."""
+        if not bool(getattr(
+            getattr(self.parent, "settings", None), "proofreading_event_capture", False
+        )):
+            return None
+        page = getattr(self.parent, "current_page", None)
+        if page is None or getattr(self.parent, "project", None) is None:
+            return None
+        self.__dict__["_review_evidence_source_fingerprints"] = None
+        try:
+            previous = read_pdic(pdic_path(page))
+            from .proofreading_capture import verified_ocr_preedit_fingerprints
+            cache_fn = getattr(self.parent, "_paddle_cache_path", None)
+            cache = cache_fn() if callable(cache_fn) else None
+            self.__dict__["_review_evidence_source_fingerprints"] = (
+                verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+            )
+            return previous
+        except (OSError, ValueError, TypeError):
+            return None
+
+    def _review_evidence_after_save(self, previous: list[WordEntry] | None) -> None:
+        """Supplement a committed PDIC, never modify or roll back user edits."""
+        if previous is None:
+            return
+        page = getattr(self.parent, "current_page", None)
+        project = getattr(self.parent, "project", None)
+        if page is None or project is None:
+            return
+        try:
+            from .proofreading_capture import capture_saved_review_rename
+            source = self.__dict__.pop("_review_evidence_source_fingerprints", None)
+            capture_saved_review_rename(
+                project_root=project.root, page=page, prior_pdic_entries=previous,
+                source_fingerprints=source,
+            )
+        except (OSError, ValueError, TypeError):
+            self.parent.status_var.set(
+                "校对内容已保存，但本地校对操作日志写入失败，请检查磁盘权限。"
+            )
+
 
     def _bound_row_entries(self) -> list[WordEntry]:
         """Return stable rendered-row bindings, with compatibility fallback."""
@@ -6400,8 +6458,37 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent._claim_page_for_manual_edit():
             return "break"
 
+        # Only explicitly enabled, project-local evidence capture. Save the
+        # *previous on-disk* PDIC before mutating any shared Entry objects.
+        capture_requested = bool(getattr(
+            getattr(self.parent, "settings", None), "proofreading_event_capture", False
+        ))
+        prior_pdic_rows = None
+        prior_ocr_fingerprints = None
+        if capture_requested and self.parent.current_page is not None:
+            try:
+                prior_pdic_rows = read_pdic(pdic_path(self.parent.current_page))
+                from .proofreading_capture import verified_ocr_preedit_fingerprints
+                cache_fn = getattr(self.parent, "_paddle_cache_path", None)
+                cache = cache_fn() if callable(cache_fn) else None
+                prior_ocr_fingerprints = verified_ocr_preedit_fingerprints(
+                    cache, pdic_path(self.parent.current_page),
+                )
+            except (OSError, ValueError, TypeError):
+                prior_pdic_rows = None
+
         self._commit_edits()
         entry = row_entries[int(index)]
+        deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
+        deleted_candidate_id = str(entry.candidate_id or "")
+        candidate_id_unique = (
+            bool(deleted_candidate_id)
+            and sum(
+                str(row.get("candidate_id", "")) == deleted_candidate_id
+                for row in getattr(self.parent, "ocr_review_candidates", ())
+                if isinstance(row, dict)
+            ) == 1
+        )
         simplified_key = simplified_entry_key(entry.x, entry.y)
         rendered_stem = getattr(self, "_rendered_page_stem", "")
         if rendered_stem and hasattr(self, "_simplified_page_cache"):
@@ -6429,6 +6516,23 @@ class ReviewWindow(tk.Toplevel):
         # Do not sync stale main-canvas Entry widgets back into the shared model:
         # the proofreading text above is the newest source of truth.
         self.parent.save_pdic(silent=True, sync_editors=False)
+        capture_failed = False
+        if prior_pdic_rows is not None:
+            try:
+                from .proofreading_capture import capture_saved_review_deletion
+                capture_saved_review_deletion(
+                    project_root=self.parent.project.root,
+                    page=self.parent.current_page,
+                    prior_pdic_entries=prior_pdic_rows,
+                    expected_deleted=deleted_identity,
+                    deleted_candidate_id=deleted_candidate_id,
+                    candidate_id_unique=candidate_id_unique,
+                    source_fingerprints=prior_ocr_fingerprints,
+                )
+            except (OSError, ValueError, TypeError):
+                # PDIC and manual overrides were saved successfully. Evidence
+                # errors must neither undo that save nor silently claim success.
+                capture_failed = True
         if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
             self._persist_simplified_page(self._rendered_page_stem)
         self.parent.redraw()
@@ -6440,7 +6544,10 @@ class ReviewWindow(tk.Toplevel):
         if not self.parent.entries:
             self._show_ocr_options(None)
             self._update_title()
-        self.parent.status_var.set(f"已删除词条：{deleted_word}")
+        self.parent.status_var.set(
+            f"已删除词条：{deleted_word}"
+            + ("（本地操作日志保存失败，PDIC 已保存）" if capture_failed else "")
+        )
         return "break"
 
     def _save_digit_map(self) -> None:
@@ -6541,9 +6648,11 @@ class ReviewWindow(tk.Toplevel):
                 return
             if not self.parent._claim_page_for_manual_edit():
                 return
+        evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(sync_editors=False)
+        self._review_evidence_after_save(evidence_before)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
         if self.parent.project:
@@ -13871,6 +13980,10 @@ class PictureCaptureApp(tk.Tk):
             return
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
+        # Only an actual canvas click may initiate a manual-add evidence event.
+        queue_add = getattr(self, "_queue_proofreading_add_evidence", None)
+        if callable(queue_add):
+            queue_add(source_x, source_y)
         self.entries.append(WordEntry("", source_x, source_y))
         self._sort_entries_reading_order()
         self.redraw()
@@ -14288,6 +14401,163 @@ class PictureCaptureApp(tk.Tk):
                 self._pending_manual_override_path = None
                 self._pending_manual_override_payload = None
 
+    def _queue_proofreading_add_evidence(self, x: int, y: int) -> None:
+        """Stage a user canvas click, NOT a durable event until PDIC commits."""
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        state = self.__dict__
+        if "_pending_evidence_add" in state:
+            # More than one insertion or additional save requests coalesced.
+            state["_pending_evidence_add"] = False
+            return
+        project = getattr(self, "project", None)
+        page = getattr(self, "current_page", None)
+        if project is None or page is None:
+            return
+        try:
+            old = read_pdic(pdic_path(page))
+        except (OSError, ValueError):
+            return
+        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        cache_fn = getattr(self, "_paddle_cache_path", None)
+        cache = cache_fn() if callable(cache_fn) else None
+        source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+        state["_pending_evidence_add"] = (page, old, (int(x), int(y)), source)
+
+    def _flush_proofreading_add_evidence(self) -> None:
+        """Record the manual click only after a successfully saved PDIC."""
+        snapshot = self.__dict__.pop("_pending_evidence_add", None)
+        if not isinstance(snapshot, tuple):
+            return
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        if len(snapshot) != 4:
+            return
+        page, old, xy, source = snapshot
+        project = getattr(self, "project", None)
+        if project is None or getattr(self, "current_page", None) != page:
+            return
+        try:
+            from .proofreading_capture import capture_saved_manual_addition
+            capture_saved_manual_addition(
+                project_root=project.root, page=page,
+                prior_pdic_entries=old, expected_xy=xy,
+                source_fingerprints=source,
+            )
+        except (OSError, ValueError, TypeError):
+            status = getattr(self, "status_var", None)
+            if status is not None:
+                status.set("词条已保存，但本地新增词条日志写入失败。")
+
+    def _queue_proofreading_candidate_evidence(self, cand: dict, selected: bool) -> None:
+        """Keep one pre-save checkbox snapshot; coalesced edits are ambiguous."""
+        state = self.__dict__
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        if "_pending_evidence_toggle" in state:
+            state["_pending_evidence_toggle"] = False
+            return
+        page = getattr(self, "current_page", None)
+        if page is None or getattr(self, "project", None) is None:
+            return
+        candidate_id = str(cand.get("candidate_id", "") or "")
+        if not candidate_id or sum(
+            str(row.get("candidate_id", "")) == candidate_id
+            for row in getattr(self, "ocr_review_candidates", ())
+            if isinstance(row, dict)
+        ) != 1:
+            return
+        try:
+            before = read_pdic(pdic_path(page))
+            override = self._manual_selection_path()
+            expected = (
+                str(cand.get("word", "")),
+                int(cand.get("source_x", 0)), int(cand.get("source_y", 0)),
+            )
+        except (OSError, ValueError, TypeError):
+            return
+        if override is None:
+            return
+        position_switch = None
+        group_id = str(cand.get("position_group_id") or "")
+        if selected and group_id:
+            siblings = [
+                row for row in getattr(self, "ocr_review_candidates", ())
+                if row is not cand and isinstance(row, dict)
+                and row.get("position_group_id") == group_id
+                and str(row.get("candidate_id") or "") != candidate_id
+            ]
+            # Only an actual selected, uniquely linked sibling counts as the
+            # pre-click physical-headword location; never infer from nearest Y.
+            matched = [
+                (str(entry.candidate_id), (str(entry.word), int(entry.x), int(entry.y)))
+                for sibling in siblings
+                for entry in getattr(self, "entries", ())
+                if str(entry.candidate_id or "") == str(sibling.get("candidate_id") or "")
+                and str(entry.candidate_id or "")
+            ]
+            if len(matched) == 1:
+                removed_id, removed_row = matched[0]
+                if sum(
+                    str(row.get("candidate_id") or "") == removed_id
+                    for row in getattr(self, "ocr_review_candidates", ())
+                    if isinstance(row, dict)
+                ) == 1:
+                    position_switch = (removed_id, removed_row, group_id)
+        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        cache_fn = getattr(self, "_paddle_cache_path", None)
+        cache = cache_fn() if callable(cache_fn) else None
+        source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
+        state["_pending_evidence_toggle"] = (
+            page, before, expected, candidate_id, bool(selected), override,
+            position_switch, source,
+        )
+
+    def _flush_proofreading_candidate_evidence(self) -> None:
+        """Only after PDIC and delayed manual-selection sidecar are both saved."""
+        snapshot = self.__dict__.pop("_pending_evidence_toggle", None)
+        if not isinstance(snapshot, tuple):
+            return
+        if len(snapshot) != 8:
+            return
+        page, before, expected, candidate_id, selected, override, position_switch, source = snapshot
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        project = getattr(self, "project", None)
+        # A deferred callback must never attribute a previous page's click
+        # after navigation has already changed the active page.
+        if project is None or getattr(self, "current_page", None) != page:
+            return
+        try:
+            from .proofreading_capture import (
+                capture_saved_candidate_selection,
+                capture_saved_position_switch,
+            )
+            recorded = capture_saved_candidate_selection(
+                project_root=project.root, page=page,
+                prior_pdic_entries=before, expected_entry=expected,
+                candidate_id=candidate_id, candidate_id_unique=True,
+                selected=selected, manual_selection_path=override,
+                source_fingerprints=source,
+            )
+            if not recorded and selected and position_switch is not None:
+                old_candidate_id, old_entry, group_id = position_switch
+                capture_saved_position_switch(
+                    project_root=project.root, page=page,
+                    prior_pdic_entries=before,
+                    removed_entry=old_entry, added_entry=expected,
+                    removed_candidate_id=old_candidate_id,
+                    added_candidate_id=candidate_id,
+                    position_group_id=group_id,
+                    manual_selection_path=override,
+                    source_fingerprints=source,
+                )
+        except (OSError, ValueError, TypeError):
+            # Journal failure must not roll back user PDIC or overrides.
+            status = getattr(self, "status_var", None)
+            if status is not None:
+                status.set("候选选择已保存，但本地校对日志写入失败。")
+
     def _schedule_deferred_page_save(self, *, sync_editors: bool = True) -> None:
         """Coalesce rapid checkbox edits while preserving an exact page snapshot."""
         project = self.__dict__.get("project")
@@ -14336,6 +14606,8 @@ class PictureCaptureApp(tk.Tk):
                 self._refresh_word_fill_check_from_line_count(page_index, len(entries), persist=True)
                 self._update_page_row(page_index)
         self._flush_pending_manual_override()
+        self._flush_proofreading_candidate_evidence()
+        self._flush_proofreading_add_evidence()
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
         return self._review_controller_for_call().entry_for_candidate(cand)
@@ -14344,6 +14616,7 @@ class PictureCaptureApp(tk.Tk):
     def set_candidate_selected(self, cand: dict, selected: bool) -> bool:
         if not self._claim_page_for_manual_edit():
             return False
+        self._queue_proofreading_candidate_evidence(cand, selected)
         # Commit every visible editor by object identity before changing the
         # entries list. This prevents a middle-row removal from reassigning the
         # following editor texts to earlier entries.
@@ -15394,6 +15667,8 @@ class PictureCaptureApp(tk.Tk):
         changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
         self._last_pdic_write_changed = changed
         self._flush_pending_manual_override()
+        self._flush_proofreading_candidate_evidence()
+        self._flush_proofreading_add_evidence()
         if changed:
             self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
             self._update_page_row(self.current_index)

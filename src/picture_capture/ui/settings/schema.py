@@ -189,6 +189,7 @@ CHECK_GROUPS = [
             ("每个OCR左缘候选行显示复选框", "paddle_show_candidate_checkboxes"),
         ]),
         ("校对时主界面", [
+            ("记录本地校对操作证据（默认关）", "proofreading_event_capture"),
             ("主界面显示 OCR 内容选择", "review_main_show_ocr_choices"),
             ("主界面按 OCR 置信度显示底色", "review_main_show_ocr_background"),
         ]),
@@ -563,6 +564,7 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "proofreading_event_capture": "默认关闭。启用后仅将支持的人工校对操作，在 PDIC 成功保存后记录到本地项目的独立事件日志；不自动上传、不进行模型训练，普通保存和 OCR 自动画线不等于人工确认。关闭后停止记录，不删除已有日志；含词条文本的记录由用户自行保管、决定是否导出。",
     "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
     "illustration_label_font_bold": "插图标签使用粗体显示，适合扫描背景较复杂、细体不易看清的页面。只改变显示效果。",
     "illustration_label_font_italic": "插图标签使用斜体显示，便于与原始扫描文字作视觉区分。只改变显示效果，不影响识别和导出。",
