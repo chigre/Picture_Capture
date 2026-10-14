@@ -157,3 +157,57 @@ def test_review_window_never_attaches_pre_edit_snapshot_to_other_page(tmp_path):
         uuid5(NAMESPACE_URL, "second.png").hex + ".json"
     )
     assert not other_journal.exists()
+
+
+def test_owned_identity_survives_unrelated_committed_rename_and_reopen(tmp_path):
+    page, pdic, journal = _owned_move(tmp_path)
+
+    def change(words):
+        previous, digest = read_pdic(pdic), sha256_file(pdic)
+        write_pdic(pdic, [Entry(words[0], 11, 27), Entry(words[1], 50, 80)],
+                   100, ("page", "@", "@"))
+        assert capture_saved_review_rename(
+            project_root=tmp_path, page=page,
+            prior_pdic_entries=previous, prior_pdic_sha256=digest,
+        )
+
+    change(("alpha", "beta-fixed"))  # The tracked alpha is untouched.
+    change(("alpha-fixed", "beta-fixed"))
+    change(("alpha-final", "beta-final"))  # Multi-rename, shared atomic commit.
+    events = load_events(journal)
+    alpha_events = [e for e in events if e["after"] and e["after"]["x"] == 11]
+    assert len(alpha_events) == 3
+    assert all(e["entry_id"] == "owned-alpha-event" for e in alpha_events)
+    assert all(e["verification_status"] == "explicit_action_unverified_page"
+               for e in events)
+    assert all(e.get("prior_pdic_sha256") for e in events[1:])
+
+
+def test_unobserved_pdic_edit_breaks_proven_snapshot_chain(tmp_path):
+    page, pdic, journal = _owned_move(tmp_path)
+    # No evidence event records this independent on-disk mutation.
+    write_pdic(pdic, [Entry("alpha", 11, 27), Entry("outside", 50, 80)],
+               100, ("page", "@", "@"))
+    previous, digest = read_pdic(pdic), sha256_file(pdic)
+    old_journal = journal.read_bytes()
+    write_pdic(pdic, [Entry("alpha-fixed", 11, 27),
+                      Entry("outside", 50, 80)], 100, ("page", "@", "@"))
+    assert not capture_saved_review_rename(
+        project_root=tmp_path, page=page,
+        prior_pdic_entries=previous, prior_pdic_sha256=digest,
+    )
+    assert journal.read_bytes() == old_journal
+
+
+def test_source_image_drift_blocks_identity_reuse(tmp_path):
+    page, pdic, journal = _owned_move(tmp_path)
+    previous, digest = read_pdic(pdic), sha256_file(pdic)
+    before = journal.read_bytes()
+    page.write_bytes(b"source-image-replaced")
+    write_pdic(pdic, [Entry("alpha-fixed", 11, 27),
+                      Entry("beta", 50, 80)], 100, ("page", "@", "@"))
+    assert not capture_saved_review_rename(
+        project_root=tmp_path, page=page,
+        prior_pdic_entries=previous, prior_pdic_sha256=digest,
+    )
+    assert journal.read_bytes() == before

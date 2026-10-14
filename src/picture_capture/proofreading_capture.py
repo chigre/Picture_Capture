@@ -75,45 +75,16 @@ def _triples(entries: list[object]) -> list[tuple[str, int, int]]:
 
 def _owned_ids_at_saved_snapshot(
     journal: Path, *, page_id: str, prior_pdic_sha256: str,
-) -> tuple[bool, dict[tuple[str, int, int], str | None]]:
-    """Replay only explicit operation-owned IDs at the exact PRE-edit PDIC.
-
-    The journal's most recent committed edit must match the pre-edit file.
-    An older matching digest is insufficient (e.g. later independent edits).
-    Never use row numbers, nearest neighbours, or an unrelated OCR candidate.
-    None means competing owners for one physical saved row: fail closed.
-    """
+    image_sha256: str | None = None,
+) -> tuple[bool, dict[tuple[str, int, int], str]]:
+    """Read explicitly owned IDs from a contiguous verified snapshot chain."""
     if not journal.is_file():
         return True, {}
-    records = load_events(journal)
-    latest = next((row for row in reversed(records) if row.get("action") != "verify"), None)
-    if latest is not None and (
-        latest.get("page_id") != page_id
-        or latest.get("pdic_sha256") != prior_pdic_sha256
-    ):
-        return False, {}
-    owners: dict[tuple[str, int, int], set[str]] = {}
-    for row in records:
-        if (row.get("page_id") != page_id
-                or row.get("pdic_sha256") != prior_pdic_sha256
-                or row.get("action") not in {"add", "move", "rename", "select"}):
-            continue
-        after = row.get("after")
-        if not isinstance(after, dict):
-            continue
-        try:
-            word, x, y = after["word"], after["x"], after["y"]
-        except KeyError:
-            continue
-        if not isinstance(word, str) or type(x) is not int or type(y) is not int:
-            continue
-        owner = row.get("entry_id")
-        if not isinstance(owner, str) or not owner:
-            return False, {}
-        owners.setdefault((word, x, y), set()).add(owner)
-    return True, {key: next(iter(ids)) if len(ids) == 1 else None
-                  for key, ids in owners.items()}
-
+    from .proofreading_identity import owned_entries_at_snapshot
+    return owned_entries_at_snapshot(
+        load_events(journal), page_id=page_id,
+        pdic_sha256=prior_pdic_sha256, image_sha256=image_sha256,
+    )
 
 def capture_saved_review_deletion(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
@@ -222,6 +193,7 @@ def capture_saved_review_rename(
             return False
         trusted, owned_ids = _owned_ids_at_saved_snapshot(
             journal, page_id=page_id, prior_pdic_sha256=prior_pdic_sha256,
+            image_sha256=sha256_file(page),
         )
         if not trusted:
             return False
@@ -233,7 +205,7 @@ def capture_saved_review_rename(
         entry_id = owned_ids.get(before_key) or uuid5(
             NAMESPACE_URL, f"{page_id}|xy|{x}|{y}"
         ).hex
-        events.append(make_event(
+        evidence = make_event(
             page_id=page_id, action="rename",
             before={"word": before_word, "x": x, "y": y},
             after={"word": after_word, "x": x, "y": y},
@@ -241,7 +213,12 @@ def capture_saved_review_rename(
             image_sha256=sha256_file(page),
             **_ocr_fields(source_fingerprints),
             **section_fields_for_event(page, before_xy=(x, y), after_xy=(x, y)),
-        ))
+        )
+        # Optional additive event provenance; old journals remain loadable.
+        # This proves a direct predecessor even after reopening or other edits.
+        if prior_pdic_sha256 is not None:
+            evidence["prior_pdic_sha256"] = prior_pdic_sha256
+        events.append(evidence)
     if len(events) == 1:
         append_event(journal, events[0], pdic_file=saved_file)
     else:
