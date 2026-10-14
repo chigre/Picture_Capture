@@ -1,0 +1,27 @@
+name: Settings coverage and hardcoded thresholds
+on:
+  push:
+    branches:
+      - feat/integrated-ocr-runtime-monitor-20261014
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Scan every package Python file
+        run: python scripts/audit_settings_runtime.py --out build/settings-audit
+      - name: Check completeness of generated artifacts
+        run: |
+          test -s build/settings-audit/appsettings_field_matrix.csv
+          test -s build/settings-audit/hardcoded_threshold_candidates.json
+          test -s build/settings-audit/summary.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: settings-audit-inventory
+          path: build/settings-audit/
+          if-no-files-found: error
