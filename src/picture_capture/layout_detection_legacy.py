@@ -126,11 +126,27 @@ def _get_text_detector(settings: AppSettings) -> Any:
     """
     from .ordinary_gpu_pipeline import reject_cpu_worker_detector
 
-    # An opt-in staged ordinary CPU worker may never instantiate a second
-    # GPU model, even through an unexpected fallback or call-site drift.
+    # The staged GPU pipeline must NEVER instantiate a Paddle model in its
+    # CPU consumers, including when a model is already cached.
     reject_cpu_worker_detector()
-    device = resolve_paddle_device()
-    key = f"{device}|nomkldnn"
+    # The alternative CPU-only page pool owns a separate CPU model in EACH
+    # worker. Require explicit device AND threads; never use fallback attempts
+    # which silently discard device="cpu" on a PaddleOCR version mismatch.
+    cpu_pool_worker = os.environ.get(
+        "PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER"
+    ) == "1"
+    if cpu_pool_worker:
+        device = "cpu"
+        try:
+            threads = max(1, min(8, int(os.environ.get("OMP_NUM_THREADS", "1"))))
+        except (ValueError, TypeError):
+            threads = 1
+    else:
+        device = resolve_paddle_device()
+        threads = None
+    key = f"{device}|nomkldnn" + (
+        f"|threads={threads}" if cpu_pool_worker else ""
+    )
     if key in _TEXT_DETECTION_CACHE:
         return _TEXT_DETECTION_CACHE[key]
 
@@ -148,15 +164,20 @@ def _get_text_detector(settings: AppSettings) -> Any:
         ) from exc
 
     kwargs: dict[str, Any] = {"enable_mkldnn": False, "device": device}
+    if cpu_pool_worker:
+        kwargs["cpu_threads"] = threads
 
-    # Newer PaddleOCR 3.x exposes enable_mkldnn directly.  Keep compatibility
-    # with older 3.x signatures by progressively dropping unsupported kwargs.
-    attempts = [
-        kwargs,
-        {k: v for k, v in kwargs.items() if k != "device"},
-        {"device": device},
-        {},
-    ]
+    # Strict CPU mode fails closed instead of silently losing the CPU device
+    # or thread cap. Legacy serial mode preserves its historical compatibility
+    # fallbacks; no MKLDNN/PIR change is authorized here.
+    attempts = (
+        [kwargs] if cpu_pool_worker else [
+            kwargs,
+            {k: v for k, v in kwargs.items() if k != "device"},
+            {"device": device},
+            {},
+        ]
+    )
     seen: set[tuple[tuple[str, str], ...]] = set()
     last_exc: Exception | None = None
     for attempt in attempts:
