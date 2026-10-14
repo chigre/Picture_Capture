@@ -40,7 +40,8 @@ _LAYOUT_ESTIMATE_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 
 def _layout_estimate_cache_key(image, settings) -> tuple[Any, ...]:
     digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
-    return (str(image.mode), tuple(image.size), digest, repr(settings))
+    from .layout_scale_experiment import FLAG
+    return (str(image.mode), tuple(image.size), digest, repr(settings), os.environ.get(FLAG, "off"))
 
 
 def clear_layout_estimate_cache() -> None:
@@ -112,9 +113,13 @@ def detect_layout_parameters(image, settings):
     if raw is not None:
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
     else:
-        raw = detect_layout_parameters_reliable(
-            analysis_image, settings, sys.modules[__name__]
+        from .layout_scale_experiment import detect_at_scale
+        raw, scale_used = detect_at_scale(
+            analysis_image, settings, sys.modules[__name__],
+            detect_layout_parameters_reliable,
         )
+        if tracking:
+            record_page("<substage>", -1, {"layout_detector_scale": scale_used}, stage_group="layout_scale_experiment")
         _LAYOUT_ESTIMATE_CACHE[key] = raw
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
         while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
