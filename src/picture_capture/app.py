@@ -15485,11 +15485,23 @@ class PictureCaptureApp(tk.Tk):
             ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
         )
         from .ordinary_gpu_pipeline import staged_pipeline_enabled
-        gpu_staged = bool(
+        from .ordinary_cpu_pool import cpu_pool_enabled, cpu_pool_config
+        cpu_pool = bool(
             method == "left_edge"
+            and cpu_pool_enabled(settings, len(indices))
+        )
+        cpu_pool_workers, cpu_inference_threads = (
+            cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
+        )
+        # The two experiments are mutually exclusive. Explicit CPU-only
+        # mode wins if both flags accidentally exist in the environment.
+        gpu_staged = bool(
+            method == "left_edge" and not cpu_pool
             and staged_pipeline_enabled(settings, len(indices))
         )
-        if gpu_staged:
+        if cpu_pool:
+            ordinary_workers = cpu_pool_workers
+        elif gpu_staged:
             # Memory-conservative trial: ONE reusable GPU detector and at
             # most two CPU page allocations; never six CUDA model copies.
             ordinary_workers = 2
@@ -15523,9 +15535,16 @@ class PictureCaptureApp(tk.Tk):
                 if previous_count is not None:
                     return {"index": int(index), "count": previous_count, "resumed": True}
             if normal_executor is not None:
-                count = normal_executor.submit(
-                    detect_entries_job, str(page), settings, pages_info[index], index
-                ).result()
+                if cpu_pool:
+                    from .ordinary_cpu_pool import cpu_ordinary_page_job
+                    count = normal_executor.submit(
+                        cpu_ordinary_page_job, str(page), settings,
+                        pages_info[index], index, cpu_inference_threads,
+                    ).result()
+                else:
+                    count = normal_executor.submit(
+                        detect_entries_job, str(page), settings, pages_info[index], index
+                    ).result()
                 return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
@@ -15731,6 +15750,23 @@ class PictureCaptureApp(tk.Tk):
                 gpu_job_builder=lambda index, _position, _total: (
                     str(project.images[index]), settings, index,
                 ),
+            )
+        elif cpu_pool and cpu_pool_workers > 1:
+            from .ordinary_cpu_pool import cpu_ordinary_page_job
+            started = self._start_parallel_batch_task(
+                label, indices, cpu_ordinary_page_job,
+                lambda index, _position, _total: (
+                    str(project.images[index]), settings,
+                    pages_info[index], index, cpu_inference_threads,
+                ),
+                result_consumer=lambda index, count: {
+                    "index": int(index), "count": int(count),
+                },
+                on_done=done,
+                item_label=lambda index: project.images[index].name,
+                max_workers=cpu_pool_workers,
+                foreground_page_edit=True,
+                page_indexer=lambda index: int(index),
             )
         elif method == "left_edge" and ordinary_workers > 1:
             # Dormant legacy parallel path: the ordinary_draw_workers safety
