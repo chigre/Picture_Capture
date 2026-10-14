@@ -612,6 +612,11 @@ class AppSettings(metaclass=_AppSettingsMeta):
     paddle_refine_separator_y: bool = True
     # Experimental ink-safe Y verification after the standard refiner; OFF by default.
     separator_y_ink_safe_gap: bool = False
+    # Experimental white-gap guard: identical historical defaults when enabled.
+    separator_y_ink_safe_max_fraction: float = 0.25
+    separator_y_ink_safe_ink_threshold: int = 185
+    separator_y_ink_safe_existing_ink_ratio: float = 0.045
+    separator_y_ink_safe_gap_ink_ratio: float = 0.02
     paddle_separator_search_ratio: float = 0.30
     paddle_separator_band_radius: int = 2
     # Downward-biased Y-refinement safety clearance in original-image pixels.
