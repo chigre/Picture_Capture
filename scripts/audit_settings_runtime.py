@@ -50,6 +50,20 @@ REGISTRY_ONLY = {
     "FIELDS", "FIELD_GROUPS", "CHECK_GROUPS",
 }
 PRODUCTION_RUNTIME_PREFIX = "src/picture_capture/"
+PERSISTENCE_REGRESSION = (
+    "tests/test_settings_runtime_audit_20261015.py::"
+    "test_every_appsettings_value_roundtrips_through_json"
+)
+TARGETED_RUNTIME_TESTS = {
+    "separator_y_ink_safe_max_fraction":
+        "tests/test_ink_safe_separator_20261014.py::test_white_gap_thresholds_are_actually_consumed_by_shared_refiner",
+    "separator_y_ink_safe_ink_threshold":
+        "tests/test_ink_safe_separator_20261014.py::test_white_gap_search_fraction_and_grayscale_threshold_affect_runtime",
+    "separator_y_ink_safe_existing_ink_ratio":
+        "tests/test_ink_safe_separator_20261014.py::test_existing_ink_ratio_controls_whether_previously_safe_line_is_moved",
+    "separator_y_ink_safe_gap_ink_ratio":
+        "tests/test_ink_safe_separator_20261014.py::test_candidate_gap_ink_ratio_controls_three_row_acceptance",
+}
 
 
 def field_defaults():
@@ -238,6 +252,8 @@ def main():
             "gui_save_mechanism": ("SettingsDialog.save -> setattr -> AppSettings.to_json"
                                    if ui_path else "custom UI / project editor / internal: review"),
             "load_mechanism": "AppSettings.from_json -> migrate_app_settings_payload",
+            "persistence_runtime_test": PERSISTENCE_REGRESSION,
+            "targeted_algorithm_runtime_test": TARGETED_RUNTIME_TESTS.get(name, ""),
             "runtime_static_read_count": len(live_reads),
             "runtime_static_read_sites": ";".join(live_reads[:80]),
             "source_reads_count": len(evidence["reads"]),
@@ -245,8 +261,13 @@ def main():
             "source_read_sites": ";".join(evidence["reads"][:80]),
             "source_write_sites": ";".join(evidence["writes"][:40]),
             "persistence": "AppSettings.to_json/from_json; check project migrations",
-            "runtime_status": ("static_candidates_only_runtime_test_required"
-                               if live_reads else "no_simple_static_runtime_read_review_dynamic_access"),
+            "runtime_status": (
+                "targeted_behavior_test"
+                if name in TARGETED_RUNTIME_TESTS else (
+                    "static_candidates_only_runtime_test_required"
+                    if live_reads else "no_simple_static_runtime_read_review_dynamic_access"
+                )
+            ),
         })
     with (args.out / "appsettings_field_matrix.csv").open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())
