@@ -270,6 +270,29 @@ class ProofreadingVisualVerificationDialog(tk.Toplevel):
         self._reload()
 
 
+def _review_has_uncommitted_text(review_window: tk.Misc) -> bool:
+    """Fail closed if a save returned without binding/committing live editor text.
+
+    A pending OCR page may decline ownership without raising an exception.
+    Stable rendered Entry bindings, not index-based page sorting, are required.
+    """
+    try:
+        rows = review_window._bound_row_entries()
+        vars_ = review_window.vars
+        if len(rows) != len(vars_):
+            return True
+        if any(field.get().strip() != entry.word for field, entry in zip(vars_, rows)):
+            return True
+        parent = review_window.parent
+        page = getattr(parent, "current_page", None)
+        dirty_pages = getattr(review_window, "_simplified_dirty_pages", ())
+        if page is not None and page.stem in dirty_pages:
+            return True
+    except (AttributeError, TypeError, ValueError, tk.TclError):
+        return True
+    return False
+
+
 def open_visual_verification(review_window: tk.Misc) -> None:
     """Open a dialog only with the local recording opt-in enabled."""
     parent = review_window.parent
@@ -303,6 +326,16 @@ def open_visual_verification(review_window: tk.Misc) -> None:
     # display a stale operation as verified merely because it is still selected.
     review_window.save(redraw_main=False)
     if getattr(parent, "current_page", None) != page:
+        return
+    if _review_has_uncommitted_text(review_window) or (
+        callable(batch_state)
+        and batch_state(getattr(parent, "current_index", -1)) in {"pending", "processing"}
+    ):
+        messagebox.showinfo(
+            "请先完成保存",
+            "校对编辑尚未成功提交，或页面仍在处理中；请完成保存后再核验。",
+            parent=review_window,
+        )
         return
     cache_fn = getattr(parent, "_paddle_cache_path", None)
     cache = cache_fn() if callable(cache_fn) else None
