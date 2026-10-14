@@ -244,7 +244,8 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
     reference = float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
     reference_arg = reference if reference > 0 else None
 
-    for column_index, column in enumerate(list(getattr(layout, "columns", []) or [])):\n        modes = list(getattr(column, "indent_modes", []) or [])
+    for column_index, column in enumerate(list(getattr(layout, "columns", []) or [])):
+        modes = list(getattr(column, "indent_modes", []) or [])
         if not modes:
             continue
 
