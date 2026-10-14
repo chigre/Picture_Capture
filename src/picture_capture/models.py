@@ -718,6 +718,27 @@ class AppSettings(metaclass=_AppSettingsMeta):
                 raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
             if not 10.0 <= value <= 100.0:  # also rejects NaN/infinity
                 raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
+        if name.startswith("separator_y_ink_safe_") and name != "separator_y_ink_safe_gap":
+            allowed = {
+                "separator_y_ink_safe_max_fraction": (0.01, 0.30),
+                "separator_y_ink_safe_ink_threshold": (0.0, 255.0),
+                "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20),
+                "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10),
+            }
+            if name in allowed:
+                try:
+                    numeric = float(value)
+                except (ValueError, TypeError, OverflowError) as exc:
+                    raise ValueError(f"{name} 必须是数字。") from exc
+                low, high = allowed[name]
+                if not low <= numeric <= high:
+                    raise ValueError(f"{name} 必须在 {low}–{high} 之间。")
+                if name == "separator_y_ink_safe_ink_threshold":
+                    if not numeric.is_integer():
+                        raise ValueError(f"{name} 必须是整数。")
+                    value = int(numeric)
+                else:
+                    value = numeric
         object.__setattr__(self, name, value)
 
     @property
