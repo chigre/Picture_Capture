@@ -76,6 +76,7 @@ def _triples(entries: list[object]) -> list[tuple[str, int, int]]:
 def _owned_ids_at_saved_snapshot(
     journal: Path, *, page_id: str, prior_pdic_sha256: str,
     image_sha256: str | None = None,
+    required_before: tuple[tuple[str, int, int], ...] = (),
 ) -> tuple[bool, dict[tuple[str, int, int], str]]:
     """Read explicitly owned IDs from a contiguous verified snapshot chain."""
     if not journal.is_file():
@@ -84,6 +85,7 @@ def _owned_ids_at_saved_snapshot(
     return owned_entries_at_snapshot(
         load_events(journal), page_id=page_id,
         pdic_sha256=prior_pdic_sha256, image_sha256=image_sha256,
+        required_before=required_before,
     )
 
 def capture_saved_review_deletion(
@@ -194,6 +196,9 @@ def capture_saved_review_rename(
         trusted, owned_ids = _owned_ids_at_saved_snapshot(
             journal, page_id=page_id, prior_pdic_sha256=prior_pdic_sha256,
             image_sha256=sha256_file(page),
+            required_before=tuple(
+                (old_word, x, y) for (x, y), old_word, _ in changed
+            ),
         )
         if not trusted:
             return False

@@ -23,6 +23,7 @@ def _triple(value: object) -> tuple[str, int, int] | None:
 def owned_entries_at_snapshot(
     events: list[dict[str, Any]], *, page_id: str, pdic_sha256: str,
     image_sha256: str | None = None,
+    required_before: tuple[tuple[str, int, int], ...] = (),
 ) -> tuple[bool, dict[tuple[str, int, int], str]]:
     """Return proven identities at the current *pre-edit* PDIC snapshot.
 
@@ -57,6 +58,19 @@ def owned_entries_at_snapshot(
         if groups[start - 1][0] != predecessor:
             break
         start -= 1
+
+    # An older owned row on the same physical coordinate is a collision risk
+    # if an unrecorded edit breaks the snapshot chain. Never silently mint a
+    # new XY-derived identity for that requested row: report unknown instead.
+    if start and required_before:
+        changed_xy = {(x, y) for _, x, y in required_before}
+        for _, older in groups[:start]:
+            for row in older:
+                if row.get("page_id") != page_id:
+                    continue
+                after = _triple(row.get("after"))
+                if after is not None and after[1:] in changed_xy:
+                    return False, {}
 
     owners: dict[tuple[str, int, int], str] = {}
     for _, block in groups[start:]:

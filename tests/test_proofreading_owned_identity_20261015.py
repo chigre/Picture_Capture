@@ -211,3 +211,34 @@ def test_source_image_drift_blocks_identity_reuse(tmp_path):
         prior_pdic_entries=previous, prior_pdic_sha256=digest,
     )
     assert journal.read_bytes() == before
+
+
+def test_broken_ancestry_does_not_mint_new_xy_id_over_prior_moved_owner(tmp_path):
+    page, pdic, journal = _owned_move(tmp_path)
+    existing = read_pdic(pdic)
+    # Simulate another older capture path that produced a valid event but did
+    # not yet store the additive predecessor field.
+    write_pdic(
+        pdic, [Entry("alpha", 11, 27), Entry("beta-legacy", 50, 80)],
+        100, ("page", "@", "@"),
+    )
+    previous_commit = make_event(
+        page_id=load_events(journal)[0]["page_id"], action="rename",
+        before={"word": "beta", "x": 50, "y": 80},
+        after={"word": "beta-legacy", "x": 50, "y": 80},
+        entry_id="beta-owned", pdic_sha256=sha256_file(pdic),
+        image_sha256=sha256_file(page),
+    )
+    append_event(journal, previous_commit, pdic_file=pdic)
+    prior_rows, prior_sha = read_pdic(pdic), sha256_file(pdic)
+    before_journal = journal.read_bytes()
+    write_pdic(
+        pdic, [Entry("alpha-renamed", 11, 27),
+               Entry("beta-legacy", 50, 80)],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_review_rename(
+        project_root=tmp_path, page=page,
+        prior_pdic_entries=prior_rows, prior_pdic_sha256=prior_sha,
+    )
+    assert journal.read_bytes() == before_journal
