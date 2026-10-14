@@ -22,57 +22,35 @@
     }
   },
   "current_state": {
-    "status": "blocked",
-    "active_phase": "R1",
-    "active_work_item": "R0.2",
-    "work_in_progress": false,
-    "implementation_pr": {
-      "number": 481,
-      "url": "https://github.com/chigre/Picture_Capture/pull/481",
-      "branch": "feat/pc-cq-b1-quality-gates-20261014",
-      "status": "open",
-      "units": [
-        "R0.2",
-        "R1.1",
-        "R1.2",
-        "R1.3"
-      ]
-    },
-    "implementation_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
+    "status": "in_progress",
+    "active_phase": "R2",
+    "active_work_item": "R2.1",
+    "work_in_progress": true,
+    "implementation_pr": null,
+    "implementation_head_sha": null,
     "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
-    "last_completed_work_item": "R0.1",
+    "last_completed_work_item": "R1.3",
     "blockers": [
       {
-        "type": "ci_regression_failure",
-        "pr": "https://github.com/chigre/Picture_Capture/pull/481",
-        "run": "https://github.com/chigre/Picture_Capture/actions/runs/38454078389",
-        "details": [
-          "R1.3 test_existing_benchmark_runners_declare_separate_sources: missing literal test_kind actual_detection_regenerated in complete archive runner",
-          "R1.1 existing test_real_benchmark_uses_identical_production_matching_primitive: benchmark no longer calls match_ordered_markers directly"
-        ],
-        "affected_jobs": [
-          "ubuntu-latest",
-          "windows-latest",
-          "macos-latest",
-          "python310-compat"
-        ],
-        "write_policy": "No production code changes until CI failures resolved per user stop gate"
+        "type": "verification_pending",
+        "message": "B1 full postmerge pytest CI not yet independently observed; PR CI passed and main CodeQL successful.",
+        "run": "https://github.com/chigre/Picture_Capture/actions/runs/38509067455"
       }
     ],
-    "required_next_action": "B1 ONLY: inspect two failed assertions and reconcile test/implementation semantics under user-approved code-write gate; keep PR #481 as sole active production PR; rerun full 3-platform+3.10 CI; do not start B2.",
-    "last_test_evidence": "CI 38454078389: golden step 18 passed/1 failed; Python 3.10 full pytest 2045 passed, 2 failed, 2 skipped. Architecture guard passed Ubuntu; Windows/macOS guard skipped by workflow. No new tests run locally in this automation.",
-    "active_batch": "B1",
-    "next_batch": "B1"
+    "required_next_action": "Continue B2 on this branch: review event journal architecture, add explicit UI/controller capture AFTER committed PDIC and manual overrides, finalize stable IDs/consent and cross-platform tests; do not merge a foundation-only draft PR. Reconcile B1 post-merge CI; do not mark B1 verified without full required evidence.",
+    "last_test_evidence": "B1 PR #481 checks passed CI 38504973658, merged de257754217520b64c8bbf4c6c4547dc1a0136b2; postmerge Push on main CodeQL run 38509067455 success; no postmerge full pytest CI run confirmed. B2 foundation tests committed, not run yet.",
+    "active_batch": "B2",
+    "next_batch": "B3"
   },
   "units": {
     "R0.1": "verified",
-    "R0.2": "pr_open",
-    "R1.1": "blocked",
-    "R1.2": "pr_open",
-    "R1.3": "blocked",
-    "R2.1": "todo",
-    "R2.2": "todo",
-    "R2.3": "todo",
+    "R0.2": "merged",
+    "R1.1": "merged",
+    "R1.2": "merged",
+    "R1.3": "merged",
+    "R2.1": "in_progress",
+    "R2.2": "in_progress",
+    "R2.3": "in_progress",
     "R3.1": "todo",
     "R3.2": "todo",
     "R4.1": "todo",
@@ -200,6 +178,27 @@
       },
       "blocker": "Two test assertions failed; no production code writes this turn",
       "next_batch": "B1"
+    },
+    {
+      "type": "b1_merged",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/481",
+      "pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38504973658",
+      "merge_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
+      "postmerge_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/38509067455",
+      "status": "merged_postmerge_full_ci_unconfirmed"
+    },
+    {
+      "type": "b2_foundation",
+      "status": "in_progress_not_merged",
+      "branch": "feat/pc-cq-b2-proofreading-evidence-20261014",
+      "files": [
+        "src/picture_capture/proofreading_events.py",
+        "src/picture_capture/proofreading_evidence.py",
+        "tests/test_proofreading_events_20261014.py",
+        "tests/test_proofreading_evidence_20261014.py",
+        "docs/roadmaps/CORE_QUALITY_B2_RUNBOOK.md"
+      ],
+      "note": "Not wired to UI. No behavior change or labels exported. Testing pending."
     }
   ],
   "rules_for_updates": {
@@ -257,10 +256,10 @@
         "R1.2",
         "R1.3"
       ],
-      "status": "blocked",
+      "status": "merged",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/481",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "CI 38454078389 failure: two assertions in benchmark provenance and ordered matching tests; four jobs red.",
+      "blocker": "Postmerge full CI not observed; PR CI passed 38504973658 and main CodeQL success 38509067455",
       "implementation_head_sha": "176426c18480d52989eaf7d74ccb09cf95bed108",
       "ci": {
         "run_id": 38454078389,
@@ -294,7 +293,8 @@
           "status": "blocked",
           "evidence": "tests/test_b1_benchmark_provenance_20261014.py::test_existing_benchmark_runners_declare_separate_sources fails (missing test_kind literal)"
         }
-      }
+      },
+      "merge_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2"
     },
     "B2": {
       "units": [
@@ -302,10 +302,10 @@
         "R2.2",
         "R2.3"
       ],
-      "status": "todo",
+      "status": "in_progress",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": "UI capture and integration tests missing; foundation only"
     },
     "B3": {
       "units": [
