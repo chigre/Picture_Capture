@@ -121,3 +121,39 @@ def test_event_audit_fails_open_to_unknown_not_gold_when_ocr_changes(tmp_path):
     )
     assert result["stale_events"] == 2
     assert result["training_labels_exported"] == 0
+
+
+def test_journal_rejects_false_predecessor_even_when_postsave_pdic_matches(tmp_path):
+    pdic, journal = _case(tmp_path)
+    first = _event(pdic)
+    append_event(journal, first, pdic_file=pdic)
+    before = journal.read_bytes()
+    second = _event(pdic, before={"word": "lemma", "x": 10, "y": 30},
+                    after={"word": "lemma2", "x": 10, "y": 30})
+    second["prior_pdic_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="predecessor"):
+        append_event(journal, second, pdic_file=pdic)
+    assert journal.read_bytes() == before
+
+
+def test_atomic_multi_rename_rejects_mixed_or_stale_predecessors(tmp_path):
+    from picture_capture.proofreading_events import append_rename_batch
+    pdic, journal = _case(tmp_path)
+    first = _event(pdic)
+    append_event(journal, first, pdic_file=pdic)
+    saved = journal.read_bytes()
+    one = _event(pdic, before={"word": "one", "x": 10, "y": 20},
+                 after={"word": "ONE", "x": 10, "y": 20},
+                 entry_id="first-owner")
+    two = _event(pdic, before={"word": "two", "x": 20, "y": 30},
+                 after={"word": "TWO", "x": 20, "y": 30},
+                 entry_id="second-owner")
+    one["prior_pdic_sha256"] = "f" * 64
+    two["prior_pdic_sha256"] = "e" * 64
+    with pytest.raises(ValueError, match="Mixed"):
+        append_rename_batch(journal, [one, two], pdic_file=pdic)
+    assert journal.read_bytes() == saved
+    two["prior_pdic_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="predecessor"):
+        append_rename_batch(journal, [one, two], pdic_file=pdic)
+    assert journal.read_bytes() == saved

@@ -1,5 +1,7 @@
 # PC-CQ/B2 — Human proofreading evidence (partial merge; remaining acceptance underway)
 
+**2026-10-14 B2 当前 Draft [#498](https://github.com/chigre/Picture_Capture/pull/498)：** 已增加连续 PDIC 指纹血缘的 Entry ID 延续（已有明确操作所有权的 move → 其他词条改名 → 再次改名/重开）、按写入锁校验日志前驱、跨页与来源漂移防伪，并独立增加 synthetic 回归。PR 未合并，最新 CI 结果须以 GitHub 实时 Checks 为准。**不能声称支持通用词条 XY 拖拽**；[#483](https://github.com/chigre/Picture_Capture/issues/483) 的真实 Windows 操作者 W1–W8 验收仍欠缺。单一活跃生产 PR 为 #498，B2 不得标为 verified。
+
 **Live status (2026-10-14):** Default-OFF local evidence [#482](https://github.com/chigre/Picture_Capture/pull/482), cross-platform real-Tk synthetic evidence tests [#486](https://github.com/chigre/Picture_Capture/pull/486) and atomic multiple unique-XY text-only rename capture [#489](https://github.com/chigre/Picture_Capture/pull/489) are merged. Latest main `04c02286` passed [CI 38553009540](https://github.com/chigre/Picture_Capture/actions/runs/38553009540) and [CodeQL 38553009318](https://github.com/chigre/Picture_Capture/actions/runs/38553009318). **B2 is STILL IN PROGRESS**, because arbitrary moved/compound Entry identity and human-run Windows ReviewWindow end-to-end acceptance remain open in [#483](https://github.com/chigre/Picture_Capture/issues/483). The historical paragraphs below describe older draft slices, not today's live status.
 
 ## Source-of-truth chain

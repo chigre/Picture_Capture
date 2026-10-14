@@ -150,6 +150,20 @@ def append_event(
         if actual is None or event.get("pdic_sha256") != actual:
             raise ValueError("Current PDIC does not match the recorded post-save snapshot")
         events = load_events(path)
+        # Predecessor links are additive provenance. Enforce the same direct
+        # predecessor used for identity replay while the journal lock is held.
+        predecessor = event.get("prior_pdic_sha256")
+        if predecessor is not None:
+            if (not isinstance(predecessor, str)
+                    or len(predecessor) != 64
+                    or any(ch not in "0123456789abcdef" for ch in predecessor)):
+                raise ValueError("Invalid prior proofreading PDIC digest")
+            last_edit = next(
+                (row for row in reversed(events) if row.get("action") != "verify"),
+                None,
+            )
+            if last_edit is not None and last_edit.get("pdic_sha256") != predecessor:
+                raise ValueError("Proofreading predecessor no longer matches journal")
         if any(existing["operation_id"] == event["operation_id"] for existing in events):
             raise ValueError("Duplicate proofreading operation id")
         if event.get("action") == "verify":
@@ -237,6 +251,7 @@ def append_rename_batch(
             event.get("image_sha256") != first.get("image_sha256"),
             event.get("ocr_signature") != first.get("ocr_signature"),
             event.get("final_snapshot_sha256") != first.get("final_snapshot_sha256"),
+            event.get("prior_pdic_sha256") != first.get("prior_pdic_sha256"),
         )):
             raise ValueError("Mixed or unproven proofreading rename batch")
         operation_ids.append(event["operation_id"])
@@ -255,6 +270,18 @@ def append_rename_batch(
         if saved_sha is None or saved_sha != first.get("pdic_sha256"):
             raise ValueError("Current PDIC does not match the recorded post-save snapshot")
         previous = load_events(target)
+        predecessor = first.get("prior_pdic_sha256")
+        if predecessor is not None:
+            if (not isinstance(predecessor, str)
+                    or len(predecessor) != 64
+                    or any(ch not in "0123456789abcdef" for ch in predecessor)):
+                raise ValueError("Invalid prior proofreading PDIC digest")
+            last_edit = next(
+                (row for row in reversed(previous) if row.get("action") != "verify"),
+                None,
+            )
+            if last_edit is not None and last_edit.get("pdic_sha256") != predecessor:
+                raise ValueError("Proofreading predecessor no longer matches journal")
         existing_ids = {event["operation_id"] for event in previous}
         if any(operation_id in existing_ids for operation_id in operation_ids):
             raise ValueError("Duplicate proofreading operation id")
