@@ -924,26 +924,48 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         )
         help_title.pack(anchor="w", fill="x", padx=(0, 6))
-        # Each tab has its own help panel. Bind every panel's body to the
-        # shared variable, just as the help title already is; a one-time
-        # text=... snapshot silently leaves all but the last tab stale.
+        # Each tab owns a vertically scrollable help pane. The old Label
+        # wrapped long explanations but clipped their bottom beyond the window.
+        help_view = ttk.Frame(help_box)
+        help_view.pack(fill="both", expand=True, pady=(7, 0))
+        help_canvas = tk.Canvas(help_view, borderwidth=0, highlightthickness=0)
+        help_scroll = ttk.Scrollbar(help_view, orient="vertical", command=help_canvas.yview)
+        help_canvas.configure(yscrollcommand=help_scroll.set)
+        help_canvas.pack(side="left", fill="both", expand=True)
+        help_scroll.pack(side="right", fill="y")
+        help_content = ttk.Frame(help_canvas)
+        help_window = help_canvas.create_window((0, 0), window=help_content, anchor="nw")
+        help_content.bind(
+            "<Configure>",
+            lambda _e, cv=help_canvas: cv.configure(scrollregion=cv.bbox("all")),
+            add="+",
+        )
+        help_canvas.bind(
+            "<Configure>",
+            lambda e, cv=help_canvas, item=help_window: cv.itemconfigure(
+                item, width=max(1, e.width)
+            ),
+            add="+",
+        )
+        self._settings_help_scroll_canvases.append(help_canvas)
+        # Bind the live variable in every tab rather than taking a snapshot.
         help_body = ttk.Label(
-            help_box,
+            help_content,
             textvariable=self._settings_help_body_var,
             foreground="#555b63",
             justify="left",
             anchor="nw",
             wraplength=300,
         )
-        help_body.pack(anchor="w", fill="x", padx=(0, 8), pady=(7, 0))
-        help_image = ttk.Label(help_box, anchor="center")
-        help_separator = ttk.Separator(help_box, orient="horizontal")
+        help_body.pack(anchor="w", fill="x", padx=(0, 8))
+        help_image = ttk.Label(help_content, anchor="center")
+        help_separator = ttk.Separator(help_content, orient="horizontal")
         help_separator.pack(fill="x", pady=(14, 10))
         self._settings_help_image_widgets.append(
-            (help_image, help_separator, help_box)
+            (help_image, help_separator, help_content)
         )
         help_hint = ttk.Label(
-            help_box,
+            help_content,
             text="把鼠标停在设置项上、点击 ⓘ，或用 Tab/鼠标进入输入框时，"
                  "右侧会显示完整说明与版面图解；左侧只保留参数、单位和必要状态。",
             foreground="#7a8088",
@@ -951,12 +973,25 @@ class SettingsDialog(tk.Toplevel):
         )
         help_hint.pack(anchor="w", fill="x", padx=(0, 6))
         self._bind_responsive_labels(
-            help_box,
+            help_content,
             help_body,
             help_hint,
-            horizontal_padding=34,
+            horizontal_padding=18,
             min_wrap=120,
         )
+
+        def scroll_help(event) -> str:
+            direction = (
+                (-1 if event.num == 4 else 1)
+                if getattr(event, "num", None) in (4, 5)
+                else (-1 if getattr(event, "delta", 0) > 0 else 1)
+            )
+            help_canvas.yview_scroll(3 * direction, "units")
+            return "break"
+
+        for wheel_widget in (help_canvas, help_content, help_body, help_hint, help_image):
+            for event_name in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                wheel_widget.bind(event_name, scroll_help, add="+")
         help_box.bind(
             "<Configure>",
             lambda _e: self._schedule_settings_help_image_render(),
@@ -1014,6 +1049,7 @@ class SettingsDialog(tk.Toplevel):
             tuple[ttk.Label, ttk.Separator, ttk.LabelFrame]
         ] = []
         self._settings_help_image_job: str | None = None
+        self._settings_help_scroll_canvases: list[tk.Canvas] = []
 
         outer = ttk.Frame(self, padding=(18, 14, 18, 12))
         outer.pack(fill="both", expand=True)
