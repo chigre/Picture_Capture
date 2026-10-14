@@ -23,3 +23,20 @@ def test_profile_malformed_line_is_ignored(tmp_path, monkeypatch):
     monkeypatch.setattr(profile, "_directory", lambda: tmp_path)
     (tmp_path / "bad.jsonl").write_text("invalid json\n", encoding="utf-8")
     assert profile.recent_profiles(0) == []
+
+
+def test_export_report_has_machine_readable_csv_and_markdown(tmp_path, monkeypatch):
+    monkeypatch.setattr(profile, "_directory", lambda: tmp_path)
+    rows = [{
+        "time": 1.0, "page": "page.png", "page_index": 0,
+        "pid": 100, "stage_group": "detect_entries_inner",
+        "stages_ms": {"inner_page_understanding": 1500.0},
+    }]
+    path = profile.export_batch_report(
+        rows, label="普通画线", elapsed_seconds=2.0, completed=1,
+    )
+    assert path is not None and path.exists()
+    assert "1.500" in path.read_text(encoding="utf-8")
+    csv_path = path.with_suffix(".csv")
+    assert csv_path.exists()
+    assert "inner_page_understanding" in csv_path.read_text(encoding="utf-8-sig")
