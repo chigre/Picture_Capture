@@ -155,7 +155,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
             last_exc = exc
             # Strict CPU pool: no unbounded default-thread fallback.
             if cpu_pool_worker:
-                continue
+                break
             legacy = {k: v for k, v in attempt.items()
                       if k not in {"enable_mkldnn", "cpu_threads"}}
             if legacy == attempt:
