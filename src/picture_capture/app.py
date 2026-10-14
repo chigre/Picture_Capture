@@ -15769,14 +15769,19 @@ class PictureCaptureApp(tk.Tk):
             if profiling_enabled():
                 page_names = {str(project.images[i]) for i in indices}
                 stage_rows = recent_profiles(batch_started_at, pages=page_names)
-                report_path = export_batch_report(
-                    stage_rows, label=label, elapsed_seconds=elapsed_seconds,
-                    completed=completed,
-                )
-                if report_path is not None:
-                    quality_text += "；性能报告已保存（环境中心→打开性能报告）"
+                try:
+                    report_path = export_batch_report(
+                        stage_rows, label=label, elapsed_seconds=elapsed_seconds,
+                        completed=completed,
+                    )
+                except Exception as exc:
+                    quality_text += f"；性能报告导出失败：{exc}"
                 else:
-                    quality_text += "；本次未生成分阶段报告"
+                    quality_text += (
+                        f"；性能报告已保存：{report_path}"
+                        if stage_rows else
+                        f"；性能报告已保存（没有匹配到逐页计时数据）：{report_path}"
+                    )
             suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
