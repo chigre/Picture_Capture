@@ -13106,6 +13106,7 @@ class PictureCaptureApp(tk.Tk):
     # One entry's canvas/editor widgets are owned by the dedicated UI module.
     # Importing as a class attribute preserves method binding and call sites.
     from .ui.entry_overlay_builder import draw_entry_overlay as _draw_entry_overlay
+    from .ui.entry_move_controller import move_entry_via_dialog as _move_entry_via_dialog
 
     def _remove_entry_overlay(self, entry: WordEntry) -> None:
         """Remove only the widgets/canvas items belonging to one headword row."""
