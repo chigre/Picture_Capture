@@ -4,7 +4,7 @@
   "plan_version": "1.1.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-14T09:30:00Z",
+  "updated_at_utc": "2026-10-14T09:25:13.822Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -22,7 +22,7 @@
     }
   },
   "current_state": {
-    "status": "pr_open",
+    "status": "in_progress",
     "active_phase": "R2",
     "active_work_item": "R2.1",
     "work_in_progress": false,
@@ -30,30 +30,30 @@
       "number": 486,
       "url": "https://github.com/chigre/Picture_Capture/pull/486",
       "branch": "feat/pc-cq-b2-tk-proofreading-gui-smoke-20261014",
-      "status": "draft",
+      "status": "merged",
       "units": [
         "R2.1",
         "R2.2",
         "R2.3"
       ]
     },
-    "implementation_head_sha": "772772692d468e8910e00705fc9faae21fb9accd",
-    "latest_verified_main_sha": "fb1521316eb644b8b21b4a03ca204f69642a6b88",
+    "implementation_head_sha": "b0bc75fba3da3f36140422481b19833fc2efc9b3",
+    "latest_verified_main_sha": "334f06165bf2c4e6ea47c894844781ba2641698c",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
-        "type": "latest_ci_pending",
-        "message": "#486 synthetic Tk end-to-end dialog tests submitted; Windows/macOS/Linux, Python310, CodeQL and architecture jobs pending.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38541438880"
+        "type": "durable_entry_identity_not_proven",
+        "message": "Issue #483: cross-session arbitrary XY marker movement, multi-row edits, sections and reordered Entries still lack identity determined from an explicit operation (never row number/proximity).",
+        "url": "https://github.com/chigre/Picture_Capture/issues/483"
       },
       {
-        "type": "incomplete_B2",
-        "message": "Issue #483 still blocks durable arbitrary XY/multi-row identity and genuine operator Windows FocusOut/autosave/navigation/crash-reopen smoke. Synthetic widget tests alone cannot prove those flows.",
+        "type": "real_windows_operator_acceptance_pending",
+        "message": "Synthetic real-Tk dialog smoke passed across 3 OS; this is not a human-run Windows ReviewWindow FocusOut/autosave/page-navigation/SECTION/crash/reopen acceptance test.",
         "url": "https://github.com/chigre/Picture_Capture/issues/483"
       }
     ],
-    "required_next_action": "Inspect fixed-head PR #486 CI and repair any platform GUI failures in the same Draft PR; after green CI consider merge, then verify main CI. Keep B2 in progress until #483 identity and genuine Windows user-workflow gates are independently validated. Do not begin B3.",
-    "last_test_evidence": "#482 merged as 74aced55; postmerge main CI 38536954048 and CodeQL 38536955228 success. #485 right-column role fix merged into main fb152131 and user confirmed solved; main runs 38540839501, 38540840204 success. #486 adds standalone real-Tk synthetic image/PDIC consent, cancel, stale-source refusal, two judgment outcomes, reopen smoke on three platforms, not a human acceptance test; CI pending.",
+    "required_next_action": "B2 (#483) only: design an explicit-operation-backed stable Entry identity and test multi-edit/drag/crash/reopen fail-closed without altering PDIC/SECTION/Profile schema; obtain genuine Windows ReviewWindow operator smoke. Open a single production PR only for a testable B2 subset. Do not start B3, PR-B, training or new experimental defaults.",
+    "last_test_evidence": "#482 conservative local evidence merged at 74aced55, main CI 38536954048 and CodeQL 38536955228 success. #485 right-column role fix confirmed resolved by user and merged in main fb152131 (CI 38540839501, CodeQL 38540840204 success). #486 real Tk-widget synthetic visual verification/cancel/positive/negative/stale source/reopen merged at 334f0616; PR head CI 38541585126 successful across Windows/macOS/Linux/Python3.10/CodeQL. Postmerge main CI 38541861529 and CodeQL 38541862627 successful. No claim of human Windows workflow test, durable arbitrary marker identity or real-scan F1.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
@@ -340,6 +340,17 @@
         "docs/roadmaps/CORE_QUALITY_STATE.json"
       ],
       "note": "Real Tk widget (not genuine human acceptance) synthetic scan crop, consent disabled by default, cancellation preserves journal bytes, two explicit judgments, source drift failure, reopen, PDIC untouched. #483 remains blocked."
+    },
+    {
+      "type": "b2_real_tk_postmerge_verified_but_b2_incomplete",
+      "status": "merged_ci_green_b2_in_progress",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/486",
+      "merge_sha": "334f06165bf2c4e6ea47c894844781ba2641698c",
+      "pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38541585126",
+      "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38541861529",
+      "main_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/38541862627",
+      "remaining_issue": "https://github.com/chigre/Picture_Capture/issues/483",
+      "note": "CI is only synthetic real-widget integration, not human Windows or arbitrary move identity. Keep B2 in progress, B3 unstarted; default OFF and PDIC unchanged."
     }
   ],
   "rules_for_updates": {
@@ -449,14 +460,14 @@
         "R2.2",
         "R2.3"
       ],
-      "status": "pr_open",
+      "status": "in_progress",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Initial conservative B2 #482 is merged and validated on main. New Draft #486 tests real Tk widgets against synthetic assets; pending CI. Full B2 remains in progress: arbitrary moved/multi-row stable Entry identity and true Windows operator workflow at #483.",
+      "blocker": "B2 #482 + #486 merged and verified by CI; Issue #483 still blocks stable arbitrary marker drag/multi-row Entry identity and human-operated Windows ReviewWindow navigation/FocusOut/crash/reopen. B2 not verified; B3 must not start.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Default-OFF narrow opt-in event capture and Tk human verification UI merged in #482; read-only source crop, no auto consent, journal locking. #486 adds real widget integration smoke across Windows/macOS/Linux, CI pending. Arbitrary XY moved/multi-edit stable Entry IDs and real operator GUI acceptance remain open (#483)."
+          "evidence": "Default-OFF narrow opt-in event capture and Tk human verification UI merged in #482; read-only source crop, no auto consent, journal locking. #486 adds real widget integration smoke across Windows/macOS/Linux, CI pending. Arbitrary XY moved/multi-edit stable Entry IDs and real operator GUI acceptance remain open (#483). #486 Tk dialog construction, preview, checkbox, cancel, error, reopen on synthetic PNG/PDIC passed all CI and postmerge main CI (38541861529). Human Windows operator and unrestricted identity remain outstanding."
         },
         "R2.2": {
           "status": "in_progress",
@@ -464,7 +475,7 @@
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Local aggregate verification counts, explicit user positive/negative records, zero training/export pixels and no uploads merged in #482. #486 tests positive/negative confirmation/cancel/stale scans/reopening with synthetic real Tk widgets. CI pending and genuine operator acceptance outstanding."
+          "evidence": "Local aggregate verification counts, explicit user positive/negative records, zero training/export pixels and no uploads merged in #482. #486 tests positive/negative confirmation/cancel/stale scans/reopening with synthetic real Tk widgets. CI pending and genuine operator acceptance outstanding. #486 synthetic positive/negative verified journal writes passed actual Tk workflow on three CI OS; no training or private data. Full B2 safety/UI integration not complete."
         }
       },
       "merge_sha": "74aced55d60fd413cf7723e4ff0cdf6c5e9ca1ad",
@@ -474,6 +485,13 @@
         "url": "https://github.com/chigre/Picture_Capture/actions/runs/38536954048",
         "status": "success",
         "codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/38536955228"
+      },
+      "followup_merge_sha": "334f06165bf2c4e6ea47c894844781ba2641698c",
+      "followup_postmerge_main_ci": {
+        "main_sha": "334f06165bf2c4e6ea47c894844781ba2641698c",
+        "ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38541861529",
+        "codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/38541862627",
+        "status": "success"
       }
     },
     "B3": {
