@@ -34,7 +34,7 @@ def test_edit_is_not_automatically_promoted_to_verified_label(tmp_path):
     pdic, journal = _case(tmp_path)
     entry = _event(pdic)
     assert entry["verification_status"] == "explicit_action_unverified_page"
-    with pytest.raises(ValueError, match="explicitly"):
+    with pytest.raises(ValueError, match="not automatically a verified label"):
         _event(pdic, verification_status="verified")
     assert not journal.exists()
 
