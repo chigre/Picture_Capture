@@ -53,3 +53,40 @@ and not a substitute for real per-page project Profile coordinates.
   multiresolution implementation.
 - Do not enable multiresolution production drawing by default based on
   geometry-only benchmarking.
+
+
+## Opt-in real drawing multiresolution (new)
+
+The ordinary Layout detection facade now accepts an **experiment-only**
+environment variable:
+
+```bat
+set "PICTURE_CAPTURE_LAYOUT_SCALE_EXPERIMENT=auto"
+```
+
+The default is `off`. Automatic choice is based on the **original page's
+longest edge**:
+
+| Original longest edge | Temporary Layout detector scale |
+|---|---|
+| < 3000 px | 100% |
+| 3000–3999 px | 75% |
+| >= 4000 px | 50% |
+
+Explicit `75` and `50` options may be used to test, but still avoid
+downsampling small images (<3000 px); a requested 50% is limited to 75%
+when the longest side is 3000–3999 px.
+
+Only the reliability detector input is scaled, and detected geometry is mapped
+back to the original pixel coordinates; downstream physical rows, page
+understanding, entry recovery and PDIC continue at original resolution.
+Nonidentity Layout transformations retain the unscaled original path.
+The profiling JSONL stage-group `layout_scale_100pct`,
+`layout_scale_75pct` or `layout_scale_50pct` shows the selected scale.
+The zero-valued `selected` marker is a category, **not a time**.
+
+To compare the production pipeline, preserve full PDIC snapshots for the same
+20 pages with the experiment flag `off` and `auto`. Strictly compare every
+PDIC, including line count, order and coordinates. A layout estimate close
+to baseline does not imply PDIC equality. Leave this setting OFF on projects
+not yet validated.
