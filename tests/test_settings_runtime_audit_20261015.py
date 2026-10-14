@@ -39,3 +39,18 @@ def test_help_panel_has_initial_wraplength():
     source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     label = source[source.index("help_body = ttk.Label("):]
     assert "wraplength=300" in label[:300]
+
+
+def test_every_appsettings_value_roundtrips_through_json(tmp_path):
+    """Exercise persistence for every dataclass field in a real runtime."""
+    from dataclasses import asdict, fields
+    initial = AppSettings()
+    destination = tmp_path / "full_settings.json"
+    initial.to_json(destination)
+    reopened = AppSettings.from_json(destination)
+    current = asdict(initial)
+    restored = asdict(reopened)
+    assert set(current) == set(restored)
+    mismatches = {key: (value, restored[key])
+                  for key, value in current.items() if restored[key] != value}
+    assert not mismatches, mismatches
