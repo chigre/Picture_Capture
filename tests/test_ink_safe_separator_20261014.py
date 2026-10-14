@@ -70,7 +70,7 @@ def test_shared_refiner_is_reversible_and_does_not_change_candidate_classificati
 
 def test_ink_gap_toggle_visible_in_settings_center_with_specific_explanation(tmp_path):
     assert any(name == "separator_y_ink_safe_gap"
-               for _title, name in schema.OCR_ADVANCED_CHECKS)
+               for _title, name in schema.SEPARATOR_Y_CHECKS)
     assert "默认关闭" in schema.CHECK_HELP["separator_y_ink_safe_gap"]
     settings = AppSettings(separator_y_ink_safe_gap=True)
     location = tmp_path / "settings.json"
