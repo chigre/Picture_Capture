@@ -2492,6 +2492,14 @@ class ReviewWindow(tk.Toplevel):
             row1, text="排序检查", width=7, command=self.run_order_check,
             style="PCR.Compact.TButton",
         ).pack(side="left", padx=(5, 0))
+        if getattr(self.parent.settings, "proofreading_event_capture", False):
+            # Explicit, second-stage source-image review; never an autosave
+            # action or implicit approval of a PDIC correction.
+            ttk.Button(
+                row1, text="核验记录", width=8,
+                command=self._open_proofreading_visual_verification,
+                style="PCR.Compact.TButton",
+            ).pack(side="left", padx=(6, 0))
         ttk.Separator(controls, orient="horizontal").pack(fill="x", pady=(5, 0))
 
         focused = ttk.Frame(
@@ -4748,6 +4756,11 @@ class ReviewWindow(tk.Toplevel):
     def _commit_edits(self) -> None:
         from .review_main_editor_sync import commit_proofread_entries
         commit_proofread_entries(self)
+
+    def _open_proofreading_visual_verification(self) -> None:
+        """User-initiated scan preview and independent judgment, never OCR."""
+        from .proofreading_verify_ui import open_visual_verification
+        open_visual_verification(self)
 
     def _review_evidence_before_save(self) -> list[WordEntry] | None:
         """Read the pre-edit on-disk PDIC only for explicit project-local opt-in."""
