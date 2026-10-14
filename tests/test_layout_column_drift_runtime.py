@@ -270,7 +270,9 @@ def test_neighbour_tail_bleed_cannot_define_right_body_lane():
     right = base.ColumnDesign(1, 430, 800, 0)
     y_positions = [12 + index * 38 for index in range(24)]
     genuine_head_rows = {3, 9, 15, 21}
-    polluted_rows = set(range(12, 24)) - genuine_head_rows
+    # Include two lower true headwords: the real failure also hid genuine
+    # right-column heads inside the phantom body family.
+    polluted_rows = set(range(12, 24))
 
     for index, y in enumerate(y_positions):
         first = 482 if index in genuine_head_rows else 433
