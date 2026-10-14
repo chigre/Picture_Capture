@@ -90,3 +90,30 @@ To compare the production pipeline, preserve full PDIC snapshots for the same
 PDIC, including line count, order and coordinates. A layout estimate close
 to baseline does not imply PDIC equality. Leave this setting OFF on projects
 not yet validated.
+
+
+## Layout settings revision — denoise and selected scaled parameters
+
+Both independently persisted booleans are now in Layout settings and the
+compact Layout parameters menu, directly above "使用自动版面参数":
+
+- `analysis_denoise_enabled=True`: shared full-resolution adaptive denoise.
+  The intensity `analysis_denoise_strength=auto` (off/weak/auto/strong)
+  lives in the Layout-related advanced settings rather than Display controls.
+- `layout_denoise_enabled=True`: additional detector-only speck cleanup,
+  separately switchable.
+
+The size-aware downsample flag is `layout_scale_enabled=False` by default
+and has seven independently persisted allow-list switches. Default ON:
+`layout_scale_columns`, `layout_scale_column_width`,
+`layout_scale_gutter`. Default OFF:
+`layout_scale_start_y`, `layout_scale_manual_x`,
+`layout_scale_character_height`, `layout_scale_row_padding`.
+Unchecked scalar parameters use existing full-resolution project parameter
+priors, NOT a downsampled estimate; fine physical row/entry analysis remains
+full resolution. In the 50% experiment, downsampled column lane boundaries
+are omitted unless the user explicitly enables first-column X scaling.
+
+The older `PICTURE_CAPTURE_LAYOUT_SCALE_EXPERIMENT` environment variable
+still overrides the GUI scale master when explicitly set. To use the GUI switch,
+remove that line from `windows_run.bat` (rather than forcing `off`).
