@@ -621,7 +621,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # analysis, expressed as a percentage of the current straightened column.
     # Keeping this local prevents long definition text at the right side of a
     # column from pulling the separator toward the preceding line.
-    paddle_separator_roi_width_ratio: float = 60.0
+    paddle_separator_roi_width_ratio: float = 100.0
     paddle_separator_column_margin: int = 8
     # Optional second OCR pass for diagnostics / conservative rescue.  It uses
     # the same straightened candidate band and the existing Tesseract language/path.
