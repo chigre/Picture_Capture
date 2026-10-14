@@ -177,6 +177,76 @@ def test_verification_journal_rejects_wrong_source_identity(tmp_path):
         append_event(journal, impostor, pdic_file=pdic)
     assert len(load_events(journal)) == 1
 
+
+def test_verification_does_not_commit_when_image_changes_before_append(tmp_path, monkeypatch):
+    """Post-consent source drift must not become a verified judgment."""
+    from picture_capture import proofreading_verification as mod
+
+    pdic, image, journal, event = _source(tmp_path)
+    original = mod.append_event
+
+    def changed_image(journal_path, review, *, pdic_file, **kwargs):
+        image.write_bytes(b"scan replaced after visual inspection")
+        return original(journal_path, review, pdic_file=pdic_file, **kwargs)
+
+    monkeypatch.setattr(mod, "append_event", changed_image)
+    with pytest.raises(ValueError, match="source .*changed|source .*mismatch"):
+        _verify(pdic, image, journal, event)
+    assert len(load_events(journal)) == 1
+    assert not journal.with_name(journal.name + ".lock").exists()
+
+
+def test_verification_does_not_commit_when_ocr_cache_changes_before_append(tmp_path, monkeypatch):
+    """An OCR signature checked before acquiring the lock can become stale."""
+    from picture_capture import proofreading_verification as mod
+
+    pdic, image, journal, event = _source(tmp_path, ocr_signature="ocr-v1")
+    cache = tmp_path / "source_ocr.json"
+    cache.write_text(json.dumps({"signature": "ocr-v1"}), encoding="utf-8")
+    original = mod.append_event
+
+    def changed_ocr(journal_path, review, *, pdic_file, **kwargs):
+        cache.write_text(json.dumps({"signature": "later-ocr"}), encoding="utf-8")
+        return original(journal_path, review, pdic_file=pdic_file, **kwargs)
+
+    monkeypatch.setattr(mod, "append_event", changed_ocr)
+    with pytest.raises(ValueError, match="source .*changed|source .*mismatch"):
+        _verify(pdic, image, journal, event, ocr_cache=cache)
+    assert len(load_events(journal)) == 1
+
+
+def test_verified_journal_rechecks_source_bytes_inside_write_lock(tmp_path, monkeypatch):
+    """A source changed during atomic publication fails without erasing history."""
+    from picture_capture import proofreading_events as mod
+
+    pdic, image, journal, source = _source(tmp_path)
+    review = make_event(
+        page_id=source["page_id"], action="verify",
+        before={"reviewed_operation_id": source["operation_id"]},
+        after={"judgment": "correct_headword"},
+        entry_id=source["entry_id"], pdic_sha256=sha256_file(pdic),
+        image_sha256=sha256_file(image),
+        verification_status="verified", explicitly_verified=True,
+    )
+    before = journal.read_bytes()
+    original_writer = mod.write_text_atomic
+
+    def change_source_and_write(path, content):
+        image.write_bytes(b"changed at commit boundary")
+        return original_writer(path, content)
+
+    monkeypatch.setattr(mod, "write_text_atomic", change_source_and_write)
+    # Even if a replacement races the second source check, the checked
+    # prepublication boundary must reject mutations observed before writing.
+    image.write_bytes(b"changed before exclusive write")
+    with pytest.raises(ValueError, match="source .*changed|source .*mismatch"):
+        mod.append_event(
+            journal, review, pdic_file=pdic,
+            source_checks={image: source["image_sha256"]},
+        )
+    assert journal.read_bytes() == before
+
+
 def test_cli_is_explicit_not_training_and_no_visual_auto_approval():
     content = (
         Path(__file__).resolve().parents[1] / "scripts" /
