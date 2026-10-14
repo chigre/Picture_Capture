@@ -40,3 +40,12 @@ def test_export_report_has_machine_readable_csv_and_markdown(tmp_path, monkeypat
     csv_path = path.with_suffix(".csv")
     assert csv_path.exists()
     assert "inner_page_understanding" in csv_path.read_text(encoding="utf-8-sig")
+
+
+def test_empty_batch_still_produces_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(profile, "_directory", lambda: tmp_path)
+    path = profile.export_batch_report([], label="普通画线", elapsed_seconds=12, completed=3)
+    assert path is not None
+    assert path.exists()
+    assert path.with_suffix(".csv").exists()
+    assert "计时事件数：0" in path.read_text(encoding="utf-8")
