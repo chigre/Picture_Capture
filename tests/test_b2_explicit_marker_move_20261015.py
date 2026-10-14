@@ -187,3 +187,77 @@ def test_move_ui_index_is_operation_owner_not_sorted_row_number():
     assert "<Button-3>" in overlay
     assert "self._move_entry_via_dialog(e)" in overlay
     assert "index" not in "self._move_entry_via_dialog(e)"
+
+
+def test_move_dialog_preserves_source_when_destination_collides_or_is_invalid(tmp_path, monkeypatch):
+    import picture_capture.ui.entry_move_controller as module
+    app, page, messages = _app(tmp_path)
+    source = pdic_path(page).read_bytes()
+    for value in ("50,80", "-1,100", "300,100", "bad input"):
+        monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: value)
+        assert move_entry_via_dialog(app, app.entries[0]) == "break"
+        assert (app.entries[0].x, app.entries[0].y) == (10, 20)
+        assert pdic_path(page).read_bytes() == source
+    assert not _evidence(tmp_path)
+
+
+def test_move_dialog_refuses_section_gap(tmp_path, monkeypatch):
+    from picture_capture.page_sections import PageSection
+    import picture_capture.ui.entry_move_controller as module
+    app, page, _ = _app(tmp_path)
+    app.page_sections = [PageSection(0, 90)]
+    before = pdic_path(page).read_bytes()
+    monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: "70,100")
+    assert move_entry_via_dialog(app, app.entries[0]) == "break"
+    assert pdic_path(page).read_bytes() == before
+
+
+def test_move_dialog_corrupt_simplified_source_fails_closed(tmp_path, monkeypatch):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    import picture_capture.ui.entry_move_controller as module
+    app, page, _ = _app(tmp_path)
+    paired = simplified_review_path_for_image(page)
+    paired.parent.mkdir(parents=True, exist_ok=True)
+    paired.write_text("{broken json", encoding="utf-8")
+    existing = pdic_path(page).read_bytes()
+    monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: "70,100")
+    assert move_entry_via_dialog(app, app.entries[0]) == "break"
+    assert pdic_path(page).read_bytes() == existing
+    assert paired.read_text(encoding="utf-8") == "{broken json"
+
+
+def test_move_dialog_switch_page_mid_dialog_fails_closed(tmp_path, monkeypatch):
+    import picture_capture.ui.entry_move_controller as module
+    app, page, _ = _app(tmp_path)
+    existing = pdic_path(page).read_bytes()
+    def navigate(*_args, **_kwargs):
+        app.current_page = tmp_path / "other.png"
+        return "70,100"
+    monkeypatch.setattr(module.simpledialog, "askstring", navigate)
+    assert move_entry_via_dialog(app, app.entries[0]) == "break"
+    assert pdic_path(page).read_bytes() == existing
+
+
+def test_move_dialog_logs_opted_in_unverified_move(tmp_path, monkeypatch):
+    import picture_capture.ui.entry_move_controller as module
+    app, page, messages = _app(tmp_path)
+    monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: "70,100")
+    assert move_entry_via_dialog(app, app.entries[0]) == "break"
+    saved = _evidence(tmp_path)
+    assert len(saved) == 1
+    assert saved[0]["action"] == "move"
+    assert saved[0]["verification_status"] == "explicit_action_unverified_page"
+
+
+def test_move_dialog_report_journal_error_without_falsely_reporting_success(tmp_path, monkeypatch):
+    from picture_capture import proofreading_capture
+    import picture_capture.ui.entry_move_controller as module
+    app, page, messages = _app(tmp_path)
+    monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: "70,100")
+    def error_after_pdic(*_args, **_kwargs):
+        raise OSError("simulated write interruption")
+    monkeypatch.setattr(proofreading_capture, "capture_saved_explicit_marker_move", error_after_pdic)
+    assert move_entry_via_dialog(app, app.entries[0]) == "break"
+    assert (read_pdic(pdic_path(page))[0].x, read_pdic(pdic_path(page))[0].y) == (70,100)
+    assert "证据写入失败" in messages[-1]
+    assert not _evidence(tmp_path)
