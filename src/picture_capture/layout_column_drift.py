@@ -83,7 +83,7 @@ def _foreign_column_tail_replacement(
     if (
         row.ndim != 2 or row.size == 0
         or initial_x >= semantic_left
-        or initial_x > previous_right + max(6, round(reference * .30))
+        or initial_x > previous_right + max(12, round(reference * .40))
     ):
         return None
     boundary = semantic_left - analysis_left
