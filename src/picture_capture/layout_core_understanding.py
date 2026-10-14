@@ -226,7 +226,9 @@ def _headword_peer_body_seed(
     return None
 
 
-def _resolve_directional_body_lanes(\n    layout: Any, *, diagnostics: dict[str, Any] | None = None,\n) -> None:
+def _resolve_directional_body_lanes(
+    layout: Any, *, diagnostics: dict[str, Any] | None = None,
+) -> None:
     """Choose the body family from explicit indent polarity, not row counts."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
     if indent_type == "none":
