@@ -211,3 +211,54 @@ def capture_saved_candidate_selection(
         event, pdic_file=pdic,
     )
     return True
+
+
+def capture_saved_manual_addition(
+    *, project_root: Path, page: Path,
+    prior_pdic_entries: list[object], expected_xy: tuple[int, int],
+) -> bool:
+    """Prove a unique manual canvas insertion from one saved PDIC row delta.
+
+    A manually added row can be renamed before save. The explicit canvas click
+    provides its original XY; a unique +1 row at precisely those coordinates
+    proves addition. Any simultaneous delete, rename, move, duplicate coordinate
+    or wrong-page snapshot is rejected. No OCR candidate is fabricated.
+    """
+    old = Counter(_triples(prior_pdic_entries))
+    target = pdic_path(page)
+    new = Counter(_triples(read_pdic(target)))
+    removed, added = old - new, new - old
+    if removed or sum(added.values()) != 1:
+        return False
+    if sum(new.values()) - sum(old.values()) != 1:
+        return False
+    (word, x, y), = added.keys()
+    if (int(x), int(y)) != (int(expected_xy[0]), int(expected_xy[1])):
+        return False
+    if added[(word, x, y)] != 1:
+        return False
+    if sum(count for (_, px, py), count in old.items() if (px, py) == (x, y)):
+        return False
+    if sum(count for (_, px, py), count in new.items() if (px, py) == (x, y)) != 1:
+        return False
+    project_root = Path(project_root)
+    page = Path(page)
+    project_id = _project_identity(project_root)
+    relative_page = page.resolve().relative_to(project_root.resolve()).as_posix()
+    page_id = f"{project_id}/{relative_page}"
+    entry_id = uuid5(NAMESPACE_URL, f"{page_id}|xy|{x}|{y}").hex
+    sha = sha256_file(target)
+    if sha is None:
+        raise OSError("Saved PDIC disappeared before manual add evidence capture")
+    event = make_event(
+        page_id=page_id, action="add", before=None,
+        after={"word": word, "x": x, "y": y},
+        pdic_sha256=sha, entry_id=entry_id,
+        image_sha256=sha256_file(page),
+    )
+    page_key = uuid5(NAMESPACE_URL, relative_page).hex
+    append_event(
+        data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json",
+        event, pdic_file=target,
+    )
+    return True

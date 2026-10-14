@@ -55,3 +55,7 @@ uv run --locked pytest
 ### Additional R2.1 checkbox capture (pending CI)
 
 OCR candidate checkbox select/deselect is now captured only when a *single* pre-save PDIC entry addition/removal matches the selected candidate and the corresponding `*_manual_selection.json` file confirms the **same** manually selected state, word and candidate ID **after both files are saved**. Rapid coalesced candidate clicks explicitly invalidate attribution and skip event creation. A failed/interrupted save cannot create a journal record. Same-column alternate-Y swaps involving multiple entries remain unknown, not labeled. The option is OFF unless explicitly enabled. Tests use synthetic rows and local files only.
+
+### Additional R2.1 main-canvas manual addition (pending CI)
+
+A real canvas click now stages a pre-save PDIC snapshot and canonical-to-original-source XY. **Only** after a successful full PDIC save (and manual overrides flush) can it log an `add` event, requiring exactly one new row at the clicked XY, no unrelated rename/delete/move, no duplicated coordinate and no coalesced second insertion. Row text may be entered before saving. A missing/stale page, old project with option OFF, or background OCR save without a prior click generates no evidence. This change never rewrites existing PDIC for telemetry. Identity is stable by page+XY only for non-moving distinct entries; coordinate moves remain unlinked.

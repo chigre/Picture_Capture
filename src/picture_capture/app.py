@@ -13951,6 +13951,10 @@ class PictureCaptureApp(tk.Tk):
             return
         col = column_index_for_click(x, geometry, y)
         source_x, source_y = geometry.canonical_to_source(geometry.column_starts[col], canonical_y)
+        # Only an actual canvas click may initiate a manual-add evidence event.
+        queue_add = getattr(self, "_queue_proofreading_add_evidence", None)
+        if callable(queue_add):
+            queue_add(source_x, source_y)
         self.entries.append(WordEntry("", source_x, source_y))
         self._sort_entries_reading_order()
         self.redraw()
@@ -14368,6 +14372,47 @@ class PictureCaptureApp(tk.Tk):
                 self._pending_manual_override_path = None
                 self._pending_manual_override_payload = None
 
+    def _queue_proofreading_add_evidence(self, x: int, y: int) -> None:
+        """Stage a user canvas click, NOT a durable event until PDIC commits."""
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        state = self.__dict__
+        if "_pending_evidence_add" in state:
+            # More than one insertion or additional save requests coalesced.
+            state["_pending_evidence_add"] = False
+            return
+        project = getattr(self, "project", None)
+        page = getattr(self, "current_page", None)
+        if project is None or page is None:
+            return
+        try:
+            old = read_pdic(pdic_path(page))
+        except (OSError, ValueError):
+            return
+        state["_pending_evidence_add"] = (page, old, (int(x), int(y)))
+
+    def _flush_proofreading_add_evidence(self) -> None:
+        """Record the manual click only after a successfully saved PDIC."""
+        snapshot = self.__dict__.pop("_pending_evidence_add", None)
+        if not isinstance(snapshot, tuple):
+            return
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        page, old, xy = snapshot
+        project = getattr(self, "project", None)
+        if project is None or getattr(self, "current_page", None) != page:
+            return
+        try:
+            from .proofreading_capture import capture_saved_manual_addition
+            capture_saved_manual_addition(
+                project_root=project.root, page=page,
+                prior_pdic_entries=old, expected_xy=xy,
+            )
+        except (OSError, ValueError, TypeError):
+            status = getattr(self, "status_var", None)
+            if status is not None:
+                status.set("词条已保存，但本地新增词条日志写入失败。")
+
     def _queue_proofreading_candidate_evidence(self, cand: dict, selected: bool) -> None:
         """Keep one pre-save checkbox snapshot; coalesced edits are ambiguous."""
         state = self.__dict__
@@ -14475,6 +14520,7 @@ class PictureCaptureApp(tk.Tk):
                 self._update_page_row(page_index)
         self._flush_pending_manual_override()
         self._flush_proofreading_candidate_evidence()
+        self._flush_proofreading_add_evidence()
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
         return self._review_controller_for_call().entry_for_candidate(cand)
@@ -15535,6 +15581,7 @@ class PictureCaptureApp(tk.Tk):
         self._last_pdic_write_changed = changed
         self._flush_pending_manual_override()
         self._flush_proofreading_candidate_evidence()
+        self._flush_proofreading_add_evidence()
         if changed:
             self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
             self._update_page_row(self.current_index)

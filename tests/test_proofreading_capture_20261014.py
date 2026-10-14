@@ -308,3 +308,70 @@ def test_ocr_checkbox_flushes_after_both_pdic_and_override_writes():
         )
     assert "self._queue_proofreading_candidate_evidence(cand, selected)" in source
     assert 'state["_pending_evidence_toggle"] = False' in source
+
+
+def test_proven_single_canvas_addition_creates_unverified_local_event(tmp_path):
+    from picture_capture.proofreading_capture import capture_saved_manual_addition
+
+    page, old = _page(tmp_path)
+    fresh = Entry(word="new hand entry", x=30, y=110)
+    write_pdic(pdic_path(page), old + [fresh], 100, ("page", "@", "@"))
+    saved_bytes = pdic_path(page).read_bytes()
+    assert capture_saved_manual_addition(
+        project_root=tmp_path, page=page, prior_pdic_entries=old,
+        expected_xy=(30, 110),
+    )
+    assert pdic_path(page).read_bytes() == saved_bytes
+    journal = next(
+        p for p in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if p.name != "project_identity.json"
+    )
+    e = load_events(journal)[0]
+    assert e["action"] == "add" and e["candidate_id"] is None
+    assert e["verification_status"] == "explicit_action_unverified_page"
+    assert e["after"] == {"word": "new hand entry", "x": 30, "y": 110}
+    assert e["entry_id"] is not None
+    assert e["coordinate_space"] == "original_image_xy"
+
+
+def test_add_evidence_rejects_multiedit_duplicate_and_wrong_clicked_location(tmp_path):
+    from picture_capture.proofreading_capture import capture_saved_manual_addition
+
+    page, old = _page(tmp_path)
+    a = Entry(word="manual", x=30, y=110)
+    write_pdic(pdic_path(page), old + [a], 100, ("page", "@", "@"))
+    opts = dict(project_root=tmp_path, page=page, prior_pdic_entries=old)
+    assert not capture_saved_manual_addition(**opts, expected_xy=(31, 110))
+    write_pdic(
+        pdic_path(page), old + [a, Entry(word="extra", x=20, y=120)],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_manual_addition(**opts, expected_xy=(30, 110))
+    write_pdic(
+        pdic_path(page), old + [Entry(word="colliding", x=10, y=20)],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_manual_addition(**opts, expected_xy=(10, 20))
+    write_pdic(
+        pdic_path(page), [old[1], a], 100, ("page", "@", "@"),
+    )
+    assert not capture_saved_manual_addition(**opts, expected_xy=(30, 110))
+    assert not (tmp_path / "ProofreadingEvidence").exists()
+
+
+def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
+    app = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    click = app[app.index("    def canvas_left_click("):app.index("    def canvas_left_drag(")]
+    assert click.index('queue_add(source_x, source_y)') < click.index(
+        'self.entries.append(WordEntry("", source_x, source_y))'
+    )
+    for method in ("_flush_deferred_page_save(", "save_pdic("):
+        start = app.index("    def " + method)
+        end = app.find("\n    def ", start + 8)
+        part = app[start:end if end != -1 else None]
+        assert part.index("write_pdic(") < part.index(
+            "self._flush_proofreading_add_evidence()"
+        )
+    assert 'state["_pending_evidence_add"] = False' in app
