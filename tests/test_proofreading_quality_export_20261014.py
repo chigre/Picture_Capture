@@ -105,4 +105,6 @@ def test_explicit_export_cli_does_not_overwrite_source_or_pdic():
     assert "parser.add_argument(\"--output\"" in src
     assert "args.pdic.resolve()" in src
     assert "args.journal.resolve()" in src
+    assert "args.image.resolve()" in src
+    assert "args.output.exists()" in src
     assert "write_text_atomic(" in src
