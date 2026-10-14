@@ -15474,6 +15474,8 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
+        import time
+        batch_started_at = time.time()
         self.save_pdic(silent=True)
         self.settings.detection_method = method
         settings = replace(self.settings)
@@ -15716,6 +15718,32 @@ class PictureCaptureApp(tk.Tk):
                         f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
                         + (f"（{', '.join(names)}{more}）" if names else "")
                     )
+            from .inference_monitor import recent_model_events
+            elapsed_seconds = max(0.001, time.time() - batch_started_at)
+            observed_events = recent_model_events(batch_started_at)
+            observed_devices = sorted({str(row["device"]) for row in observed_events})
+            observed_pids = {int(row["pid"]) for row in observed_events}
+            inferred = "/".join(observed_devices) if observed_devices else "未记录（可能命中缓存）"
+            monitor_text = (
+                f"；耗时 {elapsed_seconds:.1f}s"
+                f"；速度 {completed / elapsed_seconds:.2f} 页/s"
+                f"；模型设备 {inferred}"
+                f"；模型实例进程 {len(observed_pids)}"
+            )
+            if cpu_pool:
+                monitor_text += f"；CPU 工作进程配置 {cpu_pool_workers}"
+            elif gpu_staged:
+                monitor_text += "；GPU 推理生产者 1 / CPU 消费者最多 2"
+            elif method in {"paddleocr", "combined"}:
+                monitor_text += "；OCR 页面串行调度"
+            if observed_events:
+                observed_dnn = sorted({
+                    str(row["mkldnn"]) for row in observed_events
+                    if row.get("device") == "cpu"
+                })
+                if observed_dnn:
+                    monitor_text += f"；oneDNN 配置 {'/'.join(observed_dnn)}"
+            quality_text += monitor_text
             suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
