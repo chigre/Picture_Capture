@@ -30,6 +30,7 @@ def test_ordinary_multi_page_path_uses_existing_parallel_runner_with_page_claims
     start = source.index("    def _detect_pages(")
     end = source.index("\n    def clear_entries(", start)
     handler = source[start:end]
+    assert 'indices = list(dict.fromkeys(indices))' in handler
     assert 'if method == "left_edge" and ordinary_workers > 1:' in handler
     assert "detect_entries_job," in handler
     assert "max_workers=ordinary_workers" in handler
