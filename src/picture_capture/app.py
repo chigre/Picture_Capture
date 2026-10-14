@@ -2550,6 +2550,12 @@ class ReviewWindow(tk.Toplevel):
         row1.pack(fill="x", pady=(0, 4))
         self.review_control_row = row1
         self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
+        self._review_flat_button(row1, "撤销保存", self.undo_saved_review).pack(side="left", padx=(4, 0))
+        self._review_flat_button(row1, "重做保存", self.redo_saved_review).pack(side="left", padx=(4, 0))
+        # Add non-conflicting session-save shortcuts. Plain Ctrl+Z/Y remain
+        # owned by the focused text editor / platform, never hijacked here.
+        self.bind("<Control-Alt-z>", lambda _event: self.undo_saved_review())
+        self.bind("<Control-Alt-y>", lambda _event: self.redo_saved_review())
         self._sync_autosave_label()
         ttk.Checkbutton(
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
@@ -4290,12 +4296,15 @@ class ReviewWindow(tk.Toplevel):
             return True
         if not dirty:
             return True
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(silent=True, sync_editors=False)
         self._review_evidence_after_save(evidence_before)
         self._persist_simplified_page(current_stem)
+        record_review_after(self, transaction_before)
         return True
 
     def _effective_wordslist_locator_mode(self) -> str:
@@ -4837,6 +4846,9 @@ class ReviewWindow(tk.Toplevel):
             Path(chosen), persist=True, redraw=True,
             on_done=loaded, on_error=failed,
         )
+
+    # Thin class-level UI delegation; the transaction service owns decisions.
+    from .ui.review_transaction_actions import undo_saved_review, redo_saved_review
 
     def _commit_edits(self) -> None:
         from .review_main_editor_sync import commit_proofread_entries
@@ -5875,6 +5887,8 @@ class ReviewWindow(tk.Toplevel):
         if getattr(self, "_active_crop_page_stem", None) != current_stem:
             self._active_crop_fixed_size = None
             self._active_crop_page_stem = current_stem
+        from .ui.review_transaction_actions import history_page_changed
+        history_page_changed(self, current_stem)
         self._rendered_page_stem = current_stem
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
@@ -6572,6 +6586,11 @@ class ReviewWindow(tk.Toplevel):
             except (OSError, ValueError, TypeError):
                 prior_pdic_rows = None
 
+        # Capture before mutating shared Entry objects or saving the PDIC.
+        # OCR-linked deletion changes manual-selection ownership and will
+        # intentionally be refused by the R3 transaction classifier.
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         self._commit_edits()
         entry = row_entries[int(index)]
         deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
@@ -6630,6 +6649,10 @@ class ReviewWindow(tk.Toplevel):
                 capture_failed = True
         if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
             self._persist_simplified_page(self._rendered_page_stem)
+        # The soon-to-be-rebuilt ReviewWindow rows still reference the old
+        # widgets; read the true saved parent.entries to classify this one
+        # committed deletion, then rebuild widgets for the restored identities.
+        record_review_after(self, transaction_before, allow_unbound=True)
         self.parent.redraw()
 
         next_index = min(int(index), max(0, len(self.parent.entries) - 1))
@@ -6743,6 +6766,8 @@ class ReviewWindow(tk.Toplevel):
                 return
             if not self.parent._claim_page_for_manual_edit():
                 return
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
@@ -6750,6 +6775,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_evidence_after_save(evidence_before)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
+        record_review_after(self, transaction_before)
         if self.parent.project:
             try:
                 self.parent.settings.to_json(settings_path(self.parent.project.root))
@@ -12884,6 +12910,18 @@ class PictureCaptureApp(tk.Tk):
         ):
             if self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode(sync_editors=not review_saved)
+        from .proofreading_transactions import recover_pending_for_page
+        try:
+            if not recover_pending_for_page(self.project.images[index]):
+                self.status_var.set(
+                    "R3 校对事务恢复需要人工处理：磁盘状态与恢复标记不匹配，本次未切页。"
+                )
+                return
+        except (OSError, ValueError, RuntimeError):
+            self.status_var.set(
+                "R3 校对事务恢复失败：未读取可能不一致的 PDIC/简体配对。"
+            )
+            return
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
         use_preloaded = bool(
