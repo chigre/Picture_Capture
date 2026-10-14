@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 from .formats import write_text_atomic
@@ -113,7 +113,10 @@ def load_events(path: Path) -> list[dict[str, Any]]:
     return events
 
 
-def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
+def append_event(
+    path: Path, event: dict[str, Any], *, pdic_file: Path,
+    source_checks: Mapping[Path, str] | None = None,
+) -> None:
     """Atomically persist evidence only if it represents CURRENT saved PDIC.
 
     No writes to PDIC, OCR caches or human overrides. A cross-process local
@@ -124,6 +127,11 @@ def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
     if event.get("action") not in ACTIONS or not event.get("operation_id"):
         raise ValueError("Invalid proofreading action")
     path = Path(path)
+    # Source checks are supplied only by an explicit verification caller.
+    # Ordinary proofreading events retain their historical write contract.
+    checks = {Path(p): digest for p, digest in (source_checks or {}).items()}
+    if any(not isinstance(digest, str) or len(digest) != 64 for digest in checks.values()):
+        raise ValueError("Verification source digest is invalid")
     # mkdir is an atomic exclusive operation on Windows, macOS and Linux.
     # Refuse overlapping writers instead of racing on read-modify-replace;
     # never automatically delete a stale lock belonging to another process.
@@ -137,6 +145,8 @@ def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
         ) from error
     try:
         actual = sha256_file(pdic_file)
+        if checks and any(sha256_file(p) != digest for p, digest in checks.items()):
+            raise ValueError("Verification source changed before journal publication")
         if actual is None or event.get("pdic_sha256") != actual:
             raise ValueError("Current PDIC does not match the recorded post-save snapshot")
         events = load_events(path)
@@ -189,6 +199,8 @@ def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
         # Recheck source right before atomic publication, not just before load.
         if sha256_file(pdic_file) != actual:
             raise ValueError("PDIC changed while writing proofreading evidence")
+        if checks and any(sha256_file(p) != digest for p, digest in checks.items()):
+            raise ValueError("Verification source changed before journal publication")
         write_text_atomic(
             path,
             json.dumps({"format": EVENT_FORMAT, "events": events},
