@@ -3380,6 +3380,7 @@ def detect_illustration_regions(
 
 def detect_illustrations_to_ppp(
     image_path: Path, settings: AppSettings, *, profile_page_index: int = 0,
+    detected_regions: list[PolygonRegion] | None = None,
 ) -> dict[str, int]:
     """Detect illustrations and safely update one page's PPP file.
 
@@ -3391,8 +3392,11 @@ def detect_illustrations_to_ppp(
     write_path = ppp_write_path_for_image(image_path)
     existing = read_ppp(read_path)
     manual = [r for r in existing if not is_auto_illustration_region(r)]
-    detected = detect_illustration_regions(
-        image_path, settings, profile_page_index=profile_page_index,
+    detected = (
+        list(detected_regions) if detected_regions is not None else
+        detect_illustration_regions(
+            image_path, settings, profile_page_index=profile_page_index,
+        )
     )
     manual_boxes = [b for r in manual if (b := _polygon_bbox(r)) is not None]
     accepted: list[PolygonRegion] = []
