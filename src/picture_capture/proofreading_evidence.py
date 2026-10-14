@@ -74,10 +74,24 @@ def summarize_proofreading_evidence(
         current_pdic_sha256=current_pdic_sha256,
         current_ocr_signature=current_ocr_signature,
     )
-    links = [
-        link_event_to_final(event, final_report, current_ocr_signature=current_ocr_signature)
-        for event in events
-    ]
+    # A matching candidate ID is not enough if the event's saved PDIC or OCR
+    # provenance has since changed. Never count such a link as "matched".
+    links = []
+    for event in events:
+        if (
+            not current_pdic_sha256
+            or event.get("pdic_sha256") != current_pdic_sha256
+            or (
+                event.get("ocr_signature") is not None
+                and event.get("ocr_signature") != current_ocr_signature
+            )
+        ):
+            links.append({"status": "stale"})
+        else:
+            links.append(link_event_to_final(
+                event, final_report,
+                current_ocr_signature=current_ocr_signature,
+            ))
     frequencies = Counter(link["status"] for link in links)
     return {
         "format": "picture-capture-proofreading-evidence-audit-v1",
