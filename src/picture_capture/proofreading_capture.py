@@ -84,6 +84,7 @@ def capture_saved_review_deletion(
         page_id=page_id, action="delete",
         before={"word": word, "x": x, "y": y}, after=None,
         pdic_sha256=sha, candidate_id=candidate or None, entry_id=entry_id,
+        image_sha256=sha256_file(page),
     )
     # Namespace journal by full relative page name, not just its stem.
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
