@@ -20,7 +20,10 @@ from .cc_cedict import (
 from .chinese_simplify import opencc_runtime_status
 from .ocr_engines import lens_status, tesseract_status
 from .models import resolved_tesseract_language
-from .runtime_environment import effective_tesseract_configured, save_runtime_setting
+from .runtime_environment import (
+    effective_tesseract_configured, save_runtime_setting, runtime_setting,
+    clear_runtime_caches,
+)
 from .ui_compat import fit_window_to_work_area
 
 
@@ -207,6 +210,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         ttk.Button(actions, text="重新检测", command=self.refresh).pack(side="left")
         ttk.Button(actions, text="安装/切换 Paddle OCR", command=self._launch_ocr_installer).pack(side="left", padx=(6, 0))
         ttk.Button(actions, text="OCR 设置", command=self._open_ocr_settings).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="画线性能设置", command=self._open_inference_settings).pack(side="left", padx=(6, 0))
         ttk.Button(actions, text="复制诊断信息", command=self._copy_diagnostics).pack(side="right")
 
         self.status_var = tk.StringVar(value="准备检测…")
@@ -361,6 +365,92 @@ class EnvironmentCenterWindow(tk.Toplevel):
                 messagebox.showerror("环境检测失败", str(exc), parent=self)
 
         self.app._start_ui_worker(f"environment-center-{id(self)}", worker, done, failed)
+
+    def _open_inference_settings(self) -> None:
+        """Machine-local settings shared by OCR and Layout TextDetection."""
+        if getattr(self.app, "_batch_active", False):
+            messagebox.showwarning(
+                "画线性能设置", "请先完成或停止当前画线任务，再修改推理设备或加速参数。",
+                parent=self,
+            )
+            return
+        window = tk.Toplevel(self)
+        window.title("画线性能设置")
+        window.transient(self)
+        window.grab_set()
+        fit_window_to_work_area(window, 490, 475, min_width=440, min_height=410)
+        body = ttk.Frame(window, padding=16)
+        body.pack(fill="both", expand=True)
+
+        ttk.Label(body, text="画线性能设置", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+        ttk.Label(
+            body,
+            text="适用于普通画线的 TextDetection 和 OCR 画线的 PaddleOCR。\n"
+                 "以下配置只保存到当前电脑，不随词典项目迁移。",
+            wraplength=440, justify="left",
+        ).pack(anchor="w", pady=(6, 10))
+
+        device = tk.StringVar(value=str(runtime_setting("paddle_device", "auto") or "auto"))
+        mkldnn = tk.StringVar(value=str(runtime_setting("paddle_mkldnn", "auto") or "auto"))
+        workers = tk.StringVar(value=str(runtime_setting("paddle_cpu_workers", "auto") or "auto"))
+        if device.get() not in {"auto", "cpu", "gpu"}:
+            device.set("auto")
+        if mkldnn.get() not in {"auto", "on", "off"}:
+            mkldnn.set("auto")
+        if workers.get() not in {"auto", "2", "4", "6"}:
+            workers.set("auto")
+
+        def options(title: str, variable, entries: tuple[tuple[str, str], ...],
+                    *, enabled: bool = True) -> None:
+            group = ttk.LabelFrame(body, text=title, padding=(10, 5))
+            group.pack(fill="x", pady=(0, 8))
+            for value, label in entries:
+                ttk.Radiobutton(
+                    group, text=label, value=value, variable=variable,
+                    state="normal" if enabled else "disabled",
+                ).pack(side="left", padx=(0, 12))
+
+        options("推理设备", device, (
+            ("auto", "自动"), ("cpu", "仅 CPU"), ("gpu", "优先 GPU"),
+        ))
+        options("MKL-DNN（oneDNN）CPU 加速", mkldnn, (
+            ("auto", "自动"), ("on", "尝试启用"), ("off", "关闭"),
+        ))
+        options("CPU 页面并行进程数（暂未启用）", workers, (
+            ("auto", "自动"), ("2", "2"), ("4", "4"), ("6", "6"),
+        ), enabled=False)
+        ttk.Label(
+            body,
+            text="当前批量画线仍遵守单进程安全保护；待 CPU 多进程/单 GPU "
+                 "服务完成实机测试后再开放该项。oneDNN 自动模式优先尝试启用，"
+                 "初始化不兼容时回退；如推理阶段发生错误请改为“关闭”。",
+            wraplength=440, justify="left",
+        ).pack(anchor="w", pady=(3, 9))
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", side="bottom", pady=(8, 0))
+
+        def apply() -> None:
+            try:
+                save_runtime_setting("paddle_device", device.get())
+                save_runtime_setting("paddle_mkldnn", mkldnn.get())
+                clear_runtime_caches()
+                from .ocr_channel import clear_ocr_channel_paddle_engine_cache
+                from .layout_detection import clear_text_detection_cache
+                clear_ocr_channel_paddle_engine_cache()
+                clear_text_detection_cache()
+            except Exception as exc:
+                messagebox.showerror("保存画线性能设置失败", str(exc), parent=window)
+                return
+            window.destroy()
+            self.refresh()
+            messagebox.showinfo(
+                "画线性能设置", "配置已保存。后续新建的 PaddleOCR/TextDetection 模型将使用新设置。",
+                parent=self,
+            )
+
+        ttk.Button(buttons, text="取消", command=window.destroy).pack(side="right")
+        ttk.Button(buttons, text="保存设置", command=apply).pack(side="right", padx=(0, 8))
 
     def _open_ocr_settings(self) -> None:
         self.app.open_settings()
