@@ -99,6 +99,34 @@ def test_unexpected_cpu_paddle_model_guard_invalidates_page():
     reject_cpu_worker_detector()
 
 
+def test_real_paddle_detector_entrypoint_refuses_cpu_stage_before_import():
+    from picture_capture.layout_detection_legacy import _get_text_detector
+
+    prepared = PreparedLayoutEstimate(
+        value="geom", page_size=(30, 40), source_size_bytes=100,
+        source_mtime_ns=1, detector_settings_repr="settings", page_index=2,
+    )
+    with use_prepared_layout(prepared) as state:
+        with pytest.raises(RuntimeError, match="another Paddle GPU"):
+            _get_text_detector(SimpleNamespace())
+        with pytest.raises(RuntimeError, match="not consumed exactly once"):
+            validate_prepared_layout(state)
+
+
+def test_gui_pipeline_displays_per_page_gpu_and_cpu_stage_markers():
+    source = (
+        Path(__file__).resolve().parents[1] / "src"
+        / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    start = source.index("    def _start_parallel_batch_task(")
+    end = source.index("    def _finish_batch_task(", start)
+    part = source[start:end]
+    assert 'ProcessPoolExecutor(max_workers=1, mp_context=context)' in part
+    assert '"pipeline_stage", position, total, label, "GPU版面预检"' in part
+    assert '"pipeline_stage", position, total, label, "CPU画线与保存"' in part
+    assert "gpu_executor.shutdown(wait=True, cancel_futures=True)" in part
+
+
 def test_gpu_preflight_matches_page_policy_and_refuses_changed_image(tmp_path, monkeypatch):
     from picture_capture.models import AppSettings
     from picture_capture import layout_detection
