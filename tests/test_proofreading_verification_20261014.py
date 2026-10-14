@@ -229,16 +229,18 @@ def test_verified_journal_rechecks_source_bytes_inside_write_lock(tmp_path, monk
         verification_status="verified", explicitly_verified=True,
     )
     before = journal.read_bytes()
-    original_writer = mod.write_text_atomic
+    actual_digest = mod.sha256_file
+    reads = 0
 
-    def change_source_and_write(path, content):
-        image.write_bytes(b"changed at commit boundary")
-        return original_writer(path, content)
+    def changed_between_two_source_reads(path):
+        nonlocal reads
+        if Path(path) == image:
+            reads += 1
+            if reads == 2:
+                image.write_bytes(b"changed while journal was locked")
+        return actual_digest(path)
 
-    monkeypatch.setattr(mod, "write_text_atomic", change_source_and_write)
-    # Even if a replacement races the second source check, the checked
-    # prepublication boundary must reject mutations observed before writing.
-    image.write_bytes(b"changed before exclusive write")
+    monkeypatch.setattr(mod, "sha256_file", changed_between_two_source_reads)
     with pytest.raises(ValueError, match="source .*changed|source .*mismatch"):
         mod.append_event(
             journal, review, pdic_file=pdic,
