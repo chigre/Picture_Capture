@@ -86,6 +86,7 @@ FIELDS = [
         ("横线Y精修安全空间（px）", "paddle_separator_safety_px", int),
         ("横线Y精修横向分析范围（%）", "paddle_separator_roi_width_ratio", float),
         ("横线Y精修栏边余量（px）", "paddle_separator_column_margin", int),
+        ("Y 精修最大位移（行高比）", "separator_y_max_shift_ratio", float),
         ("Tesseract 对照 PSM", "paddle_tesseract_psm", int),
         ("Google Lens 超时（秒）", "paddle_lens_timeout", int),
         ("Lens无置信度默认值", "paddle_lens_default_confidence", float),
@@ -260,6 +261,7 @@ SETTING_LABELS = {
         "paddle_separator_band_radius": "横线空白带平滑半径",
         "paddle_separator_roi_width_ratio": "横线精修横向范围",
         "paddle_separator_column_margin": "横线精修栏边余量",
+        "separator_y_max_shift_ratio": "精修最大位移（行高比）",
         "paddle_max_input_side": "OCR 最大输入边长",
         "paddle_preprocessing": "OCR 图像预处理",
         "paddle_device": "PaddleOCR 运行设备",
@@ -347,6 +349,7 @@ SETTING_HELP = {
         "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径，单位为原图像素。该值不再使用 1400px 参考宽度。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。",
         "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离，单位为原图像素。设置 2 就始终是原图 2 px，不随页面宽度变化。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
         "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
+        "separator_y_max_shift_ratio": "限制普通画线 Layout 逐条横线精修后相对粗定位的最大移动幅度，单位是典型行高的倍数，默认 0.45。设小可减少跳到相邻行，设大允许修正更明显的初始定位误差。仅影响 Layout 逐条精修的位移上限，不控制其他后处理的 Y 调整。\n\n建议保持默认并使用逐条诊断核对精修前后坐标，修改前请保留 PDIC 基准文件。",
         "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。单位为原图像素，不按页面宽度缩放。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。",
         "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
         "paddle_lens_language": "Google Lens OCR 语言自动跟随【词头 OCR 语言】，不再单独配置。Profile 或 OCR 语言变化时会同步更新。",
@@ -541,6 +544,7 @@ SETTING_SPIN = {
         "paddle_separator_band_radius": (0, 200, 1),
         "paddle_separator_roi_width_ratio": (10.0, 100.0, 0.1),
         "paddle_separator_column_margin": (0, 2000, 1),
+        "separator_y_max_shift_ratio": (0.0, 1.5, 0.05),
         "paddle_header_search_height": (0.0, 100.0, 0.1), "paddle_header_rule_margin": (0, 1000, 1),
         "batch_interval": (0.5, 3600, 0.5),
         "illustration_detect_padding": (0, 5000, 1),
@@ -737,6 +741,7 @@ SEPARATOR_Y_FIELDS = (
     "paddle_separator_safety_px",
     "paddle_separator_roi_width_ratio",
     "paddle_separator_column_margin",
+    "separator_y_max_shift_ratio",
 )
 
 SEPARATOR_Y_CHECKS = (
