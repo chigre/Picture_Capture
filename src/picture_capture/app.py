@@ -932,6 +932,8 @@ class SettingsDialog(tk.Toplevel):
             textvariable=self._settings_help_body_var,
             foreground="#555b63",
             justify="left",
+            anchor="nw",
+            wraplength=300,
         )
         help_body.pack(anchor="w", fill="x", padx=(0, 8), pady=(7, 0))
         help_image = ttk.Label(help_box, anchor="center")
