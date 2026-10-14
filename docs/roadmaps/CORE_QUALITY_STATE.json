@@ -37,22 +37,22 @@
         "R2.3"
       ]
     },
-    "implementation_head_sha": "02e31b46989db2d362ea87fe2c851d57d20c4c16",
+    "implementation_head_sha": "eac15f5d4080ea58c2dea904e75052be7026d5bb",
     "latest_verified_main_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "ci_pending",
-        "message": "New explicit verification, SECTION snapshot tests and image header optimization are pending latest cross-platform CI.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38527018680"
+        "message": "Latest crash/failure regression head eac15f5 PR CI in progress; green cannot be assumed.",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38527230069"
       },
       {
         "type": "b2_scope_incomplete",
-        "message": "Explicit visual confirmation currently CLI-only; general moved-entry ID, save failure/rollback UI smoke, concurrent write gate and complete integration still missing."
+        "message": "PR remains draft: explicit confirmation CLI-only; non-OCR arbitrary coordinate moves, multi-row transaction identity, UI visual verification, crash/reopen GUI acceptance and multi-process safety not complete."
       }
     ],
-    "required_next_action": "Follow latest PR #482 CI for explicit verification/SECTION. Fix any test or integration regressions within same draft PR. Complete negative UI save-failure and rollback/SECTION tests, cross-session stable identity and user-facing confirmation workflow; do not create a duplicate PR or merge until acceptance and full required checks complete.",
-    "last_test_evidence": "B2 previous stable head 5c2e9e6 CI 38523977278 succeeded cross-platform; explicit verification and real SECTION attribution added later. 38526758684 passed source-attached section capture tests; intermediate Windows 38526731055 failure is intermittent Python 3.13 Tcl/Tk init.tcl read error. Latest source head CI (newer than bcccae9) is pending, not verified.",
+    "required_next_action": "Follow latest #482 CI 38527230069 and any subsequent checkpoint run; correct actual failures on same PR. Confirm new explicit confirmation, original-image SECTION and failed save/page-switch/atomic journal regression. Then complete user-facing visual verification, general moved-Entry identities and concurrency/rollback GUI tests. Do not merge draft on CI green alone; no training or uploads.",
+    "last_test_evidence": "B2 explicit visual verify CI 38526858946 passed all jobs; persisted SECTION regression CI 38526823103 passed all; direct section geometry CI 38526789757 passed all. Image header optimization CI 38527018680 and B2 latest failure-boundaries CI 38527230069 were in progress at checkpoint. Intermediate Windows init.tcl sporadic host error 38526731055 not code assertion.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
@@ -266,6 +266,15 @@
       ],
       "run": "https://github.com/chigre/Picture_Capture/actions/runs/38527018680",
       "note": "CLI-only explicit manual judgement; source/digest-guarded SECTION classification. No automatic training. B2 unfinished."
+    },
+    {
+      "type": "b2_crash_and_cross_page_hardening",
+      "status": "draft_latest_ci_pending",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/482",
+      "code": "6ebed7c776b5af05e8e7de4f89fed9abd548b748",
+      "tests": "eac15f5d4080ea58c2dea904e75052be7026d5bb",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38527230069",
+      "note": "Candidate delayed evidence invalidated on page navigation. Tests require failure of PDIC write prevents override/evidence flushing and injected atomic journal failure keeps prior bytes. No train/upload."
     }
   ],
   "rules_for_updates": {
@@ -372,19 +381,19 @@
       "status": "pr_open",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Latest CI pending; CLI-only verification and SECTION provenance tests not yet validated. GUI verification and lifecycle hardening remain.",
+      "blocker": "CI latest eac15f5 pending; UI explicit verification, cross-session arbitrary move, concurrency and GUI lifecycle remain.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Opt-in local post-save delete, rename, canvas add, OCR candidate select/deselect and narrow grouped original/refined-Y move; a local CLI can explicitly verify a saved action via image+PDIC/optional OCR hashes. UI confirmation and general moves incomplete."
+          "evidence": "Opt-in post-save delete/rename/add/checkbox select-deselect/narrow grouped move; explicit operator-confirmed local verification CLI. Cross-page and failed PDIC save negative tests. General arbitrary move and verification UI outstanding."
         },
         "R2.2": {
           "status": "in_progress",
-          "evidence": "Validated pre-human OCR/final PDIC snapshots propagate to post-save event. Source and OCR mismatch fail closed; no auto labels. Latest explicit verification test CI pending."
+          "evidence": "Pre-human final-OCR fingerprints only from validated on-disk cache+PDIC; unique/nonstale candidate link, image/PDIC checks and operator explicit judgment. No automatic training labels."
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Offline aggregate exporter includes only explicit source-valid positive/negative judgment counts, not training labels; SECTION attribution from original-image XY, persisted transform and SHA, invalidated by section edits. Latest full CI pending."
+          "evidence": "Read-only privacy-minimal aggregates, manual positive/negative judgment count with source hashes, SECTION classification using persisted original-image boundaries, transform and sidecar digest, unknown/stale classification, image header-only performance optimization. Latest CI pending."
         }
       }
     },
