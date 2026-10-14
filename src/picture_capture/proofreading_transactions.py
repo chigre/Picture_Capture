@@ -153,7 +153,12 @@ def _atomic_bytes(path: Path, data: bytes) -> None:
 def _publish(path: Path, data: bytes | None) -> None:
     if data is None:
         path.unlink(missing_ok=True)
-        note_page_artifact_edit(path)
+        # Deletion already committed; nonessential cache bookkeeping must
+        # never turn it into a false transaction failure.
+        try:
+            note_page_artifact_edit(path)
+        except OSError:
+            pass
     else:
         _atomic_bytes(path, data)
 
