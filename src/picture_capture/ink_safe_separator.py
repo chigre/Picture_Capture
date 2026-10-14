@@ -15,12 +15,13 @@ import numpy as np
 def refine_to_verified_white_gap(
     gray: np.ndarray, original_y: int, coarse_y: int, line_height: float,
     *, max_fraction: float = 0.25, ink_threshold: int = 185,
+    existing_ink_ratio: float = 0.045, gap_ink_ratio: float = 0.02,
 ) -> tuple[int, dict[str, Any]]:
     """Find the nearest safe, multi-row white gap within a bounded ink ROI.
 
     The gray ROI is already expressed in the candidate's canonical coordinate
     space, and any correction must remain inside it. A gap must be three
-    successive rows with <=2% dark pixels. Do not "optimize" a row already
+    successive rows with at most the configured dark-pixel fraction. Do not "optimize" a row already
     sufficiently white, and do not force a move when no verified gap exists.
     """
     info: dict[str, Any] = {
@@ -53,13 +54,13 @@ def refine_to_verified_white_gap(
     dark = np.asarray(roi < int(ink_threshold), dtype=np.float32).mean(axis=1)
     ink_here = float(dark[y - (low - 2)])
     info["original_ink_fraction"] = round(ink_here, 6)
-    if ink_here <= 0.045:
+    if ink_here <= float(existing_ink_ratio):
         info["gap_reason"] = "already_ink_safe"
         return y, info
     candidates: list[tuple[int, int, int]] = []
     for target in range(low, high + 1):
         at = target - (low - 2)
-        if float(np.max(dark[at - 1:at + 2])) > 0.02:
+        if float(np.max(dark[at - 1:at + 2])) > float(gap_ink_ratio):
             continue
         # Prefer smallest distance from the original chosen position, then the
         # original coarse anchor, then earlier (upper) safe gap for stable ties.

@@ -23,6 +23,10 @@ def test_y_settings_have_only_one_owner():
         "paddle_separator_roi_width_ratio",
         "paddle_separator_column_margin",
         "separator_y_max_shift_ratio",
+        "separator_y_ink_safe_max_fraction",
+        "separator_y_ink_safe_ink_threshold",
+        "separator_y_ink_safe_existing_ink_ratio",
+        "separator_y_ink_safe_gap_ink_ratio",
     }
     assert set(schema.SEPARATOR_Y_FIELDS) == five
     assert not five.intersection(schema.OCR_COMMON_FIELDS)

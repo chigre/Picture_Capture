@@ -61,6 +61,26 @@ def main() -> int:
             window = factory()
             windows.append(window)
             _stage(f"constructed {name}")
+            if name == "SettingsDialog":
+                # Real Tk construction/scroll smoke, not only source inspection.
+                help_canvases = getattr(window, "_settings_help_scroll_canvases", [])
+                if not help_canvases:
+                    raise RuntimeError("Settings help has no independently scrollable canvases")
+                window._show_settings_help("长说明换行测试", "说明：这是一段很长的中文参数说明。" * 90)
+                window.update_idletasks()
+                visible = [cv for cv in help_canvases if cv.winfo_ismapped()]
+                if visible:
+                    cv = visible[0]
+                    if cv.bbox("all") is None:
+                        raise RuntimeError("Settings help text has no scroll region")
+                    cv.yview_moveto(1.0)
+                    window.update_idletasks()
+                    if cv.yview()[0] <= 0.0:
+                        raise RuntimeError("Long Settings help did not overflow into scrollable region")
+                    window._show_settings_help("另一设置", "短说明")
+                    window.update_idletasks()
+                    if cv.yview()[0] > 0.0:
+                        raise RuntimeError("Switching Settings help did not reset scroll position")
             window.withdraw()
             window.update_idletasks()
             _stage(f"withdrew {name}")
