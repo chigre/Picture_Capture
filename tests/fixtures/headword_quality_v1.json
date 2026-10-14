@@ -1,0 +1,170 @@
+{
+  "format": "picture-capture-quality-fixtures-v1",
+  "run_type": "synthetic_fixture",
+  "label_status": "synthetic_contract_only_not_human_truth",
+  "coordinate_space": "canonical_column_and_reading_axis_v",
+  "examples": [
+    {
+      "id": "dense_neighbors_max_tp",
+      "tolerance": 5,
+      "predicted": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          5
+        ]
+      ],
+      "reference": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          9
+        ]
+      ],
+      "expected": {
+        "matched": 2,
+        "false_positive": 0,
+        "false_negative": 0,
+        "f1": 1,
+        "median_abs_delta_v": 4
+      }
+    },
+    {
+      "id": "column_boundaries_do_not_cross",
+      "tolerance": 5,
+      "predicted": [
+        [
+          0,
+          100
+        ],
+        [
+          1,
+          100
+        ]
+      ],
+      "reference": [
+        [
+          0,
+          100
+        ],
+        [
+          1,
+          120
+        ]
+      ],
+      "expected": {
+        "matched": 1,
+        "false_positive": 1,
+        "false_negative": 1,
+        "f1": 0.5
+      }
+    },
+    {
+      "id": "same_y_different_columns",
+      "tolerance": 0,
+      "predicted": [
+        [
+          1,
+          60
+        ]
+      ],
+      "reference": [
+        [
+          0,
+          60
+        ]
+      ],
+      "expected": {
+        "matched": 0,
+        "false_positive": 1,
+        "false_negative": 1,
+        "f1": 0
+      }
+    },
+    {
+      "id": "dense_duplicates",
+      "tolerance": 4,
+      "predicted": [
+        [
+          0,
+          100
+        ],
+        [
+          0,
+          100
+        ]
+      ],
+      "reference": [
+        [
+          0,
+          100
+        ]
+      ],
+      "expected": {
+        "matched": 1,
+        "false_positive": 1,
+        "false_negative": 0,
+        "f1": 0.666667
+      }
+    },
+    {
+      "id": "empty_verified_page",
+      "tolerance": 5,
+      "predicted": [],
+      "reference": [],
+      "expected": {
+        "matched": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "f1": 1,
+        "exact": true
+      }
+    },
+    {
+      "id": "no_predictions",
+      "tolerance": 5,
+      "predicted": [],
+      "reference": [
+        [
+          0,
+          40
+        ]
+      ],
+      "expected": {
+        "matched": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "f1": 0
+      }
+    },
+    {
+      "id": "off_by_tolerance",
+      "tolerance": 5,
+      "predicted": [
+        [
+          0,
+          15
+        ]
+      ],
+      "reference": [
+        [
+          0,
+          20
+        ]
+      ],
+      "expected": {
+        "matched": 1,
+        "false_positive": 0,
+        "false_negative": 0,
+        "f1": 1,
+        "median_abs_delta_v": 5
+      }
+    }
+  ]
+}

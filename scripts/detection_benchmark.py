@@ -22,7 +22,7 @@ build_core_services()
 
 from picture_capture.formats import pdic_path, read_pdic
 from picture_capture.models import Entry, ProjectState
-from picture_capture.ordered_marker_matching import match_ordered_markers
+from picture_capture.detection_quality_metrics import marker_metrics
 from picture_capture.page_sections import read_page_sections
 from picture_capture.performance_metrics import timing_summary_ms
 from picture_capture.processing import Geometry, column_index_for_click, detect_entries
@@ -45,50 +45,8 @@ def _rows(entries: list[Entry], geometry: Geometry) -> list[tuple[int, int]]:
 def match_markers(
     predicted: list[Entry], reference: list[Entry], geometry: Geometry, tolerance: int,
 ) -> dict[str, object]:
-    """Globally match same-column markers by minimum absolute reading-axis distance."""
-    pred = _rows(predicted, geometry)
-    ref = _rows(reference, geometry)
-    edges = []
-    for pi, (pc, pv) in enumerate(pred):
-        for ri, (rc, rv) in enumerate(ref):
-            if pc != rc:
-                continue
-            delta = abs(pv - rv)
-            if delta <= tolerance:
-                edges.append((delta, pi, ri))
-    # Maximize real TP before minimizing Y error; greedy nearest-first can
-    # steal the only possible partner of a neighboring genuine headword.
-    pairs = match_ordered_markers(len(pred), len(ref), edges)
-    deltas = [abs(pred[pi][1] - ref[ri][1]) for pi, ri in pairs]
-
-    tp = len(deltas)
-    fp = len(pred) - tp
-    fn = len(ref) - tp
-    precision = tp / (tp + fp) if tp + fp else 1.0
-    recall = tp / (tp + fn) if tp + fn else 1.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    ordered = sorted(deltas)
-    return {
-        "predicted": len(pred),
-        "reference": len(ref),
-        "matched": tp,
-        "matching_algorithm": "ordered_max_cardinality_min_delta_v1",
-        "unmatched_predicted": [pred[i] for i in range(len(pred)) if i not in {p for p, _ in pairs}],
-        "unmatched_reference": [ref[i] for i in range(len(ref)) if i not in {q for _, q in pairs}],
-        "false_positive": fp,
-        "false_negative": fn,
-        "precision": round(precision, 6),
-        "recall": round(recall, 6),
-        "f1": round(f1, 6),
-        "exact": fp == 0 and fn == 0,
-        "median_abs_delta_v": (
-            ordered[len(ordered) // 2] if ordered else None
-        ),
-        "p95_abs_delta_v": (
-            ordered[min(len(ordered) - 1, round((len(ordered) - 1) * .95))]
-            if ordered else None
-        ),
-    }
+    """Project source XY through geometry; use the shared monotone metric contract."""
+    return marker_metrics(_rows(predicted, geometry), _rows(reference, geometry), tolerance)
 
 
 def _indices(project: ProjectState, spec: str) -> list[int]:
@@ -313,6 +271,7 @@ def benchmark(
             "ground_truth_pages": gt_pages,
             "exact_ground_truth_pages": total["exact"],
             "exact_page_rate": round(total["exact"] / gt_pages, 6) if gt_pages else None,
+            "true_positive": tp,
             "precision": round(precision, 6) if precision is not None else None,
             "recall": round(recall, 6) if recall is not None else None,
             "f1": round(f1, 6) if f1 is not None else None,
@@ -324,6 +283,8 @@ def benchmark(
 
     return {
         "format": "picture-capture-detection-benchmark-v1",
+        "run_type": "current_detector",
+        "ground_truth_status": "saved_pdic_unless_independently_verified",
         "project": str(project.root),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "modes": list(modes),

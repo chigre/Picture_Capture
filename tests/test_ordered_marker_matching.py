@@ -62,5 +62,15 @@ def test_real_benchmark_uses_identical_production_matching_primitive():
         Path(core.__file__).resolve().parents[2] / "scripts" /
         "detection_benchmark.py"
     ).read_text(encoding="utf-8")
-    assert "match_ordered_markers(" in benchmark
+    # The benchmark now delegates to a pure metric helper, which must use
+    # the same primitive as production processing. Check the complete chain,
+    # not only a function-name occurrence in one particular source file.
+    import picture_capture.detection_quality_metrics as quality
+
+    metric_source = Path(quality.__file__).read_text(encoding="utf-8")
+    assert "marker_metrics(" in benchmark
+    assert "match_ordered_markers(" in metric_source
     assert "match_ordered_markers(" in processing
+    assert quality.marker_metrics(
+        [(0, 0), (0, 5)], [(0, 4), (0, 9)], 5,
+    )["matched"] == 2
