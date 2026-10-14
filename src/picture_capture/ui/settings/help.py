@@ -25,6 +25,13 @@ def show_settings_help(
         # it refreshes whichever tab is visible, rather than only the final
         # tab's Label as the former single-widget pointer did.
         dialog._settings_help_body_var.set(_normalize_ui_paragraphs(raw_body))
+    # The newly selected parameter should start at the top of its explanation,
+    # even if the user had previously scrolled to another parameter's footnote.
+    for help_canvas in getattr(dialog, "_settings_help_scroll_canvases", ()):
+        try:
+            help_canvas.yview_moveto(0.0)
+        except tk.TclError:
+            pass
     dialog._settings_help_current_image = image_name
     dialog._schedule_settings_help_image_render()
 
