@@ -265,6 +265,19 @@ def draw_entry_overlay(
     # Sequence numbers intentionally use a neutral light-gray control style;
     # the delete control remains red to preserve its destructive meaning.
     index_label._pc_skip_classic_appearance = True
+    # B2: index widget owns a concrete Entry object, never a sorted-row index.
+    # Right click gives an explicit original-image XY relocation action.
+    # No ordinary left-click/canvas draw or text-editor gesture is changed.
+    index_label.bind(
+        "<Button-3>",
+        lambda _event, e=entry: self._move_entry_via_dialog(e),
+    )
+    index_label.bind(
+        "<Control-Button-1>",
+        lambda _event, e=entry: self._move_entry_via_dialog(e),
+    )
+    self._attach_tooltip(index_label, "右键序号：按原图 X,Y 移动画线（一次一个）")
+
     self.overlay_widgets.append(index_label)
     record["widgets"].append(index_label)
     record["index_widget"] = index_label

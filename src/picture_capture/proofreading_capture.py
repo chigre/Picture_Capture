@@ -437,3 +437,64 @@ def capture_saved_position_switch(
         event, pdic_file=target,
     )
     return True
+
+
+def capture_saved_explicit_marker_move(
+    *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+    prior_pdic_sha256: str, before: tuple[str, int, int],
+    after: tuple[str, int, int], prior_image_sha256: str,
+) -> bool:
+    """Record a genuinely UI-owned arbitrary XY relocation after durable save.
+
+    The UI, not a nearest-neighbour matcher, names the exact Entry object.
+    Independently require an otherwise unchanged saved PDIC and a unique
+    coordinate on both sides. Move+rename of that *one* Entry is supported,
+    but unrelated edits or duplicate coordinates refuse attribution.
+    """
+    project_root, page = Path(project_root), Path(page)
+    file = pdic_path(page)
+    if (not isinstance(prior_pdic_sha256, str)
+            or len(prior_pdic_sha256) != 64
+            or not isinstance(prior_image_sha256, str)
+            or sha256_file(page) != prior_image_sha256
+            or before[1:] == after[1:]):
+        return False
+    existing = _triples(prior_pdic_entries)
+    saved = _triples(read_pdic(file))
+    if (len(existing) != len(saved)
+            or len({(x, y) for _, x, y in existing}) != len(existing)
+            or len({(x, y) for _, x, y in saved}) != len(saved)):
+        return False
+    old, new = Counter(existing), Counter(saved)
+    if (old[before] != 1 or new[after] != 1
+            or old - new != Counter([before])
+            or new - old != Counter([after])):
+        return False
+    saved_sha = sha256_file(file)
+    if saved_sha is None:
+        raise OSError("Committed PDIC vanished before explicit marker move evidence")
+    relative = page.resolve().relative_to(project_root.resolve()).as_posix()
+    page_id = f"{_project_identity(project_root)}/{relative}"
+    journal = (data_root(project_root) / "ProofreadingEvidence"
+               / f"{uuid5(NAMESPACE_URL, relative).hex}.json")
+    valid, owners = _owned_ids_at_saved_snapshot(
+        journal, page_id=page_id, prior_pdic_sha256=prior_pdic_sha256,
+        image_sha256=prior_image_sha256, required_before=(before,),
+    )
+    if not valid:
+        return False
+    # New identity belongs to this explicit action, never the new XY.
+    entry_id = owners.get(before) or uuid4().hex
+    event = make_event(
+        page_id=page_id, action="move",
+        before={"word": before[0], "x": before[1], "y": before[2]},
+        after={"word": after[0], "x": after[1], "y": after[2]},
+        entry_id=entry_id, pdic_sha256=saved_sha,
+        image_sha256=prior_image_sha256,
+        **section_fields_for_event(
+            page, before_xy=before[1:], after_xy=after[1:],
+        ),
+    )
+    event["prior_pdic_sha256"] = prior_pdic_sha256
+    append_event(journal, event, pdic_file=file)
+    return True
