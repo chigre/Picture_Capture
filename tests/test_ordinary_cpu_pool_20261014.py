@@ -47,24 +47,32 @@ def test_24_cpu_workers_and_threads_bounded_independently():
 
 
 def test_cpu_worker_forces_device_and_reuses_original_pdics_writer(monkeypatch):
-    from picture_capture import processing
+    # processing is a mirrored facade: patching its public function also
+    # mutates processing_core via facade_compat. Restore BOTH namespaces
+    # before any subsequent tests to avoid a false legacy-ownership failure.
+    from picture_capture import processing, processing_core
     from picture_capture.runtime_environment import resolve_paddle_device
 
+    original_core = processing_core.detect_entries_job
     observed = []
-    monkeypatch.setenv("PICTURE_CAPTURE_PADDLE_DEVICE", "gpu")
-    monkeypatch.setattr(
-        processing, "detect_entries_job",
-        lambda *args: observed.append(args) or 17,
-    )
-    try:
-        assert cpu_ordinary_page_job("synthetic.png", "s", ("p", "@", "@"), 9, 3) == 17
-        assert os.environ["PICTURE_CAPTURE_PADDLE_DEVICE"] == "cpu"
-        assert os.environ["PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER"] == "1"
-        assert os.environ["OMP_NUM_THREADS"] == "3"
-        assert resolve_paddle_device() == "cpu"
-        assert observed == [("synthetic.png", "s", ("p", "@", "@"), 9)]
-    finally:
-        resolve_paddle_device.cache_clear()
+    with monkeypatch.context() as isolated:
+        isolated.setenv("PICTURE_CAPTURE_PADDLE_DEVICE", "gpu")
+        isolated.setattr(
+            processing, "detect_entries_job",
+            lambda *args: observed.append(args) or 17,
+        )
+        try:
+            assert cpu_ordinary_page_job(
+                "synthetic.png", "s", ("p", "@", "@"), 9, 3
+            ) == 17
+            assert os.environ["PICTURE_CAPTURE_PADDLE_DEVICE"] == "cpu"
+            assert os.environ["PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER"] == "1"
+            assert os.environ["OMP_NUM_THREADS"] == "3"
+            assert resolve_paddle_device() == "cpu"
+            assert observed == [("synthetic.png", "s", ("p", "@", "@"), 9)]
+        finally:
+            resolve_paddle_device.cache_clear()
+    processing_core.detect_entries_job = original_core
 
 
 def test_cpu_only_detector_explicit_threads_no_gpu_fallback(monkeypatch):
