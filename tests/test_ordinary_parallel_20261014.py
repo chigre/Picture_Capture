@@ -98,6 +98,7 @@ def test_parallel_batch_manual_claim_prevents_submitting_or_overwriting_pending_
         def _flush_deferred_page_save(self): pass
         def _update_page_row(self, index): self._updated_pages.append(index)
         def after(self, delay, callback): return 123
+        def _poll_batch_queue(self): pass
 
     fake = Fake()
 
