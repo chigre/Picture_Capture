@@ -108,6 +108,9 @@ def test_audit_maps_all_fields_and_new_separator_controls(tmp_path):
             assert "横线Y精修" in row["settings_center_path"]
             assert row["dedicated_help"] == "True"
             assert "separator_y_refinement.py" in row["runtime_static_read_sites"]
+            assert row["runtime_status"] == "targeted_behavior_test"
+            assert "test_ink_safe_separator_20261014.py" in row["targeted_algorithm_runtime_test"]
+            assert "test_every_appsettings_value_roundtrips_through_json" in row["persistence_runtime_test"]
     review = json.loads(
         (tmp_path / "hardcoded_threshold_candidates.json").read_text(encoding="utf-8")
     )
