@@ -158,3 +158,26 @@ def test_invalid_new_thresholds_rejected_even_outside_spinbox(tmp_path):
     path = tmp_path / "saved.json"
     defaults.to_json(path)
     assert AppSettings.from_json(path).separator_y_ink_safe_ink_threshold == 185
+
+
+def test_existing_ink_ratio_controls_whether_previously_safe_line_is_moved():
+    gray = np.full((110, 55), 255, dtype=np.uint8)
+    gray[50, :2] = 35  # 2/55 = 3.6% dark ink: safe under 4.5% default.
+    untouched, report = refine_to_verified_white_gap(gray, 50, 50, 28)
+    assert untouched == 50 and report["gap_reason"] == "already_ink_safe"
+    moved, report = refine_to_verified_white_gap(
+        gray, 50, 50, 28, existing_ink_ratio=0.01,
+    )
+    assert moved < 50 and report["gap_corrected"]
+
+
+def test_candidate_gap_ink_ratio_controls_three_row_acceptance():
+    gray = np.full((110, 55), 255, dtype=np.uint8)
+    gray[:, 0] = 45  # Every row has 1/55 (1.8%) dark ink.
+    gray[48:53, :35] = 45  # Original separator definitely crosses text.
+    found, report = refine_to_verified_white_gap(gray, 50, 50, 28)
+    assert found < 48 and report["gap_corrected"]
+    forbidden, report = refine_to_verified_white_gap(
+        gray, 50, 50, 28, gap_ink_ratio=0.0,
+    )
+    assert forbidden == 50 and report["gap_reason"] == "no_three_row_white_gap"
