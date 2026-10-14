@@ -320,6 +320,7 @@ def _ordinary_entries_from_layout_roles(
     image: Image.Image | None = None,
     *,
     page_index: int = 0,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
     """Materialize final Layout entry rows with canonical classification."""
     from .entry_classification import copy_layout_line_classification
@@ -330,6 +331,7 @@ def _ordinary_entries_from_layout_roles(
             image,
             understanding,
             page_index=int(page_index),
+            diagnostics=diagnostics,
         )
         if image is not None
         else {}
@@ -606,11 +608,36 @@ def detect_entries(
             and list(getattr(understanding.layout, "columns", []) or [])
         ):
             geometry = _geometry_from_page_understanding(understanding)
+            y_refine_diagnostics = [] if replay_trace is not None else None
             entries = _ordinary_entries_from_layout_roles(
                 understanding,
                 analysis_image,
                 page_index=profile_page_index,
+                diagnostics=y_refine_diagnostics,
             )
+            if replay_trace is not None:
+                replay_trace.add_note(
+                    "separator_y_per_line",
+                    "横线 Y 精修诊断（逐条）",
+                    "记录普通画线 Layout 词条初始 Y、墨迹谷结果、位移限制、"
+                    "真实左右栏 ROI 与异常。此阶段只读，后续修正可能继续改变坐标。",
+                    details={
+                        "count": len(y_refine_diagnostics),
+                        "errors": sum(bool(x.get("error")) for x in y_refine_diagnostics),
+                        "lines": y_refine_diagnostics,
+                    },
+                    candidates=[
+                        {"status": "refined" if not x.get("error") else "error",
+                         "column": x.get("column"), "reason": x.get("reason"),
+                         "source_box": [x.get("roi_x0"), x.get("clamped_y"),
+                                        x.get("roi_x1"), x.get("clamped_y")],
+                         "coarse_y": x.get("coarse_y"),
+                         "raw_refined_y": x.get("raw_refined_y"),
+                         "clamped_y": x.get("clamped_y"),
+                         "shift": x.get("shift")}
+                        for x in y_refine_diagnostics if x.get("column")
+                    ],
+                )
             _record_ordinary_debug_stage(
                 debug_trace, "layout_role_materialization", entries,
             )
