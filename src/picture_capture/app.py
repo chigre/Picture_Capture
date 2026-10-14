@@ -11434,8 +11434,9 @@ class PictureCaptureApp(tk.Tk):
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
         *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
+        foreground_page_edit: bool = False, page_indexer=None,
     ) -> bool:
-        """ start parallel batch task."""
+        """Run bounded independent page jobs while protecting manual PDIC edits."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11471,12 +11472,22 @@ class PictureCaptureApp(tk.Tk):
                 title, items, serial_worker, on_done, item_label,
                 allow_page_navigation=allow_page_navigation,
                 allow_pdic_edits=allow_pdic_edits,
+                foreground_page_edit=foreground_page_edit,
+                page_indexer=page_indexer,
             )
 
         self._batch_active = True
         self._batch_parallel = True
         self._batch_allow_page_navigation = bool(allow_page_navigation)
         self._batch_allow_pdic_edits = bool(allow_pdic_edits)
+        self._batch_foreground_pages = bool(foreground_page_edit)
+        self._batch_skipped_count = 0
+        page_id = page_indexer or (lambda item: int(item))
+        with self._batch_state_lock:
+            self._batch_page_states = (
+                {page_id(item): "pending" for item in items}
+                if foreground_page_edit else {}
+            )
         self._batch_title = title
         self._batch_on_done = on_done
         self._batch_stop_event.clear()
@@ -11491,7 +11502,15 @@ class PictureCaptureApp(tk.Tk):
             self.batch_bar.pack(side="top", fill="x")
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。暂停/停止不会再派发新页面。"
+            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
         )
+
+        if foreground_page_edit:
+            for item in items:
+                try:
+                    self._update_page_row(page_id(item))
+                except Exception:
+                    pass
 
         try:
             while True:
@@ -11522,10 +11541,28 @@ class PictureCaptureApp(tk.Tk):
                         item = items[next_index]
                         position = next_index + 1
                         label = labeler(item)
+                        item_index = page_id(item) if foreground_page_edit else None
+                        next_index += 1
+                        if foreground_page_edit:
+                            # The same lock protects the foreground editor's
+                            # pending -> manual_locked claim. No submit, and
+                            # therefore no PDIC overwrite, after that claim.
+                            with self._batch_state_lock:
+                                state = self._batch_page_states.get(item_index, "pending")
+                                if state == "manual_locked":
+                                    self._batch_skipped_count += 1
+                                    completed += 1
+                                    self._batch_queue.put((
+                                        "skipped", completed, total, label, item_index
+                                    ))
+                                    continue
+                                self._batch_page_states[item_index] = "processing"
+                            self._batch_queue.put((
+                                "item", position, total, label, item_index
+                            ))
                         args = job_builder(item, position, total)
                         future = executor.submit(worker_func, *args)
-                        futures[future] = (item, position, label)
-                        next_index += 1
+                        futures[future] = (item, position, label, item_index)
                         self._batch_queue.put((
                             "parallel_state", completed, total, len(futures), label, workers
                         ))
@@ -11541,13 +11578,18 @@ class PictureCaptureApp(tk.Tk):
                     if not done_set:
                         continue
                     for future in done_set:
-                        item, _position, label = futures.pop(future)
+                        item, _position, label, item_index = futures.pop(future)
                         raw = future.result()
                         result = result_consumer(item, raw) if result_consumer is not None else raw
                         results.append(result)
                         completed += 1
+                        if foreground_page_edit:
+                            with self._batch_state_lock:
+                                if self._batch_page_states.get(item_index) == "processing":
+                                    self._batch_page_states[item_index] = "done"
                         self._batch_queue.put((
-                            "parallel_progress", completed, total, label, result, len(futures), workers
+                            "parallel_progress", completed, total, label, result,
+                            len(futures), workers, item_index
                         ))
 
                 self._batch_queue.put((
@@ -11631,9 +11673,17 @@ class PictureCaptureApp(tk.Tk):
                     f"{self._batch_title}并行处理中：完成 {completed}/{total}，当前 {active} 页运行；最近派发 {label}"
                 )
             elif kind == "parallel_progress":
-                _kind, completed, total, label, _result, active, workers = event
+                _kind, completed, total, label, _result, active, workers, *page_ids = event
                 self._batch_in_item = active > 0
                 self.batch_progress_var.set(100.0 * completed / max(1, total))
+                if page_ids and page_ids[0] is not None:
+                    item_index = int(page_ids[0])
+                    self._update_page_row(item_index)
+                    if (item_index == self.current_index
+                            and self._foreground_batch_state(item_index) == "done"):
+                        # Reload the worker's saved PDIC instead of serializing
+                        # the stale foreground copy of the completed page.
+                        self.load_page(item_index)
                 if not self._batch_pause_event.is_set() and not self._batch_stop_event.is_set():
                     if active:
                         self.batch_text_var.set(
@@ -15366,6 +15416,10 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _detect_pages(self, indices: list[int], *, method: str, force_refresh: bool) -> None:
+        if method == "left_edge":
+            # One physical page must never be submitted to multiple writer
+            # processes in the same batch, even through an unusual API caller.
+            indices = list(dict.fromkeys(indices))
         if not self.project or not indices:
             self.status_var.set("没有需要处理的页面"); return
         if not self._guard_transformed_geometry("批量画线"):
@@ -15388,9 +15442,13 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages_info = {i: self.pages_tuple(i) for i in indices}
         filter_path = headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
+        from .ordinary_parallel import ordinary_draw_workers
+        ordinary_workers = (
+            ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
+        )
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
-            if method == "left_edge" else None
+            if method == "left_edge" and ordinary_workers <= 1 else None
         )
 
         def worker(index: int, _position: int, _total: int):
@@ -15605,11 +15663,30 @@ class PictureCaptureApp(tk.Tk):
                     f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
                 )
 
-        started = self._start_batch_task(
-            label, indices, worker, done,
-            item_label=lambda index: project.images[index].name,
-            foreground_page_edit=True, page_indexer=lambda index: int(index),
-        )
+        if method == "left_edge" and ordinary_workers > 1:
+            # Each spawn job writes only its own page's PDIC and automatic
+            # baseline. The parallel coordinator claims pages under the same
+            # foreground/manual-lock contract as the existing serial runner.
+            started = self._start_parallel_batch_task(
+                label, indices, detect_entries_job,
+                lambda index, _position, _total: (
+                    str(project.images[index]), settings, pages_info[index], index,
+                ),
+                result_consumer=lambda index, count: {
+                    "index": int(index), "count": int(count),
+                },
+                on_done=done,
+                item_label=lambda index: project.images[index].name,
+                max_workers=ordinary_workers,
+                foreground_page_edit=True,
+                page_indexer=lambda index: int(index),
+            )
+        else:
+            started = self._start_batch_task(
+                label, indices, worker, done,
+                item_label=lambda index: project.images[index].name,
+                foreground_page_edit=True, page_indexer=lambda index: int(index),
+            )
         if not started and normal_executor is not None:
             normal_executor.shutdown(wait=False, cancel_futures=True)
 
