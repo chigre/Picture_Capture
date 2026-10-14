@@ -375,3 +375,75 @@ def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
             "self._flush_proofreading_add_evidence()"
         )
     assert 'state["_pending_evidence_add"] = False' in app
+
+
+def test_named_ocr_same_word_y_position_switch_is_audited_after_both_saves(tmp_path):
+    import json
+    from picture_capture.proofreading_capture import capture_saved_position_switch
+
+    page, old = _page(tmp_path)
+    moved_before = ("first", 10, 20)
+    moved_after = ("first", 10, 24)
+    write_pdic(
+        pdic_path(page),
+        [Entry(word="first", x=10, y=24), old[1]],
+        100, ("page", "@", "@"),
+    )
+    overrides = tmp_path / "page_manual_selection.json"
+    overrides.write_text(json.dumps({
+        "page": "page", "version": 1, "overrides": {
+            "old-y": {"selected": False, "word": "first", "engine": "position_switch"},
+            "new-y": {"selected": True, "word": "first", "engine": "manual_checkbox"},
+        },
+    }), encoding="utf-8")
+    kwargs = dict(
+        project_root=tmp_path, page=page, prior_pdic_entries=old,
+        removed_entry=moved_before, added_entry=moved_after,
+        removed_candidate_id="old-y", added_candidate_id="new-y",
+        position_group_id="stable-headword", manual_selection_path=overrides,
+    )
+    assert capture_saved_position_switch(**kwargs)
+    journal = next(
+        p for p in (tmp_path / "ProofreadingEvidence").glob("*.json")
+        if p.name != "project_identity.json"
+    )
+    ev = load_events(journal)
+    assert len(ev) == 1
+    assert ev[0]["action"] == "move"
+    assert ev[0]["before"]["y"] == 20
+    assert ev[0]["after"]["y"] == 24
+    assert ev[0]["entry_id"] and ev[0]["candidate_id"] == "new-y"
+    assert ev[0]["verification_status"] == "explicit_action_unverified_page"
+
+
+def test_position_switch_rejects_partial_manual_override_or_multiple_edits(tmp_path):
+    import json
+    from picture_capture.proofreading_capture import capture_saved_position_switch
+
+    page, old = _page(tmp_path)
+    before = ("first", 10, 20)
+    after = ("first", 10, 24)
+    write_pdic(pdic_path(page), [Entry("first", 10, 24), old[1]], 100, ("page", "@", "@"))
+    overrides = tmp_path / "manual.json"
+    overrides.write_text(json.dumps({"page": "page", "overrides": {
+        "new-y": {"selected": True, "word": "first", "engine": "manual_checkbox"},
+    }}), encoding="utf-8")
+    kwargs = dict(
+        project_root=tmp_path, page=page, prior_pdic_entries=old,
+        removed_entry=before, added_entry=after,
+        removed_candidate_id="old-y", added_candidate_id="new-y",
+        position_group_id="stable", manual_selection_path=overrides,
+    )
+    assert not capture_saved_position_switch(**kwargs)
+    overrides.write_text(json.dumps({"page": "page", "overrides": {
+        "old-y": {"selected": False, "word": "first", "engine": "position_switch"},
+        "new-y": {"selected": True, "word": "first", "engine": "manual_checkbox"},
+    }}), encoding="utf-8")
+    assert not capture_saved_position_switch(**{**kwargs, "added_entry": ("changed", 10, 24)})
+    write_pdic(
+        pdic_path(page),
+        [Entry("first", 10, 24), Entry("also changed", 10, 60)],
+        100, ("page", "@", "@"),
+    )
+    assert not capture_saved_position_switch(**kwargs)
+    assert not (tmp_path / "ProofreadingEvidence").exists()

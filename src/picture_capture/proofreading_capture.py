@@ -262,3 +262,79 @@ def capture_saved_manual_addition(
         event, pdic_file=target,
     )
     return True
+
+
+def capture_saved_position_switch(
+    *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+    removed_entry: tuple[str, int, int],
+    added_entry: tuple[str, int, int],
+    removed_candidate_id: str, added_candidate_id: str,
+    position_group_id: str, manual_selection_path: Path,
+) -> bool:
+    """Prove a user-selected original/refined Y switch of the SAME headword.
+
+    This is not a general move inference: a unique old candidate disappears,
+    a unique new candidate appears, both have identical word text, their XY
+    differs, and both explicit overrides exist in the committed sidecar.
+    """
+    if not all((removed_candidate_id, added_candidate_id, position_group_id)):
+        return False
+    if removed_candidate_id == added_candidate_id:
+        return False
+    if removed_entry[0] != added_entry[0] or removed_entry[1:] == added_entry[1:]:
+        return False
+    before = Counter(_triples(prior_pdic_entries))
+    target = pdic_path(page)
+    after = Counter(_triples(read_pdic(target)))
+    removed = before - after
+    added = after - before
+    if removed != Counter([removed_entry]) or added != Counter([added_entry]):
+        return False
+    if before[removed_entry] != 1 or after[added_entry] != 1:
+        return False
+    if sum(n for (_, x, y), n in after.items() if (x, y) == added_entry[1:]) != 1:
+        return False
+    try:
+        raw = json.loads(Path(manual_selection_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return False
+    if not isinstance(raw, dict) or not isinstance(raw.get("overrides"), dict):
+        return False
+    if raw.get("page") != Path(page).stem:
+        return False
+    old_override = raw["overrides"].get(removed_candidate_id)
+    new_override = raw["overrides"].get(added_candidate_id)
+    if not isinstance(old_override, dict) or not isinstance(new_override, dict):
+        return False
+    if old_override.get("selected") is not False or old_override.get("engine") != "position_switch":
+        return False
+    if new_override.get("selected") is not True or new_override.get("engine") != "manual_checkbox":
+        return False
+    if str(old_override.get("word")) != removed_entry[0]:
+        return False
+    if str(new_override.get("word")) != added_entry[0]:
+        return False
+    project_root = Path(project_root)
+    relative_page = Path(page).resolve().relative_to(project_root.resolve()).as_posix()
+    page_id = f"{_project_identity(project_root)}/{relative_page}"
+    # Group ID is an explicit OCR physical-headword identity, rather than
+    # fragile list order or changing coordinates.
+    entry_id = uuid5(NAMESPACE_URL, f"{page_id}|group|{position_group_id}").hex
+    fingerprint = sha256_file(target)
+    if fingerprint is None:
+        raise OSError("Saved PDIC disappeared before position-switch evidence")
+    word, x0, y0 = removed_entry
+    _, x1, y1 = added_entry
+    event = make_event(
+        page_id=page_id, action="move",
+        before={"word": word, "x": x0, "y": y0},
+        after={"word": word, "x": x1, "y": y1},
+        pdic_sha256=fingerprint, entry_id=entry_id,
+        candidate_id=added_candidate_id, image_sha256=sha256_file(page),
+    )
+    page_key = uuid5(NAMESPACE_URL, relative_page).hex
+    append_event(
+        data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json",
+        event, pdic_file=target,
+    )
+    return True

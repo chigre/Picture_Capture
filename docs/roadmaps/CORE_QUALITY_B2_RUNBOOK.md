@@ -59,3 +59,7 @@ OCR candidate checkbox select/deselect is now captured only when a *single* pre-
 ### Additional R2.1 main-canvas manual addition (pending CI)
 
 A real canvas click now stages a pre-save PDIC snapshot and canonical-to-original-source XY. **Only** after a successful full PDIC save (and manual overrides flush) can it log an `add` event, requiring exactly one new row at the clicked XY, no unrelated rename/delete/move, no duplicated coordinate and no coalesced second insertion. Row text may be entered before saving. A missing/stale page, old project with option OFF, or background OCR save without a prior click generates no evidence. This change never rewrites existing PDIC for telemetry. Identity is stable by page+XY only for non-moving distinct entries; coordinate moves remain unlinked.
+
+### Narrow OCR candidate position-switch move (pending CI)
+
+Choosing a candidate's original/anchor versus refined-Y alternative uses a physical `position_group_id`. After the deferred PDIC and manual-selection override files **both** commit, a `move` event is allowed only if the prior and saved PDIC differ by exactly one removed and one added identical word at different source XY, both candidate IDs are unique and same-group, and the old/new override records unambiguously show `position_switch` and `manual_checkbox`. Stable identity is derived from the explicit group ID. Any text change, duplicate candidates, simultaneous edits, failed sidecar write or missing group link remains unknown. This is **not** unrestricted visual marker dragging support.

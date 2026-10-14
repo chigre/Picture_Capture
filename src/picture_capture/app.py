@@ -14442,8 +14442,35 @@ class PictureCaptureApp(tk.Tk):
             return
         if override is None:
             return
+        position_switch = None
+        group_id = str(cand.get("position_group_id") or "")
+        if selected and group_id:
+            siblings = [
+                row for row in getattr(self, "ocr_review_candidates", ())
+                if row is not cand and isinstance(row, dict)
+                and row.get("position_group_id") == group_id
+                and str(row.get("candidate_id") or "") != candidate_id
+            ]
+            # Only an actual selected, uniquely linked sibling counts as the
+            # pre-click physical-headword location; never infer from nearest Y.
+            matched = [
+                (str(entry.candidate_id), (str(entry.word), int(entry.x), int(entry.y)))
+                for sibling in siblings
+                for entry in getattr(self, "entries", ())
+                if str(entry.candidate_id or "") == str(sibling.get("candidate_id") or "")
+                and str(entry.candidate_id or "")
+            ]
+            if len(matched) == 1:
+                removed_id, removed_row = matched[0]
+                if sum(
+                    str(row.get("candidate_id") or "") == removed_id
+                    for row in getattr(self, "ocr_review_candidates", ())
+                    if isinstance(row, dict)
+                ) == 1:
+                    position_switch = (removed_id, removed_row, group_id)
         state["_pending_evidence_toggle"] = (
             page, before, expected, candidate_id, bool(selected), override,
+            position_switch,
         )
 
     def _flush_proofreading_candidate_evidence(self) -> None:
@@ -14451,20 +14478,36 @@ class PictureCaptureApp(tk.Tk):
         snapshot = self.__dict__.pop("_pending_evidence_toggle", None)
         if not isinstance(snapshot, tuple):
             return
-        page, before, expected, candidate_id, selected, override = snapshot
+        if len(snapshot) != 7:
+            return
+        page, before, expected, candidate_id, selected, override, position_switch = snapshot
         if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
             return
         project = getattr(self, "project", None)
         if project is None:
             return
         try:
-            from .proofreading_capture import capture_saved_candidate_selection
-            capture_saved_candidate_selection(
+            from .proofreading_capture import (
+                capture_saved_candidate_selection,
+                capture_saved_position_switch,
+            )
+            recorded = capture_saved_candidate_selection(
                 project_root=project.root, page=page,
                 prior_pdic_entries=before, expected_entry=expected,
                 candidate_id=candidate_id, candidate_id_unique=True,
                 selected=selected, manual_selection_path=override,
             )
+            if not recorded and selected and position_switch is not None:
+                old_candidate_id, old_entry, group_id = position_switch
+                capture_saved_position_switch(
+                    project_root=project.root, page=page,
+                    prior_pdic_entries=before,
+                    removed_entry=old_entry, added_entry=expected,
+                    removed_candidate_id=old_candidate_id,
+                    added_candidate_id=candidate_id,
+                    position_group_id=group_id,
+                    manual_selection_path=override,
+                )
         except (OSError, ValueError, TypeError):
             # Journal failure must not roll back user PDIC or overrides.
             status = getattr(self, "status_var", None)
