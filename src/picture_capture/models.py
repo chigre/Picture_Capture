@@ -623,6 +623,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # column from pulling the separator toward the preceding line.
     paddle_separator_roi_width_ratio: float = 100.0
     paddle_separator_column_margin: int = 8
+    separator_y_max_shift_ratio: float = 0.45
     # Optional second OCR pass for diagnostics / conservative rescue.  It uses
     # the same straightened candidate band and the existing Tesseract language/path.
     paddle_use_paddleocr: bool = True
