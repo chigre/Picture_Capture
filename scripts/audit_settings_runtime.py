@@ -67,7 +67,8 @@ def scan_reads_writes(fields):
     for path in sorted(PACKAGE.rglob("*.py")):
         relative = path.relative_to(ROOT).as_posix()
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            source_text = path.read_text(encoding="utf-8")
+            tree = ast.parse(source_text)
         except (SyntaxError, UnicodeError) as exc:
             literals.append({"file": relative, "line": 0, "kind": "parse_error", "expression": str(exc)})
             continue
@@ -89,7 +90,7 @@ def scan_reads_writes(fields):
                         and type(x.value) in (int, float) and x.value not in (0, 1)]
                 if not nums:
                     continue
-                parent = ast.get_source_segment(path.read_text(encoding="utf-8"), node) or ""
+                parent = ast.get_source_segment(source_text, node) or ""
                 if len(parent) > 230:
                     parent = parent[:227] + "..."
                 literals.append({
