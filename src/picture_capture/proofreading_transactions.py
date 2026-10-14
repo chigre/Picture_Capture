@@ -105,7 +105,9 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
         return None
 
 
-def _undoable_committed_change(before: SavedSnapshot, after: SavedSnapshot) -> bool:
+def _undoable_committed_change(
+    before: SavedSnapshot, after: SavedSnapshot, *, allow_reversal: bool = False,
+) -> bool:
     if (before.page != after.page or not before.image_sha
             or before.image_sha != after.image_sha
             or before.candidates != after.candidates
@@ -119,6 +121,11 @@ def _undoable_committed_change(before: SavedSnapshot, after: SavedSnapshot) -> b
     # by the same file transaction. Compound insertions/multiple deletions
     # remain unknown until they have separately-owned operations.
     if len(removed) + len(added) > 1:
+        return False
+    # Only an explicit ReviewWindow DELETE can own disappearance of one row.
+    # A newly appearing row during a save has no R3 UI add-operation owner.
+    # The reverse direction is used exclusively to replay a stored delete.
+    if added and not allow_reversal:
         return False
     lost_or_added = next(iter(removed or added), None)
     if lost_or_added is not None:
@@ -273,7 +280,7 @@ def _publish_restored_snapshot(
         changes.append(("simplified", expected.simplified_bytes, target.simplified_bytes))
     if not changes:
         return False
-    if (not _undoable_committed_change(expected, target)
+    if (not _undoable_committed_change(expected, target, allow_reversal=True)
             or _recovery_path(page).exists()):
         return False
     # Revalidate exact bytes immediately before staging. An intervening writer

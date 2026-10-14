@@ -433,3 +433,16 @@ def test_unrendered_row_bindings_do_not_destroy_history_before_repaint(tmp_path)
     review._bound_row_entries = lambda: rows
     review.vars = [Var(rows[0].word)]
     assert history.undo(review)
+
+
+def test_unowned_new_entry_during_save_cannot_create_deletion_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    rows.append(Entry("unowned-extra", 61, 82))
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review, allow_unbound=True)
+    assert after
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+    assert not history.undo_stack
