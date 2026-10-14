@@ -51,3 +51,7 @@ uv run --locked pytest
 ### Additional R2.1 text-edit capture (pending CI)
 
 `ReviewWindow.save` and `autosave_commit` now inspect prior PDIC bytes only if recording was explicitly enabled. They invoke `capture_saved_review_rename` strictly **after the PDIC write succeeded**. The journal accepts just one unique XY-preserving word edit; multiword saves, XY moves, duplicates and no-change saves generate no event. Namespaced UUID5 keyed to project/page/original XY is stable across text changes and reordered review rows; this does **not** establish a reliable identity for moved or coincident entries. Logging errors never override the successful PDIC save. This remains a draft; no claims about other edit actions, UI integration smoke or verified labels.
+
+### Additional R2.1 checkbox capture (pending CI)
+
+OCR candidate checkbox select/deselect is now captured only when a *single* pre-save PDIC entry addition/removal matches the selected candidate and the corresponding `*_manual_selection.json` file confirms the **same** manually selected state, word and candidate ID **after both files are saved**. Rapid coalesced candidate clicks explicitly invalidate attribution and skip event creation. A failed/interrupted save cannot create a journal record. Same-column alternate-Y swaps involving multiple entries remain unknown, not labeled. The option is OFF unless explicitly enabled. Tests use synthetic rows and local files only.

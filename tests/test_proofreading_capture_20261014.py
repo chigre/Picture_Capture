@@ -210,3 +210,101 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
             "_review_evidence_after_save(evidence_before)"
         )
     assert "proofreading_event_capture" in review
+
+
+def test_candidate_toggle_only_records_one_confirmed_pdic_and_manual_override_save(tmp_path):
+    import json
+    from picture_capture.proofreading_capture import capture_saved_candidate_selection
+
+    page, original = _page(tmp_path)
+    candidate = ("added", 10, 100)
+    # Selecting one new candidate changes exactly one PDIC row.
+    write_pdic(
+        pdic_path(page),
+        original + [Entry(word=candidate[0], x=candidate[1], y=candidate[2])],
+        100, ("page", "@", "@"),
+    )
+    saved = pdic_path(page).read_bytes()
+    overrides = tmp_path / "page_manual_selection.json"
+    overrides.write_text(json.dumps({
+        "version": 1, "page": "page",
+        "overrides": {"unique-cid": {"selected": True, "word": "added", "engine": "manual_checkbox"}},
+    }), encoding="utf-8")
+    assert capture_saved_candidate_selection(
+        project_root=tmp_path, page=page, prior_pdic_entries=original,
+        expected_entry=candidate, candidate_id="unique-cid",
+        selected=True, candidate_id_unique=True, manual_selection_path=overrides,
+    )
+    assert pdic_path(page).read_bytes() == saved
+    journal = next(p for p in (tmp_path / "ProofreadingEvidence").glob("*.json") if p.name != "project_identity.json")
+    rows = load_events(journal)
+    assert len(rows) == 1 and rows[0]["action"] == "select"
+    assert rows[0]["candidate_id"] == "unique-cid"
+    assert rows[0]["verification_status"] == "explicit_action_unverified_page"
+    assert rows[0]["entry_id"] is not None
+    # Deselect the same candidate after saving both files.
+    new_previous = read_pdic(pdic_path(page))
+    write_pdic(pdic_path(page), original, 100, ("page", "@", "@"))
+    overrides.write_text(json.dumps({
+        "version": 1, "page": "page",
+        "overrides": {"unique-cid": {"selected": False, "word": "added", "engine": "manual_checkbox"}},
+    }), encoding="utf-8")
+    assert capture_saved_candidate_selection(
+        project_root=tmp_path, page=page, prior_pdic_entries=new_previous,
+        expected_entry=candidate, candidate_id="unique-cid",
+        selected=False, candidate_id_unique=True, manual_selection_path=overrides,
+    )
+    final = load_events(journal)
+    assert [row["action"] for row in final] == ["select", "deselect"]
+    assert final[0]["entry_id"] == final[1]["entry_id"]
+
+
+def test_candidate_toggle_rejects_partial_or_ambiguous_commits(tmp_path):
+    import json
+    from picture_capture.proofreading_capture import capture_saved_candidate_selection
+
+    page, original = _page(tmp_path)
+    expected = ("added", 10, 100)
+    extra = Entry(word="other-new", x=10, y=120)
+    write_pdic(
+        pdic_path(page),
+        original + [Entry(word="added", x=10, y=100), extra],
+        100, ("page", "@", "@"),
+    )
+    overrides = tmp_path / "page_manual_selection.json"
+    overrides.write_text(json.dumps({
+        "version": 1, "page": "page",
+        "overrides": {"unique-cid": {"selected": True, "word": "added", "engine": "manual_checkbox"}},
+    }), encoding="utf-8")
+    kwargs = dict(
+        project_root=tmp_path, page=page, prior_pdic_entries=original,
+        expected_entry=expected, candidate_id="unique-cid",
+        selected=True, candidate_id_unique=True, manual_selection_path=overrides,
+    )
+    assert capture_saved_candidate_selection(**kwargs) is False
+    write_pdic(
+        pdic_path(page),
+        original + [Entry(word="added", x=10, y=100)],
+        100, ("page", "@", "@"),
+    )
+    assert capture_saved_candidate_selection(**{**kwargs, "candidate_id_unique": False}) is False
+    overrides.write_text(json.dumps({
+        "version": 1, "page": "page", "overrides": {
+            "unique-cid": {"selected": False, "word": "added", "engine": "manual_checkbox"},
+        },
+    }), encoding="utf-8")
+    assert capture_saved_candidate_selection(**kwargs) is False
+    assert not (tmp_path / "ProofreadingEvidence").exists()
+
+
+def test_ocr_checkbox_flushes_after_both_pdic_and_override_writes():
+    source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    for method in ("_flush_deferred_page_save(", "save_pdic("):
+        begin = source.index("    def " + method)
+        end = source.find("\n    def ", begin + 8)
+        snippet = source[begin:end if end != -1 else None]
+        assert snippet.index("self._flush_pending_manual_override()") < snippet.index(
+            "self._flush_proofreading_candidate_evidence()"
+        )
+    assert "self._queue_proofreading_candidate_evidence(cand, selected)" in source
+    assert 'state["_pending_evidence_toggle"] = False' in source

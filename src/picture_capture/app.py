@@ -14368,6 +14368,64 @@ class PictureCaptureApp(tk.Tk):
                 self._pending_manual_override_path = None
                 self._pending_manual_override_payload = None
 
+    def _queue_proofreading_candidate_evidence(self, cand: dict, selected: bool) -> None:
+        """Keep one pre-save checkbox snapshot; coalesced edits are ambiguous."""
+        state = self.__dict__
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        if "_pending_evidence_toggle" in state:
+            state["_pending_evidence_toggle"] = False
+            return
+        page = getattr(self, "current_page", None)
+        if page is None or getattr(self, "project", None) is None:
+            return
+        candidate_id = str(cand.get("candidate_id", "") or "")
+        if not candidate_id or sum(
+            str(row.get("candidate_id", "")) == candidate_id
+            for row in getattr(self, "ocr_review_candidates", ())
+            if isinstance(row, dict)
+        ) != 1:
+            return
+        try:
+            before = read_pdic(pdic_path(page))
+            override = self._manual_selection_path()
+            expected = (
+                str(cand.get("word", "")),
+                int(cand.get("source_x", 0)), int(cand.get("source_y", 0)),
+            )
+        except (OSError, ValueError, TypeError):
+            return
+        if override is None:
+            return
+        state["_pending_evidence_toggle"] = (
+            page, before, expected, candidate_id, bool(selected), override,
+        )
+
+    def _flush_proofreading_candidate_evidence(self) -> None:
+        """Only after PDIC and delayed manual-selection sidecar are both saved."""
+        snapshot = self.__dict__.pop("_pending_evidence_toggle", None)
+        if not isinstance(snapshot, tuple):
+            return
+        page, before, expected, candidate_id, selected, override = snapshot
+        if not getattr(getattr(self, "settings", None), "proofreading_event_capture", False):
+            return
+        project = getattr(self, "project", None)
+        if project is None:
+            return
+        try:
+            from .proofreading_capture import capture_saved_candidate_selection
+            capture_saved_candidate_selection(
+                project_root=project.root, page=page,
+                prior_pdic_entries=before, expected_entry=expected,
+                candidate_id=candidate_id, candidate_id_unique=True,
+                selected=selected, manual_selection_path=override,
+            )
+        except (OSError, ValueError, TypeError):
+            # Journal failure must not roll back user PDIC or overrides.
+            status = getattr(self, "status_var", None)
+            if status is not None:
+                status.set("候选选择已保存，但本地校对日志写入失败。")
+
     def _schedule_deferred_page_save(self, *, sync_editors: bool = True) -> None:
         """Coalesce rapid checkbox edits while preserving an exact page snapshot."""
         project = self.__dict__.get("project")
@@ -14416,6 +14474,7 @@ class PictureCaptureApp(tk.Tk):
                 self._refresh_word_fill_check_from_line_count(page_index, len(entries), persist=True)
                 self._update_page_row(page_index)
         self._flush_pending_manual_override()
+        self._flush_proofreading_candidate_evidence()
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
         return self._review_controller_for_call().entry_for_candidate(cand)
@@ -14424,6 +14483,7 @@ class PictureCaptureApp(tk.Tk):
     def set_candidate_selected(self, cand: dict, selected: bool) -> bool:
         if not self._claim_page_for_manual_edit():
             return False
+        self._queue_proofreading_candidate_evidence(cand, selected)
         # Commit every visible editor by object identity before changing the
         # entries list. This prevents a middle-row removal from reassigning the
         # following editor texts to earlier entries.
@@ -15474,6 +15534,7 @@ class PictureCaptureApp(tk.Tk):
         changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
         self._last_pdic_write_changed = changed
         self._flush_pending_manual_override()
+        self._flush_proofreading_candidate_evidence()
         if changed:
             self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
             self._update_page_row(self.current_index)

@@ -144,3 +144,70 @@ def capture_saved_review_rename(
     journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
     append_event(journal, event, pdic_file=saved_file)
     return True
+
+
+def capture_saved_candidate_selection(
+    *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+    expected_entry: tuple[str, int, int], candidate_id: str,
+    selected: bool, candidate_id_unique: bool, manual_selection_path: Path,
+) -> bool:
+    """Persist a unique explicit checkbox action after BOTH source files commit.
+
+    All other edits, replaced OCR alternatives, missing/stale manual overrides,
+    duplicate candidate identities, or multi-click coalescing are not evidence
+    of an individually attributable toggle.
+    """
+    if not candidate_id or not candidate_id_unique:
+        return False
+    old = Counter(_triples(prior_pdic_entries))
+    pdic = pdic_path(page)
+    current = Counter(_triples(read_pdic(pdic)))
+    if selected:
+        expected_before, expected_after = old, old + Counter([expected_entry])
+        if old[expected_entry]:
+            return False
+    else:
+        if old[expected_entry] != 1:
+            return False
+        expected_before, expected_after = old, old - Counter([expected_entry])
+    if old != expected_before or current != expected_after:
+        return False
+    try:
+        override = json.loads(Path(manual_selection_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return False
+    if not isinstance(override, dict) or not isinstance(override.get("overrides"), dict):
+        return False
+    row = override["overrides"].get(candidate_id)
+    if not isinstance(row, dict) or row.get("selected") is not selected:
+        return False
+    if row.get("engine") != "manual_checkbox":
+        return False
+    if str(row.get("word", "")) != expected_entry[0]:
+        return False
+    if str(override.get("page", "")) != page.stem:
+        return False
+
+    project_root = Path(project_root)
+    project_id = _project_identity(project_root)
+    relative_page = Path(page).resolve().relative_to(project_root.resolve()).as_posix()
+    page_id = f"{project_id}/{relative_page}"
+    entry_id = uuid5(NAMESPACE_URL, f"{page_id}|{candidate_id}").hex
+    word, x, y = expected_entry
+    row_data = {"word": word, "x": x, "y": y}
+    sha = sha256_file(pdic)
+    if sha is None:
+        raise OSError("Saved PDIC disappeared before candidate evidence capture")
+    event = make_event(
+        page_id=page_id, action="select" if selected else "deselect",
+        before=None if selected else row_data,
+        after=row_data if selected else None,
+        pdic_sha256=sha, entry_id=entry_id, candidate_id=candidate_id,
+        image_sha256=sha256_file(page),
+    )
+    key = uuid5(NAMESPACE_URL, relative_page).hex
+    append_event(
+        data_root(project_root) / "ProofreadingEvidence" / f"{key}.json",
+        event, pdic_file=pdic,
+    )
+    return True
