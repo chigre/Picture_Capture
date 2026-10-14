@@ -92,3 +92,34 @@ def test_safe_default_scaled_fields(monkeypatch):
     assert result.character_height == 64
     assert result.row_padding == 11
     assert result.column_starts == ()
+
+
+def test_shared_and_layout_denoise_are_independent(tmp_path):
+    from picture_capture.adaptive_denoise import resolve_denoise_strength
+    from picture_capture.ui.settings import schema
+    off = AppSettings(analysis_denoise_enabled=False, layout_denoise_enabled=True)
+    assert resolve_denoise_strength(off) == "off"
+    on = AppSettings(analysis_denoise_enabled=True, layout_denoise_enabled=False)
+    assert resolve_denoise_strength(on) == "auto"
+    path = tmp_path / "settings.json"
+    on.to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.layout_denoise_enabled is False
+    assert reopened.analysis_denoise_enabled is True
+    assert schema.SETTING_CHOICES["analysis_denoise_strength"]["强"] == "strong"
+    assert "analysis_denoise_strength" in schema.NORMAL_ADVANCED_FIELDS
+
+
+def test_safe_scale_allowlist_persists_and_is_visible():
+    from picture_capture.ui.settings import schema
+    current = AppSettings()
+    assert current.layout_scale_enabled is False
+    assert (current.layout_scale_columns, current.layout_scale_column_width,
+            current.layout_scale_gutter) == (True, True, True)
+    assert (current.layout_scale_start_y, current.layout_scale_manual_x,
+            current.layout_scale_character_height, current.layout_scale_row_padding) == (
+                False, False, False, False,
+            )
+    checks = {name for _, name in schema.NORMAL_CHECKS}
+    assert {"analysis_denoise_enabled", "layout_denoise_enabled",
+            "layout_scale_enabled", "layout_scale_manual_x"} <= checks
