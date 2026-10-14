@@ -168,6 +168,16 @@ FIELD_GROUPS = [
 
 CHECK_GROUPS = [
         ("版面行为", [
+        ("共享分析图自适应去噪", "analysis_denoise_enabled"),
+        ("Layout 专用去噪", "layout_denoise_enabled"),
+        ("启用按原图尺寸缩图估计（实验）", "layout_scale_enabled"),
+        ("50% 可用：分栏数", "layout_scale_columns"),
+        ("50% 可用：单栏宽", "layout_scale_column_width"),
+        ("50% 可用：栏间距", "layout_scale_gutter"),
+        ("50% 可用：正文起始 Y", "layout_scale_start_y"),
+        ("50% 可用：首栏 X", "layout_scale_manual_x"),
+        ("50% 可用：字高", "layout_scale_character_height"),
+        ("50% 可用：行间空", "layout_scale_row_padding"),
             ("使用自动版面参数", "ordinary_auto_layout"),
             ("分栏数", "ordinary_auto_columns"),
             ("正文起始Y", "ordinary_auto_start_y"),
@@ -198,6 +208,10 @@ CHECK_GROUPS = [
 OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra", "jpn", "ara")
 
 SETTING_LABELS = {
+        "analysis_denoise_enabled": "共享分析图自适应去噪",
+        "layout_denoise_enabled": "Layout 专用去噪",
+        "layout_scale_enabled": "按原图尺寸自动缩图",
+        "analysis_denoise_strength": "共享分析图去噪强度",
         "layout_mask_illustrations": "Layout前白化插图",
         "layout_mask_illustrations_use_existing": "使用已有的插图数据",
         "columns": "正文栏数",
@@ -556,6 +570,7 @@ SETTING_HELP_IMAGES = {
     }
 
 SETTING_CHOICES = {
+        "analysis_denoise_strength": {"关闭": "off", "弱": "weak", "自动": "auto", "强": "strong"},
         "analysis_threshold_mode": {
             "自动（推荐，等同 Otsu）": "auto",
             "Otsu 全页阈值": "otsu",
@@ -571,6 +586,16 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "analysis_denoise_enabled": "共享分析图统一去噪的总开关；关闭仅影响共享预处理，不关闭 Layout 独立墨迹去噪。",
+    "layout_denoise_enabled": "是否在可靠性融合版面检测前执行额外墨迹去噪；不影响共享分析图去噪，也不改原图。",
+    "layout_scale_enabled": "实验功能：按原图最长边选择 100% / 75% / 50% 检测，仅经勾选的版面参数接受缩图估计，默认关闭。",
+    "layout_scale_columns": "允许缩图检测结果用于分栏数，默认允许。",
+    "layout_scale_column_width": "允许缩图检测结果用于单栏宽度，默认允许。",
+    "layout_scale_gutter": "允许缩图检测结果用于栏间距，默认允许。",
+    "layout_scale_start_y": "允许缩图检测结果用于正文起始 Y，默认不允许。",
+    "layout_scale_manual_x": "允许缩图检测结果用于首栏 X，默认不允许；此前测试发现部分页面存在明显 X 偏移。",
+    "layout_scale_character_height": "允许缩图结果用于普通字高，默认不允许。",
+    "layout_scale_row_padding": "允许缩图结果用于行间空，默认不允许。",
     "layout_mask_illustrations_use_existing": "只有同时开启【Layout 分析前白化插图】才生效。勾选：仅读取当前页已保存的 PPP 多边形直接填白，不重新识别、不改写 PPP；PPP 缺失明确报错。不勾选：自动识别插图，把识别结果写入 PPP（保留手绘区域），并按安全规则白化。",
     "proofreading_event_capture": "默认关闭。启用后仅将支持的人工校对操作，在 PDIC 成功保存后记录到本地项目的独立事件日志；不自动上传、不进行模型训练，普通保存和 OCR 自动画线不等于人工确认。关闭后停止记录，不删除已有日志；含词条文本的记录由用户自行保管、决定是否导出。",
     "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
@@ -662,6 +687,16 @@ ILLUSTRATION_CHECKS = (
 )
 
 NORMAL_CHECKS = (
+        ("共享分析图自适应去噪", "analysis_denoise_enabled"),
+        ("Layout 专用去噪", "layout_denoise_enabled"),
+        ("启用按原图尺寸缩图估计（实验）", "layout_scale_enabled"),
+        ("50% 可用：分栏数", "layout_scale_columns"),
+        ("50% 可用：单栏宽", "layout_scale_column_width"),
+        ("50% 可用：栏间距", "layout_scale_gutter"),
+        ("50% 可用：正文起始 Y", "layout_scale_start_y"),
+        ("50% 可用：首栏 X", "layout_scale_manual_x"),
+        ("50% 可用：字高", "layout_scale_character_height"),
+        ("50% 可用：行间空", "layout_scale_row_padding"),
         ("自动精修横线 Y", "paddle_refine_separator_y"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
