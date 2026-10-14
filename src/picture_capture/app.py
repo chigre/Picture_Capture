@@ -4857,8 +4857,15 @@ class ReviewWindow(tk.Toplevel):
         if page is None or getattr(self.parent, "project", None) is None:
             return None
         self.__dict__["_review_evidence_source_fingerprints"] = None
+        self.__dict__["_review_evidence_prior_pdic_sha256"] = None
         try:
-            previous = read_pdic(pdic_path(page))
+            from .proofreading_events import sha256_file
+            saved = pdic_path(page)
+            prior_sha = sha256_file(saved)
+            previous = read_pdic(saved)
+            if prior_sha is None or sha256_file(saved) != prior_sha:
+                return None
+            self.__dict__["_review_evidence_prior_pdic_sha256"] = prior_sha
             from .proofreading_capture import verified_ocr_preedit_fingerprints
             cache_fn = getattr(self.parent, "_paddle_cache_path", None)
             cache = cache_fn() if callable(cache_fn) else None
@@ -4880,9 +4887,10 @@ class ReviewWindow(tk.Toplevel):
         try:
             from .proofreading_capture import capture_saved_review_rename
             source = self.__dict__.pop("_review_evidence_source_fingerprints", None)
+            prior_sha = self.__dict__.pop("_review_evidence_prior_pdic_sha256", None)
             capture_saved_review_rename(
                 project_root=project.root, page=page, prior_pdic_entries=previous,
-                source_fingerprints=source,
+                source_fingerprints=source, prior_pdic_sha256=prior_sha,
             )
         except (OSError, ValueError, TypeError):
             self.parent.status_var.set(
