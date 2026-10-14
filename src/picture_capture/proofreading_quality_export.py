@@ -13,6 +13,7 @@ from typing import Any
 
 from .proofreading_events import audit_events, load_events, sha256_file
 from .proofreading_verification import explicit_verification_counts
+from .project_storage import page_sections_read_path_for_image
 
 EXPORT_FORMAT = "picture-capture-proofreading-quality-export-v1"
 
@@ -62,9 +63,31 @@ def summarize_local_events(
         image_sha256=image_digest,
     )
     types = Counter(_change_type(event) for event in events)
-    section_counts = Counter(
-        str(event.get("section_id") or "unknown") for event in events
+    # SECTION must be bound to the actual original-image coordinate and
+    # sidecar digest captured at edit time. An unbound or changed sidecar is
+    # unknown, never attributed to the nearest SECTION.
+    section_sha = (
+        sha256_file(page_sections_read_path_for_image(image_path))
+        if image_path is not None else None
     )
+    section_counts = Counter()
+    stale_section = 0
+    for event in events:
+        saved_section = event.get("section_snapshot_sha256")
+        saved_image = event.get("image_sha256")
+        if (
+            section_sha is not None
+            and saved_section == section_sha
+            and image_digest is not None
+            and saved_image == image_digest
+            and isinstance(event.get("section_id"), str)
+            and event["section_id"].startswith("section:")
+        ):
+            section_counts[event["section_id"]] += 1
+        else:
+            section_counts["unknown"] += 1
+            if saved_section is not None and saved_section != section_sha:
+                stale_section += 1
     # Sections may have free text. Only emit salted, non-reversible identifiers,
     # scoped to this project (and not user-provided section titles).
     section_summaries = {
@@ -82,6 +105,8 @@ def summarize_local_events(
         "provenance": provenance,
         "change_types": dict(sorted(types.items())),
         "section_counts_hashed": section_summaries,
+        "section_unattributed_events": section_counts.get("unknown", 0),
+        "section_snapshot_stale_events": stale_section,
         "verified_positive_labels": review_counts["correct_headword"],
         "verified_negative_labels": review_counts["not_headword"],
         "verification_basis": "explicit_current_saved_pdic_and_source_image_judgment_only",
