@@ -11578,9 +11578,15 @@ class PictureCaptureApp(tk.Tk):
                             # This synchronous handoff intentionally bounds
                             # in-flight pages to 1 GPU + <= workers CPU.
                             gpu_args = gpu_job_builder(item, position, total)
+                            self._batch_queue.put((
+                                "pipeline_stage", position, total, label, "GPU版面预检",
+                            ))
                             prepared = gpu_executor.submit(
                                 gpu_preflight_func, *gpu_args
                             ).result()
+                            self._batch_queue.put((
+                                "pipeline_stage", position, total, label, "CPU画线与保存",
+                            ))
                             args = (*args, prepared)
                         future = executor.submit(worker_func, *args)
                         futures[future] = (item, position, label, item_index)
@@ -11686,6 +11692,15 @@ class PictureCaptureApp(tk.Tk):
                 else:
                     self.batch_text_var.set(f"{self._batch_title}：已完成 {completed}/{total}：{label}")
                     self.status_var.set(f"{self._batch_title}：已完成 {completed}/{total} 页，最近完成 {label}")
+            elif kind == "pipeline_stage":
+                _kind, position, total, label, stage = event
+                self.batch_text_var.set(
+                    f"{self._batch_title} {position}/{total}：{stage} · {label}"
+                )
+                self.status_var.set(
+                    f"{self._batch_title}：{stage}（{label}）；"
+                    "GPU模型只在一个进程中运行。"
+                )
             elif kind == "parallel_state":
                 _kind, completed, total, active, label, workers = event
                 self._batch_in_item = active > 0
