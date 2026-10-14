@@ -156,7 +156,9 @@ class ProofreadingVisualVerificationDialog(tk.Toplevel):
         self._enable_buttons()
 
     def _reload(self) -> None:
-        self.table.delete(*self.table.get_children())
+        existing_rows = self.table.get_children()
+        if existing_rows:
+            self.table.delete(*existing_rows)
         try:
             rows = actionable_saved_events(
                 self.journal, self.pdic, self.page, ocr_cache=self.ocr_cache
@@ -270,6 +272,22 @@ def open_visual_verification(review_window: tk.Misc) -> None:
     project = getattr(parent, "project", None)
     page = getattr(parent, "current_page", None)
     if project is None or page is None:
+        return
+    # Filtered edits can still be flushing in the background. Do not begin
+    # confirmation until they are committed; the same applies to OCR batches.
+    if getattr(review_window, "_filter_rows_active", False):
+        messagebox.showinfo(
+            "请先完成保存", "请先退出筛选校对，等待当前页修改完成保存后再核验。",
+            parent=review_window,
+        )
+        return
+    batch_state = getattr(parent, "_foreground_batch_state", None)
+    current_index = getattr(parent, "current_index", -1)
+    if callable(batch_state) and batch_state(current_index) in {"pending", "processing"}:
+        messagebox.showinfo(
+            "请先完成保存", "当前页正在处理或尚未完成保存，请稍后手动打开核验。",
+            parent=review_window,
+        )
         return
     # Commit outstanding live proofreading edits, then re-check disk. Never
     # display a stale operation as verified merely because it is still selected.
