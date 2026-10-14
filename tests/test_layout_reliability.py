@@ -127,3 +127,26 @@ def test_separator_track_can_anchor_second_column_on_noisy_page():
     assert fused.separator_x is not None
     assert abs(fused.separator_x - 351) <= 5
     assert 365 <= fused.column_starts[1] <= 390
+
+
+def test_integral_reuse_matches_four_independent_box_sums():
+    """Optimized 5/11/directional neighbourhoods must be pixel-identical."""
+    from picture_capture.layout_reliability import _box_sum
+    for shape in [(1, 1), (3, 5), (50, 73), (120, 120)]:
+        ink = np.random.default_rng(20261014).integers(0, 2, shape, dtype=np.uint8).astype(bool)
+        h, w = ink.shape
+        padded = np.pad(ink.astype(np.uint8), ((6, 6), (6, 6)))
+        integral = np.pad(
+            padded.cumsum(axis=0, dtype=np.int32).cumsum(axis=1, dtype=np.int32),
+            ((1, 0), (1, 0)),
+        )
+        for ry, rx in [(2, 2), (5, 5), (6, 0), (0, 6)]:
+            y0, x0 = 6 - ry, 6 - rx
+            y1, x1 = 7 + ry, 7 + rx
+            actual = (
+                integral[y1:y1 + h, x1:x1 + w]
+                - integral[y0:y0 + h, x1:x1 + w]
+                - integral[y1:y1 + h, x0:x0 + w]
+                + integral[y0:y0 + h, x0:x0 + w]
+            )
+            np.testing.assert_array_equal(actual, _box_sum(ink, ry, rx))
