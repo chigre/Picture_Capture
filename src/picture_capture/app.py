@@ -785,6 +785,13 @@ class SettingsDialog(tk.Toplevel):
                 )
             check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
             check.grid(row=row, column=0, sticky="w", pady=4)
+            if name == "layout_mask_illustrations_use_existing":
+                parent_mask = self.vars.get("layout_mask_illustrations")
+                if parent_mask is not None:
+                    def _sync_illustration_reuse_state(*_ignored, master=parent_mask, child=check):
+                        child.configure(state="normal" if master.get() else "disabled")
+                    parent_mask.trace_add("write", _sync_illustration_reuse_state)
+                    _sync_illustration_reuse_state()
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=1, sticky="w", padx=(8, 0))
             callback = lambda l=label, n=name: self._show_check_help(l, n)
