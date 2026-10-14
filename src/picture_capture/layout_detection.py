@@ -124,6 +124,10 @@ def detect_layout_parameters(image, settings):
     # Preserve the historical two-layer cache contract: the reliable/raw
     # estimate is cached, while observed character-height correction is replayed
     # after every cache lookup and is never written back into the raw cache.
+    if not tracking:
+        return apply_character_height_fallback(
+            image, settings, raw, sys.modules[__name__],
+        )
     corrected = apply_character_height_fallback(
         image,
         settings,
