@@ -50,3 +50,38 @@
 2. 对全部 `AppSettings` 字段做 AST 级“读取/写入/默认值/显示位置/配置验证”映射，排除 `Entry` 等非设置数据类型；
 3. 动态验证 Settings Center 每个 Tab 的控件值保存、关闭重开、Windows spawn 子进程继承与实际分支读取；
 4. 以相同原图/PPP/PDIC 建立输出等价性测试，再按优先级决定是否开放这些阈值。
+
+
+## 第二阶段：自动化审计与整改（2026-10-15）
+
+增加 `scripts/audit_settings_runtime.py`：基于 AST 遍历整个
+`src/picture_capture/**/*.py`，列出每一个 `AppSettings` 字段的
+默认表达式、设置中心 schema 位置、代码静态读取与写入位置，以及检测
+模块中带数字比较的潜在硬编码阈值。通过
+`python scripts/audit_settings_runtime.py --out build/settings-audit`
+生成：
+
+- `appsettings_field_matrix.csv`
+- `hardcoded_threshold_candidates.json`
+- `summary.json`
+
+另有 `.github/workflows/settings-audit.yml` 在 GitHub Actions 运行全仓库
+扫描并尝试上传 `settings-audit-inventory` artifact。
+`tests/test_settings_runtime_audit_20261015.py` 在 CI 中实际执行该脚本、
+检查设置默认值及全部设置 JSON 往返。
+
+已做的不改变默认画线输出的修复：
+
+1. 帮助面板原先绑定动态 `textvariable` 时，初始不设置 wraplength，窗口会
+   先按单行长文本扩展。现设初始 `wraplength=300`，运行时继续按面板宽度重排。
+2. 普通 Layout Y 精修位移上限原来固定为 `0.45×行高`，现在增加
+   `separator_y_max_shift_ratio`，置于【横线 Y 精修】，默认值仍为 `0.45`。
+3. `paddle_separator_safety_px` 说明纠正为实际 OCR 边界候选安全距离，
+   不再暗示其能控制普通 Layout 的全部最终横线。
+4. 更新旧测试对【横线 Y 精修】独立标签的归属要求。
+
+**需要强调：自动审计产物是静态证据，不等于 UI 自动化或 PDIC 输出等价证明。**
+静态字段位置可能漏掉手工构建的窗口与动态 `getattr`；数字比较列表包含
+数学安全判据，必须人工筛选后才能成为可修改参数。剩余需运行 Windows
+界面交互/跨进程、保存/重开、20 页 PDIC 严格比较等测试。未经实际故障
+证据，不擅自开放 CJK 符号与大字头识别的几十个耦合阈值。
