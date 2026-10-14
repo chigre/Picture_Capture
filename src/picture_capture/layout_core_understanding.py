@@ -518,6 +518,22 @@ def understand_layout_core(
     Debug traces bypass shared Layout caching and capture publication. An
     isolated diagnostic run never mutates the normal cached Layout objects.
     """
+    from time import perf_counter as _perf
+    from .draw_performance_profile import enabled as _prof_on, record_page
+    _profiling = _prof_on()
+    _last = _perf() if _profiling else 0.0
+    _stages = {}
+    def _mark(name):
+        nonlocal _last
+        if _profiling:
+            now = _perf()
+            _stages[name] = now - _last
+            _last = now
+    def _finish(cache_status):
+        if _profiling:
+            _mark("layout_core_finalization")
+            record_page("<substage>", page_index, _stages,
+                        stage_group=f"layout_core_{cache_status}")
     # Diagnostic replay records a separate production pass, never publishes
     # LayoutRows and never mutates/reuses the shared normal result cache.
     key = None
@@ -530,12 +546,17 @@ def understand_layout_core(
         cached = _LAYOUT_CACHE.get(key)
         if cached is not None:
             _LAYOUT_CACHE.move_to_end(key)
-            return _publish_captured_result(cached, page_index)
+            _mark("layout_core_cache_lookup")
+            result = _publish_captured_result(cached, page_index)
+            _finish("cache_hit")
+            return result
 
+    _mark("layout_core_cache_lookup")
     layout, page_settings, applied = infer_dictionary_page_layout(
         image, settings, page_index=int(page_index),
         **({"trace": trace} if trace is not None else {}),
     )
+    _mark("layout_core_layout_inference")
     _apply_explicit_indent_semantics(layout, page_settings)
     # Even when the user explicitly chose no indentation, the low-level
     # physical detector has to be neutralized once. This is state
@@ -600,6 +621,7 @@ def understand_layout_core(
                                  "rescued_rows": int(restored_indents["rescued_rows"]),
                              })
 
+    _mark("layout_core_role_normalize_recovery")
     physical = _physical_reliable(layout)
     cjk = uses_cjk_role_model(page_settings)
     generic_body = bool(
@@ -622,6 +644,7 @@ def understand_layout_core(
         symbol_evidence=SymbolEvidenceResult(markers=[]),
     )
 
+    _mark("layout_core_role_metadata")
     symbol_promoted, large_promoted = _apply_universal_ordinary_evidence(
         image,
         result,
@@ -630,6 +653,7 @@ def understand_layout_core(
         large_head_debug_context=large_head_debug_context,
         trace=trace,
     )
+    _mark("layout_core_symbol_large_head_evidence")
     from .layout_verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
         recover_verified_oversized_heads(
@@ -642,6 +666,7 @@ def understand_layout_core(
         trace.add_layout("verified_oversized", "大字头最终复核",
                          "再次核实大字形与物理行对应关系；移除无效的大字碎片。",
                          layout, details=dict(verified_heads))
+    _mark("layout_core_verified_oversized")
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
     # before changing this canonical ordinary-mode output.
@@ -672,11 +697,15 @@ def understand_layout_core(
                              "physical_reliable": bool(physical),
                              "role_model": role_model,
                          })
+        _finish("trace")
         return result
     if large_head_diagnostics is not None or large_head_debug_context is not None:
+        _finish("diagnostic")
         return result
     _LAYOUT_CACHE[key] = result
     _LAYOUT_CACHE.move_to_end(key)
     while len(_LAYOUT_CACHE) > _CACHE_LIMIT:
         _LAYOUT_CACHE.popitem(last=False)
-    return _publish_captured_result(result, page_index)
+    published = _publish_captured_result(result, page_index)
+    _finish("cache_miss")
+    return published
