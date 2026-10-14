@@ -6403,7 +6403,7 @@ class ReviewWindow(tk.Toplevel):
         # Only explicitly enabled, project-local evidence capture. Save the
         # *previous on-disk* PDIC before mutating any shared Entry objects.
         capture_requested = bool(getattr(
-            self.parent.settings, "proofreading_event_capture", False
+            getattr(self.parent, "settings", None), "proofreading_event_capture", False
         ))
         prior_pdic_rows = None
         if capture_requested and self.parent.current_page is not None:
