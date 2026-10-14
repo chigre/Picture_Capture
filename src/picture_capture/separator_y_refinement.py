@@ -62,6 +62,10 @@ def refine_separator_y(
         refined_y, gap_details = refine_to_verified_white_gap(
             gray, int(refined_y), int(coarse_y),
             max(2, int(round(float(line_height or 0)))),
+            max_fraction=float(settings.separator_y_ink_safe_max_fraction),
+            ink_threshold=int(settings.separator_y_ink_safe_ink_threshold),
+            existing_ink_ratio=float(settings.separator_y_ink_safe_existing_ink_ratio),
+            gap_ink_ratio=float(settings.separator_y_ink_safe_gap_ink_ratio),
         )
         payload.update(gap_details)
     payload.setdefault("refiner", "shared_separator_y")
