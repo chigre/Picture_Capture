@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from uuid import NAMESPACE_URL, uuid5
 
-from PIL import Image, ImageOps, ImageTk
+from PIL import Image, ImageDraw, ImageOps, ImageTk
 
 from .formats import pdic_path
 from .project_storage import data_root
@@ -201,7 +201,7 @@ class ProofreadingVisualVerificationDialog(tk.Toplevel):
         self.details.set(
             f"原记录：{before.get('word', '—')}，"
             f"保存后：{after.get('word', '—')}；"
-            "仅检查扫描图中该位置是否属于词头，不自动判定。"
+            "红圈标示当前记录坐标；仅检查该处是否属于词头，不自动判定。"
         )
         position = after if "x" in after and "y" in after else before
         try:
@@ -213,10 +213,20 @@ class ProofreadingVisualVerificationDialog(tk.Toplevel):
                 w, h = source.size
                 if not (0 <= x < w and 0 <= y < h):
                     raise ValueError("Marker position is outside the source scan")
+                left, top = max(0, x - 140), max(0, y - 65)
                 crop = source.crop((
-                    max(0, x - 140), max(0, y - 65),
-                    min(w, x + 330), min(h, y + 100),
-                ))
+                    left, top, min(w, x + 330), min(h, y + 100),
+                )).convert("RGB")
+                # The red circle annotates only the temporary preview, never
+                # the original scanned dictionary image on disk.
+                marker_x, marker_y = x - left, y - top
+                ImageDraw.Draw(crop).ellipse(
+                    (
+                        marker_x - 9, marker_y - 9,
+                        marker_x + 9, marker_y + 9,
+                    ),
+                    outline="#df3030", width=3,
+                )
                 crop.thumbnail((650, 270))
                 photo = ImageTk.PhotoImage(crop, master=self)
             self.preview_photo = photo
