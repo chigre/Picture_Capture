@@ -868,12 +868,23 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     Compatibility path: OCR-free image-density layout estimation when the
     installed Paddle/PaddleX stack still cannot execute detection.
     """
+    from time import perf_counter as _perf
+    from .draw_performance_profile import enabled as _profile_enabled, record_page
+    _tracking = _profile_enabled()
+    _tick = _perf() if _tracking else 0.0
+    _steps = {}
     source = normalize_page_rgb(image)
     transform = LayoutTransform(settings.layout_transform)  # type: ignore[arg-type]
     analysis = transform.canonical_image_for_analysis(source)
+    if _tracking:
+        _steps["inner_detector_image_transform"] = _perf() - _tick
+        _tick = _perf()
     paddle_error: Exception | None = None
     try:
         detector = _get_text_detector(settings)
+        if _tracking:
+            _steps["inner_detector_model_get"] = _perf() - _tick
+            _tick = _perf()
         # Reassert immediately before predict because PaddleX can modify flags
         # while constructing other pipelines in the same application process.
         os.environ["FLAGS_enable_pir_api"] = "0"
@@ -881,6 +892,9 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
             results = list(detector.predict(np.asarray(analysis), batch_size=1, limit_side_len=2400))
         except TypeError:
             results = list(detector.predict(np.asarray(analysis)))
+        if _tracking:
+            _steps["inner_detector_predict"] = _perf() - _tick
+            _tick = _perf()
         if results:
             boxes = _boxes_from_detection(results[0], analysis.width, analysis.height)
             if boxes:
@@ -896,6 +910,10 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
                 )
                 estimate.canonical_transform = transform.kind
                 estimate.confidence = min(1.0, estimate.source_boxes / 40.0)
+                if _tracking:
+                    _steps["inner_detector_geometry"] = _perf() - _tick
+                    record_page("<substage>", -1, _steps,
+                                stage_group="layout_detector")
                 return estimate
             paddle_error = RuntimeError("PaddleOCR 整页版面检测没有返回文本框。")
         else:
@@ -903,6 +921,9 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     except Exception as exc:
         paddle_error = exc
 
+    if _tracking:
+        _steps["inner_detector_failed_or_empty"] = _perf() - _tick
+        _tick = _perf()
     try:
         estimate = _projection_layout_estimate(analysis, settings)
         estimate.canonical_transform = transform.kind
