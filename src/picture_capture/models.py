@@ -728,6 +728,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
+        # Existing project configs created before the 100%-width default
+        # retain the historical 60% when this field was absent.
+        raw.setdefault("paddle_separator_roi_width_ratio", 60.0)
         for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             raw[name] = _normalize_display_opacity(raw.get(name, 40.0))
         raw = migrate_app_settings_payload(raw, cls)
