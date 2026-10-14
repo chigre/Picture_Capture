@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 from .models import AppSettings
-from .runtime_environment import resolve_paddle_device
+from .inference_performance import resolve_inference_policy, paddle_constructor_variants
 from .image_utils import normalize_page_rgb
 from .layout_transform import LayoutTransform
 
@@ -117,21 +117,13 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 
 def _get_text_detector(settings: AppSettings) -> Any:
-    """Create a detection-only PaddleOCR model with CPU oneDNN/PIR disabled.
-
-    PaddlePaddle 3.3.x + recent PaddleOCR builds can enter a PIR/oneDNN CPU
-    execution path that raises ConvertPirAttribute2RuntimeAttribute for text
-    detection models.  Layout detection values compatibility over peak speed,
-    so explicitly disable that acceleration path here.
-    """
-    device = resolve_paddle_device()
-    key = f"{device}|nomkldnn"
+    """Get a cached detector using the shared device and CPU acceleration policy."""
+    policy = resolve_inference_policy()
+    key = f"{policy.device}|{policy.mkldnn}|{policy.cpu_threads}"
     if key in _TEXT_DETECTION_CACHE:
         return _TEXT_DETECTION_CACHE[key]
 
-    # Must be set before importing/constructing PaddleOCR/PaddleX components.
-    # This is intentionally an assignment (not setdefault): some PaddleX builds
-    # may have set it to 1 earlier in the process.
+    # Paddle 3.x PIR compatibility flag must precede model construction.
     os.environ["FLAGS_enable_pir_api"] = "0"
     from .windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
@@ -139,40 +131,31 @@ def _get_text_detector(settings: AppSettings) -> Any:
         from paddleocr import TextDetection
     except ImportError as exc:
         raise RuntimeError(
-            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
+            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或执行：uv sync --extra ocr-cpu"
         ) from exc
 
-    kwargs: dict[str, Any] = {"enable_mkldnn": False, "device": device}
-
-    # Newer PaddleOCR 3.x exposes enable_mkldnn directly.  Keep compatibility
-    # with older 3.x signatures by progressively dropping unsupported kwargs.
-    attempts = [
-        kwargs,
-        {k: v for k, v in kwargs.items() if k != "device"},
-        {"device": device},
-        {},
-    ]
-    seen: set[tuple[tuple[str, str], ...]] = set()
     last_exc: Exception | None = None
-    for attempt in attempts:
-        marker = tuple(sorted((str(k), repr(v)) for k, v in attempt.items()))
-        if marker in seen:
-            continue
-        seen.add(marker)
+    for candidate in paddle_constructor_variants({}, policy):
         try:
-            detector = TextDetection(**attempt)
-            # Layout detection only needs the active device configuration.
-            # Keeping stale detector instances for every past device can pin
-            # substantial Paddle/PaddleX memory for the whole GUI session.
-            _TEXT_DETECTION_CACHE.clear()
-            _TEXT_DETECTION_CACHE[key] = detector
-            return detector
+            detector = TextDetection(**candidate)
         except TypeError as exc:
             last_exc = exc
-            continue
+            # Compatibility with versions lacking optional CPU switches.
+            legacy = {k: v for k, v in candidate.items()
+                      if k not in {"enable_mkldnn", "cpu_threads"}}
+            if legacy == candidate:
+                continue
+            try:
+                detector = TextDetection(**legacy)
+            except Exception as retry_exc:
+                last_exc = retry_exc
+                continue
         except Exception as exc:
             last_exc = exc
-            break
+            continue
+        _TEXT_DETECTION_CACHE.clear()
+        _TEXT_DETECTION_CACHE[key] = detector
+        return detector
     raise RuntimeError(f"PaddleOCR 文本检测模型初始化失败：{last_exc}") from last_exc
 
 
