@@ -6,12 +6,23 @@ Never sum overlapped stages to estimate total elapsed batch time.
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 import os
 from pathlib import Path
 import time
 from .runtime_environment import user_data_root
 
 _ENV = "PICTURE_CAPTURE_DRAW_PROFILE"
+_CURRENT_PAGE: ContextVar[str | None] = ContextVar("draw_profile_page", default=None)
+
+
+def bind_page(path: str | Path):
+    return _CURRENT_PAGE.set(str(path))
+
+
+def unbind_page(token) -> None:
+    _CURRENT_PAGE.reset(token)
+
 
 
 def enabled() -> bool:
@@ -31,7 +42,9 @@ def record_page(image_path: str | Path, page_index: int, stages: dict[str, float
         folder.mkdir(parents=True, exist_ok=True)
         row = {
             "time": time.time(), "pid": os.getpid(),
-            "page_index": int(page_index), "page": str(image_path),
+            "page_index": int(page_index), "page": (
+                _CURRENT_PAGE.get() if str(image_path) == "<substage>" else str(image_path)
+            ),
             "mode": mode, "stage_group": stage_group,
             "stages_ms": {str(k): round(max(0.0, float(v)) * 1000, 3)
                           for k, v in stages.items()},
