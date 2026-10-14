@@ -276,6 +276,7 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+        "analysis_denoise_strength": "共享分析图自适应去噪的强度，可选关闭、弱、自动、强；要一键关闭请使用 Layout 区的共享去噪开关。",
         "layout_mask_illustrations_use_existing": (
             "依赖【Layout 分析前白化插图】。勾选后只读取当前页 PPP 中已经保存的插图多边形，"
             "直接对白化分析副本进行处理，不运行插图自动识别，也不改写 PPP。"
@@ -433,6 +434,7 @@ NORMAL_COMMON_FIELDS = (
     )
 
 NORMAL_ADVANCED_FIELDS = (
+        "analysis_denoise_strength",
         "analysis_threshold_mode", "darkness_threshold", "dark_area_percent",
         "ordinary_right_divisor", "physical_row_projection_width_percent",
         "white_threshold_high", "white_threshold_low",
