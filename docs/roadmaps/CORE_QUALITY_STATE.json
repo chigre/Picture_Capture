@@ -4,7 +4,7 @@
   "plan_version": "1.1.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-14T19:00:00Z",
+  "updated_at_utc": "2026-10-14T19:20:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -25,35 +25,35 @@
     "status": "in_progress",
     "active_phase": "R2",
     "active_work_item": "R2.1",
-    "work_in_progress": true,
+    "work_in_progress": false,
     "implementation_pr": {
       "number": 500,
       "url": "https://github.com/chigre/Picture_Capture/pull/500",
       "branch": "feat/pc-cq-b2-explicit-marker-move-20261015",
-      "status": "draft_ci_running",
+      "status": "merged_main_ci_green_b2_pending_human",
       "units": [
         "R2.1",
         "R2.2",
         "R2.3"
       ]
     },
-    "implementation_head_sha": "da24f81f3c0eadd25c5ae44baa33f8c0c921ee12",
-    "latest_verified_main_sha": "8a95e37d592f421d823efbe338942333867ad15c",
+    "implementation_head_sha": "cc72e1f9d0db1b5db968da44b70c4c4d46dad572",
+    "latest_verified_main_sha": "3248882a40606069c9eb5b931c1a690bef87c422",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "real_windows_operator_acceptance_pending",
-        "message": "#483 W1–W11 must be executed interactively on actual authorized Windows project (including newly added right-click X,Y move), not replaced by CI synthetic tests.",
+        "message": "#483 genuine Windows user must validate W1–W11 including new index-label right-click original-image XY move, FocusOut/autosave, SECTION and source crop, crash/reopen, source errors; synthetic runner is not equivalent.",
         "url": "https://github.com/chigre/Picture_Capture/issues/483"
       },
       {
-        "type": "explicit_move_scope_review_pending",
-        "message": "#500 adds explicit numbered-label right-click original-image coordinate move; not a generic freehand drag. OCR-linked rows or active simplified pairing intentionally refuse to protect source lineage; these restrictions need user/operator acceptance.",
+        "type": "move_scope_human_review_pending",
+        "message": "#500 implements explicit typed original XY move, not freehand drag; safely refuses OCR-linked entries and paired simplified records that require R3 multi-file transaction ownership. User acceptance of this scope is pending.",
         "url": "https://github.com/chigre/Picture_Capture/pull/500"
       }
     ],
-    "required_next_action": "ONE active production PR #500 B2: resolve fixed-head CI, compare safety and architecture guard; if green merge only after review, then postmerge main CI. Keep B2 in_progress until real Windows operator acceptance W1-W11. Do not start B3 or PR-B.",
-    "last_test_evidence": "main@8a95e37 CI 38617829031 success on Windows/macOS/Ubuntu/Python3.10. PR #500: test-first backend/UI explicit index-widget-owned original-image XY move, changed Entry plus same-entry rename, no invented proximity, fail-closed collisions/cross-page/SECTION/Profile/OCR-linked/simplified sidecar/batch; opt-in event post-PDIC; head da24f81 fixed-head CI pending. Synthetic runner only; not real Windows human W1-W8.",
+    "required_next_action": "B2/#483 ONLY: have an actual Windows operator run W1–W11 from CORE_QUALITY_B2_WINDOWS_ACCEPTANCE_20261015.md with an authorized local project copy, record PASS/FAIL without private scan uploads; confirm whether explicit typed XY reposition for simple Entry rows is accepted instead of freehand dragging and whether OCR-linked/paired simplified movement should be supported in R3 transaction. Do not mark R2 verified or start B3/R3/PR-B.",
+    "last_test_evidence": "#500 fixed-head PR CI 38619428582 success Windows/macOS/Ubuntu/Python3.10 (pytest, architecture guards, Tk smoke and wheel). #500 squash merged as main@3248882a40606069c9eb5b931c1a690bef87c422 and postmerge main CI 38619848886 success across all four jobs. Synthetic explicit Entry right-click X,Y relocation, post-save provenance, same-row rename, cross-page/SECTION/Profile/batch/candidate/simplified guards, corrupted sidecar, save rollback and zero automatic verified labels passed. Human Windows W1–W11 not performed.",
     "active_batch": "B2",
     "next_batch": "B2"
   },
@@ -457,6 +457,25 @@
         "#500 explicit coordinate entry rightclick not freehand drag"
       ],
       "note": "Code + sidecar safe increment only; leave R2/B2 in_progress until human acceptance; no model learning, no PDIC/SECTION/Profile schema changes."
+    },
+    {
+      "type": "b2_explicit_marker_move_postmerge",
+      "status": "merged_main_ci_green_b2_in_progress",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/500",
+      "code_head_sha": "cc72e1f9d0db1b5db968da44b70c4c4d46dad572",
+      "merge_sha": "3248882a40606069c9eb5b931c1a690bef87c422",
+      "pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38619428582",
+      "postmerge_main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38619848886",
+      "subtasks": [
+        "R2.1",
+        "R2.2",
+        "R2.3"
+      ],
+      "remaining_blockers": [
+        "human Windows operator W1-W11",
+        "#500 no generic freehand drag / OCR-linked/paired simplified move"
+      ],
+      "note": "no open production PR, experimental evidence default OFF, no existing data formats changed, no private uploads or automatic training labels."
     }
   ],
   "rules_for_updates": {
@@ -569,19 +588,19 @@
       "status": "in_progress",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "#500 Draft: explicit action-owned marker XY entry position change (not freehand drag) + exact post-save local event, additional safety tests. Real Windows W1–W11 operator acceptance unresolved, B2 not verified.",
+      "blocker": "#500 explicit per-Entry original XY positioning and post-PDIC evidence code merged with full four-platform fixed-head PR and main CI. B2 remains in progress pending actual human Windows W1–W11 and scope acceptance (not freehand drag / OCR-linked or paired simplified edits). B3 and real-scan PR-B deferred.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Default-OFF narrow opt-in event capture and Tk human verification UI merged in #482; read-only source crop, no auto consent, journal locking. #486 adds real widget integration smoke across Windows/macOS/Linux, CI pending. Arbitrary XY moved/multi-edit stable Entry IDs and real operator GUI acceptance remain open (#483). #486 Tk dialog construction, preview, checkbox, cancel, error, reopen on synthetic PNG/PDIC passed all CI and postmerge main CI (38541861529). Human Windows operator and unrestricted identity remain outstanding. #489 Draft: proposed append-only same-snapshot multi-rename events (unchanged unique original XY), persistent same-coordinate ID across reorder/reopen, atomic batch journal. CI pending; cannot claim durable identity through arbitrary movement. #489 merged: same-save multiple text-only edits at globally unique unchanged XY captured atomically with UUIDv5 same-position ID across reorder/reopen; no arbitrary XY move stability claim; CI and postmerge CI green. PR #498 adds regression for operation-owned post-move IDs across rename/reopen; draft CI pending, not generic XY drag. New PR #498 staged actual pre-save PDIC digest, page identity, proven Entry ID replay across uninterrupted saved rename chain and session reopen; mixed-row atomic identity regression; refuses ambiguous legacy gaps, source image drift, unrelated PDIC mutations. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: right-click concrete Entry numeric widget to type original-image X,Y; unique old/new coordinates, unchanged other rows, optional same-entry rename, refuses OCR-linked/simplified pairing, SECTION/Profile gaps and background batches; human action, not coordinate inference."
+          "evidence": "Default-OFF narrow opt-in event capture and Tk human verification UI merged in #482; read-only source crop, no auto consent, journal locking. #486 adds real widget integration smoke across Windows/macOS/Linux, CI pending. Arbitrary XY moved/multi-edit stable Entry IDs and real operator GUI acceptance remain open (#483). #486 Tk dialog construction, preview, checkbox, cancel, error, reopen on synthetic PNG/PDIC passed all CI and postmerge main CI (38541861529). Human Windows operator and unrestricted identity remain outstanding. #489 Draft: proposed append-only same-snapshot multi-rename events (unchanged unique original XY), persistent same-coordinate ID across reorder/reopen, atomic batch journal. CI pending; cannot claim durable identity through arbitrary movement. #489 merged: same-save multiple text-only edits at globally unique unchanged XY captured atomically with UUIDv5 same-position ID across reorder/reopen; no arbitrary XY move stability claim; CI and postmerge CI green. PR #498 adds regression for operation-owned post-move IDs across rename/reopen; draft CI pending, not generic XY drag. New PR #498 staged actual pre-save PDIC digest, page identity, proven Entry ID replay across uninterrupted saved rename chain and session reopen; mixed-row atomic identity regression; refuses ambiguous legacy gaps, source image drift, unrelated PDIC mutations. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: right-click concrete Entry numeric widget to type original-image X,Y; unique old/new coordinates, unchanged other rows, optional same-entry rename, refuses OCR-linked/simplified pairing, SECTION/Profile gaps and background batches; human action, not coordinate inference. #500 merged main@3248882a40606069c9eb5b931c1a690bef87c422, fixed-head PR CI 38619428582 and postmerge main CI 38619848886 SUCCESS; genuine Windows W1–W11 and move scope review still pending, not fully verified."
         },
         "R2.2": {
           "status": "in_progress",
-          "evidence": "Conservative pre-edit OCR ancestry/PDIC/image binding, in-lock source digest checks and SECTION provenance merged in #482 with green main CI. Unlinked/ambiguous candidate mapping remains unknown; broadened durable identity not yet verified. #489 batch events maintain same page, image, saved PDIC sha and OCR pre-edit fingerprints, with fail-closed stale/duplicate/mixed-source guards. Synthetic CI pending. #489 all batch event sources linked to same current saved PDIC digest; mixed source and stale/duplicate events refuse recording; CI and postmerge CI green. PR #498 transports double-checked pre-edit PDIC digest into opt-in journal owner replay; stale/ambiguous fail-closed, CI pending. New optional predecessor PDIC SHA for proven rename events; replay only connected journal snapshots, preserve original OCR source ancestry; enforce predecessor inside exclusive journal lock for single and multi-row batches. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: postcommit explicit move event retains connected owned ID or mints action-owned UUID; previous PDIC/image digest, page, atomic journal predecessor and unknown/stale protections, experimental evidence opt-in default OFF."
+          "evidence": "Conservative pre-edit OCR ancestry/PDIC/image binding, in-lock source digest checks and SECTION provenance merged in #482 with green main CI. Unlinked/ambiguous candidate mapping remains unknown; broadened durable identity not yet verified. #489 batch events maintain same page, image, saved PDIC sha and OCR pre-edit fingerprints, with fail-closed stale/duplicate/mixed-source guards. Synthetic CI pending. #489 all batch event sources linked to same current saved PDIC digest; mixed source and stale/duplicate events refuse recording; CI and postmerge CI green. PR #498 transports double-checked pre-edit PDIC digest into opt-in journal owner replay; stale/ambiguous fail-closed, CI pending. New optional predecessor PDIC SHA for proven rename events; replay only connected journal snapshots, preserve original OCR source ancestry; enforce predecessor inside exclusive journal lock for single and multi-row batches. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: postcommit explicit move event retains connected owned ID or mints action-owned UUID; previous PDIC/image digest, page, atomic journal predecessor and unknown/stale protections, experimental evidence opt-in default OFF. #500 merged main@3248882a40606069c9eb5b931c1a690bef87c422, fixed-head PR CI 38619428582 and postmerge main CI 38619848886 SUCCESS; genuine Windows W1–W11 and move scope review still pending, not fully verified."
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Local aggregate verification counts, explicit user positive/negative records, zero training/export pixels and no uploads merged in #482. #486 tests positive/negative confirmation/cancel/stale scans/reopening with synthetic real Tk widgets. CI pending and genuine operator acceptance outstanding. #486 synthetic positive/negative verified journal writes passed actual Tk workflow on three CI OS; no training or private data. Full B2 safety/UI integration not complete. #489 multi-text operations remain explicit_action_unverified_page and do not export labels; disk-write failures publish no partial event group. CI pending. #489 atomic batch journal publication tested on first journal and existing journal disk-full failure; still non-verified evidence, no automatic labels; main CI/CodeQL green. PR #498 keeps non-verified event status; no training/quality claims. CI and Windows hands-on review pending. Unverified action status retained; synthetic tests for stale/ambiguous owner, image replacement, unrecorded edits, cross-page refusal, and atomic journal preservation; no training labels exported. Human operator/real scan remain pending. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: regression tests for exact saved PDIC delta, same-row rename/reopen, unowned other edits, duplicate coordinate, image drift, malformed simplified sidecar, FocusOut-compatible entry object, batch refusal, save rollback, page switch, evidence journal warning; no verified labels. Human Windows W1–W11 pending."
+          "evidence": "Local aggregate verification counts, explicit user positive/negative records, zero training/export pixels and no uploads merged in #482. #486 tests positive/negative confirmation/cancel/stale scans/reopening with synthetic real Tk widgets. CI pending and genuine operator acceptance outstanding. #486 synthetic positive/negative verified journal writes passed actual Tk workflow on three CI OS; no training or private data. Full B2 safety/UI integration not complete. #489 multi-text operations remain explicit_action_unverified_page and do not export labels; disk-write failures publish no partial event group. CI pending. #489 atomic batch journal publication tested on first journal and existing journal disk-full failure; still non-verified evidence, no automatic labels; main CI/CodeQL green. PR #498 keeps non-verified event status; no training/quality claims. CI and Windows hands-on review pending. Unverified action status retained; synthetic tests for stale/ambiguous owner, image replacement, unrecorded edits, cross-page refusal, and atomic journal preservation; no training labels exported. Human operator/real scan remain pending. Latest CI pending. #498 merged main@c1b16d0b, full CI 38616327415 and postmerge CI 38616790068 green; remaining #483 real operator and generic drag gates prevent verified. #500 Draft: regression tests for exact saved PDIC delta, same-row rename/reopen, unowned other edits, duplicate coordinate, image drift, malformed simplified sidecar, FocusOut-compatible entry object, batch refusal, save rollback, page switch, evidence journal warning; no verified labels. Human Windows W1–W11 pending. #500 merged main@3248882a40606069c9eb5b931c1a690bef87c422, fixed-head PR CI 38619428582 and postmerge main CI 38619848886 SUCCESS; genuine Windows W1–W11 and move scope review still pending, not fully verified."
         }
       },
       "merge_sha": "74aced55d60fd413cf7723e4ff0cdf6c5e9ca1ad",
@@ -600,15 +619,18 @@
         "status": "success"
       },
       "active_implementation_pr": "https://github.com/chigre/Picture_Capture/pull/500",
-      "active_head_sha": "da24f81f3c0eadd25c5ae44baa33f8c0c921ee12",
+      "active_head_sha": "cc72e1f9d0db1b5db968da44b70c4c4d46dad572",
       "ci": {
-        "status": "in_progress",
-        "conclusion": null,
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38619163865",
-        "note": "Code head da24f81 CI in progress; previous CI runs may represent older heads. Test-first first head failed indentation during collection, corrected before current head."
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38619428582",
+        "status": "completed",
+        "conclusion": "success",
+        "postmerge_main_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38619848886",
+        "postmerge_main_ci_status": "completed",
+        "postmerge_main_ci_conclusion": "success",
+        "main_sha": "3248882a40606069c9eb5b931c1a690bef87c422"
       },
-      "latest_merged_pr": "https://github.com/chigre/Picture_Capture/pull/498",
-      "latest_merge_sha": "c1b16d0b8112367f2a5ad816018fe8fd771c91d4"
+      "latest_merged_pr": "https://github.com/chigre/Picture_Capture/pull/500",
+      "latest_merge_sha": "3248882a40606069c9eb5b931c1a690bef87c422"
     },
     "B3": {
       "units": [
