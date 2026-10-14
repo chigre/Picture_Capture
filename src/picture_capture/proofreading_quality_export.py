@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .proofreading_events import audit_events, load_events, sha256_file
+from .proofreading_verification import explicit_verification_counts
 
 EXPORT_FORMAT = "picture-capture-proofreading-quality-export-v1"
 
@@ -56,6 +57,10 @@ def summarize_local_events(
         current_ocr_signature=current_ocr_signature,
         current_image_sha256=image_digest,
     )
+    review_counts = explicit_verification_counts(
+        events, pdic_sha256=sha256_file(pdic_path),
+        image_sha256=image_digest,
+    )
     types = Counter(_change_type(event) for event in events)
     section_counts = Counter(
         str(event.get("section_id") or "unknown") for event in events
@@ -77,11 +82,13 @@ def summarize_local_events(
         "provenance": provenance,
         "change_types": dict(sorted(types.items())),
         "section_counts_hashed": section_summaries,
-        "verified_positive_labels": 0,
-        "verified_negative_labels": 0,
+        "verified_positive_labels": review_counts["correct_headword"],
+        "verified_negative_labels": review_counts["not_headword"],
+        "verification_basis": "explicit_current_saved_pdic_and_source_image_judgment_only",
         "training_labels_exported": 0,
         "warning": (
             "Historical events may be stale after edits. No candidate link is "
-            "certified, no raw words/pages are exported, and nothing is uploaded."
+            "certified, explicit verified judgments are not training labels, "
+            "no raw words/pages are exported, and nothing is uploaded."
         ),
     }
