@@ -638,6 +638,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     paddle_show_candidate_checkboxes: bool = True
     # Opt-in across-process OCR/combined batch checkpoint verification.
     ocr_resume_completed_pages: bool = False
+    # Opt-in, project-local proofreading event evidence; no uploads or training.
+    proofreading_event_capture: bool = False
     # Experimental engine-scoped raw PSM recognition reuse; disabled by default.
     ocr_cache_tesseract_raw: bool = False
     # Only skip Tesseract *diagnostic-only* passes in high-trust Paddle columns.
