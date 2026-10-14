@@ -849,7 +849,7 @@ def detect_entries_job(
     """
     from contextlib import nullcontext
     from time import perf_counter
-    from .draw_performance_profile import enabled as profile_enabled, record_page
+    from .draw_performance_profile import enabled as profile_enabled, record_page, bind_page, unbind_page
     profiling = profile_enabled()
     stages = {}
     total_start = perf_counter()
@@ -881,6 +881,7 @@ def detect_entries_job(
         stages["image_open_normalize"] = perf_counter() - tick
         tick = perf_counter()
 
+    page_binding = bind_page(page) if profiling else None
     try:
         current = replace(settings)
         current.detection_method = "left_edge"
@@ -927,6 +928,8 @@ def detect_entries_job(
             record_page(page, profile_page_index, stages)
         return len(entries)
     finally:
+        if page_binding is not None:
+            unbind_page(page_binding)
         image.close()
 
 
