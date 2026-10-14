@@ -8,6 +8,7 @@ dialog class without creating a dependency back into ``app.py``.
 """
 
 FIELDS = [
+        ("共享分析图去噪强度", "analysis_denoise_strength", str),
         ("词典完整名称", "dictionary_full_name", str),
         ("词典缩写名称", "dictionary_abbreviation", str),
         ("ISBN", "dictionary_isbn", str),
