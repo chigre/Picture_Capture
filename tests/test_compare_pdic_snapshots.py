@@ -2,7 +2,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from scripts.compare_pdic_snapshots import compare_trees, main
+import importlib.util
+
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compare_pdic_snapshots.py"
+_SPEC = importlib.util.spec_from_file_location("compare_pdic_snapshots", _SCRIPT)
+assert _SPEC is not None and _SPEC.loader is not None
+_MODULE = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_MODULE)
+compare_trees = _MODULE.compare_trees
+main = _MODULE.main
 
 
 def _pdic(root: Path, name: str, rows: list[str]) -> None:
