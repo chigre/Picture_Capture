@@ -49,3 +49,25 @@ def test_empty_batch_still_produces_report(tmp_path, monkeypatch):
     assert path.exists()
     assert path.with_suffix(".csv").exists()
     assert "计时事件数：0" in path.read_text(encoding="utf-8")
+
+
+def test_prepared_analysis_reuse_is_opt_in_and_pixel_identical(monkeypatch):
+    import numpy as np
+    from PIL import Image
+    from types import SimpleNamespace
+    from picture_capture.image_utils import build_analysis_image
+
+    arr = np.full((45, 37, 3), 255, dtype=np.uint8)
+    arr[10:30, 12:15] = 0
+    settings = SimpleNamespace(analysis_denoise_strength="auto")
+    monkeypatch.delenv("PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS", raising=False)
+    original = Image.fromarray(arr, "RGB")
+    prepared = build_analysis_image(original, settings)
+    assert prepared.info["_picture_capture_analysis_strength"] == "auto"
+    monkeypatch.setenv("PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS", "1")
+    reused = build_analysis_image(prepared, settings)
+    assert reused is not prepared
+    np.testing.assert_array_equal(np.asarray(reused), np.asarray(prepared))
+    other = SimpleNamespace(analysis_denoise_strength="weak")
+    changed = build_analysis_image(prepared, other)
+    assert changed.info["_picture_capture_analysis_strength"] == "weak"
