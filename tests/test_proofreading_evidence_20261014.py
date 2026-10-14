@@ -82,3 +82,15 @@ def test_aggregate_reports_counts_only_and_never_exports_labels():
     }
     assert summary["training_labels_exported"] == 0
     assert "candidate-1" not in str(summary)
+
+
+def test_old_pdic_fingerprint_cannot_count_as_matched_ocr_link():
+    old_event = _event(pdic_sha256="a" * 64)
+    summary = summarize_proofreading_evidence(
+        [old_event], current_pdic_sha256="b" * 64,
+        current_ocr_signature="recognition-1", final_report=_final(),
+    )
+    assert summary["provenance"]["stale_events"] == 1
+    assert summary["link_status_counts"]["stale"] == 1
+    assert summary["link_status_counts"]["matched"] == 0
+    assert summary["training_labels_exported"] == 0
