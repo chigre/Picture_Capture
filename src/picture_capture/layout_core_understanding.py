@@ -193,6 +193,44 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
         if not stable_modes:
             stable_modes = [max(modes, key=lambda mode: int(getattr(mode, "support", 0) or 0))]
 
+        if indent_type == "headword" and len(layout.columns) >= 2:
+            # An outside-column band can be a gutter/neighbor projection
+            # artifact, not the actual text-body origin. If chosen as the
+            # leftmost body anchor, it promotes every normal body row between
+            # that artifact and the genuinely indented headword band.
+            #
+            # Only discard such a band from BODY-SEED selection when two
+            # independently supported, well-separated in-column families
+            # remain, and one is substantially stronger than the outside
+            # band. Otherwise preserve the original directional semantics.
+            # Never remove physical lines, invent bracket evidence, or change
+            # the Entry/PDIC representation.
+            outside_limit = -max(24.0, reference * 0.70)
+            inside = [
+                mode for mode in stable_modes
+                if float(getattr(mode, "center", 0.0) or 0.0) >= outside_limit
+            ]
+            outside = [
+                mode for mode in stable_modes
+                if float(getattr(mode, "center", 0.0) or 0.0) < outside_limit
+            ]
+            if len(inside) >= 2 and outside:
+                centers = [
+                    float(getattr(mode, "center", 0.0) or 0.0)
+                    for mode in inside
+                ]
+                strongest_inside = max(
+                    int(getattr(mode, "support", 0) or 0) for mode in inside
+                )
+                strongest_outside = max(
+                    int(getattr(mode, "support", 0) or 0) for mode in outside
+                )
+                if (
+                    max(centers) - min(centers) >= max(20.0, reference * 0.65)
+                    and strongest_inside >= 1.5 * strongest_outside
+                ):
+                    stable_modes = inside
+
         if indent_type == "body":
             desired_body = max(
                 stable_modes,
