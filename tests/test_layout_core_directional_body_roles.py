@@ -168,3 +168,98 @@ def test_moderate_negative_column_indent_is_not_dropped() -> None:
 
     assert right.body_mode is right_body
     assert right.entry_modes == [right_head]
+
+
+def test_peer_supported_body_lane_with_sparse_true_headwords() -> None:
+    """A 25%-support cutoff must not promote nearly all ordinary body rows.
+
+    Structural fixture, no dictionary pixels: the true headword lane is too
+    sparse to pass the old stable-mode threshold. An outside-column family
+    steals the leftmost *stable* lane, while the dominant in-column body family
+    agrees with the well-anchored body family in the other column.
+    """
+    left_body = _mode(7.8, 42, 3)
+    left_head = _mode(137, 10, 3)
+    left = SimpleNamespace(
+        indent_modes=[left_body, left_head],
+        lines=left_body.lines + left_head.lines, body_mode=None,
+        entry_modes=[],
+    )
+    gutter = _mode(-96.8, 14, 3)
+    actual_body = _mode(7.7, 31, 4)
+    # 3 true entries < ceil(31 * .25) == 8, so the old #485 condition misses it.
+    actual_head = _mode(136, 3, 3)
+    right = SimpleNamespace(
+        indent_modes=[gutter, actual_body, actual_head],
+        lines=gutter.lines + actual_body.lines + actual_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53,
+        columns=[left, right], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert right.body_mode is actual_body
+    assert right.entry_modes == [actual_head]
+    assert all(row.role == "body" for row in actual_body.lines + gutter.lines)
+    assert all(row.role == "entry" for row in actual_head.lines)
+
+
+def test_peer_consensus_guard_does_not_assume_same_margin_without_evidence() -> None:
+    """Real asymmetric columns must retain their independent indentation."""
+    first_body = _mode(7.8, 42, 4)
+    first_head = _mode(135, 9, 4)
+    first = SimpleNamespace(
+        indent_modes=[first_body, first_head],
+        lines=first_body.lines + first_head.lines, body_mode=None,
+        entry_modes=[],
+    )
+    # No near-peer in-column body lane: a far-negative body is a valid option,
+    # and a right-hand page can use a different margin/format.
+    outside_body = _mode(-95, 14, 4)
+    offset_head = _mode(54, 31, 4)
+    sparse_second_head = _mode(136, 3, 3)
+    second = SimpleNamespace(
+        indent_modes=[outside_body, offset_head, sparse_second_head],
+        lines=outside_body.lines + offset_head.lines + sparse_second_head.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53,
+        columns=[first, second], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    assert second.body_mode is outside_body
+    assert offset_head in second.entry_modes
+
+
+def test_peer_consensus_needs_independent_proven_headword_family() -> None:
+    """A strong body neighbor alone is not evidence of a separate entry lane."""
+    first_body = _mode(7.8, 42, 4)
+    first_head = _mode(137, 10, 4)
+    first = SimpleNamespace(
+        indent_modes=[first_body, first_head],
+        lines=first_body.lines + first_head.lines, body_mode=None,
+        entry_modes=[],
+    )
+    outside_body = _mode(-96, 14, 4)
+    inner_body = _mode(7.6, 31, 4)
+    isolated_ornament = _mode(135, 1, 3)
+    second = SimpleNamespace(
+        indent_modes=[outside_body, inner_body, isolated_ornament],
+        lines=outside_body.lines + inner_body.lines + isolated_ornament.lines,
+        body_mode=None, entry_modes=[],
+    )
+    layout = SimpleNamespace(
+        indent_type="headword", ordinary_line_height=53,
+        columns=[first, second], display_heads=[],
+    )
+
+    _resolve_directional_body_lanes(layout)
+
+    # Without at least three consistent true head-like rows, abstain.
+    assert second.body_mode is outside_body
