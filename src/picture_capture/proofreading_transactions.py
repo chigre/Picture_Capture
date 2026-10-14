@@ -139,7 +139,12 @@ def _atomic_bytes(path: Path, data: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp, path)
-        note_page_artifact_edit(path)
+        # The file is already committed: cache bookkeeping must never turn a
+        # successful replace into a reported write failure with stale UI.
+        try:
+            note_page_artifact_edit(path)
+        except OSError:
+            pass
     finally:
         if temp is not None:
             temp.unlink(missing_ok=True)

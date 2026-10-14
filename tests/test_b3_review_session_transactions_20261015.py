@@ -132,7 +132,7 @@ def test_ocr_or_override_drift_refuses_snapshot_and_undo(tmp_path, sidecar):
     assert rows[0].word == "ONE"
 
 
-def test_simplified_sidecar_change_never_records_pdiconly_history(tmp_path):
+def test_simplified_sidecar_change_is_reversed_with_saved_pdic(tmp_path):
     from picture_capture.project_storage import simplified_review_path_for_image
     page, rows, review = _case(tmp_path)
     before = snapshot_review(review)
@@ -145,8 +145,13 @@ def test_simplified_sidecar_change_never_records_pdiconly_history(tmp_path):
     after = snapshot_review(review)
     history = ReviewSessionHistory()
     assert after is not None
-    assert not history.record(before, after)
-    assert not history.undo_stack
+    assert history.record(before, after)
+    assert history.undo(review)
+    assert [e.word for e in read_pdic(pdic_path(page))] == ["one", "two"]
+    assert not simplified.exists()
+    assert history.redo(review)
+    assert [e.word for e in read_pdic(pdic_path(page))] == ["ONE", "two"]
+    assert simplified.is_file()
 
 
 def test_reordered_entries_still_refer_to_same_objects_not_text_similarity(tmp_path):
@@ -205,3 +210,93 @@ def test_ui_wiring_exposes_explicit_review_save_undo_redo():
     assert 'self._review_flat_button(row1, "重做保存"' in source
     assert "record_review_after(self, transaction_before)" in source
     assert "invalidate_review_history(self)" in source
+
+
+
+def test_multi_file_interruption_rolls_back_without_changing_ui(tmp_path, monkeypatch):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review = _case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_text('{"entries":[]}', encoding="utf-8")
+    before = snapshot_review(review)
+    assert before
+    rows[0].word = "ONE"
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    simplified.write_text('{"entries":[{"x":10,"y":20,"source_word":"ONE","text":"AUTO","manual":false}]}', encoding="utf-8")
+    after = snapshot_review(review)
+    assert after
+    history = ReviewSessionHistory()
+    assert history.record(before, after)
+    original_pdic, original_simplified = pdic_path(page).read_bytes(), simplified.read_bytes()
+    publish = module._publish
+
+    def fail_simplified(path, data):
+        if path == simplified and data != original_simplified:
+            raise OSError("simulated disk full during second file")
+        return publish(path, data)
+
+    monkeypatch.setattr(module, "_publish", fail_simplified)
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert simplified.read_bytes() == original_simplified
+    assert rows[0].word == "ONE"
+    assert not module._recovery_path(page).exists()
+
+
+def test_crash_recovery_rolls_back_partial_two_file_update(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review = _case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b"original companion")
+    orig = pdic_path(page).read_bytes()
+    target = orig.replace(b"one", b"ONE")
+    staging = [
+        ("pdic", orig, target),
+        ("simplified", b"original companion", b"restored companion"),
+    ]
+    marker = module._stage_recovery(page, staging)
+    assert marker.is_file()
+    module._publish(pdic_path(page), target)  # Crash between first and second.
+    assert module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == orig
+    assert simplified.read_bytes() == b"original companion"
+    assert not marker.exists()
+
+
+def test_complete_multifile_recovery_keeps_target_and_clears_marker(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review = _case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    original = pdic_path(page).read_bytes()
+    new = original.replace(b"one", b"ONE")
+    marker = module._stage_recovery(page, [
+        ("pdic", original, new),
+        ("simplified", None, b"new-simplified"),
+    ])
+    module._publish(pdic_path(page), new)
+    module._publish(simplified, b"new-simplified")
+    assert module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == new
+    assert simplified.read_bytes() == b"new-simplified"
+    assert not marker.exists()
+
+
+def test_external_file_change_blocks_recovery_and_preserves_user_bytes(tmp_path):
+    page, _, _ = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    module._stage_recovery(page, [("pdic", original, original.replace(b"one", b"ONE"))])
+    pdic_path(page).write_bytes(b"external human edit")
+    assert not module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == b"external human edit"
+    assert module._recovery_path(page).exists()
+
+
+def test_dirty_simplified_widget_blocks_even_when_pdic_clean(tmp_path):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    review._simplified_dirty_pages = {page.stem}
+    assert not history.undo(review)
+    assert rows[0].word == "ONE"

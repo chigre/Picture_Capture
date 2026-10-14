@@ -12902,6 +12902,18 @@ class PictureCaptureApp(tk.Tk):
         ):
             if self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode(sync_editors=not review_saved)
+        from .proofreading_transactions import recover_pending_for_page
+        try:
+            if not recover_pending_for_page(self.project.images[index]):
+                self.status_var.set(
+                    "R3 校对事务恢复需要人工处理：磁盘状态与恢复标记不匹配，本次未切页。"
+                )
+                return
+        except (OSError, ValueError, RuntimeError):
+            self.status_var.set(
+                "R3 校对事务恢复失败：未读取可能不一致的 PDIC/简体配对。"
+            )
+            return
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
         use_preloaded = bool(
