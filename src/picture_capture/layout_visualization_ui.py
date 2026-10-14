@@ -55,6 +55,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         str(getattr(settings, "layout_column_separator_mode", "") or ""),
         "layout_mask_illustrations",
         bool(getattr(settings, "layout_mask_illustrations", False)),
+        bool(getattr(settings, "layout_mask_illustrations_use_existing", False)),
     )
 
 
