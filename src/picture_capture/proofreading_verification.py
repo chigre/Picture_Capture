@@ -78,6 +78,7 @@ def verify_saved_action(
         entry_id=target["entry_id"],
         candidate_id=target.get("candidate_id"),
         section_id=target.get("section_id"),
+        section_snapshot_sha256=target.get("section_snapshot_sha256"),
         ocr_signature=target.get("ocr_signature"),
         final_snapshot_sha256=target.get("final_snapshot_sha256"),
         verification_status="verified",
