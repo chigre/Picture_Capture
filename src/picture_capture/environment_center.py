@@ -229,7 +229,8 @@ class EnvironmentCenterWindow(tk.Toplevel):
 
         self._add_card(
             body, "inference", "最近推理运行状态",
-            [("刷新运行记录", self._refresh_inference_status)],
+            [("刷新运行记录", self._refresh_inference_status),
+             ("打开性能报告", self._open_draw_performance_reports)],
         )
         self._add_card(
             body, "paddle", "PaddleOCR / PaddlePaddle",
@@ -370,6 +371,22 @@ class EnvironmentCenterWindow(tk.Toplevel):
                 messagebox.showerror("环境检测失败", str(exc), parent=self)
 
         self.app._start_ui_worker(f"environment-center-{id(self)}", worker, done, failed)
+
+    def _open_draw_performance_reports(self) -> None:
+        from .draw_performance_profile import _directory
+        directory = _directory() / "reports"
+        directory.mkdir(parents=True, exist_ok=True)
+        try:
+            if os.name == "nt":
+                os.startfile(str(directory))
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", str(directory)])
+            else:
+                subprocess.Popen(["xdg-open", str(directory)])
+        except (OSError, ValueError) as exc:
+            messagebox.showinfo(
+                "性能报告目录", f"{directory}\\n\\n无法自动打开：{exc}", parent=self,
+            )
 
     def _refresh_inference_status(self) -> None:
         """Report observed model initialization, not estimated GPU utilization."""
