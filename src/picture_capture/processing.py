@@ -827,6 +827,12 @@ def detect_entries_job(
     Ordinary serial calls have NO injected estimate and keep the old path.
     """
     from contextlib import nullcontext
+    from time import perf_counter
+    from .draw_performance_profile import enabled as profile_enabled, record_page
+    profiling = profile_enabled()
+    stages = {}
+    total_start = perf_counter()
+    tick = total_start
     from .bootstrap.worker import build_worker_services
     if prepared_layout is not None:
         from .ordinary_gpu_pipeline import (
@@ -840,6 +846,9 @@ def detect_entries_job(
         estimate_context = nullcontext(None)
 
     services = build_worker_services()
+    if profiling:
+        stages["bootstrap"] = perf_counter() - tick
+        tick = perf_counter()
     formats = services.formats
     processing_module = services.processing
 
@@ -847,9 +856,17 @@ def detect_entries_job(
     with Image.open(page) as opened:
         image = processing_module._core.normalize_page_rgb(opened)
 
+    if profiling:
+        stages["image_open_normalize"] = perf_counter() - tick
+        tick = perf_counter()
+
     try:
         current = replace(settings)
         current.detection_method = "left_edge"
+        sections = processing_module._core.read_page_sections(page)
+        if profiling:
+            stages["page_sections"] = perf_counter() - tick
+            tick = perf_counter()
         with estimate_context as preflight_state:
             with services.capture_layout_rows(
                 page.parent,
@@ -861,7 +878,7 @@ def detect_entries_job(
                     image,
                     current,
                     profile_page_index=profile_page_index,
-                    page_sections=processing_module._core.read_page_sections(page),
+                    page_sections=sections,
                 )
             if preflight_state is not None:
                 # An optional internal fallback must not turn a missing GPU
@@ -869,14 +886,24 @@ def detect_entries_job(
                 validate_prepared_layout(preflight_state)
                 verify_prepared_source(page, profile_page_index, prepared_layout)
 
+        if profiling:
+            stages["detect_entries"] = perf_counter() - tick
+            tick = perf_counter()
         pdic = processing_module._core.pdic_path_for_image(page)
         services.save_automatic_baseline(pdic, entries, image.width, pages)
+        if profiling:
+            stages["automatic_baseline"] = perf_counter() - tick
+            tick = perf_counter()
         formats.write_pdic(
             pdic,
             entries,
             image.width,
             pages,
         )
+        if profiling:
+            stages["pdic_write"] = perf_counter() - tick
+            stages["total_page"] = perf_counter() - total_start
+            record_page(page, profile_page_index, stages)
         return len(entries)
     finally:
         image.close()
