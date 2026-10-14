@@ -459,7 +459,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
             body,
             text="CPU 并行数仅用于启用了 CPU 专用进程池的普通画线；"
                  "其他模式仍保持其安全调度策略。较高进程数会增加内存使用。"
-                 "oneDNN 自动模式优先尝试启用，
+                 "oneDNN 自动模式优先尝试启用，"
                  "初始化不兼容时回退；如推理阶段发生错误请改为“关闭”。",
             wraplength=440, justify="left",
         ).pack(anchor="w", pady=(3, 9))
