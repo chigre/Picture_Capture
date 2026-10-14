@@ -13,6 +13,7 @@ from uuid import uuid4, uuid5, NAMESPACE_URL
 from .formats import pdic_path, read_pdic
 from .project_storage import data_root
 from .proofreading_events import append_event, make_event, sha256_file
+from .proofreading_section import section_fields_for_event
 
 def verified_ocr_preedit_fingerprints(
     cache_path: Path | None, pdic_file: Path,
@@ -115,6 +116,7 @@ def capture_saved_review_deletion(
         pdic_sha256=sha, candidate_id=candidate or None, entry_id=entry_id,
         image_sha256=sha256_file(page),
         **_ocr_fields(source_fingerprints),
+        **section_fields_for_event(page, before_xy=(x, y)),
     )
     # Namespace journal by full relative page name, not just its stem.
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
@@ -171,6 +173,7 @@ def capture_saved_review_rename(
         pdic_sha256=saved_hash, entry_id=entry_id,
         image_sha256=sha256_file(page),
         **_ocr_fields(source_fingerprints),
+        **section_fields_for_event(page, before_xy=(x, y), after_xy=(x, y)),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
@@ -238,6 +241,10 @@ def capture_saved_candidate_selection(
         pdic_sha256=sha, entry_id=entry_id, candidate_id=candidate_id,
         image_sha256=sha256_file(page),
         **_ocr_fields(source_fingerprints),
+        **section_fields_for_event(
+            page, before_xy=None if selected else (x, y),
+            after_xy=(x, y) if selected else None,
+        ),
     )
     key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(
@@ -291,6 +298,7 @@ def capture_saved_manual_addition(
         pdic_sha256=sha, entry_id=entry_id,
         image_sha256=sha256_file(page),
         **_ocr_fields(source_fingerprints),
+        **section_fields_for_event(page, after_xy=(x, y)),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(
@@ -369,6 +377,9 @@ def capture_saved_position_switch(
         pdic_sha256=fingerprint, entry_id=entry_id,
         candidate_id=added_candidate_id, image_sha256=sha256_file(page),
         **_ocr_fields(source_fingerprints),
+        **section_fields_for_event(
+            page, before_xy=(x0, y0), after_xy=(x1, y1),
+        ),
     )
     page_key = uuid5(NAMESPACE_URL, relative_page).hex
     append_event(
