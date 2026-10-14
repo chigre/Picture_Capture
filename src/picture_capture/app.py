@@ -6586,11 +6586,11 @@ class ReviewWindow(tk.Toplevel):
             except (OSError, ValueError, TypeError):
                 prior_pdic_rows = None
 
-        # Candidate deselections and simplified companions are multi-file
-        # operations. Until R3 covers their atomic rollback, invalidate the
-        # narrowly supported pure-text session undo history.
-        from .ui.review_transaction_actions import invalidate_review_history
-        invalidate_review_history(self)
+        # Capture before mutating shared Entry objects or saving the PDIC.
+        # OCR-linked deletion changes manual-selection ownership and will
+        # intentionally be refused by the R3 transaction classifier.
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         self._commit_edits()
         entry = row_entries[int(index)]
         deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
@@ -6649,6 +6649,10 @@ class ReviewWindow(tk.Toplevel):
                 capture_failed = True
         if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
             self._persist_simplified_page(self._rendered_page_stem)
+        # The soon-to-be-rebuilt ReviewWindow rows still reference the old
+        # widgets; read the true saved parent.entries to classify this one
+        # committed deletion, then rebuild widgets for the restored identities.
+        record_review_after(self, transaction_before, allow_unbound=True)
         self.parent.redraw()
 
         next_index = min(int(index), max(0, len(self.parent.entries) - 1))

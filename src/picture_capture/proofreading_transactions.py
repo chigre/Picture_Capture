@@ -52,7 +52,7 @@ def _bytes_or_absent(path: Path | None) -> bytes | None:
         return None
 
 
-def snapshot_review(review: Any) -> SavedSnapshot | None:
+def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapshot | None:
     """Require exact saved PDIC and object identities, no pending OCR owners."""
     app = review.parent
     page = getattr(app, "current_page", None)
@@ -79,12 +79,13 @@ def snapshot_review(review: Any) -> SavedSnapshot | None:
             (str(e.word), int(e.x), int(e.y)) for e in read_pdic(pdic)
         )
         from_live = Counter((word, x, y) for _, word, x, y in ordered)
-        if (not ordered or len({(x, y) for _, _, x, y in ordered}) != len(ordered)
+        if (len({(x, y) for _, _, x, y in ordered}) != len(ordered)
                 or from_disk != from_live):
             return None
-        bound = review._bound_row_entries()
-        if {id(e) for e in bound} != {id(e) for e in app.entries}:
-            return None
+        if not allow_unbound:
+            bound = review._bound_row_entries()
+            if {id(e) for e in bound} != {id(e) for e in app.entries}:
+                return None
         manual_fn = getattr(app, "_manual_selection_path", None)
         ocr_fn = getattr(app, "_paddle_cache_path", None)
         candidates = tuple(sorted(
@@ -112,25 +113,30 @@ def _undoable_committed_change(before: SavedSnapshot, after: SavedSnapshot) -> b
             or before.ocr_bytes != after.ocr_bytes):
         return False
     left, right = before.rows(), after.rows()
-    if left.keys() != right.keys():
+    removed = left.keys() - right.keys()
+    added = right.keys() - left.keys()
+    # A single direct UI-owned deletion (or its redo reversal) can be restored
+    # by the same file transaction. Compound insertions/multiple deletions
+    # remain unknown until they have separately-owned operations.
+    if len(removed) + len(added) > 1:
         return False
+    lost_or_added = next(iter(removed or added), None)
+    if lost_or_added is not None:
+        orphan = (left if removed else right)[lost_or_added][0]
+        if getattr(orphan, "candidate_id", None):
+            return False
     word_changed = False
-    for identifier, old in left.items():
-        new = right[identifier]
+    for identifier in left.keys() & right.keys():
+        old, new = left[identifier], right[identifier]
         if old[0] is not new[0] or old[2:] != new[2:]:
             return False
         if old[1] != new[1]:
-            # Candidate-linked text belongs to the OCR/manual-selection owner.
-            # Its reversible multi-file decision must be proven separately.
             if getattr(old[0], "candidate_id", None):
                 return False
             word_changed = True
-    # Never relabel a PDIC metadata/geometry rewrite as a word edit.
-    if before.pdic_bytes != after.pdic_bytes and not word_changed:
+    if before.pdic_bytes != after.pdic_bytes and not (word_changed or lost_or_added is not None):
         return False
-    # PDIC word and simplified companion snapshots can be reverted as one
-    # in-flight recoverable transaction; no OCR override/candidate guessing.
-    return word_changed or before.simplified_bytes != after.simplified_bytes
+    return word_changed or lost_or_added is not None or before.simplified_bytes != after.simplified_bytes
 
 
 def _atomic_bytes(path: Path, data: bytes) -> None:
@@ -353,11 +359,15 @@ class ReviewSessionHistory:
                 return False
         except (OSError, RuntimeError, ValueError):
             return False
-        # Disk commit succeeded; only now restore shared Entry and widgets.
+        # Disk commit succeeded; only now restore model membership AND words
+        # to the original Entry instances, never by current row index.
+        review.parent.entries[:] = [entry for entry, _, _, _ in target.entries]
         for entry, word, _, _ in target.entries:
             entry.word = word
+        current_words = {id(entry): word for entry, word, _, _ in target.entries}
         for entry, var in zip(review._bound_row_entries(), review.vars):
-            var.set(entry.word)
+            if id(entry) in current_words:
+                var.set(current_words[id(entry)])
         cache = getattr(review, "_simplified_page_cache", None)
         if isinstance(cache, dict):
             cache.pop(expected.page.stem, None)

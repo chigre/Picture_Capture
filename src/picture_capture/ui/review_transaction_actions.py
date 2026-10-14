@@ -18,8 +18,10 @@ def capture_review_before(review: Any):
     return snapshot_review(review)
 
 
-def record_review_after(review: Any, before: Any) -> None:
-    _history(review).record(before, snapshot_review(review))
+def record_review_after(review: Any, before: Any, *, allow_unbound: bool = False) -> None:
+    _history(review).record(
+        before, snapshot_review(review, allow_unbound=allow_unbound),
+    )
 
 
 def invalidate_review_history(review: Any) -> None:
