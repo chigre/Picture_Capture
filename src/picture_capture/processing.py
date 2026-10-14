@@ -69,6 +69,7 @@ def _understand_page_current(
     layout_only: bool = False,
     layout_trace: Any | None = None,
     replay_preview: Any | None = None,
+    source_image_path: Path | None = None,
 ) -> PageUnderstanding | None:
     """Resolve Page Understanding with optional static illustration masking."""
     analysis_image = image
@@ -93,10 +94,14 @@ def _understand_page_current(
                 image,
                 settings,
                 profile_page_index=int(page_index),
+                **({"source_image_path": source_image_path}
+                   if source_image_path is not None else {}),
                 **({"candidate_debug": mask_candidates}
                    if mask_candidates is not None else {}),
             )
         except Exception as exc:
+            if bool(getattr(settings, "layout_mask_illustrations_use_existing", False)):
+                raise
             analysis_image = image
             mask_stats = IllustrationMaskStats()
             mask_error = f"{type(exc).__name__}: {exc}"
@@ -315,6 +320,7 @@ def _ordinary_entries_from_layout_roles(
     image: Image.Image | None = None,
     *,
     page_index: int = 0,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
     """Materialize final Layout entry rows with canonical classification."""
     from .entry_classification import copy_layout_line_classification
@@ -325,6 +331,7 @@ def _ordinary_entries_from_layout_roles(
             image,
             understanding,
             page_index=int(page_index),
+            diagnostics=diagnostics,
         )
         if image is not None
         else {}
@@ -540,6 +547,7 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     debug_trace: dict[str, Any] | None = None,
+    source_image_path: Path | None = None,
 ) -> tuple[list[Entry], Any]:
     """Detect entries using shared denoised page analysis.
 
@@ -547,6 +555,17 @@ def detect_entries(
     never allowed to modify, veto, add to, or replace a usable Layout role
     assignment. OCR/combined retain the full enriched Page Understanding path.
     """
+    from time import perf_counter as _pc
+    from .draw_performance_profile import enabled as _profile_on
+    _timing = _profile_on() and str(getattr(settings, "detection_method", "")).lower() == "left_edge"
+    _nested = {}
+    _tick = _pc() if _timing else 0.0
+    def _mark(name):
+        nonlocal _tick
+        if _timing:
+            now = _pc()
+            _nested[name] = _nested.get(name, 0.0) + now - _tick
+            _tick = now
     source = _core.normalize_page_rgb(image)
     effective = _core.effective_page_settings(
         settings, source.size, profile_page_index,
@@ -569,16 +588,19 @@ def detect_entries(
         if replay_preview is not None:
             replay_preview("image_preparation", analysis_image)
 
+    _mark("inner_image_prepare")
     understanding = _understand_page_current(
         analysis_image,
         effective,
         page_index=profile_page_index,
         page_sections=page_sections,
         layout_only=ordinary_mode,
+        source_image_path=source_image_path,
         layout_trace=replay_trace if ordinary_mode else None,
         replay_preview=replay_preview if ordinary_mode else None,
     )
 
+    _mark("inner_page_understanding")
     # Ordinary drawing is a direct materialization of final Layout Core roles.
     if ordinary_mode:
         if (
@@ -586,14 +608,45 @@ def detect_entries(
             and list(getattr(understanding.layout, "columns", []) or [])
         ):
             geometry = _geometry_from_page_understanding(understanding)
+            y_refine_diagnostics = [] if replay_trace is not None else None
             entries = _ordinary_entries_from_layout_roles(
                 understanding,
                 analysis_image,
                 page_index=profile_page_index,
+                diagnostics=y_refine_diagnostics,
             )
+            if replay_trace is not None:
+                replay_trace.add_note(
+                    "separator_y_per_line",
+                    "横线 Y 精修诊断（逐条）",
+                    "记录普通画线 Layout 词条初始 Y、墨迹谷结果、位移限制、"
+                    "真实左右栏 ROI 与异常。此阶段只读，后续修正可能继续改变坐标。",
+                    details={
+                        "count": len(y_refine_diagnostics),
+                        "errors": sum(bool(x.get("error")) for x in y_refine_diagnostics),
+                        "lines": y_refine_diagnostics,
+                    },
+                    candidates=[
+                        {"status": "refined" if not x.get("error") else "error",
+                         "column": x.get("column"), "reason": x.get("reason"),
+                         "source_box": [x.get("roi_x0"), x.get("clamped_y"),
+                                        x.get("roi_x1"), x.get("clamped_y")],
+                         "coarse_y": x.get("coarse_y"),
+                         "raw_refined_y": x.get("raw_refined_y"),
+                         "clamped_y": x.get("clamped_y"),
+                         "shift": x.get("shift"),
+                         "roi_x0": x.get("roi_x0"), "roi_x1": x.get("roi_x1"),
+                         "search_top": x.get("search_top"),
+                         "search_bottom": x.get("search_bottom"),
+                         "clamped": x.get("clamped"),
+                         "error": x.get("error")}
+                        for x in y_refine_diagnostics if x.get("column")
+                    ],
+                )
             _record_ordinary_debug_stage(
                 debug_trace, "layout_role_materialization", entries,
             )
+            _mark("inner_role_materialization")
             # Large ideographs may generate several spurious Layout entry
             # rows inside one glyph; veto only image-confirmed duplicates.
             if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
@@ -681,6 +734,7 @@ def detect_entries(
                     analysis_image, effective, understanding, entries,
                     page_index=profile_page_index,
                 )
+            _mark("inner_entry_recovery")
             entries = _allowed_entries(
                 entries,
                 source,
@@ -746,12 +800,18 @@ def detect_entries(
                 scope="最终剩余全部候选，含后续【】及大字头来源；只读核对",
                 rationale="后续仅排序，不再对所有来源执行统一 Y 平移",
             )
+            _mark("inner_final_filter_and_corrections")
             sorted_entries = _core.sort_entries_reading_order(
                 entries, geometry, page_sections,
             )
             _record_ordinary_debug_stage(
                 debug_trace, "final_reading_order", sorted_entries,
             )
+            _mark("inner_sort")
+            if _timing:
+                from .draw_performance_profile import record_page
+                record_page("<substage>", profile_page_index, _nested,
+                            stage_group="detect_entries_inner")
             return sorted_entries, geometry
 
         if replay_trace is not None:
@@ -819,11 +879,36 @@ def detect_entries_job(
     settings: AppSettings,
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
+    *,
+    prepared_layout: Any | None = None,
 ) -> int:
-    """Run one ordinary-drawing job through the explicit worker bootstrap."""
+    """Run ordinary drawing with optional isolated, exactly-once GPU preflight.
+
+    Ordinary serial calls have NO injected estimate and keep the old path.
+    """
+    from contextlib import nullcontext
+    from time import perf_counter
+    from .draw_performance_profile import enabled as profile_enabled, record_page, bind_page, unbind_page
+    profiling = profile_enabled()
+    stages = {}
+    total_start = perf_counter()
+    tick = total_start
     from .bootstrap.worker import build_worker_services
+    if prepared_layout is not None:
+        from .ordinary_gpu_pipeline import (
+            use_prepared_layout, validate_prepared_layout,
+            verify_prepared_source,
+        )
+
+        verify_prepared_source(image_path, profile_page_index, prepared_layout)
+        estimate_context = use_prepared_layout(prepared_layout)
+    else:
+        estimate_context = nullcontext(None)
 
     services = build_worker_services()
+    if profiling:
+        stages["bootstrap"] = perf_counter() - tick
+        tick = perf_counter()
     formats = services.formats
     processing_module = services.processing
 
@@ -831,32 +916,61 @@ def detect_entries_job(
     with Image.open(page) as opened:
         image = processing_module._core.normalize_page_rgb(opened)
 
+    if profiling:
+        stages["image_open_normalize"] = perf_counter() - tick
+        tick = perf_counter()
+
+    page_binding = bind_page(page) if profiling else None
     try:
         current = replace(settings)
         current.detection_method = "left_edge"
-        with services.capture_layout_rows(
-            page.parent,
-            page,
-            int(profile_page_index),
-            settings,
-        ):
-            entries, _geometry = processing_module.detect_entries(
-                image,
-                current,
-                profile_page_index=profile_page_index,
-                page_sections=processing_module._core.read_page_sections(page),
-            )
+        sections = processing_module._core.read_page_sections(page)
+        if profiling:
+            stages["page_sections"] = perf_counter() - tick
+            tick = perf_counter()
+        with estimate_context as preflight_state:
+            with services.capture_layout_rows(
+                page.parent,
+                page,
+                int(profile_page_index),
+                settings,
+            ):
+                entries, _geometry = processing_module.detect_entries(
+                    image,
+                    current,
+                    profile_page_index=profile_page_index,
+                    page_sections=sections,
+                    **({"source_image_path": page}
+                       if getattr(current, "layout_mask_illustrations", False) else {}),
+                )
+            if preflight_state is not None:
+                # An optional internal fallback must not turn a missing GPU
+                # estimate into altered lines or a second Paddle model.
+                validate_prepared_layout(preflight_state)
+                verify_prepared_source(page, profile_page_index, prepared_layout)
 
+        if profiling:
+            stages["detect_entries"] = perf_counter() - tick
+            tick = perf_counter()
         pdic = processing_module._core.pdic_path_for_image(page)
         services.save_automatic_baseline(pdic, entries, image.width, pages)
+        if profiling:
+            stages["automatic_baseline"] = perf_counter() - tick
+            tick = perf_counter()
         formats.write_pdic(
             pdic,
             entries,
             image.width,
             pages,
         )
+        if profiling:
+            stages["pdic_write"] = perf_counter() - tick
+            stages["total_page"] = perf_counter() - total_start
+            record_page(page, profile_page_index, stages)
         return len(entries)
     finally:
+        if page_binding is not None:
+            unbind_page(page_binding)
         image.close()
 
 

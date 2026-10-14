@@ -8,6 +8,7 @@ dialog class without creating a dependency back into ``app.py``.
 """
 
 FIELDS = [
+        ("共享分析图去噪强度", "analysis_denoise_strength", str),
         ("词典完整名称", "dictionary_full_name", str),
         ("词典缩写名称", "dictionary_abbreviation", str),
         ("ISBN", "dictionary_isbn", str),
@@ -85,6 +86,7 @@ FIELDS = [
         ("横线Y精修安全空间（px）", "paddle_separator_safety_px", int),
         ("横线Y精修横向分析范围（%）", "paddle_separator_roi_width_ratio", float),
         ("横线Y精修栏边余量（px）", "paddle_separator_column_margin", int),
+        ("Y 精修最大位移（行高比）", "separator_y_max_shift_ratio", float),
         ("Tesseract 对照 PSM", "paddle_tesseract_psm", int),
         ("Google Lens 超时（秒）", "paddle_lens_timeout", int),
         ("Lens无置信度默认值", "paddle_lens_default_confidence", float),
@@ -168,6 +170,16 @@ FIELD_GROUPS = [
 
 CHECK_GROUPS = [
         ("版面行为", [
+        ("共享分析图自适应去噪", "analysis_denoise_enabled"),
+        ("Layout 专用去噪", "layout_denoise_enabled"),
+        ("启用按原图尺寸缩图估计（实验）", "layout_scale_enabled"),
+        ("50% 可用：分栏数", "layout_scale_columns"),
+        ("50% 可用：单栏宽", "layout_scale_column_width"),
+        ("50% 可用：栏间距", "layout_scale_gutter"),
+        ("50% 可用：正文起始 Y", "layout_scale_start_y"),
+        ("50% 可用：首栏 X", "layout_scale_manual_x"),
+        ("50% 可用：字高", "layout_scale_character_height"),
+        ("50% 可用：行间空", "layout_scale_row_padding"),
             ("使用自动版面参数", "ordinary_auto_layout"),
             ("分栏数", "ordinary_auto_columns"),
             ("正文起始Y", "ordinary_auto_start_y"),
@@ -198,7 +210,12 @@ CHECK_GROUPS = [
 OCR_LANGUAGES = ("eng", "spa", "fra", "ita", "por", "deu", "chi_sim", "chi_tra", "jpn", "ara")
 
 SETTING_LABELS = {
+        "analysis_denoise_enabled": "共享分析图自适应去噪",
+        "layout_denoise_enabled": "Layout 专用去噪",
+        "layout_scale_enabled": "按原图尺寸自动缩图",
+        "analysis_denoise_strength": "共享分析图去噪强度",
         "layout_mask_illustrations": "Layout前白化插图",
+        "layout_mask_illustrations_use_existing": "使用已有的插图数据",
         "columns": "正文栏数",
         "start_y": "正文起始 Y",
         "bottom_y": "正文结束 Y",
@@ -244,6 +261,7 @@ SETTING_LABELS = {
         "paddle_separator_band_radius": "横线空白带平滑半径",
         "paddle_separator_roi_width_ratio": "横线精修横向范围",
         "paddle_separator_column_margin": "横线精修栏边余量",
+        "separator_y_max_shift_ratio": "精修最大位移（行高比）",
         "paddle_max_input_side": "OCR 最大输入边长",
         "paddle_preprocessing": "OCR 图像预处理",
         "paddle_device": "PaddleOCR 运行设备",
@@ -261,10 +279,17 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+        "analysis_denoise_strength": "共享分析图自适应去噪的强度，可选关闭、弱、自动、强；要一键关闭请使用 Layout 区的共享去噪开关。",
+        "layout_mask_illustrations_use_existing": (
+            "依赖【Layout 分析前白化插图】。勾选后只读取当前页 PPP 中已经保存的插图多边形，"
+            "直接对白化分析副本进行处理，不运行插图自动识别，也不改写 PPP。"
+            "未勾选时由自动检测产生候选，并按原有安全阈值筛选。"
+            "PPP 缺失时不应默默改为重新检测或认为本页没有插图。"
+        ),
         "layout_mask_illustrations": (
             "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
             "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-            "原始扫描图、PPP、OCR、PDIC 与切图文件都不会被修改。\n\n"
+            "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
             "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
             "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
         ),
@@ -322,8 +347,9 @@ SETTING_HELP = {
         "paddle_pos_search_chars": "作用：lemma 提取后，语法解析在其后的多长文本范围内寻找 POS/变形等结构提示。这样可利用近邻语法标签，同时避免把很后面的释义正文缩写误当词头证据。\n\n调整：长词头、长性别变体或 POS 距离较远时可适当增大；过大可能在定义正文里误命中缩写。存在活动 Dictionary Profile 时，POS 标签集合通常由 Profile 的 pos_labels 决定。",
         "paddle_separator_search_ratio": "作用：OCR 粗定位词头 Y 后，以典型行高为尺度，在其附近上下搜索更合理的空白带/分隔位置，从而把横线从文字框位置精修到视觉上的行间空白。\n\n调整：增大搜索更宽，能修正较大的 OCR Y 偏差，但更可能跳到相邻行；减小更保守。只有【自动精修横线 Y】开启时才直接影响结果。",
         "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径，单位为原图像素。该值不再使用 1400px 参考宽度。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。",
-        "paddle_separator_safety_px": "作用：横线精修后与当前词头墨迹之间保留的额外安全距离，单位为原图像素。设置 2 就始终是原图 2 px，不随页面宽度变化。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
+        "paddle_separator_safety_px": "作用：OCR 图像边界候选搜索中的安全距离，单位为原图像素。该字段并不是普通 Layout 逐条墨迹谷精修的统一安全距离，也不能保证最终横线绝不穿字；普通画线后续还可能进行独立的 CJK 坐标修正。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
         "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
+        "separator_y_max_shift_ratio": "限制普通画线 Layout 逐条横线精修后相对粗定位的最大移动幅度，单位是典型行高的倍数，默认 0.45。设小可减少跳到相邻行，设大允许修正更明显的初始定位误差。仅影响 Layout 逐条精修的位移上限，不控制其他后处理的 Y 调整。\n\n建议保持默认并使用逐条诊断核对精修前后坐标，修改前请保留 PDIC 基准文件。",
         "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。单位为原图像素，不按页面宽度缩放。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。",
         "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
         "paddle_lens_language": "Google Lens OCR 语言自动跟随【词头 OCR 语言】，不再单独配置。Profile 或 OCR 语言变化时会同步更新。",
@@ -412,6 +438,7 @@ NORMAL_COMMON_FIELDS = (
     )
 
 NORMAL_ADVANCED_FIELDS = (
+        "analysis_denoise_strength",
         "analysis_threshold_mode", "darkness_threshold", "dark_area_percent",
         "ordinary_right_divisor", "physical_row_projection_width_percent",
         "white_threshold_high", "white_threshold_low",
@@ -423,7 +450,6 @@ NORMAL_ADVANCED_FIELDS = (
 OCR_COMMON_FIELDS = (
         "ocr_language", "paddle_preprocessing",
         "paddle_band_width_ratio", "paddle_left_tolerance",
-        "paddle_separator_safety_px",
     )
 
 OCR_ADVANCED_FIELDS = (
@@ -432,9 +458,7 @@ OCR_ADVANCED_FIELDS = (
         "paddle_height_ratio", "paddle_boldness_ratio", "paddle_gap_ratio",
         "paddle_min_candidate_score", "paddle_header_search_height",
         "paddle_header_rule_ink_ratio", "paddle_header_rule_margin",
-        "paddle_pos_search_chars", "paddle_separator_search_ratio",
-        "paddle_separator_band_radius", "paddle_separator_roi_width_ratio",
-        "paddle_separator_column_margin", "paddle_tesseract_psm",
+        "paddle_pos_search_chars", "paddle_tesseract_psm",
         "paddle_alignment_y_tolerance_ratio", "paddle_alignment_min_similarity",
         "paddle_conflict_review_margin",
     )
@@ -520,6 +544,7 @@ SETTING_SPIN = {
         "paddle_separator_band_radius": (0, 200, 1),
         "paddle_separator_roi_width_ratio": (10.0, 100.0, 0.1),
         "paddle_separator_column_margin": (0, 2000, 1),
+        "separator_y_max_shift_ratio": (0.0, 1.5, 0.05),
         "paddle_header_search_height": (0.0, 100.0, 0.1), "paddle_header_rule_margin": (0, 1000, 1),
         "batch_interval": (0.5, 3600, 0.5),
         "illustration_detect_padding": (0, 5000, 1),
@@ -549,6 +574,7 @@ SETTING_HELP_IMAGES = {
     }
 
 SETTING_CHOICES = {
+        "analysis_denoise_strength": {"关闭": "off", "弱": "weak", "自动": "auto", "强": "strong"},
         "analysis_threshold_mode": {
             "自动（推荐，等同 Otsu）": "auto",
             "Otsu 全页阈值": "otsu",
@@ -564,6 +590,19 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
+    "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
+    "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪；如需比较，建议同一批页面复测并核对 PDIC。",
+    "layout_denoise_enabled": "单独控制可靠性融合版面检测之前的墨迹去噪。关闭后仅省去这一层清理，仍保留共享分析图的去噪设置；在污点多、细线多的词典中应比较检测准确度。",
+    "layout_scale_enabled": "实验选项，根据原图最长边选择 100%、75% 或 50% 的临时版面检测图。只有下方允许的参数接受缩图估计，其余使用项目原分辨率先验；未完成 PDIC 对照前请保持关闭。",
+    "layout_scale_columns": "允许 50% 或 75% 缩图版面检测更新分栏数。分栏数反映整体宏观布局，通常对缩图较稳定，因此默认勾选；复杂跨栏页面仍需检查原图的分栏结果。",
+    "layout_scale_column_width": "允许 50% 或 75% 缩图版面检测更新单栏宽度，并把尺寸还原到原图像素。默认勾选；若书脊弯曲、边缘遮挡或跨栏插图导致宽度异常，可关闭。",
+    "layout_scale_gutter": "允许 50% 或 75% 缩图版面检测更新相邻栏间空白宽度，并转换回原图坐标。默认勾选；窄栏距或栏间插图明显的词典，建议比较原图估计。",
+    "layout_scale_start_y": "控制是否允许缩图结果更新正文起始 Y。该值受页眉、装饰线、裁边及首行文字影响，可能随缩放变化；默认不勾选，沿用项目原始分辨率的参数。",
+    "layout_scale_manual_x": "控制是否允许缩图结果更新首栏 X。此前真实页面出现过明显的横向坐标偏移，因此默认不勾选；允许时建议逐页检查左缘及完整 PDIC 坐标。",
+    "layout_scale_character_height": "控制是否允许缩图结果更新普通文字字符高度。字高会影响物理行归并、缩进和大字头判断，因此默认不勾选；优先沿用原图项目先验并核对视觉分析。",
+    "layout_scale_row_padding": "控制是否允许缩图结果更新普通文字行间空白。该值直接影响词条行高和分隔位置，低分辨率更容易产生舍入偏差，默认不勾选并沿用原图项目参数。",
+    "layout_mask_illustrations_use_existing": "只有同时开启【Layout 分析前白化插图】才生效。勾选：仅读取当前页已保存的 PPP 多边形直接填白，不重新识别、不改写 PPP；PPP 缺失明确报错。不勾选：自动识别插图，把识别结果写入 PPP（保留手绘区域），并按安全规则白化。",
     "proofreading_event_capture": "默认关闭。启用后仅将支持的人工校对操作，在 PDIC 成功保存后记录到本地项目的独立事件日志；不自动上传、不进行模型训练，普通保存和 OCR 自动画线不等于人工确认。关闭后停止记录，不删除已有日志；含词条文本的记录由用户自行保管、决定是否导出。",
     "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
     "illustration_label_font_bold": "插图标签使用粗体显示，适合扫描背景较复杂、细体不易看清的页面。只改变显示效果。",
@@ -572,7 +611,7 @@ CHECK_HELP = {
     "layout_mask_illustrations": (
         "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
         "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-        "原始扫描图、PPP、OCR、PDIC 与切图文件都不会被修改。\n\n"
+        "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
         "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
         "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
     ),
@@ -647,13 +686,23 @@ ILLUSTRATION_APPEARANCE_FIELDS = (
 
 ILLUSTRATION_CHECKS = (
     ("Layout 分析前白化插图", "layout_mask_illustrations"),
+    ("使用已有的插图数据", "layout_mask_illustrations_use_existing"),
     ("显示插图区域标签", "show_illustration_labels"),
     ("插图标签粗体", "illustration_label_font_bold"),
     ("插图标签斜体", "illustration_label_font_italic"),
 )
 
 NORMAL_CHECKS = (
-        ("自动精修横线 Y", "paddle_refine_separator_y"),
+        ("共享分析图自适应去噪", "analysis_denoise_enabled"),
+        ("Layout 专用去噪", "layout_denoise_enabled"),
+        ("启用按原图尺寸缩图估计（实验）", "layout_scale_enabled"),
+        ("50% 可用：分栏数", "layout_scale_columns"),
+        ("50% 可用：单栏宽", "layout_scale_column_width"),
+        ("50% 可用：栏间距", "layout_scale_gutter"),
+        ("50% 可用：正文起始 Y", "layout_scale_start_y"),
+        ("50% 可用：首栏 X", "layout_scale_manual_x"),
+        ("50% 可用：字高", "layout_scale_character_height"),
+        ("50% 可用：行间空", "layout_scale_row_padding"),
         ("跟随栏左缘倾斜/弯曲", "follow_column_deformation"),
         ("使用自动版面参数", "ordinary_auto_layout"),
         ("分栏数", "ordinary_auto_columns"),
@@ -671,7 +720,6 @@ OCR_COMMON_CHECKS = (
         ("多 OCR 自动融合", "paddle_dual_ocr_arbitration"),
         ("要求结构/视觉提示", "paddle_require_visual_cue"),
         ("要求词性/变形/词条符号", "paddle_require_pos_or_symbol"),
-        ("自动精修横线 Y", "paddle_refine_separator_y"),
     )
 
 OCR_ADVANCED_CHECKS = (
@@ -684,9 +732,22 @@ OCR_ADVANCED_CHECKS = (
         ("Tesseract 可补漏 Paddle", "paddle_tesseract_rescue"),
         ("Tesseract 自动比较 PSM 4/6", "paddle_tesseract_auto_psm"),
         ("显示每个 OCR 候选复选框", "paddle_show_candidate_checkboxes"),
-        ("实验：原图白缝核验横线Y（默认关）", "separator_y_ink_safe_gap"),
         ("实验：同栏词头样式救回续行（默认关）", "paddle_peer_style_rescue"),
     )
+
+SEPARATOR_Y_FIELDS = (
+    "paddle_separator_search_ratio",
+    "paddle_separator_band_radius",
+    "paddle_separator_safety_px",
+    "paddle_separator_roi_width_ratio",
+    "paddle_separator_column_margin",
+    "separator_y_max_shift_ratio",
+)
+
+SEPARATOR_Y_CHECKS = (
+    ("自动精修横线 Y（普通画线与 OCR 共用）", "paddle_refine_separator_y"),
+    ("实验：原图白缝核验横线 Y", "separator_y_ink_safe_gap"),
+)
 
 DISPLAY_STYLE_CHECKS = (
         ("主界面词条粗体", "main_entry_font_bold"),
@@ -717,6 +778,7 @@ __all__ = [
     "OCR_COMMON_FIELDS",
     "OCR_ADVANCED_FIELDS",
     "DISPLAY_FIELDS",
+    "SEPARATOR_Y_FIELDS", "SEPARATOR_Y_CHECKS",
     "PROJECT_RUNTIME_FIELDS",
     "EXPERT_FIELDS",
     "SETTING_UNITS",

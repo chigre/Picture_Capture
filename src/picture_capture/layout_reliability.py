@@ -40,10 +40,29 @@ def clean_layout_speckles(image: Image.Image, settings: AppSettings, backend: An
     if ink.size == 0 or not np.any(ink):
         return source.copy()
 
-    local5 = _box_sum(ink, 2, 2)
-    local11 = _box_sum(ink, 5, 5)
-    vertical13 = _box_sum(ink, 6, 0)
-    horizontal13 = _box_sum(ink, 0, 6)
+    # All four neighbourhoods share one padded summed-area table.
+    # This avoids four full-page cumulative-sum passes and preserves the
+    # exact inclusive counts and boundary-zero semantics of _box_sum.
+    height, width = ink.shape
+    padded = np.pad(ink.astype(np.uint8, copy=False), ((6, 6), (6, 6)))
+    integral = np.pad(
+        padded.cumsum(axis=0, dtype=np.int32).cumsum(axis=1, dtype=np.int32),
+        ((1, 0), (1, 0)),
+    )
+    def count(ry: int, rx: int) -> np.ndarray:
+        y0, x0 = 6 - ry, 6 - rx
+        y1, x1 = 7 + ry, 7 + rx
+        return (
+            integral[y1:y1 + height, x1:x1 + width]
+            - integral[y0:y0 + height, x1:x1 + width]
+            - integral[y1:y1 + height, x0:x0 + width]
+            + integral[y0:y0 + height, x0:x0 + width]
+        )
+
+    local5 = count(2, 2)
+    local11 = count(5, 5)
+    vertical13 = count(6, 0)
+    horizontal13 = count(0, 6)
     remove = (
         ink
         & (local5 <= 6)
@@ -172,9 +191,22 @@ def _projection_estimate(cleaned_source: Image.Image, settings: AppSettings, bac
 
 def _paddle_estimate(cleaned_source: Image.Image, settings: AppSettings, backend: Any) -> Any:
     """Run the normal Paddle layout path, without treating successful execution as reliability."""
+    from time import perf_counter
+    from .draw_performance_profile import enabled, record_page
+    tracking = enabled()
+    tick = perf_counter() if tracking else 0.0
+    steps = {}
+    def mark(name):
+        nonlocal tick
+        if tracking:
+            now = perf_counter()
+            steps[name] = now - tick
+            tick = now
     transform = LayoutTransform(settings.layout_transform)
     analysis = transform.canonical_image_for_analysis(cleaned_source)
+    mark("paddle_prepare_transform")
     detector = backend._get_text_detector(settings)
+    mark("paddle_model_get")
     import os
 
     os.environ["FLAGS_enable_pir_api"] = "0"
@@ -182,11 +214,17 @@ def _paddle_estimate(cleaned_source: Image.Image, settings: AppSettings, backend
         results = list(detector.predict(np.asarray(analysis), batch_size=1, limit_side_len=2400))
     except TypeError:
         results = list(detector.predict(np.asarray(analysis)))
+    mark("paddle_predict")
     if not results:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_paddle_empty")
         raise RuntimeError("PaddleOCR 整页版面检测没有返回结果。")
     boxes = backend._boxes_from_detection(results[0], analysis.width, analysis.height)
     if not boxes:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_paddle_no_boxes")
         raise RuntimeError("PaddleOCR 整页版面检测没有返回文本框。")
+    mark("paddle_boxes_decode")
     gray = np.asarray(ImageOps.grayscale(analysis), dtype=np.uint8)
     estimate = backend.infer_layout_from_boxes(
         boxes,
@@ -197,7 +235,10 @@ def _paddle_estimate(cleaned_source: Image.Image, settings: AppSettings, backend
         fixed_columns=settings.columns,
         column_separator_mode=settings.layout_column_separator_mode,
     )
+    mark("paddle_geometry_inference")
     estimate.canonical_transform = transform.kind
+    if tracking:
+        record_page("<substage>", -1, steps, stage_group="reliable_paddle")
     return estimate
 
 
@@ -436,11 +477,31 @@ def _fuse_detected_geometry(primary: Any, secondary: Any, image_size: tuple[int,
 
 def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings, backend: Any) -> Any:
     """Noise-robust, cross-checked replacement for detect_layout_parameters."""
+    from time import perf_counter
+    from .draw_performance_profile import enabled, record_page
+    tracking = enabled()
+    tick = perf_counter() if tracking else 0.0
+    steps = {}
+    def mark(name):
+        nonlocal tick
+        if tracking:
+            now = perf_counter()
+            steps[name] = now - tick
+            tick = now
+    def finish(result, route):
+        mark("reliable_fusion")
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group=f"reliable_{route}")
+        return result
     source = normalize_page_rgb(image)
     if str(getattr(settings, "layout_transform", "identity") or "identity") != "identity":
-        return backend._legacy_detect_layout_parameters(source, settings)
+        result = backend._legacy_detect_layout_parameters(source, settings)
+        return finish(result, "legacy_transform")
 
-    cleaned = clean_layout_speckles(source, settings, backend)
+    cleaned = (clean_layout_speckles(source, settings, backend)
+               if bool(getattr(settings, "layout_denoise_enabled", True))
+               else source.copy())
+    mark("reliable_speck_cleanup")
     paddle_error: Exception | None = None
     projection_error: Exception | None = None
     primary = None
@@ -449,12 +510,16 @@ def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings,
         primary = _paddle_estimate(cleaned, settings, backend)
     except Exception as exc:
         paddle_error = exc
+    mark("reliable_paddle_total")
     try:
         secondary = _projection_estimate(cleaned, settings, backend)
     except Exception as exc:
         projection_error = exc
 
+    mark("reliable_projection_total")
     if primary is None and secondary is None:
+        if tracking:
+            record_page("<substage>", -1, steps, stage_group="reliable_both_failed")
         raise RuntimeError(
             f"PaddleOCR 整页版面检测失败：{paddle_error}\n"
             f"投影版面检测也失败：{projection_error}"
@@ -462,12 +527,12 @@ def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings,
     if primary is None:
         secondary.confidence = min(0.70, max(0.30, float(secondary.source_boxes) / 8.0))
         secondary.method = f"reliable_fusion+projection_only+paddle_error={type(paddle_error).__name__ if paddle_error else 'unknown'}"
-        return secondary
+        return finish(secondary, "projection_only")
     if secondary is None:
         primary.confidence = min(0.70, max(0.25, float(primary.source_boxes) / 50.0))
         primary.method = f"reliable_fusion+paddle_only+projection_error={type(projection_error).__name__ if projection_error else 'unknown'}"
-        return primary
+        return finish(primary, "paddle_only")
 
     if str(getattr(settings, "layout_columns_policy", "detect") or "detect").lower() == "fixed":
-        return _fuse_fixed_geometry(primary, secondary, settings, cleaned, backend)
-    return _fuse_detected_geometry(primary, secondary, cleaned.size)
+        return finish(_fuse_fixed_geometry(primary, secondary, settings, cleaned, backend), "fused_fixed")
+    return finish(_fuse_detected_geometry(primary, secondary, cleaned.size), "fused_detected")

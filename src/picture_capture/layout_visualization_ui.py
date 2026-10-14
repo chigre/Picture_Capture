@@ -53,6 +53,8 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         controls,
         str(getattr(settings, "layout_columns_policy", "") or ""),
         str(getattr(settings, "layout_column_separator_mode", "") or ""),
+        "layout_mask_illustrations_use_existing",
+        bool(getattr(settings, "layout_mask_illustrations_use_existing", False)),
         "layout_mask_illustrations",
         bool(getattr(settings, "layout_mask_illustrations", False)),
     )

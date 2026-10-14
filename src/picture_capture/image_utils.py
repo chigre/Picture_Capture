@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import os
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
@@ -108,6 +109,15 @@ def build_analysis_image(
     support.  The resulting image is shared by Layout, Page Understanding,
     ordinary/VB and other visual evidence so they see the same cleaned pixels.
     """
+    # Experimental reuse: enabled only for images explicitly produced by this
+    # same analysis builder at the same denoise strength. Keep off by default
+    # until exact PDIC parity has been validated on real dictionary scans.
+    requested = resolve_denoise_strength(settings)
+    if (os.environ.get("PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS") == "1"
+            and ink_mask is None
+            and image.mode == "RGB"
+            and image.info.get("_picture_capture_analysis_strength") == requested):
+        return image.copy()
     source = normalize_page_rgb(image)
     gray_image = ImageOps.grayscale(source)
     try:
@@ -122,7 +132,7 @@ def build_analysis_image(
         if ink.size == 0 or not bool(np.any(ink)):
             return source
 
-        strength = resolve_denoise_strength(settings)
+        strength = requested
         remove, profile = adaptive_speck_remove_mask(ink, strength=strength)
 
         # Keep diagnostics attached to the in-memory analysis image.  This is
@@ -142,12 +152,14 @@ def build_analysis_image(
 
         if not bool(np.any(remove)):
             source.info["analysis_denoise_profile"] = profile_payload
+            source.info["_picture_capture_analysis_strength"] = requested
             return source
 
         arr = np.asarray(source).copy()
         arr[remove] = 255
         cleaned = Image.fromarray(arr, mode="RGB")
         cleaned.info["analysis_denoise_profile"] = profile_payload
+        cleaned.info["_picture_capture_analysis_strength"] = requested
         source.close()
         return cleaned
     finally:

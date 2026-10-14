@@ -29,7 +29,7 @@ def build_illustration_settings_tab(dialog: object, tab: ttk.Frame) -> None:
               "尺寸单位可填 % 或 px（切换单位不自动换算数值）；墨迹占比越高筛选越保守。"
               "阈值修改后需重新运行“插图识别”才能改变已有自动区域。",
     )
-    dialog._add_check_group(page, "插图与 Layout", ILLUSTRATION_CHECKS[:1])
+    dialog._add_check_group(page, "插图与 Layout", ILLUSTRATION_CHECKS[:2])
     group = dialog._add_setting_group(
         page, "插图区域、边框与标签",
         ILLUSTRATION_APPEARANCE_FIELDS,
@@ -51,4 +51,4 @@ def build_illustration_settings_tab(dialog: object, tab: ttk.Frame) -> None:
         ttk.Button(control[0], text="选色…", command=choose).grid(
             row=0, column=2, padx=(8, 0),
         )
-    dialog._add_check_group(page, "标签显示与字形", ILLUSTRATION_CHECKS[1:])
+    dialog._add_check_group(page, "标签显示与字形", ILLUSTRATION_CHECKS[2:])

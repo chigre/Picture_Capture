@@ -282,7 +282,22 @@ class AppSettings(metaclass=_AppSettingsMeta):
     crop_parallel_workers: int = 0
     # Optional Layout-only preprocessing. Source scans, PPP annotations, OCR
     # input and crop outputs remain untouched; default preserves legacy behavior.
+    # Full-resolution shared analysis and detector-only experimental policies.
+    draw_performance_profile: bool = False
+    reuse_prepared_analysis: bool = False
+    analysis_denoise_enabled: bool = True
+    analysis_denoise_strength: str = "auto"
+    layout_denoise_enabled: bool = True
+    layout_scale_enabled: bool = False
+    layout_scale_columns: bool = True
+    layout_scale_column_width: bool = True
+    layout_scale_gutter: bool = True
+    layout_scale_start_y: bool = False
+    layout_scale_manual_x: bool = False
+    layout_scale_character_height: bool = False
+    layout_scale_row_padding: bool = False
     layout_mask_illustrations: bool = False
+    layout_mask_illustrations_use_existing: bool = False
     # Automatic PPP illustration detection intentionally adds a little context
     # around dark connected components. The right side gets a larger default
     # because classic dictionary illustrations often extend into the gutter.
@@ -606,8 +621,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # analysis, expressed as a percentage of the current straightened column.
     # Keeping this local prevents long definition text at the right side of a
     # column from pulling the separator toward the preceding line.
-    paddle_separator_roi_width_ratio: float = 60.0
+    paddle_separator_roi_width_ratio: float = 100.0
     paddle_separator_column_margin: int = 8
+    separator_y_max_shift_ratio: float = 0.45
     # Optional second OCR pass for diagnostics / conservative rescue.  It uses
     # the same straightened candidate band and the existing Tesseract language/path.
     paddle_use_paddleocr: bool = True
@@ -713,6 +729,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
         raw = json.loads(path.read_text(encoding="utf-8"))
+        # Existing project configs created before the 100%-width default
+        # retain the historical 60% when this field was absent.
+        raw.setdefault("paddle_separator_roi_width_ratio", 60.0)
         for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             raw[name] = _normalize_display_opacity(raw.get(name, 40.0))
         raw = migrate_app_settings_payload(raw, cls)

@@ -26,7 +26,7 @@ from PIL import Image, ImageOps
 from .image_utils import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
 from .ocr_engines import find_tesseract, run_google_lens
-from .runtime_environment import resolve_paddle_device
+from .inference_performance import resolve_inference_policy, paddle_constructor_variants
 
 
 OCR_ENGINE_ORDER: tuple[str, ...] = ("paddle", "tesseract", "lens")
@@ -328,9 +328,10 @@ def clear_ocr_channel_paddle_engine_cache(
 def _create_paddle_engine(settings: AppSettings) -> Any:
     language = _paddle_language(settings)
     orientation = bool(getattr(settings, "paddle_use_textline_orientation", False))
-    device = resolve_paddle_device()
+    policy = resolve_inference_policy()
+    device = policy.device
     version = str(getattr(settings, "paddle_ocr_version", "PP-OCRv5") or "PP-OCRv5")
-    key = (language, device, version, orientation)
+    key = (language, device, version, orientation, policy.mkldnn, policy.cpu_threads)
     with _PADDLE_ENGINE_CACHE_LOCK:
         existing = _PADDLE_ENGINE_CACHE.get(key)
         if existing is not None:
@@ -357,26 +358,43 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
             "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行："
             "uv sync --extra ocr-cpu"
         ) from exc
-    try:
-        kwargs = dict(
-            lang=language,
-            ocr_version=version,
-            device=device,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=orientation,
-            enable_mkldnn=False,
-        )
+    kwargs = dict(
+        lang=language,
+        ocr_version=version,
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=orientation,
+    )
+    last_exc: Exception | None = None
+    engine = None
+    for candidate in paddle_constructor_variants(kwargs, policy):
         try:
-            engine = PaddleOCR(**kwargs)
-        except TypeError:
-            # Some PaddleOCR 3.x builds do not expose this constructor flag.
-            kwargs.pop("enable_mkldnn", None)
-            engine = PaddleOCR(**kwargs)
-    except Exception as exc:
+            engine = PaddleOCR(**candidate)
+            break
+        except TypeError as exc:
+            # Older builds may lack acceleration tuning arguments. Preserve
+            # the selected device instead of silently defaulting to GPU.
+            last_exc = exc
+            legacy = {k: v for k, v in candidate.items()
+                      if k not in {"enable_mkldnn", "cpu_threads"}}
+            if legacy == candidate:
+                continue
+            try:
+                engine = PaddleOCR(**legacy)
+                break
+            except Exception as retry_exc:
+                last_exc = retry_exc
+        except Exception as exc:
+            last_exc = exc
+            # When Auto oneDNN fails, the next candidate disables it.
+            continue
+    if engine is None:
         raise RuntimeError(
-            f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{exc}"
-        ) from exc
+            f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{last_exc}"
+        ) from last_exc
+
+    from .inference_monitor import record_model_event
+    record_model_event("PaddleOCR", policy.device, policy.mkldnn, policy.cpu_threads)
 
     clear_ocr_channel_paddle_engine_cache(keep_key=key)
     with _PADDLE_ENGINE_CACHE_LOCK:

@@ -41,6 +41,11 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     This keeps Page Layout synchronized with any deliberate test/debug replacement
     on `layout_detection.detect_layout_parameters` without bootstrap mutation.
     """
+    from .ordinary_gpu_pipeline import take_prepared_layout
+
+    prepared = take_prepared_layout(image, settings)
+    if prepared is not None:
+        return prepared
     from . import layout_detection
 
     return layout_detection.detect_layout_parameters(image, settings)
@@ -83,9 +88,26 @@ def resolve_page_layout_policy(
     meaning of "首栏X自动" without allowing a dominant inward body lane to redefine
     the column origin.
     """
+    from time import perf_counter as _perf
+    from .draw_performance_profile import enabled as _enabled, record_page
+    _timed = _enabled()
+    _tick = _perf() if _timed else 0.0
+    _segments = {}
+    def _mark(stage):
+        nonlocal _tick
+        if _timed:
+            now = _perf()
+            _segments[stage] = now - _tick
+            _tick = now
+    def _save(state):
+        if _timed:
+            record_page("<substage>", page_index, _segments,
+                        stage_group=f"auto_policy_{state}")
     current = replace(settings)
     if not bool(getattr(current, "ordinary_auto_layout", False)):
         current.manual_columns = False
+        _mark("policy_disabled")
+        _save("disabled")
         return current, None, {}
 
     detector_settings = replace(current)
@@ -95,13 +117,16 @@ def resolve_page_layout_policy(
     # One authoritative physical estimate. This replaces the projection-only
     # Page Understanding path that could disagree with ordinary auto-layout and
     # with the on-image Layout diagnostic overlay.
+    _mark("policy_settings_copy")
     estimate = detect_layout_parameters(image, detector_settings)
+    _mark("policy_detector_total")
 
     # Build the same canonical domain used by Page Design for X registration.
     _source, canonical, _transform, _effective = base._analysis_page(
         image, detector_settings, page_index
     )
 
+    _mark("policy_canonical_analysis")
     applied: dict[str, int] = {}
     # Resolve every selected scalar except X first. X registration may use the
     # newly allowed page-specific column count/width/gutter/line scale, while
@@ -117,6 +142,7 @@ def resolve_page_layout_policy(
         setattr(current, field, value)
         applied[field] = value
 
+    _mark("policy_scalar_merge")
     if bool(getattr(current, "ordinary_auto_manual_x", False)):
         registration = register_page_manual_x(
             canonical, current, estimate, **({"ops": ops} if ops is not None else {})
@@ -124,7 +150,9 @@ def resolve_page_layout_policy(
         current.manual_x = int(registration.value)
         applied["manual_x"] = int(registration.value)
 
+    _mark("policy_manual_x_registration")
     current.manual_columns = False
+    _save("detected")
     return current, estimate, applied
 
 
@@ -191,11 +219,23 @@ def infer_dictionary_page_layout(
     projection_trace: list[list[dict[str, Any]]] | None = None,
 ) -> tuple[base.DictionaryPageLayout, AppSettings, dict[str, int]]:
     """Infer one page instance while respecting project fixed/auto field policy."""
+    from time import perf_counter as _pc
+    from .draw_performance_profile import enabled as _enabled, record_page
+    _profile = _enabled()
+    _tick = _pc() if _profile else 0.0
+    _stages = {}
+    def _mark(key):
+        nonlocal _tick
+        if _profile:
+            now = _pc()
+            _stages[key] = now - _tick
+            _tick = now
     resolver = resolve_page_layout_policy if policy_resolver is None else policy_resolver
     page_settings, estimate, applied = resolver(
         image, settings, page_index=page_index,
         **({"ops": ops} if ops is not None else {}),
     )
+    _mark("physical_policy_resolve")
     resolved_ops = base.current_layout_ops() if ops is None else ops
     source, canonical, transform, effective = base._analysis_page(
         image, page_settings, page_index
@@ -204,6 +244,7 @@ def infer_dictionary_page_layout(
         np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8), effective
     )
 
+    _mark("physical_analysis_ink_mask")
     # Top remains policy-controlled. Bottom is different: a projection estimate
     # must not truncate the very text rows Page Understanding is supposed to
     # inspect. Scan the full allowed page/template domain first, then derive the
@@ -271,6 +312,7 @@ def infer_dictionary_page_layout(
             projection_trace.append(stage or [])
         return strips, runs
 
+    _mark("physical_initial_geometry")
     # First infer line scale without accepting projection_bottom as a hard crop.
     full_bottom = canonical.height
     strips, raw_runs = column_strips(seed, full_bottom)
@@ -300,6 +342,7 @@ def infer_dictionary_page_layout(
     # coordinate uses the same final bottom.
     strips, raw_runs = column_strips(reference, bottom)
 
+    _mark("physical_row_projection")
     indent_type = base._indent_type(page_settings)
     # Keep policy-aware PageDesign in sync with physical projection's accepted
     # 0.26–1.90× row band. The raw base PageDesign path already uses this
@@ -328,6 +371,7 @@ def infer_dictionary_page_layout(
         resolved_ops.assign_indent_semantics(column, indent_type, reference)
         columns.append(column)
 
+    _mark("physical_row_features_and_indent_modes")
     # Preserve the base sparse-lane transfer.
     sign = 1.0 if indent_type == "headword" else -1.0
     offsets = [
@@ -357,6 +401,7 @@ def infer_dictionary_page_layout(
                     role="entry",
                 ))
 
+    _mark("physical_sparse_lane_transfer")
     char_width = base._char_width(columns, reference)
     pitch = base._line_pitch(columns, reference)
     display_heads = [
@@ -426,6 +471,7 @@ def infer_dictionary_page_layout(
         reliable=reliable,
         reason=reason,
     )
+    _mark("physical_layout_assembly")
     layout = finalize_layout_column_drift(
         image,
         page_settings,
@@ -434,6 +480,10 @@ def infer_dictionary_page_layout(
         page_ink=page_ink,
         **({"ops": ops} if ops is not None else {}),
     )
+    _mark("physical_column_drift_finalization")
+    if _profile:
+        record_page("<substage>", page_index, _stages,
+                    stage_group="physical_layout_inference")
     return layout, page_settings, applied
 
 

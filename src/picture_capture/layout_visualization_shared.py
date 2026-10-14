@@ -102,6 +102,7 @@ def _shared_snapshot_for_app_impl(app: Any) -> Any:
             page_index=page_index,
             page_sections=page_sections,
             layout_only=True,
+            source_image_path=getattr(app, "current_page", None),
         )
         if understanding is None:
             raise RuntimeError("Page Understanding 未能生成版面结果")

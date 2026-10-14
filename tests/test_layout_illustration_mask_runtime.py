@@ -24,11 +24,12 @@ def test_layout_mask_checkbox_has_dedicated_check_help_contract():
     expected = (
         "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
         "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-        "原始扫描图、PPP、OCR、PDIC 与切图文件都不会被修改。\n\n"
+        "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
         "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
         "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
     )
     assert CHECK_HELP[SETTING_NAME] == expected
+    assert "不重新识别" in CHECK_HELP["layout_mask_illustrations_use_existing"]
 
 
 def test_layout_illustration_mask_is_native_persistable_setting(tmp_path: Path):
@@ -387,3 +388,73 @@ def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
     )
     assert result is None
     assert masked.close_calls == 1
+
+
+def test_existing_ppp_mask_never_redetects_or_rewrites(tmp_path, monkeypatch):
+    import numpy as np
+    from picture_capture.formats import write_ppp
+    from picture_capture.project_storage import ppp_write_path_for_image
+    page = tmp_path / "page.png"
+    Image.new("RGB", (400, 300), (20, 30, 40)).save(page)
+    ppp = ppp_write_path_for_image(page)
+    write_ppp(ppp, [_rect(40, 50, 210, 260)], page.stem)
+    original_bytes = ppp.read_bytes()
+    settings = AppSettings(
+        layout_mask_illustrations=True,
+        layout_mask_illustrations_use_existing=True,
+    )
+    def forbid(*args, **kwargs):
+        raise AssertionError("Existing PPP reuse must never invoke detector")
+    monkeypatch.setattr(
+        "picture_capture.processing_core.detect_illustration_regions_from_image",
+        forbid,
+    )
+    with Image.open(page) as image:
+        masked, stats = mask_large_illustrations_for_layout(
+            image, settings, source_image_path=page,
+        )
+        assert stats.masked == 1
+        assert tuple(np.asarray(masked)[100, 100]) == (255, 255, 255)
+        assert tuple(np.asarray(masked)[20, 20]) == (20, 30, 40)
+    assert ppp.read_bytes() == original_bytes
+
+
+def test_existing_ppp_missing_is_error_not_implicit_scan(tmp_path):
+    page = tmp_path / "missing.png"
+    settings = AppSettings(
+        layout_mask_illustrations=True,
+        layout_mask_illustrations_use_existing=True,
+    )
+    import pytest
+    with pytest.raises(FileNotFoundError, match="PPP"):
+        mask_large_illustrations_for_layout(
+            Image.new("RGB", (300, 300), "white"),
+            settings, source_image_path=page,
+        )
+
+
+def test_automatic_layout_mask_persists_detected_regions_once(tmp_path, monkeypatch):
+    from picture_capture.formats import read_ppp
+    from picture_capture.project_storage import ppp_read_path_for_image
+    import picture_capture.processing_core as core
+    page = tmp_path / "auto.png"
+    Image.new("RGB", (400, 300), "white").save(page)
+    called = []
+    def fake_detect(*args, **kwargs):
+        called.append(1)
+        return [_rect(60, 50, 280, 270)]
+    monkeypatch.setattr(core, "detect_illustration_regions_from_image", fake_detect)
+    settings = AppSettings(
+        layout_mask_illustrations=True,
+        layout_mask_illustrations_use_existing=False,
+        character_height=20, column_width=300,
+    )
+    with Image.open(page) as image:
+        masked, stats = mask_large_illustrations_for_layout(
+            image, settings, source_image_path=page,
+        )
+    assert len(called) == 1
+    assert stats.masked == 1
+    persisted = read_ppp(ppp_read_path_for_image(page))
+    assert len(persisted) == 1
+    assert "AUTO" in persisted[0].label

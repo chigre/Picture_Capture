@@ -510,6 +510,8 @@ class SettingsDialog(tk.Toplevel):
     SETTING_HELP_IMAGES = _settings_schema.SETTING_HELP_IMAGES
     SETTING_CHOICES = _settings_schema.SETTING_CHOICES
     CHECK_HELP = _settings_schema.CHECK_HELP
+    SEPARATOR_Y_FIELDS = _settings_schema.SEPARATOR_Y_FIELDS
+    SEPARATOR_Y_CHECKS = _settings_schema.SEPARATOR_Y_CHECKS
     NORMAL_CHECKS = _settings_schema.NORMAL_CHECKS
     OCR_COMMON_CHECKS = _settings_schema.OCR_COMMON_CHECKS
     OCR_ADVANCED_CHECKS = _settings_schema.OCR_ADVANCED_CHECKS
@@ -785,6 +787,13 @@ class SettingsDialog(tk.Toplevel):
                 )
             check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
             check.grid(row=row, column=0, sticky="w", pady=4)
+            if name == "layout_mask_illustrations_use_existing":
+                parent_mask = self.vars.get("layout_mask_illustrations")
+                if parent_mask is not None:
+                    def _sync_illustration_reuse_state(*_ignored, master=parent_mask, child=check):
+                        child.configure(state="normal" if master.get() else "disabled")
+                    parent_mask.trace_add("write", _sync_illustration_reuse_state)
+                    _sync_illustration_reuse_state()
             info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
             info.grid(row=row, column=1, sticky="w", padx=(8, 0))
             callback = lambda l=label, n=name: self._show_check_help(l, n)
@@ -923,6 +932,8 @@ class SettingsDialog(tk.Toplevel):
             textvariable=self._settings_help_body_var,
             foreground="#555b63",
             justify="left",
+            anchor="nw",
+            wraplength=300,
         )
         help_body.pack(anchor="w", fill="x", padx=(0, 8), pady=(7, 0))
         help_image = ttk.Label(help_box, anchor="center")
@@ -1021,6 +1032,8 @@ class SettingsDialog(tk.Toplevel):
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
+        performance_tab = ttk.Frame(notebook)
+        separator_y_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
         display_tab = ttk.Frame(notebook)
         project_tab = ttk.Frame(notebook)
@@ -1032,7 +1045,9 @@ class SettingsDialog(tk.Toplevel):
             (common_tab, "常用"),
             (ocr_tab, "OCR画线"),
             (normal_tab, "普通画线"),
+            (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
+            (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
             (crop_tab, "切图"),
@@ -1045,7 +1060,9 @@ class SettingsDialog(tk.Toplevel):
         self._settings_tabs = {
             "common": common_tab,
             "normal": normal_tab,
+            "separator_y": separator_y_tab,
             "illustration": illustration_tab,
+            "performance": performance_tab,
             "ocr": ocr_tab,
             "display": display_tab,
             "project": project_tab,
@@ -1233,7 +1250,38 @@ class SettingsDialog(tk.Toplevel):
             self.NORMAL_ADVANCED_FIELDS,
         )
 
+        # Cross-cutting feature, not an OCR-only or ordinary-only option.
+        separator_y_page = self._scrollable_settings_page(separator_y_tab)
+        self._settings_intro(
+            separator_y_page, "横线 Y 精修（所有画线共用）",
+            "集中控制 OCR 与普通画线共享的局部墨迹谷精修。"
+            "横向分析范围对新项目默认 100%；老项目已保存的取值保持不变。",
+        )
+        self._add_check_group(
+            separator_y_page, "启用与安全检查", self.SEPARATOR_Y_CHECKS,
+            intro="白缝安全核验为实验性功能，默认关闭。",
+        )
+        self._add_setting_group(
+            separator_y_page, "精修参数", self.SEPARATOR_Y_FIELDS,
+            intro="横向范围 100% 表示在扣除栏边余量后的整栏可用宽度内寻找空白带；"
+            "并非保证每条线均不穿字。",
+        )
+
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
+        performance_page = self._scrollable_settings_page(performance_tab)
+        self._settings_intro(
+            performance_page, "性能测试与诊断",
+            "本页管理运行时测试开关和性能报告；项目设置会自动保存，"
+            "新启动的普通画线子进程继承对应选项。",
+        )
+        self._add_check_group(
+            performance_page, "分析图与性能日志",
+            (
+                ("启用普通画线性能诊断（导出 Markdown/CSV）", "draw_performance_profile"),
+                ("复用已处理的分析图（实验）", "reuse_prepared_analysis"),
+            ),
+            intro="复用功能可能改变重复去噪语义，务必先比较完整 PDIC。",
+        )
 
         ocr_page = self._scrollable_settings_page(ocr_tab)
         self._settings_intro(
@@ -11435,8 +11483,9 @@ class PictureCaptureApp(tk.Tk):
         on_done=None, item_label=None, max_workers: int = 0,
         *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
+        gpu_preflight_func=None, gpu_job_builder=None,
     ) -> bool:
-        """Run bounded independent page jobs while protecting manual PDIC edits."""
+        """Run bounded page jobs; optional one-process GPU preflight before CPU."""
         if self._batch_active:
             messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
             return False
@@ -11463,7 +11512,7 @@ class PictureCaptureApp(tk.Tk):
         workers = resolve_crop_worker_count(max_workers)
         # A one-worker request is intentionally routed through the existing
         # sequential runner, useful for low-memory machines and diagnostics.
-        if workers <= 1:
+        if workers <= 1 and gpu_preflight_func is None:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -11501,7 +11550,10 @@ class PictureCaptureApp(tk.Tk):
         if not self.batch_bar.winfo_manager():
             self.batch_bar.pack(side="top", fill="x")
         self.status_var.set(
-            f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。暂停/停止不会再派发新页面。"
+            (f"{title}开始：一个 GPU 预检进程 + {workers} 个 CPU 处理进程；"
+             if gpu_preflight_func is not None else
+             f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。")
+            + "暂停/停止不会再派发新页面。"
             + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
         )
 
@@ -11528,6 +11580,10 @@ class PictureCaptureApp(tk.Tk):
             futures = {}
             context = multiprocessing.get_context("spawn")
             executor = ProcessPoolExecutor(max_workers=workers, mp_context=context)
+            gpu_executor = (
+                ProcessPoolExecutor(max_workers=1, mp_context=context)
+                if gpu_preflight_func is not None else None
+            )
             try:
                 while True:
                     # Fill only the currently free worker slots. This is what
@@ -11561,6 +11617,25 @@ class PictureCaptureApp(tk.Tk):
                                 "item", position, total, label, item_index
                             ))
                         args = job_builder(item, position, total)
+                        if gpu_executor is not None:
+                            if gpu_job_builder is None:
+                                raise RuntimeError("Missing GPU preflight job builder")
+                            # Exactly ONE long-lived model-owning spawn process
+                            # does each full Layout detector preflight. Never
+                            # initialize CUDA/Paddle inside the CPU workers.
+                            # This synchronous handoff intentionally bounds
+                            # in-flight pages to 1 GPU + <= workers CPU.
+                            gpu_args = gpu_job_builder(item, position, total)
+                            self._batch_queue.put((
+                                "pipeline_stage", position, total, label, "GPU版面预检",
+                            ))
+                            prepared = gpu_executor.submit(
+                                gpu_preflight_func, *gpu_args
+                            ).result()
+                            self._batch_queue.put((
+                                "pipeline_stage", position, total, label, "CPU画线与保存",
+                            ))
+                            args = (*args, prepared)
                         future = executor.submit(worker_func, *args)
                         futures[future] = (item, position, label, item_index)
                         self._batch_queue.put((
@@ -11602,6 +11677,8 @@ class PictureCaptureApp(tk.Tk):
                 ))
             finally:
                 executor.shutdown(wait=True, cancel_futures=True)
+                if gpu_executor is not None:
+                    gpu_executor.shutdown(wait=True, cancel_futures=True)
 
         self._batch_thread = threading.Thread(
             target=runner, name=f"PictureCapture-{title}-parallel", daemon=True
@@ -11663,6 +11740,15 @@ class PictureCaptureApp(tk.Tk):
                 else:
                     self.batch_text_var.set(f"{self._batch_title}：已完成 {completed}/{total}：{label}")
                     self.status_var.set(f"{self._batch_title}：已完成 {completed}/{total} 页，最近完成 {label}")
+            elif kind == "pipeline_stage":
+                _kind, position, total, label, stage = event
+                self.batch_text_var.set(
+                    f"{self._batch_title} {position}/{total}：{stage} · {label}"
+                )
+                self.status_var.set(
+                    f"{self._batch_title}：{stage}（{label}）；"
+                    "GPU模型只在一个进程中运行。"
+                )
             elif kind == "parallel_state":
                 _kind, completed, total, active, label, workers = event
                 self._batch_in_item = active > 0
@@ -15436,9 +15522,36 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
+        import time
+        batch_started_at = time.time()
         self.save_pdic(silent=True)
+        # Auto illustration detection persists PPP in workers. Flush any
+        # foreground manual edits first so the worker's AUTO merge preserves
+        # them. PPP-reuse mode is read-only and must never fabricate a missing
+        # PPP file.
+        if (
+            method == "left_edge"
+            and bool(getattr(self.settings, "layout_mask_illustrations", False))
+            and not bool(getattr(self.settings, "layout_mask_illustrations_use_existing", False))
+            and self.current_page is not None
+        ):
+            from .formats import write_ppp
+            self._sync_polygon_label_texts()
+            write_ppp(
+                self._ppp_write_path(self.current_page),
+                self.polygons,
+                self.current_page.stem,
+            )
         self.settings.detection_method = method
         settings = replace(self.settings)
+        # Set the process environment *before* spawning workers. Snapshot the
+        # values at the start of this batch to keep child processes consistent.
+        os.environ["PICTURE_CAPTURE_DRAW_PROFILE"] = (
+            "1" if bool(getattr(settings, "draw_performance_profile", False)) else "0"
+        )
+        os.environ["PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS"] = (
+            "1" if bool(getattr(settings, "reuse_prepared_analysis", False)) else "0"
+        )
         project = self.project
         pages_info = {i: self.pages_tuple(i) for i in indices}
         filter_path = headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
@@ -15446,6 +15559,27 @@ class PictureCaptureApp(tk.Tk):
         ordinary_workers = (
             ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
         )
+        from .ordinary_gpu_pipeline import staged_pipeline_enabled
+        from .ordinary_cpu_pool import cpu_pool_enabled, cpu_pool_config
+        cpu_pool = bool(
+            method == "left_edge"
+            and cpu_pool_enabled(settings, len(indices))
+        )
+        cpu_pool_workers, cpu_inference_threads = (
+            cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
+        )
+        # The two experiments are mutually exclusive. Explicit CPU-only
+        # mode wins if both flags accidentally exist in the environment.
+        gpu_staged = bool(
+            method == "left_edge" and not cpu_pool
+            and staged_pipeline_enabled(settings, len(indices))
+        )
+        if cpu_pool:
+            ordinary_workers = cpu_pool_workers
+        elif gpu_staged:
+            # Memory-conservative trial: ONE reusable GPU detector and at
+            # most two CPU page allocations; never six CUDA model copies.
+            ordinary_workers = 2
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
             if method == "left_edge" and ordinary_workers <= 1 else None
@@ -15453,6 +15587,10 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
+            from .draw_performance_profile import enabled as profile_enabled, record_page
+            tracing = profile_enabled() and method in {"paddleocr", "combined"}
+            stages = {}
+            trace_tick = time.perf_counter()
             resume_dependencies = ()
             if (
                 method in {"paddleocr", "combined"}
@@ -15476,12 +15614,22 @@ class PictureCaptureApp(tk.Tk):
                 if previous_count is not None:
                     return {"index": int(index), "count": previous_count, "resumed": True}
             if normal_executor is not None:
-                count = normal_executor.submit(
-                    detect_entries_job, str(page), settings, pages_info[index], index
-                ).result()
+                if cpu_pool:
+                    from .ordinary_cpu_pool import cpu_ordinary_page_job
+                    count = normal_executor.submit(
+                        cpu_ordinary_page_job, str(page), settings,
+                        pages_info[index], index, cpu_inference_threads,
+                    ).result()
+                else:
+                    count = normal_executor.submit(
+                        detect_entries_job, str(page), settings, pages_info[index], index
+                    ).result()
                 return {"index": int(index), "count": int(count)}
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
+            if tracing:
+                stages["ocr_image_load"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method in {"paddleocr", "combined"} else None
             sections = read_page_sections(page)
             entries, _geometry = detect_entries(
@@ -15491,6 +15639,9 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=index,
                 page_sections=sections,
             )
+            if tracing:
+                stages["ocr_detect_entries"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             text_stats = None
             if method == "combined":
                 original_coords = [
@@ -15512,6 +15663,9 @@ class PictureCaptureApp(tk.Tk):
                     raise RuntimeError(
                         f"{page.name} 融合画线自动补字意外修改了画线坐标"
                     )
+            if tracing:
+                stages["ocr_marker_text_fill"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             saved_pdic = pdic_path(page)
             if method in {"paddleocr", "combined"}:
                 # Mandatory lossless snapshot BEFORE replacing an existing
@@ -15520,6 +15674,9 @@ class PictureCaptureApp(tk.Tk):
                 from .ocr_pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
+            if tracing:
+                stages["ocr_preserve_and_pdic"] = time.perf_counter() - trace_tick
+                trace_tick = time.perf_counter()
             result = {"index": int(index), "count": len(entries)}
             if method in {"paddleocr", "combined"} and cache_path is not None:
                 # The OCR cache is pre-Layout. Read the *actual saved PDIC*
@@ -15560,6 +15717,9 @@ class PictureCaptureApp(tk.Tk):
                     "text_large": int(text_stats.get("large", 0)),
                     "text_failed": int(text_stats.get("failed", 0)),
                 })
+            if tracing:
+                stages["ocr_audit_resume"] = time.perf_counter() - trace_tick
+                record_page(page, index, stages, mode=method)
             return result
 
         def done(completed, total, stopped, results, error):
@@ -15650,6 +15810,51 @@ class PictureCaptureApp(tk.Tk):
                         f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
                         + (f"（{', '.join(names)}{more}）" if names else "")
                     )
+            from .inference_monitor import recent_model_events
+            elapsed_seconds = max(0.001, time.time() - batch_started_at)
+            observed_events = recent_model_events(batch_started_at)
+            observed_devices = sorted({str(row["device"]) for row in observed_events})
+            observed_pids = {int(row["pid"]) for row in observed_events}
+            inferred = "/".join(observed_devices) if observed_devices else "未记录（可能命中缓存）"
+            monitor_text = (
+                f"；耗时 {elapsed_seconds:.1f}s"
+                f"；速度 {completed / elapsed_seconds:.2f} 页/s"
+                f"；模型设备 {inferred}"
+                f"；模型实例进程 {len(observed_pids)}"
+            )
+            if cpu_pool:
+                monitor_text += f"；CPU 工作进程配置 {cpu_pool_workers}"
+            elif gpu_staged:
+                monitor_text += "；GPU 推理生产者 1 / CPU 消费者最多 2"
+            elif method in {"paddleocr", "combined"}:
+                monitor_text += "；OCR 页面串行调度"
+            if observed_events:
+                observed_dnn = sorted({
+                    str(row["mkldnn"]) for row in observed_events
+                    if row.get("device") == "cpu"
+                })
+                if observed_dnn:
+                    monitor_text += f"；oneDNN 配置 {'/'.join(observed_dnn)}"
+            quality_text += monitor_text
+            from .draw_performance_profile import (
+                enabled as profiling_enabled, recent_profiles, export_batch_report,
+            )
+            if profiling_enabled():
+                page_names = {str(project.images[i]) for i in indices}
+                stage_rows = recent_profiles(batch_started_at, pages=page_names)
+                try:
+                    report_path = export_batch_report(
+                        stage_rows, label=label, elapsed_seconds=elapsed_seconds,
+                        completed=completed, settings=settings,
+                    )
+                except Exception as exc:
+                    quality_text += f"；性能报告导出失败：{exc}"
+                else:
+                    quality_text += (
+                        f"；性能报告已保存：{report_path}"
+                        if stage_rows else
+                        f"；性能报告已保存（没有匹配到逐页计时数据）：{report_path}"
+                    )
             suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
             skipped = int(getattr(self, "_batch_skipped_count", 0))
             skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
@@ -15663,10 +15868,49 @@ class PictureCaptureApp(tk.Tk):
                     f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
                 )
 
-        if method == "left_edge" and ordinary_workers > 1:
-            # Each spawn job writes only its own page's PDIC and automatic
-            # baseline. The parallel coordinator claims pages under the same
-            # foreground/manual-lock contract as the existing serial runner.
+        if gpu_staged:
+            from .ordinary_gpu_pipeline import (
+                prepare_gpu_layout_job, detect_entries_staged_job,
+            )
+            started = self._start_parallel_batch_task(
+                label, indices, detect_entries_staged_job,
+                lambda index, _position, _total: (
+                    str(project.images[index]), settings, pages_info[index], index,
+                ),
+                result_consumer=lambda index, count: {
+                    "index": int(index), "count": int(count),
+                },
+                on_done=done,
+                item_label=lambda index: project.images[index].name,
+                max_workers=ordinary_workers,
+                foreground_page_edit=True,
+                page_indexer=lambda index: int(index),
+                gpu_preflight_func=prepare_gpu_layout_job,
+                gpu_job_builder=lambda index, _position, _total: (
+                    str(project.images[index]), settings, index,
+                ),
+            )
+        elif cpu_pool and cpu_pool_workers > 1:
+            from .ordinary_cpu_pool import cpu_ordinary_page_job
+            started = self._start_parallel_batch_task(
+                label, indices, cpu_ordinary_page_job,
+                lambda index, _position, _total: (
+                    str(project.images[index]), settings,
+                    pages_info[index], index, cpu_inference_threads,
+                ),
+                result_consumer=lambda index, count: {
+                    "index": int(index), "count": int(count),
+                },
+                on_done=done,
+                item_label=lambda index: project.images[index].name,
+                max_workers=cpu_pool_workers,
+                foreground_page_edit=True,
+                page_indexer=lambda index: int(index),
+            )
+        elif method == "left_edge" and ordinary_workers > 1:
+            # Dormant legacy parallel path: the ordinary_draw_workers safety
+            # policy always returns 1 unless a separately validated design
+            # deliberately changes it. No duplicate GPU inference permitted.
             started = self._start_parallel_batch_task(
                 label, indices, detect_entries_job,
                 lambda index, _position, _total: (

@@ -117,62 +117,62 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 
 def _get_text_detector(settings: AppSettings) -> Any:
-    """Create a detection-only PaddleOCR model with CPU oneDNN/PIR disabled.
+    """Cached TextDetection using one shared hardware policy.
 
-    PaddlePaddle 3.3.x + recent PaddleOCR builds can enter a PIR/oneDNN CPU
-    execution path that raises ConvertPirAttribute2RuntimeAttribute for text
-    detection models.  Layout detection values compatibility over peak speed,
-    so explicitly disable that acceleration path here.
+    Preserve PR494's strict CPU worker and staged GPU inference guards.
     """
-    device = resolve_paddle_device()
-    key = f"{device}|nomkldnn"
+    from .ordinary_gpu_pipeline import reject_cpu_worker_detector
+    from .inference_performance import (
+        InferencePolicy, resolve_inference_policy, paddle_constructor_variants,
+    )
+
+    reject_cpu_worker_detector()
+    policy = resolve_inference_policy()
+    cpu_pool_worker = os.environ.get("PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER") == "1"
+    if cpu_pool_worker:
+        try:
+            threads = max(1, min(8, int(os.environ.get("OMP_NUM_THREADS", "1"))))
+        except (ValueError, TypeError):
+            threads = 1
+        policy = InferencePolicy("cpu", policy.mkldnn, 1, threads)
+    key = f"{policy.device}|{policy.mkldnn}|{policy.cpu_threads}"
     if key in _TEXT_DETECTION_CACHE:
         return _TEXT_DETECTION_CACHE[key]
 
-    # Must be set before importing/constructing PaddleOCR/PaddleX components.
-    # This is intentionally an assignment (not setdefault): some PaddleX builds
-    # may have set it to 1 earlier in the process.
     os.environ["FLAGS_enable_pir_api"] = "0"
     from .windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
     try:
         from paddleocr import TextDetection
     except ImportError as exc:
-        raise RuntimeError(
-            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
-        ) from exc
+        raise RuntimeError("尚未安装 PaddleOCR。请执行：uv sync --extra ocr-cpu") from exc
 
-    kwargs: dict[str, Any] = {"enable_mkldnn": False, "device": device}
-
-    # Newer PaddleOCR 3.x exposes enable_mkldnn directly.  Keep compatibility
-    # with older 3.x signatures by progressively dropping unsupported kwargs.
-    attempts = [
-        kwargs,
-        {k: v for k, v in kwargs.items() if k != "device"},
-        {"device": device},
-        {},
-    ]
-    seen: set[tuple[tuple[str, str], ...]] = set()
     last_exc: Exception | None = None
-    for attempt in attempts:
-        marker = tuple(sorted((str(k), repr(v)) for k, v in attempt.items()))
-        if marker in seen:
-            continue
-        seen.add(marker)
+    for attempt in paddle_constructor_variants({}, policy):
         try:
             detector = TextDetection(**attempt)
-            # Layout detection only needs the active device configuration.
-            # Keeping stale detector instances for every past device can pin
-            # substantial Paddle/PaddleX memory for the whole GUI session.
-            _TEXT_DETECTION_CACHE.clear()
-            _TEXT_DETECTION_CACHE[key] = detector
-            return detector
         except TypeError as exc:
             last_exc = exc
-            continue
+            # Strict CPU pool: no unbounded default-thread fallback.
+            if cpu_pool_worker:
+                break
+            legacy = {k: v for k, v in attempt.items()
+                      if k not in {"enable_mkldnn", "cpu_threads"}}
+            if legacy == attempt:
+                continue
+            try:
+                detector = TextDetection(**legacy)
+            except Exception as retry_exc:
+                last_exc = retry_exc
+                continue
         except Exception as exc:
             last_exc = exc
-            break
+            continue
+        from .inference_monitor import record_model_event
+        record_model_event("TextDetection", policy.device, policy.mkldnn, policy.cpu_threads)
+        _TEXT_DETECTION_CACHE.clear()
+        _TEXT_DETECTION_CACHE[key] = detector
+        return detector
     raise RuntimeError(f"PaddleOCR 文本检测模型初始化失败：{last_exc}") from last_exc
 
 
@@ -868,12 +868,23 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     Compatibility path: OCR-free image-density layout estimation when the
     installed Paddle/PaddleX stack still cannot execute detection.
     """
+    from time import perf_counter as _perf
+    from .draw_performance_profile import enabled as _profile_enabled, record_page
+    _tracking = _profile_enabled()
+    _tick = _perf() if _tracking else 0.0
+    _steps = {}
     source = normalize_page_rgb(image)
     transform = LayoutTransform(settings.layout_transform)  # type: ignore[arg-type]
     analysis = transform.canonical_image_for_analysis(source)
+    if _tracking:
+        _steps["inner_detector_image_transform"] = _perf() - _tick
+        _tick = _perf()
     paddle_error: Exception | None = None
     try:
         detector = _get_text_detector(settings)
+        if _tracking:
+            _steps["inner_detector_model_get"] = _perf() - _tick
+            _tick = _perf()
         # Reassert immediately before predict because PaddleX can modify flags
         # while constructing other pipelines in the same application process.
         os.environ["FLAGS_enable_pir_api"] = "0"
@@ -881,6 +892,9 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
             results = list(detector.predict(np.asarray(analysis), batch_size=1, limit_side_len=2400))
         except TypeError:
             results = list(detector.predict(np.asarray(analysis)))
+        if _tracking:
+            _steps["inner_detector_predict"] = _perf() - _tick
+            _tick = _perf()
         if results:
             boxes = _boxes_from_detection(results[0], analysis.width, analysis.height)
             if boxes:
@@ -896,6 +910,10 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
                 )
                 estimate.canonical_transform = transform.kind
                 estimate.confidence = min(1.0, estimate.source_boxes / 40.0)
+                if _tracking:
+                    _steps["inner_detector_geometry"] = _perf() - _tick
+                    record_page("<substage>", -1, _steps,
+                                stage_group="layout_detector")
                 return estimate
             paddle_error = RuntimeError("PaddleOCR 整页版面检测没有返回文本框。")
         else:
@@ -903,10 +921,17 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     except Exception as exc:
         paddle_error = exc
 
+    if _tracking:
+        _steps["inner_detector_failed_or_empty"] = _perf() - _tick
+        _tick = _perf()
     try:
         estimate = _projection_layout_estimate(analysis, settings)
         estimate.canonical_transform = transform.kind
         estimate.confidence = min(1.0, estimate.source_boxes / 6.0)
+        if _tracking:
+            _steps["inner_detector_projection_fallback"] = _perf() - _tick
+            record_page("<substage>", -1, _steps,
+                        stage_group="layout_detector_fallback")
         return estimate
     except Exception as fallback_exc:
         raise RuntimeError(
