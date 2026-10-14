@@ -81,5 +81,5 @@ def test_existing_benchmark_runners_declare_separate_sources():
     regenerated = (root / "run_training_archive_full_benchmark.py").read_text(encoding="utf-8")
     assert '"run_type": "current_detector"' in current
     assert '"run_type": "historic_cache"' in historic
-    assert '"test_kind": "actual_detection_regenerated"' in regenerated
+    assert 'result["test_kind"] = "actual_detection_regenerated"' in regenerated
     assert "marker_metrics(" in current
