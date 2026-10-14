@@ -302,3 +302,47 @@ def test_dirty_simplified_widget_blocks_even_when_pdic_clean(tmp_path):
     review._simplified_dirty_pages = {page.stem}
     assert not history.undo(review)
     assert rows[0].word == "ONE"
+
+
+def test_ocr_candidate_owned_word_is_not_undoable_by_plain_text_transaction(tmp_path):
+    page, rows, review = _case(tmp_path)
+    rows[0].candidate_id = "candidate-0"
+    before = snapshot_review(review)
+    assert before is not None
+    rows[0].word = "ONE"
+    review.vars[0].set("ONE")
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review)
+    assert after is not None
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+    assert not history.undo_stack
+
+
+def test_metadata_only_pdic_change_is_not_a_text_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    text = pdic_path(page).read_text(encoding="utf-8")
+    pdic_path(page).write_text(text.replace("#synthetic#@#@", "#synthetic#previous#@"), encoding="utf-8")
+    after = snapshot_review(review)
+    assert after is not None
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+
+
+def test_external_edit_between_preflight_and_publish_refuses_undo(tmp_path, monkeypatch):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    original = pdic_path(page).read_bytes()
+    check = module._publish_restored_snapshot
+
+    def concurrent_write(before, target):
+        pdic_path(page).write_bytes(b"concurrently altered PDIC")
+        return check(before, target)
+
+    monkeypatch.setattr(module, "_publish_restored_snapshot", concurrent_write)
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == b"concurrently altered PDIC"
+    assert rows[0].word == "ONE"
