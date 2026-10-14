@@ -63,7 +63,7 @@ def test_multiple_verified_geometry_text_changes_are_one_atomic_journal(tmp_path
     before_next = read_pdic(pdic_path(page))
     write_pdic(
         pdic_path(page), [
-            Entry("newer-a", 16, 24), before_next[0], Entry("newer-b", 16, 68)
+            Entry("newer-a", 16, 24), Entry("same", 16, 110), Entry("newer-b", 16, 68)
         ], 56, ("page", "@", "@"),
     )
     assert capture_saved_review_rename(
