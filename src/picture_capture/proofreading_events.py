@@ -116,25 +116,43 @@ def load_events(path: Path) -> list[dict[str, Any]]:
 def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
     """Atomically persist evidence only if it represents CURRENT saved PDIC.
 
-    No writes to PDIC, OCR caches or human overrides. Caller must serialize
-    concurrent writes for this page; the journal is not a multi-process lock.
+    No writes to PDIC, OCR caches or human overrides. A cross-process local
+    exclusive directory lock serializes journal updates without waiting.
     """
     if not isinstance(event, dict) or event.get("verification_status") not in LABEL_STATUSES:
         raise ValueError("Invalid proofreading event")
     if event.get("action") not in ACTIONS or not event.get("operation_id"):
         raise ValueError("Invalid proofreading action")
-    actual = sha256_file(pdic_file)
-    if actual is None or event.get("pdic_sha256") != actual:
-        raise ValueError("Current PDIC does not match the recorded post-save snapshot")
-    events = load_events(path)
-    if any(existing["operation_id"] == event["operation_id"] for existing in events):
-        raise ValueError("Duplicate proofreading operation id")
-    events.append(dict(event))
-    write_text_atomic(
-        path,
-        json.dumps({"format": EVENT_FORMAT, "events": events},
-                   ensure_ascii=False, separators=(",", ":")),
-    )
+    path = Path(path)
+    # mkdir is an atomic exclusive operation on Windows, macOS and Linux.
+    # Refuse overlapping writers instead of racing on read-modify-replace;
+    # never automatically delete a stale lock belonging to another process.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_dir = path.with_name(f"{path.name}.lock")
+    try:
+        lock_dir.mkdir()
+    except FileExistsError as error:
+        raise OSError(
+            f"Proofreading journal is locked by another writer: {lock_dir}"
+        ) from error
+    try:
+        actual = sha256_file(pdic_file)
+        if actual is None or event.get("pdic_sha256") != actual:
+            raise ValueError("Current PDIC does not match the recorded post-save snapshot")
+        events = load_events(path)
+        if any(existing["operation_id"] == event["operation_id"] for existing in events):
+            raise ValueError("Duplicate proofreading operation id")
+        events.append(dict(event))
+        # Recheck source right before atomic publication, not just before load.
+        if sha256_file(pdic_file) != actual:
+            raise ValueError("PDIC changed while writing proofreading evidence")
+        write_text_atomic(
+            path,
+            json.dumps({"format": EVENT_FORMAT, "events": events},
+                       ensure_ascii=False, separators=(",", ":")),
+        )
+    finally:
+        lock_dir.rmdir()
 
 
 def audit_events(
