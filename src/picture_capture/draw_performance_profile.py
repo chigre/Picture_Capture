@@ -86,3 +86,62 @@ def summarize(records: list[dict]) -> dict[str, float]:
         for key, milliseconds in record.get("stages_ms", {}).items():
             sums[key] = sums.get(key, 0.0) + float(milliseconds)
     return sums
+
+
+def export_batch_report(records: list[dict], *, label: str,
+                        elapsed_seconds: float, completed: int) -> Path | None:
+    """Write human-readable Markdown and per-page CSV beside JSONL logs."""
+    if not records:
+        return None
+    import csv
+    from datetime import datetime
+    import re
+    try:
+        root = _directory() / "reports"
+        root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(label))[:40]
+        prefix = root / f"{stamp}_{safe_label}"
+        keys = sorted({k for item in records
+                       for k in item.get("stages_ms", {})})
+        csv_path = prefix.with_suffix(".csv")
+        with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(["page", "page_index", "pid", "stage_group", *keys])
+            for item in sorted(records, key=lambda x: (x.get("page_index", 0),
+                                                       x.get("stage_group", ""))):
+                metrics = item.get("stages_ms", {})
+                writer.writerow([item.get("page"), item.get("page_index"),
+                                 item.get("pid"), item.get("stage_group"),
+                                 *(metrics.get(k, "") for k in keys)])
+        totals = summarize(records)
+        report = [
+            f"# Picture Capture — {label} 性能诊断",
+            "",
+            f"- 已完成页数：{completed}",
+            f"- 批次实际耗时：{elapsed_seconds:.3f} 秒",
+            f"- 吞吐量：{completed / max(0.001, elapsed_seconds):.3f} 页/秒",
+            f"- 计时事件数：{len(records)}",
+            "",
+            "## 各阶段累计耗时",
+            "",
+            "| 阶段 | 累计耗时（秒） |",
+            "|---|---:|",
+        ]
+        for key, ms in sorted(totals.items(), key=lambda x: -x[1]):
+            report.append(f"| {key} | {ms / 1000:.3f} |")
+        report.extend([
+            "",
+            "## 数据解释",
+            "",
+            "各 worker 和 GPU/CPU 阶段存在重叠，累计耗时不能相加作为批次总耗时。",
+            "detect_entries 内部计时与上层 detect_entries 计时属于嵌套关系，也不能相加。",
+            "模型推理耗时未细分 CUDA kernel，不能据此宣称 GPU 实测利用率。",
+            f"详细逐页数据：`{csv_path.name}`",
+            "",
+        ])
+        md_path = prefix.with_suffix(".md")
+        md_path.write_text("\n".join(report), encoding="utf-8")
+        return md_path
+    except (OSError, TypeError, ValueError):
+        return None
