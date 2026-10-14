@@ -41,6 +41,11 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     This keeps Page Layout synchronized with any deliberate test/debug replacement
     on `layout_detection.detect_layout_parameters` without bootstrap mutation.
     """
+    from .ordinary_gpu_pipeline import take_prepared_layout
+
+    prepared = take_prepared_layout(image, settings)
+    if prepared is not None:
+        return prepared
     from . import layout_detection
 
     return layout_detection.detect_layout_parameters(image, settings)
