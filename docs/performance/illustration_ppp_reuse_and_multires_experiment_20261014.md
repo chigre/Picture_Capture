@@ -1,0 +1,55 @@
+# Layout illustration PPP reuse and multiresolution experiment
+
+## Layout illustration switches
+
+The Illustration settings panel has a parent **Layout 分析前白化插图** checkbox
+and a subordinate **使用已有的插图数据** checkbox. When the parent is OFF,
+the child is disabled and neither detection nor Layout whitening runs.
+
+When parent ON / reuse ON, read each page's existing PPP polygons in original
+source image XY, fill them white only in a temporary Layout analysis copy, and
+DO NOT run illustration detection or modify PPP. A missing PPP is a real error
+(not equivalent to a valid empty PPP, and not a reason to rerun detection).
+The checkbox is only suitable for projects where ALL pages have been processed,
+including an intentionally empty PPP for pages with no illustration.
+
+When parent ON / reuse OFF, run the existing illustration detector only ONCE
+per page. Save the detected candidate polygons through the existing
+`detect_illustrations_to_ppp` merge policy, retaining manual polygons and
+replacing AUTO polygons. In Layout, continue applying the existing safety
+rules: small/head-like auto candidates are not whitened. No original scan
+pixels or PDIC coordinates are changed by the mask.
+
+Manual PPP edits to the foreground page are flushed before the ordinary
+batch worker runs in this auto-detection mode.
+
+## Independent multiresolution geometry benchmark
+
+The separate script `scripts/benchmark_layout_scales.py` measures automatic
+layout detection at 100%, 75%, and 50%, maps estimated dimensions back to
+source coordinates, and writes machine-readable JSON. It does NOT change
+production drawing, PPP or PDIC.
+
+Example (adjust paths to your project):
+
+```powershell
+python scripts/benchmark_layout_scales.py --settings "D:\\project\\settings.json" --images "D:\\project\\001.png" "D:\\project\\002.png" --output "D:\\benchmark\\layout_scales.json"
+```
+
+Compare columns, start Y, first column X, column width, gutter, and character
+height against the unscaled baseline, not just elapsed seconds. An altered
+geometry estimate is not by itself a PDIC error, but cannot be shipped as a
+drawing optimization before running the same-page full PDIC parity comparison
+with the actual drawing pipeline. Scaled settings are an approximate benchmark
+and not a substitute for real per-page project Profile coordinates.
+
+## Test and release gates
+
+- Complete CI on Python 3.10 and Windows/macOS/Linux.
+- Windows sample of 20 known pages, both PPP modes, verifying that manual PPP
+  regions are preserved and reuse mode never calls a detector.
+- Missing PPP reuse produces a clear error and does not silently run detection.
+- Full PDIC equivalence and comparable screenshots for any eventual live
+  multiresolution implementation.
+- Do not enable multiresolution production drawing by default based on
+  geometry-only benchmarking.
