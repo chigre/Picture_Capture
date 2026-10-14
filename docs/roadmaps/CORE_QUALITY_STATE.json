@@ -4,7 +4,7 @@
   "plan_version": "1.1.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-14",
+  "updated_at_utc": "2026-10-14T07:51:38.341Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -37,22 +37,22 @@
         "R2.3"
       ]
     },
-    "implementation_head_sha": "7fa59b809bcc3465df80f8d974a10786c627da5f",
+    "implementation_head_sha": "437cc6792d88d89a8623b682484d119180d60aad",
     "latest_verified_main_sha": "de257754217520b64c8bbf4c6c4547dc1a0136b2",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "latest_ci_pending",
-        "message": "Full CI of new interactive human visual verification UI and journal lock not yet green; latest head includes visual marker annotation.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38529384679"
+        "message": "Newest branch run includes locked verification dedupe / linked-source validation and manual override post-save failure regression; CI result not yet available. Prior branch head d585d06 passed cross-platform CI.",
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38531009761"
       },
       {
         "type": "incomplete_B2",
         "message": "General XY marker movement across sessions, multi-row transaction stable ID and actual GUI FocusOut/crash/rollback smoke are not complete. B2 draft remains unmerged."
       }
     ],
-    "required_next_action": "Check newest PR #482 head/CI; fix actual failures in same PR. Smoke verify button and scanned crop UI on Windows and test journal contention on supported platforms. Safely address remaining arbitrary marker move identity and complete GUI FocusOut/crash/reopen rollback tests, or explicitly scope deferred acceptance without claiming it complete. Keep PR draft and never auto-train or upload.",
-    "last_test_evidence": "Last complete base head 4199465 B2 CI 38527358775 success all four jobs. Current B2 adds visual verification UI, opt-in toolbar button, cross-process exclusive journal lock, preview coordinate ring and seven headless regression tests. Latest CI for visual tests 38529384679 in progress at checkpoint; further source preview commit 7fa59b8 not yet fully CI-verified.",
+    "required_next_action": "Review CI 38531009761 on #482's code head and fix any actual failures on this same branch. Run genuine Windows desktop GUI smoke for verification crop, FocusOut, crash/reopen, page/SECTION navigation. General manually moved XY and multi-row durable identity still blocked; keep Draft, do not merge or begin B3 prematurely.",
+    "last_test_evidence": "Base #482 CI 38529553615 succeeded on d585d063. New source/identity+double verification lock checks committed 8b6b0345, tests 7ddca3d6 and b05cc824; manual override failure-path tests 437cc679. Full latest-run CI 38531009761 pending; no local run claim.",
     "active_batch": "B2",
     "next_batch": "B3"
   },
@@ -288,6 +288,17 @@
       "head_before_checkpoint": "7fa59b809bcc3465df80f8d974a10786c627da5f",
       "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38529384679",
       "note": "User-initiated in-app confirmation and image crop; no default consent or training. Exclusive per-journal lock. Still incomplete moved-entry IDs and actual Windows GUI smoke."
+    },
+    {
+      "type": "b2_verification_concurrency_and_override_failures",
+      "status": "draft_latest_ci_pending",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/482",
+      "test_first_commit": "7ddca3d6802ed23d6487eccd754e685cf414a89a",
+      "lock_check_commit": "8b6b034540ac1a986bd169d144b38ed173e75099",
+      "audit_fixture_commit": "b05cc824f5baf6de38c17382670d04f4b3a61314",
+      "override_boundary_tests": "437cc6792d88d89a8623b682484d119180d60aad",
+      "latest_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38531009761",
+      "note": "No new format/PDIC/model changes; verifies origin inside exclusive per-journal write, rejects double positive/negative labeling, and tests failing manual override after PDIC commit. GUI/manual moved-row blockers remain."
     }
   ],
   "rules_for_updates": {
@@ -394,11 +405,11 @@
       "status": "pr_open",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Latest visual verification UI/lock CI pending; general moved-row identity and real GUI smoke incomplete.",
+      "blocker": "Latest B2 CI pending; genuine Windows desktop GUI smoke, arbitrary moved marker identity and multi-row/reopen fidelity not yet verified. Keep Draft.",
       "unit_evidence": {
         "R2.1": {
           "status": "in_progress",
-          "evidence": "Settings default OFF; saved event journals for delete/rename/add/select/deselect/narrow OCR grouped move. New ReviewWindow button allows user to select only fresh actionable records and visually confirm original scan crop. Exclusive per-journal local lock added. General XY move and real GUI smoke not verified."
+          "evidence": "Settings default OFF; saved event journals for delete/rename/add/select/deselect/narrow OCR grouped move. New ReviewWindow button allows user to select only fresh actionable records and visually confirm original scan crop. Exclusive per-journal local lock added. General XY move and real GUI smoke not verified. Additional synthetic failure-path tests assert no journal evidence if manual-selection override saving fails after PDIC commit; awaiting CI."
         },
         "R2.2": {
           "status": "in_progress",
@@ -406,7 +417,7 @@
         },
         "R2.3": {
           "status": "in_progress",
-          "evidence": "Local aggregate audit with explicit user positive/negative decisions; source/image/SECTION transform and sidecar digest; no training exports. GUI smoke, concurrency/write failure tests awaiting CI."
+          "evidence": "Local aggregate audit with explicit user positive/negative decisions; source/image/SECTION transform and sidecar digest; no training exports. GUI smoke, concurrency/write failure tests awaiting CI. Exclusive lock now checks same reviewed_operation_id for duplicate verified judgments and rejects mismatched linked-source identity even if pre-lock reads were stale; tests added, CI pending."
         }
       }
     },
