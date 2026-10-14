@@ -119,7 +119,8 @@ def detect_layout_parameters(image, settings):
             detect_layout_parameters_reliable,
         )
         if tracking:
-            record_page("<substage>", -1, {"layout_detector_scale": scale_used}, stage_group="layout_scale_experiment")
+            record_page("<substage>", -1, {"selected": 0.0},
+                        stage_group=f"layout_scale_{round(scale_used * 100)}pct")
         _LAYOUT_ESTIMATE_CACHE[key] = raw
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
         while len(_LAYOUT_ESTIMATE_CACHE) > _LAYOUT_ESTIMATE_CACHE_LIMIT:
