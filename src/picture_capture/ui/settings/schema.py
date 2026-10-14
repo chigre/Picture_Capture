@@ -87,6 +87,10 @@ FIELDS = [
         ("横线Y精修横向分析范围（%）", "paddle_separator_roi_width_ratio", float),
         ("横线Y精修栏边余量（px）", "paddle_separator_column_margin", int),
         ("Y 精修最大位移（行高比）", "separator_y_max_shift_ratio", float),
+        ("原图白缝核验最大偏移（行高比）", "separator_y_ink_safe_max_fraction", float),
+        ("原图白缝核验墨迹灰度阈值", "separator_y_ink_safe_ink_threshold", int),
+        ("原横线允许墨迹比例", "separator_y_ink_safe_existing_ink_ratio", float),
+        ("候选白缝最大墨迹比例", "separator_y_ink_safe_gap_ink_ratio", float),
         ("Tesseract 对照 PSM", "paddle_tesseract_psm", int),
         ("Google Lens 超时（秒）", "paddle_lens_timeout", int),
         ("Lens无置信度默认值", "paddle_lens_default_confidence", float),
@@ -262,6 +266,10 @@ SETTING_LABELS = {
         "paddle_separator_roi_width_ratio": "横线精修横向范围",
         "paddle_separator_column_margin": "横线精修栏边余量",
         "separator_y_max_shift_ratio": "精修最大位移（行高比）",
+        "separator_y_ink_safe_max_fraction": "原图白缝核验最大偏移（行高比）",
+        "separator_y_ink_safe_ink_threshold": "原图白缝核验墨迹灰度阈值",
+        "separator_y_ink_safe_existing_ink_ratio": "原横线允许墨迹比例",
+        "separator_y_ink_safe_gap_ink_ratio": "候选白缝最大墨迹比例",
         "paddle_max_input_side": "OCR 最大输入边长",
         "paddle_preprocessing": "OCR 图像预处理",
         "paddle_device": "PaddleOCR 运行设备",
@@ -279,6 +287,10 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+        "separator_y_ink_safe_max_fraction": "原图白缝核验允许搜索的最大位移（行高比），默认0.25，另有0.30倍行高的安全上限。仅在开启实验性白缝核验后生效。\n\n增大更易找到远处白缝，但可能跳到相邻行；减小更保守，也可能无法修复穿字。",
+        "separator_y_ink_safe_ink_threshold": "原图白缝核验对灰度图计算墨迹比例时，低于此阈值（默认185）的像素视为墨迹。仅在实验性白缝核验开启后生效。\n\n增大将浅色笔画也视作墨迹，但过高可能把灰背景当作文字；减小可能漏掉浅印字形。",
+        "separator_y_ink_safe_existing_ink_ratio": "已有横线位置的墨迹占比不超过此值时不移动；默认0.045（4.5%）。仅在实验性白缝核验开启后生效。\n\n降低会更积极调整轻微穿字的线；提高更保守，可能允许线穿过部分文字。",
+        "separator_y_ink_safe_gap_ink_ratio": "候选分隔位置相邻连续三行的墨迹占比，每行必须小于或等于此比例；默认0.02（2%）。仅在实验性白缝核验开启后生效。\n\n降低使候选更严格，可能找不到白缝；提高可接受更灰的白带，但会增加穿过文字的风险。",
         "analysis_denoise_strength": "共享分析图自适应去噪的强度，可选关闭、弱、自动、强；要一键关闭请使用 Layout 区的共享去噪开关。",
         "layout_mask_illustrations_use_existing": (
             "依赖【Layout 分析前白化插图】。勾选后只读取当前页 PPP 中已经保存的插图多边形，"
@@ -486,6 +498,10 @@ EXPERT_FIELDS = (
     )
 
 SETTING_UNITS = {
+        "separator_y_ink_safe_max_fraction": "× 行高",
+        "separator_y_ink_safe_ink_threshold": "灰度 0–255",
+        "separator_y_ink_safe_existing_ink_ratio": "比例 0–1",
+        "separator_y_ink_safe_gap_ink_ratio": "比例 0–1",
         "columns": "栏",
         "guide_opacity": "%", "headword_marker_opacity": "%", "illustration_fill_opacity": "%",
         "start_y": "% 图高", "bottom_y": "原图px", "manual_x": "% 图宽",
@@ -520,6 +536,10 @@ SETTING_UNITS = {
     }
 
 SETTING_SPIN = {
+        "separator_y_ink_safe_max_fraction": (0.01, 0.30, 0.01),
+        "separator_y_ink_safe_ink_threshold": (0, 255, 1),
+        "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20, 0.005),
+        "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10, 0.005),
         "columns": (1, 12, 1),
         "guide_opacity": (0.0, 100.0, 5.0),
         "headword_marker_opacity": (0.0, 100.0, 5.0),
@@ -742,6 +762,10 @@ SEPARATOR_Y_FIELDS = (
     "paddle_separator_roi_width_ratio",
     "paddle_separator_column_margin",
     "separator_y_max_shift_ratio",
+    "separator_y_ink_safe_max_fraction",
+    "separator_y_ink_safe_ink_threshold",
+    "separator_y_ink_safe_existing_ink_ratio",
+    "separator_y_ink_safe_gap_ink_ratio",
 )
 
 SEPARATOR_Y_CHECKS = (
