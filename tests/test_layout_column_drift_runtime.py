@@ -407,3 +407,86 @@ def test_isolated_outdented_marker_is_not_called_previous_column_text():
     )
     assert right.lines[0].first_x < 0
     assert rejected == {}
+
+
+def test_undistorted_right_column_uses_its_inside_ink_not_maximum_probe_radius():
+    """A clear 92px potential gutter does not cause 92px applied skew."""
+    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+
+    ink = np.zeros((600, 3220), dtype=bool)
+    left = base.ColumnDesign(0, 101, 1591, 94)
+    right = base.ColumnDesign(1, 1685, 3175, 0)
+    rows = []
+    for index in range(6):
+        y = 25 + index * 78
+        ink[y:y + 49, 1693:1727] = True
+        rows.append(_line(y, y + 55))
+    right.lines = rows
+    layout = SimpleNamespace(
+        columns=[left, right], body_top=0, body_bottom=600,
+        ordinary_line_height=52.65, indent_type="headword",
+        reason="base",
+    )
+    assert _analysis_left_for_column(layout.columns, 1, 52.65) == 1593
+    overhang = {}
+    rejected = {}
+    counts = remeasure_layout_indents_from_ink(
+        layout, ink, ops=explicit_physical_layout_ops(),
+        measured_overhangs=overhang,
+        foreign_tail_rejections=rejected,
+    )
+    assert counts == {1: 6}
+    assert all(0 <= row.first_x <= 10 for row in right.lines)
+    assert overhang == {}
+    assert rejected == {}
+
+
+def test_genuine_outdents_report_actual_ink_distance_not_possible_safety_window():
+    """True negative-X ink is retained as a measured 15px outdent."""
+    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+
+    ink = np.zeros((200, 680), dtype=bool)
+    first = base.ColumnDesign(0, 40, 390, 40)
+    second = base.ColumnDesign(1, 430, 660, 0)
+    ink[20:40, 415:429] = True
+    ink[20:40, 435:470] = True
+    second.lines = [_line(20, 43)]
+    layout = SimpleNamespace(
+        columns=[first, second], body_top=0, body_bottom=200,
+        ordinary_line_height=20., indent_type="headword",
+        reason="base",
+    )
+    actual = {}
+    counts = remeasure_layout_indents_from_ink(
+        layout, ink, ops=explicit_physical_layout_ops(),
+        measured_overhangs=actual,
+    )
+    assert counts == {1: 1}
+    assert second.lines[0].first_x == -15
+    assert actual == {1: (1, 15)}
+    assert _left_safety(20., 230) > 15
+
+
+def test_foreign_tail_rejection_has_zero_accepted_gutter_overhang():
+    """Reject foreign source without recording it as real skew."""
+    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+
+    ink = np.zeros((150, 680), dtype=bool)
+    first = base.ColumnDesign(0, 40, 390, 40)
+    second = base.ColumnDesign(1, 430, 660, 0)
+    ink[10:27, 380:403] = True
+    ink[10:27, 433:465] = True
+    second.lines = [_line(10, 27)]
+    layout = SimpleNamespace(
+        columns=[first, second], body_top=0, body_bottom=150,
+        ordinary_line_height=20., indent_type="headword", reason="base",
+    )
+    actual, rejected = {}, {}
+    remeasure_layout_indents_from_ink(
+        layout, ink, ops=explicit_physical_layout_ops(),
+        measured_overhangs=actual,
+        foreign_tail_rejections=rejected,
+    )
+    assert second.lines[0].first_x == 3
+    assert rejected == {1: 1}
+    assert actual == {}
