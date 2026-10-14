@@ -424,7 +424,12 @@ class EnvironmentCenterWindow(tk.Toplevel):
             device.set("auto")
         if mkldnn.get() not in {"auto", "on", "off"}:
             mkldnn.set("auto")
-        if workers.get() not in {"auto", "2", "4", "6"}:
+        cpu_limit = max(1, os.cpu_count() or 1)
+        try:
+            worker_count = int(workers.get())
+            if not 1 <= worker_count <= cpu_limit:
+                workers.set("auto")
+        except ValueError:
             workers.set("auto")
 
         def options(title: str, variable, entries: tuple[tuple[str, str], ...],
@@ -443,13 +448,18 @@ class EnvironmentCenterWindow(tk.Toplevel):
         options("MKL-DNN（oneDNN）CPU 加速", mkldnn, (
             ("auto", "自动"), ("on", "尝试启用"), ("off", "关闭"),
         ))
-        options("CPU 页面并行进程数（暂未启用）", workers, (
-            ("auto", "自动"), ("2", "2"), ("4", "4"), ("6", "6"),
-        ), enabled=False)
+        worker_frame = ttk.LabelFrame(body, text="CPU 页面并行进程数", padding=(10, 5))
+        worker_frame.pack(fill="x", pady=(0, 8))
+        ttk.Label(worker_frame, text=f"自动或输入 1–{cpu_limit}：").pack(side="left")
+        ttk.Combobox(
+            worker_frame, textvariable=workers, width=9,
+            values=("auto", "1", "2", "4", "6", "8", "12", "16", "24", "32"),
+        ).pack(side="left", padx=(8, 0))
         ttk.Label(
             body,
-            text="当前批量画线仍遵守单进程安全保护；待 CPU 多进程/单 GPU "
-                 "服务完成实机测试后再开放该项。oneDNN 自动模式优先尝试启用，"
+            text="CPU 并行数仅用于启用了 CPU 专用进程池的普通画线；"
+                 "其他模式仍保持其安全调度策略。较高进程数会增加内存使用。"
+                 "oneDNN 自动模式优先尝试启用，
                  "初始化不兼容时回退；如推理阶段发生错误请改为“关闭”。",
             wraplength=440, justify="left",
         ).pack(anchor="w", pady=(3, 9))
@@ -458,7 +468,16 @@ class EnvironmentCenterWindow(tk.Toplevel):
         buttons.pack(fill="x", side="bottom", pady=(8, 0))
 
         def apply() -> None:
+            if workers.get().strip().lower() != "auto":
+                try:
+                    count = int(workers.get())
+                    if not 1 <= count <= cpu_limit:
+                        raise ValueError()
+                except ValueError:
+                    messagebox.showerror("进程数无效", f"请输入 auto 或 1–{cpu_limit} 的整数。", parent=window)
+                    return
             try:
+                save_runtime_setting("paddle_cpu_workers", workers.get().strip().lower())
                 save_runtime_setting("paddle_device", device.get())
                 save_runtime_setting("paddle_mkldnn", mkldnn.get())
                 clear_runtime_caches()
