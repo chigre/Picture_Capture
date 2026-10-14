@@ -59,7 +59,14 @@ def test_every_appsettings_value_roundtrips_through_json(tmp_path):
 def test_audit_maps_all_fields_and_new_separator_controls(tmp_path):
     from dataclasses import fields
     import csv
-    from scripts import audit_settings_runtime as audit
+    # The test runner only injects src/ into sys.path; import the audit
+    # script by its repository path without requiring a scripts package.
+    spec = importlib.util.spec_from_file_location(
+        "settings_runtime_audit", ROOT / "scripts" / "audit_settings_runtime.py"
+    )
+    assert spec is not None and spec.loader is not None
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
 
     field_names = {f.name for f in fields(AppSettings())}
     assert field_names == set(audit.field_defaults())
