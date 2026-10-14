@@ -12,7 +12,7 @@ from uuid import uuid4, uuid5, NAMESPACE_URL
 
 from .formats import pdic_path, read_pdic
 from .project_storage import data_root
-from .proofreading_events import append_event, append_rename_batch, make_event, sha256_file
+from .proofreading_events import append_event, append_rename_batch, load_events, make_event, sha256_file
 from .proofreading_section import section_fields_for_event
 
 def verified_ocr_preedit_fingerprints(
@@ -73,6 +73,48 @@ def _triples(entries: list[object]) -> list[tuple[str, int, int]]:
     return [(str(entry.word), int(entry.x), int(entry.y)) for entry in entries]
 
 
+def _owned_ids_at_saved_snapshot(
+    journal: Path, *, page_id: str, prior_pdic_sha256: str,
+) -> tuple[bool, dict[tuple[str, int, int], str | None]]:
+    """Replay only explicit operation-owned IDs at the exact PRE-edit PDIC.
+
+    The journal's most recent committed edit must match the pre-edit file.
+    An older matching digest is insufficient (e.g. later independent edits).
+    Never use row numbers, nearest neighbours, or an unrelated OCR candidate.
+    None means competing owners for one physical saved row: fail closed.
+    """
+    if not journal.is_file():
+        return True, {}
+    records = load_events(journal)
+    latest = next((row for row in reversed(records) if row.get("action") != "verify"), None)
+    if latest is not None and (
+        latest.get("page_id") != page_id
+        or latest.get("pdic_sha256") != prior_pdic_sha256
+    ):
+        return False, {}
+    owners: dict[tuple[str, int, int], set[str]] = {}
+    for row in records:
+        if (row.get("page_id") != page_id
+                or row.get("pdic_sha256") != prior_pdic_sha256
+                or row.get("action") not in {"add", "move", "rename", "select"}):
+            continue
+        after = row.get("after")
+        if not isinstance(after, dict):
+            continue
+        try:
+            word, x, y = after["word"], after["x"], after["y"]
+        except KeyError:
+            continue
+        if not isinstance(word, str) or type(x) is not int or type(y) is not int:
+            continue
+        owner = row.get("entry_id")
+        if not isinstance(owner, str) or not owner:
+            return False, {}
+        owners.setdefault((word, x, y), set()).add(owner)
+    return True, {key: next(iter(ids)) if len(ids) == 1 else None
+                  for key, ids in owners.items()}
+
+
 def capture_saved_review_deletion(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
     expected_deleted: tuple[str, int, int],
@@ -128,6 +170,7 @@ def capture_saved_review_deletion(
 def capture_saved_review_rename(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
     source_fingerprints: tuple[str, str] | None = None,
+    prior_pdic_sha256: str | None = None,
 ) -> bool:
     """Capture one or several same-save renames with provable XY identity.
 
@@ -165,12 +208,31 @@ def capture_saved_review_rename(
     saved_hash = sha256_file(saved_file)
     if saved_hash is None:
         raise OSError("PDIC disappeared after saved review rename")
-    # Record only explicitly demonstrated text deltas. The original coords
-    # are stable across this save and a later reopen; arbitrary moves remain
-    # unsupported until an operation-owned durable identity exists.
+    # Existing operation-owned IDs (including proven moves) take priority over
+    # historical XY-minted IDs, but only when the prior journal snapshot is the
+    # exact PDIC read before this save. A stale or ambiguous journal never
+    # licenses a new geometry-based identity guess.
+    key = uuid5(NAMESPACE_URL, relative_page).hex
+    journal = data_root(project_root) / "ProofreadingEvidence" / f"{key}.json"
+    owned_ids: dict[tuple[str, int, int], str | None] = {}
+    if prior_pdic_sha256 is not None:
+        if (not isinstance(prior_pdic_sha256, str)
+                or len(prior_pdic_sha256) != 64
+                or any(c not in "0123456789abcdef" for c in prior_pdic_sha256)):
+            return False
+        trusted, owned_ids = _owned_ids_at_saved_snapshot(
+            journal, page_id=page_id, prior_pdic_sha256=prior_pdic_sha256,
+        )
+        if not trusted:
+            return False
     events = []
     for (x, y), before_word, after_word in sorted(changed):
-        entry_id = uuid5(NAMESPACE_URL, f"{page_id}|xy|{x}|{y}").hex
+        before_key = (before_word, x, y)
+        if before_key in owned_ids and owned_ids[before_key] is None:
+            return False
+        entry_id = owned_ids.get(before_key) or uuid5(
+            NAMESPACE_URL, f"{page_id}|xy|{x}|{y}"
+        ).hex
         events.append(make_event(
             page_id=page_id, action="rename",
             before={"word": before_word, "x": x, "y": y},
@@ -180,8 +242,6 @@ def capture_saved_review_rename(
             **_ocr_fields(source_fingerprints),
             **section_fields_for_event(page, before_xy=(x, y), after_xy=(x, y)),
         ))
-    key = uuid5(NAMESPACE_URL, relative_page).hex
-    journal = data_root(project_root) / "ProofreadingEvidence" / f"{key}.json"
     if len(events) == 1:
         append_event(journal, events[0], pdic_file=saved_file)
     else:
