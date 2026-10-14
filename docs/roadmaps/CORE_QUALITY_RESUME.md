@@ -17,7 +17,9 @@
 7. 将实施证据登记到 STATE：before/after SHA、PR URL、CI URL+结论、目标测试、文件、是否已合并、下一步唯一编号、blocking_reason、work_in_progress。CI 正在跑时不得谎报完成。
 8. 当 PR 已合并且最新 main CI 通过，才将该批次及其已验收子任务标记 verified；开始下一批次必须确认依赖、状态和用户限制未变。新阶段或目标改变应先更新 PLAN 版本。
 
-## 当前入口（2026-10-14）：B2 的 #482/#486/#489 已合并，#483 仍阻塞整体验收
+## 当前入口（2026-10-14）：B2 的 #482/#486/#489 已合并，#498 正在追加安全身份血缘；#483 仍阻塞整体验收
+
+**新增进行中：[#498](https://github.com/chigre/Picture_Capture/pull/498) 是唯一活跃 Draft 生产 PR，补充真实 pre-edit PDIC 指纹、已明确操作所有权的 Entry ID 跨连续保存/不相关改名/重开延续；在日志原子锁内校验前驱 SHA，遇未知旧日志断链、重复身份、图片更换、跨页时拒绝猜测。最新 CI 见 #498 Checks。此工作不代表实现任意词条拖拽，也不能替代 Windows 真人校对。B2 保持 in_progress；最优先处理 #498 CI 然后继续 #483。**
 
 **B0 #479、B1 #481 已通过对应主分支验收。B2 基础记录 #482、真实 Tk 合成核验 #486、同次保存多条独立文字修改的原子证据 #489 也已合并。** 当前 main@`04c02286` 的 [CI 38553009540](https://github.com/chigre/Picture_Capture/actions/runs/38553009540) 与 [CodeQL 38553009318](https://github.com/chigre/Picture_Capture/actions/runs/38553009318) 成功，所有已完成增量均保持用户校对证据默认关闭。#488 双栏行首修复已合并，但未把过去的原图单独像素审计冒充新版本的完整画线基准。**B2 仍未全部验收：Issue #483 继续要求任意 XY 标记移动/混合编辑的操作所有权身份，以及真正由人执行的 Windows ReviewWindow FocusOut/自动保存/跨 SECTION/异常重开检查。** B2 的唯一下一步是 #483，B3 和真实扫描 PR-B 继续延后。
 
