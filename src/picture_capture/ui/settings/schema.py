@@ -589,6 +589,8 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
+    "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
     "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪；如需比较，建议同一批页面复测并核对 PDIC。",
     "layout_denoise_enabled": "单独控制可靠性融合版面检测之前的墨迹去噪。关闭后仅省去这一层清理，仍保留共享分析图的去噪设置；在污点多、细线多的词典中应比较检测准确度。",
     "layout_scale_enabled": "实验选项，根据原图最长边选择 100%、75% 或 50% 的临时版面检测图。只有下方允许的参数接受缩图估计，其余使用项目原分辨率先验；未完成 PDIC 对照前请保持关闭。",
