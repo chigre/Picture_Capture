@@ -116,7 +116,7 @@ def export_batch_report(records: list[dict], *, label: str,
         totals = summarize(records)
         configuration = {}
         if settings is not None:
-            from .layout_scale_experiment import FLAG, choose_layout_scale
+            from .layout_scale_experiment import FLAG
             from .adaptive_denoise import resolve_denoise_strength
             properties = (
                 "draw_performance_profile", "reuse_prepared_analysis",
@@ -137,6 +137,10 @@ def export_batch_report(records: list[dict], *, label: str,
                 "PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS"
             )
             configuration["profiling_environment"] = os.environ.get(_ENV)
+        snapshot_path = prefix.with_suffix(".settings.json")
+        snapshot_path.write_text(
+            json.dumps(configuration, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         report = [
             f"# Picture Capture — {label} 性能诊断",
             "",
@@ -179,6 +183,7 @@ def export_batch_report(records: list[dict], *, label: str,
             "detect_entries 内部计时与上层 detect_entries 计时属于嵌套关系，也不能相加。",
             "模型推理耗时未细分 CUDA kernel，不能据此宣称 GPU 实测利用率。",
             f"详细逐页数据：`{csv_path.name}`",
+            f"独立运行配置快照：`{snapshot_path.name}`",
             "",
         ])
         md_path = prefix.with_suffix(".md")
