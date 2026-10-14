@@ -22,12 +22,22 @@
     }
   },
   "current_state": {
-    "status": "in_progress",
+    "status": "pr_open",
     "active_phase": "R2",
     "active_work_item": "R2.1",
-    "work_in_progress": true,
-    "implementation_pr": null,
-    "implementation_head_sha": null,
+    "work_in_progress": false,
+    "implementation_pr": {
+      "number": 482,
+      "url": "https://github.com/chigre/Picture_Capture/pull/482",
+      "branch": "feat/pc-cq-b2-proofreading-evidence-20261014",
+      "status": "draft",
+      "units": [
+        "R2.1",
+        "R2.2",
+        "R2.3"
+      ]
+    },
+    "implementation_head_sha": "0e56cd3105850033fcb22b7f7c7d080e6838b658",
     "latest_verified_main_sha": "0d2b3b1ff2e2e17bee7ccd9d094a4fd2d0e16ddf",
     "last_completed_work_item": "R1.3",
     "blockers": [
@@ -37,7 +47,7 @@
         "run": "https://github.com/chigre/Picture_Capture/actions/runs/38509067455"
       }
     ],
-    "required_next_action": "Continue B2 on this branch: review event journal architecture, add explicit UI/controller capture AFTER committed PDIC and manual overrides, finalize stable IDs/consent and cross-platform tests; do not merge a foundation-only draft PR. Reconcile B1 post-merge CI; do not mark B1 verified without full required evidence.",
+    "required_next_action": "Continue draft PR #482; implement safe post-save UI event capture & human consent/opt-in, stable entry identities, failure/reopen cases and GUI integration; run cross-platform CI; do not merge before complete R2.1–R2.3 acceptance. Check main postmerge B1 CI facts.",
     "last_test_evidence": "B1 PR #481 checks passed CI 38504973658, merged de257754217520b64c8bbf4c6c4547dc1a0136b2; postmerge Push on main CodeQL run 38509067455 success; no postmerge full pytest CI run confirmed. B2 foundation tests committed, not run yet.",
     "active_batch": "B2",
     "next_batch": "B3"
@@ -199,6 +209,12 @@
         "docs/roadmaps/CORE_QUALITY_B2_RUNBOOK.md"
       ],
       "note": "Not wired to UI. No behavior change or labels exported. Testing pending."
+    },
+    {
+      "type": "b2_draft_pr",
+      "url": "https://github.com/chigre/Picture_Capture/pull/482",
+      "status": "draft_incomplete",
+      "note": "Foundation event journal and conservative read-only linkage only; UI wiring and real CI validation pending."
     }
   ],
   "rules_for_updates": {
@@ -302,8 +318,8 @@
         "R2.2",
         "R2.3"
       ],
-      "status": "in_progress",
-      "implementation_pr": null,
+      "status": "pr_open",
+      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/482",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": "UI capture and integration tests missing; foundation only"
     },
