@@ -142,6 +142,7 @@ def test_simplified_sidecar_change_is_reversed_with_saved_pdic(tmp_path):
     simplified = simplified_review_path_for_image(page)
     simplified.parent.mkdir(parents=True, exist_ok=True)
     simplified.write_text('{"entries":[]}', encoding="utf-8")
+    review.vars[0].set("ONE")  # Saved ReviewWindow editor, not an unsaved edit.
     after = snapshot_review(review)
     history = ReviewSessionHistory()
     assert after is not None
@@ -224,6 +225,7 @@ def test_multi_file_interruption_rolls_back_without_changing_ui(tmp_path, monkey
     rows[0].word = "ONE"
     write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
     simplified.write_text('{"entries":[{"x":10,"y":20,"source_word":"ONE","text":"AUTO","manual":false}]}', encoding="utf-8")
+    review.vars[0].set("ONE")  # Simulate post-commit ReviewWindow text.
     after = snapshot_review(review)
     assert after
     history = ReviewSessionHistory()
