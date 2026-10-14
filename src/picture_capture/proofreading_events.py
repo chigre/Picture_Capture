@@ -47,6 +47,8 @@ def make_event(
     final_snapshot_sha256: str | None = None,
     entry_id: str | None = None,
     operation_id: str | None = None,
+    image_sha256: str | None = None,
+    section_id: str | None = None,
 ) -> dict[str, Any]:
     """Create an event AFTER saving PDIC, with explicit (not inferred) provenance.
 
@@ -66,6 +68,8 @@ def make_event(
     if entry_id is not None and (not isinstance(entry_id, str) or not entry_id):
         raise ValueError("Entry identity must not be a row index or empty reference")
     return {
+        "schema_version": 1,
+        "coordinate_space": "original_image_xy",
         "operation_id": operation_id or uuid4().hex,
         "recorded_utc": datetime.now(timezone.utc).isoformat(),
         "page_id": str(page_id),
@@ -79,6 +83,8 @@ def make_event(
         "pdic_sha256": pdic_sha256,
         "ocr_signature": ocr_signature,
         "final_snapshot_sha256": final_snapshot_sha256,
+        "image_sha256": image_sha256,
+        "section_id": section_id,
     }
 
 
@@ -132,6 +138,7 @@ def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
 def audit_events(
     events: list[dict[str, Any]], *, current_pdic_sha256: str | None,
     current_ocr_signature: str | None,
+    current_image_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Read-only provenance counts; never promote inferred edits into gold labels."""
     counts = {status: 0 for status in sorted(LABEL_STATUSES)}
@@ -146,7 +153,11 @@ def audit_events(
         ocr_ok = ocr_ref is None or (
             current_ocr_signature is not None and ocr_ref == current_ocr_signature
         )
-        if not pdic_ok or not ocr_ok:
+        image_ref = item.get("image_sha256")
+        image_ok = image_ref is None or (
+            current_image_sha256 is not None and image_ref == current_image_sha256
+        )
+        if not pdic_ok or not ocr_ok or not image_ok:
             stale += 1
         elif status == "verified" and item.get("entry_id") and (
             item.get("candidate_id") or item.get("action") == "verify"
