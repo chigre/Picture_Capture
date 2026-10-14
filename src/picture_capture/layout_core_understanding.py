@@ -156,79 +156,7 @@ def _body_lane_ids(
     return absorbed
 
 
-def _headword_peer_body_seed(
-    layout: Any,
-    column_index: int,
-    modes: list[Any],
-    proposed: Any,
-    reference: float,
-) -> Any | None:
-    """Only recover a body seed corroborated by an independently sound column.
-
-    A displaced outside-column/gutter family can be physically real ink but
-    cannot be trusted as this column's body origin. An alternative dominant
-    family is accepted only if it agrees in *local X coordinates* with a
-    corroborating column and each column has a separate supported headword
-    indentation family. With insufficient proof retain the original role.
-    """
-    ref = max(6.0, float(reference))
-    if len(getattr(layout, "columns", ()) or ()) < 2 or not modes:
-        return None
-
-    def support(mode: Any) -> int:
-        return int(getattr(mode, "support", 0) or 0)
-
-    def center(mode: Any) -> float:
-        return float(getattr(mode, "center", 0.0) or 0.0)
-
-    dominant = max(modes, key=support)
-    if dominant is proposed:
-        return None
-    if (
-        support(dominant) < max(6, 1.5 * support(proposed))
-        or center(dominant) - center(proposed) < max(30.0, ref * .95)
-    ):
-        return None
-
-    # Accept repeated but sparse physical headword families even when they
-    # fall below the old 25%-of-body stable-lane threshold.
-    head_gap = max(20.0, ref * .65)
-    if not any(
-        support(mode) >= 3 and center(mode) - center(dominant) >= head_gap
-        for mode in modes
-    ):
-        return None
-
-    tolerance = max(10.0, ref * .30)
-    for peer_index, peer in enumerate(layout.columns):
-        if peer_index == column_index:
-            continue
-        peer_modes = list(getattr(peer, "indent_modes", ()) or ())
-        if len(peer_modes) < 2:
-            continue
-        peer_body = max(peer_modes, key=support)
-        if abs(center(dominant) - center(peer_body)) > tolerance:
-            continue
-        stable_peer = [
-            mode for mode in peer_modes
-            if support(mode) >= max(2, math.ceil(support(peer_body) * .25))
-        ]
-        if not stable_peer:
-            continue
-        outer_peer = min(stable_peer, key=center)
-        if center(peer_body) - center(outer_peer) > max(12.0, ref * .30):
-            continue
-        if any(
-            support(mode) >= 3 and center(mode) - center(peer_body) >= head_gap
-            for mode in peer_modes
-        ):
-            return dominant
-    return None
-
-
-def _resolve_directional_body_lanes(
-    layout: Any, *, diagnostics: dict[str, Any] | None = None,
-) -> None:
+def _resolve_directional_body_lanes(layout: Any) -> None:
     """Choose the body family from explicit indent polarity, not row counts."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
     if indent_type == "none":
@@ -245,10 +173,8 @@ def _resolve_directional_body_lanes(
 
     reference = float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
     reference_arg = reference if reference > 0 else None
-    if diagnostics is not None:
-        diagnostics["column_seed_decisions"] = []
 
-    for column_index, column in enumerate(list(getattr(layout, "columns", []) or [])):
+    for column in list(getattr(layout, "columns", []) or []):
         modes = list(getattr(column, "indent_modes", []) or [])
         if not modes:
             continue
@@ -315,13 +241,6 @@ def _resolve_directional_body_lanes(
                 stable_modes,
                 key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
             )
-        prior_seed = desired_body
-        if indent_type == "headword":
-            peer_seed = _headword_peer_body_seed(
-                layout, column_index, modes, desired_body, reference,
-            )
-            if peer_seed is not None:
-                desired_body = peer_seed
 
         body_ids = _body_lane_ids(modes, desired_body, reference_arg)
         body_centers = [
@@ -359,29 +278,6 @@ def _resolve_directional_body_lanes(
 
         column.body_mode = desired_body
         column.entry_modes = list(entry_modes)
-        if diagnostics is not None:
-            diagnostics["column_seed_decisions"].append({
-                "column": column_index,
-                "prior_seed_center": round(float(getattr(prior_seed, "center", 0)), 3),
-                "chosen_body_center": round(float(getattr(desired_body, "center", 0)), 3),
-                "selection_reason": (
-                    "independent_peer_corrob"
-                    if prior_seed is not desired_body else "directional_stable_lane"
-                ),
-                "stable_support_cutoff": stable_threshold,
-                "modes": [
-                    {
-                        "center": round(float(getattr(mode, "center", 0)), 3),
-                        "support": int(getattr(mode, "support", 0) or 0),
-                        "stable": any(mode is stable for stable in stable_modes),
-                    }
-                    for mode in modes
-                ],
-                "entry_rows": sum(
-                    str(getattr(line, "role", "")) == "entry"
-                    for line in list(getattr(column, "lines", ()) or ())
-                ),
-            })
 
     _suppress_display_head_duplicate_entries(layout)
 
@@ -651,14 +547,10 @@ def understand_layout_core(
             trace.add_layout("indent_semantics", "缩进语义判定",
                              "应用 Project/Profile 缩进语义并重新归一化行角色。", layout,
                              details={"indent_type": str(layout.indent_type)})
-        body_lane_diagnostics: dict[str, Any] | None = {} if trace is not None else None
-        _resolve_directional_body_lanes(layout, diagnostics=body_lane_diagnostics)
+        _resolve_directional_body_lanes(layout)
         if trace is not None:
-            trace.add_layout(
-                "body_lanes", "正文缩进族调整",
-                "调整正文缩进带对词条行与正文行的判定。",
-                layout, details=body_lane_diagnostics,
-            )
+            trace.add_layout("body_lanes", "正文缩进族调整",
+                             "调整正文缩进带对词条行与正文行的判定。", layout)
     # For 'none', normalize_layout_roles has already set every provisional
     # physical line and lane to body and cleared entry_modes. The no-indent
     # arm of _resolve_directional_body_lanes would repeat exactly that reset.
