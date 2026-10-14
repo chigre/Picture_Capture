@@ -24,11 +24,15 @@ def link_event_to_final(
     if final_report is None or final_report.get("format") != "picture-capture-final-ocr-decisions-v1":
         return result
     expected_ocr = event.get("ocr_signature")
-    actual_ocr = final_report.get("ocr_cache_signature")
-    if expected_ocr and (expected_ocr != actual_ocr or expected_ocr != current_ocr_signature):
-        return {**result, "status": "stale", "reason": "ocr_signature_changed"}
     expected_snapshot = event.get("final_snapshot_sha256")
-    if expected_snapshot and expected_snapshot != final_report.get("pdic_snapshot_sha256"):
+    if not expected_ocr or not expected_snapshot:
+        # An event with no verified pre-human OCR/final snapshot can be kept
+        # locally, but must never be attached to a later unrelated OCR run.
+        return {**result, "reason": "missing_provenance_fingerprint"}
+    actual_ocr = final_report.get("ocr_cache_signature")
+    if expected_ocr != actual_ocr or expected_ocr != current_ocr_signature:
+        return {**result, "status": "stale", "reason": "ocr_signature_changed"}
+    if expected_snapshot != final_report.get("pdic_snapshot_sha256"):
         return {**result, "status": "stale", "reason": "final_pdic_snapshot_changed"}
     candidate_id = str(event.get("candidate_id") or "")
     if not candidate_id:
