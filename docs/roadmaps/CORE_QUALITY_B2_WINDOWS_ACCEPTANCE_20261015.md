@@ -1,6 +1,6 @@
 # PC-CQ/B2 — Windows 真人校对验收（尚未执行）
 
-关联：[#483](https://github.com/chigre/Picture_Capture/issues/483)、[#498](https://github.com/chigre/Picture_Capture/pull/498)。本文件是人工验收记录模板，不代表任何步骤已通过。
+关联：[#483](https://github.com/chigre/Picture_Capture/issues/483)、[#498](https://github.com/chigre/Picture_Capture/pull/498)、[#500](https://github.com/chigre/Picture_Capture/pull/500)。本文件是人工验收记录模板，不代表任何步骤已通过。
 
 ## 版本与隐私边界
 
@@ -39,3 +39,13 @@
 - 签收者：**待填写**
 
 测试全部确认后再修改 `CORE_QUALITY_STATE.json` 为 verified；此前仅能保持 B2 in_progress。
+
+## W9–W11：新增显式画线移动入口（均尚待 Windows 真人完成）
+
+| 编号 | 实际操作（测试项目副本） | 预期结果 |
+| --- | --- | --- |
+| W9 | 开关 OFF，右键**某条词条的序号标签**，输入原图 X,Y（不同于旧坐标），按确定，重开该页 | 只有被指定的真实 Entry 行改变坐标；其他 PDIC 行、SECTION、Profile、简体配对未变；关开关不产生日志；取消不修改 |
+| W10 | 显式开启证据记录，右键移动没有 OCR 候选、没有简体配对的词条，事先可单独修改同条文字，随后失焦/保存/切 SECTION/重启 | 仅生成一个未核验 move，具有同一 UI 对象身份、准确 before/after 和旧/新 PDIC 指纹；再次改名沿用稳定 ID，不自动 verified 或触发训练；绝不借最近 XY 归属 |
+| W11 | 批处理 processing/pending、原图/PDIC 被外部改变、重复目标 XY、SECTION/Profile 空白、简体配对或 OCR 候选、其他词条未保存、意外关闭/磁盘写入错误等分别操作 | 全部拒绝归属或明确提示；保存前失败不更改 PDIC，日志失败不回滚已保存人工 PDIC；无同页词条错绑，不可破坏原有配对/缓存 |
+
+执行前必须等待 PR #500 与合并后 main CI 通过。以上均为**待人工填写**，不能由合成测试自动标记 PASS；仅补充坐标对话框，不承诺自由画布拖拽已经实现。
