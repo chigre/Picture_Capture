@@ -282,6 +282,17 @@ class AppSettings(metaclass=_AppSettingsMeta):
     crop_parallel_workers: int = 0
     # Optional Layout-only preprocessing. Source scans, PPP annotations, OCR
     # input and crop outputs remain untouched; default preserves legacy behavior.
+    # Full-resolution shared analysis and detector-only experimental policies.
+    analysis_denoise_strength: str = "auto"
+    layout_denoise_enabled: bool = True
+    layout_scale_enabled: bool = False
+    layout_scale_columns: bool = True
+    layout_scale_column_width: bool = True
+    layout_scale_gutter: bool = True
+    layout_scale_start_y: bool = False
+    layout_scale_manual_x: bool = False
+    layout_scale_character_height: bool = False
+    layout_scale_row_padding: bool = False
     layout_mask_illustrations: bool = False
     layout_mask_illustrations_use_existing: bool = False
     # Automatic PPP illustration detection intentionally adds a little context
