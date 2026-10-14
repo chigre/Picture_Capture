@@ -142,6 +142,49 @@ def append_event(path: Path, event: dict[str, Any], *, pdic_file: Path) -> None:
         events = load_events(path)
         if any(existing["operation_id"] == event["operation_id"] for existing in events):
             raise ValueError("Duplicate proofreading operation id")
+        if event.get("action") == "verify":
+            # The UI preflight runs BEFORE acquiring the journal lock. Two
+            # clients can both approve the same operation from stale reads.
+            # Repeat all referential checks inside this exclusive write lock.
+            before = event.get("before")
+            reviewed_id = (
+                before.get("reviewed_operation_id")
+                if isinstance(before, dict) else None
+            )
+            if not isinstance(reviewed_id, str) or not reviewed_id:
+                raise ValueError("Verification requires an existing source operation")
+            matching = [
+                row for row in events
+                if row.get("operation_id") == reviewed_id and row.get("action") != "verify"
+            ]
+            if len(matching) != 1:
+                raise ValueError("Verification source operation is missing or ambiguous")
+            source = matching[0]
+            if source.get("verification_status") != "explicit_action_unverified_page":
+                raise ValueError("Verification source is not an unverified human action")
+            if event.get("verification_status") != "verified":
+                raise ValueError("Verification must be explicitly confirmed")
+            if not source.get("entry_id") or event.get("entry_id") != source["entry_id"]:
+                raise ValueError("Verification entry identity does not match source")
+            for key in ("page_id", "pdic_sha256", "ocr_signature"):
+                if event.get(key) != source.get(key):
+                    raise ValueError(f"Verification {key} does not match source")
+            # Legacy synthetic fixtures may omit image provenance; whenever
+            # both records have it, forbid a mismatched source image.
+            if source.get("image_sha256") is not None and (
+                event.get("image_sha256") is not None
+                and event.get("image_sha256") != source["image_sha256"]
+            ):
+                raise ValueError("Verification image does not match source")
+            if any(
+                row.get("action") == "verify"
+                and isinstance(row.get("before"), dict)
+                and row["before"].get("reviewed_operation_id") == reviewed_id
+                for row in events
+            ):
+                raise ValueError("This proofreading operation was already verified")
+        elif event.get("verification_status") == "verified":
+            raise ValueError("Ordinary proofreading edits cannot become verified labels")
         events.append(dict(event))
         # Recheck source right before atomic publication, not just before load.
         if sha256_file(pdic_file) != actual:
