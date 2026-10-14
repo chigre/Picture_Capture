@@ -82,7 +82,7 @@ uv run --locked python scripts/verify_proofreading_action.py \
   --ocr-cache /project/path/to/original_ocr_cache.json
 ```
 
-`--ocr-cache` is required only for OCR-linked events. These explicit judgments are *separate user confirmations*, not implied by a manual rename, checkbox click or a unique candidate link. Read-only aggregate export counts only fresh, referentially valid confirmed positive/negative judgments. **No raw words, OCR proposals, images, or training labels are exported and no model is trained.** The interface is currently CLI-only; UI verification controls remain missing.
+`--ocr-cache` is required only for OCR-linked events. These explicit judgments are *separate user confirmations*, not implied by a manual rename, checkbox click or a unique candidate link. Read-only aggregate export counts only fresh, referentially valid confirmed positive/negative judgments. **No raw words, OCR proposals, images, or training labels are exported and no model is trained.** The interface also has an explicit ReviewWindow button and original-scan preview; the CLI remains available for offline verification.
 
 ### SECTION provenance from original-image geometry (pending latest CI)
 
@@ -90,8 +90,20 @@ New post-save events resolve SECTION using the persisted `page_sections` origina
 
 ### Remaining acceptance gates
 
-- Extend explicit verification into user-facing proofreading UI with reliable event selection and visual comparison (CLI-only is not final UX)
+- Validate ReviewWindow's new opt-in visual verification UI with actual scanner/window smoke across platforms (headless contracts are already added)
 - Improve durable identity for arbitrary marker movement outside explicitly grouped OCR position switches; support crash/reopen and multi-row transactions without guessing
 - Add UI integration tests for save failure, manual override write failure, page navigation during active deferred saves, and SECTION/PDIC rollback
 - Review local evidence-log privacy, malformed journal recovery and multi-process concurrent writers
 - Confirm latest cross-platform PR CI + CodeQL and post-merge main CI; **do not merge a draft PR or mark B2 verified only from synthetic tests**
+
+### In-app visual verification and concurrency lock (2026-10-14; latest CI pending)
+
+With **记录本地校对操作证据** enabled in Settings, the proofreading toolbar now shows **核验记录**. The control first commits the current proofreading editor (blocking on pending/processing/filtered writes), then opens a separate local-only dialog. It reads only the existing local project identity/journal and lists operations which are currently on-disk, have stable identities, and have not already been verified. No event is selected by default. Selecting an event displays an original scanned-image crop with a red circle around its source XY coordinate, and the user must tick the visual-inspection confirmation checkbox and accept a final confirmation dialog before an independent positive/negative judgment is saved. Source PDIC/image/cache hashes are **revalidated at confirmation time** by `verify_saved_action`. No model training, uploads, screenshots or image changes occur.
+
+Concurrent writers of the same local JSON journal now compete for a directory `<page-journal>.json.lock` created atomically. The second writer fails closed and does not overwrite the first writer's events. The lock is released even after a write/PDIC mismatch exception. **Crash recovery**: a process crash may leave an orphaned `.lock` directory; intentionally never auto-delete a lock while another application might own it. Close all Picture_Capture processes and inspect the journal before manually deleting a confirmed orphan. No silent journal truncation is allowed. This guard serializes a single journal, **not arbitrary simultaneous PDIC writes**.
+
+Additional headless tests verify: dialog's read-only event lookup before confirmation; stale source images/PDIC and wrong OCR caches unavailable for verification; events disappear once verified; missing/corrupt project identity never creates a record; exclusive lock refuses overlapping writers without data loss; lock release after simulated write error. A real GUI smoke run with actual full-resolution dictionary scans remains a separate outstanding acceptance gate.
+
+### Still outstanding
+
+Arbitrary manual XY marker movement and per-row multi-edit identity across sessions remain unverified without an explicit stable entry ID; **do not infer them from proximity or row ordering**. Some scene interactions and focus/close/rollback require GUI smoke on a real Windows desktop. The draft PR must not be merged merely because unit CI is green.
