@@ -107,3 +107,15 @@ Additional headless tests verify: dialog's read-only event lookup before confirm
 ### Still outstanding
 
 Arbitrary manual XY marker movement and per-row multi-edit identity across sessions remain unverified without an explicit stable entry ID; **do not infer them from proximity or row ordering**. Some scene interactions and focus/close/rollback require GUI smoke on a real Windows desktop. The draft PR must not be merged merely because unit CI is green.
+
+
+### Source-consent commit and unsaved-editor boundary (additional B2 safeguards)
+
+Two additional headless regressions address narrow evidence corruption risks without changing the PDIC schema or journal schema:
+
+- **Post-consent source drift**: An image or linked OCR cache may be replaced after the user visually confirms it but before the append-only journal is published. The explicit verification path now carries SHA-256 checks for both files into the existing exclusive per-journal lock. It validates them before and immediately prior to the atomic journal publication, in addition to the saved PDIC digest. If any source differs, no verification event is written. This narrows, but cannot eliminate, filesystem TOCTOU without cross-file transactions.
+- **Uncommitted editor state**: ReviewWindow.save may legitimately refuse to claim a pending OCR page and return without raising. Before opening the visual-verification dialog, the UI now requires rendered-entry identity bindings to agree in number and text with the live edit controls, requires no pending simplified edits, and rechecks pending/processing batch state. If these preconditions cannot be shown, it displays a save-first message and does not show the confirmation UI.
+
+Tests simulate an image/OCR cache change between the preflight check and the append call, preservation of the existing journal on rejection, a no-op save with dirty text, mismatched row bindings, and a normal committed save. The new source validation applies to independent human verification events only; ordinary unverified action logging retains the previous contract.
+
+**Remaining gates unchanged**: arbitrary marker movement requires actual stable Entry identity beyond geometric proximity; Windows real-GUI FocusOut/navigation/reopen/crop smoke remains outstanding. Do not treat green CI as evidence of these unperformed tests. The PR stays Draft; no remote submission of local images or patient/dictionary content.
