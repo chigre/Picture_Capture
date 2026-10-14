@@ -18,6 +18,18 @@ This PR is **draft** until the integration gate below is implemented and verifie
 - Audit counts by status and linkage; **always exports zero training labels** pending independent verification and R2.2 data consent.
 - Two test modules with synthetic data, no dictionary scans.
 
+
+## Additional implemented opt-in slice (pending CI)
+
+- `AppSettings.proofreading_event_capture` is **OFF by default**, exposed in Settings Center under “校对时主界面”; prior projects without this key load with recording OFF.
+- `ReviewWindow.delete_review_entry` captures the prior persisted PDIC before editing and requests logging only **after** `save_pdic(..., sync_editors=False)` returns. The recorder accepts only one unambiguous deleted row whose text/original XY precisely match the on-disk before/after diff; co-saved renames, duplicated rows, unresolvable candidates and untouched PDIC produce no deletion event.
+- Project identity is a local, explicitly created UUID sidecar under `ProofreadingEvidence` on the first consented, provable deletion; page ID uses its relative path and project identity. A unique OCR candidate ID yields a stable namespaced entity ID; an unlinked or duplicated candidate is left without an entry ID rather than guessed.
+- Source image bytes are fingerprinted (SHA-256), and event schema records original-image XY. Existing PDIC bytes and manual override files are not modified by journaling. Journal failure is reflected in the user's status while the already saved PDIC remains authoritative.
+- `scripts/export_proofreading_quality.py` explicitly accepts local journal, saved PDIC, image (optional), project identity, license declaration and output; it writes **only aggregate counts**, source digest and license, without page images, raw words, filesystem paths or labels. Missing source image fingerprints and changed PDICs are stale. Export never runs automatically.
+- `proofreading_evidence.link_event_to_final` now refuses OCR candidate linkage when either OCR signature or final-PDIC fingerprint is missing, avoiding unwarranted linkage from a later OCR run. Current delete events without such source-fingerprint proof are intentionally reported as **unknown**, not as verified labels.
+
+**Incomplete**: rename/move/add/select/deselect/verify event capture; durable entry ID map for manually inserted/renamed records across app sessions; full rollback test of candidate override writes; SECTION grouping from actual project annotations; explicit positive/negative labels verified by user; integrated UI export. **Do not merge the draft PR based on green tests alone.**
+
 ## Required before claiming B2 complete or merging this PR
 
 - Trace ReviewWindow/main-canvas edits and candidate toggles. Record events ONLY after a successfully committed PDIC and manual-override update; never journal an unsaved edit as completed.
@@ -30,7 +42,7 @@ This PR is **draft** until the integration gate below is implemented and verifie
 ## Commands (once integration is ready)
 
 ```bash
-uv run --locked pytest -q tests/test_proofreading_events_20261014.py tests/test_proofreading_evidence_20261014.py
+uv run --locked pytest -q tests/test_proofreading_events_20261014.py tests/test_proofreading_evidence_20261014.py tests/test_proofreading_capture_20261014.py tests/test_proofreading_quality_export_20261014.py
 uv run --locked python scripts/architecture_guard.py
 uv run --locked python scripts/change_architecture_guard.py --base origin/main
 uv run --locked pytest
