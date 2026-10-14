@@ -13,17 +13,18 @@ import pytest
 from picture_capture.ordinary_parallel import ordinary_draw_workers
 
 
-def test_ordinary_worker_policy_scales_on_24_core_cpu_without_oversubscription():
-    assert ordinary_draw_workers(100, cpu_count=24, override="") == 6
-    assert ordinary_draw_workers(4, cpu_count=24, override="") == 4
-    assert ordinary_draw_workers(1, cpu_count=24, override="8") == 1
-    assert ordinary_draw_workers(50, cpu_count=24, override="8") == 8
-    assert ordinary_draw_workers(50, cpu_count=24, override="1") == 1
-    assert ordinary_draw_workers(50, cpu_count=2, override="") == 1
-    assert ordinary_draw_workers(50, cpu_count=24, override="oops") == 6
+def test_ordinary_worker_policy_serializes_even_on_24_core_gpu_machine(monkeypatch):
+    """The old setx override must not cause six or eight Paddle GPU models."""
+    monkeypatch.setenv("PICTURE_CAPTURE_ORDINARY_WORKERS", "8")
+    for pages, cores in ((1, 24), (100, 24), (500, 48), (5, 4)):
+        assert ordinary_draw_workers(pages, cpu_count=cores) == 1
+        assert ordinary_draw_workers(pages, cpu_count=cores, override="8") == 1
+        assert ordinary_draw_workers(pages, cpu_count=cores, override="1") == 1
+        assert ordinary_draw_workers(pages, cpu_count=cores, override="") == 1
 
 
-def test_ordinary_multi_page_path_uses_existing_parallel_runner_with_page_claims():
+
+def test_parallel_path_remains_guarded_but_policy_cannot_activate_gpu_duplication():
     source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
@@ -31,6 +32,7 @@ def test_ordinary_multi_page_path_uses_existing_parallel_runner_with_page_claims
     end = source.index("\n    def clear_entries(", start)
     handler = source[start:end]
     assert 'indices = list(dict.fromkeys(indices))' in handler
+    assert ordinary_draw_workers(50, cpu_count=24, override="8") == 1
     assert 'if method == "left_edge" and ordinary_workers > 1:' in handler
     assert "detect_entries_job," in handler
     assert "max_workers=ordinary_workers" in handler
