@@ -819,9 +819,25 @@ def detect_entries_job(
     settings: AppSettings,
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
+    *,
+    prepared_layout: Any | None = None,
 ) -> int:
-    """Run one ordinary-drawing job through the explicit worker bootstrap."""
+    """Run ordinary drawing with optional isolated, exactly-once GPU preflight.
+
+    Ordinary serial calls have NO injected estimate and keep the old path.
+    """
+    from contextlib import nullcontext
     from .bootstrap.worker import build_worker_services
+    if prepared_layout is not None:
+        from .ordinary_gpu_pipeline import (
+            use_prepared_layout, validate_prepared_layout,
+            verify_prepared_source,
+        )
+
+        verify_prepared_source(image_path, profile_page_index, prepared_layout)
+        estimate_context = use_prepared_layout(prepared_layout)
+    else:
+        estimate_context = nullcontext(None)
 
     services = build_worker_services()
     formats = services.formats
@@ -834,18 +850,24 @@ def detect_entries_job(
     try:
         current = replace(settings)
         current.detection_method = "left_edge"
-        with services.capture_layout_rows(
-            page.parent,
-            page,
-            int(profile_page_index),
-            settings,
-        ):
-            entries, _geometry = processing_module.detect_entries(
-                image,
-                current,
-                profile_page_index=profile_page_index,
-                page_sections=processing_module._core.read_page_sections(page),
-            )
+        with estimate_context as preflight_state:
+            with services.capture_layout_rows(
+                page.parent,
+                page,
+                int(profile_page_index),
+                settings,
+            ):
+                entries, _geometry = processing_module.detect_entries(
+                    image,
+                    current,
+                    profile_page_index=profile_page_index,
+                    page_sections=processing_module._core.read_page_sections(page),
+                )
+            if preflight_state is not None:
+                # An optional internal fallback must not turn a missing GPU
+                # estimate into altered lines or a second Paddle model.
+                validate_prepared_layout(preflight_state)
+                verify_prepared_source(page, profile_page_index, prepared_layout)
 
         pdic = processing_module._core.pdic_path_for_image(page)
         services.save_automatic_baseline(pdic, entries, image.width, pages)
