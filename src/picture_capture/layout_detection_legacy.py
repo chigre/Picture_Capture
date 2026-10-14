@@ -117,88 +117,60 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 
 def _get_text_detector(settings: AppSettings) -> Any:
-    """Create a detection-only PaddleOCR model with CPU oneDNN/PIR disabled.
+    """Cached TextDetection using one shared hardware policy.
 
-    PaddlePaddle 3.3.x + recent PaddleOCR builds can enter a PIR/oneDNN CPU
-    execution path that raises ConvertPirAttribute2RuntimeAttribute for text
-    detection models.  Layout detection values compatibility over peak speed,
-    so explicitly disable that acceleration path here.
+    Preserve PR494's strict CPU worker and staged GPU inference guards.
     """
     from .ordinary_gpu_pipeline import reject_cpu_worker_detector
+    from .inference_performance import (
+        InferencePolicy, resolve_inference_policy, paddle_constructor_variants,
+    )
 
-    # The staged GPU pipeline must NEVER instantiate a Paddle model in its
-    # CPU consumers, including when a model is already cached.
     reject_cpu_worker_detector()
-    # The alternative CPU-only page pool owns a separate CPU model in EACH
-    # worker. Require explicit device AND threads; never use fallback attempts
-    # which silently discard device="cpu" on a PaddleOCR version mismatch.
-    cpu_pool_worker = os.environ.get(
-        "PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER"
-    ) == "1"
+    policy = resolve_inference_policy()
+    cpu_pool_worker = os.environ.get("PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER") == "1"
     if cpu_pool_worker:
-        device = "cpu"
         try:
             threads = max(1, min(8, int(os.environ.get("OMP_NUM_THREADS", "1"))))
         except (ValueError, TypeError):
             threads = 1
-    else:
-        device = resolve_paddle_device()
-        threads = None
-    key = f"{device}|nomkldnn" + (
-        f"|threads={threads}" if cpu_pool_worker else ""
-    )
+        policy = InferencePolicy("cpu", policy.mkldnn, 1, threads)
+    key = f"{policy.device}|{policy.mkldnn}|{policy.cpu_threads}"
     if key in _TEXT_DETECTION_CACHE:
         return _TEXT_DETECTION_CACHE[key]
 
-    # Must be set before importing/constructing PaddleOCR/PaddleX components.
-    # This is intentionally an assignment (not setdefault): some PaddleX builds
-    # may have set it to 1 earlier in the process.
     os.environ["FLAGS_enable_pir_api"] = "0"
     from .windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
     try:
         from paddleocr import TextDetection
     except ImportError as exc:
-        raise RuntimeError(
-            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
-        ) from exc
+        raise RuntimeError("尚未安装 PaddleOCR。请执行：uv sync --extra ocr-cpu") from exc
 
-    kwargs: dict[str, Any] = {"enable_mkldnn": False, "device": device}
-    if cpu_pool_worker:
-        kwargs["cpu_threads"] = threads
-
-    # Strict CPU mode fails closed instead of silently losing the CPU device
-    # or thread cap. Legacy serial mode preserves its historical compatibility
-    # fallbacks; no MKLDNN/PIR change is authorized here.
-    attempts = (
-        [kwargs] if cpu_pool_worker else [
-            kwargs,
-            {k: v for k, v in kwargs.items() if k != "device"},
-            {"device": device},
-            {},
-        ]
-    )
-    seen: set[tuple[tuple[str, str], ...]] = set()
     last_exc: Exception | None = None
-    for attempt in attempts:
-        marker = tuple(sorted((str(k), repr(v)) for k, v in attempt.items()))
-        if marker in seen:
-            continue
-        seen.add(marker)
+    for attempt in paddle_constructor_variants({}, policy):
         try:
             detector = TextDetection(**attempt)
-            # Layout detection only needs the active device configuration.
-            # Keeping stale detector instances for every past device can pin
-            # substantial Paddle/PaddleX memory for the whole GUI session.
-            _TEXT_DETECTION_CACHE.clear()
-            _TEXT_DETECTION_CACHE[key] = detector
-            return detector
         except TypeError as exc:
             last_exc = exc
-            continue
+            # Strict CPU pool: no unbounded default-thread fallback.
+            if cpu_pool_worker:
+                continue
+            legacy = {k: v for k, v in attempt.items()
+                      if k not in {"enable_mkldnn", "cpu_threads"}}
+            if legacy == attempt:
+                continue
+            try:
+                detector = TextDetection(**legacy)
+            except Exception as retry_exc:
+                last_exc = retry_exc
+                continue
         except Exception as exc:
             last_exc = exc
-            break
+            continue
+        _TEXT_DETECTION_CACHE.clear()
+        _TEXT_DETECTION_CACHE[key] = detector
+        return detector
     raise RuntimeError(f"PaddleOCR 文本检测模型初始化失败：{last_exc}") from last_exc
 
 
