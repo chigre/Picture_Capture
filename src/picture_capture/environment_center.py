@@ -228,6 +228,10 @@ class EnvironmentCenterWindow(tk.Toplevel):
         scrollbar.pack(side="right", fill="y")
 
         self._add_card(
+            body, "inference", "最近推理运行状态",
+            [("刷新运行记录", self._refresh_inference_status)],
+        )
+        self._add_card(
             body, "paddle", "PaddleOCR / PaddlePaddle",
             [("安装 / 切换", self._launch_ocr_installer)],
         )
@@ -293,6 +297,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
             paddle_text, tess, lens, official_opencc, legacy_opencc, opencc_runtime, cedict, cedict_error = payload
 
             self._status_labels["paddle"].configure(text=paddle_text)
+            self._refresh_inference_status()
 
             if lens.get("available"):
                 lens_text = (
@@ -365,6 +370,28 @@ class EnvironmentCenterWindow(tk.Toplevel):
                 messagebox.showerror("环境检测失败", str(exc), parent=self)
 
         self.app._start_ui_worker(f"environment-center-{id(self)}", worker, done, failed)
+
+    def _refresh_inference_status(self) -> None:
+        """Report observed model initialization, not estimated GPU utilization."""
+        import time
+        from .inference_monitor import recent_model_events
+        events = recent_model_events(time.time() - 3600)
+        label = self._status_labels.get("inference")
+        if label is None:
+            return
+        if not events:
+            label.configure(text="最近一小时没有检测到新的模型初始化记录。模型缓存复用时可能没有新记录。")
+            return
+        latest = events[-1]
+        pids = {int(row["pid"]) for row in events}
+        models = ", ".join(sorted({str(row["kind"]) for row in events}))
+        label.configure(text=(
+            f"最近初始化模型：{models}\\n"
+            f"最近记录设备：{latest['device']}；模型进程 PID：{latest['pid']}\\n"
+            f"最近一小时出现的模型进程：{len(pids)}；"
+            f"oneDNN 策略：{latest['mkldnn']}；CPU线程：{latest['cpu_threads']}\\n"
+            "注意：这里记录的是实际模型构造参数，不是 GPU CUDA 利用率测量。"
+        ))
 
     def _open_inference_settings(self) -> None:
         """Machine-local settings shared by OCR and Layout TextDetection."""
