@@ -27,8 +27,13 @@ def main() -> int:
         args.journal, args.pdic, image_path=args.image,
         project_id=args.project_id, license_statement=args.license_statement,
     )
-    if args.output.resolve() in {args.pdic.resolve(), args.journal.resolve()}:
-        parser.error("The export must not overwrite PDIC or source event journal")
+    protected = {args.pdic.resolve(), args.journal.resolve()}
+    if args.image is not None:
+        protected.add(args.image.resolve())
+    if args.output.resolve() in protected:
+        parser.error("The export must not overwrite a source PDIC, image or event journal")
+    if args.output.suffix.lower() != ".json" or args.output.exists():
+        parser.error("Choose a new .json output file; existing project data are never overwritten")
     write_text_atomic(
         args.output,
         json.dumps(result, ensure_ascii=False, indent=2) + chr(10),
