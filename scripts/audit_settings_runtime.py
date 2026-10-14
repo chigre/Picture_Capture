@@ -138,7 +138,7 @@ def classified_candidates(literals, fields):
         meaningful = any(token in expr.lower() for token in decision_terms)
         existing = sorted(
             name for name in keys
-            if re.search(r"\\b" + re.escape(name) + r"\\b", expr)
+            if re.search(r"\b" + re.escape(name) + r"\b", expr)
         )
         yield {**item,
                "existing_settings_mentioned": existing,
