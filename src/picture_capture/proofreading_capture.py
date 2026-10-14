@@ -12,7 +12,7 @@ from uuid import uuid4, uuid5, NAMESPACE_URL
 
 from .formats import pdic_path, read_pdic
 from .project_storage import data_root
-from .proofreading_events import append_event, make_event, sha256_file
+from .proofreading_events import append_event, append_rename_batch, make_event, sha256_file
 from .proofreading_section import section_fields_for_event
 
 def verified_ocr_preedit_fingerprints(
@@ -129,12 +129,13 @@ def capture_saved_review_rename(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
     source_fingerprints: tuple[str, str] | None = None,
 ) -> bool:
-    """Log exactly one committed text-only edit, never inferred edits in bulk.
+    """Capture one or several same-save renames with provable XY identity.
 
-    Both prior and after snapshots come from the on-disk PDIC. Unique original
-    XY positions are the stable identity across word changes and SECTION
-    reorder; ambiguous duplicate coordinates or changed coordinates are
-    rejected. OCR ancestry is deliberately unknown until independently linked.
+    Unique original XY ties each text-only change to its persisted row even
+    after row/SECTION reordering; no list-position matching is used. Reject
+    coordinate moves, additions, deletions and coordinate duplicates. A multi-
+    rename save is written as one all-or-none journal publication, never as
+    individually committed fragments or automatically verified training labels.
     """
     project_root, page = Path(project_root), Path(page)
     old = _triples(prior_pdic_entries)
@@ -155,29 +156,36 @@ def capture_saved_review_rename(
         for (x, y), old_word in old_map.items()
         if old_word != new_map[(x, y)]
     ]
-    if len(changed) != 1:
+    if not changed:
         return False
-    ((x, y), before_word, after_word), = changed
     project_id = _project_identity(project_root)
     relative_page = page.resolve().relative_to(project_root.resolve()).as_posix()
     page_id = f"{project_id}/{relative_page}"
     # Stable through renames and list reordering, but never claim an OCR ID.
-    entry_id = uuid5(NAMESPACE_URL, f"{page_id}|xy|{x}|{y}").hex
     saved_hash = sha256_file(saved_file)
     if saved_hash is None:
         raise OSError("PDIC disappeared after saved review rename")
-    event = make_event(
-        page_id=page_id, action="rename",
-        before={"word": before_word, "x": x, "y": y},
-        after={"word": after_word, "x": x, "y": y},
-        pdic_sha256=saved_hash, entry_id=entry_id,
-        image_sha256=sha256_file(page),
-        **_ocr_fields(source_fingerprints),
-        **section_fields_for_event(page, before_xy=(x, y), after_xy=(x, y)),
-    )
-    page_key = uuid5(NAMESPACE_URL, relative_page).hex
-    journal = data_root(project_root) / "ProofreadingEvidence" / f"{page_key}.json"
-    append_event(journal, event, pdic_file=saved_file)
+    # Record only explicitly demonstrated text deltas. The original coords
+    # are stable across this save and a later reopen; arbitrary moves remain
+    # unsupported until an operation-owned durable identity exists.
+    events = []
+    for (x, y), before_word, after_word in sorted(changed):
+        entry_id = uuid5(NAMESPACE_URL, f"{page_id}|xy|{x}|{y}").hex
+        events.append(make_event(
+            page_id=page_id, action="rename",
+            before={"word": before_word, "x": x, "y": y},
+            after={"word": after_word, "x": x, "y": y},
+            pdic_sha256=saved_hash, entry_id=entry_id,
+            image_sha256=sha256_file(page),
+            **_ocr_fields(source_fingerprints),
+            **section_fields_for_event(page, before_xy=(x, y), after_xy=(x, y)),
+        ))
+    key = uuid5(NAMESPACE_URL, relative_page).hex
+    journal = data_root(project_root) / "ProofreadingEvidence" / f"{key}.json"
+    if len(events) == 1:
+        append_event(journal, events[0], pdic_file=saved_file)
+    else:
+        append_rename_batch(journal, events, pdic_file=saved_file)
     return True
 
 

@@ -210,6 +210,66 @@ def append_event(
         lock_dir.rmdir()
 
 
+def append_rename_batch(
+    path: Path, additions: list[dict[str, Any]], *, pdic_file: Path,
+) -> None:
+    """One atomic journal publication for a provable multi-row text-only save.
+
+    The caller has independently validated unchanged, unique original XY for
+    every row. Never batch verification actions, OCR votes or mixed operations.
+    Unlike repeated append_event calls, failure cannot leave a partial group.
+    """
+    rows = list(additions)
+    if len(rows) < 2:
+        raise ValueError("Multi-rename batch requires two or more events")
+    first = rows[0]
+    operation_ids = []
+    entry_ids = []
+    for event in rows:
+        if not isinstance(event, dict) or any((
+            event.get("action") != "rename",
+            event.get("source_stage") != "human_edited_pdic",
+            event.get("verification_status") != "explicit_action_unverified_page",
+            not isinstance(event.get("operation_id"), str),
+            not isinstance(event.get("entry_id"), str) or not event.get("entry_id"),
+            event.get("page_id") != first.get("page_id"),
+            event.get("pdic_sha256") != first.get("pdic_sha256"),
+            event.get("image_sha256") != first.get("image_sha256"),
+            event.get("ocr_signature") != first.get("ocr_signature"),
+            event.get("final_snapshot_sha256") != first.get("final_snapshot_sha256"),
+        )):
+            raise ValueError("Mixed or unproven proofreading rename batch")
+        operation_ids.append(event["operation_id"])
+        entry_ids.append(event["entry_id"])
+    if len(set(operation_ids)) != len(rows) or len(set(entry_ids)) != len(rows):
+        raise ValueError("Duplicate operation or entry identity in rename batch")
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lock = target.with_name(f"{target.name}.lock")
+    try:
+        lock.mkdir()
+    except FileExistsError as error:
+        raise OSError(f"Proofreading journal is locked by another writer: {lock}") from error
+    try:
+        saved_sha = sha256_file(pdic_file)
+        if saved_sha is None or saved_sha != first.get("pdic_sha256"):
+            raise ValueError("Current PDIC does not match the recorded post-save snapshot")
+        previous = load_events(target)
+        existing_ids = {event["operation_id"] for event in previous}
+        if any(operation_id in existing_ids for operation_id in operation_ids):
+            raise ValueError("Duplicate proofreading operation id")
+        previous.extend(dict(event) for event in rows)
+        if sha256_file(pdic_file) != saved_sha:
+            raise ValueError("PDIC changed while writing proofreading evidence")
+        write_text_atomic(
+            target,
+            json.dumps({"format": EVENT_FORMAT, "events": previous},
+                       ensure_ascii=False, separators=(",", ":")),
+        )
+    finally:
+        lock.rmdir()
+
+
 def audit_events(
     events: list[dict[str, Any]], *, current_pdic_sha256: str | None,
     current_ocr_signature: str | None,
