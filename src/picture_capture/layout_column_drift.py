@@ -57,12 +57,64 @@ def _analysis_left_for_column(
 
 
 
+def _foreign_column_tail_replacement(
+    row: np.ndarray,
+    *,
+    initial_x: int,
+    analysis_left: int,
+    semantic_left: int,
+    previous_right: int,
+    reference: float,
+) -> int | None:
+    """Find real in-column text behind a disconnected neighboring-column tail.
+
+    Widened slant windows can begin only 1–3 px beyond the previous column's
+    nominal right edge. A previous-column line ending there is not evidence
+    that the *next* column starts at that X. Require BOTH an actual in-column
+    text onset and a long, physically empty horizontal gap from the outside
+    fragment to that onset. This is a row-local image observation, not a
+    second-pass role guess, row-index rule or cross-column body vote.
+
+    Genuine negative first-X drift/overhang is preserved when print continues
+    across the semantic left edge or the gap is ambiguous.
+    """
+    from .layout_physical_indent import _credible_first_ink_x
+
+    if (
+        row.ndim != 2 or row.size == 0
+        or initial_x >= semantic_left
+        or initial_x > previous_right + max(6, round(reference * .30))
+    ):
+        return None
+    boundary = semantic_left - analysis_left
+    if boundary <= 0 or boundary >= row.shape[1]:
+        return None
+
+    right_onset = _credible_first_ink_x(row[:, boundary:], reference)
+    if right_onset is None:
+        return None
+
+    # A true overhanging glyph/prefix normally continues through the gutter
+    # towards semantic_left. An unrelated previous-column tail leaves a large
+    # background corridor before any credible in-column glyph.
+    outside_ink = np.flatnonzero(np.asarray(row[:, :boundary], dtype=bool).any(axis=0))
+    if outside_ink.size == 0:
+        return None
+    last_outside_x = analysis_left + int(outside_ink[-1])
+    inside_x = semantic_left + int(right_onset)
+    gap = inside_x - last_outside_x - 1
+    if gap < max(12, round(max(6.0, reference) * .70)):
+        return None
+    return int(inside_x)
+
+
 def remeasure_layout_indents_from_ink(
     layout: Any,
     page_ink: np.ndarray,
     *,
     ops: base.LayoutPrimitiveOps | None = None,
     divider_positions: dict[int, int] | None = None,
+    foreign_tail_rejections: dict[int, int] | None = None,
 ) -> dict[int, int]:
     """Re-measure recovered rows without clipping ink left of ``column.left``.
 
@@ -119,6 +171,7 @@ def remeasure_layout_indents_from_ink(
             continue
 
         count = 0
+        rejected_tails = 0
         for line in list(getattr(column, "lines", []) or []):
             try:
                 y0 = max(0, min(height, body_top + int(getattr(line, "y0"))))
@@ -130,8 +183,23 @@ def remeasure_layout_indents_from_ink(
             if local is None:
                 continue
             absolute_x = analysis_left + int(local)
+            if position > 0:
+                inside_x = _foreign_column_tail_replacement(
+                    row,
+                    initial_x=absolute_x,
+                    analysis_left=analysis_left,
+                    semantic_left=semantic_left,
+                    previous_right=int(columns[position - 1].right),
+                    reference=reference,
+                )
+                if inside_x is not None:
+                    absolute_x = inside_x
+                    rejected_tails += 1
             line.first_x = int(absolute_x - semantic_left)
             count += 1
+
+        if rejected_tails and foreign_tail_rejections is not None:
+            foreign_tail_rejections[column_index] = rejected_tails
 
         if count:
             # Composition already provides the physical-indent implementations.
@@ -160,6 +228,7 @@ def finalize_layout_column_drift(
     explicit_ops = ops is not None
     ops = base.current_layout_ops() if ops is None else ops
     divider_positions: dict[int, int] = {}
+    foreign_tails: dict[int, int] = {}
     if page_ink is None:
         from .layout_detection import analysis_ink_mask
 
@@ -173,7 +242,11 @@ def finalize_layout_column_drift(
                 np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8),
                 effective,
             )
-            counts = remeasure_layout_indents_from_ink(layout, page_ink, divider_positions=divider_positions, **({"ops": ops} if explicit_ops else {}))
+            counts = remeasure_layout_indents_from_ink(
+                layout, page_ink, divider_positions=divider_positions,
+                foreign_tail_rejections=foreign_tails,
+                **({"ops": ops} if explicit_ops else {}),
+            )
         finally:
             try:
                 canonical.close()
@@ -184,7 +257,11 @@ def finalize_layout_column_drift(
             except Exception:
                 pass
     else:
-        counts = remeasure_layout_indents_from_ink(layout, page_ink, divider_positions=divider_positions, **({"ops": ops} if explicit_ops else {}))
+        counts = remeasure_layout_indents_from_ink(
+                layout, page_ink, divider_positions=divider_positions,
+                foreign_tail_rejections=foreign_tails,
+                **({"ops": ops} if explicit_ops else {}),
+            )
 
     if counts:
         detail = ",".join(
@@ -196,6 +273,11 @@ def finalize_layout_column_drift(
             f"C{index + 1}:X{right}" for index, right in sorted(divider_positions.items())
         )
         layout.reason += f"; slanted_gutter_rule_guard={detail}"
+    if foreign_tails:
+        detail = ",".join(
+            f"C{index + 1}:{count}" for index, count in sorted(foreign_tails.items())
+        )
+        layout.reason += f"; foreign_column_tail_rejected={detail}"
     return layout
 
 
