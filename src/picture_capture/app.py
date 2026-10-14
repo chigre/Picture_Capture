@@ -15416,6 +15416,10 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _detect_pages(self, indices: list[int], *, method: str, force_refresh: bool) -> None:
+        if method == "left_edge":
+            # One physical page must never be submitted to multiple writer
+            # processes in the same batch, even through an unusual API caller.
+            indices = list(dict.fromkeys(indices))
         if not self.project or not indices:
             self.status_var.set("没有需要处理的页面"); return
         if not self._guard_transformed_geometry("批量画线"):
