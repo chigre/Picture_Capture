@@ -69,6 +69,7 @@ def _understand_page_current(
     layout_only: bool = False,
     layout_trace: Any | None = None,
     replay_preview: Any | None = None,
+    source_image_path: Path | None = None,
 ) -> PageUnderstanding | None:
     """Resolve Page Understanding with optional static illustration masking."""
     analysis_image = image
@@ -93,10 +94,13 @@ def _understand_page_current(
                 image,
                 settings,
                 profile_page_index=int(page_index),
+                source_image_path=source_image_path,
                 **({"candidate_debug": mask_candidates}
                    if mask_candidates is not None else {}),
             )
         except Exception as exc:
+            if bool(getattr(settings, "layout_mask_illustrations_use_existing", False)):
+                raise
             analysis_image = image
             mask_stats = IllustrationMaskStats()
             mask_error = f"{type(exc).__name__}: {exc}"
@@ -540,6 +544,7 @@ def detect_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     debug_trace: dict[str, Any] | None = None,
+    source_image_path: Path | None = None,
 ) -> tuple[list[Entry], Any]:
     """Detect entries using shared denoised page analysis.
 
@@ -587,6 +592,7 @@ def detect_entries(
         page_index=profile_page_index,
         page_sections=page_sections,
         layout_only=ordinary_mode,
+        source_image_path=source_image_path,
         layout_trace=replay_trace if ordinary_mode else None,
         replay_preview=replay_preview if ordinary_mode else None,
     )
@@ -901,6 +907,7 @@ def detect_entries_job(
                     current,
                     profile_page_index=profile_page_index,
                     page_sections=sections,
+                    source_image_path=page,
                 )
             if preflight_state is not None:
                 # An optional internal fallback must not turn a missing GPU
