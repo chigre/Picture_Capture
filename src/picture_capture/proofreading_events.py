@@ -49,6 +49,7 @@ def make_event(
     operation_id: str | None = None,
     image_sha256: str | None = None,
     section_id: str | None = None,
+    section_snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Create an event AFTER saving PDIC, with explicit (not inferred) provenance.
 
@@ -85,6 +86,7 @@ def make_event(
         "final_snapshot_sha256": final_snapshot_sha256,
         "image_sha256": image_sha256,
         "section_id": section_id,
+        "section_snapshot_sha256": section_snapshot_sha256,
     }
 
 
