@@ -2550,6 +2550,8 @@ class ReviewWindow(tk.Toplevel):
         row1.pack(fill="x", pady=(0, 4))
         self.review_control_row = row1
         self._review_flat_button(row1, "保存", self.save, role="primary").pack(side="left")
+        self._review_flat_button(row1, "撤销保存", self.undo_saved_review).pack(side="left", padx=(4, 0))
+        self._review_flat_button(row1, "重做保存", self.redo_saved_review).pack(side="left", padx=(4, 0))
         self._sync_autosave_label()
         ttk.Checkbutton(
             row1, textvariable=self.autosave_label_var, variable=self.parent.autosave_var,
@@ -4290,12 +4292,15 @@ class ReviewWindow(tk.Toplevel):
             return True
         if not dirty:
             return True
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         self.parent.save_pdic(silent=True, sync_editors=False)
         self._review_evidence_after_save(evidence_before)
         self._persist_simplified_page(current_stem)
+        record_review_after(self, transaction_before)
         return True
 
     def _effective_wordslist_locator_mode(self) -> str:
@@ -4837,6 +4842,9 @@ class ReviewWindow(tk.Toplevel):
             Path(chosen), persist=True, redraw=True,
             on_done=loaded, on_error=failed,
         )
+
+    # Thin class-level UI delegation; the transaction service owns decisions.
+    from .ui.review_transaction_actions import undo_saved_review, redo_saved_review
 
     def _commit_edits(self) -> None:
         from .review_main_editor_sync import commit_proofread_entries
@@ -5875,6 +5883,8 @@ class ReviewWindow(tk.Toplevel):
         if getattr(self, "_active_crop_page_stem", None) != current_stem:
             self._active_crop_fixed_size = None
             self._active_crop_page_stem = current_stem
+        from .ui.review_transaction_actions import history_page_changed
+        history_page_changed(self, current_stem)
         self._rendered_page_stem = current_stem
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
@@ -6572,6 +6582,11 @@ class ReviewWindow(tk.Toplevel):
             except (OSError, ValueError, TypeError):
                 prior_pdic_rows = None
 
+        # Candidate deselections and simplified companions are multi-file
+        # operations. Until R3 covers their atomic rollback, invalidate the
+        # narrowly supported pure-text session undo history.
+        from .ui.review_transaction_actions import invalidate_review_history
+        invalidate_review_history(self)
         self._commit_edits()
         entry = row_entries[int(index)]
         deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
@@ -6743,6 +6758,8 @@ class ReviewWindow(tk.Toplevel):
                 return
             if not self.parent._claim_page_for_manual_edit():
                 return
+        from .ui.review_transaction_actions import capture_review_before, record_review_after
+        transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         self._commit_edits()
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
@@ -6750,6 +6767,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_evidence_after_save(evidence_before)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
+        record_review_after(self, transaction_before)
         if self.parent.project:
             try:
                 self.parent.settings.to_json(settings_path(self.parent.project.root))
