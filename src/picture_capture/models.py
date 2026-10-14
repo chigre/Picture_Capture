@@ -283,6 +283,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # Optional Layout-only preprocessing. Source scans, PPP annotations, OCR
     # input and crop outputs remain untouched; default preserves legacy behavior.
     # Full-resolution shared analysis and detector-only experimental policies.
+    draw_performance_profile: bool = False
+    reuse_prepared_analysis: bool = False
     analysis_denoise_enabled: bool = True
     analysis_denoise_strength: str = "auto"
     layout_denoise_enabled: bool = True
