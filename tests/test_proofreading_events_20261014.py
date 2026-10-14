@@ -72,14 +72,19 @@ def test_corrupt_event_journal_never_silently_erased(tmp_path):
 
 def test_event_audit_explicit_verified_and_stale_are_separate(tmp_path):
     pdic, journal = _case(tmp_path)
+    source = _event(pdic, candidate_id="c-1")
     verified = _event(
-        pdic, action="verify", verification_status="verified",
+        pdic, action="verify",
+        before={"reviewed_operation_id": source["operation_id"]},
+        after={"judgment": "correct_headword"},
+        verification_status="verified",
         explicitly_verified=True, candidate_id="c-1",
     )
     inferred = _event(
         pdic, action="add", verification_status="inferred",
         entry_id="entry-b", candidate_id=None,
     )
+    append_event(journal, source, pdic_file=pdic)
     append_event(journal, verified, pdic_file=pdic)
     append_event(journal, inferred, pdic_file=pdic)
     result = audit_events(
@@ -88,26 +93,31 @@ def test_event_audit_explicit_verified_and_stale_are_separate(tmp_path):
     )
     assert result["current_verified_records_requiring_link_audit"] == 1
     assert result["training_labels_exported"] == 0
-    assert result["not_training_ready"] == 1
+    assert result["not_training_ready"] == 2
     pdic.write_bytes(b"edited again")
     stale = audit_events(
         load_events(journal), current_pdic_sha256=sha256_file(pdic),
         current_ocr_signature=None,
     )
-    assert stale["stale_events"] == 2
+    assert stale["stale_events"] == 3
     assert stale["current_verified_records_requiring_link_audit"] == 0
 
 
 def test_event_audit_fails_open_to_unknown_not_gold_when_ocr_changes(tmp_path):
     pdic, journal = _case(tmp_path)
+    source = _event(pdic, candidate_id="c-1", ocr_signature="ocr-v1")
     event = _event(
-        pdic, action="verify", verification_status="verified",
+        pdic, action="verify",
+        before={"reviewed_operation_id": source["operation_id"]},
+        after={"judgment": "correct_headword"},
+        verification_status="verified",
         explicitly_verified=True, candidate_id="c-1", ocr_signature="ocr-v1",
     )
+    append_event(journal, source, pdic_file=pdic)
     append_event(journal, event, pdic_file=pdic)
     result = audit_events(
         load_events(journal), current_pdic_sha256=sha256_file(pdic),
         current_ocr_signature="ocr-v2",
     )
-    assert result["stale_events"] == 1
+    assert result["stale_events"] == 2
     assert result["training_labels_exported"] == 0
