@@ -1,6 +1,6 @@
 # PC-CQ/B2 — Human proofreading evidence (work in progress)
 
-This PR is **draft** until the integration gate below is implemented and verified. Local event primitives and conservative read-only linking do **not** constitute an activated human feedback loop.
+This PR is **draft**: limited opt-in UI capture now exists, but the full human-feedback contract remains incomplete. A green CI only validates tested slices, not a fully activated human-feedback loop.
 
 ## Source-of-truth chain
 
@@ -10,7 +10,7 @@ This PR is **draft** until the integration gate below is implemented and verifie
 
 **Do not** use row index after sorting, classify an arbitrary human click as a verified true/false label, or synthesize candidate IDs for unmatched Layout-only lines.
 
-## Implemented foundations (not yet connected to UI writes)
+## Implemented foundations and narrowly integrated opt-in UI slices
 
 - A versioned local JSON event journal with `operation_id`, independent stable `entry_id` supplied by caller, source stage, action, before/after fields, candidate ID, OCR/final fingerprints and post-save PDIC SHA256. Default status is `explicit_action_unverified_page`.
 - Atomic journal updates; source PDIC is never written/changed. If journal is malformed or actual PDIC differs from the event's post-save snapshot, writing fails closed.
@@ -32,9 +32,9 @@ This PR is **draft** until the integration gate below is implemented and verifie
 
 ## Required before claiming B2 complete or merging this PR
 
-- Trace ReviewWindow/main-canvas edits and candidate toggles. Record events ONLY after a successfully committed PDIC and manual-override update; never journal an unsaved edit as completed.
+- Finish safe post-save capture for unsupported manual operations and verify no unsaved edits or coalesced changes can generate evidence. Implemented: single deletion, single rename, single canvas addition, candidate selection/deselection and strict original/refined Y switch.
 - Decide and test a locally controlled settings option/default to enable evidence capture, including legacy JSON migration and UI visibility if needed. No network telemetry.
-- Support rename, add, delete, move, select/deselect and verify with stable Entry identity. Events covering changes to multiple rows need a shared operation_id.
+- Implement explicit human verification and durable Entry identity for arbitrary coordinate edits; narrowly supported actions use reliable original XY or named OCR position group identity. Co-edited multiple rows remain unclassified; general moving/edit grouping not complete.
 - Cover crash/retry, delete, autosave, FocusOut, SECTION reorder, page navigation, manual override rollback, snapshot invalidation and cross-platform UI smoke.
 - Ensure raw scan text/paths are not sent to GitHub; project data stays local. Export only explicitly requested, minimal metadata with authorization.
 - Complete R2.1/R2.2/R2.3 individually with evidence; 3-platform full CI and post-merge main CI required. PR-B real scan benchmarking remains deferred.
