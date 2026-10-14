@@ -1,6 +1,6 @@
 # PC-CQ/B3 — R3 校对事务化：实现与验收记录
 
-当前：**Draft [PR #502](https://github.com/chigre/Picture_Capture/pull/502)**；R3.1、R3.2 在进展中，未经最终 fixed-head CI 和真人操作验收不得称 verified。
+**#502 安全工程增量已合并**：PR head `e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06` 的 [CI 38630143182](https://github.com/chigre/Picture_Capture/actions/runs/38630143182) 成功；合并 `main@910b889898efab1ffc2975cdfa613eb675be70ef` 的 [CI 38630567897](https://github.com/chigre/Picture_Capture/actions/runs/38630567897) 四平台成功。**R3.1/R3.2 整体仍 in_progress**，下一工作包 [#503](https://github.com/chigre/Picture_Capture/issues/503) 包含 OCR 候选删除/manual_selection/复杂组合编辑的所有权与跨文件撤销；相关真人 GUI 验收还未执行。R2/B2 用户明确暂不验收。以下 T1–T12 的合成回归在 CI 通过，但不能代替真实人工操作。
 
 ## 用户阶段授权
 
@@ -16,18 +16,18 @@
 
 | 验收项 | 独立断言 | 状态 |
 | --- | --- | --- |
-| T1 保存文字 Undo→Redo | PDIC 恢复完整原始**字节**；Entry 对象身份相同 | 待最终 PR CI |
-| T2 两次保存 + 排序重排 | 反向 Undo×2/Redo×2 不用行号猜测 | 待最终 PR CI |
-| T3 撤销后新改名 | 清空 Redo，不复活旧编辑 | 待最终 PR CI |
-| T4 未保存 Tk 文字 | 拒绝 Undo、不修改磁盘 | 待最终 PR CI |
-| T5 外部 PDIC/manual_selection/OCR 文件改变 | 指纹不匹配拒绝，不覆盖原始资料 | 待最终 PR CI |
-| T6 简体副本＋PDIC 同次改动 | 两个文件严格恢复并且恢复窗口缓存 | 待最终 PR CI |
-| T7 第二文件写入失败 | 自动回滚至提交前；内存数据不变 | 待最终 PR CI |
-| T8 崩溃后混合旧/新文件 | 下次 load_page 恢复，第三方改动拒绝 | 待最终 PR CI |
-| T9 单条无 OCR 关联删除 | Undo 恢复同一个 Entry；Redo 再删除；删最后一条可还原 | 待最终 PR CI |
-| T10 OCR-linked 删除/候选文字 | 拒绝 Undo，保留人工 override | 待最终 PR CI |
-| T11 翻页与 Tk 异步行重建 | 同页有源指纹才 Undo，行尚未就绪不能毁掉有效栈 | 待最终 PR CI |
-| T12 三平台 Tk/构建与 Python 3.10 | 最新 PR-head CI 及合并后 main CI | 待执行 |
+| T1 保存文字 Undo→Redo | PDIC 恢复完整原始**字节**；Entry 对象身份相同 | 合成回归随 #502 CI 通过；真人未验收 |
+| T2 两次保存 + 排序重排 | 反向 Undo×2/Redo×2 不用行号猜测 | 合成回归随 #502 CI 通过；真人未验收 |
+| T3 撤销后新改名 | 清空 Redo，不复活旧编辑 | 合成回归随 #502 CI 通过；真人未验收 |
+| T4 未保存 Tk 文字 | 拒绝 Undo、不修改磁盘 | 合成回归随 #502 CI 通过；真人未验收 |
+| T5 外部 PDIC/manual_selection/OCR 文件改变 | 指纹不匹配拒绝，不覆盖原始资料 | 合成回归随 #502 CI 通过；真人未验收 |
+| T6 简体副本＋PDIC 同次改动 | 两个文件严格恢复并且恢复窗口缓存 | 合成回归随 #502 CI 通过；真人未验收 |
+| T7 第二文件写入失败 | 自动回滚至提交前；内存数据不变 | 合成回归随 #502 CI 通过；真人未验收 |
+| T8 崩溃后混合旧/新文件 | 下次 load_page 恢复，第三方改动拒绝 | 合成回归随 #502 CI 通过；真人未验收 |
+| T9 单条无 OCR 关联删除 | Undo 恢复同一个 Entry；Redo 再删除；删最后一条可还原 | 合成回归随 #502 CI 通过；真人未验收 |
+| T10 OCR-linked 删除/候选文字 | 拒绝 Undo，保留人工 override | 合成回归随 #502 CI 通过；真人未验收 |
+| T11 翻页与 Tk 异步行重建 | 同页有源指纹才 Undo，行尚未就绪不能毁掉有效栈 | 合成回归随 #502 CI 通过；真人未验收 |
+| T12 三平台 Tk/构建与 Python 3.10 | 最新 PR-head CI 及合并后 main CI | PR 与 postmerge main CI 均通过 |
 
 ## 仍未覆盖的 R3 正式 DoD
 
