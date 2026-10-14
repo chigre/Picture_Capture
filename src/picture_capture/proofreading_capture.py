@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from uuid import uuid4, uuid5, NAMESPACE_URL
 
-from .formats import pdic_path, read_pdic, write_text_atomic
+from .formats import pdic_path, read_pdic
 from .project_storage import data_root
 from .proofreading_events import append_event, make_event, sha256_file
 
@@ -46,6 +46,7 @@ def _triples(entries: list[object]) -> list[tuple[str, int, int]]:
 
 def capture_saved_review_deletion(
     *, project_root: Path, page: Path, prior_pdic_entries: list[object],
+    expected_deleted: tuple[str, int, int],
     deleted_candidate_id: str | None, candidate_id_unique: bool,
 ) -> bool:
     """Capture a just-saved deletion only if disk proves exactly one row removed.
@@ -63,6 +64,8 @@ def capture_saved_review_deletion(
     if added or sum(removed.values()) != 1 or sum(existing.values()) - sum(current.values()) != 1:
         return False
     (word, x, y), = removed.keys()
+    if (word, x, y) != expected_deleted:
+        return False
     if existing[(word, x, y)] != 1:
         # Could be either of two indistinguishable rows; don't claim identity.
         return False
