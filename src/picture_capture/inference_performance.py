@@ -50,16 +50,17 @@ def resolve_inference_policy(*, page_count: int = 1) -> InferencePolicy:
         "PICTURE_CAPTURE_PADDLE_MKLDNN", "paddle_mkldnn",
         "auto", {"auto", "on", "off"},
     )
-    workers = _choice(
-        "PICTURE_CAPTURE_PADDLE_CPU_WORKERS", "paddle_cpu_workers",
-        "auto", {"auto", "2", "4", "6"},
-    )
+    raw_workers = str(os.environ.get("PICTURE_CAPTURE_PADDLE_CPU_WORKERS") or runtime_setting("paddle_cpu_workers", "auto") or "auto").strip().lower()
     cpu_count = max(1, os.cpu_count() or 1)
-    if workers == "auto":
-        # Deliberately conservative: workers own separate heavyweight models.
-        count = max(1, min(6, cpu_count // 4, int(page_count)))
+    if raw_workers == "auto":
+        # Conservative until per-process model memory is measured.
+        count = max(1, min(cpu_count // 4, int(page_count)))
     else:
-        count = max(1, min(int(workers), cpu_count, int(page_count)))
+        try:
+            requested = int(raw_workers)
+        except ValueError:
+            requested = max(1, cpu_count // 4)
+        count = max(1, min(requested, cpu_count, max(1, int(page_count))))
     # Prevent six workers from *each* using all available CPU threads.
     default_threads = max(1, min(4, cpu_count // max(1, count)))
     threads = _positive_int(
