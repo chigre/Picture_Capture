@@ -91,8 +91,6 @@ def summarize(records: list[dict]) -> dict[str, float]:
 def export_batch_report(records: list[dict], *, label: str,
                         elapsed_seconds: float, completed: int) -> Path | None:
     """Write human-readable Markdown and per-page CSV beside JSONL logs."""
-    if not records:
-        return None
     import csv
     from datetime import datetime
     import re
@@ -143,5 +141,5 @@ def export_batch_report(records: list[dict], *, label: str,
         md_path = prefix.with_suffix(".md")
         md_path.write_text("\n".join(report), encoding="utf-8")
         return md_path
-    except (OSError, TypeError, ValueError):
-        return None
+    except (OSError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"性能报告导出失败：{_directory() / 'reports'}：{exc}") from exc
