@@ -156,6 +156,76 @@ def _body_lane_ids(
     return absorbed
 
 
+def _headword_peer_body_seed(
+    layout: Any,
+    column_index: int,
+    modes: list[Any],
+    proposed: Any,
+    reference: float,
+) -> Any | None:
+    """Only recover a body seed corroborated by an independently sound column.
+
+    A displaced outside-column/gutter family can be physically real ink but
+    cannot be trusted as this column's body origin. An alternative dominant
+    family is accepted only if it agrees in *local X coordinates* with a
+    corroborating column and each column has a separate supported headword
+    indentation family. With insufficient proof retain the original role.
+    """
+    ref = max(6.0, float(reference))
+    if len(getattr(layout, "columns", ()) or ()) < 2 or not modes:
+        return None
+
+    def support(mode: Any) -> int:
+        return int(getattr(mode, "support", 0) or 0)
+
+    def center(mode: Any) -> float:
+        return float(getattr(mode, "center", 0.0) or 0.0)
+
+    dominant = max(modes, key=support)
+    if dominant is proposed:
+        return None
+    if (
+        support(dominant) < max(6, 1.5 * support(proposed))
+        or center(dominant) - center(proposed) < max(30.0, ref * .95)
+    ):
+        return None
+
+    # Accept repeated but sparse physical headword families even when they
+    # fall below the old 25%-of-body stable-lane threshold.
+    head_gap = max(20.0, ref * .65)
+    if not any(
+        support(mode) >= 3 and center(mode) - center(dominant) >= head_gap
+        for mode in modes
+    ):
+        return None
+
+    tolerance = max(10.0, ref * .30)
+    for peer_index, peer in enumerate(layout.columns):
+        if peer_index == column_index:
+            continue
+        peer_modes = list(getattr(peer, "indent_modes", ()) or ())
+        if len(peer_modes) < 2:
+            continue
+        peer_body = max(peer_modes, key=support)
+        if abs(center(dominant) - center(peer_body)) > tolerance:
+            continue
+        stable_peer = [
+            mode for mode in peer_modes
+            if support(mode) >= max(2, math.ceil(support(peer_body) * .25))
+        ]
+        if not stable_peer:
+            continue
+        outer_peer = min(stable_peer, key=center)
+        if center(peer_body) - center(outer_peer) > max(12.0, ref * .30):
+            continue
+        if any(
+            support(mode) >= 3 and center(mode) - center(peer_body) >= head_gap
+            for mode in peer_modes
+        ):
+            return dominant
+    return None
+
+
 def _resolve_directional_body_lanes(layout: Any) -> None:
     """Choose the body family from explicit indent polarity, not row counts."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
@@ -174,8 +244,7 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
     reference = float(getattr(layout, "ordinary_line_height", 0.0) or 0.0)
     reference_arg = reference if reference > 0 else None
 
-    for column in list(getattr(layout, "columns", []) or []):
-        modes = list(getattr(column, "indent_modes", []) or [])
+    for column_index, column in enumerate(list(getattr(layout, "columns", []) or [])):\n        modes = list(getattr(column, "indent_modes", []) or [])
         if not modes:
             continue
 
@@ -241,6 +310,11 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
                 stable_modes,
                 key=lambda mode: float(getattr(mode, "center", 0.0) or 0.0),
             )
+            peer_seed = _headword_peer_body_seed(
+                layout, column_index, modes, desired_body, reference,
+            )
+            if peer_seed is not None:
+                desired_body = peer_seed
 
         body_ids = _body_lane_ids(modes, desired_body, reference_arg)
         body_centers = [
