@@ -928,6 +928,10 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
         estimate = _projection_layout_estimate(analysis, settings)
         estimate.canonical_transform = transform.kind
         estimate.confidence = min(1.0, estimate.source_boxes / 6.0)
+        if _tracking:
+            _steps["inner_detector_projection_fallback"] = _perf() - _tick
+            record_page("<substage>", -1, _steps,
+                        stage_group="layout_detector_fallback")
         return estimate
     except Exception as fallback_exc:
         raise RuntimeError(
