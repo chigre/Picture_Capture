@@ -4858,6 +4858,7 @@ class ReviewWindow(tk.Toplevel):
             return None
         self.__dict__["_review_evidence_source_fingerprints"] = None
         self.__dict__["_review_evidence_prior_pdic_sha256"] = None
+        self.__dict__["_review_evidence_source_page"] = page
         try:
             from .proofreading_events import sha256_file
             saved = pdic_path(page)
@@ -4882,7 +4883,8 @@ class ReviewWindow(tk.Toplevel):
             return
         page = getattr(self.parent, "current_page", None)
         project = getattr(self.parent, "project", None)
-        if page is None or project is None:
+        owned_page = self.__dict__.pop("_review_evidence_source_page", None)
+        if page is None or project is None or page != owned_page:
             return
         try:
             from .proofreading_capture import capture_saved_review_rename
