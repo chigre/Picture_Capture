@@ -88,9 +88,26 @@ def resolve_page_layout_policy(
     meaning of "首栏X自动" without allowing a dominant inward body lane to redefine
     the column origin.
     """
+    from time import perf_counter as _perf
+    from .draw_performance_profile import enabled as _enabled, record_page
+    _timed = _enabled()
+    _tick = _perf() if _timed else 0.0
+    _segments = {}
+    def _mark(stage):
+        nonlocal _tick
+        if _timed:
+            now = _perf()
+            _segments[stage] = now - _tick
+            _tick = now
+    def _save(state):
+        if _timed:
+            record_page("<substage>", page_index, _segments,
+                        stage_group=f"auto_policy_{state}")
     current = replace(settings)
     if not bool(getattr(current, "ordinary_auto_layout", False)):
         current.manual_columns = False
+        _mark("policy_disabled")
+        _save("disabled")
         return current, None, {}
 
     detector_settings = replace(current)
@@ -100,13 +117,16 @@ def resolve_page_layout_policy(
     # One authoritative physical estimate. This replaces the projection-only
     # Page Understanding path that could disagree with ordinary auto-layout and
     # with the on-image Layout diagnostic overlay.
+    _mark("policy_settings_copy")
     estimate = detect_layout_parameters(image, detector_settings)
+    _mark("policy_detector_total")
 
     # Build the same canonical domain used by Page Design for X registration.
     _source, canonical, _transform, _effective = base._analysis_page(
         image, detector_settings, page_index
     )
 
+    _mark("policy_canonical_analysis")
     applied: dict[str, int] = {}
     # Resolve every selected scalar except X first. X registration may use the
     # newly allowed page-specific column count/width/gutter/line scale, while
@@ -122,6 +142,7 @@ def resolve_page_layout_policy(
         setattr(current, field, value)
         applied[field] = value
 
+    _mark("policy_scalar_merge")
     if bool(getattr(current, "ordinary_auto_manual_x", False)):
         registration = register_page_manual_x(
             canonical, current, estimate, **({"ops": ops} if ops is not None else {})
@@ -129,7 +150,9 @@ def resolve_page_layout_policy(
         current.manual_x = int(registration.value)
         applied["manual_x"] = int(registration.value)
 
+    _mark("policy_manual_x_registration")
     current.manual_columns = False
+    _save("detected")
     return current, estimate, applied
 
 
