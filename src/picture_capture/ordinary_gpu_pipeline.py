@@ -104,6 +104,19 @@ def take_prepared_layout(image: Image.Image, settings: Any) -> Any | None:
     return expected.value
 
 
+def reject_cpu_worker_detector() -> None:
+    """Reject unexpected Paddle TextDetection inside a staged CPU page job.
+
+    Processing has a legacy broad fallback from Layout failure to VB. Mark the
+    current preflight invalid BEFORE raising so that this cannot silently
+    publish a different PDIC with plausible marker counts.
+    """
+    state = _ACTIVE.get()
+    if state is not None:
+        state.invalid = True
+        raise RuntimeError("CPU worker attempted another Paddle GPU Layout detector")
+
+
 def validate_prepared_layout(state: _Consumption) -> None:
     if state.invalid or state.consumed != 1:
         raise RuntimeError(
@@ -191,5 +204,5 @@ __all__ = [
     "PreparedLayoutEstimate", "staged_pipeline_enabled",
     "prepare_gpu_layout_job", "detect_entries_staged_job",
     "use_prepared_layout", "take_prepared_layout", "validate_prepared_layout",
-    "verify_prepared_source",
+    "verify_prepared_source", "reject_cpu_worker_detector",
 ]
