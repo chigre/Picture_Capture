@@ -6104,7 +6104,11 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     detect_end = text.index("    def clear_entries", detect_start)
     detect_block = text[detect_start:detect_end]
     assert 'ProcessPoolExecutor(max_workers=1' in detect_block
-    assert 'if method == "left_edge" else None' in detect_block
+    # A single ordinary page still uses the legacy one-process worker, while
+    # multi-page ordinary drawing uses the bounded independent page pool.
+    assert 'if method == "left_edge" and ordinary_workers <= 1 else None' in detect_block
+    assert 'if method == "left_edge" and ordinary_workers > 1:' in detect_block
+    assert 'foreground_page_edit=True,' in detect_block
     assert "detect_entries_job" in detect_block
 
 
