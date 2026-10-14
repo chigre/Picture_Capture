@@ -40,10 +40,29 @@ def clean_layout_speckles(image: Image.Image, settings: AppSettings, backend: An
     if ink.size == 0 or not np.any(ink):
         return source.copy()
 
-    local5 = _box_sum(ink, 2, 2)
-    local11 = _box_sum(ink, 5, 5)
-    vertical13 = _box_sum(ink, 6, 0)
-    horizontal13 = _box_sum(ink, 0, 6)
+    # All four neighbourhoods share one padded summed-area table.
+    # This avoids four full-page cumulative-sum passes and preserves the
+    # exact inclusive counts and boundary-zero semantics of _box_sum.
+    height, width = ink.shape
+    padded = np.pad(ink.astype(np.uint8, copy=False), ((6, 6), (6, 6)))
+    integral = np.pad(
+        padded.cumsum(axis=0, dtype=np.int32).cumsum(axis=1, dtype=np.int32),
+        ((1, 0), (1, 0)),
+    )
+    def count(ry: int, rx: int) -> np.ndarray:
+        y0, x0 = 6 - ry, 6 - rx
+        y1, x1 = 7 + ry, 7 + rx
+        return (
+            integral[y1:y1 + height, x1:x1 + width]
+            - integral[y0:y0 + height, x1:x1 + width]
+            - integral[y1:y1 + height, x0:x0 + width]
+            + integral[y0:y0 + height, x0:x0 + width]
+        )
+
+    local5 = count(2, 2)
+    local11 = count(5, 5)
+    vertical13 = count(6, 0)
+    horizontal13 = count(0, 6)
     remove = (
         ink
         & (local5 <= 6)
