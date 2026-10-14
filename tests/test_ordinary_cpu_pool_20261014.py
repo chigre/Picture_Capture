@@ -93,6 +93,7 @@ def test_cpu_only_detector_explicit_threads_no_gpu_fallback(monkeypatch):
     monkeypatch.setenv("PICTURE_CAPTURE_ORDINARY_CPU_POOL_WORKER", "1")
     monkeypatch.setenv("OMP_NUM_THREADS", "3")
     monkeypatch.setenv("PICTURE_CAPTURE_PADDLE_DEVICE", "gpu")
+    monkeypatch.setenv("PICTURE_CAPTURE_PADDLE_MKLDNN", "off")
     legacy._TEXT_DETECTION_CACHE.clear()
     try:
         one = legacy._get_text_detector(SimpleNamespace())
