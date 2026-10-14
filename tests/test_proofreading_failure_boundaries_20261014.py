@@ -79,6 +79,62 @@ def test_deferred_ocr_save_disk_failure_never_flushes_evidence_or_sidecar(tmp_pa
     assert pdic.read_bytes() == snapshot
 
 
+
+def test_manual_override_save_failure_blocks_all_evidence_after_pdic_commit(tmp_path):
+    """The PDIC may be durable, but an uncommitted override is not evidence."""
+    page, pdic = _page(tmp_path)
+    from picture_capture.formats import read_pdic
+    calls: list[str] = []
+
+    def failed_override():
+        calls.append("override")
+        raise OSError("manual override disk full")
+
+    instance = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path),
+        current_page=page, image=SimpleNamespace(width=100),
+        _deferred_save_job=None,
+        entries=[Entry("edited", 10, 20)],
+        pages_tuple=lambda: ("one", "@", "@"),
+        _sort_entries_reading_order=lambda: None,
+        _flush_pending_manual_override=failed_override,
+        _flush_proofreading_candidate_evidence=lambda: calls.append("candidate"),
+        _flush_proofreading_add_evidence=lambda: calls.append("add"),
+    )
+    with pytest.raises(OSError, match="manual override disk full"):
+        PictureCaptureApp.save_pdic(instance, silent=True, sync_editors=False)
+    assert [entry.word for entry in read_pdic(pdic)] == ["edited"]
+    assert calls == ["override"]
+    assert not (tmp_path / "ProofreadingEvidence").exists()
+
+
+def test_deferred_override_failure_never_attributes_saved_pdic_as_verified_action(tmp_path):
+    page, pdic = _page(tmp_path)
+    calls: list[str] = []
+
+    def failed_override():
+        calls.append("override")
+        raise OSError("sidecar permission denied")
+
+    obj = SimpleNamespace(
+        _deferred_save_job=None,
+        _deferred_save_snapshot=(
+            page, [Entry("edited", 10, 20)], 100,
+            ("one", "@", "@"), 0,
+        ),
+        _deferred_save_page=page,
+        project=SimpleNamespace(root=tmp_path, images=[page]),
+        _refresh_word_fill_check_from_line_count=lambda *args, **kwargs: None,
+        _update_page_row=lambda *args, **kwargs: None,
+        _flush_pending_manual_override=failed_override,
+        _flush_proofreading_candidate_evidence=lambda: calls.append("candidate"),
+        _flush_proofreading_add_evidence=lambda: calls.append("add"),
+    )
+    with pytest.raises(OSError, match="sidecar permission denied"):
+        PictureCaptureApp._flush_deferred_page_save(obj)
+    assert calls == ["override"]
+    assert not (tmp_path / "ProofreadingEvidence").exists()
+
 def test_page_navigation_discards_queued_candidate_audit_without_writing(tmp_path):
     page, pdic = _page(tmp_path)
     next_page = tmp_path / "two.png"
