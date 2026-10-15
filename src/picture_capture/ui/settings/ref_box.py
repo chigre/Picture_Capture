@@ -79,13 +79,15 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
     page = dialog._scrollable_settings_page(tab)
     dialog._settings_intro(
         page, "REF 框 · 词条中的参见/同义词/反义词跳转区域",
-        "单页保存 data/ref_box/页名.rbox；七列 TSV：id、x、y、w、h、"
-        "entry_index、text。与 PDIC/PPP 完全分离。"
+        "单页保存 data/ref_box/页名.rbox；九列 TSV：id、x、y、w、h、"
+        "w.ww%、h.hh%、entry_index、text。百分比均以原图宽度为分母。"
+        "旧七列文件可直接读取，编辑保存后升级。与 PDIC/PPP 分离。"
         "用户已框选的 REF 永不被自动识别覆盖；自动检测只做本地样本图案匹配。",
     )
     group = dialog._add_setting_group(
         page, "REF 文字与半透明显示", REF_BOX_STYLE_FIELDS,
         intro="默认系统推荐字体、16 号、淡蓝色 50% 不透明度、无边框。"
+              "字号采用词条文本框的同一缩放策略（跟随缩放或固定），"
               "颜色填 #RRGGBB；仅改变显示，不改变 rbox 坐标。",
     )
     # The setting group owns the same tk.Variable used by autosave.
