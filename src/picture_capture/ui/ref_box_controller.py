@@ -508,6 +508,44 @@ class RefBoxController:
             menu.grab_release()
         return "break"
 
+    def _uncover_ref_from_tk_windows(self):
+        """Window canvas items are always visually above canvas graphics.
+
+        Temporarily hide only windows overlapping a REF when in REF edit mode.
+        They return on ordinary redraw after exiting the mode. Other PDIC/PPP
+        widgets remain visible. Combined with the event forwarding fallback,
+        REF handles and text can always receive pointer interaction.
+        """
+        if not self.editing or not self.boxes:
+            return
+        canvas = self.app.canvas
+        s = self.app.view_scale
+        regions = [
+            (b.x*s, b.y*s, (b.x+b.w)*s, (b.y+b.h)*s)
+            for b in self.boxes
+        ]
+        regions.extend(
+            (x0*s, y0*s, x1*s, y1*s)
+            for _action, x0, y0, x1, y1 in self._action_buttons()
+        )
+        try:
+            for item in canvas.find_all():
+                if canvas.type(item) != "window":
+                    continue
+                bounds = canvas.bbox(item)
+                if bounds is None:
+                    continue
+                if any(
+                    bounds[0] < x1 and bounds[2] > x0
+                    and bounds[1] < y1 and bounds[3] > y0
+                    for x0, y0, x1, y1 in regions
+                ):
+                    canvas.itemconfigure(item, state="hidden")
+        except (AttributeError, tk.TclError):
+            # Tests and third-party preview canvases need not expose window
+            # introspection; event routing remains available.
+            return
+
     def render(self):
         # Repaint only REF canvas items when selecting; avoid destroying Tk
         # word-entry windows which are necessary for a stable double-click.
@@ -595,9 +633,9 @@ class RefBoxController:
                 )
         if self.drag_box is not None:
             self._preview_drag()
-        # Canvas graphics are drawn last, above PPP/PDIC lines. Tk window
-        # widgets may still float above canvas graphics; bind_overlay_widgets
-        # explicitly routes their mouse events to the REF editor.
+        self._uncover_ref_from_tk_windows()
+        # Canvas graphics are drawn last. Tk widgets overlapping a REF are
+        # temporarily hidden only for REF edit mode; the rest forward events.
 
     def recognize_selected_scope(self):
         app = self.app
