@@ -85,10 +85,21 @@ def write_training_unified_layout_diagnostic(
             "error": f"{type(exc).__name__}: {exc}",
         }
 
-    destination.write_text(
-        json.dumps(document, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        encoded = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
+    except (TypeError, ValueError, OverflowError) as exc:
+        # Some detector plug-ins may return non-JSON numeric objects. Never
+        # advertise those diagnostics as complete or omit the page artifact.
+        available = False
+        document = {
+            "schema": "picture-capture-ordinary-evidence-v2",
+            "page_index": int(page_index),
+            "image_size": image_size,
+            "available": False,
+            "error": f"Diagnostic JSON serialization failed: {type(exc).__name__}: {exc}",
+        }
+        encoded = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
+    destination.write_text(encoded, encoding="utf-8")
     return {
         "json": destination.relative_to(staging_root).as_posix(),
         "available": available,
