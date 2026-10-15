@@ -22,7 +22,7 @@ from ..overlay_layout_helpers import effective_main_overlay_font_size
 from ..review_text_helpers import _entry_font_spec
 from ..ref_box_detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
-    list_ref_samples,
+    list_ref_samples, default_ref_box_dimensions,
 )
 
 
@@ -440,14 +440,7 @@ class RefBoxController:
                 self._commit(proposed)
             return "break"
         if abs(x-sx) < 3 and abs(y-sy) < 3:
-            line_height = max(
-                2.0, float(getattr(self.app.settings, "character_height", 26))
-                + float(getattr(self.app.settings, "row_padding", 0)),
-            )
-            height = max(2, round(line_height * float(
-                getattr(self.app.settings, "ref_box_height_lines", 1))))
-            width = max(2, round(line_height * float(
-                getattr(self.app.settings, "ref_box_width_lines", 2))))
+            width, height = default_ref_box_dimensions(self.app.settings)
             candidate = replace(candidate, x=sx, y=sy, w=width, h=height)
         image = self.app.image
         candidate = replace(
