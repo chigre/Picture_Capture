@@ -60,6 +60,7 @@ FIELDS = [
         ("REF 框文字颜色", "ref_box_text_color", str),
         ("REF 框字体", "ref_box_font_family", str),
         ("REF 框字号", "ref_box_font_size", int),
+        ("REF ×／编辑按钮位置", "ref_box_action_position", str),
         ("REF 默认宽度（行高倍数）", "ref_box_width_lines", float),
         ("REF 默认高度（行高倍数）", "ref_box_height_lines", float),
         ("REF 样本最低匹配分 0.60–0.999", "ref_match_threshold", float),
@@ -304,6 +305,7 @@ SETTING_HELP = {
     "ref_box_text_color": "REF 框中文字的显示颜色，默认深蓝。只影响可见文字，不影响 REF 底色状态判断；即使关闭显示 REF 文字，也不会清空已填写的内容或改变已填写时的淡绿色底色。",
     "ref_box_font_family": "REF 显示字体，默认根据系统字体与词典 OCR 语言推荐；可手动指定已安装字体。",
     "ref_box_font_size": "REF 框中文字的基准字号，默认 16 号；与主词条文本框共用「跟随缩放」开关和页面显示宽度 / 1400px 的缩放算法。关闭跟随时保持固定字号。仅改变标注显示，不修改坐标或原扫描。",
+    "ref_box_action_position": "REF 文本编辑 ✎ 与删除 × 的操作按钮可以放在框的上方靠右、上方靠左或右侧。位置受页面边界自动约束，避免按钮落在页面外；默认上方靠右。",
     "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
     "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
     "ref_match_threshold": "识别 REF 时的图案匹配最低分，默认 0.88；阈值越高误检越少，但可能漏检印刷略有变化的标签。对任意颜色的采集样本使用相同算法。",
@@ -614,6 +616,11 @@ SETTING_HELP_IMAGES = {
     }
 
 SETTING_CHOICES = {
+        "ref_box_action_position": {
+            "上方靠右（默认）": "above_right",
+            "上方靠左": "above_left",
+            "右侧": "right_side",
+        },
         "analysis_denoise_strength": {"关闭": "off", "弱": "weak", "自动": "auto", "强": "strong"},
         "analysis_threshold_mode": {
             "自动（推荐，等同 Otsu）": "auto",
@@ -632,6 +639,7 @@ SETTING_CHOICES = {
 CHECK_HELP = {
     "ref_box_show": "主画布是否显示已有 REF 框。关闭只隐藏标注，不删除本地 .rbox。进入编辑模式仍会显示。",
     "ref_box_show_text": "仅控制 REF 框内已填写文字在主画布上的显示/隐藏，默认显示；关闭后仍保留框体、淡橙/淡绿底色、文本原始内容与编辑能力。文本非空的框仍按已填写状态着色。",
+    "ref_box_delete_always_visible": "在【编辑 REF】模式下，每个 REF 都显示删除 × 按钮，即使尚未选中。关闭时仅选中的 REF 显示 ×。主界面普通浏览时不会显示可点击的删除按钮，避免误删；删除操作仍然只能单击 ×。",
     "ref_box_font_bold": "决定 REF 框文字是否使用粗体，默认关闭。启用后只调整界面字体粗细，不会重新识别框位置或改变已保存的文字。",
     "ref_box_font_italic": "决定 REF 框文字是否使用斜体，默认关闭。适合需要区别原书字体的标注风格；切换只改变画布显示，不影响文件数据。",
     "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
@@ -717,6 +725,7 @@ REF_BOX_STYLE_FIELDS = (
     "ref_box_fill_color", "ref_box_fill_opacity",
     "ref_box_filled_color", "ref_box_filled_opacity",
     "ref_box_text_color", "ref_box_font_family", "ref_box_font_size",
+    "ref_box_action_position",
 )
 REF_BOX_GEOMETRY_FIELDS = (
     "ref_box_width_lines", "ref_box_height_lines", "ref_match_threshold",
@@ -724,6 +733,7 @@ REF_BOX_GEOMETRY_FIELDS = (
 REF_BOX_CHECKS = (
     ("显示 REF 框", "ref_box_show"),
     ("显示 REF 框内文字", "ref_box_show_text"),
+    ("编辑模式中所有 REF 一直显示 ×", "ref_box_delete_always_visible"),
     ("REF 字体加粗", "ref_box_font_bold"),
     ("REF 字体斜体", "ref_box_font_italic"),
     ("新框自动挂靠所在正文词条", "ref_box_auto_attach"),
