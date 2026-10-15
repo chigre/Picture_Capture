@@ -52,23 +52,75 @@ def add_ref_sample(image_path: Path, source_box: tuple[int, int, int, int]) -> P
     return target
 
 
+def _numpy_template_scores(source: np.ndarray, template: np.ndarray) -> np.ndarray:
+    """RGB-normalized cross-correlation with NumPy FFT; no optional CV dependency.
+
+    Per-channel mean subtraction is the TM_CCOEFF_NORMED convention. The
+    image is bounded by the caller to avoid memory spikes on large scans.
+    """
+    height, width = source.shape[:2]
+    th, tw = template.shape[:2]
+    if th > height or tw > width:
+        return np.empty((0, 0), dtype=np.float32)
+    hfft, wfft = height + th - 1, width + tw - 1
+    channel_count = source.shape[2]
+    kernel = template.astype(np.float32)
+    kernel -= kernel.mean(axis=(0, 1), keepdims=True)
+    k_norm = float(np.square(kernel).sum())
+    if k_norm < 1e-6:
+        return np.full((height-th+1, width-tw+1), -1.0, dtype=np.float32)
+    numerator = np.zeros((height-th+1, width-tw+1), dtype=np.float64)
+    window_variance = np.zeros_like(numerator)
+    window_area = th * tw
+    for channel in range(channel_count):
+        array = source[:, :, channel].astype(np.float32)
+        kernel_channel = kernel[::-1, ::-1, channel]
+        spectrum = np.fft.rfft2(array, s=(hfft, wfft))
+        spectrum *= np.fft.rfft2(kernel_channel, s=(hfft, wfft))
+        correlation = np.fft.irfft2(spectrum, s=(hfft, wfft))
+        numerator += correlation[th - 1:height, tw - 1:width]
+        square = array.astype(np.float64)
+        integral = np.pad(square, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+        integral2 = np.pad(square * square, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+        totals = (integral[th:, tw:] - integral[:-th, tw:]
+                  - integral[th:, :-tw] + integral[:-th, :-tw])
+        totals2 = (integral2[th:, tw:] - integral2[:-th, tw:]
+                   - integral2[th:, :-tw] + integral2[:-th, :-tw])
+        window_variance += np.maximum(0.0, totals2 - totals * totals / window_area)
+    denom = np.sqrt(np.maximum(1e-8, k_norm * window_variance))
+    score = np.clip(numerator / denom, -1.0, 1.0).astype(np.float32)
+    score[window_variance < 1e-5] = -1.0
+    return score
+
+
 def match_ref_templates(
     image: Image.Image, samples: list[Path], *,
     threshold: float = 0.88, max_results: int = 200,
 ) -> list[tuple[int, int, int, int]]:
-    """Bounded multi-scale TM_CCOEFF_NORMED; returns non-overlapping boxes.
+    """Bounded multiscale RGB matching, with NumPy fallback if CV is missing.
 
-    Works with arbitrary colors/typography, not only blue backgrounds.
-    Empty/constant samples are invalid; an unavailable cv2 dependency causes
-    an explicit error rather than pretending the recognition was successful.
+    No blue-only rule, no network dependencies, no training, no image upload.
     """
     try:
         import cv2
-    except ImportError as exc:
-        raise RuntimeError("自动 REF 识别需要 OpenCV，请安装项目的图像处理依赖") from exc
+    except ImportError:
+        cv2 = None
     if not 0.60 <= float(threshold) <= 0.999:
         raise ValueError("REF match threshold must be between 0.60 and 0.999")
-    source = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    # FFT fallback uses considerably more memory than OpenCV. A bounded
+    # temporary view is sufficient for ordinary glyph-sized REF templates;
+    # returned coordinates always refer to full-resolution source pixels.
+    original_width, original_height = image.size
+    ratio = (min(1.0, 2048 / max(original_width, original_height))
+             if cv2 is None else 1.0)
+    if ratio < 1.0:
+        resized = image.convert("RGB").resize(
+            (max(1, round(original_width * ratio)),
+             max(1, round(original_height * ratio))), Image.Resampling.BILINEAR,
+        )
+        source = np.asarray(resized, dtype=np.uint8)
+    else:
+        source = np.asarray(image.convert("RGB"), dtype=np.uint8)
     height, width = source.shape[:2]
     proposals: list[tuple[float, int, int, int, int]] = []
     for sample_path in samples:
@@ -77,21 +129,38 @@ def match_ref_templates(
         if min(source_template.shape[:2]) < 4 or float(source_template.std()) < 4.0:
             continue
         for factor in (0.85, 1.0, 1.15):
-            sw = max(4, round(source_template.shape[1] * factor))
-            sh = max(4, round(source_template.shape[0] * factor))
+            sw = max(4, round(source_template.shape[1] * factor * ratio))
+            sh = max(4, round(source_template.shape[0] * factor * ratio))
             if sw > width or sh > height:
                 continue
-            template = cv2.resize(source_template, (sw, sh), interpolation=cv2.INTER_AREA)
+            if cv2 is not None:
+                template = cv2.resize(source_template, (sw, sh), interpolation=cv2.INTER_AREA)
+            else:
+                template = np.asarray(
+                    Image.fromarray(source_template).resize(
+                        (sw, sh), Image.Resampling.BILINEAR,
+                    ), dtype=np.uint8,
+                )
             if template.std() < 4.0:
                 continue
-            scores = cv2.matchTemplate(source, template, cv2.TM_CCOEFF_NORMED)
-            # Never enumerate every pixel in a large saturated similarity map:
-            # suppress one accepted peak at a time in score space.
+            scores = (
+                cv2.matchTemplate(source, template, cv2.TM_CCOEFF_NORMED)
+                if cv2 is not None else _numpy_template_scores(source, template)
+            )
+            # Suppress peaks without materializing every matching pixel.
             for _ in range(max_results):
-                _, score, _, (xx, yy) = cv2.minMaxLoc(scores)
+                if cv2 is not None:
+                    _, score, _, (xx, yy) = cv2.minMaxLoc(scores)
+                else:
+                    flat = int(np.argmax(scores))
+                    yy, xx = np.unravel_index(flat, scores.shape)
+                    score = float(scores[yy, xx])
                 if not np.isfinite(score) or score < threshold:
                     break
-                proposals.append((float(score), xx, yy, sw, sh))
+                proposals.append((
+                    float(score), round(xx / ratio), round(yy / ratio),
+                    max(1, round(sw / ratio)), max(1, round(sh / ratio)),
+                ))
                 pad_x, pad_y = max(1, round(sw * 0.65)), max(1, round(sh * 0.65))
                 scores[max(0, yy-pad_y):min(scores.shape[0], yy+pad_y+1),
                        max(0, xx-pad_x):min(scores.shape[1], xx+pad_x+1)] = -1.0
