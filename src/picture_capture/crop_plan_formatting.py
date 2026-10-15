@@ -47,7 +47,7 @@ def canonical_polygon_link(region: PolygonRegion) -> tuple[str, int | None] | No
     legacy PPP and can still use the old exact-headword association path.
     """
     match = re.fullmatch(
-        r"P_\\d+\\|([^|]+)\\|(xxx|\\d{3})(?:\\|AUTO_\\d+)?",
+        r"P_\d+\|([^|]+)\|(xxx|\d{3})(?:\|AUTO_\d+)?",
         str(region.label or "").strip(), flags=re.I,
     )
     if match is None:
