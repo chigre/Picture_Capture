@@ -68,6 +68,22 @@ def main() -> int:
         thumbs.enabled_var.set(False)
         thumbs.width = 80
         thumbs.apply()
+        # Range selection is for batch operations, never a page-index filter.
+        app.update_idletasks()
+        full_row = app.page_range_controls_row
+        if full_row.winfo_rooty() - app.sidebar.winfo_rooty() > 8:
+            raise RuntimeError("Redundant top padding still leaves a blank gap above full page-range controls")
+        full_modes = [
+            str(button.cget("value")) for button in full_row.winfo_children()
+        ]
+        if full_modes != ["current", "to_end", "to_specified", "bookmarks"]:
+            raise RuntimeError(f"Expected four batch-range choices in full mode: {full_modes}")
+        last_radio = full_row.winfo_children()[-1]
+        if (last_radio.winfo_rootx() + last_radio.winfo_width() >
+                app.page_panel.winfo_rootx() + app.page_panel.winfo_width() + 2):
+            raise RuntimeError("Bookmark range radio is clipped in normal full page-index width")
+        _stage("full page range: no phantom row, bookmark radio present and uncut")
+
         _stage("page thumbnail controls smoke: OK")
 
         # The old smoke only asserted that the #0 column was visible; it never
@@ -98,6 +114,21 @@ def main() -> int:
                         values=("", path.stem, "", "", "", ""),
                     )
                 app.project = SimpleNamespace(root=project_root, images=scans)
+                # Bookmark range chooses work pages, not visible index rows.
+                saved_bookmarks = list(app.settings.page_bookmarks)
+                app.settings.page_bookmarks = ["synthetic-2", "synthetic-0"]
+                try:
+                    app.page_range_var.set("bookmarks")
+                    if app.selected_page_indices() != [0, 2]:
+                        raise RuntimeError("Bookmark batch scope must resolve saved page stems")
+                    if len(app.page_list.get_children()) != 3:
+                        raise RuntimeError("Bookmark scope incorrectly filtered the page index")
+                    app.settings.page_bookmarks = []
+                    if app.selected_page_indices() != []:
+                        raise RuntimeError("An empty bookmark scope must select no work pages")
+                finally:
+                    app.settings.page_bookmarks = saved_bookmarks
+                    app.page_range_var.set("current")
                 thumbs.enabled_var.set(True)
                 thumbs.apply()
                 thumbs.project_rows_ready()

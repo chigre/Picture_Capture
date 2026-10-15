@@ -84,7 +84,8 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         remember("button", result)
         return result
 
-    # 80% font (applied by the sidebar) with equal native-indicator geometry.
+    # Preserve the proven first-row compact layout; bookmarks is a separate
+    # full-width radio below the specified-entry row in the 120px rail.
     for column, caption, value in (
         (0, "当前", "current"),
         (1, "至末页", "to_end"),
@@ -116,8 +117,11 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         jump, "跳转到指定页面的第一个有效页面；ENTER为快捷键",
     )
 
+    radio(controls, "书签", "bookmarks").grid(
+        row=2, column=0, columnspan=3, sticky="w", padx=0, pady=0,
+    )
     actions = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    actions.grid(row=2, column=0, columnspan=3, sticky="ew")
+    actions.grid(row=3, column=0, columnspan=3, sticky="ew")
     for index, (caption, callback, help_text) in enumerate((
         ("⨇", lambda: app.jump_to_bookmark(-1), "上一书签"),
         ("⨈", lambda: app.jump_to_bookmark(1), "下一书签"),
