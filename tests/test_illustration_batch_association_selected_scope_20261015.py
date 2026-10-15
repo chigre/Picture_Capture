@@ -224,8 +224,6 @@ def test_batch_scope_error_summary_survives_one_page_failure(tmp_path, monkeypat
 
 
 def test_preexisting_uppercase_ppp_is_updated_in_place_not_duplicated(tmp_path):
-    import os
-
     page = setup_page(tmp_path, "080051")
     lower = ppp_write_path_for_image(page)
     upper = lower.with_suffix(".PPP")
@@ -234,8 +232,16 @@ def test_preexisting_uppercase_ppp_is_updated_in_place_not_duplicated(tmp_path):
     result = associate_existing_ppp_page(page, AppSettings(), 0)
     assert result["status"] == "changed"
     assert read_ppp(upper)[0].label == "P_01|080051|001"
-    if os.name != "nt":
-        assert not lower.exists(), "Must not create lowercase sibling of original .PPP"
+    # macOS APFS is commonly case-insensitive even though os.name == 'posix':
+    # Path.exists() of 080051.ppp resolves the existing 080051.PPP there.
+    # Only counting actual directory entries detects duplicate creations
+    # consistently across Windows/macOS/Linux.
+    matching = [
+        candidate.name for candidate in page.parent.iterdir()
+        if candidate.stem.casefold() == page.stem.casefold()
+        and candidate.suffix.casefold() == ".ppp"
+    ]
+    assert len(matching) == 1, matching
 
 
 def test_corrupted_ppp_skipped_without_rewriting_surviving_regions(tmp_path):
