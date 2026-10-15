@@ -38,7 +38,7 @@ class IllustrationController:
     def previous_entry_ref(self) -> tuple[str, int] | None:
         """Last PDIC ordinal on the actual preceding project page."""
         app = self.app
-        if app.project is None or app.current_index <= 0:
+        if getattr(app, "current_index", -1) <= 0 or getattr(app, "project", None) is None:
             return None
         return previous_entry_ref_for_image(app.project.images[app.current_index - 1])
 
