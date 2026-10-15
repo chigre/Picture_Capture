@@ -292,7 +292,8 @@ ACTION_GROUPS = (
      ("编辑插图", "toggle_polygon_drawing")),
     (("插图关联", "associate_illustrations"),),
     None,
-    (("识别'REF'", "recognize_ref_boxes"), ("编辑'REF'", "toggle_ref_box_edit")),
+    (("识别'REF'", "recognize_ref_boxes"), ("编辑'REF'", "toggle_ref_box_edit"),
+     ("OCR 'REF'", "ocr_ref_boxes")),
     None,
     (("压缩OCR缓存", "cleanup_paddleocr_temp_selected_scope"),),
 )
