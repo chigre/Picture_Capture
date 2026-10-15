@@ -5,12 +5,10 @@ single source of truth; this file only creates one compact presentation.
 """
 from __future__ import annotations
 
-import os
 import tkinter as tk
 from tkinter import font, ttk
 from typing import Any, Callable
 
-from picture_capture.adaptive_denoise import DENOISE_ENV
 from picture_capture.layout_visualization_ui_v3 import (
     _invalidate_layout_snapshot,
     _set_layout_exclusive_visibility,
@@ -107,7 +105,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     def font_style(row: ttk.Frame, size: str, bold: str, italic: str) -> None:
         entry(row, size, 3)
-        check(row, "粗", qb[bold])
+        check(row, "粗 ", qb[bold])
         check(row, "斜", qb[italic])
 
     def dropdown(caption: str, variable: tk.Variable, choices: tuple[str, ...],
@@ -154,7 +152,31 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     divider()
 
-    # Group 2: illustration shape and label. Each visual property remains
+    # Group 2: editable headword label, background, fixed/zoom behaviour.
+    visible = qb.get("show_main_entry_labels")
+    if visible is None:
+        visible = tk.BooleanVar(value=bool(app.settings.show_main_entry_labels))
+        qb["show_main_entry_labels"] = visible
+        visible.trace_add("write", lambda *_: app._quick_parameter_changed())
+
+    row = line()
+    check(row, "词头标签", visible,
+          lambda: app._apply_overlay_visibility_toggle("show_main_entry_labels", visible))
+    label(row, "底")
+    swatch(row, "main_entry_default_color")
+    check(row, "缩放", qb["main_entry_follow_zoom"])
+
+    row = line()
+    label(row, "横排自动适宽")
+    value(row, "竖排字数", "main_entry_width_chars", 3)
+    value(row, "偏移%", "main_entry_x_ratio", 3)
+    family_line("main_entry_font_family")
+    font_style(line(), "main_entry_font_size",
+               "main_entry_font_bold", "main_entry_font_italic")
+
+    divider()
+
+    # Group 3: illustration shape and label. Each visual property remains
     # on its specified line, not a generic verticalized grid.
     row = line()
     check(row, "插图形状:线", app.polygon_var, app.redraw)
@@ -180,30 +202,6 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     divider()
 
-    # Group 3: editable headword label, background, fixed/zoom behaviour.
-    visible = qb.get("show_main_entry_labels")
-    if visible is None:
-        visible = tk.BooleanVar(value=bool(app.settings.show_main_entry_labels))
-        qb["show_main_entry_labels"] = visible
-        visible.trace_add("write", lambda *_: app._quick_parameter_changed())
-
-    row = line()
-    check(row, "词头标签", visible,
-          lambda: app._apply_overlay_visibility_toggle("show_main_entry_labels", visible))
-    label(row, "底")
-    swatch(row, "main_entry_default_color")
-    check(row, "缩放", qb["main_entry_follow_zoom"])
-
-    row = line()
-    label(row, "横排自动适宽")
-    value(row, "竖排字数", "main_entry_width_chars", 3)
-    value(row, "偏移%", "main_entry_x_ratio", 3)
-    family_line("main_entry_font_family")
-    font_style(line(), "main_entry_font_size",
-               "main_entry_font_bold", "main_entry_font_italic")
-
-    divider()
-
     # Group 4: diagnostic OCR overlays.
     for caption, key in (
         ("显示OCR内容选择器", "review_main_show_ocr_choices"),
@@ -224,6 +222,17 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     row = line()
     value(row, "向右比例%", "right_ratio", 4)
 
+    divider()
+
+    # Crop-preview label controls immediately below the rightward ratio.
+    row = line()
+    label(row, "切图预览标签:")
+    font_style(row, "crop_preview_font_size",
+               "crop_preview_font_bold", "crop_preview_font_italic")
+    check(row, "缩放", qb["crop_preview_follow_zoom"])
+    family_line("crop_preview_font_family")
+    divider()
+
     row = line()
     layout_var = app._layout_visualization_var
 
@@ -233,24 +242,6 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         app.redraw()
 
     check(row, "显示Layout", layout_var, toggle_layout)
-    label(row, "去噪强度")
-
-    def apply_denoise(_event: Any = None) -> None:
-        from picture_capture.layout_visualization_ui_v3 import _DENOISE_LABEL_TO_VALUE
-        os.environ[DENOISE_ENV] = _DENOISE_LABEL_TO_VALUE.get(
-            str(app._analysis_denoise_strength_var.get()), "auto",
-        )
-        _invalidate_layout_snapshot(app)
-        app.redraw()
-
-    denoise = ttk.Combobox(
-        row, textvariable=app._analysis_denoise_strength_var,
-        values=("关闭", "弱", "自动", "强"), state="readonly",
-        width=6, style="PC.Display.TCombobox",
-    )
-    denoise.pack(side="left", padx=0, pady=0)
-    denoise.bind("<<ComboboxSelected>>", apply_denoise)
-
     # The visible 280px palette is a separate widget tree from the legacy
     # quick-settings owner.  Reuse its session-only variable/callback; merely
     # adding the checkbox to the hidden owner leaves users without an entry.
@@ -342,12 +333,6 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         row, text="对比旧诊断 JSON", command=compare_unified_layout,
     ).pack(side="left", padx=0, pady=0)
 
-    row = line()
-    label(row, "切图预览标签:")
-    font_style(row, "crop_preview_font_size",
-               "crop_preview_font_bold", "crop_preview_font_italic")
-    check(row, "缩放", qb["crop_preview_follow_zoom"])
-    family_line("crop_preview_font_family")
     return panel
 
 
