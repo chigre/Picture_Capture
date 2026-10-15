@@ -44,6 +44,27 @@ def normalize_ref_ocr_text(text: str) -> str:
     return "\n".join(line.strip() for line in str(text or "").splitlines()).strip()
 
 
+def extract_ref_quoted_text(text: str) -> str:
+    """Extract matching Chinese quotes, falling back to partial boundaries."""
+    import re
+
+    original = normalize_ref_ocr_text(text)
+    if not original:
+        return original
+    for opening, closing in (("“", "”"), ("‘", "’")):
+        pattern = re.escape(opening) + r"([^" + re.escape(opening + closing) + r"]+)" + re.escape(closing)
+        match = re.search(pattern, original, re.DOTALL)
+        if match:
+            return normalize_ref_ocr_text(match.group(1))
+    opens = [i for i, ch in enumerate(original) if ch in "“‘"]
+    closes = [i for i, ch in enumerate(original) if ch in "”’"]
+    start = opens[0] + 1 if opens else 0
+    end = closes[-1] if closes else len(original)
+    if end < start:
+        return original  # invalid/reversed quotes: avoid destructive truncation
+    return normalize_ref_ocr_text(original[start:end])
+
+
 def ocr_ref_boxes_page(
     image_path: Path, settings: Any, *,
     session_factory: Callable[..., Any] = OcrChannelSession,
@@ -106,7 +127,13 @@ def ocr_ref_boxes_page(
                 ]
                 selected, _agreed = choose_ocr_text(plan, choices)
                 if selected and selected.text:
-                    updates[box.id] = selected.text
+                    extracted = (extract_ref_quoted_text(selected.text)
+                                 if getattr(settings, "ref_ocr_quote_extraction", True)
+                                 else selected.text)
+                    if extracted:
+                        updates[box.id] = extracted
+                    else:
+                        result["blank"] += 1
                 else:
                     result["blank"] += 1
             except Exception:
