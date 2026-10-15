@@ -69,6 +69,78 @@ def main() -> int:
         thumbs.width = 80
         thumbs.apply()
         _stage("page thumbnail controls smoke: OK")
+
+        # The old smoke only asserted that the #0 column was visible; it never
+        # loaded a real PNG or checked a Tk PhotoImage pixel. Exercise the real
+        # full page index with entirely synthetic source images.
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+        from PIL import Image
+        from picture_capture.page_thumbnail_cache import thumbnail_cache_path
+        import time
+
+        with TemporaryDirectory(prefix="pc-thumb-smoke-") as working:
+            project_root = Path(working)
+            scans = []
+            colors = ((235, 25, 30), (25, 220, 40), (30, 60, 240))
+            saved_project = app.project
+            try:
+                for index, color in enumerate(colors):
+                    path = project_root / f"synthetic-{index}.png"
+                    Image.new("RGB", (240, 340), color).save(path)
+                    scans.append(path)
+                    app.page_list.insert(
+                        "", "end", iid=str(index),
+                        values=("", path.stem, "", "", "", ""),
+                    )
+                app.project = SimpleNamespace(root=project_root, images=scans)
+                thumbs.enabled_var.set(True)
+                thumbs.apply()
+                thumbs.project_rows_ready()
+                app.update_idletasks()
+
+                def pixel_for(iid: str):
+                    raw = app.page_list.item(iid, "image")
+                    if not raw:
+                        return None
+                    name = raw[0] if isinstance(raw, (tuple, list)) else raw
+                    return tuple(int(v) for v in app.tk.splitlist(
+                        app.tk.call(name, "get", 5, 5),
+                    ))
+
+                for _ in range(60):
+                    app.update()
+                    if all(pixel_for(str(i)) == colors[i] for i in range(3)):
+                        break
+                    time.sleep(0.03)
+                else:
+                    raise RuntimeError("Real thumbnails never loaded into native first-column cells")
+
+                for i in range(3):
+                    if not app.page_list.bbox(str(i), "#0"):
+                        raise RuntimeError("Thumbnail first-column cell has no visible bbox")
+                app.page_list.move("2", "", 0)
+                app.update()
+                if pixel_for("2") != colors[2] or pixel_for("0") != colors[0]:
+                    raise RuntimeError("Sorting detached image pixels from their stable page iids")
+                for _ in range(80):
+                    app.update()
+                    if all(thumbnail_cache_path(project_root, path).is_file() for path in scans):
+                        break
+                    time.sleep(0.03)
+                else:
+                    raise RuntimeError("All-page thumbnail cache did not fill the project folder")
+                _stage("actual synthetic page images: visible pixels, sorting, disk cache OK")
+            finally:
+                thumbs.enabled_var.set(False)
+                thumbs.width = 80
+                thumbs.apply()
+                thumbs._clear_images()
+                for iid in app.page_list.get_children():
+                    app.page_list.delete(iid)
+                app.project = saved_project
+
         if app._app_icon_photo is None:
             raise RuntimeError(
                 "Packaged application icon failed to load: "

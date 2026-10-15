@@ -2,8 +2,9 @@
 
 The original Treeview iid is the page's project index.  The native #0 tree
 column owns each preview, so sorting/moving rows cannot detach its image.
-Only rows in the viewport hold Tk PhotoImages; all project pages are eligible
-for lazy preview without loading every scan (or writing scan-derived files).
+Only rows in the viewport hold Tk PhotoImages. All pages are progressively
+cached as derived PNGs within the project's _PictureCapture working directory.
+The cache is disposable, never a modification to original scans.
 """
 from __future__ import annotations
 
@@ -18,6 +19,9 @@ from typing import Any
 from PIL import Image, ImageTk
 
 from picture_capture.project_storage import settings_path
+from picture_capture.page_thumbnail_cache import (
+    display_page_thumbnail, get_page_thumbnail, source_fingerprint,
+)
 
 
 DEFAULT_THUMBNAIL_WIDTH = 80
@@ -52,9 +56,9 @@ def visible_page_iids(tree: ttk.Treeview) -> list[str]:
     try:
         height = max(1, int(tree.winfo_height()))
         iid = ""
-        for probe_y in (1, 20, 40, 60, 80):
-            if probe_y >= height:
-                break
+        # The heading height and row heights vary across ttk themes and DPI.
+        # Probe the viewport rather than assuming 20/40px always hit a row.
+        for probe_y in range(1, height, 12):
             iid = tree.identify_row(probe_y)
             if iid:
                 break
@@ -86,6 +90,10 @@ class PageThumbnailController:
         self._attached: dict[str, tuple] = {}
         self._refresh_job: str | None = None
         self._generation = 0
+        self._warm_job: str | None = None
+        self._warm_cursor = 0
+        self._warm_project_key: tuple | None = None
+        self._empty_view_retries = 0
         self.row = ttk.Frame(host, style="PC.Sidebar.TFrame")
         self.row.pack(fill="x", pady=(2, 3))
         self.toggle = ttk.Checkbutton(
@@ -165,6 +173,8 @@ class PageThumbnailController:
     def load_preferences(self) -> None:
         """Reload independent project preferences, not previous-project state."""
         self._clear_images()
+        self._warm_cursor = 0
+        self._warm_project_key = None
         settings = self.app.settings
         self.enabled_var.set(bool(getattr(settings, "page_list_show_thumbnails", False)))
         self.width = normalized_thumbnail_width(
@@ -201,11 +211,19 @@ class PageThumbnailController:
             self._clear_images()
         else:
             self.request_visible()
+            self._schedule_warm_cache()
         if hasattr(self.app, "_schedule_page_cell_overlay_refresh"):
             self.app._schedule_page_cell_overlay_refresh()
 
     def _clear_images(self) -> None:
         self._generation += 1
+        self._empty_view_retries = 0
+        if self._warm_job is not None:
+            try:
+                self.app.after_cancel(self._warm_job)
+            except tk.TclError:
+                pass
+            self._warm_job = None
         if self._refresh_job is not None:
             try:
                 self.app.after_cancel(self._refresh_job)
@@ -236,18 +254,25 @@ class PageThumbnailController:
         if project is None or not self._visible_enabled():
             return
         try:
-            visible = set(self.app._visible_page_list_iids())
+            visible_rows = self.app._visible_page_list_iids()
+            visible = set(visible_rows)
+            if not visible and self.tree.get_children("") and self._empty_view_retries < 12:
+                # On project open, Treeview can be populated before it is mapped
+                # or sized. A one-shot after_idle then leaves previews blank.
+                self._empty_view_retries += 1
+                self._refresh_job = self.app.after(100, self._render_visible)
+                return
+            self._empty_view_retries = 0
             for iid in set(self._attached) - visible:
                 if self.tree.exists(iid):
                     self.tree.item(iid, image="")
                 self._attached.pop(iid, None)
             rendered = 0
-            for iid in self.app._visible_page_list_iids():
+            for iid in visible_rows:
                 try:
                     index = int(iid)
                     path = Path(project.images[index])
-                    stat = path.stat()
-                    key = (str(path), stat.st_mtime_ns, stat.st_size, self.width)
+                    key = (str(path), source_fingerprint(path), self.width)
                 except (ValueError, IndexError, OSError, TypeError):
                     continue
                 if self._attached.get(iid) == key:
@@ -276,14 +301,57 @@ class PageThumbnailController:
             pass
 
     def _make_photo(self, path: Path) -> ImageTk.PhotoImage:
-        bounds = preview_bounds(self.width)
-        with Image.open(path) as source:
-            # JPEG decoder downsampling prevents decoding full-resolution scans
-            # when the format supports draft mode.
-            source.draft("RGB", bounds)
-            preview = source.copy()
-        preview.thumbnail(bounds, Image.Resampling.LANCZOS)
+        # Generate/reuse the persistent full-size cache first, then scale the
+        # small RGB preview only; no repeated full-scan decode when resizing.
+        preview = display_page_thumbnail(self.app.project.root, path, self.width)
         return ImageTk.PhotoImage(preview, master=self.tree)
+
+    def project_rows_ready(self) -> None:
+        """Called after the page Treeview has been populated for this project."""
+        self._empty_view_retries = 0
+        if self._visible_enabled():
+            try:
+                self.tree.xview_moveto(0.0)
+            except tk.TclError:
+                pass
+        self.request_visible()
+        self._schedule_warm_cache()
+
+    def _schedule_warm_cache(self) -> None:
+        """Populate every project's cache incrementally without preloading Tk."""
+        if not self._visible_enabled() or self._warm_job is not None:
+            return
+        project = getattr(self.app, "project", None)
+        if project is None:
+            return
+        project_key = (str(project.root), id(project))
+        if project_key != self._warm_project_key:
+            self._warm_project_key = project_key
+            self._warm_cursor = 0
+        if self._warm_cursor >= len(project.images):
+            return
+        try:
+            self._warm_job = self.app.after(90, self._warm_step)
+        except tk.TclError:
+            self._warm_job = None
+
+    def _warm_step(self) -> None:
+        self._warm_job = None
+        if not self._visible_enabled():
+            return
+        project = getattr(self.app, "project", None)
+        if project is None or (str(project.root), id(project)) != self._warm_project_key:
+            return
+        if self._warm_cursor >= len(project.images):
+            return
+        image = Path(project.images[self._warm_cursor])
+        self._warm_cursor += 1
+        try:
+            get_page_thumbnail(project.root, image)
+        except (OSError, ValueError, SyntaxError):
+            # Missing/corrupt page never blocks the rest of the project's cache.
+            pass
+        self._schedule_warm_cache()
 
 
 __all__ = [
