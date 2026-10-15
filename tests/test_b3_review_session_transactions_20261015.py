@@ -572,3 +572,182 @@ def test_source_chain_change_between_commits_clears_preexisting_undo(tmp_path):
     # after an intervening OCR cache change that could change word ownership.
     assert len(hist.undo_stack) == 1
     assert hist.undo_stack[0].before.pdic_bytes == before.pdic_bytes
+
+
+def _manual_owned_case(tmp_path):
+    """Synthetic project-local candidate files; no private scans."""
+    page, rows, review = _case(tmp_path)
+    directory = tmp_path / "QT" / "PaddleOCR"
+    directory.mkdir(parents=True, exist_ok=True)
+    override = directory / f"{page.stem}_manual_selection.json"
+    cache = directory / f"{page.stem}.json"
+    review.parent._manual_selection_path = lambda: override
+    review.parent._paddle_cache_path = lambda: cache
+    return page, rows, review, override, cache
+
+
+def test_three_file_owned_bundle_atomic_commit_without_editing_live_rows(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b'{"entries":[]}')
+    expected = snapshot_review(review)
+    assert expected is not None
+    target_pdic = expected.pdic_bytes.replace(b"one", b"ONE")
+    manual_data = b'{"version":1,"overrides":{"candidate":{"selected":false}}}'
+    new_simplified = b'{"entries":[{"x":10,"y":20,"text":"ONE"}]}'
+    assert module.publish_owned_review_bundle(
+        expected, pdic_bytes=target_pdic, manual_bytes=manual_data,
+        simplified_bytes=new_simplified,
+    )
+    assert pdic_path(page).read_bytes() == target_pdic
+    assert override.read_bytes() == manual_data
+    assert simplified.read_bytes() == new_simplified
+    assert [row.word for row in rows] == ["one", "two"]
+    assert not module._recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("failed_role", ["manual", "simplified"])
+def test_three_file_owned_bundle_write_failure_recovers_without_ui_mutation(
+    tmp_path, monkeypatch, failed_role,
+):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b"original simplified")
+    before = snapshot_review(review)
+    assert before
+    target_pdic = before.pdic_bytes.replace(b"one", b"ONE")
+    new_manual = b'{"overrides":{"candidate":{"selected":false}}}'
+    new_simplified = b"new simplified"
+    chosen = override if failed_role == "manual" else simplified
+    original_publish = module._publish
+    failed = False
+
+    def injected_failure(path, contents):
+        nonlocal failed
+        if path == chosen and not failed:
+            failed = True
+            raise OSError("simulated disk write failed")
+        return original_publish(path, contents)
+
+    monkeypatch.setattr(module, "_publish", injected_failure)
+    with pytest.raises(OSError):
+        module.publish_owned_review_bundle(
+            before, pdic_bytes=target_pdic, manual_bytes=new_manual,
+            simplified_bytes=new_simplified,
+        )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert not override.exists()
+    assert simplified.read_bytes() == b"original simplified"
+    assert [row.word for row in rows] == ["one", "two"]
+    assert not module._recovery_path(page).exists()
+
+
+def test_three_file_crash_mid_commit_reopens_with_trusted_manual_path(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    original_pdic = pdic_path(page).read_bytes()
+    changes = [
+        ("pdic", original_pdic, original_pdic.replace(b"one", b"ONE")),
+        ("manual", None, b'{"selected":false}'),
+        ("simplified", None, b'{"entries":[]}'),
+    ]
+    marker = module._stage_recovery(page, changes, manual_path=override)
+    module._publish(pdic_path(page), changes[0][2])
+    module._publish(override, changes[1][2])
+    assert marker.is_file()
+    with pytest.raises(ValueError):
+        module.recover_pending_for_page(page)
+    assert marker.is_file()
+    with pytest.raises(ValueError):
+        module.recover_pending_for_page(
+            page, manual_path=override.with_name("different_manual_selection.json"),
+        )
+    assert module.recover_pending_for_page(page, manual_path=override)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert not override.exists()
+    assert not simplified.exists()
+    assert not marker.exists()
+
+
+def test_three_file_completed_commit_recovery_keeps_all_targets(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    old = pdic_path(page).read_bytes()
+    stages = [
+        ("pdic", old, old.replace(b"two", b"TWO")),
+        ("manual", None, b'{"selected":false}'),
+        ("simplified", None, b'{"entries":[]}'),
+    ]
+    marker = module._stage_recovery(page, stages, manual_path=override)
+    for role, _, contents in stages:
+        target = {"pdic": pdic_path(page), "manual": override, "simplified": simplified}[role]
+        module._publish(target, contents)
+    assert module.recover_pending_for_page(page, manual_path=override)
+    assert pdic_path(page).read_bytes() == stages[0][2]
+    assert override.read_bytes() == stages[1][2]
+    assert simplified.read_bytes() == stages[2][2]
+    assert not marker.exists()
+
+
+def test_owned_bundle_rejects_external_manual_or_ocr_drift_before_write(tmp_path):
+    page, rows, review, override, cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    override.write_bytes(b"external manual choice")
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert not module._recovery_path(page).exists()
+    override.unlink()
+    cache.write_bytes(b"new OCR cache")
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert [row.word for row in rows] == ["one", "two"]
+
+
+def test_owned_bundle_rechecks_sources_after_writing_intent_marker(tmp_path, monkeypatch):
+    page, _, review, override, cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    stage = module._stage_recovery
+
+    def concurrent_ocr_write(*args, **kwargs):
+        result = stage(*args, **kwargs)
+        cache.write_bytes(b"raced OCR cache")
+        return result
+
+    monkeypatch.setattr(module, "_stage_recovery", concurrent_ocr_write)
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert cache.read_bytes() == b"raced OCR cache"
+    assert not override.exists()
+    assert not module._recovery_path(page).exists()
+
+
+def test_manual_recovery_never_trusts_ambiguous_path(tmp_path):
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    with pytest.raises(ValueError):
+        module._stage_recovery(page, [
+            ("pdic", b"old", b"new"), ("manual", None, b"payload"),
+        ], manual_path=tmp_path / "unrelated.txt")
+    assert not module._recovery_path(page).exists()
+
+
+def test_application_page_reopen_supplies_trusted_candidate_override_path():
+    from picture_capture import app as gui
+    code = Path(gui.__file__).read_text(encoding="utf-8")
+    assert "recover_pending_for_page(target_page, manual_path=trusted_manual_path)" in code
