@@ -231,3 +231,32 @@ def test_ref_defaults_and_schema():
     assert {"ref_box_font_family", "ref_box_fill_color"}.issubset(set(REF_BOX_STYLE_FIELDS))
     assert "ref_match_threshold" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_box_show" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
+
+
+def test_ref_recognition_never_saves_or_flushes_pdic(tmp_path, monkeypatch):
+    from picture_capture.ui import ref_box_controller as mod
+
+    page = tmp_path / "page.png"
+    Image.new("RGB", (100, 100), "white").save(page)
+    app = FakeApp(page)
+    app.project = SimpleNamespace(root=tmp_path, images=(page,))
+    app.current_index = 0
+    app._batch_active = False
+    app.settings = AppSettings()
+    app.guard = lambda: True
+    app.selected_page_indices = lambda: [0]
+    app.save_pdic = lambda **_kwargs: pytest.fail("REF cannot write PDIC")
+    app._flush_deferred_page_save = lambda: pytest.fail("REF cannot flush headword edits")
+    app._start_batch_task = lambda title, indices, job, **_kwargs: (
+        calls.append((title, indices, job))
+    )
+    calls = []
+    monkeypatch.setattr(mod, "list_ref_samples", lambda _root: [tmp_path / "sample.png"])
+    monkeypatch.setattr(mod.messagebox, "askyesno", lambda *_a, **_k: True)
+
+    controller = RefBoxController(app)
+    controller.load_page(page)
+    controller.recognize_selected_scope()
+    assert len(calls) == 1
+    assert calls[0][0] == "识别 REF"
+    assert calls[0][1] == [0]
