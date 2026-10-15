@@ -40,6 +40,7 @@ class RefBoxController:
 
     def load_page(self, page: Path) -> None:
         """Fail closed on corrupt files instead of dropping manually entered rows."""
+        self.capture_sample = False
         self.cancel_drag()
         self.loaded_page = None
         self.boxes = []
@@ -125,6 +126,7 @@ class RefBoxController:
             if not self._ready():
                 return
         active = not self.editing
+        self.capture_sample = False
         if active:
             if app.polygon_draw_var.get():
                 app.toggle_polygon_drawing()
@@ -164,7 +166,7 @@ class RefBoxController:
         if getattr(app, "_batch_active", False) or app._preprocess_mode_active():
             app.status_var.set("批量任务/预处理期间不可采集 REF 样本")
             return
-        self.editing = False
+        self.stop_edit()
         self.capture_sample = True
         self.cancel_drag()
         app.status_var.set("REF 样本采集：在主画布拖选一个完整的图案，松开即本地保存。右键取消。")
