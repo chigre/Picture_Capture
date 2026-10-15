@@ -170,7 +170,11 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
     assert 'self._auxiliary_controller.delete_at_chip(x, y)' in source
     assert 'self._auxiliary_controller.add(x, y)' in source
     assert 'not self._section_editing and not self.polygon_draw_var.get()' in source
-    assert 'text="[X]"' in controller
+    shared = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
+    assert "create_overlay_delete_button(" in controller
+    assert 'text="[X]"' in shared
+    assert 'cursor="hand2"' in shared
+    assert 'tooltip="点击删除该辅助线!"' in controller
     assert 'app._auxiliary_delete_hitboxes.append((*box, i))' in controller
 
 
@@ -178,14 +182,25 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
     from picture_capture.auxiliary_line_controller import AuxiliaryLineController
     from picture_capture import auxiliary_line_controller as mod
 
+    from picture_capture.ui import overlay_delete_button
+
+    class Button:
+        def __init__(self, parent, **options):
+            self.options = options
+        def winfo_reqwidth(self):
+            return 39
+        def winfo_reqheight(self):
+            return 23
+
     class Canvas:
         def create_line(self, *_args, **_kw):
             return None
         def create_rectangle(self, *_args, **_kw):
             return None
-        def create_text(self, *_args, **_kw):
+        def create_window(self, *_args, **_kw):
             return None
 
+    monkeypatch.setattr(overlay_delete_button.tk, "Button", Button)
     labels = []
     app = SimpleNamespace(
         image=SimpleNamespace(width=500, height=600),
@@ -194,6 +209,9 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
         _auxiliary_drag=None,
         page_sections=[],
         canvas=Canvas(),
+        settings=SimpleNamespace(column_width=200),
+        overlay_widgets=[],
+        _attach_tooltip=lambda *_args: None,
         entries=[SimpleNamespace(word="词条", x=10, y=40)],
         auxiliary_mode_var=SimpleNamespace(get=lambda: False),
         status_var=SimpleNamespace(set=lambda value: labels.append(value)),
