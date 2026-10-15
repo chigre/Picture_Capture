@@ -239,8 +239,8 @@ def test_ref_settings_validation_fails_before_mutation(key, value):
 
 def test_ref_defaults_and_schema():
     s = AppSettings()
-    assert (s.ref_box_fill_color, s.ref_box_fill_opacity) == ("#ffe0b2", 50.0)
-    assert (s.ref_box_filled_color, s.ref_box_filled_opacity) == ("#c8e6c9", 50.0)
+    assert (s.ref_box_fill_color, s.ref_box_fill_opacity) == ("#ffe0b2", 0.0)
+    assert (s.ref_box_filled_color, s.ref_box_filled_opacity) == ("#c8e6c9", 0.0)
     assert s.ref_box_show_text is True
     assert (s.ref_box_font_size, s.ref_box_font_bold, s.ref_box_font_italic) == (16, False, False)
     assert (s.ref_box_width_lines, s.ref_box_height_lines) == (2.0, 1.0)
@@ -248,7 +248,8 @@ def test_ref_defaults_and_schema():
     assert "ref_match_threshold" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_match_scale_tolerance_percent" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_box_show" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
-    assert "ref_box_show_text" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
+    from picture_capture.ui.settings.schema import REF_TEXT_LABEL_CHECKS
+    assert "ref_box_show_text" in dict((name, code) for name, code in REF_TEXT_LABEL_CHECKS).values()
     assert {"ref_box_filled_color", "ref_box_filled_opacity"}.issubset(REF_BOX_STYLE_FIELDS)
 
 
