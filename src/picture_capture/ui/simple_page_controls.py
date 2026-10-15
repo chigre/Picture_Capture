@@ -84,21 +84,19 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         remember("button", result)
         return result
 
-    # Four batch range choices share the same variable in compact mode.
-    # Its 120px rail cannot display four choices in a single horizontal row.
-    for position, caption, value in (
+    # Preserve the proven first-row compact layout; bookmarks is a separate
+    # full-width radio below the specified-entry row in the 120px rail.
+    for column, caption, value in (
         (0, "当前", "current"),
         (1, "至末页", "to_end"),
         (2, "至指定", "to_specified"),
-        (3, "书签", "bookmarks"),
     ):
         radio(controls, caption, value).grid(
-            row=position // 2, column=position % 2,
-            sticky="w", padx=0, pady=0,
+            row=0, column=column, sticky="w", padx=0, pady=0,
         )
 
     spec = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    spec.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 1))
+    spec.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 1))
     spec.columnconfigure(1, weight=1)
     # The unlabeled selector and the text field share the same page variable.
     radio(spec, "", "specified").grid(
@@ -119,8 +117,11 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         jump, "跳转到指定页面的第一个有效页面；ENTER为快捷键",
     )
 
+    radio(controls, "书签", "bookmarks").grid(
+        row=2, column=0, columnspan=3, sticky="w", padx=0, pady=0,
+    )
     actions = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    actions.grid(row=2, column=0, columnspan=3, sticky="ew")
+    actions.grid(row=3, column=0, columnspan=3, sticky="ew")
     for index, (caption, callback, help_text) in enumerate((
         ("⨇", lambda: app.jump_to_bookmark(-1), "上一书签"),
         ("⨈", lambda: app.jump_to_bookmark(1), "下一书签"),
