@@ -147,6 +147,15 @@ class RefBoxController:
         )
         app.redraw()
 
+    def stop_edit(self):
+        """Exit both REF pointer modes before unrelated drawing/preprocessing."""
+        self.editing = False
+        self.capture_sample = False
+        self.cancel_drag()
+        button = getattr(self.app, "_ref_box_edit_button", None)
+        if button is not None:
+            button.configure(text="编辑'REF'", style="PC.Compact.TButton")
+
     def start_capture_sample(self):
         app = self.app
         if not app.guard() or not self._ready():
