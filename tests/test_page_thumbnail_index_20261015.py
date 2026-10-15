@@ -167,3 +167,19 @@ def test_failed_settings_write_rolls_back_without_touching_project_file(tmp_path
     assert app.settings.page_list_thumbnail_size == 80
     assert destination.read_text(encoding="utf-8") == "original settings"
     assert not list(destination.parent.glob(".thumbnail-settings-*"))
+
+
+def test_visible_render_begins_with_browsed_page_not_first_table_row(tmp_path):
+    files = [tmp_path / f"page{n}.png" for n in range(4)]
+    for f in files:
+        f.write_bytes(b"synthetic-source-data")
+    app = _App(files)
+    app.visible = ["1", "3", "2"]
+    app.current_index = 3
+    ctrl = _controller(app)
+    touched = []
+    ctrl._make_photo = lambda path: (touched.append(path.stem) or f"preview:{path.stem}")
+    ctrl._render_visible()
+    assert touched == ["page3", "page2"]  # The page above is deferred.
+    assert ctrl.tree.images["3"] == "preview:page3"
+    assert ctrl.tree.images["2"] == "preview:page2"

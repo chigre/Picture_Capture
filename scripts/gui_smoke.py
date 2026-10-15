@@ -77,7 +77,10 @@ def main() -> int:
         from tempfile import TemporaryDirectory
         from types import SimpleNamespace
         from PIL import Image
-        from picture_capture.page_thumbnail_cache import thumbnail_cache_path
+        from picture_capture.page_thumbnail_cache import (
+            thumbnail_cache_path, thumbnail_cache_dir,
+            FINGERPRINT_KEY, SOURCE_FILENAME_KEY, source_fingerprint,
+        )
         import time
 
         with TemporaryDirectory(prefix="pc-thumb-smoke-") as working:
@@ -131,7 +134,20 @@ def main() -> int:
                     time.sleep(0.03)
                 else:
                     raise RuntimeError("All-page thumbnail cache did not fill the project folder")
-                _stage("actual synthetic page images: visible pixels, sorting, disk cache OK")
+                cache_files = list(thumbnail_cache_dir(project_root).iterdir())
+                if sorted(file.name for file in cache_files) != [
+                    f"synthetic-{i}.png" for i in range(3)
+                ]:
+                    raise RuntimeError("Cache must use original page stems in one flat directory")
+                if not all(path.is_file() for path in cache_files):
+                    raise RuntimeError("Flat thumbnail cache unexpectedly created nested directories")
+                for path in scans:
+                    with Image.open(thumbnail_cache_path(project_root, path)) as cached:
+                        if cached.info.get(SOURCE_FILENAME_KEY) != path.name:
+                            raise RuntimeError("Cached PNG source filename does not match its page")
+                        if cached.info.get(FINGERPRINT_KEY) != source_fingerprint(path):
+                            raise RuntimeError("Cached PNG source fingerprint does not match its page")
+                _stage("actual synthetic page images: visible pixels, sorted IDs, flat source-validated cache OK")
             finally:
                 thumbs.enabled_var.set(False)
                 thumbs.width = 80

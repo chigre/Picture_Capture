@@ -25,9 +25,13 @@ def test_cache_is_project_local_and_contains_real_pixels(tmp_path):
     assert preview.getpixel((5, 5)) == (245, 21, 31)
     cache = disk.thumbnail_cache_path(tmp_path, scan)
     assert cache.is_file()
-    assert disk.thumbnail_cache_dir(tmp_path) in cache.parents
+    assert cache.parent == disk.thumbnail_cache_dir(tmp_path)
+    assert cache.name == "001.png"
+    assert not any(p.is_dir() for p in disk.thumbnail_cache_dir(tmp_path).iterdir())
     with Image.open(cache) as saved:
         assert saved.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(scan)
+        assert saved.info[disk.SOURCE_KEY] == disk._path_hash(scan)
+        assert saved.info[disk.SOURCE_FILENAME_KEY] == scan.name
         assert saved.getpixel((5, 5)) == (245, 21, 31)
     assert scan.read_bytes() == original
 
@@ -130,6 +134,93 @@ def test_progressively_caches_all_pages_not_only_visible_ones(tmp_path):
 def test_filename_identity_prevents_cache_swap_between_same_stems(tmp_path):
     a = make_scan(tmp_path / "volume1" / "001.png", (255, 0, 0))
     b = make_scan(tmp_path / "volume2" / "001.png", (0, 0, 255))
-    assert disk.thumbnail_cache_path(tmp_path, a) != disk.thumbnail_cache_path(tmp_path, b)
-    assert disk.get_page_thumbnail(tmp_path, a).getpixel((0, 0)) == (255, 0, 0)
-    assert disk.get_page_thumbnail(tmp_path, b).getpixel((0, 0)) == (0, 0, 255)
+    names = disk.thumbnail_name_map([a, b])
+    cache_a = disk.thumbnail_cache_path(tmp_path, a, names)
+    cache_b = disk.thumbnail_cache_path(tmp_path, b, names)
+    assert cache_a != cache_b
+    assert cache_a.parent == cache_b.parent == disk.thumbnail_cache_dir(tmp_path)
+    assert cache_a.name.startswith("001__")
+    assert cache_b.name.startswith("001__")
+    assert disk.get_page_thumbnail(tmp_path, a, names).getpixel((0, 0)) == (255, 0, 0)
+    assert disk.get_page_thumbnail(tmp_path, b, names).getpixel((0, 0)) == (0, 0, 255)
+    assert cache_a.is_file() and cache_b.is_file()
+
+
+def test_original_page_names_and_suffix_conflicts_are_flat(tmp_path):
+    a = make_scan(tmp_path / "vol1" / "080127.jpg", (210, 40, 30))
+    b = make_scan(tmp_path / "vol1" / "080128.png", (210, 80, 30))
+    c = make_scan(tmp_path / "vol2" / "080127.png", (30, 60, 210))
+    name_map = disk.thumbnail_name_map([a, b, c])
+    assert disk.thumbnail_cache_path(tmp_path, b, name_map).name == "080128.png"
+    for scan in (a, b, c):
+        preview = disk.get_page_thumbnail(tmp_path, scan, name_map)
+        assert preview.size[0] <= 160
+        assert disk.thumbnail_cache_path(tmp_path, scan, name_map).is_file()
+    names = [p.name for p in disk.thumbnail_cache_dir(tmp_path).iterdir()]
+    assert len(names) == 3 and len(set(name.casefold() for name in names)) == 3
+    assert all(name.endswith(".png") for name in names)
+    assert all(path.is_file() for path in disk.thumbnail_cache_dir(tmp_path).iterdir())
+
+
+def test_switching_or_copying_cache_png_cannot_swap_source_pixels(tmp_path):
+    a = make_scan(tmp_path / "a.png", (230, 15, 10))
+    b = make_scan(tmp_path / "b.png", (10, 20, 230))
+    disk.get_page_thumbnail(tmp_path, a)
+    disk.get_page_thumbnail(tmp_path, b)
+    target = disk.thumbnail_cache_path(tmp_path, b)
+    target.write_bytes(disk.thumbnail_cache_path(tmp_path, a).read_bytes())
+    assert disk.get_page_thumbnail(tmp_path, b).getpixel((1, 1)) == (10, 20, 230)
+    with Image.open(target) as verified:
+        assert verified.info[disk.SOURCE_KEY] == disk._path_hash(b)
+
+
+def test_content_sensitive_fingerprint_rejects_mtime_restored_edit(tmp_path):
+    import os
+    scan = make_scan(tmp_path / "page.bmp", (200, 80, 20))
+    stat = scan.stat()
+    disk.get_page_thumbnail(tmp_path, scan)
+    before = disk.source_fingerprint(scan)
+    make_scan(scan, (25, 80, 200))
+    os.utime(scan, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert scan.stat().st_size == stat.st_size
+    assert scan.stat().st_mtime_ns == stat.st_mtime_ns
+    assert disk.source_fingerprint(scan) != before
+    assert disk.get_page_thumbnail(tmp_path, scan).getpixel((2, 2)) == (25, 80, 200)
+
+
+def test_v1_nested_cache_rebuilds_actual_source_and_removes_old_dir(tmp_path):
+    from PIL import PngImagePlugin
+    scan = make_scan(tmp_path / "scan-017.jpg", (10, 200, 90))
+    legacy = disk._legacy_cache_path(tmp_path, scan)
+    legacy.parent.mkdir(parents=True)
+    old_meta = PngImagePlugin.PngInfo()
+    # Old caches did not verify source-content samples. Even a plausible
+    # legacy cache can show a wrong scan, so it must be rebuilt from source.
+    old_meta.add_text(disk.FINGERPRINT_KEY, "a" * 64)
+    Image.new("RGB", (158, 224), (220, 10, 10)).save(
+        legacy, format="PNG", pnginfo=old_meta,
+    )
+    expected_pixel = disk._build_thumbnail(scan).getpixel((0, 0))
+    result = disk.get_page_thumbnail(tmp_path, scan)
+    assert result.getpixel((0, 0)) == expected_pixel
+    assert result.getpixel((0, 0)) != (220, 10, 10)
+    assert disk.thumbnail_cache_path(tmp_path, scan).name == "scan-017.png"
+    assert disk.thumbnail_cache_path(tmp_path, scan).is_file()
+    assert not legacy.exists()
+    assert not legacy.parent.exists()
+
+
+def test_name_collision_is_case_insensitive_even_on_linux(tmp_path):
+    a = tmp_path / "setA" / "PAGE.JPG"
+    b = tmp_path / "setB" / "page.png"
+    names = disk.thumbnail_name_map([a, b])
+    assert names[str(a.resolve())].casefold() != names[str(b.resolve())].casefold()
+
+
+def test_read_only_duplicate_name_respects_original_pixels(tmp_path, monkeypatch):
+    a = make_scan(tmp_path / "a" / "001.png", (255, 0, 0))
+    b = make_scan(tmp_path / "b" / "001.png", (0, 0, 255))
+    names = disk.thumbnail_name_map([a, b])
+    monkeypatch.setattr(disk, "_publish_cache", lambda *_args: (_ for _ in ()).throw(PermissionError()))
+    assert disk.get_page_thumbnail(tmp_path, a, names).getpixel((1, 1)) == (255, 0, 0)
+    assert disk.get_page_thumbnail(tmp_path, b, names).getpixel((1, 1)) == (0, 0, 255)
