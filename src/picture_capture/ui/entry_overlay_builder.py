@@ -23,6 +23,7 @@ from ..overlay_layout_helpers import (
 from ..overlay_opacity import create_alpha_canvas_line
 from ..review_text_helpers import _entry_font_spec
 from ..ui_compat import resolve_content_font_family
+from .overlay_delete_button import create_overlay_delete_button
 from .widgets.vertical_word import VerticalWordText
 
 
@@ -88,27 +89,14 @@ def draw_entry_overlay(
     delete_button = None
     delete_req_width = 0
     if show_markers:
-        delete_button = tk.Button(
+        delete_button = create_overlay_delete_button(
             self.canvas,
-            text="[X]",
-            width=3,
-            takefocus=False,
-            relief="flat",
-            bd=0,
-            highlightthickness=0,
-            padx=1,
-            pady=0,
-            cursor="hand2",
-            fg="#ffffff",
-            bg="#9d042f",
-            activeforeground="#ffffff",
-            activebackground="#9d042f",
             command=lambda e=entry: self.delete_entry(e),
+            attach_tooltip=self._attach_tooltip,
+            tooltip="点击删除该画线!",
         )
-        delete_button._pc_skip_classic_appearance = True
         if processing_readonly:
             delete_button.configure(state="disabled")
-        self._attach_tooltip(delete_button, "点击删除该画线!")
         self.overlay_widgets.append(delete_button)
         record["widgets"].append(delete_button)
         record["delete_widget"] = delete_button
