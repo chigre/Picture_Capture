@@ -20,8 +20,9 @@ from typing import Iterable, Mapping
 from PIL import Image, ImageOps, PngImagePlugin
 
 from picture_capture.project_storage import storage_root
+from picture_capture.image_utils import normalize_page_rgb
 
-CACHE_VERSION = "page-index-v4"
+CACHE_VERSION = "page-index-v5"
 CACHE_BOUNDS = (120, 120)
 FINGERPRINT_KEY = "picture_capture_source_fingerprint"
 SOURCE_KEY = "picture_capture_source_path_hash"
@@ -149,11 +150,18 @@ def _read_valid_thumbnail(
 
 
 def _build_thumbnail(source_path: Path) -> Image.Image:
+    """Antialias every scan mode before reducing it to a tiny full-page view.
+
+    Pillow uses nearest-neighbor resizing for modes '1' and 'P' regardless
+    of the LANCZOS argument. Converting *after* thumbnail() produced jagged
+    black speckles for binary/paletted pages. Normalize EXIF, palette,
+    bilevel and transparent pages to opaque RGB before resampling.
+    """
     with Image.open(source_path) as source:
         source.draft("RGB", CACHE_BOUNDS)
-        display = ImageOps.exif_transpose(source)
-        display.thumbnail(CACHE_BOUNDS, Image.Resampling.LANCZOS)
-        return display.convert("RGB")
+        display = normalize_page_rgb(source)
+    display.thumbnail(CACHE_BOUNDS, Image.Resampling.LANCZOS)
+    return display
 
 
 def _publish_cache(
