@@ -31,6 +31,7 @@ def _file_ticket(path: Path) -> tuple[int, int, str]:
 
 def associate_existing_ppp_page(
     image_path: Path, settings: AppSettings, page_index: int,
+    previous_image_path: Path | None = None,
 ) -> dict:
     """Associate one existing PPP, atomically writing changed PPP labels only.
 
@@ -76,6 +77,18 @@ def associate_existing_ppp_page(
     if not entries:
         return {"status": "skipped_no_pdic", "page_index": page_index, "page": page.name}
 
+    previous_ref = None
+    previous_pdic = None
+    previous_ticket = None
+    if previous_image_path is not None:
+        previous_image = Path(previous_image_path)
+        previous_pdic = pdic_path(previous_image)
+        if previous_pdic.is_file():
+            previous_ticket = _file_ticket(previous_pdic)
+            previous_entries = read_pdic(previous_pdic)
+            if previous_entries and len(previous_entries) <= 1000:
+                previous_ref = (previous_image.stem, len(previous_entries) - 1)
+
     with Image.open(page) as opened:
         image = normalize_page_rgb(opened)
     try:
@@ -86,6 +99,7 @@ def associate_existing_ppp_page(
         new_labels = illustration_labels(
             regions, page.stem, geometry, sections,
             entries=entries, associate=True,
+            previous_entry_ref=previous_ref,
         )
     finally:
         image.close()
@@ -98,6 +112,8 @@ def associate_existing_ppp_page(
     changed = any(region.label != label for region, label in zip(regions, new_labels))
     if _file_ticket(source_ppp) != original_ticket or _file_ticket(source_pdic) != pdic_ticket:
         raise RuntimeError(f"{page.name}: PPP/PDIC changed concurrently; association not saved")
+    if previous_ticket is not None and _file_ticket(previous_pdic) != previous_ticket:
+        raise RuntimeError(f"{page.name}: previous PDIC changed concurrently; association not saved")
 
     if changed:
         # Use the REAL existing file, including historic uppercase .PPP case.
@@ -108,6 +124,8 @@ def associate_existing_ppp_page(
             raise RuntimeError(f"{page.name}: PPP changed concurrently; association not saved")
         if _file_ticket(source_pdic) != pdic_ticket:
             raise RuntimeError(f"{page.name}: PDIC changed concurrently; association not saved")
+        if previous_ticket is not None and _file_ticket(previous_pdic) != previous_ticket:
+            raise RuntimeError(f"{page.name}: previous PDIC changed concurrently; association not saved")
         write_ppp(output, proposed, page.stem)
         persisted = read_ppp(output)
         if [(r.label, r.points) for r in persisted] != [
@@ -123,10 +141,16 @@ def associate_existing_ppp_page(
     }
 
 
-def associate_existing_ppp_job(image_path: str, settings: AppSettings, page_index: int) -> dict:
+def associate_existing_ppp_job(
+    image_path: str, settings: AppSettings, page_index: int,
+    previous_image_path: str | None = None,
+) -> dict:
     """Catch a single page failure so other selected PPP pages still proceed."""
     try:
-        return associate_existing_ppp_page(Path(image_path), settings, page_index)
+        return associate_existing_ppp_page(
+            Path(image_path), settings, page_index,
+            Path(previous_image_path) if previous_image_path is not None else None,
+        )
     except Exception as exc:
         return {
             "status": "failed", "page_index": int(page_index),
