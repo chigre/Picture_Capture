@@ -24,7 +24,10 @@ import numpy as np
 from PIL import Image
 
 from .models import AppSettings, Entry
-from .ordinary_large_head_role_guard import strict_candidate_starts_at_row_front
+from .ordinary_large_head_role_guard import (
+    _nearest_row,
+    strict_candidate_starts_at_row_front,
+)
 from .ordinary_visual import _components, _otsu
 
 
@@ -535,8 +538,17 @@ def detect_ordinary_large_head_entries(
                 ):
                     continue
 
+                # A large glyph may begin below the actual printed row
+                # because a small superscript/number precedes it. Once the
+                # physical row-front guard has authorized the glyph, the
+                # separator belongs to the ROW, not the top of its ink box.
+                # This also prevents role fusion from promoting a second-row
+                # fragment when a tall glyph starts >0.15 row below row top.
+                start_row = _nearest_row(column, semantic_box, line_height)
+                if start_row is None:
+                    continue
                 height = float(y1 - y0)
-                canonical_y = top + int(y0)
+                canonical_y = top + int(getattr(start_row, "y0"))
                 source_x, source_y = layout.transform.canonical_to_source_point(
                     semantic_left,
                     canonical_y,
