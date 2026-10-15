@@ -269,10 +269,12 @@ class RefBoxController:
             self._commit(proposed)
             return "break"
         if abs(x-sx) < 3 and abs(y-sy) < 3:
-            height = max(2, round(float(getattr(self.app.settings, "character_height", 26))
-                                  * float(getattr(self.app.settings, "ref_box_height_lines", 1))))
-            width = max(2, round(float(getattr(self.app.settings, "character_height", 26))
-                                 * float(getattr(self.app.settings, "ref_box_width_lines", 2))))
+            line_height = max(2.0, float(getattr(self.app.settings, "character_height", 26))
+                              + float(getattr(self.app.settings, "row_padding", 0)))
+            height = max(2, round(line_height * float(
+                getattr(self.app.settings, "ref_box_height_lines", 1))))
+            width = max(2, round(line_height * float(
+                getattr(self.app.settings, "ref_box_width_lines", 2))))
             candidate = replace(candidate, x=sx, y=sy, w=width, h=height)
         image = self.app.image
         candidate = replace(
