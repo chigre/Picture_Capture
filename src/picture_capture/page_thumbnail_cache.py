@@ -207,19 +207,9 @@ def get_page_thumbnail(
     signature = source_fingerprint(source_path)
     destination = thumbnail_cache_path(project_root, source_path, names)
 
-    if names is None and destination.is_file():
-        # Standalone callers may not have the complete page-name collision map.
-        # Do not overwrite an existing preview owned by a different scan.
-        try:
-            with Image.open(destination) as saved:
-                owner = saved.info.get(SOURCE_KEY)
-            if owner and owner != _path_hash(source_path):
-                destination = destination.with_name(
-                    _safe_stem(source_path) + "__" + _path_hash(source_path)[:12] + ".png",
-                )
-        except (OSError, ValueError, SyntaxError):
-            pass
-
+    # The project-level name map is mandatory for ambiguous stems. A cache
+    # with the right filename but another page's metadata is stale and must
+    # be replaced at this exact destination, not silently diverted elsewhere.
     cached = _read_valid_thumbnail(destination, signature, source_path)
     if cached is not None:
         return cached
