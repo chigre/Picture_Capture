@@ -15,6 +15,8 @@ from typing import Any
 
 from PIL import Image, ImageTk
 
+from picture_capture.project_storage import settings_path
+
 
 DEFAULT_THUMBNAIL_WIDTH = 80
 MIN_THUMBNAIL_WIDTH = 40
@@ -85,7 +87,7 @@ class PageThumbnailController:
         project = getattr(self.app, "project", None)
         if project is not None:
             try:
-                settings.to_json(Path(project.root) / "settings.json")
+                settings.to_json(settings_path(project.root))
             except (OSError, ValueError, TypeError) as exc:
                 setattr(settings, key, previous)
                 status = getattr(self.app, "status_var", None)
