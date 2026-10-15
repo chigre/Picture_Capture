@@ -123,6 +123,33 @@ def test_cross_page_scale_and_tint_recognition_without_opencv(tmp_path, monkeypa
     assert detect_ref_boxes_page(target_page, settings, 0)["added"] == 0
 
 
+
+
+def test_minor_anisotropic_page_stretch_can_match_sample_without_cv2(tmp_path, monkeypatch):
+    """Slight spine/page curvature can stretch X and compress Y unequally."""
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    page_a = tmp_path / "a.png"
+    page_b = tmp_path / "b.png"
+    rng = np.random.default_rng(212)
+    pattern = rng.integers(24, 220, (24, 48), dtype=np.uint8)
+    rgb = np.stack([pattern] * 3, axis=2)
+    _guide_page(page_a, rgb, x=20, y=20)
+    sample = add_ref_sample(page_a, (20, 20, 68, 44))
+    warped = np.asarray(
+        Image.fromarray(rgb).resize((52, 22), Image.Resampling.BILINEAR),
+        dtype=np.uint8,
+    )
+    _guide_page(page_b, warped, x=92, y=41)
+    with Image.open(page_b) as img:
+        hits = match_ref_templates(
+            img, [sample], threshold=0.85,
+            scale_tolerance_percent=25,
+        )
+    assert any(abs(x-92) <= 2 and abs(y-41) <= 2
+               and abs(w-52) <= 2 and abs(h-22) <= 2
+               for x, y, w, h in hits)
+
+
 @pytest.mark.parametrize("value", ["-1", "51", "nan", "invalid"])
 def test_ref_match_scale_tolerance_rejected_before_settings_mutation(value):
     from types import SimpleNamespace
