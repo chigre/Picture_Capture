@@ -155,3 +155,31 @@ def test_previously_saved_cross_page_label_survives_ppp_roundtrip(tmp_path):
     assert persisted[0].label == "P_01|080005|013|AUTO_01"
     renumbered = illustration_labels(persisted, "080006", geo())
     assert renumbered == ["P_01|080005|013|AUTO_01"]
+
+
+def test_actual_ww000_export_contains_previous_page_partial_polygon(monkeypatch, tmp_path):
+    monkeypatch.setattr(core, "_base_entry_crop_pieces", fake_pieces)
+    page = tmp_path / "080006.png"
+    source = Image.new("RGB", (240, 400), "white")
+    source.putpixel((115, 80), (0, 0, 0))
+    source.save(page)
+    polygon = region("P_01|080005|013", 85, 55, 125, 100)
+    output = tmp_path / "QT" / "PWW"
+    records = core.split_whole_entries(
+        page, [Entry("current first", 15, 150)], AppSettings(),
+        output, polygons=[polygon], top_y=0,
+        previous_entry_ref=("080005", 13),
+    )
+    leading = next(r for r in records if "WW_000(0-1)" in r.filename)
+    assert leading.box[2] >= 125
+    with Image.open(output / leading.filename) as extracted:
+        assert extracted.getpixel((115 - leading.box[0], 80 - leading.box[1])) == (0, 0, 0)
+    # The explicitly previous-page-owned PPP should NOT be re-emitted as a
+    # separate figure when it already travels with WW_000.
+    pictures = core.split_illustrations(
+        page, [polygon], tmp_path / "QT" / "PIC", AppSettings(),
+        entries=[Entry("current first", 15, 150)], top_y=0,
+        previous_entry_ref=("080005", 13),
+    )
+    assert pictures.records == []
+    assert pictures.events[0].relation == "partial"
