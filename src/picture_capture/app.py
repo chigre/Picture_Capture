@@ -11446,6 +11446,7 @@ class PictureCaptureApp(tk.Tk):
         refresh_page_quality: bool = True,
         allow_page_navigation: bool = False,
         allow_pdic_edits: bool = False,
+        flush_deferred_save: bool = True,
     ) -> bool:
         """ start batch task."""
         if self._batch_active:
@@ -11465,7 +11466,8 @@ class PictureCaptureApp(tk.Tk):
             return False
         if self._ui_close_requested:
             return False
-        self._flush_deferred_page_save()
+        if flush_deferred_save:
+            self._flush_deferred_page_save()
         items = list(items)
         if not items:
             self.status_var.set("没有需要处理的页面")
@@ -14114,6 +14116,9 @@ class PictureCaptureApp(tk.Tk):
 
     def recognize_ref_boxes(self) -> None:
         self.ref_box_controller.recognize_selected_scope()
+
+    def ocr_ref_boxes(self) -> None:
+        self.ref_box_controller.ocr_selected_scope()
 
     def toggle_polygon_drawing(self) -> None:
         if self.ref_box_controller.pointer_active:
