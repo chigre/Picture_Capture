@@ -285,6 +285,7 @@ def test_ref_body_font_uses_same_main_entry_zoom_contract(
     app.settings = AppSettings(
         ref_box_show=True, ref_box_fill_opacity=0.0,
         ref_box_filled_opacity=0.0,
+        ref_text_label_background_opacity=0.0,
         ref_box_font_size=16, ref_box_font_bold=True,
         main_entry_follow_zoom=follow_zoom, main_entry_font_size=24,
     )
