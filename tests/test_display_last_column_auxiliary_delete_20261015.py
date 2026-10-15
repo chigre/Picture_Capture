@@ -183,3 +183,40 @@ def test_auxiliary_length_matches_entry_marker_ratio_and_hit_bound(
     assert canvas.lines[0][0][0:3:2] == expected
     assert controller._nearest(end, 100) == 0
     assert controller._nearest(end + 1, 100) is None
+
+
+def test_entry_delete_button_is_orange_gold_but_auxiliary_keeps_its_color(monkeypatch):
+    monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
+    monkeypatch.setattr(
+        overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial",
+    )
+    opts = {"command": lambda: None, "attach_tooltip": lambda *_: None,
+            "tooltip": "remove", "ocr_language": "chi_sim"}
+    entry = overlay_delete_button.create_overlay_delete_button(
+        _Canvas(), kind="entry", **opts,
+    )
+    auxiliary = overlay_delete_button.create_overlay_delete_button(
+        _Canvas(), kind="auxiliary", **opts,
+    )
+    assert entry.options["font"] == auxiliary.options["font"] == ("Arial", 9, "bold")
+    assert entry.options["bg"] == "#f5b83d"
+    assert entry.options["activebackground"] == "#e9a820"
+    assert entry.options["fg"] == "#222222"
+    assert auxiliary.options["bg"] == "#9d042f"
+    assert auxiliary.options["fg"] == "#ffffff"
+    assert entry.options["cursor"] == auxiliary.options["cursor"] == "hand2"
+
+
+def test_main_and_review_index_are_fixed_auto_font_without_zoom_scaling():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    main = (root / "ui" / "entry_overlay_builder.py").read_text("utf-8")
+    review = (root / "ui" / "review_crop_sequence.py").read_text("utf-8")
+    x_button = (root / "ui" / "overlay_delete_button.py").read_text("utf-8")
+    review_shell = (root / "app.py").read_text("utf-8")
+    assert 'fixed_overlay_control_font(\n            self.canvas, self.settings.ocr_language,' in main
+    assert 'font=_main_sequence_font(review)' in review
+    assert 'return fixed_overlay_control_font(' in review
+    assert 'font=fixed_overlay_control_font(' in review_shell
+    assert 'AUTO_FONT_FAMILY' in x_button
+    assert 'OVERLAY_CONTROL_FONT_SIZE = 9' in x_button
