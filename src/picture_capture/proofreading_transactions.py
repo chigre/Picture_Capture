@@ -18,7 +18,12 @@ import tempfile
 from typing import Any
 
 from .formats import pdic_path, read_pdic
-from .project_storage import note_page_artifact_edit, simplified_review_path_for_image
+from .project_storage import (
+    note_page_artifact_edit,
+    page_sections_read_path_for_image,
+    profile_path,
+    simplified_review_path_for_image,
+)
 from .proofreading_events import sha256_file
 
 
@@ -38,6 +43,10 @@ class SavedSnapshot:
     owner_ids: tuple[tuple[int, str], ...] = ()
     manual_path: Path | None = None
     ocr_path: Path | None = None
+    section_path: Path | None = None
+    section_bytes: bytes | None = None
+    profile_path: Path | None = None
+    profile_bytes: bytes | None = None
 
     def rows(self) -> dict[int, tuple[Any, str, int, int]]:
         return {id(item[0]): item for item in self.entries}
@@ -101,6 +110,8 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
         ))
         manual_path = manual_fn() if callable(manual_fn) else None
         ocr_path = ocr_fn() if callable(ocr_fn) else None
+        section_path = page_sections_read_path_for_image(page)
+        profile_file = profile_path(app.project.root)
         return SavedSnapshot(
             page=page, image_sha=sha256_file(page) or "",
             entries=ordered, pdic_bytes=raw,
@@ -113,6 +124,8 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
                 for entry in app.entries
             )),
             manual_path=manual_path, ocr_path=ocr_path,
+            section_path=section_path, section_bytes=_bytes_or_absent(section_path),
+            profile_path=profile_file, profile_bytes=_bytes_or_absent(profile_file),
         )
     except (OSError, ValueError, TypeError):
         return None
@@ -127,7 +140,11 @@ def _undoable_committed_change(
             or before.manual_bytes != after.manual_bytes
             or before.ocr_bytes != after.ocr_bytes
             or before.manual_path != after.manual_path
-            or before.ocr_path != after.ocr_path):
+            or before.ocr_path != after.ocr_path
+            or before.section_path != after.section_path
+            or before.section_bytes != after.section_bytes
+            or before.profile_path != after.profile_path
+            or before.profile_bytes != after.profile_bytes):
         return False
     left, right = before.rows(), after.rows()
     left_owners, right_owners = dict(before.owner_ids), dict(after.owner_ids)
@@ -313,7 +330,10 @@ def _publish_restored_snapshot(
             # original R3 safe scope. Recheck immediately before publication;
             # snapshot-time checks alone leave a TOCTOU window.
             or _bytes_or_absent(expected.manual_path) != expected.manual_bytes
-            or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes):
+            or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
+            or page_sections_read_path_for_image(page) != expected.section_path
+            or _bytes_or_absent(expected.section_path) != expected.section_bytes
+            or _bytes_or_absent(expected.profile_path) != expected.profile_bytes):
         return False
     # One-file restore is already atomic. Two files require short-lived
     # write-ahead recovery so crash/restart cannot silently mis-pair them.
@@ -346,6 +366,10 @@ def _same_live_state(current: SavedSnapshot, expected: SavedSnapshot) -> bool:
         and current.owner_ids == expected.owner_ids
         and current.manual_path == expected.manual_path
         and current.ocr_path == expected.ocr_path
+        and current.section_path == expected.section_path
+        and current.section_bytes == expected.section_bytes
+        and current.profile_path == expected.profile_path
+        and current.profile_bytes == expected.profile_bytes
         and current.rows() == expected.rows()
     )
 
@@ -372,6 +396,8 @@ class ReviewSessionHistory:
             or self.undo_stack[-1].after.candidates != before.candidates
             or self.undo_stack[-1].after.owner_ids != before.owner_ids
             or self.undo_stack[-1].after.image_sha != before.image_sha
+            or self.undo_stack[-1].after.section_bytes != before.section_bytes
+            or self.undo_stack[-1].after.profile_bytes != before.profile_bytes
         ):
             self.invalidate()
         self.undo_stack.append(SavedEdit(before, after))
