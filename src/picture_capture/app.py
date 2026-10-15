@@ -14147,18 +14147,7 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_double_click(self, event: tk.Event) -> str | None:
-        if self.ref_box_controller.pointer_active:
-            return self.ref_box_controller.double_click(*self.original_xy(event))
-        """Finish SECTION editing by double-clicking anywhere on the page image."""
-        if self._preprocess_mode_active():
-            return "break"
-        if not self._section_editing or self.image is None:
-            return None
-        x, y = self.original_xy(event)
-        if not (0 <= x < self.image.width and 0 <= y < self.image.height):
-            return None
-        self._finish_section_editing()
-        return "break"
+        return self._canvas_controller_for_call().canvas_left_double_click(event)
 
     def canvas_left_click(self, event: tk.Event) -> None:
         if self.ref_box_controller.pointer_active:
