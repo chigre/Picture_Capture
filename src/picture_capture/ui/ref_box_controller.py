@@ -15,7 +15,9 @@ from PIL import Image, ImageColor, ImageTk
 from ..ref_boxes import (
     RefBox, next_ref_id, read_ref_boxes, ref_box_ticket, write_ref_boxes,
 )
-from ..ref_box_geometry import hit_test, transform_box, action_cursor
+from ..ref_box_geometry import (
+    hit_test, transform_box, action_cursor, ref_action_buttons,
+)
 from ..overlay_layout_helpers import effective_main_overlay_font_size
 from ..review_text_helpers import _entry_font_spec
 from ..ref_box_detection import (
@@ -215,29 +217,47 @@ class RefBoxController:
         return box
 
     def _action_buttons(self):
-        """Source-coordinate positions for selected REF edit/delete chips."""
+        """Compatibility accessor: actions for the selected REF only."""
         target = next((b for b in self.boxes if b.id == self.selected_id), None)
         if target is None or self.app.image is None:
             return []
-        scale = max(0.08, float(self.app.view_scale))
-        chip = round(22 / scale)
-        gap = round(3 / scale)
-        right = min(self.app.image.width, target.x + target.w)
-        left = max(0, right - 2 * chip - gap)
-        # Position just above box when possible, else below box.
-        top = (target.y - chip - gap
-               if target.y >= chip + gap else target.y + target.h + gap)
-        top = max(0, min(self.app.image.height - chip, top))
-        return [
-            ("edit", left, top, left + chip, top + chip),
-            ("delete", left + chip + gap, top,
-             left + chip * 2 + gap, top + chip),
-        ]
+        return ref_action_buttons(
+            target, self.app.image.size, self.app.view_scale,
+            getattr(self.app.settings, "ref_box_action_position", "above_right"),
+        )
 
-    def _hit_action(self, x: int, y: int) -> str | None:
-        for kind, x0, y0, x1, y1 in self._action_buttons():
+    def _visible_action_buttons(self):
+        """(box_id, kind, x0, y0, x1, y1) for all clickable visible buttons.
+
+        Only editing mode exposes deletion.  An unselected box gets just ×
+        if the optional all-crosses setting is on.  Selected REF gets both.
+        """
+        if not self.editing or self.app.image is None:
+            return []
+        result = []
+        always = bool(getattr(
+            self.app.settings, "ref_box_delete_always_visible", False,
+        ))
+        placement = getattr(
+            self.app.settings, "ref_box_action_position", "above_right",
+        )
+        selected = next((b for b in self.boxes if b.id == self.selected_id), None)
+        targets = ([selected] if selected is not None else []) + [
+            b for b in self.boxes if b.id != self.selected_id and always
+        ]
+        for box in targets:
+            selected_box = box.id == self.selected_id
+            for kind, x0, y0, x1, y1 in ref_action_buttons(
+                box, self.app.image.size, self.app.view_scale,
+                placement, show_edit=selected_box,
+            ):
+                result.append((box.id, kind, x0, y0, x1, y1))
+        return result
+
+    def _hit_action(self, x: int, y: int) -> tuple[str, int] | None:
+        for box_id, kind, x0, y0, x1, y1 in self._visible_action_buttons():
             if x0 <= x <= x1 and y0 <= y <= y1:
-                return kind
+                return kind, box_id
         return None
 
     def press(self, x: int, y: int) -> str:
@@ -250,7 +270,12 @@ class RefBoxController:
         self.drag_start = (x, y)
         self.drag_original = None
         self.drag_box = None
-        self.pointer_action = self._hit_action(x, y) if self.editing else None
+        action_target = self._hit_action(x, y) if self.editing else None
+        self.pointer_action = action_target[0] if action_target else None
+        if action_target is not None:
+            # A permanently visible × must remove the REF that owns it,
+            # never whichever REF was selected earlier.
+            self.selected_id = action_target[1]
         self.drag_kind = "create"
         if self.editing and self.pointer_action is None:
             hit, action = hit_test(
@@ -544,7 +569,8 @@ class RefBoxController:
         ]
         regions.extend(
             (x0*s, y0*s, x1*s, y1*s)
-            for _action, x0, y0, x1, y1 in self._action_buttons()
+            for _box_id, _action, x0, y0, x1, y1
+            in self._visible_action_buttons()
         )
         try:
             for item in canvas.find_all():
@@ -638,7 +664,7 @@ class RefBoxController:
                         tags=("ref-box", "ref-box-handle"),
                     )
         if self.editing:
-            for action, x0, y0, x1, y1 in self._action_buttons():
+            for _box_id, action, x0, y0, x1, y1 in self._visible_action_buttons():
                 sx0, sy0, sx1, sy1 = (round(x0*s), round(y0*s),
                                       round(x1*s), round(y1*s))
                 app.canvas.create_rectangle(
