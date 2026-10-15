@@ -71,6 +71,14 @@ jobs:
         if: runner.os != 'Linux'
         run: uv run --locked python scripts/gui_proofreading_evidence_smoke.py
 
+      - name: R3 candidate deletion Tk transaction (Linux synthetic)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked python scripts/gui_r3_candidate_delete_smoke.py
+
+      - name: R3 candidate deletion Tk transaction (Windows/macOS synthetic)
+        if: runner.os != 'Linux'
+        run: uv run --locked python scripts/gui_r3_candidate_delete_smoke.py
+
       - name: Run compatibility test runner
         run: uv run --locked python run_tests.py
 
