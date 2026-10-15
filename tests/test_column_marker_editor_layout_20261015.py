@@ -72,18 +72,20 @@ def test_column_marker_span_round_trips_source_transform(kind):
 
 
 @pytest.mark.parametrize("rtl", [False, True])
-def test_editor_consumes_remaining_column_minus_delete_control(rtl):
+def test_editor_reaches_physical_column_end_without_reserving_x(rtl):
     editor_x, end_x, delete_width = (364, 500, 39) if not rtl else (736, 600, 39)
     width, delete_x, anchor = horizontal_entry_editor_slot(
         editor_x, end_x, delete_width, rtl=rtl,
     )
-    assert width == 95
+    assert width == 136
     assert delete_x == float(end_x)
-    assert anchor == ("nw" if rtl else "ne")
+    # Delete button is just OUTSIDE the column in the reading direction,
+    # so it never subtracts from the requested text box width.
+    assert anchor == ("ne" if rtl else "nw")
     full_width, _x, _anchor = horizontal_entry_editor_slot(
         editor_x, end_x, 0, rtl=rtl,
     )
-    assert full_width == width + delete_width + 2
+    assert full_width == width
 
 
 def test_refinement_roi_is_independent_of_visual_marker_ratio_and_respects_margin():
@@ -202,8 +204,8 @@ def test_real_overlay_builder_100_percent_and_editor_delete_slot(monkeypatch, in
     _bx, _by, _button, button_options = next(
         w for w in windows if isinstance(w[2], _Button)
     )
-    assert options["width"] == max(1, round(right - editor_x - 39 - 2))
-    assert (_bx, button_options["anchor"]) == (float(right), "ne")
+    assert options["width"] == max(1, round(right - editor_x))
+    assert (_bx, button_options["anchor"]) == (float(right), "nw")
     assert app._entry_visuals[id(entry)]["delete_widget"] is _button
 
 
