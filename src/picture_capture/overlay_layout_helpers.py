@@ -9,13 +9,16 @@ from .models import AppSettings
 
 def effective_main_overlay_font_size(
     image_width: int, view_scale: float, settings: AppSettings,
+    *, base_font_size: int | None = None,
 ) -> int:
     """Return the main overlay font size.
 
     1400 px displayed page width corresponds to the configured base font size.
     """
 
-    base_size = max(5, int(settings.main_entry_font_size))
+    base_size = max(5, int(
+        settings.main_entry_font_size if base_font_size is None else base_font_size
+    ))
 
     if settings.main_entry_follow_zoom:
         displayed_page_width = max(1.0, image_width * view_scale)
