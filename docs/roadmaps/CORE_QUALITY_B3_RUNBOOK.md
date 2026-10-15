@@ -2,6 +2,14 @@
 
 **#502 安全工程增量已合并**：PR head `e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06` 的 [CI 38630143182](https://github.com/chigre/Picture_Capture/actions/runs/38630143182) 成功；合并 `main@910b889898efab1ffc2975cdfa613eb675be70ef` 的 [CI 38630567897](https://github.com/chigre/Picture_Capture/actions/runs/38630567897) 四平台成功。**R3.1/R3.2 整体仍 in_progress**，下一工作包 [#503](https://github.com/chigre/Picture_Capture/issues/503) 包含 OCR 候选删除/manual_selection/复杂组合编辑的所有权与跨文件撤销；相关真人 GUI 验收还未执行。R2/B2 用户明确暂不验收。以下 T1–T12 的合成回归在 CI 通过，但不能代替真实人工操作。
 
+## #519 候选归属与源指纹硬化（R3.1/R3.2 增量，未验收）
+
+起点 main@e61fd001；PR [#519](https://github.com/chigre/Picture_Capture/pull/519) 开发中，最初 [CI 38701396654](https://github.com/chigre/Picture_Capture/actions/runs/38701396654) 在运行；最终应以 PR 末次提交固定版本 CI 为准。发现旧 SavedSnapshot 的对象引用不是不可变候选归属，快照后改 candidate_id 可误判旧普通文字事务；提交前没有再次验证 manual_selection/OCR 缓存；SECTION/Profile 改动也应使旧 Undo 失效。
+
+当前工程改动（以 PR 和 CI 为准）：(1) 冻结 Entry ID→candidate_id；(2) 提交前复核人工覆盖、OCR、SECTION、Profile 路径与精确字节；(3) 多步历史链对任何来源或 owner 断裂清栈。反例包括候选归属变化、OCR/manual 最后瞬间修改、SECTION/Profile 外部修改与提交瞬间改变、历史串链污染。没有触碰 PDIC 格式/手工 OCR 结果/设置，R2 证据仍 OFF。
+
+仍待 #503：candidate-linked 删除必须先建立拥有 candidate ID 的原子多文件操作，涵盖 manual_selection、PDIC、简体缓存和 UI checkbox，同一事务回滚，真实 Tk 自动保存/FocusOut/取消/跨页/关闭/重启测试。当前故意拒绝 candidate-linked Undo/Redo。不能把 #519 自动回归代替真实 Windows 人工操作，更不得关闭 #483 或标 R2/R3 verified。
+
 ## 用户阶段授权
 
 2026-10-15 用户明确：「R2 暂不验收，继续 R3」。R2/B2 的 #483 和真人 Windows W1–W11 不关闭，也不标 verified。这是 R3 启动门槛的局部豁免，不是 R2 自动完成。
