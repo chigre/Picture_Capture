@@ -53,6 +53,14 @@ FIELDS = [
         ("插图标签背景色", "illustration_label_fill_color", str),
         ("插图标签字体", "illustration_label_font_family", str),
         ("插图标签字号", "illustration_label_font_size", int),
+        ("REF 框填充颜色", "ref_box_fill_color", str),
+        ("REF 框填充不透明度 %", "ref_box_fill_opacity", float),
+        ("REF 框文字颜色", "ref_box_text_color", str),
+        ("REF 框字体", "ref_box_font_family", str),
+        ("REF 框字号", "ref_box_font_size", int),
+        ("REF 默认宽度（行高倍数）", "ref_box_width_lines", float),
+        ("REF 默认高度（行高倍数）", "ref_box_height_lines", float),
+        ("REF 样本最低匹配分 0.60–0.999", "ref_match_threshold", float),
         ("OCR 语言", "ocr_language", str),
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
@@ -687,6 +695,20 @@ CHECK_HELP = {
         "review_entry_font_bold": "开启后校对窗口“原词条”编辑框使用粗体；关闭为常规字重。只影响校对文字显示和字体测量，不改变原图裁图或保存内容。",
         "review_entry_font_italic": "开启后校对窗口“原词条”编辑框使用斜体；关闭为正体。只影响显示；若某字体斜体导致字符更宽，可见字符数可能略变，但词条数据不变。",
     }
+
+REF_BOX_STYLE_FIELDS = (
+    "ref_box_fill_color", "ref_box_fill_opacity",
+    "ref_box_text_color", "ref_box_font_family", "ref_box_font_size",
+)
+REF_BOX_GEOMETRY_FIELDS = (
+    "ref_box_width_lines", "ref_box_height_lines", "ref_match_threshold",
+)
+REF_BOX_CHECKS = (
+    ("显示 REF 框", "ref_box_show"),
+    ("REF 字体加粗", "ref_box_font_bold"),
+    ("REF 字体斜体", "ref_box_font_italic"),
+    ("新框自动挂靠所在正文词条", "ref_box_auto_attach"),
+)
 
 ILLUSTRATION_DETECTION_FIELDS = (
     "illustration_detect_gray_threshold", "illustration_detect_parallel_workers",
