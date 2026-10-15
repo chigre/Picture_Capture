@@ -44,32 +44,6 @@ def _region_top_coordinates(region: PolygonRegion, geometry) -> list[tuple[int, 
     ]
 
 
-def _upper_anchor_samples(points: list[tuple[int, int]]) -> tuple[int, int, int]:
-    """Upper envelope at left/mid/right; prioritize left, then mid, then right.
-
-    The nearest top polygon vertices supply the boundary Y. For polygons whose
-    top edge is sloped the midpoint is linearly interpolated, not the lowest
-    vertex (which may be on the figure's bottom border).
-    """
-    left = min(u for u, _ in points)
-    right = max(u for u, _ in points)
-    top_points = sorted(points, key=lambda p: (p[0], p[1]))
-    left_v = min(v for u, v in points if u == left)
-    right_v = min(v for u, v in points if u == right)
-    if right == left:
-        return left_v, left_v, right_v
-    mid = (left + right) / 2.0
-    candidates: list[float] = []
-    for u0, v0 in points:
-        for u1, v1 in points:
-            if u0 == u1 or not min(u0, u1) <= mid <= max(u0, u1):
-                continue
-            v_mid = v0 + (v1 - v0) * (mid - u0) / (u1 - u0)
-            candidates.append(v_mid)
-    middle_v = round(min(candidates)) if candidates else min(left_v, right_v)
-    return left_v, middle_v, right_v
-
-
 def _region_key(region: PolygonRegion, geometry, sections) -> tuple[int, int, int, int]:
     from .processing_core import column_index_for_click
 
@@ -101,7 +75,7 @@ def _nearest_above_entry(
     section = section_index_for_v(min(v for _, v in points), sections, geometry.top, geometry.bottom)
     sorted_entries = sort_entries_reading_order(list(entries), geometry, sections)
     candidates: list[tuple[int, int, int, int]] = []
-    for ordinal, entry in enumerate(sorted_entries, 1):
+    for ordinal, entry in enumerate(sorted_entries):
         u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
         if column_index_for_click(entry.x, geometry, entry.y) != column:
             continue
@@ -109,16 +83,17 @@ def _nearest_above_entry(
         if entry_section != section:
             continue
         candidates.append((ordinal, u, v, entry_section))
-    # Top-edge anchor priority is intentional: left-upper Y first, then
-    # midpoint, then right-upper. At each anchor the closest PDIC above wins.
-    for anchor_v in _upper_anchor_samples(points):
-        above = [item for item in candidates if item[2] < anchor_v]
-        if above:
-            ordinal, _u, _v, _section = min(
-                above, key=lambda item: (anchor_v - item[2], item[0]),
-            )
-            return ordinal
-    return None
+    # The physical TOP of the complete polygon, not the left/mid/right
+    # envelope: irregular sloping regions may have their highest vertex
+    # far from the left edge. A word within the polygon height is NOT above.
+    top_v = min(v for _, v in points)
+    above = [item for item in candidates if item[2] < top_v]
+    if not above:
+        return None
+    ordinal, _u, _v, _section = min(
+        above, key=lambda item: (top_v - item[2], item[0]),
+    )
+    return ordinal
 
 
 def illustration_labels(

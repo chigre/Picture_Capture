@@ -11977,7 +11977,7 @@ class PictureCaptureApp(tk.Tk):
         return self._illustration_controller_for_call().persist_current()
 
     def associate_illustrations(self) -> None:
-        self._illustration_controller_for_call().associate_current_page()
+        self._illustration_controller_for_call().associate_selected_scope()
 
     def reload_wordslist_reference(
         self, selected_path: Path | None = None, *, persist: bool = True, redraw: bool = True,

@@ -88,7 +88,7 @@ def test_link_writes_complete_ppp_before_ui_change(tmp_path, monkeypatch):
     monkeypatch.setattr(ui, "confirm_illustration_association", lambda _app: True)
     ui.IllustrationController(app).associate_current_page()
     assert [p.label for p in app.polygons] == [
-        "P_02|080123|002|AUTO_01", "P_01|080123|001",
+        "P_02|080123|001|AUTO_01", "P_01|080123|000",
     ]
     assert all(a is b for a, b in zip(app.polygons, original_objects))
     saved = read_ppp(app.current_page.with_suffix(".ppp"))

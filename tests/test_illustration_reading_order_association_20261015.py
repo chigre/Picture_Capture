@@ -81,12 +81,12 @@ def test_link_within_column_same_section_to_closest_headword_above():
         regions, "080999", geo(), [PageSection(0, 400), PageSection(400, 800)],
         entries=entries, associate=True,
     )
-    # Canonical PDIC order: left far=1, left near=2, right=3,
-    # right below=4, next section left=5.
+    # Canonical PDIC indices begin at zero on EVERY page:
+    # left far=0, left near=1, right=2, right below=3, section2 left=4.
     assert labels == [
-        "P_02|080999|003",
-        "P_01|080999|002",
-        "P_03|080999|005",
+        "P_02|080999|002",
+        "P_01|080999|001",
+        "P_03|080999|004",
     ]
 
 

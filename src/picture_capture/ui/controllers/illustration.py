@@ -18,6 +18,7 @@ from .crop import complete_crop_widths
 from ...formats import pdic_path, read_ppp, write_ppp
 from ...models import PolygonRegion
 from ...illustration_labels import illustration_labels, label_text, user_edited_link
+from ...illustration_batch_association import associate_existing_ppp_job
 from ..illustration_association_dialog import confirm_illustration_association
 from ...processing import (
     append_crop_log, append_illustration_crop_log, detect_illustrations_job,
@@ -193,6 +194,115 @@ class IllustrationController:
             app.status_var.set(f"插图关联已保存：{total} 个插图，{linked} 个关联到上方词条，{total - linked} 个未匹配")
         elif [r.label for r in app.polygons] == before:
             app.status_var.set("插图关联结果未变化；PPP 已核对。")
+
+    def associate_selected_scope(self) -> None:
+        """Associate all pages selected by current / range / bookmarks.
+
+        No existing PPP => skip (never create one); serial background batch
+        owns the disk reads/writes. For the visible page the existing PDIC
+        autosave is flushed before workers begin; once workers finish the
+        live PPP is reloaded from disk with FocusOut sync suppressed.
+        """
+        app = self.app
+        if getattr(app, "_batch_active", False):
+            app.status_var.set("已有批量任务在运行；插图关联未开始。")
+            return
+        if not app.guard():
+            return
+        if getattr(app, "polygon_draw_var", None) is not None and app.polygon_draw_var.get():
+            app.status_var.set("请先结束【编辑插图】，再进行插图关联。")
+            return
+        try:
+            indices = app.selected_page_indices()
+        except Exception as exc:
+            app.show_error("页面范围无效", exc)
+            return
+        if not indices:
+            app.status_var.set("选定范围没有页面，未进行插图关联。")
+            return
+        project = app.project
+        # Reading the on-disk PPP is important: live Canvas polygons may be
+        # empty while the selected range contains many annotated pages.
+        existing = [
+            index for index in indices
+            if app._ppp_read_path(project.images[index]).is_file()
+        ]
+        skipped_missing = len(indices) - len(existing)
+        if not existing:
+            app.status_var.set(f"所选 {len(indices)} 页均没有 PPP，已全部跳过，未创建文件。")
+            return
+        if not confirm_illustration_association(app):
+            return
+        try:
+            if app.current_index in existing:
+                # Apply the same deferred text commit boundary as other
+                # selected-range read-only PDIC consumers. Do not save a
+                # non-selected page or fabricate a missing PPP.
+                app._flush_deferred_page_save()
+                app.save_pdic(silent=True)
+                # Geometry must already be persisted when leaving edit mode.
+                # Do not rewrite existing PPP merely as a preflight: older
+                # projects may use uppercase .PPP. The batch worker owns its
+                # exact existing source path and remains disk-first.
+                on_disk = read_ppp(app._ppp_read_path(app.current_page))
+                if [region.points for region in on_disk] != [
+                    region.points for region in app.polygons
+                ]:
+                    raise RuntimeError("当前页仍有未保存的插图几何修改；请先保存/结束编辑")
+        except Exception as exc:
+            app.show_error("插图关联前保存当前页失败", exc)
+            return
+
+        settings = replace(app.settings)
+        pages = tuple(project.images)
+        current = int(app.current_index)
+
+        def job(index: int, _position: int, _total: int):
+            return associate_existing_ppp_job(str(pages[index]), settings, index)
+
+        def done(completed, total, stopped, results, error):
+            # Always reload: an I/O hook may fail after an atomic PPP replace,
+            # so the UI must not keep a stale live polygon snapshot.
+            if app.project is project and app.current_index == current and current in existing:
+                try:
+                    app.polygons = read_ppp(app._ppp_read_path(pages[current]))
+                    app.__dict__["_suppress_polygon_label_sync"] = True
+                    try:
+                        app.redraw()
+                    finally:
+                        app.__dict__["_suppress_polygon_label_sync"] = False
+                except Exception as exc:
+                    app.show_error("重新读取已保存 PPP 失败", exc)
+            if app.project is project:
+                for result in results:
+                    try:
+                        app._update_page_row(int(result["page_index"]))
+                    except Exception:
+                        pass
+            changed = sum(item["status"] == "changed" for item in results)
+            unchanged = sum(item["status"] == "unchanged" for item in results)
+            skipped = skipped_missing + sum(
+                str(item.get("status", "")).startswith("skipped") for item in results
+            )
+            failed = [item for item in results if item["status"] == "failed"]
+            total_linked = sum(item.get("linked", 0) for item in results)
+            detail = f"已更新 {changed} 页，未变化 {unchanged} 页，跳过 {skipped} 页，错误 {len(failed)} 页；关联 {total_linked} 个插图"
+            if failed:
+                first = failed[0]
+                app.status_var.set(f"插图关联部分失败：{detail}；{first['page']}：{first['error']}")
+            else:
+                suffix = "（提前停止）" if stopped else ""
+                app.status_var.set(f"插图关联完成{suffix}：{detail}")
+
+        try:
+            app._start_batch_task(
+                "插图关联", existing, job, on_done=done,
+                item_label=lambda index: pages[index].name,
+                refresh_page_quality=False,
+                allow_page_navigation=False, allow_pdic_edits=False,
+            )
+        except Exception as exc:
+            app.show_error("插图关联任务启动失败", exc)
 
     def split_illustrations_selected_scope(self) -> None:
         app = self.app
