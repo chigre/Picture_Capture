@@ -53,8 +53,8 @@ def extract_ref_text(text: str, pattern: str) -> str:
     import re
 
     original = normalize_ref_ocr_text(text)
-    pattern = str(pattern or "").strip()
-    if not pattern or not original:
+    pattern = str(pattern or "")
+    if not pattern.strip() or not original:
         return original
     if len(pattern) > 2000:
         raise ValueError("OCR REF extraction regex must be at most 2000 characters")
