@@ -148,3 +148,83 @@ def test_marker_ocr_and_preview_use_identical_role_independent_visual_extent():
         assert "visual_oversized_head_height(" in content
         assert "visual_head_height=visual_height," in content
     assert "large_for_ocr = meta.entry_scale == \"oversized\" or visual_height > 0" in source
+
+
+
+@pytest.mark.parametrize(("ocr_text", "expected"), [
+    ("編號【蘋果】字義", "蘋果"),
+    ("噪音【雲端", "雲端"),
+    ("蘋果】其他內容", "蘋果"),
+    ("正常文字", "正常文字"),
+])
+def test_existing_marker_ocr_fallback_applies_profile_bracket_extraction(
+    monkeypatch, ocr_text, expected,
+):
+    """Exercise the real ordinary-marker OCR writer with OCR engines mocked."""
+    from picture_capture import processing_core, ocr_channel, dictionary_profile
+    from picture_capture import entry_ocr_crop, paddle_headwords
+
+    image = Image.new("RGB", (850, 580), "white")
+    geometry = _Geometry(image)
+    settings = _settings(ocr_replace=False)
+    entry = Entry("", 100, 200)
+    before = (entry.x, entry.y)
+    monkeypatch.setattr(
+        processing_core, "_page_geometry_context",
+        lambda page, cfg, index: (image, settings, image, geometry),
+    )
+    monkeypatch.setattr(
+        processing_core, "sort_entries_reading_order",
+        lambda entries, _geometry, _sections: entries,
+    )
+    monkeypatch.setattr(
+        entry_ocr_crop, "resolve_entry_ocr_row_metrics",
+        lambda *_args, **_kwargs: EntryOcrRowMetrics(40.0, 52.0),
+    )
+    monkeypatch.setattr(
+        dictionary_profile, "effective_project_profile_id",
+        lambda *_args: "cjk_visual",
+    )
+    monkeypatch.setattr(
+        dictionary_profile, "load_dictionary_profile",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            uses_parser=lambda mode: mode == "cjk_bracketed",
+        ),
+    )
+    monkeypatch.setattr(paddle_headwords, "parse_headword_text", lambda *_args, **_kwargs: None)
+
+    class Channel:
+        def __init__(self, _settings):
+            pass
+
+        def recognize_crop(self, _image, **_kwargs):
+            return SimpleNamespace(
+                plan=object(),
+                candidates=[SimpleNamespace(
+                    ok=True, engine="tesseract", text=ocr_text,
+                    confidence=0.91, records=[],
+                )],
+            )
+
+    monkeypatch.setattr(ocr_channel, "OcrChannelSession", Channel)
+    monkeypatch.setattr(
+        ocr_channel, "choose_ocr_text",
+        lambda _plan, choices: (choices[0], True) if choices else (None, False),
+    )
+    entries, stats = processing_core.ocr_existing_entry_words_from_markers(
+        image, [entry], settings, [], only_blank=True,
+    )
+    assert entries[0] is entry
+    assert entry.word == expected
+    assert (entry.x, entry.y) == before
+    assert stats["filled"] == 1
+
+
+def test_latin_or_profile_disabled_marker_ocr_does_not_cut_bracket_words(monkeypatch):
+    from picture_capture import processing_core
+    # Direct pure-helper check is the stable policy contract; real OCR writer
+    # enables this only for explicitly configured CJK-bracket dictionary mode.
+    assert bracketed_ocr_lemma("prefix【apple】suffix", enabled=False) is None
+    source = __import__("inspect").getsource(processing_core.ocr_existing_entry_words_from_markers)
+    assert 'profile.uses_parser("cjk_bracketed")' in source
+    assert 'profile_cjk_allow_bracketed_headword' in source
