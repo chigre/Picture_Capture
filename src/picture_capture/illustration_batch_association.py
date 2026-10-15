@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
- 
 from PIL import Image
 
 from .formats import pdic_path, read_pdic, read_ppp, write_ppp
