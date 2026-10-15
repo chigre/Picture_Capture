@@ -5,6 +5,18 @@ from __future__ import annotations
 from .models import natural_text_key
 
 
+def bookmarked_page_indices(images: list, bookmark_stems: set[str]) -> list[int]:
+    """Batch work scope: indices of bookmarked pages in source page order.
+
+    This does not hide, reorder, select, or mutate Treeview rows. The project
+    bookmark contract uses image stems, not sorted index positions.
+    """
+    return [
+        index for index, path in enumerate(images)
+        if path.stem in bookmark_stems
+    ]
+
+
 def _natural_text_key(value: object) -> tuple:
     """Natural, case-insensitive key used by the sortable page list.
 
