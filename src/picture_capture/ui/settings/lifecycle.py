@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 import tkinter as tk
 
 
@@ -49,6 +50,9 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
     limits = {
         "ref_box_fill_opacity": (0.0, 100.0),
         "ref_box_filled_opacity": (0.0, 100.0),
+        "ref_text_label_background_opacity": (0.0, 100.0),
+        "ref_text_label_gap": (0.0, 60.0),
+        "ref_text_label_padding": (0.0, 24.0),
         "ref_box_font_size": (6.0, 72.0),
         "ref_box_width_lines": (0.25, 20.0),
         "ref_box_height_lines": (0.25, 20.0),
@@ -65,9 +69,11 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
             raise ValueError(f"{key} 需要有效数字。") from exc
         if not isfinite(requested) or not lower <= requested <= upper:
             raise ValueError(f"{key} 必须在 {lower}–{upper} 之间。")
+        if key in {"ref_text_label_gap", "ref_text_label_padding"} and not requested.is_integer():
+            raise ValueError(f"{key} 必须为整数。")
         if key == "ref_box_font_size" and not requested.is_integer():
             raise ValueError("REF 字号必须为整数。")
-    for key in ("ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color"):
+    for key in ("ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color", "ref_text_label_background_color"):
         if key in values:
             from PIL import ImageColor
             try:
@@ -77,6 +83,15 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
                 ImageColor.getrgb(value)
             except ValueError as exc:
                 raise ValueError(f"{key} 必须是 #RRGGBB 颜色。") from exc
+    if "ref_ocr_extract_regex" in values:
+        pattern = str(values["ref_ocr_extract_regex"].get()).strip()
+        if len(pattern) > 2000:
+            raise ValueError("OCR REF 提取正则不能超过 2000 字符。")
+        if pattern:
+            try:
+                re.compile(pattern, re.DOTALL)
+            except re.error as exc:
+                raise ValueError(f"OCR REF 提取正则无效：{exc}") from exc
 
 
 def schedule_autosave(dialog: Any) -> None:
