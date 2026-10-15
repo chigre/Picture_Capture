@@ -10,11 +10,13 @@ from picture_capture.ref_box_detection import (
     add_ref_sample,
     default_ref_sample_direction,
     delete_ref_sample,
+    detect_ref_boxes_page,
     list_ref_samples,
     read_ref_sample_metadata,
     ref_box_after_guide,
     write_ref_sample_metadata,
 )
+from picture_capture.ref_boxes import read_ref_boxes
 from picture_capture.ui.ref_box_controller import RefBoxController
 from picture_capture.ui.settings import schema
 
@@ -93,3 +95,40 @@ def test_capture_release_stays_active_until_explicit_exit(tmp_path, monkeypatch)
     assert saved[0][2] == {"category": "别名", "direction": "before"}
     assert controller.cancel_capture() == "break"
     assert controller.capture_sample is False
+
+
+@pytest.mark.parametrize(
+    ("direction", "expected_x", "expected_w"),
+    [
+        ("after", 100, 60),
+        ("before", 60, 60),
+    ],
+)
+def test_detect_page_uses_template_metadata_direction(
+    tmp_path, monkeypatch, direction, expected_x, expected_w,
+):
+    import picture_capture.ref_box_detection as detection
+
+    page = tmp_path / "00011.png"
+    Image.new("RGB", (300, 200), "white").save(page)
+    sample = add_ref_sample(
+        page, (20, 20, 50, 40), category="别名",
+        direction=direction,
+    )
+    monkeypatch.setattr(
+        detection, "match_ref_templates",
+        lambda _image, _samples, **opts: [((100, 50, 20, 8), sample)],
+    )
+    monkeypatch.setattr(detection, "read_pdic", lambda _path: [])
+    monkeypatch.setattr(detection, "read_page_sections", lambda _page: [])
+    monkeypatch.setattr(detection, "associate_ref_to_entry", lambda *args: None)
+    settings = AppSettings(
+        character_height=20, row_padding=0, ref_box_width_lines=2,
+        ref_box_height_lines=1, ref_box_include_guide_width=True,
+    )
+    result = detect_ref_boxes_page(page, settings, 0)
+    assert result["status"] == "changed"
+    assert result["added"] == 1
+    boxes = read_ref_boxes(page)
+    assert len(boxes) == 1
+    assert (boxes[0].x, boxes[0].w) == (expected_x, expected_w)
