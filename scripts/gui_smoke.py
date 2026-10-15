@@ -179,6 +179,35 @@ def main() -> int:
                         if cached.info.get(FINGERPRINT_KEY) != source_fingerprint(path):
                             raise RuntimeError("Cached PNG source fingerprint does not match its page")
                 from picture_capture.ui.page_list_grid import page_grid_segments
+
+                def check_grid_column_alignment(label: str) -> None:
+                    """Catch the native ttk heading separator's 5px grip offset."""
+                    app.update_idletasks()
+                    app._page_index_grid.repaint()
+                    lines = page_grid_segments(app.page_list)
+                    vertical = [x for x, _y, w, _h in lines if w == 1]
+                    visible_rows = app._visible_page_list_iids()
+                    if not visible_rows:
+                        raise RuntimeError(f"{label}: no visible page index rows")
+                    iid = visible_rows[0]
+                    displayed = tuple(app.tk.splitlist(app.page_list.cget("displaycolumns")))
+                    if not displayed or displayed == ("#all",):
+                        displayed = tuple(app.tk.splitlist(app.page_list.cget("columns")))
+                    shown = (("#0",) if "tree" in str(app.page_list.cget("show")) else ())
+                    expected = []
+                    for column in (*shown, *displayed):
+                        cell = app.page_list.bbox(iid, column)
+                        if not cell:
+                            raise RuntimeError(f"{label}: missing displayed bbox {column}")
+                        boundary = int(cell[0]) + int(cell[2]) - 1
+                        if 0 < boundary < app.page_list.winfo_width():
+                            expected.append(boundary)
+                    if vertical != expected:
+                        raise RuntimeError(
+                            f"{label}: body dividers {vertical} do not match "
+                            f"native heading/cell boundaries {expected}"
+                        )
+
                 app._page_index_grid.repaint()
                 segments = page_grid_segments(app.page_list)
                 if not any(width == 1 for _x, _y, width, _h in segments):
@@ -187,7 +216,14 @@ def main() -> int:
                     raise RuntimeError("No horizontal cell gridlines found in real Tk Treeview")
                 if app._page_index_grid.visible_segment_count != len(segments):
                     raise RuntimeError("Pale cell grid failed to place every visible divider")
-                _stage("page index grid: actual Tk horizontal and vertical dividers OK")
+                check_grid_column_alignment("initial viewport")
+                horizontal_range = app.page_list.xview()
+                if horizontal_range[1] - horizontal_range[0] < 0.99:
+                    app.page_list.xview_moveto(1.0)
+                    check_grid_column_alignment("horizontal scroll")
+                    app.page_list.xview_moveto(0.0)
+                    check_grid_column_alignment("horizontal scroll restored")
+                _stage("page index grid: native heading/body divider pixels align")
                 _stage("actual synthetic page images: visible pixels, sorted IDs, flat source-validated cache OK")
 
                 # Previous smoke used THREE pages: it could never catch the
@@ -241,6 +277,7 @@ def main() -> int:
                 lines_after_sort = page_grid_segments(app.page_list)
                 if not lines_after_sort or app._page_index_grid.visible_segment_count != len(lines_after_sort):
                     raise RuntimeError("Cell borders vanished after scrolling/reordering page index")
+                check_grid_column_alignment("scrolled/sorted 36-page index")
                 _stage("thumbnails and cell borders after scrolling and sorting: OK")
                 # A temporary synthetic project must not disappear while the
                 # bounded background workers still publish thumbnail PNGs.

@@ -19,9 +19,11 @@ DARK_GRID = "#4c5663"
 def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
     """Return x, y, width, height for lines inside *actual displayed cells*.
 
-    Probes identify_row/identify_column rather than page indices, so sorting,
-    scrolling, optional columns, thumbnail #0 and large row heights work alike.
-    Do not infer row coordinates by iid, cache order or Treeview.bbox.
+    Row borders follow identify_row; vertical rulers use displayed column
+    bbox geometry from the first visible row. Never infer X from
+    identify_column(): its draggable heading grip can shift the hitbox by
+    several pixels or entirely past the viewport's edge. Native bbox
+    respects #0 thumbnail, optional columns, reordering, DPI and xscroll.
     """
     try:
         width = max(0, int(tree.winfo_width()))
@@ -50,12 +52,47 @@ def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
                 segments.append((0, y - 1, width, 1))
             preceding = current
 
-        preceding = column(0)
-        for x in range(1, width):
-            current = column(x)
-            if current != preceding and preceding:
-                segments.append((x - 1, body_top, 1, height - body_top))
-            preceding = current
+        first_visible_iid = row(body_top)
+        if all(hasattr(tree, attr) for attr in ("bbox", "cget", "tk")):
+            # Native Treeview: enumerate DISPLAYED columns, never hit-testing
+            # boundaries. ttk heading separator resize-grips can extend past
+            # the widget edge (and are offset from the real cell boundary).
+            # Iterating bbox also includes a last-column border that remains
+            # visible even when identify_column never transitions to "".
+            displayed = tuple(
+                str(item) for item in tree.tk.splitlist(tree.cget("displaycolumns"))
+            )
+            if not displayed or displayed == ("#all",):
+                displayed = tuple(
+                    str(item) for item in tree.tk.splitlist(tree.cget("columns"))
+                )
+            # Tk 8.6 can return Tcl_Obj index objects rather than Python str
+            # for 'show'. Compare their string values, or #0 disappears.
+            show = {str(item) for item in tree.tk.splitlist(tree.cget("show"))}
+            columns = (("#0",) if "tree" in show else ()) + displayed
+            for column_id in columns:
+                cell = tree.bbox(first_visible_iid, column_id)
+                if not cell or len(cell) != 4:
+                    continue
+                boundary = int(cell[0]) + int(cell[2]) - 1
+                if 0 < boundary < width:
+                    segments.append((boundary, body_top, 1, height - body_top))
+        else:
+            # Compatibility for non-Tk geometry doubles used by older tests.
+            preceding = column(0)
+            for x in range(1, width):
+                current = column(x)
+                if current != preceding and preceding:
+                    boundary = x - 1
+                    if hasattr(tree, "bbox"):
+                        cell = tree.bbox(first_visible_iid, preceding)
+                        if not cell or len(cell) != 4:
+                            preceding = current
+                            continue
+                        boundary = int(cell[0]) + int(cell[2]) - 1
+                    if 0 < boundary < width:
+                        segments.append((boundary, body_top, 1, height - body_top))
+                preceding = current
         return segments
     except (tk.TclError, ValueError, TypeError):
         return []
