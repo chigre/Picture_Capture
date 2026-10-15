@@ -155,7 +155,8 @@ def test_page_navigation_discards_history_and_reads_saved_state(tmp_path):
 
 
 def test_template_capture_detects_any_color_not_blue_only(tmp_path):
-    cv2 = pytest.importorskip("cv2")
+    # The project's base dependencies do not include OpenCV. This must also
+    # pass through the NumPy-only fallback used by default installs.
     page = tmp_path / "012345.png"
     rng = np.random.default_rng(123)
     array = np.full((180, 250, 3), 247, dtype=np.uint8)
@@ -177,8 +178,24 @@ def test_template_capture_detects_any_color_not_blue_only(tmp_path):
     assert detect_ref_boxes_page(page, AppSettings(ref_match_threshold=0.96), 0)["added"] == 0
 
 
+
+def test_numpy_fallback_returns_same_source_coordinates_without_opencv(tmp_path, monkeypatch):
+    import sys
+    import picture_capture.ref_box_detection as detection
+    monkeypatch.setitem(sys.modules, "cv2", None)
+    path = tmp_path / "page.png"
+    rng = np.random.default_rng(987)
+    pixels = np.full((120, 180, 3), 255, dtype=np.uint8)
+    patch = rng.integers(25, 220, (14, 36, 3), dtype=np.uint8)
+    pixels[44:58, 62:98] = patch
+    Image.fromarray(pixels).save(path)
+    sample = add_ref_sample(path, (62, 44, 98, 58))
+    with Image.open(path) as image:
+        found = detection.match_ref_templates(image, [sample], threshold=0.96)
+    assert (62, 44, 36, 14) in found
+
+
 def test_template_detection_preserves_manual_rectangle_and_does_not_overwrite(tmp_path):
-    pytest.importorskip("cv2")
     page = tmp_path / "012345.png"
     rng = np.random.default_rng(123)
     array = np.full((180, 250, 3), 247, dtype=np.uint8)
