@@ -64,6 +64,7 @@ FIELDS = [
         ("REF 默认宽度（行高倍数）", "ref_box_width_lines", float),
         ("REF 默认高度（行高倍数）", "ref_box_height_lines", float),
         ("REF 样本最低匹配分 0.60–0.999", "ref_match_threshold", float),
+        ("REF 样本跨页缩放容差 ±%", "ref_match_scale_tolerance_percent", float),
         ("OCR 语言", "ocr_language", str),
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
@@ -308,7 +309,8 @@ SETTING_HELP = {
     "ref_box_action_position": "REF 文本编辑 ✎ 与删除 × 的操作按钮可以放在框的上方靠右、上方靠左或右侧。位置受页面边界自动约束，避免按钮落在页面外；默认上方靠右。",
     "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
     "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
-    "ref_match_threshold": "识别 REF 时的图案匹配最低分，默认 0.88；阈值越高误检越少，但可能漏检印刷略有变化的标签。对任意颜色的采集样本使用相同算法。",
+    "ref_match_threshold": "识别 REF 时的图案匹配最低分，默认 0.88；阈值越高误检越少，但可能漏检印刷略有变化的引导词；匹配时使用灰度对比度归一化，自动生成的框位于引导词右方。",
+    "ref_match_scale_tolerance_percent": "跨页扫描尺寸常有差异，默认对引导词样本尝试 ±25% 的多档缩放后进行灰度对比度匹配；0 表示仅匹配原大小，允许范围 0–50%。增大会增加运算量和误报风险，建议先用默认值再调整。",
         "separator_y_ink_safe_max_fraction": "原图白缝核验允许搜索的最大位移（行高比），默认0.25，另有0.30倍行高的安全上限。仅在开启实验性白缝核验后生效。\n\n增大更易找到远处白缝，但可能跳到相邻行；减小更保守，也可能无法修复穿字。",
         "separator_y_ink_safe_ink_threshold": "原图白缝核验对灰度图计算墨迹比例时，低于此阈值（默认185）的像素视为墨迹。仅在实验性白缝核验开启后生效。\n\n增大将浅色笔画也视作墨迹，但过高可能把灰背景当作文字；减小可能漏掉浅印字形。",
         "separator_y_ink_safe_existing_ink_ratio": "已有横线位置的墨迹占比不超过此值时不移动；默认0.045（4.5%）。仅在实验性白缝核验开启后生效。\n\n降低会更积极调整轻微穿字的线；提高更保守，可能允许线穿过部分文字。",
@@ -729,6 +731,7 @@ REF_BOX_STYLE_FIELDS = (
 )
 REF_BOX_GEOMETRY_FIELDS = (
     "ref_box_width_lines", "ref_box_height_lines", "ref_match_threshold",
+    "ref_match_scale_tolerance_percent",
 )
 REF_BOX_CHECKS = (
     ("显示 REF 框", "ref_box_show"),
