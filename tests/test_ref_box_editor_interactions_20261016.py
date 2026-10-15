@@ -109,6 +109,9 @@ class FakeCanvas:
     def create_text(self, *coords, **kwargs):
         self.actions.append(("text", coords, kwargs))
         return 6
+    def create_image(self, *coords, **kwargs):
+        self.actions.append(("image", coords, kwargs))
+        return 7
     def canvasx(self, x):
         return x
     def canvasy(self, y):
@@ -295,3 +298,146 @@ def test_ref_body_font_uses_same_main_entry_zoom_contract(
     )
     # REF remains independent from the main headword's configured base size.
     assert app.settings.main_entry_font_size == 24
+
+
+def test_ref_fill_palette_switches_when_text_is_added_or_removed(tmp_path):
+    from picture_capture.ui.ref_box_controller import ref_box_background
+
+    app, editor = editor_with_box(tmp_path)
+    settings = app.settings
+    assert ref_box_background("", settings) == ("#ffe0b2", 50.0)
+    assert ref_box_background("  \t\n", settings) == ("#ffe0b2", 50.0)
+    assert ref_box_background("参见", settings) == ("#c8e6c9", 50.0)
+    assert ref_box_background("see also", settings) == ("#c8e6c9", 50.0)
+    settings.ref_box_show_text = False
+    assert ref_box_background("参见", settings) == ("#c8e6c9", 50.0)
+    settings.ref_box_fill_color = "#ffccaa"
+    settings.ref_box_fill_opacity = 30.0
+    settings.ref_box_filled_color = "#bbdd99"
+    settings.ref_box_filled_opacity = 75.0
+    assert ref_box_background("", settings) == ("#ffccaa", 30.0)
+    assert ref_box_background("参见", settings) == ("#bbdd99", 75.0)
+
+
+def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content(
+    tmp_path, monkeypatch,
+):
+    import picture_capture.ui.ref_box_controller as ref_ui
+    import picture_capture.ui_compat as fonts
+
+    app, editor = editor_with_box(tmp_path)
+    editor._commit([
+        BOX,
+        RefBox(5, 100, 90, 35, 20, None, ""),
+        RefBox(6, 130, 125, 35, 20, None, "  \t"),
+    ])
+    editor.editing = False
+    displayed_images = []
+
+    def take_rgba(image):
+        displayed_images.append(image.getpixel((0, 0)))
+        return object()
+
+    monkeypatch.setattr(ref_ui.ImageTk, "PhotoImage", take_rgba)
+    monkeypatch.setattr(fonts, "resolve_content_font_family", lambda *_: "Arial")
+
+    editor.render()
+    assert displayed_images == [
+        (200, 230, 201, 128),  # populated: pale green at 50% opacity
+        (255, 224, 178, 128),  # empty: pale orange at 50% opacity
+        (255, 224, 178, 128),  # whitespace-only: still empty state
+    ]
+    assert [kwargs["text"] for kind, _args, kwargs in app.canvas.actions
+            if kind == "text"] == [BOX.text]
+
+    displayed_images.clear()
+    app.canvas.actions.clear()
+    app.settings.ref_box_show_text = False
+    editor.render()
+    assert displayed_images == [
+        (200, 230, 201, 128),
+        (255, 224, 178, 128),
+        (255, 224, 178, 128),
+    ]
+    assert not [kwargs for kind, _args, kwargs in app.canvas.actions if kind == "text"]
+    assert read_ref_boxes(app.current_page)[0].text == BOX.text
+
+    # Editing text reclassifies the color immediately, including while
+    # the "show text" option is disabled.
+    editor._commit([
+        RefBox(BOX.id, BOX.x, BOX.y, BOX.w, BOX.h,
+               BOX.entry_index, ""),
+        RefBox(5, 100, 90, 35, 20, None, "leave"),
+        RefBox(6, 130, 125, 35, 20, None, "  \t"),
+    ])
+    displayed_images.clear()
+    editor.render()
+    assert displayed_images[0] == (255, 224, 178, 128)
+    assert displayed_images[1] == (200, 230, 201, 128)
+    assert read_ref_boxes(app.current_page)[1].text == "leave"
+
+
+def test_ref_show_text_false_keeps_edit_mode_overlay_usable(tmp_path, monkeypatch):
+    import picture_capture.ui.ref_box_controller as ref_ui
+    import picture_capture.ui_compat as fonts
+
+    app, editor = editor_with_box(tmp_path)
+    app.settings.ref_box_show_text = False
+    app.settings.ref_box_show = False
+    monkeypatch.setattr(ref_ui.ImageTk, "PhotoImage", lambda _im: object())
+    monkeypatch.setattr(fonts, "resolve_content_font_family", lambda *_: "Arial")
+    editor.editing = True
+    editor.selected_id = BOX.id
+    editor.render()
+
+    # show-box=False is overridden during editing, while hidden body text
+    # must not hide REF handles or the pencil/cross action buttons.
+    assert any(kind == "rectangle" for kind, _args, _kwargs in app.canvas.actions)
+    texts = [kwargs["text"] for kind, _args, kwargs in app.canvas.actions
+             if kind == "text"]
+    assert BOX.text not in texts
+    assert "✎" in texts and "×" in texts
+
+
+def test_ref_palette_and_text_visibility_persist_after_reopen(tmp_path):
+    from picture_capture.models import AppSettings
+    from picture_capture.ui.settings.schema import (
+        CHECK_HELP, SETTING_HELP, FIELDS, REF_BOX_STYLE_FIELDS,
+        REF_BOX_CHECKS,
+    )
+    from picture_capture.ui.settings.lifecycle import validate_ref_box_controls
+
+    settings = AppSettings(
+        ref_box_show_text=False,
+        ref_box_fill_color="#ffc48a",
+        ref_box_fill_opacity=42.0,
+        ref_box_filled_color="#b6e2af",
+        ref_box_filled_opacity=65.0,
+    )
+    path = tmp_path / "settings.json"
+    settings.to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.ref_box_show_text is False
+    assert (reopened.ref_box_fill_color, reopened.ref_box_fill_opacity) == ("#ffc48a", 42.0)
+    assert (reopened.ref_box_filled_color, reopened.ref_box_filled_opacity) == ("#b6e2af", 65.0)
+
+    ref_field_names = {name for _label, name, _cast in FIELDS}
+    for name in ("ref_box_fill_color", "ref_box_fill_opacity",
+                 "ref_box_filled_color", "ref_box_filled_opacity"):
+        assert name in REF_BOX_STYLE_FIELDS
+        assert name in ref_field_names
+        assert name in SETTING_HELP and len(SETTING_HELP[name]) > 40
+    assert ("显示 REF 框内文字", "ref_box_show_text") in REF_BOX_CHECKS
+    assert len(CHECK_HELP["ref_box_show_text"]) > 40
+
+    from types import SimpleNamespace
+    values = {
+        name: SimpleNamespace(get=lambda val=value: val)
+        for name, value in (
+            ("ref_box_fill_color", "#ffc48a"),
+            ("ref_box_fill_opacity", "42"),
+            ("ref_box_filled_color", "#b6e2af"),
+            ("ref_box_filled_opacity", "65"),
+        )
+    }
+    validate_ref_box_controls(values)
