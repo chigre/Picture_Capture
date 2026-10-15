@@ -30,6 +30,7 @@ from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
+from .illustration_labels import previous_entry_ref_for_image
 from .crop_plan_formatting import (
     _normalized_crop_name,
     canonical_polygon_link,
@@ -3271,6 +3272,7 @@ def split_whole_entries(
     integrate_illustrations: bool = True, profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     transparent_background: bool = False,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
@@ -3593,6 +3595,7 @@ def split_illustrations(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     transparent_background: bool = False,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> IllustrationSplitResult:
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
@@ -3754,6 +3757,7 @@ def split_whole_entries_job(
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
     transparent_background: bool = False,
+    previous_image_path: str | Path | None = None,
 ) -> list[CropRecord]:
     """Spawn-safe worker: build the crop plan first, then execute it."""
     page = Path(image_path)
@@ -3765,6 +3769,7 @@ def split_whole_entries_job(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
         transparent_background=transparent_background,
+        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
     )
 
 
@@ -3782,6 +3787,7 @@ def split_illustrations_job(
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
     transparent_background: bool = False,
+    previous_image_path: str | Path | None = None,
 ) -> IllustrationSplitResult:
     """Spawn-safe worker: plan PPP/entry relations before exporting standalone PPPs."""
     page = Path(image_path)
@@ -3793,4 +3799,5 @@ def split_illustrations_job(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
         transparent_background=transparent_background,
+        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
     )
