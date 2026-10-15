@@ -304,7 +304,15 @@ class PageThumbnailController:
                     self.tree.item(iid, image="")
                 self._attached.pop(iid, None)
             rendered = 0
-            for iid in visible_rows:
+            # When the browsed page is visible, render it first, then the
+            # thumbnails below it; afterwards fill rows above it.
+            browsed = str(getattr(self.app, "current_index", -1))
+            if browsed in visible_rows:
+                pivot = visible_rows.index(browsed)
+                ordered_visible = visible_rows[pivot:] + visible_rows[:pivot]
+            else:
+                ordered_visible = visible_rows
+            for iid in ordered_visible:
                 try:
                     index = int(iid)
                     path = Path(project.images[index])
