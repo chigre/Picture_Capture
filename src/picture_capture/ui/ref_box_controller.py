@@ -15,6 +15,7 @@ from PIL import Image, ImageColor, ImageTk
 from ..ref_boxes import (
     RefBox, next_ref_id, read_ref_boxes, ref_box_ticket, write_ref_boxes,
 )
+from ..ref_box_geometry import hit_test, transform_box, action_cursor
 from ..ref_box_detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
     list_ref_samples,
@@ -37,11 +38,13 @@ class RefBoxController:
         self.drag_box: RefBox | None = None
         self.selected_id: int | None = None
         self._overlay_images: list[ImageTk.PhotoImage] = []
+        self.pointer_action: str | None = None
 
     def load_page(self, page: Path) -> None:
         """Fail closed on corrupt files instead of dropping manually entered rows."""
         self.capture_sample = False
         self.cancel_drag()
+        self.selected_id = None
         self.loaded_page = None
         self.boxes = []
         self.ticket = None
@@ -51,6 +54,7 @@ class RefBoxController:
             boxes = read_ref_boxes(page)
             ticket = ref_box_ticket(page)
         except (ValueError, OSError) as exc:
+            self.stop_edit()
             self.app.status_var.set(f"REF 读取失败；本页 REF 编辑已锁定：{exc}")
             return
         self.loaded_page = Path(page)
@@ -137,6 +141,7 @@ class RefBoxController:
                 app._set_section_editing(False)
         self.editing = active
         self.cancel_drag()
+        self.selected_id = None
         button = getattr(app, "_ref_box_edit_button", None)
         if button is not None:
             button.configure(
@@ -144,7 +149,7 @@ class RefBoxController:
                 style="PC.EditActive.TButton" if active else "PC.Compact.TButton",
             )
         app.status_var.set(
-            "REF 编辑：拖框新增；拖框内移动／右下角缩放；双击编辑文本；右键删除；Ctrl+Z/Y 撤销重做。"
+            "REF 编辑：单击选框；拖动内部移动、四边/四角缩放；双击或点击✎编辑文字；点击×/Delete删除；Ctrl+Z/Y撤销重做。"
             if active else "已退出 REF 编辑模式"
         )
         app.redraw()
@@ -154,6 +159,7 @@ class RefBoxController:
         self.editing = False
         self.capture_sample = False
         self.cancel_drag()
+        self.pointer_action = None
         button = getattr(self.app, "_ref_box_edit_button", None)
         if button is not None:
             button.configure(text="编辑'REF'", style="PC.Compact.TButton")
@@ -177,30 +183,64 @@ class RefBoxController:
         self.drag_original = None
         self.drag_box = None
         self.drag_kind = "create"
+        self.pointer_action = None
 
     @property
     def pointer_active(self) -> bool:
         return self.editing or self.capture_sample
 
     def _hit(self, x: int, y: int) -> RefBox | None:
-        for box in reversed(self.boxes):
-            if box.x <= x <= box.x + box.w and box.y <= y <= box.y + box.h:
-                return box
+        box, _ = hit_test(self.boxes, x, y, scale=self.app.view_scale,
+                          selected_id=self.selected_id)
+        return box
+
+    def _action_buttons(self):
+        """Source-coordinate positions for selected REF edit/delete chips."""
+        target = next((b for b in self.boxes if b.id == self.selected_id), None)
+        if target is None or self.app.image is None:
+            return []
+        scale = max(0.08, float(self.app.view_scale))
+        chip = round(22 / scale)
+        gap = round(3 / scale)
+        right = min(self.app.image.width, target.x + target.w)
+        left = max(0, right - 2 * chip - gap)
+        # Position just above box when possible, else below box.
+        top = (target.y - chip - gap
+               if target.y >= chip + gap else target.y + target.h + gap)
+        top = max(0, min(self.app.image.height - chip, top))
+        return [
+            ("edit", left, top, left + chip, top + chip),
+            ("delete", left + chip + gap, top,
+             left + chip * 2 + gap, top + chip),
+        ]
+
+    def _hit_action(self, x: int, y: int) -> str | None:
+        for kind, x0, y0, x1, y1 in self._action_buttons():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return kind
         return None
 
     def press(self, x: int, y: int) -> str:
+        if not self._ready():
+            return "break"
+        self.app.canvas.focus_set()
         self.drag_start = (x, y)
         self.drag_original = None
+        self.drag_box = None
+        self.pointer_action = self._hit_action(x, y) if self.editing else None
         self.drag_kind = "create"
-        if self.editing:
-            hit = self._hit(x, y)
+        if self.editing and self.pointer_action is None:
+            hit, action = hit_test(
+                self.boxes, x, y, scale=self.app.view_scale,
+                selected_id=self.selected_id,
+            )
             if hit is not None:
                 self.selected_id = hit.id
                 self.drag_original = hit
-                corner_distance = max(5, round(9 / max(0.1, self.app.view_scale)))
-                near_corner = (abs(x - (hit.x + hit.w)) <= corner_distance
-                               and abs(y - (hit.y + hit.h)) <= corner_distance)
-                self.drag_kind = "resize" if near_corner else "move"
+                self.drag_kind = action
+                self.app.status_var.set(
+                    f"已选 REF #{hit.id}：拖动{action}，双击或✎修改文字，×删除"
+                )
             else:
                 self.selected_id = None
         return "break"
@@ -208,24 +248,90 @@ class RefBoxController:
     def drag(self, x: int, y: int) -> str:
         if self.drag_start is None or self.app.image is None:
             return "break"
+        if self.pointer_action:
+            return "break"
         x = max(0, min(self.app.image.width, x))
         y = max(0, min(self.app.image.height, y))
         sx, sy = self.drag_start
-        old = self.drag_original
-        if old is not None and self.drag_kind == "move":
-            nx = max(0, min(self.app.image.width - old.w, old.x + x - sx))
-            ny = max(0, min(self.app.image.height - old.h, old.y + y - sy))
-            self.drag_box = replace(old, x=nx, y=ny)
-        elif old is not None and self.drag_kind == "resize":
-            self.drag_box = replace(
-                old, w=max(2, x - old.x), h=max(2, y - old.y),
+        if self.drag_original is not None:
+            self.drag_box = transform_box(
+                self.drag_original, self.drag_kind, start=(sx, sy),
+                current=(x, y), image_size=self.app.image.size,
             )
         else:
             nx, ny = min(sx, x), min(sy, y)
-            self.drag_box = RefBox(0, nx, ny, max(1, abs(x - sx)),
-                                   max(1, abs(y - sy)), None)
+            self.drag_box = RefBox(
+                0, nx, ny, max(1, abs(x-sx)), max(1, abs(y-sy)), None,
+            )
         self._preview_drag()
         return "break"
+
+    def hover(self, x: int, y: int) -> None:
+        if not self.pointer_active:
+            return
+        if self.editing and self._hit_action(x, y):
+            cursor = "hand2"
+        elif self.capture_sample:
+            cursor = "crosshair"
+        else:
+            _box, action = hit_test(
+                self.boxes, x, y, scale=self.app.view_scale,
+                selected_id=self.selected_id,
+            )
+            cursor = action_cursor(action)
+        try:
+            self.app.canvas.configure(cursor=cursor)
+        except tk.TclError:
+            pass
+
+    def _event_xy_from_overlay(self, event) -> tuple[int, int]:
+        """Translate child widget screen coordinates into scrolled page pixels."""
+        canvas = self.app.canvas
+        cx = canvas.canvasx(event.x_root - canvas.winfo_rootx())
+        cy = canvas.canvasy(event.y_root - canvas.winfo_rooty())
+        scale = max(0.001, float(self.app.view_scale))
+        return round(cx / scale), round(cy / scale)
+
+    def bind_overlay_widgets(self) -> None:
+        """Text Entry/PPP labels are Tk windows above Canvas items.
+
+        Their pointer events do not propagate to the canvas; while editing REF
+        divert those events to this controller. Redraw recreates the widgets,
+        restoring their normal PDIC/PPP bindings outside REF mode.
+        """
+        if not self.pointer_active:
+            return
+
+        def dispatch(kind: str, event):
+            xy = self._event_xy_from_overlay(event)
+            if kind == "press":
+                return self.press(*xy)
+            if kind == "drag":
+                return self.drag(*xy)
+            if kind == "release":
+                return self.release(*xy)
+            if kind == "double":
+                return self.double_click(*xy)
+            if kind == "context":
+                return self.context_menu(event, coords=xy)
+            if kind == "motion":
+                self.hover(*xy)
+                return None
+            return None
+
+        bindings = (
+            ("<Button-1>", "press"), ("<B1-Motion>", "drag"),
+            ("<ButtonRelease-1>", "release"),
+            ("<Double-Button-1>", "double"), ("<Button-3>", "context"),
+            ("<Button-2>", "context"), ("<Motion>", "motion"),
+        )
+        def install(widget):
+            for sequence, kind in bindings:
+                widget.bind(sequence, lambda event, action=kind: dispatch(action, event))
+            for child in widget.winfo_children():
+                install(child)
+        for widget in list(getattr(self.app, "overlay_widgets", ())):
+            install(widget)
 
     def _preview_drag(self):
         app = self.app
@@ -240,14 +346,25 @@ class RefBoxController:
         )
 
     def release(self, x: int, y: int) -> str:
-        if self.drag_start is None or self.app.image is None:
+        if self.drag_start is None or self.app.image is None or not self._ready():
             return "break"
         sx, sy = self.drag_start
-        self.drag(x, y)
+        x = max(0, min(self.app.image.width, x))
+        y = max(0, min(self.app.image.height, y))
+        action = self.pointer_action
+        if action is None:
+            self.drag(x, y)
         candidate = self.drag_box
         original = self.drag_original
         self.cancel_drag()
+        self.pointer_action = None
         self.app.canvas.delete("ref-drag")
+        if action == "edit":
+            self.edit_properties()
+            return "break"
+        if action == "delete":
+            self.delete_selected()
+            return "break"
         if self.capture_sample:
             self.capture_sample = False
             if abs(x-sx) < 4 or abs(y-sy) < 4:
@@ -255,7 +372,7 @@ class RefBoxController:
             else:
                 try:
                     path = add_ref_sample(
-                        self.loaded_page, (min(x,sx),min(y,sy),max(x,sx),max(y,sy)),
+                        self.loaded_page, (min(x,sx), min(y,sy), max(x,sx), max(y,sy)),
                     )
                     self.app.status_var.set(f"REF 样本已保存：{path.name}")
                 except Exception as exc:
@@ -263,14 +380,19 @@ class RefBoxController:
             self.app.redraw()
             return "break"
         if candidate is None or not self.editing:
+            self.app.redraw()  # Selection must be painted after click-only hit.
             return "break"
         if original is not None:
             proposed = [candidate if b.id == original.id else b for b in self.boxes]
-            self._commit(proposed)
+            if not self._commit(proposed):
+                return "break"
+            self.app.redraw()
             return "break"
         if abs(x-sx) < 3 and abs(y-sy) < 3:
-            line_height = max(2.0, float(getattr(self.app.settings, "character_height", 26))
-                              + float(getattr(self.app.settings, "row_padding", 0)))
+            line_height = max(
+                2.0, float(getattr(self.app.settings, "character_height", 26))
+                + float(getattr(self.app.settings, "row_padding", 0)),
+            )
             height = max(2, round(line_height * float(
                 getattr(self.app.settings, "ref_box_height_lines", 1))))
             width = max(2, round(line_height * float(
@@ -278,12 +400,13 @@ class RefBoxController:
             candidate = replace(candidate, x=sx, y=sy, w=width, h=height)
         image = self.app.image
         candidate = replace(
-            candidate, x=max(0,min(image.width-2,candidate.x)),
-            y=max(0,min(image.height-2,candidate.y)),
+            candidate, x=max(0, min(image.width-2, candidate.x)),
+            y=max(0, min(image.height-2, candidate.y)),
         )
-        candidate = replace(candidate,
-            w=max(2,min(candidate.w,image.width-candidate.x)),
-            h=max(2,min(candidate.h,image.height-candidate.y)),
+        candidate = replace(
+            candidate,
+            w=max(2, min(candidate.w, image.width-candidate.x)),
+            h=max(2, min(candidate.h, image.height-candidate.y)),
         )
         entry_index = None
         if getattr(self.app.settings, "ref_box_auto_attach", True):
@@ -293,9 +416,9 @@ class RefBoxController:
                 candidate.x, candidate.y, candidate.w, candidate.h,
             )
         added = replace(candidate, id=next_ref_id(self.boxes), entry_index=entry_index)
+        self.selected_id = added.id
         if self._commit([*self.boxes, added]):
-            self.selected_id = added.id
-            self.app.status_var.set(f"REF #{added.id} 已保存；双击框可编辑文字与挂靠词条")
+            self.app.status_var.set(f"REF #{added.id} 已保存；双击或✎编辑，×删除")
         return "break"
 
     def edit_properties(self, target_id: int | None = None):
@@ -335,22 +458,24 @@ class RefBoxController:
         editor.focus_set()
 
     def double_click(self, x: int, y: int) -> str:
+        self.cancel_drag()  # Suppress a trailing release after Tk double-click.
         target = self._hit(x, y)
         if target:
             self.selected_id = target.id
             self.edit_properties(target.id)
         return "break"
 
-    def delete_selected(self) -> bool:
+    def delete_selected(self, _event=None):
         selected = self.selected_id
         if selected is None or not self._ready():
-            return False
-        if self._commit([b for b in self.boxes if b.id != selected]):
+            return "break"
+        proposed = [b for b in self.boxes if b.id != selected]
+        if self._commit(proposed):
             self.selected_id = None
-            return True
-        return False
+            self.app.redraw()
+        return "break"
 
-    def context_menu(self, event):
+    def context_menu(self, event, *, coords=None):
         if self.capture_sample:
             self.capture_sample = False
             self.cancel_drag()
@@ -358,10 +483,11 @@ class RefBoxController:
             return "break"
         if not self.editing:
             return None
-        x, y = self.app.original_xy(event)
+        x, y = coords if coords is not None else self.app.original_xy(event)
         hit = self._hit(x, y)
         if hit is not None:
             self.selected_id = hit.id
+        self.app.redraw()
         menu = tk.Menu(self.app, tearoff=False)
         menu.add_command(label="编辑 REF 文字/挂靠", command=self.edit_properties,
                          state="normal" if self.selected_id else "disabled")
