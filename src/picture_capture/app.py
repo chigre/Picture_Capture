@@ -222,6 +222,7 @@ from .overlay_opacity import (
     create_alpha_canvas_line, release_alpha_line_photos,
 )
 from .illustration_polygon_edit import nearest_polygon_segment
+from .illustration_labels import label_text, user_edited_link
 from .illustration_fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
@@ -13487,6 +13488,9 @@ class PictureCaptureApp(tk.Tk):
                 self.canvas.create_window(cx, cy, window=check, anchor="nw")
         show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())
         show_labels = bool(self.settings.show_illustration_labels)
+        numbered_labels = (
+            self._illustration_controller_for_call().preview_labels() if show_labels else []
+        )
         if show_shapes or show_labels:
             for region_index, region in enumerate(self.polygons):
                 coords = [value * self.view_scale for point in region.points for value in point]
@@ -13554,7 +13558,7 @@ class PictureCaptureApp(tk.Tk):
                             self.settings.illustration_label_font_italic,
                         ),
                     )
-                    label_entry.insert(0, self._polygon_display_name(region, region_index))
+                    label_entry.insert(0, label_text(numbered_labels[region_index]))
                     label_entry.bind("<FocusOut>", lambda _e, r=region, w=label_entry: self._update_polygon_label(r, w))
                     label_entry.bind("<Return>", lambda _e, r=region, w=label_entry: self._commit_polygon_label_return(r, w))
                     label_entry.pack(side="left")
@@ -13674,39 +13678,26 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _polygon_display_name(region: PolygonRegion, index: int) -> str:
-        label = str(region.label or "").strip()
-        fields = label.split("|")
-        if len(fields) >= 3 and fields[1].strip():
-            return fields[1].strip()
-        return label or f"P_{index + 1:02d}"
+        return label_text(region.label) or f"P_{index + 1:02d}"
 
     def _set_polygon_display_name(self, region: PolygonRegion, name: str) -> None:
-        name = re.sub(r"[\t\r\n|]+", "_", str(name or "").strip())
-        if not name:
-            return
-        label = str(region.label or "")
-        fields = label.split("|")
-        if len(fields) >= 4:
-            fields[1] = name
-            region.label = "|".join(fields)
-        else:
-            region.label = name
+        """Compatibility setter: accept only association-code changes."""
+        region.label = user_edited_link(region.label, name)
 
     def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry) -> None:
         if self._batch_active and self._batch_allow_pdic_edits:
             return
         try:
-            name = widget.get().strip()
+            text = widget.get().strip()
         except tk.TclError:
             return
-        before = region.label
-        self._set_polygon_display_name(region, name)
-        if region.label != before and self.current_page is not None:
-            try:
-                write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-                self.status_var.set(f"PPP名称已更新：{name}")
-            except Exception as exc:
-                self.show_error("保存PPP名称失败", exc)
+        if self._illustration_controller_for_call().update_label(region, text):
+            self.status_var.set(f"PPP标签已保存：{label_text(region.label)}")
+        try:
+            widget.delete(0, tk.END)
+            widget.insert(0, label_text(region.label))
+        except tk.TclError:
+            pass
 
     def _commit_polygon_label_return(self, region: PolygonRegion, widget: tk.Entry) -> str:
         self._update_polygon_label(region, widget)
@@ -13717,10 +13708,18 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def _sync_polygon_label_texts(self) -> None:
-        for widget, region in list(getattr(self, "polygon_label_bindings", [])):
+        """Carry edited association codes across redraw without reassigning IDs."""
+        bindings = list(getattr(self, "polygon_label_bindings", []))
+        if not bindings or self.current_page is None:
+            return
+        expected = self._illustration_controller_for_call().preview_labels()
+        for widget, region in bindings:
             try:
-                self._set_polygon_display_name(region, widget.get())
-            except tk.TclError:
+                index = next(i for i, item in enumerate(self.polygons) if item is region)
+                typed = widget.get().strip()
+                if typed != label_text(expected[index]):
+                    region.label = user_edited_link(expected[index], typed)
+            except (tk.TclError, ValueError, IndexError, StopIteration):
                 continue
 
     def _nearest_polygon_vertex(self, x: int, y: int, radius_screen: float = 11.0) -> tuple[int, int] | None:
