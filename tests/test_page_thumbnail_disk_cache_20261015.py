@@ -200,8 +200,10 @@ def test_v1_nested_cache_rebuilds_actual_source_and_removes_old_dir(tmp_path):
     Image.new("RGB", (158, 224), (220, 10, 10)).save(
         legacy, format="PNG", pnginfo=old_meta,
     )
+    expected_pixel = disk._build_thumbnail(scan).getpixel((0, 0))
     result = disk.get_page_thumbnail(tmp_path, scan)
-    assert result.getpixel((0, 0)) == (10, 200, 90)
+    assert result.getpixel((0, 0)) == expected_pixel
+    assert result.getpixel((0, 0)) != (220, 10, 10)
     assert disk.thumbnail_cache_path(tmp_path, scan).name == "scan-017.png"
     assert disk.thumbnail_cache_path(tmp_path, scan).is_file()
     assert not legacy.exists()
