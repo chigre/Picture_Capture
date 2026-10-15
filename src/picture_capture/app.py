@@ -1790,6 +1790,7 @@ class SettingsDialog(tk.Toplevel):
             _settings_lifecycle_ui.validate_projection_width(self.vars)
             _settings_lifecycle_ui.validate_separator_gap_controls(self.vars)
             _settings_lifecycle_ui.validate_ref_box_controls(self.vars)
+            _settings_color_ui.validate_color_controls(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)
