@@ -36,10 +36,14 @@ def hit_test(
         if not (left - tolerance <= x <= right + tolerance
                 and top - tolerance <= y <= bottom + tolerance):
             continue
-        near_left = abs(x - left) <= tolerance
-        near_right = abs(x - right) <= tolerance
-        near_top = abs(y - top) <= tolerance
-        near_bottom = abs(y - bottom) <= tolerance
+        # Prevent large source-pixel tolerances at low zoom from turning a
+        # mid-edge drag into a corner drag or swallowing the move interior.
+        tol_x = min(tolerance, max(2.0, box.w / 4))
+        tol_y = min(tolerance, max(2.0, box.h / 4))
+        near_left = abs(x - left) <= tol_x
+        near_right = abs(x - right) <= tol_x
+        near_top = abs(y - top) <= tol_y
+        near_bottom = abs(y - bottom) <= tol_y
         # For narrow rectangles, choose the nearest of two opposing sides.
         if near_left and near_right:
             near_left = abs(x - left) <= abs(x - right)
