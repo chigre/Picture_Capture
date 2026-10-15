@@ -16,7 +16,30 @@ from picture_capture.ui.settings.color_picker import (
 from picture_capture.ui.settings import schema
 from picture_capture.ui.ref_box_controller import RefBoxController
 
-from test_ref_box_editor_interactions_20261016 import FakeApp
+from types import SimpleNamespace
+
+
+class _TestCanvas:
+    def focus_set(self):
+        return None
+    def delete(self, _tag):
+        return None
+
+
+class FakeApp:
+    def __init__(self, page: Path):
+        self.current_page = page
+        self.image = Image.new("RGB", (200, 160), "white")
+        self.image.save(page)
+        self.canvas = _TestCanvas()
+        self.view_scale = 1.0
+        self.settings = AppSettings()
+        self.status_var = SimpleNamespace(set=lambda *_args: None)
+        self.errors = []
+    def redraw(self):
+        return None
+    def show_error(self, name, error):
+        self.errors.append((name, str(error)))
 
 
 @pytest.mark.parametrize("position", REF_ACTION_POSITIONS)
@@ -137,7 +160,7 @@ def test_universal_picker_covers_all_settings_color_fields():
     assert "value.trace_add(" in picker
     assert "colorchooser.askcolor(" in picker
     assert "for name in COLOR_FIELDS" not in illustration
-    assert "for name in (" not in ref or "ref_box_fill_color" not in ref
+    assert "colorchooser.askcolor(" not in ref  # no feature-local picker
 
 
 def test_native_tk_swatch_updates_when_manual_hex_changes():
