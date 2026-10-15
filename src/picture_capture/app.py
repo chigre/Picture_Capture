@@ -132,6 +132,7 @@ from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.settings import illustration as _settings_illustration_ui
 from .ui.settings import ref_box as _settings_ref_box_ui
+from .ui.settings import color_picker as _settings_color_ui
 from .ui.ref_box_controller import RefBoxController
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
@@ -670,7 +671,8 @@ class SettingsDialog(tk.Toplevel):
             )
         if name == "layout_transform":
             return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
-        return ttk.Entry(parent, textvariable=var, width=28)
+        return (_settings_color_ui.make_color_widget(parent, var)
+                if name.endswith("_color") else ttk.Entry(parent, textvariable=var, width=28))
 
     def _add_setting_group(
         self,
