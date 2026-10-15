@@ -268,6 +268,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # REF rectangles are independent page annotations, never PPP/PDIC fields.
     ref_box_show: bool = True
     ref_box_show_text: bool = True
+    # The cross can be visible on every REF while REF edit mode is active.
+    ref_box_delete_always_visible: bool = False
+    ref_box_action_position: str = "above_right"
     # Empty/whitespace-only REF uses pale orange; filled REF uses pale green.
     # Independent opacity settings default to 50% for both states.
     ref_box_fill_color: str = "#ffe0b2"
