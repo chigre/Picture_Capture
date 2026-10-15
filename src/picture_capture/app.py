@@ -14095,6 +14095,9 @@ class PictureCaptureApp(tk.Tk):
         active = not self.polygon_draw_var.get()
         self.polygon_draw_var.set(active)
         if active:
+            if self.polygons:
+                self._sync_polygon_label_texts()
+                self._save_normalized_ppp()
             if self._section_editing:
                 self._set_section_editing(False)
             # Drawing must remain visible even if the ordinary display checkbox
@@ -14276,7 +14279,7 @@ class PictureCaptureApp(tk.Tk):
         if self.current_page is not None:
             try:
                 self._sync_polygon_label_texts()
-                if self._save_normalized_ppp():
+                if self._illustration_controller_for_call().persist_current(redraw=True):
                     self.status_var.set("PPP轮廓已调整并保存")
             except Exception as exc:
                 self.show_error("保存PPP轮廓失败", exc)
@@ -14300,10 +14303,16 @@ class PictureCaptureApp(tk.Tk):
             return
         if self.polygon_draw_var.get():
             if not self.guard(): return
-            if len(self.new_polygon) >= 3:
-                if self._illustration_controller_for_call().add_manual_polygon(self.new_polygon.copy()):
+            points = self.new_polygon.copy()
+            self.new_polygon.clear()
+            if len(points) >= 3:
+                if self._illustration_controller_for_call().add_manual_polygon(points):
                     self.status_var.set("已保存插图，整页序号已按阅读顺序更新")
-            self.new_polygon.clear(); self.redraw(); return
+                else:
+                    self.redraw()
+            else:
+                self.redraw()
+            return
         if not self.project or not self.current_page or self.image is None:
             return
         # Navigation must not claim/lock a pending OCR-batch page. Only actual
