@@ -160,15 +160,28 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
         page, "显示与默认挂靠", REF_BOX_CHECKS,
         intro="隐藏 REF 文字只影响画布显示，已有文本仍会保留；框的橙/绿底色继续根据实际内容切换。",
     )
-    dialog._add_setting_group(
+    geometry_group = dialog._add_setting_group(
         page, "画框比例与图样匹配", REF_BOX_GEOMETRY_FIELDS,
         intro="单击按行高倍数创建默认框；拖动以真实坐标创建自定义大小。"
               "识别匹配分越高越保守；任何颜色/语言的图案均可采样。",
     )
-    dialog._add_check_group(
-        page, "画框比例与图样匹配 · 附加选项", REF_BOX_GEOMETRY_CHECKS,
-        intro="关闭：从图样之后/之前开始，仅用 REF 默认宽度。开启：包含图样本身，宽度为图样实际匹配宽度 + REF 默认宽度；图样前/后方向由各样本单独决定。",
-    )
+    for label, name in REF_BOX_GEOMETRY_CHECKS:
+        if name not in dialog.vars:
+            dialog.vars[name] = tk.BooleanVar(
+                value=bool(getattr(dialog.parent.settings, name))
+            )
+        row_index = geometry_group.grid_size()[1]
+        checkbox = ttk.Checkbutton(
+            geometry_group, text=label, variable=dialog.vars[name],
+        )
+        checkbox.grid(row=row_index, column=0, columnspan=2,
+                      sticky="w", padx=(8, 0), pady=(8, 5))
+        info = ttk.Label(geometry_group, text="ⓘ", cursor="hand2")
+        info.grid(row=row_index, column=2, sticky="w", padx=(8, 0))
+        help_callback = lambda l=label, n=name: dialog._show_check_help(l, n)
+        dialog._bind_help_widget(checkbox, help_callback)
+        dialog._bind_help_widget(info, help_callback)
+        info.bind("<Button-1>", lambda _event, fn=help_callback: fn(), add="+")
     controls = ttk.LabelFrame(page, text="样本图案采集 / 管理", padding=(12, 10))
     controls.pack(fill="x", pady=(0, 12))
     ttk.Label(
