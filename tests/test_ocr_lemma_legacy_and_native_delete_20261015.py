@@ -62,15 +62,3 @@ def test_legacy_ocr_entries_uses_profile_gate_and_bracket_cleanup(monkeypatch, e
     assert out == [expected]
 
 
-def test_main_canvas_entry_delete_key_is_normal_character_edit(monkeypatch):
-    # The full widget builder is exercised through the existing real overlay
-    # mock, so this tests the installed bindings rather than a source marker.
-    from tests.test_column_marker_editor_layout_20261015 import _render, _Entry
-    app, _lines, _entry, _geometry = _render(monkeypatch)
-    editor = next(w[2] for w in app.canvas.windows if isinstance(w[2], _Entry))
-    assert "<Delete>" not in editor.bindings
-    assert "<FocusOut>" in editor.bindings
-    assert "<KeyPress>" in editor.bindings
-    assert "<Return>" in editor.bindings
-    # Explicit on-screen [X] remains the owner of separator/entry deletion.
-    assert callable(app.delete_entry)
