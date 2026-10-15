@@ -378,7 +378,8 @@ class RefBoxController:
             rgb = (183, 217, 245)
         from ..ui_compat import resolve_content_font_family
         family = resolve_content_font_family(
-            getattr(config, "ref_box_font_family", "自动（系统推荐）"),
+            app, getattr(config, "ref_box_font_family", "自动（系统推荐）"),
+            str(getattr(config, "ocr_language", "eng")),
         )
         size = max(6, round(int(getattr(config, "ref_box_font_size", 16)) * s))
         styles = []
