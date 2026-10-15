@@ -21,7 +21,8 @@ def test_cache_is_project_local_and_contains_real_pixels(tmp_path):
     scan = make_scan(tmp_path / "scans" / "001.png", (245, 21, 31))
     original = scan.read_bytes()
     preview = disk.get_page_thumbnail(tmp_path, scan)
-    assert preview.size == (158, 224)
+    assert preview.height == 448
+    assert 300 <= preview.width <= 320
     assert preview.getpixel((5, 5)) == (245, 21, 31)
     cache = disk.thumbnail_cache_path(tmp_path, scan)
     assert cache.is_file()
@@ -88,47 +89,40 @@ def test_read_only_cache_falls_back_to_real_preview(tmp_path, monkeypatch):
     assert not disk.thumbnail_cache_path(tmp_path, scan).exists()
 
 
-class FakeApp:
-    def __init__(self, root, images):
-        self.project = SimpleNamespace(root=root, images=images)
-        self.workspace_mode = "正常"
-        self.jobs = []
-
-    def after(self, delay, callback):
-        self.jobs.append((delay, callback))
-        return str(len(self.jobs))
-
-    def after_cancel(self, _job):
-        return None
-
-
-class FakeBoolean:
-    def get(self):
-        return True
-
-
 def test_progressively_caches_all_pages_not_only_visible_ones(tmp_path):
+    from picture_capture.page_thumbnail_tasks import ThumbnailTasks
+    import time
+
     scans = [
         make_scan(tmp_path / "pages" / f"page{i}.png", (20 + i, 40 + i, 60 + i))
         for i in range(7)
     ]
-    app = FakeApp(tmp_path, scans)
-    controller = PageThumbnailController.__new__(PageThumbnailController)
-    controller.app = app
-    controller.enabled_var = FakeBoolean()
-    controller._warm_job = None
-    controller._warm_cursor = 0
-    controller._warm_project_key = None
-    controller._schedule_warm_cache()
-    steps = 0
-    while app.jobs:
-        _delay, callback = app.jobs.pop(0)
-        controller._warm_job = None
-        callback()
-        steps += 1
-        assert steps <= len(scans) + 2
-    assert controller._warm_cursor == len(scans)
-    assert all(disk.thumbnail_cache_path(tmp_path, page).exists() for page in scans)
+    pool = ThumbnailTasks(workers=2)
+    names = disk.thumbnail_name_map(scans)
+    finished = set()
+    next_index = 0
+    deadline = time.monotonic() + 10
+    try:
+        while len(finished) < len(scans) and time.monotonic() < deadline:
+            while next_index < len(scans) and pool.active < 2:
+                assert pool.submit(
+                    next_index, ("synthetic", next_index), tmp_path,
+                    scans[next_index], names,
+                ) is not None
+                next_index += 1
+            for result in pool.collect():
+                assert result.error is None, result.error
+                assert result.image.getpixel((0, 0)) == (
+                    20 + result.page_index,
+                    40 + result.page_index,
+                    60 + result.page_index,
+                )
+                finished.add(result.page_index)
+            time.sleep(0.005)
+    finally:
+        pool.shutdown()
+    assert len(finished) == len(scans)
+    assert all(disk.thumbnail_cache_path(tmp_path, page, names).exists() for page in scans)
 
 
 def test_filename_identity_prevents_cache_swap_between_same_stems(tmp_path):
@@ -154,7 +148,7 @@ def test_original_page_names_and_suffix_conflicts_are_flat(tmp_path):
     assert disk.thumbnail_cache_path(tmp_path, b, name_map).name == "080128.png"
     for scan in (a, b, c):
         preview = disk.get_page_thumbnail(tmp_path, scan, name_map)
-        assert preview.size[0] <= 160
+        assert preview.size[0] <= 320
         assert disk.thumbnail_cache_path(tmp_path, scan, name_map).is_file()
     names = [p.name for p in disk.thumbnail_cache_dir(tmp_path).iterdir()]
     assert len(names) == 3 and len(set(name.casefold() for name in names)) == 3
@@ -224,3 +218,38 @@ def test_read_only_duplicate_name_respects_original_pixels(tmp_path, monkeypatch
     monkeypatch.setattr(disk, "_publish_cache", lambda *_args: (_ for _ in ()).throw(PermissionError()))
     assert disk.get_page_thumbnail(tmp_path, a, names).getpixel((1, 1)) == (255, 0, 0)
     assert disk.get_page_thumbnail(tmp_path, b, names).getpixel((1, 1)) == (0, 0, 255)
+
+
+def test_master_thumbnail_keeps_all_corners_instead_of_center_cropping(tmp_path):
+    source = tmp_path / "wide-layout.png"
+    image = Image.new("RGB", (1200, 720), "white")
+    # Illustration marks at the page edges must remain visible in index.
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, 150, 140), fill=(255, 0, 0))
+    draw.rectangle((1050, 580, 1199, 719), fill=(0, 0, 255))
+    image.save(source)
+    preview = disk.get_page_thumbnail(tmp_path, source)
+    assert preview.size[0] == 320
+    assert preview.size[1] < 448  # The full landscape aspect ratio is kept.
+    assert preview.getpixel((2, 2)) == (255, 0, 0)
+    assert preview.getpixel((preview.width - 3, preview.height - 3)) == (0, 0, 255)
+
+
+def test_fixed_v3_size_cache_rebuilds_old_v2_png_in_place(tmp_path):
+    from PIL import PngImagePlugin
+    source = make_scan(tmp_path / "page0.png", (80, 150, 200))
+    cache = disk.thumbnail_cache_path(tmp_path, source)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    old = Image.new("RGB", (158, 224), (200, 80, 80))
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text(disk.FINGERPRINT_KEY, "v2-stale")
+    metadata.add_text(disk.SOURCE_KEY, disk._path_hash(source))
+    metadata.add_text(disk.SOURCE_FILENAME_KEY, source.name)
+    old.save(cache, format="PNG", pnginfo=metadata)
+    preview = disk.get_page_thumbnail(tmp_path, source)
+    assert preview.getpixel((5, 5)) == (80, 150, 200)
+    assert preview.height == 448
+    with Image.open(cache) as saved:
+        assert saved.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(source)
+        assert saved.height == 448
