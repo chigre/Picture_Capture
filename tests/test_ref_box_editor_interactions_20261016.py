@@ -306,10 +306,10 @@ def test_ref_fill_palette_switches_when_text_is_added_or_removed(tmp_path):
 
     app, editor = editor_with_box(tmp_path)
     settings = app.settings
-    assert ref_box_background("", settings) == ("#ffe0b2", 50.0)
-    assert ref_box_background("  \t\n", settings) == ("#ffe0b2", 50.0)
-    assert ref_box_background("参见", settings) == ("#c8e6c9", 50.0)
-    assert ref_box_background("see also", settings) == ("#c8e6c9", 50.0)
+    assert ref_box_background("", settings) == ("#ffe0b2", 0.0)
+    assert ref_box_background("  \t\n", settings) == ("#ffe0b2", 0.0)
+    assert ref_box_background("参见", settings) == ("#c8e6c9", 0.0)
+    assert ref_box_background("see also", settings) == ("#c8e6c9", 0.0)
     settings.ref_box_show_text = False
     assert ref_box_background("参见", settings) == ("#c8e6c9", 50.0)
     settings.ref_box_fill_color = "#ffccaa"
@@ -343,11 +343,7 @@ def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content
     monkeypatch.setattr(fonts, "resolve_content_font_family", lambda *_: "Arial")
 
     editor.render()
-    assert displayed_images == [
-        (200, 230, 201, 128),  # populated: pale green at 50% opacity
-        (255, 224, 178, 128),  # empty: pale orange at 50% opacity
-        (255, 224, 178, 128),  # whitespace-only: still empty state
-    ]
+    assert displayed_images == [(220, 238, 252, 242)]  # label only; image ROI transparent
     assert [kwargs["text"] for kind, _args, kwargs in app.canvas.actions
             if kind == "text"] == [BOX.text]
 
@@ -355,11 +351,7 @@ def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content
     app.canvas.actions.clear()
     app.settings.ref_box_show_text = False
     editor.render()
-    assert displayed_images == [
-        (200, 230, 201, 128),
-        (255, 224, 178, 128),
-        (255, 224, 178, 128),
-    ]
+    assert displayed_images == []  # hidden label; the source-image boxes stay outlined
     assert not [kwargs for kind, _args, kwargs in app.canvas.actions if kind == "text"]
     assert read_ref_boxes(app.current_page)[0].text == BOX.text
 
@@ -373,8 +365,7 @@ def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content
     ])
     displayed_images.clear()
     editor.render()
-    assert displayed_images[0] == (255, 224, 178, 128)
-    assert displayed_images[1] == (200, 230, 201, 128)
+    assert displayed_images == []  # labels hidden; status still stored in REF text
     assert read_ref_boxes(app.current_page)[1].text == "leave"
 
 
@@ -428,7 +419,8 @@ def test_ref_palette_and_text_visibility_persist_after_reopen(tmp_path):
         assert name in REF_BOX_STYLE_FIELDS
         assert name in ref_field_names
         assert name in SETTING_HELP and len(SETTING_HELP[name]) > 40
-    assert ("显示 REF 框内文字", "ref_box_show_text") in REF_BOX_CHECKS
+    from picture_capture.ui.settings.schema import REF_TEXT_LABEL_CHECKS
+    assert ("显示 REF 文本标签", "ref_box_show_text") in REF_TEXT_LABEL_CHECKS
     assert len(CHECK_HELP["ref_box_show_text"]) > 40
 
     from types import SimpleNamespace
