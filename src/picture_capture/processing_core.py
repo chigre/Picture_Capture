@@ -2482,13 +2482,13 @@ def ocr_existing_entry_words_from_markers(
     }
     targets = [
         entry for entry in ordered
-        if not (
-            (only_blank and str(entry.word or "").strip())
-            or bool(entry.manually_selected)
-        )
+        if not bool(entry.manually_selected)
+        and not (only_blank and str(entry.word or "").strip())
     ]
     stats["skipped_existing"] = sum(
-        1 for entry in ordered if only_blank and str(entry.word or "").strip()
+        1 for entry in ordered
+        if only_blank and str(entry.word or "").strip()
+        and not bool(entry.manually_selected)
     )
     stats["skipped_manual"] = sum(
         1 for entry in ordered
@@ -2649,6 +2649,14 @@ def ocr_existing_entry_words_from_markers(
             stats["filled"] += 1
         else:
             stats["failed"] += 1
+            if not only_blank:
+                # Explicit OCR replacement must not leave previous OCR text
+                # masquerading as the result of this fresh recognition pass.
+                # Manual selections never reach this branch.
+                entry.word = ""
+                entry.confidence = None
+                entry.ocr_source = ""
+                entry.final_engine = ""
 
         if int(entry.x) != original_x or int(entry.y) != original_y:
             raise RuntimeError("普通画线后OCR文字不得修改任何画线坐标")
