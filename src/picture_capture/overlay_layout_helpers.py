@@ -107,9 +107,8 @@ def horizontal_entry_editor_slot(
         else float(column_end_x) - float(editor_x)
     )
     reserved = max(0, int(delete_width))
-    # Preserve the same 2px padding with or without a delete control, so
-    # hiding the marker frees exactly the control's space for the editor.
-    pixels = max(1, int(round(remaining - reserved - max(0, int(gap)))))
+    padding = max(0, int(gap)) if reserved else 0
+    pixels = max(1, int(round(remaining - reserved - padding)))
     return pixels, float(column_end_x), "nw" if rtl else "ne"
 
 
