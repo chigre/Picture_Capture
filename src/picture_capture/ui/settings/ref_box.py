@@ -17,7 +17,7 @@ from .schema import (
 
 
 def show_ref_samples(dialog) -> None:
-    """Grouped manager; legacy PNG samples appear under 未分类 and 向后."""
+    """Grouped manager for per-template category and target direction."""
     project = dialog.parent.project
     if project is None:
         messagebox.showinfo("REF 样本", "请先打开词典项目", parent=dialog)
@@ -27,7 +27,7 @@ def show_ref_samples(dialog) -> None:
     window.geometry("710x570")
     frame = ttk.Frame(window, padding=12)
     frame.pack(fill="both", expand=True)
-    ttk.Label(frame, text="按引导词分类管理，每个样本独立设置向前/向后；旧 PNG 自动列入“未分类”。",
+    ttk.Label(frame, text="按引导词分类管理；每个样本可单独修改类别与向前/向后方向。",
               wraplength=670).pack(anchor="w", pady=(0, 8))
     tree = ttk.Treeview(frame, show="tree", height=11, selectmode="browse")
     tree.heading("#0", text="类别 / 图样（→ 向后，← 向前）")
@@ -145,7 +145,7 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
         page, "REF 框 · 词条中的参见/同义词/反义词跳转区域",
         "单页保存 data/ref_box/页名.rbox；九列 TSV：id、x、y、w、h、"
         "w.ww%、h.hh%、entry_index、text。百分比均以原图宽度为分母。"
-        "旧七列文件可直接读取，编辑保存后升级。与 PDIC/PPP 分离。"
+        "与 PDIC/PPP 分离。"
         "用户已框选的 REF 永不被自动识别覆盖；自动检测只做本地样本图案匹配。",
     )
     dialog._add_setting_group(
