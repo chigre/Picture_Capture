@@ -242,6 +242,33 @@ def main() -> int:
                 if not lines_after_sort or app._page_index_grid.visible_segment_count != len(lines_after_sort):
                     raise RuntimeError("Cell borders vanished after scrolling/reordering page index")
                 _stage("thumbnails and cell borders after scrolling and sorting: OK")
+                # A temporary synthetic project must not disappear while the
+                # bounded background workers still publish thumbnail PNGs.
+                # In particular Windows denies unlinking a worker-owned .tmp
+                # while the background os.replace is in flight. Drain the
+                # existing after/queue path and assert all pages are cached
+                # before leaving this TemporaryDirectory.
+                for _ in range(600):
+                    app.update()
+                    if (
+                        thumbs._tasks.active == 0
+                        and all(
+                            thumbnail_cache_path(project_root, path).is_file()
+                            for path in scans
+                        )
+                    ):
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise RuntimeError(
+                        "Synthetic thumbnail workers did not drain before "
+                        "temporary project cleanup"
+                    )
+                if list(thumbnail_cache_dir(project_root).glob(".thumbnail-*.tmp")):
+                    raise RuntimeError(
+                        "Thumbnail workers left unfinished temp files"
+                    )
+                _stage("36-page cache jobs fully drained before temp project removal")
             finally:
                 thumbs.enabled_var.set(False)
                 thumbs.width = 80
