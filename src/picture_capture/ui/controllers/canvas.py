@@ -346,6 +346,8 @@ class CanvasController:
                     app.draw_cursor_guides(canvas_x, canvas_y)
                 source_x = round(canvas_x / app.view_scale)
                 source_y = round(canvas_y / app.view_scale)
+                if app.ref_box_controller.pointer_active:
+                    app.ref_box_controller.hover(source_x, source_y)
                 if (
                     not app._section_editing
                     and not app._preprocess_mode_active()
