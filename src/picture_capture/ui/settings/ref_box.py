@@ -12,7 +12,8 @@ from ...ref_box_detection import (
 )
 from .schema import (
     REF_BOX_STYLE_FIELDS, REF_BOX_GEOMETRY_FIELDS, REF_BOX_CHECKS,
-    REF_BOX_GEOMETRY_CHECKS,
+    REF_BOX_GEOMETRY_CHECKS, REF_TEXT_LABEL_FIELDS,
+    REF_TEXT_LABEL_CHECKS, REF_OCR_EXTRACTION_FIELDS,
 )
 
 
@@ -149,16 +150,27 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
         "用户已框选的 REF 永不被自动识别覆盖；自动检测只做本地样本图案匹配。",
     )
     dialog._add_setting_group(
-        page, "REF 文字与半透明显示", REF_BOX_STYLE_FIELDS,
-        intro="未填写文字：默认淡橙色 50% 不透明度；已填写文字：默认淡绿色 50% 不透明度。"
-              "两种底色和不透明度均可独立设置；无边框。"
-              "REF 文字可单独隐藏，保存内容不受影响；字体默认系统推荐、16 号，"
-              "字号与词条文本框采用相同的跟随缩放/固定策略。"
-              "选色按钮的底色直接呈现当前颜色，仍可手动输入 HEX。",
+        page, "原图 REF 定位框", REF_BOX_STYLE_FIELDS,
+        intro="框体覆盖原书目标区域，默认内部完全透明，只用轮廓提示定位；"
+              "修改框体颜色/透明度不会改变右侧的识别文本标签。",
     )
     dialog._add_check_group(
-        page, "显示与默认挂靠", REF_BOX_CHECKS,
-        intro="隐藏 REF 文字只影响画布显示，已有文本仍会保留；框的橙/绿底色继续根据实际内容切换。",
+        page, "原图 REF 框操作", REF_BOX_CHECKS,
+        intro="手动创建、框体挂靠、删除和显隐仅作用于原图 REF 区域。",
+    )
+    dialog._add_setting_group(
+        page, "REF 文本标签（独立于原图框）", REF_TEXT_LABEL_FIELDS,
+        intro="有文字时默认在原图框右侧以带底色的独立标签展示 OCR 文本，"              "页面右侧不足时自动放到左侧；原图字符不会被标签画在框内遮盖。"              "文字颜色、字体、字号、加粗/斜体和标签底色均只影响文本标签。",
+    )
+    dialog._add_check_group(
+        page, "REF 文本标签显示", REF_TEXT_LABEL_CHECKS,
+        intro="只隐藏或调整识别文本标签，不清空已保存文本，也不隐藏原图定位框。",
+    )
+    dialog._add_setting_group(
+        page, "OCR REF 文本提取正则", REF_OCR_EXTRACTION_FIELDS,
+        intro="直接编辑 Python 正则表达式；优先取参与匹配的第一个捕获组，"              "无捕获组则取完整匹配。未匹配或留空保留 OCR 原文。"
+              "默认规则提取成对中文引号内容，并兼顾左右引号缺失。"
+              "只对后续 OCR REF 生效；人工已填写内容不会被覆盖。",
     )
     geometry_group = dialog._add_setting_group(
         page, "画框比例与图样匹配", REF_BOX_GEOMETRY_FIELDS,
