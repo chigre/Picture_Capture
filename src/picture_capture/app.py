@@ -58,6 +58,7 @@ from .page_word_mapping import (
 )
 
 from .review_text_helpers import (
+    _has_distinct_ocr_alternatives,
     _candidate_choice_rows,
     _candidate_for_entry_from_list,
     _candidate_word_for_ocr_source,
@@ -14516,7 +14517,7 @@ class PictureCaptureApp(tk.Tk):
     ) -> tk.Menubutton | None:
         """Create a compact OCR-result selector displayed beside a main editor."""
         rows = _candidate_choice_rows(candidate)
-        if not rows or candidate is None:
+        if not _has_distinct_ocr_alternatives(candidate) or not rows:
             return None
         button = tk.Menubutton(
             self.canvas, text="OCR ▾",
