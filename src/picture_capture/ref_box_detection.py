@@ -107,7 +107,9 @@ def match_ref_templates(
 ) -> list[tuple[int, int, int, int]]:
     """Bounded multiscale contrast-normalized grayscale guide-word matching.
 
-    Color/brightness differences are normalized before matching. Search over
+    Color/brightness differences are normalized without clipping rare guide
+    ink pixels: whole-page percentile cutoff can destroy a small sample.
+    Search over
     multiple template scales for cross-page resolution and mild print-size
     differences. Localized nonlinear page warp remains a limitation; do not
     claim OCR or geometric rectification. NumPy fallback requires no cv2.
@@ -131,10 +133,10 @@ def match_ref_templates(
             (max(1, round(original_width * ratio)),
              max(1, round(original_height * ratio))), Image.Resampling.BILINEAR,
         )
-        source = np.asarray(ImageOps.autocontrast(resized, cutoff=1), dtype=np.uint8)
+        source = np.asarray(ImageOps.autocontrast(resized, cutoff=0), dtype=np.uint8)
     else:
         source = np.asarray(
-            ImageOps.autocontrast(ImageOps.grayscale(image), cutoff=1),
+            ImageOps.autocontrast(ImageOps.grayscale(image), cutoff=0),
             dtype=np.uint8,
         )
     height, width = source.shape[:2]
@@ -155,7 +157,7 @@ def match_ref_templates(
     for sample_path in samples:
         with Image.open(sample_path) as opened:
             source_template = np.asarray(
-                ImageOps.autocontrast(ImageOps.grayscale(opened), cutoff=1),
+                ImageOps.autocontrast(ImageOps.grayscale(opened), cutoff=0),
                 dtype=np.uint8,
             )
         if min(source_template.shape[:2]) < 4 or float(source_template.std()) < 4.0:
