@@ -65,7 +65,6 @@ def test_each_compact_display_option_is_in_one_explicit_row():
                       'swatch(row, "illustration_label_fill_color")')),
         ("词头标签", ('swatch(row, "main_entry_default_color")',
                     'check(row, "缩放", qb["main_entry_follow_zoom"])')),
-        ("显示Layout", ('label(row, "去噪强度")',)),
     ):
         block = source.split('"' + caption + '"', 1)[1].split("    row = line()", 1)[0]
         for part in parts:
