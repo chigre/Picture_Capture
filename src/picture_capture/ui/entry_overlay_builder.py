@@ -285,14 +285,16 @@ def draw_entry_overlay(
                     self.settings.layout_writing_mode, size[0],
                 )
         else:
-            # Both controls align their RIGHT edge to the horizontal marker
-            # endpoint; place OCR *under* [X] to keep both clickable.
+            # The OCR selector starts at the ACTUAL painted marker endpoint.
+            # Its left edge is fixed there, never at the full column end.
+            # Candidate-indicator controls (when available) occupy the first
+            # slot; the OCR selector follows them on their right.
             ocr_x = marker_right_screen_x
             ocr_y = marker_right_screen_y + (
                 max(1, delete_button.winfo_reqheight()) + 2
                 if delete_button is not None else 2
             )
-            ocr_anchor = "ne"
+            ocr_anchor = "nw"
 
         item = self.canvas.create_window(
             ocr_x,
