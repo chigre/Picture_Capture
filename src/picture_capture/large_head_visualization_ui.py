@@ -58,6 +58,7 @@ def get_large_head_debug_snapshot(app: Any) -> dict[str, Any]:
         app.image, app.settings,
         page_index=max(0, int(getattr(app, "current_index", 0))),
         page_sections=list(getattr(app, "page_sections", []) or []),
+        source_image_path=getattr(app, "current_page", None),
     )
     app._large_head_debug_snapshot = result
     app._large_head_debug_snapshot_key = key
@@ -108,9 +109,15 @@ def draw_large_head_debug_overlay(app: Any) -> None:
     try:
         snapshot = get_large_head_debug_snapshot(app)
     except Exception as exc:
+        # The previous TypeName-only label concealed the actionable saved-PPP
+        # error. Show the reason on canvas and keep the full text in status.
+        reason = f"{type(exc).__name__}: {exc}"
+        status = getattr(app, "status_var", None)
+        if status is not None:
+            status.set(f"大字头诊断不可用：{reason}")
         canvas.create_text(
-            12, 12, anchor="nw",
-            text=f"大字头诊断不可用：{type(exc).__name__}",
+            12, 12, anchor="nw", width=480,
+            text=f"大字头诊断不可用：{reason[:200]}",
             fill="#c62828", tags=(_TAG,),
         )
         return
