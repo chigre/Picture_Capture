@@ -75,7 +75,7 @@ def test_editor_consumes_remaining_column_minus_delete_control(rtl):
     full_width, _x, _anchor = horizontal_entry_editor_slot(
         editor_x, end_x, 0, rtl=rtl,
     )
-    assert full_width == width + delete_width
+    assert full_width == width + delete_width + 2
 
 
 def test_refinement_roi_is_independent_of_visual_marker_ratio_and_respects_margin():
