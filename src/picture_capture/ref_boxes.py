@@ -1,0 +1,158 @@
+"""Standalone, lossless REF rectangles stored as seven-column tab-separated .rbox.
+
+These are page-local annotations. They NEVER mutate PDIC, PPP, SECTION or
+Profile. Text uses RFC4180-style TSV quoting, including tabs and newlines.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from hashlib import sha256
+from io import StringIO
+from pathlib import Path
+import csv
+
+from .formats import write_text_atomic
+from .project_storage import is_managed_project, storage_root
+
+
+COLUMNS = ("id", "x", "y", "w", "h", "entry_index", "text")
+
+
+@dataclass(frozen=True, slots=True)
+class RefBox:
+    id: int
+    x: int
+    y: int
+    w: int
+    h: int
+    entry_index: int | None
+    text: str = ""
+
+
+def ref_box_root(project_root: Path) -> Path:
+    root = Path(project_root)
+    base = storage_root(root) if is_managed_project(root) else root
+    return base / "data" / "ref_box"
+
+
+def ref_box_path(image_path: Path) -> Path:
+    page = Path(image_path)
+    return ref_box_root(page.parent) / f"{page.stem}.rbox"
+
+
+def ref_sample_root(project_root: Path) -> Path:
+    return ref_box_root(project_root) / "samples"
+
+
+def ref_box_ticket(image_path: Path) -> str | None:
+    path = ref_box_path(image_path)
+    try:
+        return sha256(path.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        return None
+
+
+def validate_ref_boxes(boxes: list[RefBox] | tuple[RefBox, ...]) -> None:
+    ids: set[int] = set()
+    for box in boxes:
+        if not isinstance(box, RefBox):
+            raise ValueError("REF box record has invalid type")
+        if (not isinstance(box.id, int) or isinstance(box.id, bool)
+                or box.id <= 0 or box.id in ids):
+            raise ValueError("REF ID must be unique and positive")
+        ids.add(box.id)
+        if not all(isinstance(v, int) and not isinstance(v, bool)
+                   for v in (box.x, box.y, box.w, box.h)):
+            raise ValueError("REF coordinates must be integer source pixels")
+        if box.x < 0 or box.y < 0 or box.w <= 0 or box.h <= 0:
+            raise ValueError("REF rectangle lies outside positive source coordinates")
+        if box.entry_index is not None and (
+            not isinstance(box.entry_index, int) or isinstance(box.entry_index, bool)
+            or box.entry_index < 0
+        ):
+            raise ValueError("REF entry_index must be a nonnegative zero-based ordinal")
+        if not isinstance(box.text, str) or "\0" in box.text:
+            raise ValueError("REF text contains unsupported characters")
+
+
+def _serialize(boxes: list[RefBox] | tuple[RefBox, ...]) -> str:
+    validate_ref_boxes(boxes)
+    stream = StringIO(newline="")
+    writer = csv.writer(stream, delimiter="\t", lineterminator="\n")
+    writer.writerow(COLUMNS)
+    for box in boxes:
+        writer.writerow((
+            box.id, box.x, box.y, box.w, box.h,
+            "" if box.entry_index is None else box.entry_index, box.text,
+        ))
+    return stream.getvalue()
+
+
+def read_ref_boxes(image_path: Path) -> list[RefBox]:
+    path = ref_box_path(image_path)
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return []
+    try:
+        reader = csv.reader(StringIO(text, newline=""), delimiter="\t", strict=True)
+        if tuple(next(reader, ())) != COLUMNS:
+            raise ValueError("REF file has unexpected columns")
+        results: list[RefBox] = []
+        for row in reader:
+            if len(row) != len(COLUMNS):
+                raise ValueError("REF record has wrong column count")
+            results.append(RefBox(
+                id=int(row[0]), x=int(row[1]), y=int(row[2]),
+                w=int(row[3]), h=int(row[4]),
+                entry_index=int(row[5]) if row[5] != "" else None,
+                text=row[6],
+            ))
+        validate_ref_boxes(results)
+        return results
+    except (ValueError, csv.Error) as exc:
+        raise ValueError(f"{path.name}: invalid REF file; no changes were made") from exc
+
+
+def write_ref_boxes(image_path: Path, boxes: list[RefBox] | tuple[RefBox, ...],
+                    *, expected_ticket: str | None) -> str:
+    """Disk-first single-file atomic commit; never publish stale UI state.
+
+    A hash must be supplied from the last successful read (None means absent).
+    If the on-disk file differs, raise without overwriting external edits.
+    """
+    payload = _serialize(boxes)
+    target = ref_box_path(image_path)
+    if ref_box_ticket(image_path) != expected_ticket:
+        raise RuntimeError("REF file changed outside the editor; reload the page")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # A second check after mkdir narrows (but does not eliminate) race windows.
+    if ref_box_ticket(image_path) != expected_ticket:
+        raise RuntimeError("REF file changed before publication")
+    write_text_atomic(target, payload)
+    persisted = read_ref_boxes(image_path)
+    if persisted != list(boxes):
+        raise RuntimeError("REF write could not be verified; reload before editing")
+    return ref_box_ticket(image_path) or sha256(payload.encode("utf-8")).hexdigest()
+
+
+def next_ref_id(boxes: list[RefBox] | tuple[RefBox, ...]) -> int:
+    return max((b.id for b in boxes), default=0) + 1
+
+
+def box_intersection_fraction(a: RefBox, b: RefBox) -> float:
+    left, top = max(a.x, b.x), max(a.y, b.y)
+    right, bottom = min(a.x + a.w, b.x + b.w), min(a.y + a.h, b.y + b.h)
+    intersection = max(0, right - left) * max(0, bottom - top)
+    return intersection / max(1, min(a.w * a.h, b.w * b.h))
+
+
+def reindex_ref_box(box: RefBox, entry_index: int | None) -> RefBox:
+    return replace(box, entry_index=entry_index)
+
+
+__all__ = [
+    "RefBox", "COLUMNS", "ref_box_root", "ref_box_path", "ref_sample_root",
+    "read_ref_boxes", "write_ref_boxes", "ref_box_ticket",
+    "next_ref_id", "box_intersection_fraction", "validate_ref_boxes",
+]
