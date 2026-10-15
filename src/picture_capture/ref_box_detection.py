@@ -310,6 +310,10 @@ def ref_box_after_guide(
     if direction not in REF_SAMPLE_DIRECTIONS:
         raise ValueError(f"Invalid REF template direction: {direction}")
     ref_w, ref_h = default_ref_box_dimensions(settings)
+    # Do not create guide-only REF boxes if the intended text side is absent.
+    if ((direction == "after" and x + guide_w + 2 > page_w)
+            or (direction == "before" and x < 2)):
+        return None
     include_guide = bool(getattr(settings, "ref_box_include_guide_width", False))
     target_start = (x + guide_w if direction == "after" else x - ref_w)
     target_end = (x + guide_w + ref_w if direction == "after" else x)
