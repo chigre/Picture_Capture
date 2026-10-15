@@ -201,6 +201,7 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
             return None
 
     monkeypatch.setattr(overlay_delete_button.tk, "Button", Button)
+    monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
     labels = []
     app = SimpleNamespace(
         image=SimpleNamespace(width=500, height=600),
