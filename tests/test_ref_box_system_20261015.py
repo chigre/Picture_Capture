@@ -330,8 +330,6 @@ def test_rbox_legacy_7_field_file_is_read_without_changes_then_upgraded(tmp_path
 
 
 def test_rbox_width_denominator_matches_pdic_for_both_percent_fields(tmp_path):
-    from picture_capture.formats import write_pdic
-
     page = tmp_path / "ratio.png"
     Image.new("RGB", (200, 800), "white").save(page)
     assert write_ref_boxes(
