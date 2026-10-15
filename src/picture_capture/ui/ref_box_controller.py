@@ -24,6 +24,7 @@ from ..ref_box_ocr import ocr_ref_boxes_job, local_ref_ocr_plan
 from ..ref_box_detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
     list_ref_samples, default_ref_box_dimensions,
+    default_ref_sample_direction, REF_SAMPLE_DIRECTIONS,
 )
 
 
@@ -50,6 +51,8 @@ class RefBoxController:
         self.app = app
         self.editing = False
         self.capture_sample = False
+        self.capture_category = "见"
+        self.capture_direction = "after"
         self.loaded_page: Path | None = None
         self.boxes: list[RefBox] = []
         self.ticket: str | None = None
@@ -65,7 +68,7 @@ class RefBoxController:
 
     def load_page(self, page: Path) -> None:
         """Fail closed on corrupt files instead of dropping manually entered rows."""
-        self.capture_sample = False
+        # Capture is explicitly modal: changing pages must not exit it.
         self.cancel_drag()
         self.selected_id = None
         self.loaded_page = None
@@ -187,7 +190,7 @@ class RefBoxController:
         if button is not None:
             button.configure(text="编辑'REF'", style="PC.Compact.TButton")
 
-    def start_capture_sample(self):
+    def start_capture_sample(self, *, category: str = "见", direction: str | None = None):
         app = self.app
         if not app.guard() or not self._ready():
             app.status_var.set("请先打开一张可编辑页面，再到 REF 框设置采集样本")
@@ -195,10 +198,23 @@ class RefBoxController:
         if getattr(app, "_batch_active", False) or app._preprocess_mode_active():
             app.status_var.set("批量任务/预处理期间不可采集 REF 样本")
             return
+        category = str(category).strip()
+        if not category or len(category) > 40:
+            app.status_var.set("REF 样本类别必须为 1–40 个字符")
+            return
+        direction = direction or default_ref_sample_direction(category)
+        if direction not in REF_SAMPLE_DIRECTIONS:
+            app.status_var.set("REF 图样方向无效")
+            return
         self.stop_edit()
         self.capture_sample = True
+        self.capture_category = category
+        self.capture_direction = direction
         self.cancel_drag()
-        app.status_var.set("REF 样本采集：在主画布拖选一个完整的图案，松开即本地保存。右键取消。")
+        app.status_var.set(
+            f"连续采集 REF [{category}]（{'向前' if direction == 'before' else '向后'}）："
+            "主画布连续拖框，每次保存后可继续；右键或 Esc 退出。"
+        )
         app.redraw()
 
     def cancel_drag(self):
@@ -415,15 +431,18 @@ class RefBoxController:
             self.delete_selected()
             return "break"
         if self.capture_sample:
-            self.capture_sample = False
             if abs(x-sx) < 4 or abs(y-sy) < 4:
                 self.app.status_var.set("REF 样本框过小，未保存")
             else:
                 try:
                     path = add_ref_sample(
                         self.loaded_page, (min(x,sx), min(y,sy), max(x,sx), max(y,sy)),
+                        category=self.capture_category, direction=self.capture_direction,
                     )
-                    self.app.status_var.set(f"REF 样本已保存：{path.name}")
+                    self.app.status_var.set(
+                        f"已采集 [{self.capture_category}] {path.name}；"
+                        "继续拖框，右键或 Esc 退出采集"
+                    )
                 except Exception as exc:
                     self.app.show_error("保存 REF 样本失败", exc)
             self.app.redraw()
@@ -520,12 +539,19 @@ class RefBoxController:
             self.app.redraw()
         return "break"
 
+    def cancel_capture(self, _event=None):
+        """Only user exit or conflicting explicit mode ends continuous capture."""
+        if not self.capture_sample:
+            return None
+        self.capture_sample = False
+        self.cancel_drag()
+        self.app.status_var.set("已退出 REF 连续样本采集")
+        self.app.redraw()
+        return "break"
+
     def context_menu(self, event, *, coords=None):
         if self.capture_sample:
-            self.capture_sample = False
-            self.cancel_drag()
-            self.app.status_var.set("已取消 REF 图案采集")
-            return "break"
+            return self.cancel_capture()
         if not self.editing:
             return None
         x, y = coords if coords is not None else self.app.original_xy(event)
