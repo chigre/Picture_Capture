@@ -92,11 +92,14 @@ def _prefixed_multiline_display_head(
         aligned_rows += 1
         if aligned_rows >= 2:
             return True
-        # A compact ~2-row display glyph has only ONE physical continuation.
-        # This is still strong when a real numbering prefix, near-square tall
-        # glyph, near-top alignment and matching continuation front coexist.
-        # Taller regions keep the stricter two-continuation requirement.
-        if aligned_rows == 1 and height <= 2.20 * reference:
+        # A printed two-row display glyph has only ONE physical continuation.
+        # Its ink box can be ~2.30 row-heights tall even though segmentation
+        # found exactly two rows (080276/080283: 2.21-2.30x). Requiring two
+        # continuations above 2.20x silently promotes the LOWER fragment into
+        # an entry instead. Keep the prefix/top/square/front checks above and
+        # restrict the one-continuation exception to this bounded size; taller
+        # three-row heads still require two independent continuations.
+        if aligned_rows == 1 and height <= 2.35 * reference:
             return True
     return False
 
