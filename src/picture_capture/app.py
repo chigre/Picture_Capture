@@ -13425,10 +13425,10 @@ class PictureCaptureApp(tk.Tk):
             )
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
-            draw_ocr_crop_preview(self)
-            draw_layout_visualization_if_enabled(self)
             self.ref_box_controller.render()
             self.ref_box_controller.bind_overlay_widgets()
+            draw_ocr_crop_preview(self)
+            draw_layout_visualization_if_enabled(self)
             return
         hidden = bool(self.hide_var.get())
         geometry = self._get_cached_display_geometry()
@@ -13623,9 +13623,12 @@ class PictureCaptureApp(tk.Tk):
 
         self._apply_current_appearance(self.canvas)
         draw_ocr_crop_preview(self)
-        draw_layout_visualization_if_enabled(self)
+        if self.ref_box_controller.editing:
+            draw_layout_visualization_if_enabled(self)
         self.ref_box_controller.render()
         self.ref_box_controller.bind_overlay_widgets()
+        if not self.ref_box_controller.editing:
+            draw_layout_visualization_if_enabled(self)
 
     def _update_view_zoom_label(self) -> None:
         self._canvas_controller_for_call().update_view_zoom_label()
