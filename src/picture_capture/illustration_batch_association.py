@@ -12,12 +12,13 @@ from pathlib import Path
 from PIL import Image
 
 from .formats import pdic_path, read_pdic, read_ppp, write_ppp
+from .text_encoding import read_text_detected
 from .illustration_labels import illustration_labels
 from .models import AppSettings, PolygonRegion
 from .page_sections import read_page_sections
 from .processing_core import derive_geometry
 from .profile_semantics import effective_page_settings, page_template_analysis_image
-from .project_storage import ppp_read_path_for_image, ppp_write_path_for_image
+from .project_storage import ppp_read_path_for_image
 from .image_utils import normalize_page_rgb
 
 
@@ -45,6 +46,13 @@ def associate_existing_ppp_page(
     regions = read_ppp(source_ppp)
     if not regions:
         return {"status": "skipped_empty_ppp", "page_index": page_index, "page": page.name}
+    # The permissive historical reader silently ignores malformed records.
+    # Refuse to rewrite a partly parsed human PPP or we could erase shapes.
+    record_count = sum(
+        bool(line.strip()) for line in read_text_detected(source_ppp)[0].splitlines()
+    )
+    if len(regions) != record_count or any(len(region.points) < 3 for region in regions):
+        return {"status": "skipped_invalid_ppp", "page_index": page_index, "page": page.name}
     source_pdic = pdic_path(page)
     if not source_pdic.is_file():
         return {"status": "skipped_no_pdic", "page_index": page_index, "page": page.name}
@@ -77,14 +85,14 @@ def associate_existing_ppp_page(
         raise RuntimeError(f"{page.name}: PPP/PDIC changed concurrently; association not saved")
 
     if changed:
-        output = ppp_write_path_for_image(page)
-        # In managed-v2 projects the canonical read and write paths coincide.
-        # If the writer uses a different path, protect that existing target too.
-        destination_ticket = _file_ticket(output) if output.is_file() else None
+        # Use the REAL existing file, including historic uppercase .PPP case.
+        # Writing a lower-case sibling on case-sensitive filesystems would
+        # create a second conflicting source of truth for the same page.
+        output = source_ppp
         if _file_ticket(source_ppp) != original_ticket:
             raise RuntimeError(f"{page.name}: PPP changed concurrently; association not saved")
-        if destination_ticket is not None and _file_ticket(output) != destination_ticket:
-            raise RuntimeError(f"{page.name}: target PPP changed concurrently; association not saved")
+        if _file_ticket(source_pdic) != pdic_ticket:
+            raise RuntimeError(f"{page.name}: PDIC changed concurrently; association not saved")
         write_ppp(output, proposed, page.stem)
         persisted = read_ppp(output)
         if [(r.label, r.points) for r in persisted] != [
