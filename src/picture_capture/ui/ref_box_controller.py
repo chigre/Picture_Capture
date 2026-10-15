@@ -19,6 +19,7 @@ from ..ref_box_geometry import (
     hit_test, transform_box, action_cursor, ref_action_buttons,
 )
 from ..overlay_layout_helpers import effective_main_overlay_font_size
+from ..ref_text_label_layout import ref_text_label_rect
 from ..review_text_helpers import _entry_font_spec
 from ..ref_box_ocr import ocr_ref_boxes_job, local_ref_ocr_plan
 from ..ref_box_detection import (
@@ -64,6 +65,7 @@ class RefBoxController:
         self.drag_box: RefBox | None = None
         self.selected_id: int | None = None
         self._overlay_images: list[ImageTk.PhotoImage] = []
+        self._label_rects: dict[int, tuple[int, int, int, int]] = {}
         self.pointer_action: str | None = None
 
     def load_page(self, page: Path) -> None:
@@ -228,6 +230,13 @@ class RefBoxController:
     def pointer_active(self) -> bool:
         return self.editing or self.capture_sample
 
+    def _hit_label(self, x: int, y: int) -> RefBox | None:
+        """Labels select/edit their owner but never become stored REF geometry."""
+        for box_id, (x0, y0, x1, y1) in self._label_rects.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return next((box for box in self.boxes if box.id == box_id), None)
+        return None
+
     def _hit(self, x: int, y: int) -> RefBox | None:
         box, _ = hit_test(self.boxes, x, y, scale=self.app.view_scale,
                           selected_id=self.selected_id)
@@ -289,6 +298,13 @@ class RefBoxController:
         self.drag_box = None
         action_target = self._hit_action(x, y) if self.editing else None
         self.pointer_action = action_target[0] if action_target else None
+        label_target = self._hit_label(x, y) if self.editing and action_target is None else None
+        if label_target is not None:
+            self.selected_id = label_target.id
+            self.pointer_action = "label"
+            self.app.status_var.set(f"REF #{label_target.id} 文本标签：双击编辑，单击选择")
+            self.render()
+            return "break"
         if action_target is not None:
             # A permanently visible × must remove the REF that owns it,
             # never whichever REF was selected earlier.
@@ -334,7 +350,7 @@ class RefBoxController:
     def hover(self, x: int, y: int) -> None:
         if not self.pointer_active:
             return
-        if self.editing and self._hit_action(x, y):
+        if self.editing and (self._hit_action(x, y) or self._hit_label(x, y)):
             cursor = "hand2"
         elif self.capture_sample:
             cursor = "crosshair"
@@ -424,6 +440,9 @@ class RefBoxController:
         self.cancel_drag()
         self.pointer_action = None
         self.app.canvas.delete("ref-drag")
+        if action == "label":
+            self.render()
+            return "break"
         if action == "edit":
             self.edit_properties()
             return "break"
@@ -523,7 +542,7 @@ class RefBoxController:
 
     def double_click(self, x: int, y: int) -> str:
         self.cancel_drag()  # Suppress a trailing release after Tk double-click.
-        target = self._hit(x, y)
+        target = self._hit_label(x, y) or self._hit(x, y)
         if target:
             self.selected_id = target.id
             self.edit_properties(target.id)
@@ -555,7 +574,7 @@ class RefBoxController:
         if not self.editing:
             return None
         x, y = coords if coords is not None else self.app.original_xy(event)
-        hit = self._hit(x, y)
+        hit = self._hit_label(x, y) or self._hit(x, y)
         if hit is not None:
             self.selected_id = hit.id
         self.render()
@@ -616,6 +635,7 @@ class RefBoxController:
         if hasattr(self.app, "canvas"):
             self.app.canvas.delete("ref-box")
         self._overlay_images = []
+        self._label_rects.clear()
         if not self._ready() or not (self.editing or getattr(self.app.settings, "ref_box_show", True)):
             return
         app = self.app
@@ -653,22 +673,67 @@ class RefBoxController:
                 app.canvas.create_image(
                     xx, yy, image=photo, anchor="nw", tags=("ref-box",),
                 )
-            if self.editing:
-                selected = box.id == self.selected_id
+            # The REF itself remains on the original text. Keep its outline
+            # visible in both browsing and editing; never draw OCR letters on it.
+            if True:
+                selected = self.editing and box.id == self.selected_id
                 app.canvas.create_rectangle(
                     xx, yy, xx+ww, yy+hh,
-                    outline="#1565c0" if selected else "#477da1",
+                    outline="#1565c0" if selected else
+                            ("#549266" if box.text.strip() else "#cc914e"),
                     width=2 if selected else 1,
                     dash=() if selected else (3, 3),
                     tags=("ref-box", "ref-box-border"),
                 )
             if box.text.strip() and getattr(config, "ref_box_show_text", True):
-                app.canvas.create_text(
-                    xx + 2, yy + 1, text=box.text, anchor="nw",
-                    width=max(4, ww-4),
-                    fill=getattr(config, "ref_box_text_color", "#15395b"),
-                    font=font_spec, tags=("ref-box",),
+                padding = int(getattr(config, "ref_text_label_padding", 4))
+                lx, ly, lw, lh = ref_text_label_rect(
+                    (box.x, box.y, box.w, box.h), app.image.size,
+                    text=box.text, scale=s, font_size=size,
+                    gap=int(getattr(config, "ref_text_label_gap", 6)),
+                    padding=padding,
                 )
+                text_id = app.canvas.create_text(
+                    lx + padding, ly + padding, text=box.text, anchor="nw",
+                    width=max(1, lw - 2 * padding),
+                    fill=getattr(config, "ref_box_text_color", "#15395b"),
+                    font=font_spec, tags=("ref-box", "ref-text-label"),
+                )
+                # True Tcl Canvas bbox is authoritative where available; test
+                # stubs and headless preview retain the conservative estimate.
+                actual = None
+                try:
+                    actual = app.canvas.bbox(text_id)
+                except (AttributeError, tk.TclError, TypeError):
+                    pass
+                if actual is not None:
+                    right = min(round(app.image.width * s), max(lx + lw, actual[2] + padding))
+                    bottom = min(round(app.image.height * s), max(ly + lh, actual[3] + padding))
+                    lw = max(1, right - lx)
+                    lh = max(1, bottom - ly)
+                self._label_rects[box.id] = (
+                    round(lx / s), round(ly / s),
+                    round((lx + lw) / s), round((ly + lh) / s),
+                )
+                opacity = min(100., max(0., float(getattr(
+                    config, "ref_text_label_background_opacity", 95.,
+                ))))
+                if opacity > 0:
+                    color = str(getattr(config, "ref_text_label_background_color", "#dceefc"))
+                    rgba = Image.new(
+                        "RGBA", (lw, lh),
+                        (*ImageColor.getrgb(color), round(255 * opacity / 100)),
+                    )
+                    photo = ImageTk.PhotoImage(rgba)
+                    self._overlay_images.append(photo)
+                    bg_id = app.canvas.create_image(
+                        lx, ly, image=photo, anchor="nw",
+                        tags=("ref-box", "ref-text-label-bg"),
+                    )
+                    try:
+                        app.canvas.tag_lower(bg_id, text_id)
+                    except (AttributeError, tk.TclError, TypeError):
+                        pass
             if self.editing and box.id == self.selected_id:
                 # Eight screen-size handles indicate four sides plus corners.
                 radius = 4
