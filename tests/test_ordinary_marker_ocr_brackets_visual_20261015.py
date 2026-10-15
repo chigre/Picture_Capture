@@ -153,6 +153,7 @@ def test_marker_ocr_and_preview_use_identical_role_independent_visual_extent():
 
 @pytest.mark.parametrize(("ocr_text", "expected"), [
     ("編號【蘋果】字義", "蘋果"),
+    ("4【禾王】太平天国天王洪秀全自称。《太平天国·十", "禾王"),
     ("噪音【雲端", "雲端"),
     ("蘋果】其他內容", "蘋果"),
     ("正常文字", "正常文字"),
