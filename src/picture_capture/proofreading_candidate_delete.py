@@ -31,7 +31,9 @@ def prepare_candidate_delete(
         return None
     if dict(snapshot.owner_ids).get(id(entry)) != cid:
         return None
-    if not isinstance(candidate.get("selected"), bool) or not candidate["selected"]:
+    # Legacy OCR caches need not store a "selected" flag. The owned live
+    # Entry is stronger evidence of selection; an explicit false still vetoes.
+    if candidate.get("selected", True) is not True:
         return None
     matched = [value for key, value in snapshot.candidates if key == cid]
     if len(matched) != 1 or matched[0] != repr(candidate):
