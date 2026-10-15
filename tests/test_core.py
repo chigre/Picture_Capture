@@ -8216,8 +8216,10 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'bg="#e6e6e6"' in overlay
     assert 'fg="#000000"' in overlay
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
-    assert 'text="[X]"' in overlay
-    assert 'bg="#9d042f"' in overlay
+    shared_button = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
+    assert 'text="[X]"' in shared_button
+    assert 'bg="#9d042f"' in shared_button
+    assert 'create_overlay_delete_button(' in overlay
     assert 'record["delete_widget"] = delete_button' in overlay
 
 
