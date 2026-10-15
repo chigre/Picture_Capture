@@ -8212,7 +8212,7 @@ class PictureCaptureApp(tk.Tk):
             if self.project and self.current_page and self.image is not None:
                 try:
                     self.save_pdic(silent=True)
-                    write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+                    self._save_normalized_ppp()
                     self.settings.to_json(settings_path(self.project.root))
                 except (OSError, ValueError, tk.TclError):
                     pass
@@ -10962,7 +10962,7 @@ class PictureCaptureApp(tk.Tk):
             return None
         self.save_pdic(silent=True, sync_editors=sync_editors)
         ppp = self._ppp_write_path(self.current_page)
-        write_ppp(ppp, self.polygons, self.current_page.stem)
+        self._save_normalized_ppp()
         self._update_page_row(self.current_index)
         return pdic_path(self.current_page), ppp
 
@@ -10972,7 +10972,7 @@ class PictureCaptureApp(tk.Tk):
             return None
         if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
             target = self._ppp_write_path(self.current_page)
-            write_ppp(target, self.polygons, self.current_page.stem)
+            self._save_normalized_ppp()
             self._update_page_row(self.current_index)
             return target
         self.save_pdic(silent=True, sync_editors=sync_editors)
@@ -11975,6 +11975,12 @@ class PictureCaptureApp(tk.Tk):
     def _ppp_read_path(page: Path) -> Path:
         return ppp_read_path_for_image(page)
 
+    def _save_normalized_ppp(self) -> bool:
+        return self._illustration_controller_for_call().persist_current()
+
+    def associate_illustrations(self) -> None:
+        self._illustration_controller_for_call().associate_current_page()
+
     def reload_wordslist_reference(
         self, selected_path: Path | None = None, *, persist: bool = True, redraw: bool = True,
     ) -> tuple[Path, int]:
@@ -12546,7 +12552,7 @@ class PictureCaptureApp(tk.Tk):
                 self.apply_quick_settings(show_status=False, persist=True, silent_errors=True)
         if self.project and self.current_page and self.image is not None:
             self.save_pdic(silent=True)
-            write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+            self._save_normalized_ppp()
             self.settings.to_json(settings_path(self.project.root))
 
         migrate = False
@@ -12651,7 +12657,7 @@ class PictureCaptureApp(tk.Tk):
             if self.project and self.current_page and self.image is not None:
                 self._flush_deferred_page_save()
                 self.save_pdic(silent=True)
-                write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+                self._save_normalized_ppp()
                 self.settings.to_json(settings_path(self.project.root))
             self._pending_page_index = None
             self._invalidate_ui_worker("page-load")
@@ -13805,16 +13811,10 @@ class PictureCaptureApp(tk.Tk):
         if not messagebox.askyesno("删除PPP插图", f"删除插图：{name}？\n\n只删除当前这一个 PPP 区域。", parent=self):
             return
         self._sync_polygon_label_texts()
-        try:
-            self.polygons.pop(index)
+        if self._illustration_controller_for_call().delete_polygon(region):
             self._drag_polygon_vertex = None
             self._drag_polygon_edge = None
-            write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-            self._update_page_row(self.current_index)
-            self.redraw()
             self.status_var.set(f"已删除 PPP 插图：{name}")
-        except Exception as exc:
-            self.show_error("删除PPP插图失败", exc)
 
     @staticmethod
     @staticmethod
@@ -14274,8 +14274,8 @@ class PictureCaptureApp(tk.Tk):
         if self.current_page is not None:
             try:
                 self._sync_polygon_label_texts()
-                write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
-                self.status_var.set("PPP轮廓已调整并保存")
+                if self._save_normalized_ppp():
+                    self.status_var.set("PPP轮廓已调整并保存")
             except Exception as exc:
                 self.show_error("保存PPP轮廓失败", exc)
         return "break"
@@ -14299,9 +14299,8 @@ class PictureCaptureApp(tk.Tk):
         if self.polygon_draw_var.get():
             if not self.guard(): return
             if len(self.new_polygon) >= 3:
-                label = simpledialog.askstring("插图标注", "多边形标签（可留空）：", parent=self) or ""
-                self.polygons.append(PolygonRegion(label, self.new_polygon.copy()))
-                self._update_page_row(self.current_index)
+                if self._illustration_controller_for_call().add_manual_polygon(self.new_polygon.copy()):
+                    self.status_var.set("已保存插图，整页序号已按阅读顺序更新")
             self.new_polygon.clear(); self.redraw(); return
         if not self.project or not self.current_page or self.image is None:
             return
@@ -15636,11 +15635,7 @@ class PictureCaptureApp(tk.Tk):
         ):
             from .formats import write_ppp
             self._sync_polygon_label_texts()
-            write_ppp(
-                self._ppp_write_path(self.current_page),
-                self.polygons,
-                self.current_page.stem,
-            )
+            self._save_normalized_ppp()
         self.settings.detection_method = method
         settings = replace(self.settings)
         # Set the process environment *before* spawning workers. Snapshot the
@@ -16112,7 +16107,7 @@ class PictureCaptureApp(tk.Tk):
     def save_all(self) -> None:
         if not self.guard(): return
         self.save_pdic()
-        write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+        self._save_normalized_ppp()
 
     def save_settings(self) -> None:
         if self.project:
@@ -16149,7 +16144,7 @@ class PictureCaptureApp(tk.Tk):
                         self.review_window = None
                 if not review_saved:
                     self.save_pdic(silent=True)
-                polygon_changed = write_ppp(self._ppp_write_path(self.current_page), self.polygons, self.current_page.stem)
+                polygon_changed = self._save_normalized_ppp()
                 if self._last_pdic_write_changed or polygon_changed:
                     self.status_var.set("已自动保存")
             self.toggle_autosave()
