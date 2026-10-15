@@ -6,6 +6,7 @@ No scan, sample, template, or OCR content is sent over the network.
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 import uuid
 
@@ -22,6 +23,61 @@ from .ref_boxes import (
 )
 
 
+REF_SAMPLE_CATEGORIES = ("见", "参见", "亦作", "同", "别名", "其他", "未分类")
+REF_SAMPLE_DIRECTIONS = ("after", "before")
+
+
+def default_ref_sample_direction(category: str) -> str:
+    return "before" if category == "别名" else "after"
+
+
+def _ref_sample_metadata_path(sample_path: Path) -> Path:
+    return Path(sample_path).with_suffix(".json")
+
+
+def read_ref_sample_metadata(sample_path: Path) -> dict[str, str]:
+    """Legacy PNG templates remain valid, defaulting to after/未分类."""
+    sidecar = _ref_sample_metadata_path(sample_path)
+    if not sidecar.exists():
+        return {"category": "未分类", "direction": "after"}
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"REF sample metadata must be an object: {sidecar.name}")
+    category = str(payload.get("category") or "未分类").strip()
+    direction = payload.get("direction", "after")
+    if not category or len(category) > 40 or direction not in REF_SAMPLE_DIRECTIONS:
+        raise ValueError(f"Invalid REF sample metadata: {sidecar.name}")
+    return {"category": category, "direction": direction}
+
+
+def write_ref_sample_metadata(
+    sample_path: Path, *, category: str, direction: str,
+) -> None:
+    """Atomically save per-template category and before/after semantics."""
+    category = str(category).strip()
+    if not category or len(category) > 40:
+        raise ValueError("REF sample category must have 1–40 characters")
+    if direction not in REF_SAMPLE_DIRECTIONS:
+        raise ValueError("REF sample direction must be after or before")
+    target = _ref_sample_metadata_path(sample_path)
+    temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temp.write_text(json.dumps({"category": category, "direction": direction},
+                                   ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp.replace(target)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def delete_ref_sample(sample_path: Path, project_root: Path) -> None:
+    """Delete only a listed project-local PNG and its matching sidecar."""
+    path = Path(sample_path)
+    if path not in list_ref_samples(project_root):
+        raise ValueError("REF sample is no longer in the project sample list")
+    path.unlink()
+    _ref_sample_metadata_path(path).unlink(missing_ok=True)
+
+
 def list_ref_samples(project_root: Path) -> list[Path]:
     folder = ref_sample_root(project_root)
     if not folder.is_dir():
@@ -31,7 +87,8 @@ def list_ref_samples(project_root: Path) -> list[Path]:
                   and p.suffix.lower() == ".png")
 
 
-def add_ref_sample(image_path: Path, source_box: tuple[int, int, int, int]) -> Path:
+def add_ref_sample(image_path: Path, source_box: tuple[int, int, int, int], *,
+                   category: str = "未分类", direction: str = "after") -> Path:
     """Store only an explicitly user-selected rectangle; never a full scan."""
     page = Path(image_path)
     with Image.open(page) as opened:
@@ -49,6 +106,11 @@ def add_ref_sample(image_path: Path, source_box: tuple[int, int, int, int]) -> P
     try:
         sample.save(temp, format="PNG")
         temp.replace(target)
+        try:
+            write_ref_sample_metadata(target, category=category, direction=direction)
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
     finally:
         sample.close()
         temp.unlink(missing_ok=True)
@@ -104,7 +166,8 @@ def match_ref_templates(
     image: Image.Image, samples: list[Path], *,
     threshold: float = 0.88, max_results: int = 200,
     scale_tolerance_percent: float = 25.0,
-) -> list[tuple[int, int, int, int]]:
+    with_sources: bool = False,
+) -> list:
     """Bounded multiscale contrast-normalized grayscale guide-word matching.
 
     Color/brightness differences are normalized without clipping rare guide
@@ -140,7 +203,7 @@ def match_ref_templates(
             dtype=np.uint8,
         )
     height, width = source.shape[:2]
-    proposals: list[tuple[float, int, int, int, int]] = []
+    proposals: list[tuple[float, int, int, int, int, Path]] = []
     scale_tolerance = float(scale_tolerance_percent) / 100.0
     factors = tuple(np.linspace(
         1.0 - scale_tolerance, 1.0 + scale_tolerance,
@@ -195,20 +258,23 @@ def match_ref_templates(
                     break
                 proposals.append((
                     float(score), round(xx / ratio), round(yy / ratio),
-                    max(1, round(sw / ratio)), max(1, round(sh / ratio)),
+                    max(1, round(sw / ratio)), max(1, round(sh / ratio)), sample_path,
                 ))
                 pad_x, pad_y = max(1, round(sw * 0.65)), max(1, round(sh * 0.65))
                 scores[max(0, yy-pad_y):min(scores.shape[0], yy+pad_y+1),
                        max(0, xx-pad_x):min(scores.shape[1], xx+pad_x+1)] = -1.0
     accepted: list[RefBox] = []
-    for _, x, y, w, h in sorted(proposals, key=lambda row: (-row[0], row[2], row[1])):
+    accepted_sources: list[Path] = []
+    for _, x, y, w, h, source_path in sorted(proposals, key=lambda row: (-row[0], row[2], row[1])):
         item = RefBox(len(accepted)+1, x, y, w, h, None)
         if any(box_intersection_fraction(item, other) > 0.25 for other in accepted):
             continue
         accepted.append(item)
+        accepted_sources.append(source_path)
         if len(accepted) >= max_results:
             break
-    return [(p.x, p.y, p.w, p.h) for p in accepted]
+    guides = [(p.x, p.y, p.w, p.h) for p in accepted]
+    return list(zip(guides, accepted_sources)) if with_sources else guides
 
 
 def default_ref_box_dimensions(settings) -> tuple[int, int]:
@@ -231,27 +297,33 @@ def ref_box_after_guide(
     guide: tuple[int, int, int, int],
     image_size: tuple[int, int],
     settings,
+    direction: str = "after",
 ) -> tuple[int, int, int, int] | None:
-    """Guide is an anchor, not the REF: target begins at guide right edge.
+    """Position REF before/after its guide, optionally including the guide.
 
-    Vertical centering uses the matched guide height. The resulting target
-    size is controlled by the same REF dimensions as manual single-click.
-    Skip if no usable horizontal room remains; never wrap into another column.
+    REF default width always measures the non-guide region. When enabled,
+    the matching template (using its actual matched/scaled width) is included
+    in the target; all positions are clamped to the source image.
     """
     x, y, guide_w, guide_h = guide
     page_w, page_h = image_size
+    if direction not in REF_SAMPLE_DIRECTIONS:
+        raise ValueError(f"Invalid REF template direction: {direction}")
     ref_w, ref_h = default_ref_box_dimensions(settings)
-    target_x = x + guide_w
-    if target_x < 0 or target_x + 2 > page_w or page_h < 2:
+    include_guide = bool(getattr(settings, "ref_box_include_guide_width", False))
+    target_start = (x + guide_w if direction == "after" else x - ref_w)
+    target_end = (x + guide_w + ref_w if direction == "after" else x)
+    if include_guide:
+        target_start = min(target_start, x)
+        target_end = max(target_end, x + guide_w)
+    target_start = max(0, target_start)
+    target_end = min(page_w, target_end)
+    if target_end - target_start < 2 or page_h < 2:
         return None
     target_h = min(ref_h, page_h)
     target_y = max(0, min(page_h - target_h,
                            round(y + (guide_h - target_h) / 2)))
-    target_w = min(ref_w, page_w - target_x)
-    if target_w < 2:
-        return None
-    return target_x, target_y, target_w, target_h
-
+    return target_start, target_y, target_end - target_start, target_h
 
 def associate_ref_to_entry(
     image: Image.Image, entries: list, settings, page_index: int,
@@ -296,12 +368,19 @@ def detect_ref_boxes_page(image_path: Path, settings, page_index: int) -> dict:
             scale_tolerance_percent=float(getattr(
                 settings, "ref_match_scale_tolerance_percent", 25.0,
             )),
+            with_sources=True,
         )
         entries = read_pdic(pdic_path(page))
         sections = read_page_sections(page)
         proposed = list(existing)
-        for guide in matches:
-            target = ref_box_after_guide(guide, image.size, settings)
+        metadata_cache: dict[Path, dict[str, str]] = {}
+        for guide, sample_path in matches:
+            if sample_path not in metadata_cache:
+                metadata_cache[sample_path] = read_ref_sample_metadata(sample_path)
+            target = ref_box_after_guide(
+                guide, image.size, settings,
+                direction=metadata_cache[sample_path]["direction"],
+            )
             if target is None:
                 continue
             x, y, w, h = target
