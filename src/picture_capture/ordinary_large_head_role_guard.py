@@ -67,8 +67,13 @@ def _prefixed_multiline_display_head(
         and 0.70 <= width / height <= 1.50
         and width <= 3.50 * reference
         and 0.50 * reference <= float(x0) - first_x <= 1.45 * reference
-        and abs(float(y0) - float(getattr(nearest, "y0", 0) or 0))
-        <= 0.12 * reference
+        # A numbered glyph may start BELOW its printed row (the short prefix
+        # starts first), but not appreciably ABOVE it. The asymmetric window
+        # also rejects a candidate whose nearest row switches to the NEXT
+        # physical row after an artificial downward shift (page 080598).
+        and -0.12 * reference
+        <= float(y0) - float(getattr(nearest, "y0", 0) or 0)
+        <= 0.40 * reference
     ):
         return False
 
@@ -86,6 +91,12 @@ def _prefixed_multiline_display_head(
             continue
         aligned_rows += 1
         if aligned_rows >= 2:
+            return True
+        # A compact ~2-row display glyph has only ONE physical continuation.
+        # This is still strong when a real numbering prefix, near-square tall
+        # glyph, near-top alignment and matching continuation front coexist.
+        # Taller regions keep the stricter two-continuation requirement.
+        if aligned_rows == 1 and height <= 2.20 * reference:
             return True
     return False
 
