@@ -144,6 +144,14 @@ def match_ref_templates(
         1.0 - scale_tolerance, 1.0 + scale_tolerance,
         7 if scale_tolerance > 0 else 1,
     ))
+    # Curved pages can locally stretch text differently in X and Y.
+    # Two bounded aspect-ratio variants complement the isotropic scales;
+    # these are NOT a nonlinear dewarp or OCR substitute.
+    scales = [(float(f), float(f)) for f in factors]
+    if scale_tolerance > 0:
+        aspect = min(0.08, scale_tolerance)
+        scales.extend(((1 + aspect, 1 - aspect),
+                       (1 - aspect, 1 + aspect)))
     for sample_path in samples:
         with Image.open(sample_path) as opened:
             source_template = np.asarray(
@@ -153,9 +161,9 @@ def match_ref_templates(
         if min(source_template.shape[:2]) < 4 or float(source_template.std()) < 4.0:
             continue
         used_sizes: set[tuple[int, int]] = set()
-        for factor in factors:
-            sw = max(4, round(source_template.shape[1] * factor * ratio))
-            sh = max(4, round(source_template.shape[0] * factor * ratio))
+        for width_factor, height_factor in scales:
+            sw = max(4, round(source_template.shape[1] * width_factor * ratio))
+            sh = max(4, round(source_template.shape[0] * height_factor * ratio))
             if (sw, sh) in used_sizes or sw > width or sh > height:
                 continue
             used_sizes.add((sw, sh))
