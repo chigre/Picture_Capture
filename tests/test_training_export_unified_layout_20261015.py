@@ -185,3 +185,27 @@ def test_training_composed_page_and_zip_include_unified_json_for_every_page(tmp_
             payload = json.loads(archive.read(diagnostic_path))
             assert payload["available"] is True
             assert payload["unified_report"]["summary"]["candidates_total"] == 1
+
+
+def test_unserializable_detector_output_does_not_claim_full_diagnostic(tmp_path, monkeypatch):
+    source = _scan(tmp_path / "007.png", (40, 50, 60))
+    stage = tmp_path / "staging"
+    _scan(stage / "images" / "007.png", (40, 50, 60))
+    from picture_capture import large_head_visual_diagnostics
+    bad = _fake_evidence(
+        Image.new("RGB", (64, 84)), AppSettings(),
+        page_index=7, page_sections=[], source_image_path=source,
+    )
+    bad["unified_report"]["opaque_object"] = object()
+    monkeypatch.setattr(
+        large_head_visual_diagnostics, "build_large_head_diagnostics",
+        lambda *_a, **_k: bad,
+    )
+    result = write_training_unified_layout_diagnostic(
+        source, AppSettings(), stage, 7, "images/007.png",
+    )
+    assert result["available"] is False
+    payload = json.loads((stage / result["json"]).read_text(encoding="utf-8"))
+    assert payload["available"] is False
+    assert "serialization failed" in payload["error"]
+    assert "unified_report" not in payload
