@@ -15487,7 +15487,7 @@ class PictureCaptureApp(tk.Tk):
         if len(existing) > 1 and not messagebox.askyesno(
             "普通画线后OCR文字",
             f"将对 {len(existing)} 个已有画线的页面逐条调用共享 OCR 通道。\n\n"
-            "只填充空白词条；已有文字和人工校对内容保持不变；"
+            "重新 OCR 并覆盖已有的自动 OCR 文本；明确人工选定的词条保留；"
             "不会新增、删除或移动任何画线。继续？",
             parent=self,
         ):
@@ -15518,7 +15518,7 @@ class PictureCaptureApp(tk.Tk):
             protected_words = {
                 (int(entry.x), int(entry.y)): str(entry.word or "")
                 for entry in entries
-                if str(entry.word or "").strip() or bool(entry.manually_selected)
+                if bool(entry.manually_selected)
             }
             with Image.open(page) as opened:
                 image = normalize_page_rgb(opened)
@@ -15531,7 +15531,7 @@ class PictureCaptureApp(tk.Tk):
                 profile_page_index=index,
                 page_sections=sections,
                 profile_path=profile_path,
-                only_blank=True,
+                only_blank=False,
             )
             if len(updated) != original_count:
                 raise RuntimeError(
@@ -15543,7 +15543,7 @@ class PictureCaptureApp(tk.Tk):
             for entry in updated:
                 key = (int(entry.x), int(entry.y))
                 if key in protected_words and str(entry.word or "") != protected_words[key]:
-                    raise RuntimeError(f"{page.name} OCR文字意外覆盖了已有/人工文本")
+                    raise RuntimeError(f"{page.name} OCR文字意外覆盖了人工选定文本")
             write_pdic(pdic_path(page), updated, image.width, pages_info[index])
             export_ocred(
                 qt_root(project.root) / f"{page.stem}.OCRed",
@@ -15571,9 +15571,9 @@ class PictureCaptureApp(tk.Tk):
                 else f"普通画线后OCR文字完成：{completed}/{total} 页"
             )
             self.status_var.set(
-                f"{prefix}；填入 {filled} 条"
+                f"{prefix}；OCR 覆盖/识别 {filled} 条"
                 f"（普通框 {regular}，大字框 {large}）"
-                f"；未识别 {failed} 条；保护已有/人工文本 {skipped} 条"
+                f"；未识别 {failed} 条；保留人工选定 {skipped} 条"
             )
 
         self._start_batch_task(
