@@ -8489,6 +8489,7 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
         self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
         self.canvas.bind("<F2>", lambda e: self.ref_box_controller.edit_properties() if self.ref_box_controller.editing else None)
+        self.canvas.bind("<Escape>", self.ref_box_controller.cancel_capture)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
