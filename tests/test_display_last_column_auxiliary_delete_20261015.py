@@ -137,3 +137,20 @@ def test_display_menu_moves_groups_and_removes_denoise_selector():
     assert "_DENOISE_LABEL_TO_VALUE" not in source
     assert 'check(row, "粗 ", qb[bold])' in source
     assert source.count("divider()") >= 5
+
+
+def test_auxiliary_hit_target_matches_visible_last_column_not_page_remainder(monkeypatch):
+    """Ink beyond the actual column cannot select a line invisible there."""
+    from picture_capture import auxiliary_line_controller as mod
+    monkeypatch.setattr(mod, "column_index_for_click", lambda *_args: 1)
+    app = SimpleNamespace(
+        settings=SimpleNamespace(column_width=400),
+        view_scale=1.0,
+        _auxiliary_edits=AuxiliaryLineEdits([AuxiliaryLine(520, 100)]),
+        _get_cached_display_geometry=lambda: _geometry(),
+    )
+    ctrl = AuxiliaryLineController(app)
+    assert ctrl._nearest(900, 100) == 0
+    assert ctrl._nearest(950, 100) is None
+    assert ctrl._nearest(1090, 100) is None
+
