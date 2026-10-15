@@ -267,8 +267,13 @@ class AppSettings(metaclass=_AppSettingsMeta):
     illustration_label_font_italic: bool = False
     # REF rectangles are independent page annotations, never PPP/PDIC fields.
     ref_box_show: bool = True
-    ref_box_fill_color: str = "#b7d9f5"
+    ref_box_show_text: bool = True
+    # Empty/whitespace-only REF uses pale orange; filled REF uses pale green.
+    # Independent opacity settings default to 50% for both states.
+    ref_box_fill_color: str = "#ffe0b2"
     ref_box_fill_opacity: float = 50.0
+    ref_box_filled_color: str = "#c8e6c9"
+    ref_box_filled_opacity: float = 50.0
     ref_box_text_color: str = "#15395b"
     ref_box_font_family: str = "自动（系统推荐）"
     ref_box_font_size: int = 16
