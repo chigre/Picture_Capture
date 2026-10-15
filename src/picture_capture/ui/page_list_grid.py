@@ -19,13 +19,11 @@ DARK_GRID = "#4c5663"
 def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
     """Return x, y, width, height for lines inside *actual displayed cells*.
 
-    Row borders follow identify_row. Column hit-testing identifies the two
-    adjacent *displayed* columns, but its transition X is NOT the actual
-    native heading boundary: ttk allocates several pixels to resize-grips
-    around heading separators. The exact cell boundary comes from the
-    displayed, visible row's Treeview.bbox(iid, column_id). This avoids a
-    consistent offset on Windows/macOS and respects #0 thumbnail, optional
-    columns, column reordering, DPI, and horizontal scroll.
+    Row borders follow identify_row; vertical rulers use displayed column
+    bbox geometry from the first visible row. Never infer X from
+    identify_column(): its draggable heading grip can shift the hitbox by
+    several pixels or entirely past the viewport's edge. Native bbox
+    respects #0 thumbnail, optional columns, reordering, DPI and xscroll.
     """
     try:
         width = max(0, int(tree.winfo_width()))
@@ -55,23 +53,40 @@ def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
             preceding = current
 
         first_visible_iid = row(body_top)
-        preceding = column(0)
-        for x in range(1, width):
-            current = column(x)
-            if current != preceding and preceding:
-                # identify_column() changes AFTER the separator drag target,
-                # which can be 5+ Tk pixels to the right of the real heading
-                # divider. Read exact cell geometry instead of using x - 1.
-                boundary = x - 1
-                if hasattr(tree, "bbox"):
-                    cell = tree.bbox(first_visible_iid, preceding)
-                    if not cell or len(cell) != 4:
-                        preceding = current
-                        continue  # Do not draw a misaligned line.
-                    boundary = int(cell[0]) + int(cell[2]) - 1
+        if all(hasattr(tree, attr) for attr in ("bbox", "cget", "tk")):
+            # Native Treeview: enumerate DISPLAYED columns, never hit-testing
+            # boundaries. ttk heading separator resize-grips can extend past
+            # the widget edge (and are offset from the real cell boundary).
+            # Iterating bbox also includes a last-column border that remains
+            # visible even when identify_column never transitions to "".
+            displayed = tuple(tree.tk.splitlist(tree.cget("displaycolumns")))
+            if not displayed or displayed == ("#all",):
+                displayed = tuple(tree.tk.splitlist(tree.cget("columns")))
+            show = tuple(tree.tk.splitlist(tree.cget("show")))
+            columns = (("#0",) if "tree" in show else ()) + displayed
+            for column_id in columns:
+                cell = tree.bbox(first_visible_iid, column_id)
+                if not cell or len(cell) != 4:
+                    continue
+                boundary = int(cell[0]) + int(cell[2]) - 1
                 if 0 < boundary < width:
                     segments.append((boundary, body_top, 1, height - body_top))
-            preceding = current
+        else:
+            # Compatibility for non-Tk geometry doubles used by older tests.
+            preceding = column(0)
+            for x in range(1, width):
+                current = column(x)
+                if current != preceding and preceding:
+                    boundary = x - 1
+                    if hasattr(tree, "bbox"):
+                        cell = tree.bbox(first_visible_iid, preceding)
+                        if not cell or len(cell) != 4:
+                            preceding = current
+                            continue
+                        boundary = int(cell[0]) + int(cell[2]) - 1
+                    if 0 < boundary < width:
+                        segments.append((boundary, body_top, 1, height - body_top))
+                preceding = current
         return segments
     except (tk.TclError, ValueError, TypeError):
         return []
