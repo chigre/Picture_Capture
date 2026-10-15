@@ -434,3 +434,34 @@ def test_ref_palette_and_text_visibility_persist_after_reopen(tmp_path):
         )
     }
     validate_ref_box_controls(values)
+
+
+def test_ref_text_label_can_show_without_original_frame_and_select_for_edit(
+    tmp_path, monkeypatch,
+):
+    import picture_capture.ui.ref_box_controller as ref_ui
+    import picture_capture.ui_compat as fonts
+
+    app, editor = editor_with_box(tmp_path)
+    app.settings.ref_box_show = False
+    app.settings.ref_box_show_text = True
+    monkeypatch.setattr(ref_ui.ImageTk, "PhotoImage", lambda _image: object())
+    monkeypatch.setattr(fonts, "resolve_content_font_family", lambda *_: "Arial")
+    editor.editing = False
+    editor.render()
+    assert BOX.id in editor._label_rects
+    assert not [kwargs for kind, _, kwargs in app.canvas.actions
+                if kind == "rectangle" and "ref-box-border" in kwargs.get("tags", ())]
+    assert [kwargs["text"] for kind, _, kwargs in app.canvas.actions
+            if kind == "text"] == [BOX.text]
+
+    # Label has its own hit target; selecting does not create/move the REF box.
+    editor.editing = True
+    editor.selected_id = None
+    editor.render()
+    x0, y0, x1, y1 = editor._label_rects[BOX.id]
+    assert editor.press((x0+x1)//2, (y0+y1)//2) == "break"
+    assert editor.selected_id == BOX.id
+    assert editor.pointer_action == "label"
+    editor.release((x0+x1)//2, (y0+y1)//2)
+    assert read_ref_boxes(app.current_page)[0] == BOX
