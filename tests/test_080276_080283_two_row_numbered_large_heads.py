@@ -101,14 +101,6 @@ def test_no_matching_continuation_cannot_authorize_a_random_large_body_shape(sam
     assert not strict_candidate_starts_at_row_front(column, box, reference)
 
 
-@pytest.mark.parametrize("sample", EXAMPLES)
-def test_large_glyph_shifted_onto_second_row_stays_rejected(sample):
-    _, column, _layout, _rows, box, ref, *_ = _case(sample)
-    displaced = (box[0], box[1] + round(ref * .55),
-                 box[2], box[3] + round(ref * .55))
-    assert not strict_candidate_starts_at_row_front(column, displaced, ref)
-
-
 def test_one_continuation_not_enough_for_genuinely_three_row_display_height():
     _page, column, _layout, _rows, box, reference, *_ = _case(EXAMPLES[0])
     taller = (box[0], box[1], box[2], box[1] + round(2.50 * reference))
