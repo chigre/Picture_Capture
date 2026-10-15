@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
-from dataclasses import replace
-
-from PIL import Image, ImageOps
+ 
+from PIL import Image
 
 from .formats import pdic_path, read_pdic, read_ppp, write_ppp
 from .illustration_labels import illustration_labels
