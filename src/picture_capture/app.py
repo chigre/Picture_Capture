@@ -6575,6 +6575,12 @@ class ReviewWindow(tk.Toplevel):
             return "break"
         if not self.parent._claim_page_for_manual_edit():
             return "break"
+        if str(getattr(row_entries[int(index)], "candidate_id", "") or ""):
+            # Candidate-linked deletion must commit manual override + PDIC +
+            # simplified companion before touching any shared Entry/Tk state.
+            # Do not fall through to the legacy multi-write save sequence.
+            from .ui.review_candidate_delete_actions import delete_owned_review_candidate
+            return delete_owned_review_candidate(self, int(index), row_entries)
 
         # Only explicitly enabled, project-local evidence capture. Save the
         # *previous on-disk* PDIC before mutating any shared Entry objects.
