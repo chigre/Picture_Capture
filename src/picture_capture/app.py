@@ -5960,8 +5960,12 @@ class ReviewWindow(tk.Toplevel):
             # Membership colors are intentionally pale status colors in both
             # themes. Keep this frame out of the generic dark mapper.
             editor_frame._pc_skip_classic_appearance = True
+            from .ui.overlay_delete_button import fixed_overlay_control_font
             delete_button = tk.Button(
                 editor_frame, text="[X]", width=3, takefocus=False,
+                font=fixed_overlay_control_font(
+                    editor_frame, self.parent.settings.ocr_language,
+                ),
                 relief="flat", bd=0, padx=1, pady=0, cursor="hand2",
                 fg="#8b1a1a", bg="#f3eeee", activebackground="#f4d9d9",
                 command=lambda i=index: self.delete_review_entry(i),
