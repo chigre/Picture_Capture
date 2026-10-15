@@ -42,6 +42,20 @@ def associate_existing_ppp_page(
     source_ppp = ppp_read_path_for_image(page)
     if not source_ppp.is_file():
         return {"status": "skipped_no_ppp", "page_index": page_index, "page": page.name}
+    # On case-sensitive filesystems a page may have both .ppp and .PPP,
+    # holding DIFFERENT manually edited polygons. Never silently choose one.
+    # On Windows/macOS case-insensitive volumes the directory exposes only
+    # one actual entry even if two differently-cased lookups both succeed.
+    alternatives = [
+        sibling for sibling in source_ppp.parent.glob(f"{page.stem}.*")
+        if sibling.is_file() and sibling.suffix.casefold() == ".ppp"
+        and sibling.stem.casefold() == page.stem.casefold()
+    ]
+    if len(alternatives) > 1:
+        return {
+            "status": "skipped_ambiguous_ppp",
+            "page_index": page_index, "page": page.name,
+        }
     original_ticket = _file_ticket(source_ppp)
     regions = read_ppp(source_ppp)
     if not regions:
