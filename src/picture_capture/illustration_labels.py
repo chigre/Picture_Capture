@@ -75,7 +75,9 @@ def _region_key(region: PolygonRegion, geometry, sections) -> tuple[int, int, in
 
     points = _region_top_coordinates(region, geometry)
     if not points:
-        raise ValueError("插图轮廓无有效顶点，无法生成阅读顺序编号")
+        # Malformed historical PPP rows must not crash the entire GUI.
+        # Keep them last and unassociated; normal editing can repair them.
+        return (len(sections), len(geometry.column_starts), 10**12, 10**12)
     left = min(points, key=lambda p: (p[0], p[1]))
     left_source = min(region.points, key=lambda p: geometry.source_to_canonical(*p))
     column = column_index_for_click(int(left_source[0]), geometry, int(left_source[1]))
