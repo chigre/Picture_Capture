@@ -17,7 +17,7 @@ from PIL import Image
 
 from ...formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
-from ...layout_mask_source_guard import missing_saved_illustrations
+from ...layout_mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr_action_guard import guard_ocr_action_selection
 from ...page_sections import read_page_sections
@@ -91,7 +91,10 @@ class DetectionController:
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=page_index,
                 page_sections=page_sections,
-                source_image_path=page,
+                source_image_path=detection_mask_source_path(
+                    page, settings,
+                    ordinary=settings.detection_method not in {"paddleocr", "combined"},
+                ),
             )
             text_stats = None
             if settings.detection_method == "combined":

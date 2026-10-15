@@ -15611,7 +15611,7 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
-        from .layout_mask_source_guard import missing_saved_illustrations
+        from .layout_mask_source_guard import missing_saved_illustrations, detection_mask_source_path
         missing_ppp = missing_saved_illustrations(
             (self.project.images[i] for i in indices), self.settings,
         )
@@ -15740,7 +15740,9 @@ class PictureCaptureApp(tk.Tk):
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=index,
                 page_sections=sections,
-                source_image_path=page,
+                source_image_path=detection_mask_source_path(
+                    page, settings, ordinary=method == "left_edge",
+                ),
             )
             if tracing:
                 stages["ocr_detect_entries"] = time.perf_counter() - trace_tick
