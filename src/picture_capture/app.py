@@ -135,7 +135,7 @@ from .ui.controllers import (
     HeadwordController, IllustrationController, PageController, ProjectController,
     ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
-from .ui.page_thumbnails import PageThumbnailController
+from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -9015,42 +9015,8 @@ class PictureCaptureApp(tk.Tk):
             mapping.clear()
 
     def _visible_page_list_iids(self) -> list[str]:
-        """Return only rows currently intersecting the Treeview viewport.
-
-        Cell coloring uses child Labels because ttk.Treeview has no per-cell tag
-        colors.  Scanning every page on every repaint is unnecessarily expensive;
-        only visible rows can have an overlay, so walk forward from the first
-        visible row and stop as soon as ``bbox`` leaves the viewport.
-        """
-        if not hasattr(self, "page_list"):
-            return []
-        try:
-            height = max(1, int(self.page_list.winfo_height()))
-            # The Treeview heading occupies the top 25–40 px; a probe only
-            # at y=1/20 can miss every row when thumbnails increase rowheight.
-            iid = ""
-            for probe_y in (1, 20, 40, 60, 80):
-                if probe_y >= height:
-                    break
-                iid = self.page_list.identify_row(probe_y)
-                if iid:
-                    break
-            if not iid:
-                return []
-            visible: list[str] = []
-            while iid:
-                bbox = self.page_list.bbox(iid)
-                if not bbox:
-                    break
-                _x, y, _width, row_height = bbox
-                if y >= height:
-                    break
-                if y + row_height > 0:
-                    visible.append(str(iid))
-                iid = self.page_list.next(iid)
-            return visible
-        except tk.TclError:
-            return []
+        """Shared viewport scanner for semantic cell overlays and thumbnails."""
+        return visible_page_iids(self.page_list) if hasattr(self, "page_list") else []
 
     def _refresh_lined_cell_overlays(self) -> None:
         """Paint semantic colors only for visible page-list cells.
