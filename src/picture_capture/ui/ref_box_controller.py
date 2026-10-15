@@ -528,23 +528,66 @@ class RefBoxController:
             styles.append("italic")
         font_spec = (family, size, *styles)
         for box in self.boxes:
-            xx, yy, ww, hh = round(box.x*s), round(box.y*s), max(1, round(box.w*s)), max(1, round(box.h*s))
+            xx, yy, ww, hh = (round(box.x*s), round(box.y*s),
+                              max(1, round(box.w*s)), max(1, round(box.h*s)))
             if opacity > 0:
                 rgba = Image.new("RGBA", (ww, hh), (*rgb, round(opacity*255/100)))
                 photo = ImageTk.PhotoImage(rgba)
                 self._overlay_images.append(photo)
-                app.canvas.create_image(xx, yy, image=photo, anchor="nw", tags=("ref-box",))
-            if self.editing and box.id == self.selected_id:
-                app.canvas.create_rectangle(xx, yy, xx+ww, yy+hh, outline="#1565c0",
-                    width=1, dash=(3,2), tags=("ref-box",))
+                app.canvas.create_image(
+                    xx, yy, image=photo, anchor="nw", tags=("ref-box",),
+                )
+            if self.editing:
+                selected = box.id == self.selected_id
+                app.canvas.create_rectangle(
+                    xx, yy, xx+ww, yy+hh,
+                    outline="#1565c0" if selected else "#477da1",
+                    width=2 if selected else 1,
+                    dash=() if selected else (3, 3),
+                    tags=("ref-box", "ref-box-border"),
+                )
             if box.text:
                 app.canvas.create_text(
-                    xx + 2, yy+1, text=box.text, anchor="nw",
-                    width=max(4, ww-4), fill=getattr(config,"ref_box_text_color","#15395b"),
+                    xx + 2, yy + 1, text=box.text, anchor="nw",
+                    width=max(4, ww-4),
+                    fill=getattr(config, "ref_box_text_color", "#15395b"),
                     font=font_spec, tags=("ref-box",),
+                )
+            if self.editing and box.id == self.selected_id:
+                # Eight screen-size handles indicate four sides plus corners.
+                radius = 4
+                points = (
+                    (xx, yy), (xx + ww//2, yy), (xx + ww, yy),
+                    (xx, yy + hh//2), (xx + ww, yy + hh//2),
+                    (xx, yy + hh), (xx + ww//2, yy + hh), (xx + ww, yy + hh),
+                )
+                for hx, hy in points:
+                    app.canvas.create_rectangle(
+                        hx-radius, hy-radius, hx+radius, hy+radius,
+                        fill="#ffffff", outline="#1565c0", width=2,
+                        tags=("ref-box", "ref-box-handle"),
+                    )
+        if self.editing:
+            for action, x0, y0, x1, y1 in self._action_buttons():
+                sx0, sy0, sx1, sy1 = (round(x0*s), round(y0*s),
+                                      round(x1*s), round(y1*s))
+                app.canvas.create_rectangle(
+                    sx0, sy0, sx1, sy1, fill="#eaf3fc",
+                    outline="#1565c0", width=1,
+                    tags=("ref-box", "ref-box-action", f"ref-{action}"),
+                )
+                app.canvas.create_text(
+                    (sx0+sx1)//2, (sy0+sy1)//2,
+                    text="✎" if action == "edit" else "×",
+                    font=(family, max(10, round(14*s))),
+                    fill="#14508b" if action == "edit" else "#af2929",
+                    tags=("ref-box", "ref-box-action", f"ref-{action}"),
                 )
         if self.drag_box is not None:
             self._preview_drag()
+        # Canvas graphics are drawn last, above PPP/PDIC lines. Tk window
+        # widgets may still float above canvas graphics; bind_overlay_widgets
+        # explicitly routes their mouse events to the REF editor.
 
     def recognize_selected_scope(self):
         app = self.app
