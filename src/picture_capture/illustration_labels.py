@@ -140,6 +140,24 @@ def illustration_labels(
     return result
 
 
+def previous_entry_ref_for_image(previous_image_path) -> tuple[str, int] | None:
+    """Return the last zero-based PDIC ID of a known preceding project page.
+
+    Caller supplies the actual project predecessor, not an inferred numeric
+    filename. Never create a link when that page has no readable PDIC entries.
+    """
+    if previous_image_path is None:
+        return None
+    from pathlib import Path
+    from .formats import pdic_path, read_pdic
+
+    previous = Path(previous_image_path)
+    entries = read_pdic(pdic_path(previous))
+    if not 1 <= len(entries) <= 1000:
+        return None
+    return previous.stem, len(entries) - 1
+
+
 def user_edited_link(original: str, typed: str) -> str:
     """Allow edits to the association code only, never the generated id/page.
 
@@ -193,5 +211,6 @@ def write_ordered_auto_ppp(
 
 __all__ = [
     "illustration_labels", "label_text", "user_edited_link",
+    "previous_entry_ref_for_image",
     "write_ordered_auto_ppp",
 ]
