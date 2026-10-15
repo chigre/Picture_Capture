@@ -356,7 +356,10 @@ def test_pinned_preview_and_every_inline_crop_coexist():
     end = app.index('    def _ordinary_review_photo(', start)
     render = app[start:end]
     assert 'photo = self._ordinary_review_photo(index)' in render
-    assert 'picture = ttk.Label(self.rows, image=photo' in render
+    # Every inline crop is still resident; its child label now shares one
+    # disposable row with the lower-aligned main-style sequence badge.
+    assert 'picture, sequence_label, crop_row = create_review_crop_with_index(' in render
+    assert 'self, self.rows, photo=photo, index=index, total=len(ordered)' in render
     assert 'self._review_row_pictures.append(picture)' in render
     assert 'if index != 0:' not in render
     active = app[app.index('    def set_active(self, index: int)'):]

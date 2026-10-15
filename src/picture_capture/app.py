@@ -2493,15 +2493,17 @@ class ReviewWindow(tk.Toplevel):
         self._review_auto_zoom_width = self._review_image_area_width()
         self._request_render_rows(focus_index=0)
 
-    def _review_image_area_width(self) -> int:
-        """Return the usable crop-image width inside the proofreading left pane."""
+    def _review_image_area_width(self, canvas_width: int | None = None) -> int:
+        """Leave room for the main-style sequence badge beside each crop."""
         try:
-            canvas_width = int(self.canvas.winfo_width())
+            if canvas_width is None:
+                canvas_width = int(self.canvas.winfo_width())
+            from .ui.review_crop_sequence import review_sequence_gutter
+            badge_width = review_sequence_gutter(self)
         except (AttributeError, tk.TclError, TypeError, ValueError):
             return 1
-        # Crop labels use padx=6 on both sides. Keeping that 12 px outside the
-        # 99% image target prevents a nominally fitted strip from overflowing.
-        return max(1, canvas_width - 12)
+        # 6px outer padding on each side, plus the measured badge and gap.
+        return max(1, int(canvas_width) - 12 - badge_width)
 
     def _review_canvas_configured(self, event: tk.Event) -> None:
         try:
@@ -2510,7 +2512,7 @@ class ReviewWindow(tk.Toplevel):
             return
         if not self.review_zoom_auto:
             return
-        usable_width = max(1, int(event.width) - 12)
+        usable_width = self._review_image_area_width(event.width)
         # Ignore geometry noise that cannot change the rounded crop width.
         if abs(usable_width - int(self._review_auto_zoom_width or 0)) <= 1:
             return
@@ -5900,6 +5902,7 @@ class ReviewWindow(tk.Toplevel):
         self._review_display_crops = list(preloaded_crops)
         self._review_row_pictures.clear()
         words = self.parent._project_words if self.parent.project else set()
+        from .ui.review_crop_sequence import create_review_crop_with_index
         for index, entry in enumerate(ordered):
             next_entry = ordered[index + 1] if index + 1 < len(ordered) else None
             # Crop and LANCZOS resize are completed by a worker before this
@@ -5909,8 +5912,9 @@ class ReviewWindow(tk.Toplevel):
             # Each inline slice already has its text-dependent crop height:
             # one-character headwords use 大字头切图高, others use ordinary.
             photo = self._ordinary_review_photo(index)
-            picture = ttk.Label(self.rows, image=photo, style="PCR.Crop.TLabel")
-            picture.grid(row=index * 2, column=0, sticky="ew", padx=6, pady=(8, 0))
+            picture, sequence_label, crop_row = create_review_crop_with_index(
+                self, self.rows, photo=photo, index=index, total=len(ordered),
+            )
             self.thumbnails.append(photo)
             self._review_row_pictures.append(picture)
             var = tk.StringVar(value=entry.word)
@@ -6051,7 +6055,7 @@ class ReviewWindow(tk.Toplevel):
             simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
             simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
             simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
-            for widget in (picture, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
+            for widget in (picture, sequence_label, crop_row, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
                 widget.bind("<MouseWheel>", self.scroll_rows)
                 widget.bind("<Button-4>", lambda e: self.scroll_rows_linux(-1))
                 widget.bind("<Button-5>", lambda e: self.scroll_rows_linux(1))

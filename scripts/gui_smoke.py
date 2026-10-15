@@ -85,6 +85,36 @@ def main() -> int:
             window.update_idletasks()
             _stage(f"withdrew {name}")
 
+        # Real Tk check for the inline ReviewWindow crop-side number.
+        # No project, actual dictionary scan, or PDIC is loaded.
+        _stage("review crop-side index widget smoke")
+        from tkinter import ttk
+        from picture_capture.ui.review_crop_sequence import (
+            create_review_crop_with_index,
+        )
+        probe = tk.Frame(app)
+        probe.parent = app
+        probe.scroll_rows = lambda _event: None
+        probe.scroll_rows_linux = lambda _delta: None
+        crop_rows = ttk.Frame(probe)
+        image = tk.PhotoImage(master=app, width=100, height=32)
+        crop_widget, index_widget, crop_container = create_review_crop_with_index(
+            probe, crop_rows, photo=image, index=9, total=10,
+        )
+        if index_widget.cget("text") != app._entry_sequence_text(9, 10):
+            raise RuntimeError("Review index differs from main canvas number")
+        if index_widget.cget("bg") != "#e6e6e6":
+            raise RuntimeError("Review index lost its main-style background")
+        if index_widget.grid_info().get("sticky") != "s":
+            raise RuntimeError("Review index is not bottom-aligned to crop")
+        if crop_widget.master is not index_widget.master:
+            raise RuntimeError("Review number and crop have separate lifecycles")
+        crop_container.destroy()
+        if index_widget.winfo_exists() or crop_widget.winfo_exists():
+            raise RuntimeError("Destroying a review row left an orphan number")
+        probe.destroy()
+        _stage("review crop-side index widget smoke: OK")
+
         for window in reversed(windows):
             _stage(f"destroy {window.__class__.__name__}")
             window.destroy()
