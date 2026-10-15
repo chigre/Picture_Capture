@@ -57,6 +57,15 @@ def draw_entry_overlay(
         )
     )
     column_end_screen_x = float(column_end_source_x) * self.view_scale
+    # Controls are positioned from the *painted* marker endpoint, not
+    # the full column edge; right_ratio may be less than 100%.
+    marker_right_screen_x = max(
+        float(marker_start[0]), float(marker_end[0]),
+    ) * self.view_scale
+    marker_right_screen_y = (
+        float(marker_start[1]) if marker_start[0] >= marker_end[0]
+        else float(marker_end[1])
+    ) * self.view_scale
 
     marker_line_width = scaled_overlay_line_width(self.settings.marker_height, overlay_scale)
     show_markers = (
@@ -108,10 +117,9 @@ def draw_entry_overlay(
         # Suppress editor, sequence and OCR widgets only. Keep a visible,
         # actionable [X] attached to the marker at the column's far edge.
         if delete_button is not None:
-            button_anchor = "ne" if rtl else "nw"
             record["canvas_items"].append(self.canvas.create_window(
-                column_end_screen_x, marker_start[1] * self.view_scale,
-                window=delete_button, anchor=button_anchor,
+                marker_right_screen_x, marker_right_screen_y,
+                window=delete_button, anchor="ne",
             ))
         self._entry_visuals[id(entry)] = record
         return
@@ -276,21 +284,15 @@ def draw_entry_overlay(
                     vertical_box, menu_req_width,
                     self.settings.layout_writing_mode, size[0],
                 )
-        elif delete_button is not None:
-            # The horizontal trailing edge is reserved for [X]; do not let an
-            # optional OCR selector overlap the delete button.
-            ocr_x, ocr_y, ocr_anchor = (
-                float(editor_x), float(editor_y + editor_req_height + 2),
-                editor_anchor,
-            )
         else:
-            ocr_x, ocr_y, ocr_anchor = horizontal_ocr_menu_layout(
-                editor_x, editor_y, editor_req_width, rtl=rtl,
+            # Both controls align their RIGHT edge to the horizontal marker
+            # endpoint; place OCR *under* [X] to keep both clickable.
+            ocr_x = marker_right_screen_x
+            ocr_y = marker_right_screen_y + (
+                max(1, delete_button.winfo_reqheight()) + 2
+                if delete_button is not None else 2
             )
-            if not rtl and ocr_x + menu_req_width > size[0] - 2:
-                ocr_x = max(0, size[0] - menu_req_width - 2)
-            elif rtl and ocr_x - menu_req_width < 2:
-                ocr_x = menu_req_width + 2
+            ocr_anchor = "ne"
 
         item = self.canvas.create_window(
             ocr_x,
@@ -350,12 +352,11 @@ def draw_entry_overlay(
 
     if delete_button is not None:
         if horizontal:
-            # End of the resolved column in *source* pixels, not the index
-            # position. [X] sits AFTER the full-width editor, without taking
-            # any of the specified editor-to-column-end width.
-            delete_x = column_end_screen_x
-            delete_y = float(editor_y)
-            delete_anchor = "ne" if rtl else "nw"
+            # Align the button's RIGHT edge to the painted separator's
+            # RIGHT endpoint, for any right_ratio, including mirrored pages.
+            delete_x = marker_right_screen_x
+            delete_y = marker_right_screen_y
+            delete_anchor = "ne"
         else:
             # For vertical text there is no horizontal trailing word box;
             # use the physical right edge of its actual vertical widget.
