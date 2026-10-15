@@ -46,6 +46,7 @@ class IllustrationController:
     def persist_current(
         self, proposed: list[PolygonRegion] | None = None,
         *, associate: bool = False, redraw: bool = False,
+        label_overrides: dict[int, str] | None = None,
     ) -> bool:
         """Atomic disk-first PPP commit; publish edited labels only on success.
 
@@ -64,6 +65,11 @@ class IllustrationController:
                 entries=list(app._ordered_entries_reading_order()) if associate else (),
                 associate=associate,
             )
+            if label_overrides:
+                for index, label in label_overrides.items():
+                    if not 0 <= index < len(labels):
+                        raise ValueError("插图标签所指区域已不存在")
+                    labels[index] = label
             staged = [
                 PolygonRegion(label, list(region.points))
                 for region, label in zip(current, labels)
@@ -116,7 +122,7 @@ class IllustrationController:
 
     def delete_polygon(self, region: PolygonRegion) -> bool:
         app = self.app
-        if not app.current_page or region not in app.polygons:
+        if not app.current_page or not any(r is region for r in app.polygons):
             return False
         if getattr(app, "_batch_active", False) and getattr(app, "_batch_allow_pdic_edits", False):
             app.status_var.set("插图识别期间暂不修改 PPP。")
@@ -128,7 +134,7 @@ class IllustrationController:
 
     def update_label(self, region: PolygonRegion, typed: str) -> bool:
         app = self.app
-        if region not in app.polygons or app.current_page is None:
+        if not any(r is region for r in app.polygons) or app.current_page is None:
             return False
         if getattr(app, "_batch_active", False) and getattr(app, "_batch_allow_pdic_edits", False):
             return False
@@ -139,14 +145,13 @@ class IllustrationController:
             updated = user_edited_link(old, typed)
             if updated == old and region.label == updated:
                 return True
-            proposed = [PolygonRegion(r.label, list(r.points)) for r in app.polygons]
-            proposed[index].label = updated
+            # Keep original object identity: Tk label widgets and polygon
+            # vertex handles refer to these exact region objects.
         except Exception as exc:
             app.show_error("插图标签无效", exc)
             return False
-        return self.persist_current(proposed, redraw=True) or (
-            list(app.polygons)[index].label == updated
-        )
+        self.persist_current(label_overrides={index: updated}, redraw=False)
+        return app.polygons[index].label == updated
 
     def associate_current_page(self) -> None:
         app = self.app
