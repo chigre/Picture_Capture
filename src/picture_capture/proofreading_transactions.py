@@ -236,20 +236,40 @@ def _decode(value: Any) -> bytes | None:
     return base64.b64decode(value, validate=True)
 
 
+def _valid_manual_path(page: Path, path: Path | None) -> bool:
+    return bool(
+        path is not None
+        and Path(path).name == f"{page.stem}_manual_selection.json"
+        and Path(path).parent.name.lower() == "paddleocr"
+    )
+
+
 def _stage_recovery(
     page: Path, changes: list[tuple[str, bytes | None, bytes | None]],
+    *, manual_path: Path | None = None,
 ) -> Path:
     marker = _recovery_path(page)
     if marker.exists():
         raise RuntimeError("Unresolved R3 recovery marker; refusing new undo")
+    roles = [role for role, _, _ in changes]
+    if len(roles) != len(set(roles)) or not roles or not set(roles) <= {"pdic", "simplified", "manual"}:
+        raise ValueError("Invalid R3 recovery roles")
+    owns_manual = "manual" in roles
+    if owns_manual and not _valid_manual_path(page, manual_path):
+        raise ValueError("Candidate manual-selection recovery path is not owned by this page")
     doc = {
-        "format": "picture_capture_r3_transient_recovery", "version": 1,
+        "format": "picture_capture_r3_transient_recovery",
+        "version": 2 if owns_manual else 1,
         "page": str(page.resolve()),
         "files": [
             {"role": role, "before": _encode(old), "after": _encode(new)}
             for role, old, new in changes
         ],
     }
+    if owns_manual:
+        # Version 2 is explicitly bound to the page's expected OCR override
+        # location, never an arbitrary path from an untrusted recovery marker.
+        doc["manual_path"] = str(Path(manual_path).resolve())
     # The marker exists only during a multi-file commit and is deleted
     # immediately. It is NOT a persistent Undo/Redo journal.
     _atomic_bytes(marker, json.dumps(doc, ensure_ascii=False).encode("utf-8"))
@@ -257,7 +277,7 @@ def _stage_recovery(
 
 
 def _verified_recovery(
-    page: Path,
+    page: Path, *, manual_path: Path | None = None,
 ) -> tuple[Path, list[tuple[Path, bytes | None, bytes | None]]] | None:
     marker = _recovery_path(page)
     if not marker.is_file():
@@ -265,12 +285,18 @@ def _verified_recovery(
     doc = json.loads(marker.read_text(encoding="utf-8"))
     if (not isinstance(doc, dict)
             or doc.get("format") != "picture_capture_r3_transient_recovery"
-            or doc.get("version") != 1 or doc.get("page") != str(page.resolve())):
+            or doc.get("version") not in {1, 2}
+            or doc.get("page") != str(page.resolve())):
         raise ValueError("R3 recovery marker does not match current page")
     values = doc.get("files")
     if not isinstance(values, list) or not values:
         raise ValueError("R3 recovery marker has no files")
     known = {"pdic": pdic_path(page), "simplified": simplified_review_path_for_image(page)}
+    if doc["version"] == 2:
+        if (not _valid_manual_path(page, manual_path)
+                or doc.get("manual_path") != str(Path(manual_path).resolve())):
+            raise ValueError("R3 manual-selection recovery requires trusted project path")
+        known["manual"] = Path(manual_path)
     found = set()
     result = []
     for row in values:
@@ -281,17 +307,19 @@ def _verified_recovery(
             raise ValueError("R3 recovery contains duplicate file")
         found.add(role)
         result.append((known[role], _decode(row.get("before")), _decode(row.get("after"))))
+    if ("manual" in found) != (doc["version"] == 2):
+        raise ValueError("R3 recovery marker/manual path schema mismatch")
     return marker, result
 
 
-def recover_pending_for_page(page: Path) -> bool:
+def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> bool:
     """Reconcile an interrupted multi-file operation before loading any PDIC.
 
     All old/new bytes are explicitly embedded in a *temporary* local marker.
     A complete after-state wins; a mixed old/new state is rolled back to the
     before-state. Unexpected third-party modification requires manual action.
     """
-    pending = _verified_recovery(page)
+    pending = _verified_recovery(page, manual_path=manual_path)
     if pending is None:
         return True
     marker, items = pending
@@ -303,6 +331,78 @@ def recover_pending_for_page(page: Path) -> bool:
         for path, before, _ in items:
             _publish(path, before)
     marker.unlink()
+    return True
+
+
+def publish_owned_review_bundle(
+    expected: SavedSnapshot,
+    *, pdic_bytes: bytes,
+    manual_bytes: bytes,
+    simplified_bytes: bytes | None,
+) -> bool:
+    """Publish a future operation-owned candidate edit as one recoverable unit.
+
+    Pure persistence boundary: does not modify Entry, candidate checkbox or
+    ReviewWindow. Callers must own a unique candidate and validate its intended
+    content before supplying the exact target bytes. This function alone does
+    not enable candidate Undo/Redo.
+    """
+    page = expected.page
+    manual_path = expected.manual_path
+    if not _valid_manual_path(page, manual_path):
+        return False
+    changes = []
+    for role, old, new in (
+        ("pdic", expected.pdic_bytes, pdic_bytes),
+        ("manual", expected.manual_bytes, manual_bytes),
+        ("simplified", expected.simplified_bytes, simplified_bytes),
+    ):
+        if old != new:
+            changes.append((role, old, new))
+    if not (len(changes) >= 2 and any(role == "manual" for role, _, _ in changes)
+            and any(role == "pdic" for role, _, _ in changes)
+            and not _recovery_path(page).exists()):
+        return False
+
+    def source_unchanged() -> bool:
+        return bool(
+            sha256_file(page) == expected.image_sha
+            and _bytes_or_absent(pdic_path(page)) == expected.pdic_bytes
+            and _bytes_or_absent(manual_path) == expected.manual_bytes
+            and _bytes_or_absent(simplified_review_path_for_image(page))
+                == expected.simplified_bytes
+            and _bytes_or_absent(expected.ocr_path) == expected.ocr_bytes
+            and page_sections_read_path_for_image(page) == expected.section_path
+            and _bytes_or_absent(expected.section_path) == expected.section_bytes
+            and _bytes_or_absent(expected.profile_path) == expected.profile_bytes
+        )
+    if not source_unchanged():
+        return False
+    paths = {
+        "pdic": pdic_path(page),
+        "manual": manual_path,
+        "simplified": simplified_review_path_for_image(page),
+    }
+    marker = _stage_recovery(page, changes, manual_path=manual_path)
+    if not source_unchanged():
+        marker.unlink()
+        return False
+    try:
+        for role, _, data in changes:
+            _publish(paths[role], data)
+    except (OSError, RuntimeError, ValueError):
+        # Roll back only files still identical to our documented old/new
+        # versions. A concurrent third-party write leaves marker in place,
+        # and all subsequent page loads must refuse unsafe reopening.
+        recover_pending_for_page(page, manual_path=manual_path)
+        raise
+    # The durable files now contain the after-state. If cleanup fails, future
+    # page loads will observe complete-after and safely clear the marker; do
+    # not falsely tell callers that committed disk bytes were rolled back.
+    try:
+        marker.unlink()
+    except OSError:
+        pass
     return True
 
 
@@ -350,7 +450,12 @@ def _publish_restored_snapshot(
         # An interrupted rollback keeps marker so next page load can recover.
         recover_pending_for_page(page)
         raise
-    marker.unlink()
+    # Disk publication has succeeded; inability to remove a temporary
+    # recovery marker must not cause the GUI to retain the old in-memory words.
+    try:
+        marker.unlink()
+    except OSError:
+        pass
     return True
 
 
