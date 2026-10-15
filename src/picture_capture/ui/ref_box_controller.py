@@ -223,7 +223,10 @@ class RefBoxController:
     def press(self, x: int, y: int) -> str:
         if not self._ready():
             return "break"
-        self.app.canvas.focus_set()
+        try:
+            self.app.canvas.focus_set()
+        except (AttributeError, tk.TclError):
+            pass
         self.drag_start = (x, y)
         self.drag_original = None
         self.drag_box = None
@@ -380,13 +383,16 @@ class RefBoxController:
             self.app.redraw()
             return "break"
         if candidate is None or not self.editing:
-            self.app.redraw()  # Selection must be painted after click-only hit.
+            self.render()
             return "break"
         if original is not None:
             proposed = [candidate if b.id == original.id else b for b in self.boxes]
-            if not self._commit(proposed):
-                return "break"
-            self.app.redraw()
+            if proposed == self.boxes:
+                # Do not destroy/redraw PDIC Entry widgets for a click-only
+                # selection: otherwise Tk loses the subsequent double-click.
+                self.render()
+            else:
+                self._commit(proposed)
             return "break"
         if abs(x-sx) < 3 and abs(y-sy) < 3:
             line_height = max(
@@ -487,7 +493,7 @@ class RefBoxController:
         hit = self._hit(x, y)
         if hit is not None:
             self.selected_id = hit.id
-        self.app.redraw()
+        self.render()
         menu = tk.Menu(self.app, tearoff=False)
         menu.add_command(label="编辑 REF 文字/挂靠", command=self.edit_properties,
                          state="normal" if self.selected_id else "disabled")
@@ -503,6 +509,10 @@ class RefBoxController:
         return "break"
 
     def render(self):
+        # Repaint only REF canvas items when selecting; avoid destroying Tk
+        # word-entry windows which are necessary for a stable double-click.
+        if hasattr(self.app, "canvas"):
+            self.app.canvas.delete("ref-box")
         self._overlay_images = []
         if not self._ready() or not (self.editing or getattr(self.app.settings, "ref_box_show", True)):
             return
