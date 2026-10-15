@@ -279,3 +279,24 @@ def test_single_click_ref_defaults_use_character_height_plus_row_spacing(tmp_pat
     ctl.release(10, 12)
     assert ctl.boxes == [RefBox(1, 10, 12, 48, 24, None, "")]
     assert read_ref_boxes(app.current_page) == ctl.boxes
+
+
+def test_ref_sample_crop_uses_gui_exif_transposed_coordinates(tmp_path):
+    from picture_capture.image_utils import normalize_page_rgb
+
+    page = tmp_path / "rotated.jpg"
+    data = np.full((100, 150, 3), (242, 242, 242), dtype=np.uint8)
+    data[20:45, 35:68] = (26, 90, 170)
+    original = Image.fromarray(data)
+    exif = Image.Exif()
+    exif[274] = 6  # Exif orientation: 90° clockwise on display
+    original.save(page, exif=exif)
+    with Image.open(page) as opened:
+        display = normalize_page_rgb(opened)
+    assert display.size == (100, 150)
+    box = (55, 35, 80, 68)
+    expected = np.asarray(display.crop(box))
+    sample = add_ref_sample(page, box)
+    with Image.open(sample) as opened:
+        actual = np.asarray(opened.convert("RGB"))
+    assert np.array_equal(actual, expected)
