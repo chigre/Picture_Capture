@@ -106,7 +106,7 @@ def draw_entry_overlay(
         # Suppress editor, sequence and OCR widgets only. Keep a visible,
         # actionable [X] attached to the marker at the column's far edge.
         if delete_button is not None:
-            button_anchor = "nw" if rtl or vertical else "ne"
+            button_anchor = "ne" if rtl else "nw"
             record["canvas_items"].append(self.canvas.create_window(
                 column_end_screen_x, marker_start[1] * self.view_scale,
                 window=delete_button, anchor=button_anchor,
@@ -192,8 +192,8 @@ def draw_entry_overlay(
                 self.view_scale, rtl=rtl,
             )
         )
-        # Tk.Entry width= is measured in characters; the canvas window's
-        # explicit pixel width is the authoritative per-column editor extent.
+        # Tk.Entry width= is measured in characters; the canvas window fills
+        # the exact visible distance to the column edge, with [X] OUTSIDE it.
         editor_req_width, _delete_x, _delete_anchor = horizontal_entry_editor_slot(
             editor_x, column_end_screen_x, delete_req_width, rtl=rtl,
         )
@@ -349,10 +349,11 @@ def draw_entry_overlay(
     if delete_button is not None:
         if horizontal:
             # End of the resolved column in *source* pixels, not the index
-            # position. [X] sits immediately after the fitted editor.
+            # position. [X] sits AFTER the full-width editor, without taking
+            # any of the specified editor-to-column-end width.
             delete_x = column_end_screen_x
             delete_y = float(editor_y)
-            delete_anchor = "nw" if rtl else "ne"
+            delete_anchor = "ne" if rtl else "nw"
         else:
             # For vertical text there is no horizontal trailing word box;
             # use the physical right edge of its actual vertical widget.
