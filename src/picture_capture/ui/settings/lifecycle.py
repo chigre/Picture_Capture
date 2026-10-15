@@ -53,6 +53,7 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
         "ref_box_width_lines": (0.25, 20.0),
         "ref_box_height_lines": (0.25, 20.0),
         "ref_match_threshold": (0.60, 0.999),
+        "ref_match_scale_tolerance_percent": (0.0, 50.0),
     }
     from math import isfinite
     for key, (lower, upper) in limits.items():
