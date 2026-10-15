@@ -266,3 +266,99 @@ def test_every_v4_png_master_has_longest_dimension_at_most_120(tmp_path):
         with Image.open(disk.thumbnail_cache_path(tmp_path, page)) as stored:
             assert max(stored.size) <= 120
             assert stored.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(page)
+
+
+def _dense_monochrome_page() -> Image.Image:
+    """Tiny synthetic black printed strokes on an otherwise white page."""
+    from PIL import ImageDraw
+
+    page = Image.new("RGB", (480, 680), "white")
+    draw = ImageDraw.Draw(page)
+    for y in range(45, 640, 9):
+        for x in range(15, 440, 11):
+            draw.rectangle((x, y, x + 3, y + 1), fill="black")
+    return page
+
+
+def test_bilevel_and_palette_scans_get_real_lanczos_antialiasing(tmp_path):
+    """Regression: resizing mode 1/P before RGB conversion used nearest neighbor.
+
+    The same monochrome pixels must produce the same smooth preview whether
+    stored as RGB, grayscale, 1-bit monochrome, or palette-indexed PNG.
+    """
+    page = _dense_monochrome_page()
+    variants = {
+        "rgb": page.copy(),
+        "gray": page.convert("L"),
+        "bilevel": page.convert("1"),
+        "palette": page.quantize(colors=2, method=Image.Quantize.FASTOCTREE),
+    }
+    reference = page.copy()
+    reference.thumbnail(disk.CACHE_BOUNDS, Image.Resampling.LANCZOS)
+    assert reference.mode == "RGB"
+    for name, original in variants.items():
+        path = tmp_path / f"{name}.png"
+        original.save(path)
+        before = path.read_bytes()
+        with Image.open(path) as loaded:
+            assert loaded.mode == original.mode
+        preview = disk.get_page_thumbnail(tmp_path, path)
+        assert preview.mode == "RGB"
+        assert preview.size == reference.size
+        assert preview.tobytes() == reference.tobytes(), name
+        assert path.read_bytes() == before
+        # True antialiasing introduces gray intermediate pixel values.
+        grays = {
+            preview.getpixel((x, y))[0]
+            for y in range(preview.height)
+            for x in range(preview.width)
+        }
+        assert any(0 < value < 255 for value in grays), name
+        with Image.open(disk.thumbnail_cache_path(tmp_path, path)) as cached:
+            assert cached.mode == "RGB"
+            assert cached.tobytes() == reference.tobytes()
+            assert cached.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(path)
+
+
+def test_transparent_palette_page_has_white_paper_not_black_holes(tmp_path):
+    source = tmp_path / "paletted-transparent.png"
+    paletted = Image.new("P", (480, 680), 0)
+    paletted.putpalette([0, 0, 0, 10, 20, 30] + [0] * 762)
+    paletted.info["transparency"] = 0
+    for x in range(100, 380):
+        for y in range(150, 155):
+            paletted.putpixel((x, y), 1)
+    paletted.save(source, transparency=0)
+    preview = disk.get_page_thumbnail(tmp_path, source)
+    assert preview.mode == "RGB"
+    assert preview.getpixel((0, 0)) == (255, 255, 255)
+    assert preview.getpixel((preview.width // 2, preview.height // 4)) == (255, 255, 255)
+
+
+def test_previous_v4_bilevel_cache_is_invalidated_in_flat_folder(tmp_path, monkeypatch):
+    from PIL import PngImagePlugin
+
+    source = tmp_path / "080001.png"
+    _dense_monochrome_page().convert("1").save(source)
+    monkeypatch.setattr(disk, "CACHE_VERSION", "page-index-v4")
+    old_signature = disk.source_fingerprint(source)
+    old_preview = Image.new("RGB", (85, 120), "red")
+    destination = disk.thumbnail_cache_path(tmp_path, source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    meta = PngImagePlugin.PngInfo()
+    meta.add_text(disk.FINGERPRINT_KEY, old_signature)
+    meta.add_text(disk.SOURCE_KEY, disk._path_hash(source))
+    meta.add_text(disk.SOURCE_FILENAME_KEY, source.name)
+    old_preview.save(destination, format="PNG", pnginfo=meta)
+
+    monkeypatch.setattr(disk, "CACHE_VERSION", "page-index-v5")
+    assert disk.source_fingerprint(source) != old_signature
+    rebuilt = disk.get_page_thumbnail(tmp_path, source)
+    assert rebuilt.getpixel((0, 0)) != (255, 0, 0)
+    assert rebuilt.mode == "RGB"
+    assert max(rebuilt.size) == 120
+    assert destination.exists()
+    with Image.open(destination) as cached:
+        assert cached.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(source)
+        assert cached.getpixel((0, 0)) != (255, 0, 0)
+    assert len(list(disk.thumbnail_cache_dir(tmp_path).glob("*.png"))) == 1
