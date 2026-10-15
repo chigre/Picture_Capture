@@ -178,6 +178,16 @@ def main() -> int:
                             raise RuntimeError("Cached PNG source filename does not match its page")
                         if cached.info.get(FINGERPRINT_KEY) != source_fingerprint(path):
                             raise RuntimeError("Cached PNG source fingerprint does not match its page")
+                from picture_capture.ui.page_list_grid import page_grid_segments
+                app._page_index_grid.repaint()
+                segments = page_grid_segments(app.page_list)
+                if not any(width == 1 for _x, _y, width, _h in segments):
+                    raise RuntimeError("No vertical cell gridlines found in real Tk Treeview")
+                if not any(height == 1 for _x, _y, _w, height in segments):
+                    raise RuntimeError("No horizontal cell gridlines found in real Tk Treeview")
+                if app._page_index_grid.visible_segment_count != len(segments):
+                    raise RuntimeError("Pale cell grid failed to place every visible divider")
+                _stage("page index grid: actual Tk horizontal and vertical dividers OK")
                 _stage("actual synthetic page images: visible pixels, sorted IDs, flat source-validated cache OK")
 
                 # Previous smoke used THREE pages: it could never catch the
@@ -227,7 +237,11 @@ def main() -> int:
                     time.sleep(0.02)
                 else:
                     raise RuntimeError("Sorted/reordered page 31 displayed a stale or missing thumbnail")
-                _stage("thumbnails after scrolling beyond page nine and reordering: actual pixels OK")
+                app._page_index_grid.repaint()
+                lines_after_sort = page_grid_segments(app.page_list)
+                if not lines_after_sort or app._page_index_grid.visible_segment_count != len(lines_after_sort):
+                    raise RuntimeError("Cell borders vanished after scrolling/reordering page index")
+                _stage("thumbnails and cell borders after scrolling and sorting: OK")
             finally:
                 thumbs.enabled_var.set(False)
                 thumbs.width = 80
