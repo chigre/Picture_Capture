@@ -260,3 +260,22 @@ def test_ref_recognition_never_saves_or_flushes_pdic(tmp_path, monkeypatch):
     assert len(calls) == 1
     assert calls[0][0] == "识别 REF"
     assert calls[0][1] == [0]
+
+
+def test_single_click_ref_defaults_use_character_height_plus_row_spacing(tmp_path):
+    app = FakeApp(tmp_path / "a.png")
+    app.view_scale = 1.0
+    app.settings = AppSettings(
+        character_height=20, row_padding=4, ref_box_auto_attach=False,
+        ref_box_width_lines=2.0, ref_box_height_lines=1.0,
+    )
+    app.canvas = SimpleNamespace(
+        delete=lambda *_a: None, create_rectangle=lambda *_a, **_k: 1,
+    )
+    ctl = RefBoxController(app)
+    ctl.load_page(app.current_page)
+    ctl.editing = True
+    ctl.press(10, 12)
+    ctl.release(10, 12)
+    assert ctl.boxes == [RefBox(1, 10, 12, 48, 24, None, "")]
+    assert read_ref_boxes(app.current_page) == ctl.boxes
