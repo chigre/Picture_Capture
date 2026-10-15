@@ -201,6 +201,7 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
             return None
 
     monkeypatch.setattr(overlay_delete_button.tk, "Button", Button)
+    monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
     labels = []
     app = SimpleNamespace(
         image=SimpleNamespace(width=500, height=600),
@@ -209,7 +210,7 @@ def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch
         _auxiliary_drag=None,
         page_sections=[],
         canvas=Canvas(),
-        settings=SimpleNamespace(column_width=200),
+        settings=SimpleNamespace(column_width=200, right_ratio=100, ocr_language="chi_sim"),
         overlay_widgets=[],
         _attach_tooltip=lambda *_args: None,
         entries=[SimpleNamespace(word="词条", x=10, y=40)],

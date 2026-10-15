@@ -5450,8 +5450,8 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
         Path(__file__).parents[1] / "src/picture_capture/ui/overlay_delete_button.py"
     ).read_text(encoding="utf-8")
     assert 'text="[X]"' in shared_delete
-    assert 'bg="#9d042f"' in shared_delete
-    assert 'activebackground="#9d042f"' in shared_delete
+    assert 'bg=("#f5b83d" if kind == "entry" else "#9d042f")' in shared_delete
+    assert 'activebackground=("#e9a820" if kind == "entry" else "#9d042f")' in shared_delete
     assert 'tooltip="点击删除该画线!"' in overlay
     # The marker-owned [X] now occupies the resolved column end, rather
     # than borrowing the index label's screen position. The dedicated
@@ -8220,7 +8220,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
     shared_button = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
     assert 'text="[X]"' in shared_button
-    assert 'bg="#9d042f"' in shared_button
+    assert 'bg=("#f5b83d" if kind == "entry" else "#9d042f")' in shared_button
     assert 'create_overlay_delete_button(' in overlay
     assert 'record["delete_widget"] = delete_button' in overlay
 

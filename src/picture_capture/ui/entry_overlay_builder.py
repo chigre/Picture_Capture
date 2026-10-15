@@ -23,7 +23,7 @@ from ..overlay_layout_helpers import (
 from ..overlay_opacity import create_alpha_canvas_line
 from ..review_text_helpers import _entry_font_spec
 from ..ui_compat import resolve_content_font_family
-from .overlay_delete_button import create_overlay_delete_button
+from .overlay_delete_button import create_overlay_delete_button, fixed_overlay_control_font
 from .widgets.vertical_word import VerticalWordText
 
 
@@ -94,6 +94,8 @@ def draw_entry_overlay(
             command=lambda e=entry: self.delete_entry(e),
             attach_tooltip=self._attach_tooltip,
             tooltip="点击删除该画线!",
+            ocr_language=self.settings.ocr_language,
+            kind="entry",
         )
         if processing_readonly:
             delete_button.configure(state="disabled")
@@ -318,8 +320,8 @@ def draw_entry_overlay(
         bd=0,
         padx=2,
         pady=0,
-        font=_entry_font_spec(
-            main_family, max(8, round(editor_font_size * 0.65)), False, False,
+        font=fixed_overlay_control_font(
+            self.canvas, self.settings.ocr_language,
         ),
     )
     # Sequence numbers intentionally use a neutral light-gray control style;

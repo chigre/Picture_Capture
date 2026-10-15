@@ -4,7 +4,9 @@ from __future__ import annotations
 from .auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits, read_auxiliary_lines, write_auxiliary_lines
 from .processing import column_index_for_click
 from .page_sections import v_is_inside_sections
-from .overlay_layout_helpers import effective_overlay_column_width
+from .overlay_layout_helpers import (
+    canonical_headword_marker_span, effective_overlay_column_width,
+)
 from .ui.overlay_delete_button import create_overlay_delete_button
 
 
@@ -48,8 +50,12 @@ class AuxiliaryLineController:
             au, av = geometry.source_to_canonical(line.x, line.y)
             column = column_index_for_click(line.x, geometry, line.y)
             left = geometry.column_starts[column]
-            right = left + effective_overlay_column_width(
-                geometry, column, app.settings.column_width,
+            _, right = canonical_headword_marker_span(
+                left,
+                effective_overlay_column_width(
+                    geometry, column, app.settings.column_width,
+                ),
+                app.settings.right_ratio,
             )
             if not left <= u <= right:
                 continue
@@ -151,8 +157,12 @@ class AuxiliaryLineController:
             _u, v = geometry.source_to_canonical(marker.x, marker.y)
             col = column_index_for_click(marker.x, geometry, marker.y)
             x0 = geometry.column_starts[col]
-            x1 = x0 + effective_overlay_column_width(
-                geometry, col, app.settings.column_width,
+            x0, x1 = canonical_headword_marker_span(
+                x0,
+                effective_overlay_column_width(
+                    geometry, col, app.settings.column_width,
+                ),
+                app.settings.right_ratio,
             )
             left = geometry.canonical_to_source(x0, v)
             right = geometry.canonical_to_source(x1, v)
@@ -182,6 +192,8 @@ class AuxiliaryLineController:
                 command=lambda index=i: self.delete_index(index),
                 attach_tooltip=app._attach_tooltip,
                 tooltip="点击删除该辅助线!",
+                ocr_language=app.settings.ocr_language,
+                kind="auxiliary",
             )
             app.overlay_widgets.append(button)
             chip_width = max(1, button.winfo_reqwidth())

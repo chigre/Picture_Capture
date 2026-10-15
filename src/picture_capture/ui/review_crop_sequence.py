@@ -10,24 +10,13 @@ import tkinter as tk
 from tkinter import font, ttk
 from typing import Any
 
-from ..overlay_layout_helpers import effective_main_overlay_font_size
-from ..review_text_helpers import _entry_font_spec
-from ..ui_compat import resolve_content_font_family
+from .overlay_delete_button import fixed_overlay_control_font
 
 
 def _main_sequence_font(review: Any) -> tuple:
-    """Match the main-canvas neutral index badge, not the review editor font."""
-    app = review.parent
-    settings = app.settings
-    family = resolve_content_font_family(
-        review, settings.main_entry_font_family, settings.ocr_language,
-    )
-    image_width = int(app.image.width) if app.image is not None else 1400
-    main_font_size = effective_main_overlay_font_size(
-        image_width, app.view_scale, settings,
-    )
-    return _entry_font_spec(
-        family, max(8, round(main_font_size * 0.65)), False, False,
+    """Fixed automatic (OS-recommended) font, same as main index and [X]."""
+    return fixed_overlay_control_font(
+        review, review.parent.settings.ocr_language,
     )
 
 

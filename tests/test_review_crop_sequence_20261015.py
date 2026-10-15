@@ -79,7 +79,7 @@ def fake_tk(monkeypatch):
     monkeypatch.setattr(sequence.ttk, "Label", Label)
     monkeypatch.setattr(sequence.tk, "Label", Label)
     monkeypatch.setattr(sequence.font, "Font", FakeFont)
-    monkeypatch.setattr(sequence, "resolve_content_font_family", lambda *_: "Arial")
+    monkeypatch.setattr(sequence, "fixed_overlay_control_font", lambda *_: ("Arial", 9, "bold"))
 
 
 def test_review_crop_sequence_reuses_main_format_and_style_bottom_aligned(fake_tk):
@@ -93,7 +93,7 @@ def test_review_crop_sequence_reuses_main_format_and_style_bottom_aligned(fake_t
     assert badge.options["bd"] == 0
     assert badge.options["padx"] == 2
     assert badge.options["pady"] == 0
-    assert badge.options["font"] == ("Arial", 10)
+    assert badge.options["font"] == ("Arial", 9, "bold")
     assert badge._pc_skip_classic_appearance is True
     assert badge.grid_args["column"] == 0
     assert badge.grid_args["sticky"] == "s"
@@ -167,3 +167,17 @@ def test_render_and_delete_bindings_stay_in_existing_review_window():
     assert "child.destroy()" in render
     assert "self.parent.entries.remove(entry)" in remove
     assert "self._request_render_rows(focus_index=self.active_index)" in remove
+
+
+def test_sequence_font_does_not_change_with_zoom_or_editor_settings(fake_tk):
+    review, rows = _fixture()
+    _pic, badge, _host = sequence.create_review_crop_with_index(
+        review, rows, photo=object(), index=1, total=120,
+    )
+    review.parent.view_scale = 4.0
+    review.parent.settings.main_entry_font_size = 39
+    review.parent.settings.main_entry_font_family = "DifferentUserFont"
+    _pic2, badge2, _host2 = sequence.create_review_crop_with_index(
+        review, rows, photo=object(), index=1, total=120,
+    )
+    assert badge.options["font"] == badge2.options["font"] == ("Arial", 9, "bold")
