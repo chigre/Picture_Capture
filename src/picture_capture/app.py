@@ -13715,6 +13715,8 @@ class PictureCaptureApp(tk.Tk):
 
     def _sync_polygon_label_texts(self) -> None:
         """Carry edited association codes across redraw without reassigning IDs."""
+        if self.__dict__.get("_suppress_polygon_label_sync", False):
+            return
         bindings = list(getattr(self, "polygon_label_bindings", []))
         if not bindings or self.current_page is None:
             return
