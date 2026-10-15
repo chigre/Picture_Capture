@@ -14,7 +14,9 @@ def test_replay_forwards_original_path_without_writing_pdic(monkeypatch, tmp_pat
         seen.update(kwargs)
         kwargs["debug_trace"]["_layout_replay_trace"].add_note("test", "test", "diagnostic replay")
         return [], None
-    monkeypatch.setattr(processing, "detect_entries", fake_detect)
+    # processing is a historical module-proxy: setattr mirrors into the core.
+    # Inject into the local dictionary so pytest teardown cannot mutate core APIs.
+    monkeypatch.setitem(processing.__dict__, "detect_entries", fake_detect)
     source = Image.new("RGB", (100, 150), "white")
     trace, previews = replay._run_replay(source, SimpleNamespace(), 2, [], source_image_path=page)
     assert seen["source_image_path"] == page
