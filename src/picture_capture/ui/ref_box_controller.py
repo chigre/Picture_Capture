@@ -16,6 +16,8 @@ from ..ref_boxes import (
     RefBox, next_ref_id, read_ref_boxes, ref_box_ticket, write_ref_boxes,
 )
 from ..ref_box_geometry import hit_test, transform_box, action_cursor
+from ..overlay_layout_helpers import effective_main_overlay_font_size
+from ..review_text_helpers import _entry_font_spec
 from ..ref_box_detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
     list_ref_samples,
@@ -149,7 +151,7 @@ class RefBoxController:
                 style="PC.EditActive.TButton" if active else "PC.Compact.TButton",
             )
         app.status_var.set(
-            "REF 编辑：单击选框；拖动内部移动、四边/四角缩放；双击或点击✎编辑文字；点击×/Delete删除；Ctrl+Z/Y撤销重做。"
+            "REF 编辑：单击选框；拖动内部移动、四边/四角缩放；双击或点击✎编辑文字；仅点击×删除；Ctrl+Z/Y撤销重做。"
             if active else "已退出 REF 编辑模式"
         )
         app.redraw()
@@ -497,8 +499,6 @@ class RefBoxController:
         menu = tk.Menu(self.app, tearoff=False)
         menu.add_command(label="编辑 REF 文字/挂靠", command=self.edit_properties,
                          state="normal" if self.selected_id else "disabled")
-        menu.add_command(label="删除选中 REF", command=self.delete_selected,
-                         state="normal" if self.selected_id else "disabled")
         menu.add_separator()
         menu.add_command(label="撤销 REF", command=self.undo, state="normal" if self.undo_stack else "disabled")
         menu.add_command(label="重做 REF", command=self.redo, state="normal" if self.redo_stack else "disabled")
@@ -568,13 +568,17 @@ class RefBoxController:
             app, getattr(config, "ref_box_font_family", "自动（系统推荐）"),
             str(getattr(config, "ocr_language", "eng")),
         )
-        size = max(6, round(int(getattr(config, "ref_box_font_size", 16)) * s))
-        styles = []
-        if getattr(config, "ref_box_font_bold", False):
-            styles.append("bold")
-        if getattr(config, "ref_box_font_italic", False):
-            styles.append("italic")
-        font_spec = (family, size, *styles)
+        # Match the main headword text box: configured base size is
+        # calibrated at 1400 displayed pixels when follow-zoom is enabled;
+        # otherwise the requested font size stays fixed across zoom changes.
+        size = effective_main_overlay_font_size(
+            app.image.width, s, config,
+            base_font_size=int(getattr(config, "ref_box_font_size", 16)),
+        )
+        font_spec = _entry_font_spec(
+            family, size, getattr(config, "ref_box_font_bold", False),
+            getattr(config, "ref_box_font_italic", False),
+        )
         for box in self.boxes:
             xx, yy, ww, hh = (round(box.x*s), round(box.y*s),
                               max(1, round(box.w*s)), max(1, round(box.h*s)))
