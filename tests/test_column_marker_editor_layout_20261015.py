@@ -155,6 +155,9 @@ def _render(monkeypatch, *, show_markers=True, show_labels=True, index=0, ratio=
     monkeypatch.setattr(builder.tk, "Button", _Button)
     monkeypatch.setattr(builder.tk, "Label", _Label)
     monkeypatch.setattr(builder, "resolve_content_font_family", lambda *_args: "Arial")
+    from picture_capture.ui import overlay_delete_button
+    monkeypatch.setattr(builder, "fixed_overlay_control_font", lambda *_: ("Arial", 9, "bold"))
+    monkeypatch.setattr(overlay_delete_button, "fixed_overlay_control_font", lambda *_: ("Arial", 9, "bold"))
     lines = []
     monkeypatch.setattr(
         builder, "create_alpha_canvas_line",
