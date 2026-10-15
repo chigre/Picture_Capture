@@ -207,6 +207,8 @@ def test_job_builder_uses_storage_ppp_helper_overrides_and_settings_snapshot(mon
         7,
         False,
         1,
+        False,
+        str(Path("/pages/page001.png")),
     )
     assert payload[2] is not app.settings
 
