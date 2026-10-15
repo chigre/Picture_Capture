@@ -18,10 +18,18 @@ def test_replay_forwards_original_path_without_writing_pdic(monkeypatch, tmp_pat
     # Inject into the local dictionary so pytest teardown cannot mutate core APIs.
     monkeypatch.setitem(processing.__dict__, "detect_entries", fake_detect)
     source = Image.new("RGB", (100, 150), "white")
-    trace, previews = replay._run_replay(source, SimpleNamespace(), 2, [], source_image_path=page)
+    settings = SimpleNamespace(layout_mask_illustrations=True,
+                               layout_mask_illustrations_use_existing=True)
+    trace, previews = replay._run_replay(source, settings, 2, [], source_image_path=page)
     assert seen["source_image_path"] == page
     assert seen["profile_page_index"] == 2
     assert trace.stages
+    settings.layout_mask_illustrations_use_existing = False
+    second, previews2 = replay._run_replay(source, settings, 2, [], source_image_path=page)
+    assert seen["source_image_path"] is None  # no PPP writes in read-only auto detection
+    assert second.stages
+    for preview in previews2.values():
+        preview.close()
     for preview in previews.values():
         preview.close()
     source.close()

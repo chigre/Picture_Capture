@@ -86,7 +86,11 @@ def _run_replay(
         detect_entries(
             source, ordinary_settings, profile_page_index=int(page_index),
             page_sections=page_sections, debug_trace=pipeline,
-            source_image_path=source_image_path,
+            # A visual replay is READ-ONLY: auto-detected candidates must not
+            # write PPP. Only explicit reuse mode needs a path to read PPP.
+            source_image_path=(source_image_path if bool(getattr(
+                ordinary_settings, "layout_mask_illustrations_use_existing", False
+            )) else None),
         )
         if not trace.stages:
             raise RuntimeError("普通画线未提供任何可回放阶段")
