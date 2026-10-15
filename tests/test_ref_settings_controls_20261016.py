@@ -12,6 +12,7 @@ from picture_capture.ref_boxes import RefBox, read_ref_boxes
 from picture_capture.ref_box_geometry import ref_action_buttons, REF_ACTION_POSITIONS
 from picture_capture.ui.settings.color_picker import (
     contrast_foreground, normalized_hex, make_color_widget,
+    validate_color_controls,
 )
 from picture_capture.ui.settings import schema
 from picture_capture.ui.ref_box_controller import RefBoxController
@@ -184,3 +185,32 @@ def test_native_tk_swatch_updates_when_manual_hex_changes():
         assert button.cget("bg").lower() == "#e5e7eb"
     finally:
         root.destroy()
+
+
+@pytest.mark.parametrize(("color", "valid"), [
+    ("#ffe0b2", True), ("#c8E6C9", True), ("#123abc", True),
+    ("#FFF", False), ("red", False), ("#12345G", False),
+    ("#123456 ", False), ("", False),
+])
+def test_generic_color_validation_blocks_invalid_autosave(color, valid):
+    from types import SimpleNamespace
+    values = {
+        "illustration_outline_color": SimpleNamespace(get=lambda: color),
+        "ref_box_text_color": SimpleNamespace(get=lambda: "#15395b"),
+    }
+    if valid:
+        validate_color_controls(values)
+    else:
+        with pytest.raises(ValueError):
+            validate_color_controls(values)
+
+
+def test_color_validation_is_before_settings_mutation():
+    src = (Path(__file__).resolve().parents[1] /
+           "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    settings_start = src.index("class SettingsDialog")
+    save_start = src.index("    def save(self, *, close: bool", settings_start)
+    target = src[save_start:save_start + 2600]
+    assert target.index("_settings_color_ui.validate_color_controls(self.vars)") < (
+        target.index("for name, var in self.vars.items():")
+    )
