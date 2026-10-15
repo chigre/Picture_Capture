@@ -40,6 +40,35 @@ def main() -> int:
     app = PictureCaptureApp()
     try:
         _stage("PictureCaptureApp constructed")
+        # Real Tk thumbnail column/controls smoke, without private scans.
+        from tkinter import ttk
+        thumbs = app._page_thumbnails
+        if thumbs.tree.heading("#0", "text") != "缩略图":
+            raise RuntimeError("Thumbnail header is not the first native Treeview column")
+        if thumbs.row.winfo_manager() != "pack":
+            raise RuntimeError("Thumbnail controls not placed under page navigation")
+        if thumbs.enabled_var.get():
+            raise RuntimeError("Thumbnails must default OFF for legacy projects")
+        thumbs.enabled_var.set(True)
+        thumbs.apply()
+        if "tree" not in str(app.page_list.cget("show")):
+            raise RuntimeError("First-column preview did not become visible")
+        thumbs.width = 120
+        thumbs.apply()
+        if int(ttk.Style(app).lookup("PC.Treeview", "rowheight")) != 176:
+            raise RuntimeError("Thumbnail resizing did not increase page-row height")
+        app.workspace_mode = "紧凑"
+        thumbs.on_mode_change()
+        if "disabled" not in thumbs.toggle.state() or "tree" in str(app.page_list.cget("show")):
+            raise RuntimeError("Compact mode did not disable and hide thumbnails")
+        app.workspace_mode = "正常"
+        thumbs.on_mode_change()
+        if not thumbs.enabled_var.get() or "tree" not in str(app.page_list.cget("show")):
+            raise RuntimeError("Returning to normal mode did not restore thumbnails")
+        thumbs.enabled_var.set(False)
+        thumbs.width = 80
+        thumbs.apply()
+        _stage("page thumbnail controls smoke: OK")
         if app._app_icon_photo is None:
             raise RuntimeError(
                 "Packaged application icon failed to load: "
