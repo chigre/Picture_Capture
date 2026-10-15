@@ -48,7 +48,9 @@ class AuxiliaryLineController:
             au, av = geometry.source_to_canonical(line.x, line.y)
             column = column_index_for_click(line.x, geometry, line.y)
             left = geometry.column_starts[column]
-            right = left + geometry.column_widths[column]
+            right = left + effective_overlay_column_width(
+                geometry, column, app.settings.column_width,
+            )
             if not left <= u <= right:
                 continue
             if abs(v - av) < distance:
