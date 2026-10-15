@@ -10,7 +10,7 @@ from pathlib import Path
 import uuid
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .image_utils import normalize_page_rgb
 
@@ -63,6 +63,10 @@ def _numpy_template_scores(source: np.ndarray, template: np.ndarray) -> np.ndarr
     """
     height, width = source.shape[:2]
     th, tw = template.shape[:2]
+    if source.ndim == 2:
+        source = source[..., None]
+    if template.ndim == 2:
+        template = template[..., None]
     if th > height or tw > width:
         return np.empty((0, 0), dtype=np.float32)
     hfft, wfft = height + th - 1, width + tw - 1
@@ -99,10 +103,14 @@ def _numpy_template_scores(source: np.ndarray, template: np.ndarray) -> np.ndarr
 def match_ref_templates(
     image: Image.Image, samples: list[Path], *,
     threshold: float = 0.88, max_results: int = 200,
+    scale_tolerance_percent: float = 25.0,
 ) -> list[tuple[int, int, int, int]]:
-    """Bounded multiscale RGB matching, with NumPy fallback if CV is missing.
+    """Bounded multiscale contrast-normalized grayscale guide-word matching.
 
-    No blue-only rule, no network dependencies, no training, no image upload.
+    Color/brightness differences are normalized before matching. Search over
+    multiple template scales for cross-page resolution and mild print-size
+    differences. Localized nonlinear page warp remains a limitation; do not
+    claim OCR or geometric rectification. NumPy fallback requires no cv2.
     """
     try:
         import cv2
@@ -110,6 +118,8 @@ def match_ref_templates(
         cv2 = None
     if not 0.60 <= float(threshold) <= 0.999:
         raise ValueError("REF match threshold must be between 0.60 and 0.999")
+    if not 0 <= float(scale_tolerance_percent) <= 50:
+        raise ValueError("REF scale tolerance must be between 0 and 50 percent")
     # FFT fallback uses considerably more memory than OpenCV. A bounded
     # temporary view is sufficient for ordinary glyph-sized REF templates;
     # returned coordinates always refer to full-resolution source pixels.
@@ -117,25 +127,38 @@ def match_ref_templates(
     ratio = (min(1.0, 2048 / max(original_width, original_height))
              if cv2 is None else 1.0)
     if ratio < 1.0:
-        resized = image.convert("RGB").resize(
+        resized = ImageOps.grayscale(image).resize(
             (max(1, round(original_width * ratio)),
              max(1, round(original_height * ratio))), Image.Resampling.BILINEAR,
         )
-        source = np.asarray(resized, dtype=np.uint8)
+        source = np.asarray(ImageOps.autocontrast(resized, cutoff=1), dtype=np.uint8)
     else:
-        source = np.asarray(image.convert("RGB"), dtype=np.uint8)
+        source = np.asarray(
+            ImageOps.autocontrast(ImageOps.grayscale(image), cutoff=1),
+            dtype=np.uint8,
+        )
     height, width = source.shape[:2]
     proposals: list[tuple[float, int, int, int, int]] = []
+    scale_tolerance = float(scale_tolerance_percent) / 100.0
+    factors = tuple(np.linspace(
+        1.0 - scale_tolerance, 1.0 + scale_tolerance,
+        7 if scale_tolerance > 0 else 1,
+    ))
     for sample_path in samples:
         with Image.open(sample_path) as opened:
-            source_template = np.asarray(opened.convert("RGB"), dtype=np.uint8)
+            source_template = np.asarray(
+                ImageOps.autocontrast(ImageOps.grayscale(opened), cutoff=1),
+                dtype=np.uint8,
+            )
         if min(source_template.shape[:2]) < 4 or float(source_template.std()) < 4.0:
             continue
-        for factor in (0.85, 1.0, 1.15):
+        used_sizes: set[tuple[int, int]] = set()
+        for factor in factors:
             sw = max(4, round(source_template.shape[1] * factor * ratio))
             sh = max(4, round(source_template.shape[0] * factor * ratio))
-            if sw > width or sh > height:
+            if (sw, sh) in used_sizes or sw > width or sh > height:
                 continue
+            used_sizes.add((sw, sh))
             if cv2 is not None:
                 template = cv2.resize(source_template, (sw, sh), interpolation=cv2.INTER_AREA)
             else:
@@ -178,6 +201,48 @@ def match_ref_templates(
     return [(p.x, p.y, p.w, p.h) for p in accepted]
 
 
+def default_ref_box_dimensions(settings) -> tuple[int, int]:
+    """Same size rule for manual single-click and auto-detected REF boxes."""
+    line_height = max(
+        2.0,
+        float(getattr(settings, "character_height", 26))
+        + float(getattr(settings, "row_padding", 0)),
+    )
+    width = max(2, round(
+        line_height * float(getattr(settings, "ref_box_width_lines", 2)),
+    ))
+    height = max(2, round(
+        line_height * float(getattr(settings, "ref_box_height_lines", 1)),
+    ))
+    return width, height
+
+
+def ref_box_after_guide(
+    guide: tuple[int, int, int, int],
+    image_size: tuple[int, int],
+    settings,
+) -> tuple[int, int, int, int] | None:
+    """Guide is an anchor, not the REF: target begins at guide right edge.
+
+    Vertical centering uses the matched guide height. The resulting target
+    size is controlled by the same REF dimensions as manual single-click.
+    Skip if no usable horizontal room remains; never wrap into another column.
+    """
+    x, y, guide_w, guide_h = guide
+    page_w, page_h = image_size
+    ref_w, ref_h = default_ref_box_dimensions(settings)
+    target_x = x + guide_w
+    if target_x < 0 or target_x + 2 > page_w or page_h < 2:
+        return None
+    target_h = min(ref_h, page_h)
+    target_y = max(0, min(page_h - target_h,
+                           round(y + (guide_h - target_h) / 2)))
+    target_w = min(ref_w, page_w - target_x)
+    if target_w < 2:
+        return None
+    return target_x, target_y, target_w, target_h
+
+
 def associate_ref_to_entry(
     image: Image.Image, entries: list, settings, page_index: int,
     sections, x: int, y: int, w: int, h: int,
@@ -218,11 +283,18 @@ def detect_ref_boxes_page(image_path: Path, settings, page_index: int) -> dict:
         matches = match_ref_templates(
             image, samples,
             threshold=float(getattr(settings, "ref_match_threshold", 0.88)),
+            scale_tolerance_percent=float(getattr(
+                settings, "ref_match_scale_tolerance_percent", 25.0,
+            )),
         )
         entries = read_pdic(pdic_path(page))
         sections = read_page_sections(page)
         proposed = list(existing)
-        for x, y, w, h in matches:
+        for guide in matches:
+            target = ref_box_after_guide(guide, image.size, settings)
+            if target is None:
+                continue
+            x, y, w, h = target
             placeholder = RefBox(1, x, y, w, h, None)
             if any(box_intersection_fraction(placeholder, old) > 0.15 for old in proposed):
                 continue
