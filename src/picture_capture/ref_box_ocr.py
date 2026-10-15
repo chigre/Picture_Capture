@@ -44,26 +44,32 @@ def normalize_ref_ocr_text(text: str) -> str:
     return "\n".join(line.strip() for line in str(text or "").splitlines()).strip()
 
 
-def extract_ref_quoted_text(text: str) -> str:
-    """Extract matching Chinese quotes, falling back to partial boundaries."""
+def extract_ref_text(text: str, pattern: str) -> str:
+    """Regex extraction: first participating capture wins; otherwise full match.
+
+    Empty patterns and no-match cases leave the OCR text unchanged. A malformed
+    configured expression raises ValueError before any REF file is written.
+    """
     import re
 
     original = normalize_ref_ocr_text(text)
-    if not original:
+    pattern = str(pattern or "").strip()
+    if not pattern or not original:
         return original
-    for opening, closing in (("“", "”"), ("‘", "’")):
-        pattern = re.escape(opening) + r"([^" + re.escape(opening + closing) + r"]+)" + re.escape(closing)
-        match = re.search(pattern, original, re.DOTALL)
-        if match:
-            return normalize_ref_ocr_text(match.group(1))
-    opens = [i for i, ch in enumerate(original) if ch in "“‘"]
-    closes = [i for i, ch in enumerate(original) if ch in "”’"]
-    start = opens[0] + 1 if opens else 0
-    end = closes[-1] if closes else len(original)
-    if end < start:
-        return original  # invalid/reversed quotes: avoid destructive truncation
-    return normalize_ref_ocr_text(original[start:end])
-
+    if len(pattern) > 2000:
+        raise ValueError("OCR REF extraction regex must be at most 2000 characters")
+    try:
+        match = re.search(pattern, original, flags=re.DOTALL)
+    except re.error as exc:
+        raise ValueError(f"Invalid OCR REF extraction regex: {exc}") from exc
+    if match is None:
+        return original
+    captures = match.groups()
+    if captures:
+        extracted = next((group for group in captures if group is not None), "")
+    else:
+        extracted = match.group(0)
+    return normalize_ref_ocr_text(extracted) or original
 
 def ocr_ref_boxes_page(
     image_path: Path, settings: Any, *,
@@ -127,9 +133,9 @@ def ocr_ref_boxes_page(
                 ]
                 selected, _agreed = choose_ocr_text(plan, choices)
                 if selected and selected.text:
-                    extracted = (extract_ref_quoted_text(selected.text)
-                                 if getattr(settings, "ref_ocr_quote_extraction", True)
-                                 else selected.text)
+                    extracted = extract_ref_text(
+                        selected.text, getattr(settings, "ref_ocr_extract_regex", ""),
+                    )
                     if extracted:
                         updates[box.id] = extracted
                     else:
