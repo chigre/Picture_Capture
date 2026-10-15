@@ -17,7 +17,7 @@ import tempfile
 import unicodedata
 from typing import Iterable, Mapping
 
-from PIL import Image, ImageOps, PngImagePlugin
+from PIL import Image, PngImagePlugin
 
 from picture_capture.project_storage import storage_root
 from picture_capture.image_utils import normalize_page_rgb
