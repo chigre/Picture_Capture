@@ -48,6 +48,7 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
     """Reject invalid REF settings before any AppSettings fields are assigned."""
     limits = {
         "ref_box_fill_opacity": (0.0, 100.0),
+        "ref_box_filled_opacity": (0.0, 100.0),
         "ref_box_font_size": (6.0, 72.0),
         "ref_box_width_lines": (0.25, 20.0),
         "ref_box_height_lines": (0.25, 20.0),
@@ -65,7 +66,7 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
             raise ValueError(f"{key} 必须在 {lower}–{upper} 之间。")
         if key == "ref_box_font_size" and not requested.is_integer():
             raise ValueError("REF 字号必须为整数。")
-    for key in ("ref_box_fill_color", "ref_box_text_color"):
+    for key in ("ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color"):
         if key in values:
             from PIL import ImageColor
             try:
