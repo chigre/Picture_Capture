@@ -132,6 +132,7 @@ def entry_ocr_content_height(
     settings: AppSettings,
     *,
     row_metrics: EntryOcrRowMetrics | None = None,
+    visual_head_height: int = 0,
 ) -> int:
     """Return entry-content height, excluding surrounding row-gap margins.
 
@@ -146,8 +147,11 @@ def entry_ocr_content_height(
         0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
     )
     regular = max(physical_regular, regular_configured)
+    # A visually confirmed oversized glyph may have an incorrect or missing
+    # Layout role (particularly for a manually drawn separator). This override
+    # expands the OCR crop ONLY, without rewriting entry classification.
     if meta.entry_scale != "oversized":
-        return regular
+        return max(regular, max(0, int(visual_head_height)))
 
     oversized_configured = max(
         0, int(getattr(settings, "entry_oversized_crop_height", 0) or 0)
@@ -156,8 +160,8 @@ def entry_ocr_content_height(
         0, int(round(float(meta.detected_head_height or 0.0)))
     )
     if oversized_configured or detected:
-        return max(regular, oversized_configured, detected)
-    return max(regular, int(round(regular * 2.5)))
+        return max(regular, oversized_configured, detected, max(0, int(visual_head_height)))
+    return max(regular, int(round(regular * 2.5)), max(0, int(visual_head_height)))
 
 
 def entry_ocr_row_gap(
@@ -176,6 +180,7 @@ def entry_ocr_crop_box(
     image_size: tuple[int, int],
     *,
     row_metrics: EntryOcrRowMetrics | None = None,
+    visual_head_height: int = 0,
 ) -> tuple[int, int, int, int]:
     """Return canonical OCR crop box using one project-wide formula.
 
@@ -207,6 +212,7 @@ def entry_ocr_crop_box(
         entry,
         settings,
         row_metrics=row_metrics,
+        visual_head_height=visual_head_height,
     )
 
     crop_left = max(0, left - half_gutter)

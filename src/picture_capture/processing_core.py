@@ -2401,15 +2401,25 @@ def _ordinary_marker_local_crop(
     """
     from .entry_classification import get_entry_classification
     from .entry_ocr_crop import entry_ocr_crop_box
+    from .entry_ocr_visual_scale import visual_oversized_head_height
 
+    metrics_height = (
+        float(row_metrics.line_height) if row_metrics is not None
+        else float(settings.character_height)
+    )
+    visual_height = visual_oversized_head_height(
+        canonical, entry, geometry, settings, line_height=metrics_height,
+    )
     box = entry_ocr_crop_box(
         entry,
         geometry,
         settings,
         canonical.size,
         row_metrics=row_metrics,
+        visual_head_height=visual_height,
     )
     meta = get_entry_classification(entry)
+    large_for_ocr = meta.entry_scale == "oversized" or visual_height > 0
     horizontal = str(getattr(settings, "layout_writing_mode", "")) == "horizontal-tb"
     if horizontal and source_image is not None:
         source_box = geometry.transform.canonical_box_to_source(
@@ -2417,9 +2427,9 @@ def _ordinary_marker_local_crop(
         )
         return (
             normalize_page_rgb(source_image.crop(source_box)),
-            meta.entry_scale == "oversized",
+            large_for_ocr,
         )
-    return normalize_page_rgb(canonical.crop(box)), meta.entry_scale == "oversized"
+    return normalize_page_rgb(canonical.crop(box)), large_for_ocr
 
 
 def ocr_existing_entry_words_from_markers(
@@ -2449,6 +2459,7 @@ def ocr_existing_entry_words_from_markers(
     from .entry_ocr_crop import resolve_entry_ocr_row_metrics
     from .ocr_channel import OcrChannelSession, OcrTextChoice, choose_ocr_text
     from .paddle_headwords import parse_headword_text
+    from .ordinary_marker_ocr_text import bracketed_ocr_lemma
 
     row_metrics = resolve_entry_ocr_row_metrics(
         image,
@@ -2488,11 +2499,21 @@ def ocr_existing_entry_words_from_markers(
         return ordered, stats
 
     channel = OcrChannelSession(effective)
+    # This path fills already-drawn markers, not OCR-line detection. Only
+    # CJK bracketed dictionary profiles authorize the optional one-sided
+    # 【/】 text cleanup; the user replacement-rule toggle is independent.
+    bracket_profile = bool(
+        getattr(effective, "profile_cjk_allow_bracketed_headword", False)
+        and profile.uses_parser("cjk_bracketed")
+    )
 
     def parsed_or_raw(raw: str) -> str:
         text = str(raw or "").strip()
         if not text:
             return ""
+        bracketed = bracketed_ocr_lemma(text, enabled=bracket_profile)
+        if bracketed is not None:
+            return bracketed
         parsed = parse_headword_text(text, effective, profile=profile)
         if parsed is not None and str(parsed.normalized or "").strip():
             return str(parsed.normalized).strip()
@@ -2602,6 +2623,9 @@ def ocr_existing_entry_words_from_markers(
         confidence = selected.confidence if selected is not None else None
 
         if word:
+            bracketed = bracketed_ocr_lemma(word, enabled=bracket_profile)
+            if bracketed is not None:
+                word = bracketed
             if effective.ocr_replace:
                 word = process_ocr_text(
                     word,
