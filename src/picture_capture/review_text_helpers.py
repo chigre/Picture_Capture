@@ -152,7 +152,7 @@ def _review_similarity_color(score: float | None) -> str:
 def _has_distinct_ocr_alternatives(candidate: dict | None) -> bool:
     """Display an OCR-choice menu only for two distinct recognized texts.
 
-    The fusion/final word often duplicates the sole underlying OCR engine.
+    The fusion/final word is never a separate OCR-engine observation.
     Do not count that duplicate as an additional OCR result. Preserve the
     original engine rows and final result for genuinely divergent candidates.
     A text difference must be real, not whitespace around identical text.
@@ -167,9 +167,9 @@ def _has_distinct_ocr_alternatives(candidate: dict | None) -> bool:
         value = str(evidence.get("lemma") or "").strip()
         if value:
             words.add(value)
-    final_word = str(candidate.get("word") or "").strip()
-    if final_word:
-        words.add(final_word)
+    # The fused/manual-final word is not a separate OCR engine result.
+    # An edited final value must not turn a single-engine page into a
+    # misleading "multiple OCR results available" selector.
     return len(words) > 1
 
 
