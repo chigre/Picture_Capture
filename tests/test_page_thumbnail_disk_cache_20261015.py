@@ -21,8 +21,8 @@ def test_cache_is_project_local_and_contains_real_pixels(tmp_path):
     scan = make_scan(tmp_path / "scans" / "001.png", (245, 21, 31))
     original = scan.read_bytes()
     preview = disk.get_page_thumbnail(tmp_path, scan)
-    assert preview.height == 448
-    assert 300 <= preview.width <= 320
+    assert preview.height == 120
+    assert 0 < preview.width <= 120
     assert preview.getpixel((5, 5)) == (245, 21, 31)
     cache = disk.thumbnail_cache_path(tmp_path, scan)
     assert cache.is_file()
@@ -148,7 +148,7 @@ def test_original_page_names_and_suffix_conflicts_are_flat(tmp_path):
     assert disk.thumbnail_cache_path(tmp_path, b, name_map).name == "080128.png"
     for scan in (a, b, c):
         preview = disk.get_page_thumbnail(tmp_path, scan, name_map)
-        assert preview.size[0] <= 320
+        assert preview.size[0] <= 120
         assert disk.thumbnail_cache_path(tmp_path, scan, name_map).is_file()
     names = [p.name for p in disk.thumbnail_cache_dir(tmp_path).iterdir()]
     assert len(names) == 3 and len(set(name.casefold() for name in names)) == 3
@@ -230,8 +230,8 @@ def test_master_thumbnail_keeps_all_corners_instead_of_center_cropping(tmp_path)
     draw.rectangle((1050, 580, 1199, 719), fill=(0, 0, 255))
     image.save(source)
     preview = disk.get_page_thumbnail(tmp_path, source)
-    assert preview.size[0] == 320
-    assert preview.size[1] < 448  # The full landscape aspect ratio is kept.
+    assert preview.size[0] == 120
+    assert preview.size[1] < 120  # The full landscape aspect ratio is kept.
     assert preview.getpixel((2, 2)) == (255, 0, 0)
     assert preview.getpixel((preview.width - 3, preview.height - 3)) == (0, 0, 255)
 
@@ -249,7 +249,20 @@ def test_fixed_v3_size_cache_rebuilds_old_v2_png_in_place(tmp_path):
     old.save(cache, format="PNG", pnginfo=metadata)
     preview = disk.get_page_thumbnail(tmp_path, source)
     assert preview.getpixel((5, 5)) == (80, 150, 200)
-    assert preview.height == 448
+    assert preview.height == 120
     with Image.open(cache) as saved:
         assert saved.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(source)
-        assert saved.height == 448
+        assert saved.height == 120
+
+
+def test_every_v4_png_master_has_longest_dimension_at_most_120(tmp_path):
+    cases = ((1200, 1800), (1800, 1200), (512, 512), (160, 3000))
+    for index, (width, height) in enumerate(cases):
+        page = tmp_path / f"original-{index}.png"
+        Image.new("RGB", (width, height), (20 + index, 40, 60)).save(page)
+        preview = disk.get_page_thumbnail(tmp_path, page)
+        assert max(preview.size) <= 120
+        assert min(preview.size) >= 1
+        with Image.open(disk.thumbnail_cache_path(tmp_path, page)) as stored:
+            assert max(stored.size) <= 120
+            assert stored.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(page)
