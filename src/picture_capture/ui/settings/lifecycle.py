@@ -44,6 +44,39 @@ def validate_separator_gap_controls(values: dict[str, Any]) -> None:
             raise ValueError(f"{name} 必须为整数。")
 
 
+def validate_ref_box_controls(values: dict[str, Any]) -> None:
+    """Reject invalid REF settings before any AppSettings fields are assigned."""
+    limits = {
+        "ref_box_fill_opacity": (0.0, 100.0),
+        "ref_box_font_size": (6.0, 72.0),
+        "ref_box_width_lines": (0.25, 20.0),
+        "ref_box_height_lines": (0.25, 20.0),
+        "ref_match_threshold": (0.60, 0.999),
+    }
+    from math import isfinite
+    for key, (lower, upper) in limits.items():
+        if key not in values:
+            continue
+        try:
+            requested = float(values[key].get())
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{key} 需要有效数字。") from exc
+        if not isfinite(requested) or not lower <= requested <= upper:
+            raise ValueError(f"{key} 必须在 {lower}–{upper} 之间。")
+        if key == "ref_box_font_size" and not requested.is_integer():
+            raise ValueError("REF 字号必须为整数。")
+    for key in ("ref_box_fill_color", "ref_box_text_color"):
+        if key in values:
+            from PIL import ImageColor
+            try:
+                value = str(values[key].get())
+                if not value.startswith("#") or len(value) != 7:
+                    raise ValueError("expected #RRGGBB")
+                ImageColor.getrgb(value)
+            except ValueError as exc:
+                raise ValueError(f"{key} 必须是 #RRGGBB 颜色。") from exc
+
+
 def schedule_autosave(dialog: Any) -> None:
     if not getattr(dialog, "_autosave_ready", False):
         return
