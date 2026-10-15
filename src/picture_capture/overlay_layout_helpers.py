@@ -109,20 +109,20 @@ def horizontal_entry_editor_slot(
     editor_x: float, column_end_x: float, delete_width: int, *,
     rtl: bool = False, gap: int = 2,
 ) -> tuple[int, float, str]:
-    """Reserve the trailing [X] and fit the editable box up to column end.
+    """Fit a horizontal editor EXACTLY from its starting X to the column end.
 
-    The canonical reading direction is mirrored to screen RTL when needed.
-    Returned width is in canvas pixels, not an approximate number of glyphs.
-    The existing legacy width-in-characters setting remains for vertical text.
+    The [X] belongs *after* that boundary, outside the editable area, and
+    must never silently reduce the editor width.  Retain the historical
+    delete_width/gap parameters for callers; neither influences this width.
+    Canvas window width is expressed in screen pixels, with mirrored RTL
+    delete anchoring. Vertical word boxes use independent character lengths.
     """
     remaining = (
         float(editor_x) - float(column_end_x) if rtl
         else float(column_end_x) - float(editor_x)
     )
-    reserved = max(0, int(delete_width))
-    padding = max(0, int(gap)) if reserved else 0
-    pixels = max(1, int(round(remaining - reserved - padding)))
-    return pixels, float(column_end_x), "nw" if rtl else "ne"
+    pixels = max(1, int(round(remaining)))
+    return pixels, float(column_end_x), "ne" if rtl else "nw"
 
 
 def vertical_marker_contact_gap(marker_line_width: int) -> int:
