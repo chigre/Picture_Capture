@@ -494,3 +494,81 @@ def test_external_sidecar_change_at_last_preflight_refuses_undo(tmp_path, monkey
     assert pdic_path(page).read_bytes() == committed
     assert rows[0].word == "ONE"
     assert (tmp_path / sidecar).read_bytes() == b"external-human-or-ocr-change"
+
+
+@pytest.mark.parametrize("source", ["section", "profile"])
+def test_section_or_profile_drift_invalidates_saved_history(tmp_path, source):
+    from picture_capture.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    external = (
+        page_sections_path_for_image(page)
+        if source == "section" else profile_path(tmp_path)
+    )
+    external.parent.mkdir(parents=True, exist_ok=True)
+    external.write_bytes(b'{"external": "human edit"}')
+    assert not hist.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert not hist.undo_stack and not hist.redo_stack
+
+
+@pytest.mark.parametrize("source", ["section", "profile"])
+def test_section_or_profile_last_moment_source_race_refuses_undo(tmp_path, monkeypatch, source):
+    from picture_capture.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    external = (
+        page_sections_path_for_image(page)
+        if source == "section" else profile_path(tmp_path)
+    )
+    original = module._publish_restored_snapshot
+
+    def concurrent_human_edit(expected, target):
+        external.parent.mkdir(parents=True, exist_ok=True)
+        external.write_bytes(b'{"modified_while_undo_pending": true}')
+        return original(expected, target)
+
+    monkeypatch.setattr(module, "_publish_restored_snapshot", concurrent_human_edit)
+    assert not hist.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert external.read_bytes() == b'{"modified_while_undo_pending": true}'
+
+
+def test_unrelated_ocr_owner_change_cannot_piggyback_plain_saved_text(tmp_path):
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    before = snapshot_review(review)
+    assert before is not None
+    rows[0].candidate_id = "new"
+    rows[1].word = "TWO"
+    review.vars[1].set("TWO")
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review)
+    assert after is not None
+    assert not hist.record(before, after)
+    assert not hist.undo_stack
+
+
+def test_source_chain_change_between_commits_clears_preexisting_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    assert len(hist.undo_stack) == 1
+    cache = tmp_path / "cache.json"
+    cache.write_bytes(b'{"ocr": "external new run"}')
+    before, after = _save_words(page, rows, review, "ONE", "TWO")
+    assert hist.record(before, after)
+    # The new save is valid itself, but the old chain must not be replayable
+    # after an intervening OCR cache change that could change word ownership.
+    assert len(hist.undo_stack) == 1
+    assert hist.undo_stack[0].before.pdic_bytes == before.pdic_bytes
