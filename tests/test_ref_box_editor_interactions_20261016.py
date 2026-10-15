@@ -106,6 +106,9 @@ class FakeCanvas:
     def create_rectangle(self, *coords, **kwargs):
         self.actions.append(("rectangle", coords, kwargs))
         return 5
+    def create_text(self, *coords, **kwargs):
+        self.actions.append(("text", coords, kwargs))
+        return 6
     def canvasx(self, x):
         return x
     def canvasy(self, y):
@@ -130,6 +133,7 @@ class FakeApp:
     def __init__(self, page: Path, *, scale=1.0):
         self.current_page = page
         self.image = Image.new("RGB", (200, 180), "white")
+        self.image.save(page)
         self.view_scale = scale
         self.canvas = FakeCanvas()
         self.settings = AppSettings()
@@ -244,3 +248,50 @@ def test_context_text_and_delete_remain_independent_of_pdic(tmp_path):
     assert read_ref_boxes(app.current_page) == []
     editor.undo()
     assert read_ref_boxes(app.current_page) == proposed
+
+
+def test_ref_delete_only_via_cross_not_keyboard_or_context_menu():
+    from pathlib import Path
+    import picture_capture.app as app_module
+    import picture_capture.ui.ref_box_controller as ref_ui
+
+    app_code = Path(app_module.__file__).read_text(encoding="utf-8")
+    controller_code = Path(ref_ui.__file__).read_text(encoding="utf-8")
+    assert 'lambda e: self.ref_box_controller.delete_selected(e)' not in app_code
+    assert 'label="删除选中 REF"' not in controller_code
+    assert 'if action == "delete":' in controller_code
+    assert 'self.delete_selected()' in controller_code
+
+
+@pytest.mark.parametrize(("follow_zoom", "zoom", "expected"), [
+    (True, 1.0, 16),
+    (True, 0.5, 8),
+    (True, 2.0, 32),
+    (False, 0.5, 16),
+    (False, 2.0, 16),
+])
+def test_ref_body_font_uses_same_main_entry_zoom_contract(
+    tmp_path, monkeypatch, follow_zoom, zoom, expected,
+):
+    import picture_capture.ui_compat as fonts
+    from picture_capture.overlay_layout_helpers import effective_main_overlay_font_size
+
+    app, ctl = editor_with_box(tmp_path)
+    app.image = Image.new("RGB", (1400, 1800), "white")
+    app.view_scale = zoom
+    app.settings = AppSettings(
+        ref_box_show=True, ref_box_fill_opacity=0.0,
+        ref_box_font_size=16, ref_box_font_bold=True,
+        main_entry_follow_zoom=follow_zoom, main_entry_font_size=24,
+    )
+    ctl.editing = False
+    monkeypatch.setattr(fonts, "resolve_content_font_family", lambda *_args: "Arial")
+    ctl.render()
+    body = next(row[2] for row in app.canvas.actions
+                if row[0] == "text" and row[2].get("text") == BOX.text)
+    assert body["font"] == ("Arial", expected, "bold")
+    assert expected == effective_main_overlay_font_size(
+        app.image.width, zoom, app.settings, base_font_size=16,
+    )
+    # REF remains independent from the main headword's configured base size.
+    assert app.settings.main_entry_font_size == 24
