@@ -1,4 +1,4 @@
-"""Standalone, lossless REF rectangles stored as seven-column tab-separated .rbox.
+"""Standalone, lossless REF rectangles in nine-column tab-separated .rbox.
 
 These are page-local annotations. They NEVER mutate PDIC, PPP, SECTION or
 Profile. Text uses RFC4180-style TSV quoting, including tabs and newlines.
