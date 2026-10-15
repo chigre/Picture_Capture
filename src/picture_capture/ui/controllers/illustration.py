@@ -15,7 +15,7 @@ from tkinter import messagebox
 from typing import Any
 
 from .crop import complete_crop_widths
-from ...formats import pdic_path, read_ppp, write_ppp
+from ...formats import pdic_path, read_pdic, read_ppp, write_ppp
 from ...models import PolygonRegion
 from ...illustration_labels import illustration_labels, label_text, user_edited_link
 from ...illustration_batch_association import associate_existing_ppp_job
@@ -60,11 +60,17 @@ class IllustrationController:
             return False
         current = list(app.polygons if proposed is None else proposed)
         try:
+            previous_ref = None
+            if associate and app.project is not None and app.current_index > 0:
+                preceding = app.project.images[app.current_index - 1]
+                previous_entries = read_pdic(pdic_path(preceding))
+                if previous_entries and len(previous_entries) <= 1000:
+                    previous_ref = (preceding.stem, len(previous_entries) - 1)
             labels = illustration_labels(
                 current, page.stem, app._get_cached_display_geometry(),
                 app.page_sections,
                 entries=list(app._ordered_entries_reading_order()) if associate else (),
-                associate=associate,
+                associate=associate, previous_entry_ref=previous_ref,
             )
             if label_overrides:
                 for index, label in label_overrides.items():
@@ -258,7 +264,10 @@ class IllustrationController:
         current = int(app.current_index)
 
         def job(index: int, _position: int, _total: int):
-            return associate_existing_ppp_job(str(pages[index]), settings, index)
+            return associate_existing_ppp_job(
+                str(pages[index]), settings, index,
+                str(pages[index - 1]) if index > 0 else None,
+            )
 
         def done(completed, total, stopped, results, error):
             # Always reload: an I/O hook may fail after an atomic PPP replace,
