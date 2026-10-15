@@ -62,7 +62,9 @@ def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
             displayed = tuple(tree.tk.splitlist(tree.cget("displaycolumns")))
             if not displayed or displayed == ("#all",):
                 displayed = tuple(tree.tk.splitlist(tree.cget("columns")))
-            show = tuple(tree.tk.splitlist(tree.cget("show")))
+            # Tk 8.6 can return Tcl_Obj index objects rather than Python str
+            # for 'show'. Compare their string values, or #0 disappears.
+            show = {str(item) for item in tree.tk.splitlist(tree.cget("show"))}
             columns = (("#0",) if "tree" in show else ()) + displayed
             for column_id in columns:
                 cell = tree.bbox(first_visible_iid, column_id)
