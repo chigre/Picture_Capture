@@ -295,6 +295,14 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+    "ref_box_fill_color": "REF 标注覆盖层的底色，默认淡蓝 #b7d9f5；支持任意 #RRGGBB。仅改变屏幕显示，不修改图像或 rbox 数据。",
+    "ref_box_fill_opacity": "REF 底色真实透明度，0 为完全透明、100 为不透明，默认 50%。不会改变词典原扫描图片。",
+    "ref_box_text_color": "REF 框文字颜色，默认深蓝。屏幕标注与原正文彼此独立。",
+    "ref_box_font_family": "REF 显示字体，默认根据系统字体与词典 OCR 语言推荐；可手动指定已安装字体。",
+    "ref_box_font_size": "REF 框中的文字字号，默认 16；只改变界面显示，不修改持久化坐标。",
+    "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
+    "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
+    "ref_match_threshold": "识别 REF 时的图案匹配最低分，默认 0.88；阈值越高误检越少，但可能漏检印刷略有变化的标签。对任意颜色的采集样本使用相同算法。",
         "separator_y_ink_safe_max_fraction": "原图白缝核验允许搜索的最大位移（行高比），默认0.25，另有0.30倍行高的安全上限。仅在开启实验性白缝核验后生效。\n\n增大更易找到远处白缝，但可能跳到相邻行；减小更保守，也可能无法修复穿字。",
         "separator_y_ink_safe_ink_threshold": "原图白缝核验对灰度图计算墨迹比例时，低于此阈值（默认185）的像素视为墨迹。仅在实验性白缝核验开启后生效。\n\n增大将浅色笔画也视作墨迹，但过高可能把灰背景当作文字；减小可能漏掉浅印字形。",
         "separator_y_ink_safe_existing_ink_ratio": "已有横线位置的墨迹占比不超过此值时不移动；默认0.045（4.5%）。仅在实验性白缝核验开启后生效。\n\n降低会更积极调整轻微穿字的线；提高更保守，可能允许线穿过部分文字。",
@@ -618,6 +626,10 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "ref_box_show": "主画布是否显示已有 REF 框。关闭只隐藏标注，不删除本地 .rbox。进入编辑模式仍会显示。",
+    "ref_box_font_bold": "是否在主画布以粗体绘制 REF 文字，默认关闭。",
+    "ref_box_font_italic": "是否在主画布以斜体绘制 REF 文字，默认关闭。",
+    "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
     "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
     "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
     "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪；如需比较，建议同一批页面复测并核对 PDIC。",
