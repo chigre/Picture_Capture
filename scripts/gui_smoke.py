@@ -40,6 +40,19 @@ def main() -> int:
     app = PictureCaptureApp()
     try:
         _stage("PictureCaptureApp constructed")
+        # Real UI bridge: the existing 画线…→插图关联 command must invoke
+        # selected-scope processing, not the old current-page-only method.
+        controller = app._illustration_controller_for_call()
+        original_association = controller.associate_selected_scope
+        association_calls = []
+        try:
+            controller.associate_selected_scope = lambda: association_calls.append("range")
+            app.associate_illustrations()
+        finally:
+            controller.associate_selected_scope = original_association
+        if association_calls != ["range"]:
+            raise RuntimeError("Illustration association menu bridge is not batch-range aware")
+        _stage("illustration association menu dispatches selected-scope controller")
         # Real Tk thumbnail column/controls smoke, without private scans.
         from tkinter import ttk
         thumbs = app._page_thumbnails
