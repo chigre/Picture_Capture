@@ -18,7 +18,12 @@ import tempfile
 from typing import Any
 
 from .formats import pdic_path, read_pdic
-from .project_storage import note_page_artifact_edit, simplified_review_path_for_image
+from .project_storage import (
+    note_page_artifact_edit,
+    page_sections_read_path_for_image,
+    profile_path,
+    simplified_review_path_for_image,
+)
 from .proofreading_events import sha256_file
 
 
@@ -32,6 +37,16 @@ class SavedSnapshot:
     simplified_bytes: bytes | None
     ocr_bytes: bytes | None
     candidates: tuple[tuple[str, str], ...]
+    # A frozen ownership fingerprint, not a late read from mutable Entry refs.
+    # Without this a user/OCR rerun could attach a candidate_id after record()
+    # and an old Undo would treat that candidate-owned row as plain text.
+    owner_ids: tuple[tuple[int, str], ...] = ()
+    manual_path: Path | None = None
+    ocr_path: Path | None = None
+    section_path: Path | None = None
+    section_bytes: bytes | None = None
+    profile_path: Path | None = None
+    profile_bytes: bytes | None = None
 
     def rows(self) -> dict[int, tuple[Any, str, int, int]]:
         return {id(item[0]): item for item in self.entries}
@@ -93,13 +108,24 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
             for c in getattr(app, "ocr_review_candidates", ())
             if isinstance(c, dict)
         ))
+        manual_path = manual_fn() if callable(manual_fn) else None
+        ocr_path = ocr_fn() if callable(ocr_fn) else None
+        section_path = page_sections_read_path_for_image(page)
+        profile_file = profile_path(app.project.root)
         return SavedSnapshot(
             page=page, image_sha=sha256_file(page) or "",
             entries=ordered, pdic_bytes=raw,
-            manual_bytes=_bytes_or_absent(manual_fn() if callable(manual_fn) else None),
+            manual_bytes=_bytes_or_absent(manual_path),
             simplified_bytes=_bytes_or_absent(simplified_review_path_for_image(page)),
-            ocr_bytes=_bytes_or_absent(ocr_fn() if callable(ocr_fn) else None),
+            ocr_bytes=_bytes_or_absent(ocr_path),
             candidates=candidates,
+            owner_ids=tuple(sorted(
+                (id(entry), str(getattr(entry, "candidate_id", "") or ""))
+                for entry in app.entries
+            )),
+            manual_path=manual_path, ocr_path=ocr_path,
+            section_path=section_path, section_bytes=_bytes_or_absent(section_path),
+            profile_path=profile_file, profile_bytes=_bytes_or_absent(profile_file),
         )
     except (OSError, ValueError, TypeError):
         return None
@@ -112,9 +138,20 @@ def _undoable_committed_change(
             or before.image_sha != after.image_sha
             or before.candidates != after.candidates
             or before.manual_bytes != after.manual_bytes
-            or before.ocr_bytes != after.ocr_bytes):
+            or before.ocr_bytes != after.ocr_bytes
+            or before.manual_path != after.manual_path
+            or before.ocr_path != after.ocr_path
+            or before.section_path != after.section_path
+            or before.section_bytes != after.section_bytes
+            or before.profile_path != after.profile_path
+            or before.profile_bytes != after.profile_bytes):
         return False
     left, right = before.rows(), after.rows()
+    left_owners, right_owners = dict(before.owner_ids), dict(after.owner_ids)
+    if (set(left_owners) != set(left) or set(right_owners) != set(right)
+            or any(left_owners[key] != right_owners[key]
+                   for key in left.keys() & right.keys())):
+        return False
     removed = left.keys() - right.keys()
     added = right.keys() - left.keys()
     # A single direct UI-owned deletion (or its redo reversal) can be restored
@@ -130,7 +167,7 @@ def _undoable_committed_change(
     lost_or_added = next(iter(removed or added), None)
     if lost_or_added is not None:
         orphan = (left if removed else right)[lost_or_added][0]
-        if getattr(orphan, "candidate_id", None):
+        if (left_owners if removed else right_owners).get(lost_or_added):
             return False
     word_changed = False
     for identifier in left.keys() & right.keys():
@@ -138,7 +175,7 @@ def _undoable_committed_change(
         if old[0] is not new[0] or old[2:] != new[2:]:
             return False
         if old[1] != new[1]:
-            if getattr(old[0], "candidate_id", None):
+            if left_owners.get(identifier):
                 return False
             word_changed = True
     if before.pdic_bytes != after.pdic_bytes and not (word_changed or lost_or_added is not None):
@@ -199,20 +236,40 @@ def _decode(value: Any) -> bytes | None:
     return base64.b64decode(value, validate=True)
 
 
+def _valid_manual_path(page: Path, path: Path | None) -> bool:
+    return bool(
+        path is not None
+        and Path(path).name == f"{page.stem}_manual_selection.json"
+        and Path(path).parent.name.lower() == "paddleocr"
+    )
+
+
 def _stage_recovery(
     page: Path, changes: list[tuple[str, bytes | None, bytes | None]],
+    *, manual_path: Path | None = None,
 ) -> Path:
     marker = _recovery_path(page)
     if marker.exists():
         raise RuntimeError("Unresolved R3 recovery marker; refusing new undo")
+    roles = [role for role, _, _ in changes]
+    if len(roles) != len(set(roles)) or not roles or not set(roles) <= {"pdic", "simplified", "manual"}:
+        raise ValueError("Invalid R3 recovery roles")
+    owns_manual = "manual" in roles
+    if owns_manual and not _valid_manual_path(page, manual_path):
+        raise ValueError("Candidate manual-selection recovery path is not owned by this page")
     doc = {
-        "format": "picture_capture_r3_transient_recovery", "version": 1,
+        "format": "picture_capture_r3_transient_recovery",
+        "version": 2 if owns_manual else 1,
         "page": str(page.resolve()),
         "files": [
             {"role": role, "before": _encode(old), "after": _encode(new)}
             for role, old, new in changes
         ],
     }
+    if owns_manual:
+        # Version 2 is explicitly bound to the page's expected OCR override
+        # location, never an arbitrary path from an untrusted recovery marker.
+        doc["manual_path"] = str(Path(manual_path).resolve())
     # The marker exists only during a multi-file commit and is deleted
     # immediately. It is NOT a persistent Undo/Redo journal.
     _atomic_bytes(marker, json.dumps(doc, ensure_ascii=False).encode("utf-8"))
@@ -220,7 +277,7 @@ def _stage_recovery(
 
 
 def _verified_recovery(
-    page: Path,
+    page: Path, *, manual_path: Path | None = None,
 ) -> tuple[Path, list[tuple[Path, bytes | None, bytes | None]]] | None:
     marker = _recovery_path(page)
     if not marker.is_file():
@@ -228,12 +285,18 @@ def _verified_recovery(
     doc = json.loads(marker.read_text(encoding="utf-8"))
     if (not isinstance(doc, dict)
             or doc.get("format") != "picture_capture_r3_transient_recovery"
-            or doc.get("version") != 1 or doc.get("page") != str(page.resolve())):
+            or doc.get("version") not in {1, 2}
+            or doc.get("page") != str(page.resolve())):
         raise ValueError("R3 recovery marker does not match current page")
     values = doc.get("files")
     if not isinstance(values, list) or not values:
         raise ValueError("R3 recovery marker has no files")
     known = {"pdic": pdic_path(page), "simplified": simplified_review_path_for_image(page)}
+    if doc["version"] == 2:
+        if (not _valid_manual_path(page, manual_path)
+                or doc.get("manual_path") != str(Path(manual_path).resolve())):
+            raise ValueError("R3 manual-selection recovery requires trusted project path")
+        known["manual"] = Path(manual_path)
     found = set()
     result = []
     for row in values:
@@ -244,17 +307,19 @@ def _verified_recovery(
             raise ValueError("R3 recovery contains duplicate file")
         found.add(role)
         result.append((known[role], _decode(row.get("before")), _decode(row.get("after"))))
+    if ("manual" in found) != (doc["version"] == 2):
+        raise ValueError("R3 recovery marker/manual path schema mismatch")
     return marker, result
 
 
-def recover_pending_for_page(page: Path) -> bool:
+def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> bool:
     """Reconcile an interrupted multi-file operation before loading any PDIC.
 
     All old/new bytes are explicitly embedded in a *temporary* local marker.
     A complete after-state wins; a mixed old/new state is rolled back to the
     before-state. Unexpected third-party modification requires manual action.
     """
-    pending = _verified_recovery(page)
+    pending = _verified_recovery(page, manual_path=manual_path)
     if pending is None:
         return True
     marker, items = pending
@@ -266,6 +331,78 @@ def recover_pending_for_page(page: Path) -> bool:
         for path, before, _ in items:
             _publish(path, before)
     marker.unlink()
+    return True
+
+
+def publish_owned_review_bundle(
+    expected: SavedSnapshot,
+    *, pdic_bytes: bytes,
+    manual_bytes: bytes,
+    simplified_bytes: bytes | None,
+) -> bool:
+    """Publish a future operation-owned candidate edit as one recoverable unit.
+
+    Pure persistence boundary: does not modify Entry, candidate checkbox or
+    ReviewWindow. Callers must own a unique candidate and validate its intended
+    content before supplying the exact target bytes. This function alone does
+    not enable candidate Undo/Redo.
+    """
+    page = expected.page
+    manual_path = expected.manual_path
+    if not _valid_manual_path(page, manual_path):
+        return False
+    changes = []
+    for role, old, new in (
+        ("pdic", expected.pdic_bytes, pdic_bytes),
+        ("manual", expected.manual_bytes, manual_bytes),
+        ("simplified", expected.simplified_bytes, simplified_bytes),
+    ):
+        if old != new:
+            changes.append((role, old, new))
+    if not (len(changes) >= 2 and any(role == "manual" for role, _, _ in changes)
+            and any(role == "pdic" for role, _, _ in changes)
+            and not _recovery_path(page).exists()):
+        return False
+
+    def source_unchanged() -> bool:
+        return bool(
+            sha256_file(page) == expected.image_sha
+            and _bytes_or_absent(pdic_path(page)) == expected.pdic_bytes
+            and _bytes_or_absent(manual_path) == expected.manual_bytes
+            and _bytes_or_absent(simplified_review_path_for_image(page))
+                == expected.simplified_bytes
+            and _bytes_or_absent(expected.ocr_path) == expected.ocr_bytes
+            and page_sections_read_path_for_image(page) == expected.section_path
+            and _bytes_or_absent(expected.section_path) == expected.section_bytes
+            and _bytes_or_absent(expected.profile_path) == expected.profile_bytes
+        )
+    if not source_unchanged():
+        return False
+    paths = {
+        "pdic": pdic_path(page),
+        "manual": manual_path,
+        "simplified": simplified_review_path_for_image(page),
+    }
+    marker = _stage_recovery(page, changes, manual_path=manual_path)
+    if not source_unchanged():
+        marker.unlink()
+        return False
+    try:
+        for role, _, data in changes:
+            _publish(paths[role], data)
+    except (OSError, RuntimeError, ValueError):
+        # Roll back only files still identical to our documented old/new
+        # versions. A concurrent third-party write leaves marker in place,
+        # and all subsequent page loads must refuse unsafe reopening.
+        recover_pending_for_page(page, manual_path=manual_path)
+        raise
+    # The durable files now contain the after-state. If cleanup fails, future
+    # page loads will observe complete-after and safely clear the marker; do
+    # not falsely tell callers that committed disk bytes were rolled back.
+    try:
+        marker.unlink()
+    except OSError:
+        pass
     return True
 
 
@@ -288,7 +425,15 @@ def _publish_restored_snapshot(
     if (sha256_file(page) != expected.image_sha
             or _bytes_or_absent(pdic_path(page)) != expected.pdic_bytes
             or _bytes_or_absent(simplified_review_path_for_image(page))
-               != expected.simplified_bytes):
+               != expected.simplified_bytes
+            # OCR and manual-selection are read-only dependencies for the
+            # original R3 safe scope. Recheck immediately before publication;
+            # snapshot-time checks alone leave a TOCTOU window.
+            or _bytes_or_absent(expected.manual_path) != expected.manual_bytes
+            or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
+            or page_sections_read_path_for_image(page) != expected.section_path
+            or _bytes_or_absent(expected.section_path) != expected.section_bytes
+            or _bytes_or_absent(expected.profile_path) != expected.profile_bytes):
         return False
     # One-file restore is already atomic. Two files require short-lived
     # write-ahead recovery so crash/restart cannot silently mis-pair them.
@@ -305,7 +450,12 @@ def _publish_restored_snapshot(
         # An interrupted rollback keeps marker so next page load can recover.
         recover_pending_for_page(page)
         raise
-    marker.unlink()
+    # Disk publication has succeeded; inability to remove a temporary
+    # recovery marker must not cause the GUI to retain the old in-memory words.
+    try:
+        marker.unlink()
+    except OSError:
+        pass
     return True
 
 
@@ -318,6 +468,13 @@ def _same_live_state(current: SavedSnapshot, expected: SavedSnapshot) -> bool:
         and current.simplified_bytes == expected.simplified_bytes
         and current.ocr_bytes == expected.ocr_bytes
         and current.candidates == expected.candidates
+        and current.owner_ids == expected.owner_ids
+        and current.manual_path == expected.manual_path
+        and current.ocr_path == expected.ocr_path
+        and current.section_path == expected.section_path
+        and current.section_bytes == expected.section_bytes
+        and current.profile_path == expected.profile_path
+        and current.profile_bytes == expected.profile_bytes
         and current.rows() == expected.rows()
     )
 
@@ -339,6 +496,13 @@ class ReviewSessionHistory:
         if self.undo_stack and (
             self.undo_stack[-1].after.pdic_bytes != before.pdic_bytes
             or self.undo_stack[-1].after.simplified_bytes != before.simplified_bytes
+            or self.undo_stack[-1].after.manual_bytes != before.manual_bytes
+            or self.undo_stack[-1].after.ocr_bytes != before.ocr_bytes
+            or self.undo_stack[-1].after.candidates != before.candidates
+            or self.undo_stack[-1].after.owner_ids != before.owner_ids
+            or self.undo_stack[-1].after.image_sha != before.image_sha
+            or self.undo_stack[-1].after.section_bytes != before.section_bytes
+            or self.undo_stack[-1].after.profile_bytes != before.profile_bytes
         ):
             self.invalidate()
         self.undo_stack.append(SavedEdit(before, after))

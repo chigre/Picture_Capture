@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-15T00:55:00Z",
+  "updated_at_utc": "2026-10-15T07:50:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -25,19 +25,19 @@
     "status": "in_progress",
     "active_phase": "R3",
     "active_work_item": "R3.1",
-    "work_in_progress": false,
+    "work_in_progress": true,
     "implementation_pr": {
-      "number": 502,
-      "url": "https://github.com/chigre/Picture_Capture/pull/502",
-      "branch": "feat/pc-cq-b3-review-session-transactions-20261015",
-      "status": "merged_postmerge_main_ci_success_partial_R3",
+      "number": 519,
+      "url": "https://github.com/chigre/Picture_Capture/pull/519",
+      "branch": "feat/pc-cq-b3-r3-source-fingerprint-20261015",
+      "status": "draft_full_candidate_delete_and_source_guards_ci_pending",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06",
-    "latest_verified_main_sha": "910b889898efab1ffc2975cdfa613eb675be70ef",
+    "implementation_head_sha": "0f3cf3a877c06fd547982b0f3f0a70b15eed392a",
+    "latest_verified_main_sha": "e61fd0016da1da43e39dc30d44e66f4c7c60fdfb",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
@@ -51,8 +51,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/483"
       }
     ],
-    "required_next_action": "B3/#503 is sole next production work packet: analyze OCR candidate-linked ReviewWindow.delete_review_entry, _write_manual_override and candidate checkbox/sidecar and cache; implement provably atomic candidate-owner reversible transaction incl genuine Tk regression, without weakening source guards or changing formats. Track on one production PR. R2/B2 deferred in_progress, #483 open. No B4/R4 or PR-B.",
-    "last_test_evidence": "R3 #502 final head e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06 full Windows/macOS/Ubuntu/Python3.10 PR CI 38630143182 success and safety run 38630138177 success. Squash merged main@910b889898efab1ffc2975cdfa613eb675be70ef; postmerge main CI 38630567897 completed success on all four jobs incl Tk smoke/build. Tests cover saved text/simplified/one non-OCR-linked deletion Undo/Redo, exact bytes and Entry instance continuity, stale source refusal, crash/multifile recovery, dirty Tk. No real user Windows session or candidate-linked/manual-selection rollback; no R3 full DoD claim.",
+    "required_next_action": "Inspect latest #519 final fixed-head Windows/macOS/Ubuntu/Python3.10 CI incl architecture and new real Tk candidate deletion smoke; repair red failures, merge only green, verify postmerge main CI, update main STATE/RESUME/RUNBOOK. Then implement #503 reversible candidate-state Undo/Redo with persisted-manual/PDIC/simplified source ownership. R2 #483 W1-W11 deferred. Do not start R4.",
+    "last_test_evidence": "PR #519 adds frozen OCR owner, last-moment manual/OCR/SECTION/Profile read-only source checks, write-ahead v2 three-file manual_selection+PDIC+simplified commit with project-trusted recovery path, exact candidate delete row, real Tk synthetic UI smoke on three OS, disk failure/race/malformed and source-drift tests. Final fixed-head CI not yet green at this checkpoint. Previous intermediate CI 38702157413 failed app.py architecture ratchet, corrected without guard relaxation by removing unreachable legacy candidate override block; another intermediate Windows CI failed init.tcl runner initialization. Candidate-linked Undo/Redo still explicitly unsupported.",
     "active_batch": "B3",
     "next_batch": "B3"
   },
@@ -511,6 +511,51 @@
         "#483 R2 human Windows acceptance deferred by user"
       ],
       "note": "User authorized B3 with B2 in_progress. No real Windows user acceptance, permanent undo journal, or PR-B; no data schemas changed."
+    },
+    {
+      "type": "b3_503_source_fingerprint_patch",
+      "status": "draft_ci_running_R3_in_progress",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/519",
+      "base_main_sha": "e61fd0016da1da43e39dc30d44e66f4c7c60fdfb",
+      "head_sha": "2e967931f599428900c939f64501356b2847d432",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/38701396654",
+      "reused_prior_branch": "feat/pc-cq-b3-r3-503-20261015",
+      "scope": "Freeze per-Entry candidate ownership, revalidate manual selection/OCR/SECTION/Profile bytes and paths at Undo/Redo commit, invalidate stale multi-step history; migrate old unmerged counterexample tests to fresh main.",
+      "still_blocked": [
+        "#503 operation-owned OCR-linked deletion/compound transaction",
+        "R3 true Windows user operator validation",
+        "#483 R2 Windows W1-W11 explicitly deferred"
+      ],
+      "note": "No raw user scans, manual PDIC/SECTION/Profile formats, OCR decisions, or settings defaults were changed; R2 and R3 stay in_progress."
+    },
+    {
+      "type": "b3_503_owned_candidate_delete_and_recovery",
+      "status": "draft_final_head_ci_pending_r3_in_progress",
+      "pr": "https://github.com/chigre/Picture_Capture/pull/519",
+      "head_before_state": "0f3cf3a877c06fd547982b0f3f0a70b15eed392a",
+      "source_files": [
+        "src/picture_capture/proofreading_transactions.py",
+        "src/picture_capture/proofreading_candidate_delete.py",
+        "src/picture_capture/ui/review_candidate_delete_actions.py",
+        "src/picture_capture/app.py",
+        "scripts/gui_r3_candidate_delete_smoke.py",
+        ".github/workflows/ci.yml"
+      ],
+      "tests": [
+        "tests/test_b3_review_session_transactions_20261015.py",
+        "tests/test_b3_candidate_owned_deletion_20261015.py",
+        "scripts/gui_r3_candidate_delete_smoke.py"
+      ],
+      "scope": "Atomic source-guarded candidate-linked delete publish with selected=false manual override, saved PDIC and optional simplified sidecar; only mutate UI after all files committed. 3-file v2 crash recovery bound to trusted project OCR path; v1 kept. No candidate Undo or verified claim.",
+      "prior_intermediate_ci_failures": [
+        "38702157413 app.py architecture ratchet, fixed by deleting unreachable old code without changing baseline",
+        "38702072356 Windows init.tcl setup transient failure; needs newest fixed SHA recheck"
+      ],
+      "blockers": [
+        "candidate-linked Undo/Redo not implemented",
+        "#503 remaining FocusOut/cancel/close Tk acceptance",
+        "#483 R2 genuine Windows W1-W11 explicitly deferred"
+      ]
     }
   ],
   "rules_for_updates": {
@@ -673,30 +718,28 @@
         "R3.2"
       ],
       "status": "in_progress",
-      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/502",
+      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/519",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "#502 engineering subpacket passed fixed-head and postmerge CI; R3 remains in_progress because #503 OCR-linked/manual_selection/candidate controls and compound undo/redo are unsupported and human GUI acceptance not complete. R2 stage deferral remains.",
-      "active_implementation_branch": null,
-      "active_head_sha": "e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06",
+      "blocker": "Candidate-linked delete now has operation-owned 3-file commit path on PR #519, pending all fixed-head cross-platform tests; candidate deletion Undo/Redo still disabled and real Windows GUI acceptance pending. R2 #483 remains deferred.",
+      "active_implementation_branch": "feat/pc-cq-b3-r3-source-fingerprint-20261015",
+      "active_head_sha": "0f3cf3a877c06fd547982b0f3f0a70b15eed392a",
       "unit_evidence": {
         "R3.1": {
           "status": "in_progress",
-          "evidence": "B3 #502: strict in-memory Entry-ID-based saved-state snapshots, atomic PDIC + simplified reversible commit and transient crash recovery on page load, ReviewWindow save/autosave, candidate-unlinked single delete; refusals on OCR-linked manual overrides, stale image/PDIC, dirty Tk edits, competing source changes. Latest CI pending. #502 merged main@910b889898efab1ffc2975cdfa613eb675be70ef; fixed-head PR CI https://github.com/chigre/Picture_Capture/actions/runs/38630143182 SUCCESS; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/38630567897 SUCCESS. Partial engineering increment verified, full R3 pending #503 and user GUI acceptance."
+          "evidence": "B3 #502: strict in-memory Entry-ID-based saved-state snapshots, atomic PDIC + simplified reversible commit and transient crash recovery on page load, ReviewWindow save/autosave, candidate-unlinked single delete; refusals on OCR-linked manual overrides, stale image/PDIC, dirty Tk edits, competing source changes. Latest CI pending. #502 merged main@910b889898efab1ffc2975cdfa613eb675be70ef; fixed-head PR CI https://github.com/chigre/Picture_Capture/actions/runs/38630143182 SUCCESS; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/38630567897 SUCCESS. Partial engineering increment verified, full R3 pending #503 and user GUI acceptance. / PR #519 current branch: immutable Entry candidate_id ownership snapshot; manual/OCR/SECTION/Profile bytes and paths checked again before Undo disk publication. CI pending; no candidate-linked atomic delete yet."
         },
         "R3.2": {
           "status": "in_progress",
-          "evidence": "B3 #502: 20-step same-open-window Undo/Redo, new save drops redo, page changes clear session, stale async Tk bindings remain fail-closed without destroying valid history, explicit toolbar and Ctrl+Alt-Z/Y bindings. No retained cross-session Undo log; repeat/shortcut synthetic integration pending fixed-head CI. #502 merged main@910b889898efab1ffc2975cdfa613eb675be70ef; fixed-head PR CI https://github.com/chigre/Picture_Capture/actions/runs/38630143182 SUCCESS; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/38630567897 SUCCESS. Partial engineering increment verified, full R3 pending #503 and user GUI acceptance."
+          "evidence": "B3 #502: 20-step same-open-window Undo/Redo, new save drops redo, page changes clear session, stale async Tk bindings remain fail-closed without destroying valid history, explicit toolbar and Ctrl+Alt-Z/Y bindings. No retained cross-session Undo log; repeat/shortcut synthetic integration pending fixed-head CI. #502 merged main@910b889898efab1ffc2975cdfa613eb675be70ef; fixed-head PR CI https://github.com/chigre/Picture_Capture/actions/runs/38630143182 SUCCESS; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/38630567897 SUCCESS. Partial engineering increment verified, full R3 pending #503 and user GUI acceptance. / PR #519 current branch: multi-step Undo history invalidates on owner/source chain discontinuity, and external source races refuse safe undo. CI pending; not R3 verified."
         }
       },
       "ci": {
-        "status": "completed",
-        "conclusion": "success",
-        "head_sha": "e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/38630143182",
-        "postmerge_main_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38630567897",
-        "postmerge_main_ci_status": "completed",
-        "postmerge_main_ci_conclusion": "success",
-        "main_sha": "910b889898efab1ffc2975cdfa613eb675be70ef"
+        "status": "not_yet_confirmed_final_head",
+        "conclusion": null,
+        "head_sha": "0f3cf3a877c06fd547982b0f3f0a70b15eed392a",
+        "url": null,
+        "postmerge_main_ci_url": null,
+        "main_sha": "e61fd0016da1da43e39dc30d44e66f4c7c60fdfb"
       },
       "latest_merged_pr": "https://github.com/chigre/Picture_Capture/pull/502",
       "latest_merge_sha": "910b889898efab1ffc2975cdfa613eb675be70ef",

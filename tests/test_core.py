@@ -6476,14 +6476,15 @@ def test_v21122_hotfix5_review_delete_commits_text_removes_shared_entry_and_dese
     result = ReviewWindow.delete_review_entry(review, 0)
 
     assert result == "break"
-    assert parent.entries == [second]
-    # All visible proofreading text is committed by identity before deletion.
-    assert second.word == "乙改"
-    assert candidate["selected"] is False
-    assert calls["override"] and calls["override"][0][1]["selected"] is False
-    assert calls["saved"] == [{"silent": True, "sync_editors": False}]
-    assert calls["redraw"] == 1
-    assert "已删除词条" in parent.status_var.value
+    # This legacy unit fixture has no saved project, no PDIC and dirty Tk
+    # text. R3 now correctly REFUSES the formerly unsafe manual-before-PDIC
+    # candidate delete. The new persisted success path has dedicated source-
+    # owned end-to-end tests in test_b3_candidate_owned_deletion_20261015.py.
+    assert parent.entries == [first, second]
+    assert second.word == "乙"
+    assert candidate["selected"] is True
+    assert calls == {"saved": [], "redraw": 0, "override": []}
+    assert "未执行" in parent.status_var.value
 
 
 

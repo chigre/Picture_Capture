@@ -447,3 +447,307 @@ def test_unowned_new_entry_during_save_cannot_create_deletion_undo(tmp_path):
     history = ReviewSessionHistory()
     assert not history.record(before, after)
     assert not history.undo_stack
+
+
+def test_candidate_ownership_is_frozen_at_snapshot_time(tmp_path):
+    """An Entry cannot acquire or shed an OCR owner after a saved snapshot."""
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before is not None
+    rows[0].candidate_id = "new-ocr-owner"
+    rows[1].word = "TWO"
+    review.vars[1].set("TWO")
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review)
+    assert after is not None
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+    assert not history.undo_stack
+
+
+def test_candidate_ownership_drift_after_record_refuses_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    unchanged = pdic_path(page).read_bytes()
+    rows[0].candidate_id = "linked-after-save"
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == unchanged
+    assert rows[0].word == "ONE"
+    assert not history.undo_stack
+
+
+@pytest.mark.parametrize("sidecar", ["manual_selection.json", "cache.json"])
+def test_external_sidecar_change_at_last_preflight_refuses_undo(tmp_path, monkeypatch, sidecar):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    original = module._publish_restored_snapshot
+
+    def concurrent_write(expected, target):
+        (tmp_path / sidecar).write_bytes(b"external-human-or-ocr-change")
+        return original(expected, target)
+
+    monkeypatch.setattr(module, "_publish_restored_snapshot", concurrent_write)
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert (tmp_path / sidecar).read_bytes() == b"external-human-or-ocr-change"
+
+
+@pytest.mark.parametrize("source", ["section", "profile"])
+def test_section_or_profile_drift_invalidates_saved_history(tmp_path, source):
+    from picture_capture.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    external = (
+        page_sections_path_for_image(page)
+        if source == "section" else profile_path(tmp_path)
+    )
+    external.parent.mkdir(parents=True, exist_ok=True)
+    external.write_bytes(b'{"external": "human edit"}')
+    assert not hist.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert not hist.undo_stack and not hist.redo_stack
+
+
+@pytest.mark.parametrize("source", ["section", "profile"])
+def test_section_or_profile_last_moment_source_race_refuses_undo(tmp_path, monkeypatch, source):
+    from picture_capture.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    external = (
+        page_sections_path_for_image(page)
+        if source == "section" else profile_path(tmp_path)
+    )
+    original = module._publish_restored_snapshot
+
+    def concurrent_human_edit(expected, target):
+        external.parent.mkdir(parents=True, exist_ok=True)
+        external.write_bytes(b'{"modified_while_undo_pending": true}')
+        return original(expected, target)
+
+    monkeypatch.setattr(module, "_publish_restored_snapshot", concurrent_human_edit)
+    assert not hist.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert external.read_bytes() == b'{"modified_while_undo_pending": true}'
+
+
+def test_unrelated_ocr_owner_change_cannot_piggyback_plain_saved_text(tmp_path):
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    before = snapshot_review(review)
+    assert before is not None
+    rows[0].candidate_id = "new"
+    rows[1].word = "TWO"
+    review.vars[1].set("TWO")
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review)
+    assert after is not None
+    assert not hist.record(before, after)
+    assert not hist.undo_stack
+
+
+def test_source_chain_change_between_commits_clears_preexisting_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    hist = ReviewSessionHistory()
+    assert hist.record(*_save_words(page, rows, review, "ONE", "two"))
+    assert len(hist.undo_stack) == 1
+    cache = tmp_path / "cache.json"
+    cache.write_bytes(b'{"ocr": "external new run"}')
+    before, after = _save_words(page, rows, review, "ONE", "TWO")
+    assert hist.record(before, after)
+    # The new save is valid itself, but the old chain must not be replayable
+    # after an intervening OCR cache change that could change word ownership.
+    assert len(hist.undo_stack) == 1
+    assert hist.undo_stack[0].before.pdic_bytes == before.pdic_bytes
+
+
+def _manual_owned_case(tmp_path):
+    """Synthetic project-local candidate files; no private scans."""
+    page, rows, review = _case(tmp_path)
+    directory = tmp_path / "QT" / "PaddleOCR"
+    directory.mkdir(parents=True, exist_ok=True)
+    override = directory / f"{page.stem}_manual_selection.json"
+    cache = directory / f"{page.stem}.json"
+    review.parent._manual_selection_path = lambda: override
+    review.parent._paddle_cache_path = lambda: cache
+    return page, rows, review, override, cache
+
+
+def test_three_file_owned_bundle_atomic_commit_without_editing_live_rows(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b'{"entries":[]}')
+    expected = snapshot_review(review)
+    assert expected is not None
+    target_pdic = expected.pdic_bytes.replace(b"one", b"ONE")
+    manual_data = b'{"version":1,"overrides":{"candidate":{"selected":false}}}'
+    new_simplified = b'{"entries":[{"x":10,"y":20,"text":"ONE"}]}'
+    assert module.publish_owned_review_bundle(
+        expected, pdic_bytes=target_pdic, manual_bytes=manual_data,
+        simplified_bytes=new_simplified,
+    )
+    assert pdic_path(page).read_bytes() == target_pdic
+    assert override.read_bytes() == manual_data
+    assert simplified.read_bytes() == new_simplified
+    assert [row.word for row in rows] == ["one", "two"]
+    assert not module._recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("failed_role", ["manual", "simplified"])
+def test_three_file_owned_bundle_write_failure_recovers_without_ui_mutation(
+    tmp_path, monkeypatch, failed_role,
+):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b"original simplified")
+    before = snapshot_review(review)
+    assert before
+    target_pdic = before.pdic_bytes.replace(b"one", b"ONE")
+    new_manual = b'{"overrides":{"candidate":{"selected":false}}}'
+    new_simplified = b"new simplified"
+    chosen = override if failed_role == "manual" else simplified
+    original_publish = module._publish
+    failed = False
+
+    def injected_failure(path, contents):
+        nonlocal failed
+        if path == chosen and not failed:
+            failed = True
+            raise OSError("simulated disk write failed")
+        return original_publish(path, contents)
+
+    monkeypatch.setattr(module, "_publish", injected_failure)
+    with pytest.raises(OSError):
+        module.publish_owned_review_bundle(
+            before, pdic_bytes=target_pdic, manual_bytes=new_manual,
+            simplified_bytes=new_simplified,
+        )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert not override.exists()
+    assert simplified.read_bytes() == b"original simplified"
+    assert [row.word for row in rows] == ["one", "two"]
+    assert not module._recovery_path(page).exists()
+
+
+def test_three_file_crash_mid_commit_reopens_with_trusted_manual_path(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    original_pdic = pdic_path(page).read_bytes()
+    changes = [
+        ("pdic", original_pdic, original_pdic.replace(b"one", b"ONE")),
+        ("manual", None, b'{"selected":false}'),
+        ("simplified", None, b'{"entries":[]}'),
+    ]
+    marker = module._stage_recovery(page, changes, manual_path=override)
+    module._publish(pdic_path(page), changes[0][2])
+    module._publish(override, changes[1][2])
+    assert marker.is_file()
+    with pytest.raises(ValueError):
+        module.recover_pending_for_page(page)
+    assert marker.is_file()
+    with pytest.raises(ValueError):
+        module.recover_pending_for_page(
+            page, manual_path=override.with_name("different_manual_selection.json"),
+        )
+    assert module.recover_pending_for_page(page, manual_path=override)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert not override.exists()
+    assert not simplified.exists()
+    assert not marker.exists()
+
+
+def test_three_file_completed_commit_recovery_keeps_all_targets(tmp_path):
+    from picture_capture.project_storage import simplified_review_path_for_image
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    old = pdic_path(page).read_bytes()
+    stages = [
+        ("pdic", old, old.replace(b"two", b"TWO")),
+        ("manual", None, b'{"selected":false}'),
+        ("simplified", None, b'{"entries":[]}'),
+    ]
+    marker = module._stage_recovery(page, stages, manual_path=override)
+    for role, _, contents in stages:
+        target = {"pdic": pdic_path(page), "manual": override, "simplified": simplified}[role]
+        module._publish(target, contents)
+    assert module.recover_pending_for_page(page, manual_path=override)
+    assert pdic_path(page).read_bytes() == stages[0][2]
+    assert override.read_bytes() == stages[1][2]
+    assert simplified.read_bytes() == stages[2][2]
+    assert not marker.exists()
+
+
+def test_owned_bundle_rejects_external_manual_or_ocr_drift_before_write(tmp_path):
+    page, rows, review, override, cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    override.write_bytes(b"external manual choice")
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert not module._recovery_path(page).exists()
+    override.unlink()
+    cache.write_bytes(b"new OCR cache")
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert [row.word for row in rows] == ["one", "two"]
+
+
+def test_owned_bundle_rechecks_sources_after_writing_intent_marker(tmp_path, monkeypatch):
+    page, _, review, override, cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before
+    stage = module._stage_recovery
+
+    def concurrent_ocr_write(*args, **kwargs):
+        result = stage(*args, **kwargs)
+        cache.write_bytes(b"raced OCR cache")
+        return result
+
+    monkeypatch.setattr(module, "_stage_recovery", concurrent_ocr_write)
+    assert not module.publish_owned_review_bundle(
+        before, pdic_bytes=before.pdic_bytes.replace(b"one", b"ONE"),
+        manual_bytes=b"new", simplified_bytes=None,
+    )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert cache.read_bytes() == b"raced OCR cache"
+    assert not override.exists()
+    assert not module._recovery_path(page).exists()
+
+
+def test_manual_recovery_never_trusts_ambiguous_path(tmp_path):
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    with pytest.raises(ValueError):
+        module._stage_recovery(page, [
+            ("pdic", b"old", b"new"), ("manual", None, b"payload"),
+        ], manual_path=tmp_path / "unrelated.txt")
+    assert not module._recovery_path(page).exists()
+
+
+def test_application_page_reopen_supplies_trusted_candidate_override_path():
+    from picture_capture import app as gui
+    code = Path(gui.__file__).read_text(encoding="utf-8")
+    assert "recover_pending_for_page(target_page, manual_path=trusted_manual_path)" in code

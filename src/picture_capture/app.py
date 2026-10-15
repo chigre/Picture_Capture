@@ -6575,6 +6575,10 @@ class ReviewWindow(tk.Toplevel):
             return "break"
         if not self.parent._claim_page_for_manual_edit():
             return "break"
+        if str(getattr(row_entries[int(index)], "candidate_id", "") or ""):
+            # Candidate deletion publishes disk before mutating Tk/Entry.
+            from .ui.review_candidate_delete_actions import delete_owned_review_candidate
+            return delete_owned_review_candidate(self, int(index), row_entries)
 
         # Only explicitly enabled, project-local evidence capture. Save the
         # *previous on-disk* PDIC before mutating any shared Entry objects.
@@ -6617,20 +6621,6 @@ class ReviewWindow(tk.Toplevel):
         if rendered_stem and hasattr(self, "_simplified_page_cache"):
             self._simplified_page_records(rendered_stem).pop(simplified_key, None)
             self._simplified_dirty_pages.add(rendered_stem)
-
-        # When the row came from a named OCR review candidate, remember the
-        # deletion as an explicit deselection so reopening/reprocessing the page
-        # does not silently resurrect a manually removed headword.
-        if entry.candidate_id:
-            candidate = self.parent.get_review_candidate(entry.candidate_id)
-            if candidate is not None:
-                candidate["selected"] = False
-                check_var = self.parent.candidate_check_vars.get(str(entry.candidate_id))
-                if check_var is not None:
-                    check_var.set(False)
-                self.parent._write_manual_override(
-                    candidate, selected=False, word=entry.word, engine="review_delete"
-                )
 
         if entry in self.parent.entries:
             self.parent.entries.remove(entry)
@@ -12921,7 +12911,12 @@ class PictureCaptureApp(tk.Tk):
                 self._save_current_page_by_mode(sync_editors=not review_saved)
         from .proofreading_transactions import recover_pending_for_page
         try:
-            if not recover_pending_for_page(self.project.images[index]):
+            target_page = self.project.images[index]
+            trusted_manual_path = (
+                ocr_cache_root(self.project.root)
+                / f"{target_page.stem}_manual_selection.json"
+            )
+            if not recover_pending_for_page(target_page, manual_path=trusted_manual_path):
                 self.status_var.set(
                     "R3 校对事务恢复需要人工处理：磁盘状态与恢复标记不匹配，本次未切页。"
                 )
