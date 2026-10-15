@@ -125,6 +125,10 @@ def write_ref_boxes(image_path: Path, boxes: list[RefBox] | tuple[RefBox, ...],
     target = ref_box_path(image_path)
     if ref_box_ticket(image_path) != expected_ticket:
         raise RuntimeError("REF file changed outside the editor; reload the page")
+    # Existing manually edited records must never be silently replaced if
+    # their structure is corrupt, even when the caller knows their hash.
+    if target.is_file():
+        read_ref_boxes(image_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     # A second check after mkdir narrows (but does not eliminate) race windows.
     if ref_box_ticket(image_path) != expected_ticket:
