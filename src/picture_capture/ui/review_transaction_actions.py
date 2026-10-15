@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 from typing import Any
-from ..proofreading_transactions import ReviewSessionHistory, snapshot_review
+from ..proofreading_transactions import snapshot_review
+from ..proofreading_candidate_history import CandidateReviewHistory
 from ..review_main_editor_sync import reconcile_main_editors_after_review
 
 
-def _history(review: Any) -> ReviewSessionHistory:
+def _history(review: Any) -> CandidateReviewHistory:
     found = review.__dict__.get("_r3_saved_edit_history")
     if found is None:
-        found = ReviewSessionHistory()
+        found = CandidateReviewHistory()
         review.__dict__["_r3_saved_edit_history"] = found
     return found
 
@@ -21,6 +22,16 @@ def capture_review_before(review: Any):
 def record_review_after(review: Any, before: Any, *, allow_unbound: bool = False) -> None:
     _history(review).record(
         before, snapshot_review(review, allow_unbound=allow_unbound),
+    )
+
+
+def record_owned_candidate_after(
+    review: Any, before: Any, candidate: dict[str, Any],
+    selected_before: bool | None, plan: Any,
+) -> bool:
+    return _history(review).record_candidate_delete(
+        before, snapshot_review(review, allow_unbound=True),
+        candidate, selected_before, plan,
     )
 
 
