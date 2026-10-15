@@ -42,6 +42,38 @@ def preview_bounds(width: int) -> tuple[int, int]:
     return width, round(width * 1.4)
 
 
+def visible_page_iids(tree: ttk.Treeview) -> list[str]:
+    """Find viewport rows without scanning all items or mistaking heading for row.
+
+    Used by both line-status overlays and thumbnail display. The image index
+    may have very tall rows, so locate the first visible item by y coordinate,
+    then walk stable Treeview item links until the viewport ends.
+    """
+    try:
+        height = max(1, int(tree.winfo_height()))
+        iid = ""
+        for probe_y in (1, 20, 40, 60, 80):
+            if probe_y >= height:
+                break
+            iid = tree.identify_row(probe_y)
+            if iid:
+                break
+        result: list[str] = []
+        while iid:
+            bbox = tree.bbox(iid)
+            if not bbox:
+                break
+            _x, y, _width, row_height = bbox
+            if y >= height:
+                break
+            if y + row_height > 0:
+                result.append(str(iid))
+            iid = tree.next(iid)
+        return result
+    except tk.TclError:
+        return []
+
+
 class PageThumbnailController:
     """Small Tk-only presentation controller; never modifies page content."""
 
@@ -255,7 +287,7 @@ class PageThumbnailController:
 
 
 __all__ = [
-    "PageThumbnailController", "normalized_thumbnail_width", "preview_bounds",
+    "PageThumbnailController", "visible_page_iids", "normalized_thumbnail_width", "preview_bounds",
     "DEFAULT_THUMBNAIL_WIDTH", "MIN_THUMBNAIL_WIDTH",
     "MAX_THUMBNAIL_WIDTH", "THUMBNAIL_STEP",
 ]
