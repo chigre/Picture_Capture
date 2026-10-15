@@ -10,6 +10,12 @@
 
 仍待 #503：candidate-linked 删除必须先建立拥有 candidate ID 的原子多文件操作，涵盖 manual_selection、PDIC、简体缓存和 UI checkbox，同一事务回滚，真实 Tk 自动保存/FocusOut/取消/跨页/关闭/重启测试。当前故意拒绝 candidate-linked Undo/Redo。不能把 #519 自动回归代替真实 Windows 人工操作，更不得关闭 #483 或标 R2/R3 verified。
 
+## #519 扩展：OCR candidate-linked 删除的三文件事务提交（待最终 CI）
+
+在同一个主题 PR 中继续 #503：新增 `proofreading_candidate_delete.py` 以唯一候选 ID、快照冻结 owner、来源原始文件校验生成删除计划，按保存 PDIC 的实际行识别一个原始记录，不用最近坐标/数组行号推断；原样保留其他 PDIC 行/8字段。新增 `proofreading_transactions.publish_owned_review_bundle`，以短期 v2 write-ahead 恢复标记同步 `pdic`、`manual_selection`、`simplified`，遇部分失败只在观察值属于原始/目标集合时回滚；重启恢复必须经 project root 推导的可信 OCR 文件路径，未知/伪造路径拒绝。原有 v1 PDIC+简体标记兼容。成功提交后 `ui.review_candidate_delete_actions` 才更新 Entry 实例归属、candidate.selected、Tk checkbox、简体缓存并重绘。保守拒绝 OCR 候选歧义、丢失源、脏 Tk 编辑、脏简体、无有效 PDIC 记录、其他页/损坏 JSON、R2 事件捕获已启用等情形；风险场景不得先修改 UI。
+
+回归：`tests/test_b3_candidate_owned_deletion_20261015.py` + 扩展 `test_b3_review_session_transactions_20261015.py`；真实 Tk 合成集成 `scripts/gui_r3_candidate_delete_smoke.py` 加入 Windows/macOS/Ubuntu CI，不包含真实扫描。为满足 architecture ratchet，已删除 `app.py` 内在新分流后不可达的旧侧写覆盖块，守卫基线保持不变。**该提交只证明候选删除能够事务保存，候选删除的 Undo/Redo 仍刻意禁用**；需要下一工作包引入有明确操作身份的持久快照双向恢复、checkbox/候选缓存同步与断点/重复 Undo×N/Redo×N、跨页/FocusOut/关闭场景的最终验收。不能把自动化 Tk 合成冒充真人 Windows 验收。最终 PR-head / main CI 结论以 Actions 实时数据为准，旧的失败检查不得伪称成功。
+
 ## 用户阶段授权
 
 2026-10-15 用户明确：「R2 暂不验收，继续 R3」。R2/B2 的 #483 和真人 Windows W1–W11 不关闭，也不标 verified。这是 R3 启动门槛的局部豁免，不是 R2 自动完成。
