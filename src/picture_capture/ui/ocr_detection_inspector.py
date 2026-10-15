@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk
 
 from ..formats import pdic_path
 from ..ocr_final_decisions import load_current_final_decisions
@@ -51,12 +52,61 @@ def summary_and_rows(report: dict[str, Any]) -> tuple[str, list[tuple[str, str, 
     return summary, rows
 
 
+def preview_markers(report: dict[str, Any]) -> list[tuple[int, int, str]]:
+    """Only saved final coordinates are plotted; no nearest-candidate inference."""
+    points: list[tuple[int, int, str]] = []
+    for candidate in report.get("candidate_decisions") or []:
+        if not candidate.get("final_selected"):
+            continue
+        x, y = candidate.get("final_source_x"), candidate.get("final_source_y")
+        if x is None or y is None:
+            continue
+        try:
+            points.append((int(x), int(y), str(candidate.get("final_status", "unknown"))))
+        except (TypeError, ValueError):
+            pass
+    for row in report.get("final_only") or []:
+        try:
+            points.append((int(row["x"]), int(row["y"]), "unlinked"))
+        except (KeyError, TypeError, ValueError):
+            pass
+    return points
+
+
+def _draw_saved_markers(canvas: tk.Canvas, app: Any, report: dict[str, Any], window: tk.Toplevel) -> None:
+    """An image-aligned, purely local inspection view; never redraw app canvas."""
+    source = getattr(app, "image", None)
+    if source is None or not isinstance(source, Image.Image):
+        return
+    thumb = source.copy()
+    try:
+        thumb.thumbnail((490, 530), Image.Resampling.LANCZOS)
+        size = thumb.size
+        photo = ImageTk.PhotoImage(thumb, master=window)
+    finally:
+        thumb.close()
+    window._ocr_decision_preview_photo = photo  # retain Tk image lifetime
+    canvas.configure(width=size[0], height=size[1], scrollregion=(0, 0, *size))
+    canvas.create_image(0, 0, image=photo, anchor="nw")
+    scale_x, scale_y = size[0] / source.width, size[1] / source.height
+    colors = {"retained": "#00ae55", "moved_by_post_ocr": "#fd6a13", "unlinked": "#2b65e8"}
+    for x, y, provenance in preview_markers(report):
+        if not (0 <= x < source.width and 0 <= y < source.height):
+            continue
+        px, py = x * scale_x, y * scale_y
+        color = colors.get(provenance, "#9950d0")
+        canvas.create_line(max(0, px - 18), py, min(size[0], px + 18), py,
+                           fill=color, width=2)
+        canvas.create_oval(px - 3, py - 3, px + 3, py + 3,
+                           outline=color, fill="#ffffff", width=2)
+
+
 def show_ocr_decision_inspector(app: Any) -> None:
     """Inspect the actual saved PDIC; if stale/missing, explain without guessing."""
     parent = getattr(app, "root", None) or app
     window = tk.Toplevel(parent)
     window.title("OCR画线／融合画线 · 最终决策可视化（只读）")
-    window.geometry("1000x630")
+    window.geometry("1280x690")
     body = ttk.Frame(window, padding=12)
     body.pack(fill="both", expand=True)
     ttk.Label(
@@ -65,8 +115,18 @@ def show_ocr_decision_inspector(app: Any) -> None:
     ).pack(anchor="w", pady=(0, 8))
     status = tk.StringVar(value="")
     ttk.Label(body, textvariable=status, wraplength=950).pack(anchor="w", pady=(0, 8))
+    content = ttk.Frame(body)
+    content.pack(fill="both", expand=True)
+    table_panel = ttk.Frame(content)
+    table_panel.pack(side="left", fill="both", expand=True)
+    preview_panel = ttk.Frame(content)
+    preview_panel.pack(side="right", fill="both", padx=(12, 0))
+    ttk.Label(preview_panel, text="最终已保存画线（只读）\n绿色：OCR保留  橙色：后处理移动  蓝色：独立最终词条",
+              justify="left").pack(anchor="w", pady=(0, 6))
+    preview_canvas = tk.Canvas(preview_panel, background="#f2f2f2", highlightthickness=0)
+    preview_canvas.pack(fill="both", expand=True)
     tree = ttk.Treeview(
-        body, columns=("id", "status", "word", "coord", "reason"),
+        table_panel, columns=("id", "status", "word", "coord", "reason"),
         show="headings", selectmode="browse",
     )
     for col, heading, width in (
@@ -76,7 +136,7 @@ def show_ocr_decision_inspector(app: Any) -> None:
     ):
         tree.heading(col, text=heading)
         tree.column(col, width=width, stretch=col in {"word", "reason"})
-    scroll = ttk.Scrollbar(body, orient="vertical", command=tree.yview)
+    scroll = ttk.Scrollbar(table_panel, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scroll.set)
     tree.pack(side="left", fill="both", expand=True)
     scroll.pack(side="right", fill="y")
@@ -97,3 +157,4 @@ def show_ocr_decision_inspector(app: Any) -> None:
     status.set(summary)
     for row in rows:
         tree.insert("", "end", values=row)
+    _draw_saved_markers(preview_canvas, app, data, window)
