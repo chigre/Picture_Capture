@@ -13622,15 +13622,10 @@ class PictureCaptureApp(tk.Tk):
             self.draw_cursor_guides(*self.cursor_canvas_xy)
 
         self._apply_current_appearance(self.canvas)
-        if self.ref_box_controller.editing:
-            draw_ocr_crop_preview(self)
-            draw_layout_visualization_if_enabled(self)
-        else:
-            draw_ocr_crop_preview(self)
         self.ref_box_controller.render()
         self.ref_box_controller.bind_overlay_widgets()
-        if not self.ref_box_controller.editing:
-            draw_layout_visualization_if_enabled(self)
+        draw_ocr_crop_preview(self)
+        draw_layout_visualization_if_enabled(self)
 
     def _update_view_zoom_label(self) -> None:
         self._canvas_controller_for_call().update_view_zoom_label()
