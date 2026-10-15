@@ -606,6 +606,12 @@ class RefBoxController:
             (b.x*s, b.y*s, (b.x+b.w)*s, (b.y+b.h)*s)
             for b in self.boxes
         ]
+        # Keep a selected OCR label above nearby Tk entry overlay windows
+        # during REF editing, just as for its original-image locator.
+        regions.extend(
+            (x0*s, y0*s, x1*s, y1*s)
+            for x0, y0, x1, y1 in self._label_rects.values()
+        )
         regions.extend(
             (x0*s, y0*s, x1*s, y1*s)
             for _box_id, _action, x0, y0, x1, y1
