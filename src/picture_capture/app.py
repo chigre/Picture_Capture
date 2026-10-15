@@ -135,6 +135,7 @@ from .ui.controllers import (
     HeadwordController, IllustrationController, PageController, ProjectController,
     ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
+from .ui.page_thumbnails import PageThumbnailController
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -7718,6 +7719,9 @@ class PictureCaptureApp(tk.Tk):
         self.appearance_mode = normalized
         self._configure_global_appearance()
         self._configure_main_workspace_styles()
+        previews = self.__dict__.get("_page_thumbnails")
+        if previews is not None:
+            previews.apply()  # Theme reconfiguration resets the Treeview rowheight.
         self._apply_current_appearance(self)
         from .ui.workspace_tools import (
             refresh_compact_header_buttons, refresh_macaron_action_buttons,
@@ -8358,6 +8362,10 @@ class PictureCaptureApp(tk.Tk):
                                 command=command, style="PC.PageNav.TButton")
             button.pack(side="left", padx=(0, 4))
             self._attach_tooltip(button, tip)
+        # First-column previews are controlled directly below the 下页 row,
+        # not by Settings Center.  The original table remains authoritative.
+        thumbnail_controls_host = ttk.Frame(nav_area, style="PC.Sidebar.TFrame")
+        thumbnail_controls_host.pack(fill="x")
         list_frame = ttk.Frame(page_panel)
         list_frame.grid(row=2, column=0, sticky="nsew")
         list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
@@ -8413,6 +8421,9 @@ class PictureCaptureApp(tk.Tk):
             "illustrations": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_illustrations", True))),
         }
         self._apply_page_list_display_columns(save=False)
+        self._page_thumbnails = PageThumbnailController(
+            self, self.page_list, thumbnail_controls_host,
+        )
 
         self.canvas = tk.Canvas(
             viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
@@ -8660,6 +8671,9 @@ class PictureCaptureApp(tk.Tk):
         def run() -> None:
             self._page_overlay_refresh_job = None
             self._refresh_lined_cell_overlays()
+            previews = self.__dict__.get("_page_thumbnails")
+            if previews is not None:
+                previews.request_visible()
 
         self._page_overlay_refresh_job = self.after_idle(run)
 
@@ -12682,6 +12696,9 @@ class PictureCaptureApp(tk.Tk):
             self.project = project
             self._project_words = set(project.words)
             self.settings = project.settings
+            previews = self.__dict__.get("_page_thumbnails")
+            if previews is not None:
+                previews.load_preferences()  # Clear previous project's preview images.
             self._preprocess_results.clear()
             self._preprocess_photo = None
             self._preprocess_photo_cache_key = None
