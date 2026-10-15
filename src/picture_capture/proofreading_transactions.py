@@ -32,6 +32,12 @@ class SavedSnapshot:
     simplified_bytes: bytes | None
     ocr_bytes: bytes | None
     candidates: tuple[tuple[str, str], ...]
+    # A frozen ownership fingerprint, not a late read from mutable Entry refs.
+    # Without this a user/OCR rerun could attach a candidate_id after record()
+    # and an old Undo would treat that candidate-owned row as plain text.
+    owner_ids: tuple[tuple[int, str], ...] = ()
+    manual_path: Path | None = None
+    ocr_path: Path | None = None
 
     def rows(self) -> dict[int, tuple[Any, str, int, int]]:
         return {id(item[0]): item for item in self.entries}
@@ -93,13 +99,20 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
             for c in getattr(app, "ocr_review_candidates", ())
             if isinstance(c, dict)
         ))
+        manual_path = manual_fn() if callable(manual_fn) else None
+        ocr_path = ocr_fn() if callable(ocr_fn) else None
         return SavedSnapshot(
             page=page, image_sha=sha256_file(page) or "",
             entries=ordered, pdic_bytes=raw,
-            manual_bytes=_bytes_or_absent(manual_fn() if callable(manual_fn) else None),
+            manual_bytes=_bytes_or_absent(manual_path),
             simplified_bytes=_bytes_or_absent(simplified_review_path_for_image(page)),
-            ocr_bytes=_bytes_or_absent(ocr_fn() if callable(ocr_fn) else None),
+            ocr_bytes=_bytes_or_absent(ocr_path),
             candidates=candidates,
+            owner_ids=tuple(sorted(
+                (id(entry), str(getattr(entry, "candidate_id", "") or ""))
+                for entry in app.entries
+            )),
+            manual_path=manual_path, ocr_path=ocr_path,
         )
     except (OSError, ValueError, TypeError):
         return None
@@ -112,9 +125,16 @@ def _undoable_committed_change(
             or before.image_sha != after.image_sha
             or before.candidates != after.candidates
             or before.manual_bytes != after.manual_bytes
-            or before.ocr_bytes != after.ocr_bytes):
+            or before.ocr_bytes != after.ocr_bytes
+            or before.manual_path != after.manual_path
+            or before.ocr_path != after.ocr_path):
         return False
     left, right = before.rows(), after.rows()
+    left_owners, right_owners = dict(before.owner_ids), dict(after.owner_ids)
+    if (set(left_owners) != set(left) or set(right_owners) != set(right)
+            or any(left_owners[key] != right_owners[key]
+                   for key in left.keys() & right.keys())):
+        return False
     removed = left.keys() - right.keys()
     added = right.keys() - left.keys()
     # A single direct UI-owned deletion (or its redo reversal) can be restored
@@ -130,7 +150,7 @@ def _undoable_committed_change(
     lost_or_added = next(iter(removed or added), None)
     if lost_or_added is not None:
         orphan = (left if removed else right)[lost_or_added][0]
-        if getattr(orphan, "candidate_id", None):
+        if (left_owners if removed else right_owners).get(lost_or_added):
             return False
     word_changed = False
     for identifier in left.keys() & right.keys():
@@ -138,7 +158,7 @@ def _undoable_committed_change(
         if old[0] is not new[0] or old[2:] != new[2:]:
             return False
         if old[1] != new[1]:
-            if getattr(old[0], "candidate_id", None):
+            if left_owners.get(identifier):
                 return False
             word_changed = True
     if before.pdic_bytes != after.pdic_bytes and not (word_changed or lost_or_added is not None):
@@ -288,7 +308,12 @@ def _publish_restored_snapshot(
     if (sha256_file(page) != expected.image_sha
             or _bytes_or_absent(pdic_path(page)) != expected.pdic_bytes
             or _bytes_or_absent(simplified_review_path_for_image(page))
-               != expected.simplified_bytes):
+               != expected.simplified_bytes
+            # OCR and manual-selection are read-only dependencies for the
+            # original R3 safe scope. Recheck immediately before publication;
+            # snapshot-time checks alone leave a TOCTOU window.
+            or _bytes_or_absent(expected.manual_path) != expected.manual_bytes
+            or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes):
         return False
     # One-file restore is already atomic. Two files require short-lived
     # write-ahead recovery so crash/restart cannot silently mis-pair them.
@@ -318,6 +343,9 @@ def _same_live_state(current: SavedSnapshot, expected: SavedSnapshot) -> bool:
         and current.simplified_bytes == expected.simplified_bytes
         and current.ocr_bytes == expected.ocr_bytes
         and current.candidates == expected.candidates
+        and current.owner_ids == expected.owner_ids
+        and current.manual_path == expected.manual_path
+        and current.ocr_path == expected.ocr_path
         and current.rows() == expected.rows()
     )
 
@@ -339,6 +367,11 @@ class ReviewSessionHistory:
         if self.undo_stack and (
             self.undo_stack[-1].after.pdic_bytes != before.pdic_bytes
             or self.undo_stack[-1].after.simplified_bytes != before.simplified_bytes
+            or self.undo_stack[-1].after.manual_bytes != before.manual_bytes
+            or self.undo_stack[-1].after.ocr_bytes != before.ocr_bytes
+            or self.undo_stack[-1].after.candidates != before.candidates
+            or self.undo_stack[-1].after.owner_ids != before.owner_ids
+            or self.undo_stack[-1].after.image_sha != before.image_sha
         ):
             self.invalidate()
         self.undo_stack.append(SavedEdit(before, after))
