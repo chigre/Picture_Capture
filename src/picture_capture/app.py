@@ -6624,19 +6624,7 @@ class ReviewWindow(tk.Toplevel):
             self._simplified_page_records(rendered_stem).pop(simplified_key, None)
             self._simplified_dirty_pages.add(rendered_stem)
 
-        # When the row came from a named OCR review candidate, remember the
-        # deletion as an explicit deselection so reopening/reprocessing the page
-        # does not silently resurrect a manually removed headword.
-        if entry.candidate_id:
-            candidate = self.parent.get_review_candidate(entry.candidate_id)
-            if candidate is not None:
-                candidate["selected"] = False
-                check_var = self.parent.candidate_check_vars.get(str(entry.candidate_id))
-                if check_var is not None:
-                    check_var.set(False)
-                self.parent._write_manual_override(
-                    candidate, selected=False, word=entry.word, engine="review_delete"
-                )
+        # OCR-linked delete is handled above by the durable owned bundle.
 
         if entry in self.parent.entries:
             self.parent.entries.remove(entry)
