@@ -21,7 +21,8 @@ def test_cache_is_project_local_and_contains_real_pixels(tmp_path):
     scan = make_scan(tmp_path / "scans" / "001.png", (245, 21, 31))
     original = scan.read_bytes()
     preview = disk.get_page_thumbnail(tmp_path, scan)
-    assert preview.size == (158, 224)
+    assert preview.height == 448
+    assert 300 <= preview.width <= 320
     assert preview.getpixel((5, 5)) == (245, 21, 31)
     cache = disk.thumbnail_cache_path(tmp_path, scan)
     assert cache.is_file()
@@ -88,47 +89,40 @@ def test_read_only_cache_falls_back_to_real_preview(tmp_path, monkeypatch):
     assert not disk.thumbnail_cache_path(tmp_path, scan).exists()
 
 
-class FakeApp:
-    def __init__(self, root, images):
-        self.project = SimpleNamespace(root=root, images=images)
-        self.workspace_mode = "正常"
-        self.jobs = []
-
-    def after(self, delay, callback):
-        self.jobs.append((delay, callback))
-        return str(len(self.jobs))
-
-    def after_cancel(self, _job):
-        return None
-
-
-class FakeBoolean:
-    def get(self):
-        return True
-
-
 def test_progressively_caches_all_pages_not_only_visible_ones(tmp_path):
+    from picture_capture.page_thumbnail_tasks import ThumbnailTasks
+    import time
+
     scans = [
         make_scan(tmp_path / "pages" / f"page{i}.png", (20 + i, 40 + i, 60 + i))
         for i in range(7)
     ]
-    app = FakeApp(tmp_path, scans)
-    controller = PageThumbnailController.__new__(PageThumbnailController)
-    controller.app = app
-    controller.enabled_var = FakeBoolean()
-    controller._warm_job = None
-    controller._warm_cursor = 0
-    controller._warm_project_key = None
-    controller._schedule_warm_cache()
-    steps = 0
-    while app.jobs:
-        _delay, callback = app.jobs.pop(0)
-        controller._warm_job = None
-        callback()
-        steps += 1
-        assert steps <= len(scans) + 2
-    assert controller._warm_cursor == len(scans)
-    assert all(disk.thumbnail_cache_path(tmp_path, page).exists() for page in scans)
+    pool = ThumbnailTasks(workers=2)
+    names = disk.thumbnail_name_map(scans)
+    finished = set()
+    next_index = 0
+    deadline = time.monotonic() + 10
+    try:
+        while len(finished) < len(scans) and time.monotonic() < deadline:
+            while next_index < len(scans) and pool.active < 2:
+                assert pool.submit(
+                    next_index, ("synthetic", next_index), tmp_path,
+                    scans[next_index], names,
+                ) is not None
+                next_index += 1
+            for result in pool.collect():
+                assert result.error is None, result.error
+                assert result.image.getpixel((0, 0)) == (
+                    20 + result.page_index,
+                    40 + result.page_index,
+                    60 + result.page_index,
+                )
+                finished.add(result.page_index)
+            time.sleep(0.005)
+    finally:
+        pool.shutdown()
+    assert len(finished) == len(scans)
+    assert all(disk.thumbnail_cache_path(tmp_path, page, names).exists() for page in scans)
 
 
 def test_filename_identity_prevents_cache_swap_between_same_stems(tmp_path):
@@ -154,7 +148,7 @@ def test_original_page_names_and_suffix_conflicts_are_flat(tmp_path):
     assert disk.thumbnail_cache_path(tmp_path, b, name_map).name == "080128.png"
     for scan in (a, b, c):
         preview = disk.get_page_thumbnail(tmp_path, scan, name_map)
-        assert preview.size[0] <= 160
+        assert preview.size[0] <= 320
         assert disk.thumbnail_cache_path(tmp_path, scan, name_map).is_file()
     names = [p.name for p in disk.thumbnail_cache_dir(tmp_path).iterdir()]
     assert len(names) == 3 and len(set(name.casefold() for name in names)) == 3
