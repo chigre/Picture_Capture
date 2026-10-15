@@ -40,6 +40,56 @@ def _nearest_row(column: Any, box: tuple[int, int, int, int], reference: float) 
     return nearest
 
 
+
+def _prefixed_multiline_display_head(
+    column: Any,
+    nearest: Any,
+    box: tuple[int, int, int, int],
+    reference: float,
+    first_x: float,
+) -> bool:
+    """Authorize a *physical* numbered prefix followed by one tall glyph.
+
+    A numeral/prefix at the left edge makes the first oversized-glyph row
+    appear body-like. Its lower slices can then independently look like entry
+    rows. Only rescue a sufficiently tall, bounded glyph whose top agrees
+    with a real row and whose ink front recurs on at least two later rows
+    inside the *same* glyph. OCR, digit identity, and row ordering are not
+    used as substitutes for those measurements.
+    """
+    x0, y0, x1, y1 = box
+    height = float(y1 - y0)
+    width = float(x1 - x0)
+    if height <= 0 or width <= 0:
+        return False
+    if not (
+        height >= 2.0 * reference
+        and 0.70 <= width / height <= 1.50
+        and width <= 3.50 * reference
+        and 0.50 * reference <= float(x0) - first_x <= 1.45 * reference
+        and abs(float(y0) - float(getattr(nearest, "y0", 0) or 0))
+        <= 0.12 * reference
+    ):
+        return False
+
+    aligned_rows = 0
+    for line in list(getattr(column, "lines", []) or []):
+        try:
+            row_y = float(getattr(line, "y0"))
+            row_x = float(getattr(line, "first_x"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if not (
+            float(y0) + 0.50 * reference <= row_y < float(y1)
+            and abs(row_x - float(x0)) <= 0.45 * reference
+        ):
+            continue
+        aligned_rows += 1
+        if aligned_rows >= 2:
+            return True
+    return False
+
+
 def strict_candidate_starts_at_row_front(
     column: Any,
     box: tuple[int, int, int, int],
@@ -84,7 +134,14 @@ def strict_candidate_starts_at_row_front(
         and 0.80 <= width / max(1.0, height) <= 1.20
         and abs(float(x0) - first_x) <= reference * 0.35
     )
-    if not (left_limit <= float(x0) <= right_limit) and not first_ink_large_square:
+    prefixed_head = _prefixed_multiline_display_head(
+        column, nearest, box, reference, first_x,
+    )
+    if not (
+        left_limit <= float(x0) <= right_limit
+        or first_ink_large_square
+        or prefixed_head
+    ):
         return False
 
     role = str(getattr(nearest, "role", "body") or "body").lower()
@@ -110,7 +167,7 @@ def strict_candidate_starts_at_row_front(
             and 0.80 <= width / height <= 1.20
             and width <= reference * 2.80
         )
-        if width > normal_width and not square_display_head:
+        if width > normal_width and not (square_display_head or prefixed_head):
             return False
         if height / width < 0.60:
             return False
