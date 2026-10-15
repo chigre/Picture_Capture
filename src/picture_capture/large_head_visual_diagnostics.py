@@ -9,6 +9,7 @@ not a claim that one detector alone caused the line.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from PIL import Image
@@ -141,6 +142,7 @@ def build_large_head_diagnostics(
     *,
     page_index: int = 0,
     page_sections: list[Any] | None = None,
+    source_image_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return diagnostic data from the *real*, unmodified CJK detection code."""
     from . import processing
@@ -160,6 +162,18 @@ def build_large_head_diagnostics(
         effective = effective_page_settings(
             settings, source.size, int(page_index),
         )
+        # This screen is strictly read-only. The saved-PPP source path is
+        # required in reuse mode, but must NOT be forwarded in auto-detection
+        # mode: doing so would persist new PPP candidates while showing a
+        # diagnostic and could overwrite manual illustration edits.
+        reuse_saved_ppp = (
+            bool(getattr(effective, "layout_mask_illustrations", False))
+            and bool(getattr(effective, "layout_mask_illustrations_use_existing", False))
+        )
+        saved_ppp_source = (
+            Path(source_image_path)
+            if reuse_saved_ppp and source_image_path is not None else None
+        )
         large_head_enabled = bool(_uses_cjk_large_heads(effective))
         ordinary_mode = str(getattr(
             effective, "detection_method", "",
@@ -176,6 +190,8 @@ def build_large_head_diagnostics(
                 from .layout_illustration_mask import mask_large_illustrations_for_layout
                 candidate_image, _stats = mask_large_illustrations_for_layout(
                     analysis, effective, profile_page_index=int(page_index),
+                    **({"source_image_path": saved_ppp_source}
+                       if saved_ppp_source is not None else {}),
                 )
             try:
                 trace: list[dict[str, Any]] = []
@@ -210,6 +226,8 @@ def build_large_head_diagnostics(
                     image, settings, profile_page_index=int(page_index),
                     page_sections=page_sections,
                     debug_trace=pipeline_trace,
+                    **({"source_image_path": saved_ppp_source}
+                       if saved_ppp_source is not None else {}),
                 )
                 result["ordinary_pipeline_stages"] = pipeline_trace.get("stages", [])
             result["final_lines"] = [{
