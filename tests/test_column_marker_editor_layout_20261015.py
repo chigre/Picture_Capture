@@ -6,6 +6,7 @@ are used; no private scans/PDIC fixtures and no claims about actual OCR accuracy
 from __future__ import annotations
 
 from types import SimpleNamespace
+import inspect
 
 import pytest
 from PIL import Image
@@ -208,7 +209,7 @@ def test_real_overlay_builder_100_percent_and_editor_delete_slot(monkeypatch, in
         w for w in windows if isinstance(w[2], _Button)
     )
     assert options["width"] == max(1, round(right - editor_x))
-    assert (_bx, button_options["anchor"]) == (float(right), "nw")
+    assert (_bx, button_options["anchor"]) == (float(right), "ne")
     assert app._entry_visuals[id(entry)]["delete_widget"] is _button
 
 
@@ -228,3 +229,22 @@ def test_delete_button_follows_marker_not_headword_label(
     assert set(classes) == set(expected)
     assert bool(lines) is show_markers
     assert ("delete_widget" in app._entry_visuals[id(entry)]) is show_markers
+
+
+@pytest.mark.parametrize("index,ratio", [(0, 50), (1, 50), (0, 75), (1, 75), (0, 100), (1, 100)])
+def test_entry_x_right_edge_equals_marker_right_at_any_ratio(monkeypatch, index, ratio):
+    app, lines, entry, geometry = _render(monkeypatch, index=index, ratio=ratio)
+    assert len(lines) == 1
+    line_right = max(lines[0][0], lines[0][2])
+    bx, by, button, placement = next(
+        item for item in app.canvas.windows if isinstance(item[2], _Button)
+    )
+    assert bx == float(line_right)
+    assert placement["anchor"] == "ne"
+
+
+def test_horizontal_ocr_choice_ends_at_marker_right_below_delete(monkeypatch):
+    app, lines, entry, geometry = _render(monkeypatch, index=0, ratio=50)
+    from picture_capture.ui import entry_overlay_builder as builder
+    assert "ocr_x = marker_right_screen_x" in inspect.getsource(builder.draw_entry_overlay)
+    assert "ocr_anchor = \"ne\"" in inspect.getsource(builder.draw_entry_overlay)
