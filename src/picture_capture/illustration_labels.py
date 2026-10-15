@@ -163,4 +163,42 @@ def user_edited_link(original: str, typed: str) -> str:
     return f"P_{int(old.group(1)):02d}|{old.group(2)}|{match.group(3)}{_origin_token(original)}"
 
 
-__all__ = ["illustration_labels", "label_text", "user_edited_link"]
+def write_ordered_auto_ppp(
+    write_path, manual: Sequence[PolygonRegion], accepted: Sequence[PolygonRegion],
+    image_path, settings, profile_page_index: int,
+) -> bool:
+    """Batch detector commits correctly numbered manual and AUTO regions.
+
+    The detector has already rejected overlaps. Reuse per-page Profile and
+    SECTION geometry, preserving AUTO tokens on disk for future redetection.
+    """
+    from pathlib import Path
+    from PIL import Image, ImageOps
+    from .formats import write_ppp
+    from .processing_core import derive_nominal_geometry
+    from .profile_semantics import effective_page_settings
+    from .page_sections import read_page_sections
+
+    source = Path(image_path)
+    with Image.open(source) as opened:
+        size = ImageOps.exif_transpose(opened).size
+    effective = effective_page_settings(settings, size, profile_page_index)
+    geometry = derive_nominal_geometry(size[0], size[1], effective)
+    regions = [
+        PolygonRegion(region.label, list(region.points))
+        for region in list(manual) + list(accepted)
+    ]
+    for index in range(len(manual), len(regions)):
+        regions[index].label = (
+            f"{source.stem}|AUTO_{index - len(manual) + 1:02d}|1|{source.stem}|"
+        )
+    names = illustration_labels(regions, source.stem, geometry, read_page_sections(source))
+    for region, label in zip(regions, names):
+        region.label = label
+    return write_ppp(write_path, regions, source.stem)
+
+
+__all__ = [
+    "illustration_labels", "label_text", "user_edited_link",
+    "write_ordered_auto_ppp",
+]
