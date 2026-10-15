@@ -80,6 +80,7 @@ class _Canvas:
 
 def test_auxiliary_delete_control_uses_headword_button_style_hover_and_tooltip(monkeypatch):
     monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
+    monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
     canvas = _Canvas()
     messages = []
     notes = []
@@ -87,7 +88,7 @@ def test_auxiliary_delete_control_uses_headword_button_style_hover_and_tooltip(m
     state = AuxiliaryLineEdits([AuxiliaryLine(520, 100)])
     app = SimpleNamespace(
         image=SimpleNamespace(width=1100, height=700),
-        settings=SimpleNamespace(column_width=400),
+        settings=SimpleNamespace(column_width=400, right_ratio=100, ocr_language="chi_sim"),
         view_scale=1.0,
         canvas=canvas,
         overlay_widgets=[],
@@ -113,7 +114,7 @@ def test_auxiliary_delete_control_uses_headword_button_style_hover_and_tooltip(m
     assert placement["anchor"] == "ne"
     assert button.options["text"] == "[X]"
     assert button.options["cursor"] == "hand2"  # Tk restores parent cursor on leave.
-    assert button.options["font"] == overlay_delete_button.DELETE_BUTTON_FONT
+    assert button.options["font"] == ("Arial", 9, "bold")
     assert notes == [(button, "点击删除该辅助线!")]
     assert button._pc_skip_classic_appearance is True
 
@@ -154,3 +155,31 @@ def test_auxiliary_hit_target_matches_visible_last_column_not_page_remainder(mon
     assert ctrl._nearest(950, 100) is None
     assert ctrl._nearest(1090, 100) is None
 
+
+
+@pytest.mark.parametrize("ratio,end", [(100, 920.0), (75, 820.0), (50, 720.0)])
+def test_auxiliary_length_matches_entry_marker_ratio_and_hit_bound(
+    monkeypatch, ratio, end,
+):
+    from picture_capture import auxiliary_line_controller as mod
+    from picture_capture.overlay_layout_helpers import canonical_headword_marker_span
+    monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
+    monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
+    monkeypatch.setattr(mod, "column_index_for_click", lambda *_args: 1)
+    canvas = _Canvas()
+    app = SimpleNamespace(
+        image=SimpleNamespace(width=1100, height=700),
+        settings=SimpleNamespace(column_width=400, right_ratio=ratio, ocr_language="chi_sim"),
+        view_scale=1.0, canvas=canvas, overlay_widgets=[],
+        _auxiliary_edits=AuxiliaryLineEdits([AuxiliaryLine(520, 100)]),
+        _auxiliary_drag=None, auxiliary_mode_var=SimpleNamespace(get=lambda: False),
+        _get_cached_display_geometry=lambda: _geometry(),
+        _attach_tooltip=lambda *_args: None,
+    )
+    controller = AuxiliaryLineController(app)
+    controller.redraw()
+    expected = canonical_headword_marker_span(520, 400, ratio)
+    assert expected == (520, int(end))
+    assert canvas.lines[0][0][0:3:2] == expected
+    assert controller._nearest(end, 100) == 0
+    assert controller._nearest(end + 1, 100) is None
