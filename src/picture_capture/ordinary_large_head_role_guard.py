@@ -67,8 +67,11 @@ def _prefixed_multiline_display_head(
         and 0.70 <= width / height <= 1.50
         and width <= 3.50 * reference
         and 0.50 * reference <= float(x0) - first_x <= 1.45 * reference
+        # Printed superscripts/numbering may start the physical row before
+        # the large glyph ink. Keep the row-front contract (under half a row);
+        # a one-row-late ordinary character must not acquire this exception.
         and abs(float(y0) - float(getattr(nearest, "y0", 0) or 0))
-        <= 0.12 * reference
+        <= 0.40 * reference
     ):
         return False
 
@@ -86,6 +89,12 @@ def _prefixed_multiline_display_head(
             continue
         aligned_rows += 1
         if aligned_rows >= 2:
+            return True
+        # A compact ~2-row display glyph has only ONE physical continuation.
+        # This is still strong when a real numbering prefix, near-square tall
+        # glyph, near-top alignment and matching continuation front coexist.
+        # Taller regions keep the stricter two-continuation requirement.
+        if aligned_rows == 1 and height <= 2.20 * reference:
             return True
     return False
 
