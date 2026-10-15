@@ -84,3 +84,71 @@ def test_sort_does_not_change_border_geometry_or_page_identity():
     reversed_tree = FakeTable(scroll=12, reversed_rows=True)
     assert page_grid_segments(usual) == page_grid_segments(reversed_tree)
     assert usual.identify_row(27) != reversed_tree.identify_row(27)
+
+
+class TtkResizeGripTable(FakeTable):
+    """The native ttk column hit-test changes AFTER a draggable separator.
+
+    The screenshot showed heading boundaries ~5 logical pixels to the LEFT
+    of the current overlay. bbox() carries exact native heading/body geometry.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.column_edges = [1, 91, 136, 266, 326]
+        self._scroll_x = 0
+        self._hitbox_bias = 5
+
+    def identify_column(self, x):
+        for index, edge in enumerate(self.column_edges[1:], 1):
+            if x < edge + self._hitbox_bias - self._scroll_x:
+                return f"#{index - 1}"
+        return ""
+
+    def bbox(self, iid, column):
+        if iid not in self.rows:
+            return ""
+        try:
+            position = int(str(column).replace("#", ""))
+        except ValueError:
+            return ""
+        if position >= len(self.column_edges) - 1:
+            return ""
+        start = self.column_edges[position] - self._scroll_x
+        width = self.column_edges[position + 1] - self.column_edges[position]
+        return (start, 24, width, self.row_height)
+
+
+def test_real_cell_bounds_avoid_resize_grip_hitbox_offset():
+    tree = TtkResizeGripTable()
+    # The old implementation placed these lines at 95, 140, 270 rather
+    # than on the native header/cell edges at 90, 135, 265.
+    border_x = [
+        line[0] for line in page_grid_segments(tree)
+        if line[2] == 1
+    ]
+    assert border_x == [90, 135, 265], border_x
+
+
+def test_separator_geometry_follows_scroll_and_resized_columns():
+    tree = TtkResizeGripTable()
+    tree.scroll = 28
+    assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == [
+        90, 135, 265,
+    ]
+    tree._scroll_x = 40
+    assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == [
+        50, 95, 225, 285,
+    ]
+    tree._scroll_x = 0
+    tree.column_edges = [1, 111, 156, 286, 346]
+    assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == [
+        110, 155, 285,
+    ]
+
+
+def test_missing_unlaid_out_bbox_skips_inaccurate_separator_not_shifts():
+    tree = TtkResizeGripTable()
+    tree.bbox = lambda iid, column: ""
+    assert not [line for line in page_grid_segments(tree) if line[2] == 1]
+    assert [line for line in page_grid_segments(tree) if line[3] == 1]
