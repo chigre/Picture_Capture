@@ -21,6 +21,7 @@ from PIL import Image, ImageTk
 from picture_capture.project_storage import settings_path
 from picture_capture.page_thumbnail_cache import (
     display_page_thumbnail, get_page_thumbnail, source_fingerprint,
+    thumbnail_name_map,
 )
 
 
@@ -78,6 +79,31 @@ def visible_page_iids(tree: ttk.Treeview) -> list[str]:
         return []
 
 
+def prioritized_page_indices(
+    count: int, current_index: int, displayed_iids: list[str] | tuple[str, ...],
+) -> list[int]:
+    """First the viewed page, then the rows below it in the current sort.
+
+    Pages above the active row follow afterward. No page is omitted even if
+    the Treeview is still being built, is filtered, or contains invalid iids.
+    """
+    ordered: list[int] = []
+    seen: set[int] = set()
+    for raw in displayed_iids:
+        try:
+            index = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= index < count and index not in seen:
+            ordered.append(index)
+            seen.add(index)
+    ordered.extend(index for index in range(count) if index not in seen)
+    if not ordered:
+        return []
+    pivot = ordered.index(current_index) if current_index in seen or current_index in ordered else 0
+    return ordered[pivot:] + ordered[:pivot]
+
+
 class PageThumbnailController:
     """Small Tk-only presentation controller; never modifies page content."""
 
@@ -93,6 +119,11 @@ class PageThumbnailController:
         self._warm_job: str | None = None
         self._warm_cursor = 0
         self._warm_project_key: tuple | None = None
+        self._warm_priority_key: tuple | None = None
+        self._warm_order: list[int] = []
+        self._warm_done: set[int] = set()
+        self._cache_project_key: tuple | None = None
+        self._cache_names: dict[str, str] = {}
         self._empty_view_retries = 0
         self.row = ttk.Frame(host, style="PC.Sidebar.TFrame")
         self.row.pack(fill="x", pady=(2, 3))
@@ -175,6 +206,11 @@ class PageThumbnailController:
         self._clear_images()
         self._warm_cursor = 0
         self._warm_project_key = None
+        self._warm_priority_key = None
+        self._warm_order = []
+        self._warm_done = set()
+        self._cache_project_key = None
+        self._cache_names = {}
         settings = self.app.settings
         self.enabled_var.set(bool(getattr(settings, "page_list_show_thumbnails", False)))
         self.width = normalized_thumbnail_width(
@@ -300,15 +336,28 @@ class PageThumbnailController:
         except tk.TclError:
             pass
 
+    def _cache_names_for_project(self) -> dict[str, str]:
+        """Build the collision-proof name plan once, not for every page."""
+        project = getattr(self.app, "project", None)
+        if project is None:
+            return {}
+        key = (str(project.root), id(project), len(project.images))
+        if key != getattr(self, "_cache_project_key", None):
+            self._cache_names = thumbnail_name_map(project.images)
+            self._cache_project_key = key
+        return self._cache_names
+
     def _make_photo(self, path: Path) -> ImageTk.PhotoImage:
-        # Generate/reuse the persistent full-size cache first, then scale the
-        # small RGB preview only; no repeated full-scan decode when resizing.
-        preview = display_page_thumbnail(self.app.project.root, path, self.width)
+        # A single cached master supports every [-]/[默]/[+] width.
+        preview = display_page_thumbnail(
+            self.app.project.root, path, self.width, self._cache_names_for_project(),
+        )
         return ImageTk.PhotoImage(preview, master=self.tree)
 
     def project_rows_ready(self) -> None:
         """Called after the page Treeview has been populated for this project."""
         self._empty_view_retries = 0
+        self._warm_priority_key = None  # Treeview now contains actual sorted rows.
         if self._visible_enabled():
             try:
                 self.tree.xview_moveto(0.0)
@@ -317,8 +366,37 @@ class PageThumbnailController:
         self.request_visible()
         self._schedule_warm_cache()
 
+    def _warm_priority(self, project: Any) -> tuple:
+        """Fast key used to reprioritize on current-page/sort changes."""
+        current = getattr(self.app, "current_index", 0)
+        try:
+            current = int(current)
+        except (TypeError, ValueError):
+            current = 0
+        if not 0 <= current < len(project.images):
+            current = 0
+        return (
+            current, getattr(self.app, "_page_list_sort_column", None),
+            bool(getattr(self.app, "_page_list_sort_descending", False)),
+            len(project.images),
+        )
+
+    def _rebuild_warm_order(self, project: Any) -> None:
+        priority = self._warm_priority(project)
+        if priority == getattr(self, "_warm_priority_key", None):
+            return
+        try:
+            displayed = self.tree.get_children("")
+        except (AttributeError, tk.TclError):
+            displayed = tuple(str(i) for i in range(len(project.images)))
+        ordered = prioritized_page_indices(len(project.images), priority[0], displayed)
+        done = getattr(self, "_warm_done", set())
+        self._warm_order = [index for index in ordered if index not in done]
+        self._warm_cursor = 0
+        self._warm_priority_key = priority
+
     def _schedule_warm_cache(self) -> None:
-        """Populate every project's cache incrementally without preloading Tk."""
+        """Generate current page, followed by pages below it, then the rest."""
         if not self._visible_enabled() or self._warm_job is not None:
             return
         project = getattr(self.app, "project", None)
@@ -327,8 +405,10 @@ class PageThumbnailController:
         project_key = (str(project.root), id(project))
         if project_key != self._warm_project_key:
             self._warm_project_key = project_key
-            self._warm_cursor = 0
-        if self._warm_cursor >= len(project.images):
+            self._warm_priority_key = None
+            self._warm_done = set()
+        self._rebuild_warm_order(project)
+        if self._warm_cursor >= len(self._warm_order):
             return
         try:
             self._warm_job = self.app.after(90, self._warm_step)
@@ -342,20 +422,26 @@ class PageThumbnailController:
         project = getattr(self.app, "project", None)
         if project is None or (str(project.root), id(project)) != self._warm_project_key:
             return
-        if self._warm_cursor >= len(project.images):
+        # A navigation jump can happen mid-generation. Process its nearby
+        # ungenerated pages next without losing earlier completed work.
+        self._rebuild_warm_order(project)
+        if self._warm_cursor >= len(self._warm_order):
             return
-        image = Path(project.images[self._warm_cursor])
+        index = self._warm_order[self._warm_cursor]
         self._warm_cursor += 1
+        image = Path(project.images[index])
         try:
-            get_page_thumbnail(project.root, image)
+            get_page_thumbnail(project.root, image, self._cache_names_for_project())
         except (OSError, ValueError, SyntaxError):
-            # Missing/corrupt page never blocks the rest of the project's cache.
+            # A corrupt/missing scan never blocks the rest of the project.
             pass
+        self._warm_done.add(index)
         self._schedule_warm_cache()
 
 
 __all__ = [
-    "PageThumbnailController", "visible_page_iids", "normalized_thumbnail_width", "preview_bounds",
+    "PageThumbnailController", "prioritized_page_indices", "visible_page_iids",
+    "normalized_thumbnail_width", "preview_bounds",
     "DEFAULT_THUMBNAIL_WIDTH", "MIN_THUMBNAIL_WIDTH",
     "MAX_THUMBNAIL_WIDTH", "THUMBNAIL_STEP",
 ]
