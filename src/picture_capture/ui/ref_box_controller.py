@@ -636,7 +636,10 @@ class RefBoxController:
             self.app.canvas.delete("ref-box")
         self._overlay_images = []
         self._label_rects.clear()
-        if not self._ready() or not (self.editing or getattr(self.app.settings, "ref_box_show", True)):
+        if not self._ready():
+            return
+        if not (self.editing or getattr(self.app.settings, "ref_box_show", True)
+                or getattr(self.app.settings, "ref_box_show_text", True)):
             return
         app = self.app
         s = app.view_scale
@@ -660,22 +663,21 @@ class RefBoxController:
         for box in self.boxes:
             xx, yy, ww, hh = (round(box.x*s), round(box.y*s),
                               max(1, round(box.w*s)), max(1, round(box.h*s)))
-            fill_color, fill_opacity = ref_box_background(box.text, config)
-            opacity = min(100.0, max(0.0, fill_opacity))
-            try:
-                rgb = ImageColor.getrgb(fill_color)
-            except ValueError:
-                rgb = (200, 230, 201) if box.text.strip() else (255, 224, 178)
-            if opacity > 0:
-                rgba = Image.new("RGBA", (ww, hh), (*rgb, round(opacity*255/100)))
-                photo = ImageTk.PhotoImage(rgba)
-                self._overlay_images.append(photo)
-                app.canvas.create_image(
-                    xx, yy, image=photo, anchor="nw", tags=("ref-box",),
-                )
-            # The REF itself remains on the original text. Keep its outline
-            # visible in both browsing and editing; never draw OCR letters on it.
-            if True:
+            show_frame = self.editing or getattr(config, "ref_box_show", True)
+            if show_frame:
+                fill_color, fill_opacity = ref_box_background(box.text, config)
+                opacity = min(100.0, max(0.0, fill_opacity))
+                try:
+                    rgb = ImageColor.getrgb(fill_color)
+                except ValueError:
+                    rgb = (200, 230, 201) if box.text.strip() else (255, 224, 178)
+                if opacity > 0:
+                    rgba = Image.new("RGBA", (ww, hh), (*rgb, round(opacity*255/100)))
+                    photo = ImageTk.PhotoImage(rgba)
+                    self._overlay_images.append(photo)
+                    app.canvas.create_image(
+                        xx, yy, image=photo, anchor="nw", tags=("ref-box",),
+                    )
                 selected = self.editing and box.id == self.selected_id
                 app.canvas.create_rectangle(
                     xx, yy, xx+ww, yy+hh,
