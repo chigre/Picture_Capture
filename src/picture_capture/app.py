@@ -9026,9 +9026,15 @@ class PictureCaptureApp(tk.Tk):
             return []
         try:
             height = max(1, int(self.page_list.winfo_height()))
-            iid = self.page_list.identify_row(1)
-            if not iid:
-                iid = self.page_list.identify_row(min(height - 1, 20))
+            # The Treeview heading occupies the top 25–40 px; a probe only
+            # at y=1/20 can miss every row when thumbnails increase rowheight.
+            iid = ""
+            for probe_y in (1, 20, 40, 60, 80):
+                if probe_y >= height:
+                    break
+                iid = self.page_list.identify_row(probe_y)
+                if iid:
+                    break
             if not iid:
                 return []
             visible: list[str] = []
