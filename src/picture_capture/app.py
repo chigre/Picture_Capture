@@ -12843,11 +12843,12 @@ class PictureCaptureApp(tk.Tk):
                 self._apply_page_list_sort(ensure_current_visible=False)
             else:
                 self._update_page_list_sort_headings()
-            self._page_thumbnails.project_rows_ready()
             self._page_meta_job = self.after_idle(lambda g=generation: self._refresh_page_metadata_step(g, 0))
             self.view_scale = view_scale
             self._set_page_list_selection(selected_index, ensure_visible=True)
             self.load_page(selected_index, preloaded=payload, skip_current_save=True)
+            # Only warm after the selected page and Treeview viewport are ready.
+            self._page_thumbnails.project_rows_ready()
             self._save_session_state()
             if launch_profile_setup:
                 # A new project starts from the documented release workspace even
