@@ -8579,8 +8579,7 @@ class PictureCaptureApp(tk.Tk):
 
         header_font = font.nametofont("TkHeadingFont")
         body_font = font.nametofont("TkDefaultFont")
-        # Size to content instead of giving "page" a disproportionate share
-        # of the entire sidebar width. Keep long filenames scrollable.
+        # Preserve content-sized page columns and horizontal scrolling.
         page_names = (
             page.stem for page in getattr(self.project, "images", ())
         ) if self.project else ()
@@ -8661,12 +8660,7 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def _schedule_page_cell_overlay_refresh(self) -> None:
-        """Coalesce Treeview cell-overlay repaints into one idle callback.
-
-        Treeview can emit many yscroll/configure callbacks while rows are being
-        inserted or metadata is filled.  Scheduling a repaint for each callback
-        made large projects appear to hang during startup.
-        """
+        """Coalesce visible table colors, cell borders and thumbnails on idle."""
         if not hasattr(self, "page_list"):
             return
         if self._page_overlay_refresh_job is not None:
@@ -9030,13 +9024,7 @@ class PictureCaptureApp(tk.Tk):
         return visible_page_iids(self.page_list) if hasattr(self, "page_list") else []
 
     def _refresh_lined_cell_overlays(self) -> None:
-        """Paint semantic colors only for visible page-list cells.
-
-        Tk/ttk Treeview tags color whole rows rather than individual cells, so
-        child Labels are placed over the relevant cells.  v2.9.13 keeps the
-        v2.9.12 color semantics but repaints only visible rows and coalesces
-        callbacks, preventing large projects from stalling during list startup.
-        """
+        """Paint status-cell labels for visible rows; grid paints afterwards."""
         if not hasattr(self, "page_list"):
             return
         self._clear_lined_cell_overlays()
