@@ -12,6 +12,8 @@ import uuid
 import numpy as np
 from PIL import Image
 
+from .image_utils import normalize_page_rgb
+
 from .formats import pdic_path, read_pdic
 from .page_sections import read_page_sections
 from .ref_boxes import (
@@ -32,13 +34,14 @@ def list_ref_samples(project_root: Path) -> list[Path]:
 def add_ref_sample(image_path: Path, source_box: tuple[int, int, int, int]) -> Path:
     """Store only an explicitly user-selected rectangle; never a full scan."""
     page = Path(image_path)
-    with Image.open(page) as source:
+    with Image.open(page) as opened:
+        source = normalize_page_rgb(opened)
         x0, y0, x1, y1 = map(int, source_box)
         if not (0 <= x0 < x1 <= source.width and 0 <= y0 < y1 <= source.height):
             raise ValueError("REF template selection exceeds the page")
         if x1 - x0 < 4 or y1 - y0 < 4:
             raise ValueError("REF template crop is too small")
-        sample = source.convert("RGB").crop((x0, y0, x1, y1))
+        sample = source.crop((x0, y0, x1, y1))
     target_dir = ref_sample_root(page.parent)
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"ref_sample_{uuid.uuid4().hex}.png"
@@ -210,7 +213,7 @@ def detect_ref_boxes_page(image_path: Path, settings, page_index: int) -> dict:
     if not samples:
         return {"status": "skipped_no_samples", "page": page.name, "added": 0}
     with Image.open(page) as opened:
-        image = opened.convert("RGB")
+        image = normalize_page_rgb(opened)
     try:
         matches = match_ref_templates(
             image, samples,
