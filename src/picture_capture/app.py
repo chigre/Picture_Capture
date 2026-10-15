@@ -131,6 +131,8 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.settings import illustration as _settings_illustration_ui
+from .ui.settings import ref_box as _settings_ref_box_ui
+from .ui.ref_box_controller import RefBoxController
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
     HeadwordController, IllustrationController, PageController, ProjectController,
@@ -618,7 +620,7 @@ class SettingsDialog(tk.Toplevel):
             widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
             return widget
-        if name in {"main_entry_font_family", "review_entry_font_family"}:
+        if name in {"main_entry_font_family", "review_entry_font_family", "ref_box_font_family"}:
             families = (
                 AUTO_FONT_FAMILY,
                 *tuple(sorted(set(font.families()), key=str.casefold)),
@@ -1073,6 +1075,7 @@ class SettingsDialog(tk.Toplevel):
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
+        ref_box_tab = ttk.Frame(notebook)
         performance_tab = ttk.Frame(notebook)
         separator_y_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
@@ -1088,6 +1091,7 @@ class SettingsDialog(tk.Toplevel):
             (normal_tab, "普通画线"),
             (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
+            (ref_box_tab, "REF框"),
             (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
@@ -1103,6 +1107,7 @@ class SettingsDialog(tk.Toplevel):
             "normal": normal_tab,
             "separator_y": separator_y_tab,
             "illustration": illustration_tab,
+            "ref_box": ref_box_tab,
             "performance": performance_tab,
             "ocr": ocr_tab,
             "display": display_tab,
@@ -1309,6 +1314,7 @@ class SettingsDialog(tk.Toplevel):
         )
 
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
+        _settings_ref_box_ui.build_ref_box_settings_tab(self, ref_box_tab)
         performance_page = self._scrollable_settings_page(performance_tab)
         self._settings_intro(
             performance_page, "性能测试与诊断",
@@ -1781,6 +1787,7 @@ class SettingsDialog(tk.Toplevel):
         try:
             _settings_lifecycle_ui.validate_projection_width(self.vars)
             _settings_lifecycle_ui.validate_separator_gap_controls(self.vars)
+            _settings_lifecycle_ui.validate_ref_box_controls(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)
@@ -1880,6 +1887,9 @@ class SettingsDialog(tk.Toplevel):
             )
             self.parent.settings.illustration_label_font_family = normalize_content_font_setting(
                 self.parent.settings.illustration_label_font_family
+            )
+            self.parent.settings.ref_box_font_family = normalize_content_font_setting(
+                self.parent.settings.ref_box_font_family
             )
             self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
             self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
@@ -7305,6 +7315,7 @@ class PictureCaptureApp(tk.Tk):
             fill_page_entries=_fill_page_entries,
         )
         self.illustration_controller = IllustrationController(self)
+        self.ref_box_controller = RefBoxController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -8472,7 +8483,8 @@ class PictureCaptureApp(tk.Tk):
         # Explicit modifier binding keeps the new auxiliary gesture discoverable;
         # section and PPP editing retain their existing Shift-click behavior.
         self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
-        self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
+        self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
+        self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
@@ -9542,6 +9554,7 @@ class PictureCaptureApp(tk.Tk):
                 text="退出预处理模式" if active else "进入预处理模式"
             )
         if active:
+            self.ref_box_controller.stop_edit()
             self._section_editing = False
             self._drag_section_boundary = None
             self.polygon_draw_var.set(False)
@@ -12927,6 +12940,7 @@ class PictureCaptureApp(tk.Tk):
             return
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
+        self.ref_box_controller.load_page(self.current_page)
         use_preloaded = bool(
             preloaded
             and preloaded.get("index") == index
@@ -13396,6 +13410,7 @@ class PictureCaptureApp(tk.Tk):
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
+        self.ref_box_controller.render()
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
@@ -14083,9 +14098,19 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_auxiliary_mode(self) -> None:
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
         self._auxiliary_controller.toggle_mode()
 
+    def toggle_ref_box_edit(self) -> None:
+        self.ref_box_controller.toggle_edit()
+
+    def recognize_ref_boxes(self) -> None:
+        self.ref_box_controller.recognize_selected_scope()
+
     def toggle_polygon_drawing(self) -> None:
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
         if self._batch_active and self._batch_allow_pdic_edits:
             self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
             return
@@ -14116,6 +14141,8 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_double_click(self, event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.double_click(*self.original_xy(event))
         """Finish SECTION editing by double-clicking anywhere on the page image."""
         if self._preprocess_mode_active():
             return "break"
@@ -14128,6 +14155,9 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_left_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            if self.guard(): return self.ref_box_controller.press(*self.original_xy(event))
+            return
         if not self.guard():
             return
         x, y = self.original_xy(event)
@@ -14211,6 +14241,8 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_drag(self, event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.drag(*self.original_xy(event))
         if self._preprocess_mode_active():
             return "break"
         if self.image is None:
@@ -14247,6 +14279,8 @@ class PictureCaptureApp(tk.Tk):
         return None
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.release(*self.original_xy(_event))
         if self._preprocess_mode_active():
             return "break"
         if self.auxiliary_mode_var.get():
@@ -14289,6 +14323,8 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_right_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.context_menu(event)
         if getattr(event, "state", 0) & 0x0001:
             self._canvas_shift_right_click(event)
             return
