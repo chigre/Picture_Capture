@@ -152,3 +152,46 @@ def test_missing_unlaid_out_bbox_skips_inaccurate_separator_not_shifts():
     tree.bbox = lambda iid, column: ""
     assert not [line for line in page_grid_segments(tree) if line[2] == 1]
     assert [line for line in page_grid_segments(tree) if line[3] == 1]
+
+
+class NativeColumnGeometry(TtkResizeGripTable):
+    """Tk-style column API whose final resize hitbox is outside viewport."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from types import SimpleNamespace
+
+        self.tk = SimpleNamespace(
+            splitlist=lambda value: value if isinstance(value, tuple) else tuple(value.split()),
+        )
+
+    def cget(self, name):
+        return {
+            "columns": ("bookmark", "page", "lined"),
+            "displaycolumns": ("#all",),
+            "show": ("tree", "headings"),
+        }[name]
+
+    def bbox(self, iid, column):
+        aliases = {"bookmark": "#1", "page": "#2", "lined": "#3"}
+        return super().bbox(iid, aliases.get(column, column))
+
+
+def test_native_columns_include_final_boundary_when_resize_grip_is_offscreen():
+    tree = NativeColumnGeometry(width=304)
+    tree._scroll_x = 26
+    # The final cell ends at x=299 but identify_column() won't reach
+    # the empty hitbox until x=305 (already outside the widget).
+    assert tree.identify_column(303) == "#3"
+    vertical = [line[0] for line in page_grid_segments(tree) if line[2] == 1]
+    assert vertical == [64, 109, 239, 299]
+
+
+def test_native_column_enumeration_keeps_all_boundaries_after_scroll_and_sort():
+    tree = NativeColumnGeometry(width=310, scroll=39, reversed_rows=True)
+    expected = [90, 135, 265]
+    assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == expected
+    tree._scroll_x = 40
+    assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == [
+        50, 95, 225, 285,
+    ]
