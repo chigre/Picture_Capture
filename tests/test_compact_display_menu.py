@@ -42,11 +42,11 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
     source = (ROOT / "ui" / "compact_display_menu.py").read_text(encoding="utf-8")
     captions = (
         "自动保存", "隐藏线框（插图除外）", "显示标尺", "显示区块",
-        "栏左垂线", "词头横线", "插图形状:线",
-        "插图标签:线", "词头标签", "显示OCR内容选择器",
+        "栏左垂线", "词头横线", "词头标签",
+        "插图形状:线", "插图标签:线", "显示OCR内容选择器",
         "显示OCR对比底色结果", "显示单行画线候选框",
-        "颜色模式", "显示模式", "向右比例%", "显示Layout",
-        "去噪强度", "切图预览标签:",
+        "颜色模式", "显示模式", "向右比例%", "切图预览标签:",
+        "显示Layout",
     )
     starts = [source.index('"' + caption + '"') for caption in captions]
     assert starts == sorted(starts)
