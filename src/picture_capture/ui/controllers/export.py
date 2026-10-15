@@ -150,7 +150,8 @@ class ExportController:
             "1. 程序普通画线的自动 baseline（优先使用当时捕获的原始快照）；\n"
             "2. 当前人工增删后的最终 PDIC；\n"
             "3. added / deleted / moved / unchanged 逐条差异；\n"
-            "4. 页面排版/indent family 诊断与 OCR/PPP 上下文。\n\n"
+            "4. 页面排版/indent family 诊断与 OCR/PPP 上下文；\n"
+            "5. 每页【统一Layout诊断 JSON】（含候选、物理行角色与自动线）。\n\n"
             "如果旧页面没有历史 baseline，导出时会非破坏性重跑一次，并明确标记为 recomputed。\n\n"
             "请确认最终 PDIC 已人工校对。继续？",
             parent=app,
