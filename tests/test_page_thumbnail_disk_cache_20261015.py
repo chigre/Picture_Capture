@@ -218,3 +218,38 @@ def test_read_only_duplicate_name_respects_original_pixels(tmp_path, monkeypatch
     monkeypatch.setattr(disk, "_publish_cache", lambda *_args: (_ for _ in ()).throw(PermissionError()))
     assert disk.get_page_thumbnail(tmp_path, a, names).getpixel((1, 1)) == (255, 0, 0)
     assert disk.get_page_thumbnail(tmp_path, b, names).getpixel((1, 1)) == (0, 0, 255)
+
+
+def test_master_thumbnail_keeps_all_corners_instead_of_center_cropping(tmp_path):
+    source = tmp_path / "wide-layout.png"
+    image = Image.new("RGB", (1200, 720), "white")
+    # Illustration marks at the page edges must remain visible in index.
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, 150, 140), fill=(255, 0, 0))
+    draw.rectangle((1050, 580, 1199, 719), fill=(0, 0, 255))
+    image.save(source)
+    preview = disk.get_page_thumbnail(tmp_path, source)
+    assert preview.size[0] == 320
+    assert preview.size[1] < 448  # The full landscape aspect ratio is kept.
+    assert preview.getpixel((2, 2)) == (255, 0, 0)
+    assert preview.getpixel((preview.width - 3, preview.height - 3)) == (0, 0, 255)
+
+
+def test_fixed_v3_size_cache_rebuilds_old_v2_png_in_place(tmp_path):
+    from PIL import PngImagePlugin
+    source = make_scan(tmp_path / "page0.png", (80, 150, 200))
+    cache = disk.thumbnail_cache_path(tmp_path, source)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    old = Image.new("RGB", (158, 224), (200, 80, 80))
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text(disk.FINGERPRINT_KEY, "v2-stale")
+    metadata.add_text(disk.SOURCE_KEY, disk._path_hash(source))
+    metadata.add_text(disk.SOURCE_FILENAME_KEY, source.name)
+    old.save(cache, format="PNG", pnginfo=metadata)
+    preview = disk.get_page_thumbnail(tmp_path, source)
+    assert preview.getpixel((5, 5)) == (80, 150, 200)
+    assert preview.height == 448
+    with Image.open(cache) as saved:
+        assert saved.info[disk.FINGERPRINT_KEY] == disk.source_fingerprint(source)
+        assert saved.height == 448
