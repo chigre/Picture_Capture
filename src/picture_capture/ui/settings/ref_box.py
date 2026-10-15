@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import colorchooser, messagebox, ttk
+from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -84,28 +84,14 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
         "旧七列文件可直接读取，编辑保存后升级。与 PDIC/PPP 分离。"
         "用户已框选的 REF 永不被自动识别覆盖；自动检测只做本地样本图案匹配。",
     )
-    group = dialog._add_setting_group(
+    dialog._add_setting_group(
         page, "REF 文字与半透明显示", REF_BOX_STYLE_FIELDS,
         intro="未填写文字：默认淡橙色 50% 不透明度；已填写文字：默认淡绿色 50% 不透明度。"
               "两种底色和不透明度均可独立设置；无边框。"
               "REF 文字可单独隐藏，保存内容不受影响；字体默认系统推荐、16 号，"
-              "字号与词条文本框采用相同的跟随缩放/固定策略。",
+              "字号与词条文本框采用相同的跟随缩放/固定策略。"
+              "选色按钮的底色直接呈现当前颜色，仍可手动输入 HEX。",
     )
-    # The setting group owns the same tk.Variable used by autosave.
-    for name in ("ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color"):
-        v = dialog.vars.get(name)
-        if v is None:
-            continue
-        index = list(REF_BOX_STYLE_FIELDS).index(name) + 1
-        cell = group.grid_slaves(row=index, column=1)
-        if cell:
-            def choose(var=v):
-                color = colorchooser.askcolor(color=str(var.get()), parent=dialog)[1]
-                if color:
-                    var.set(color)
-            ttk.Button(cell[0], text="选色…", command=choose).grid(
-                row=0, column=2, padx=(7, 0),
-            )
     dialog._add_check_group(
         page, "显示与默认挂靠", REF_BOX_CHECKS,
         intro="隐藏 REF 文字只影响画布显示，已有文本仍会保留；框的橙/绿底色继续根据实际内容切换。",
