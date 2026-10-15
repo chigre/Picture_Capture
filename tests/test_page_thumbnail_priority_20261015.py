@@ -1,9 +1,12 @@
-"""Ordering of thumbnail generation, independent of scan-data availability."""
+"""Thumbnail scheduling: current/below-first, reprioritization, bounded async jobs."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 from types import SimpleNamespace
+from PIL import Image
 
+from picture_capture.page_thumbnail_tasks import ThumbnailResult
 from picture_capture.ui import page_thumbnails as ui
 
 
@@ -14,16 +17,19 @@ class _FakeTree:
     def get_children(self, _parent=""):
         return self.rows
 
+    def exists(self, iid):
+        return str(iid) in self.rows
+
 
 class _FakeApp:
     def __init__(self, root, count):
         self.current_index = 3
         self._page_list_sort_column = "illustrations"
         self._page_list_sort_descending = True
-        self.project = SimpleNamespace(
-            root=root,
-            images=[root / f"page-{index:04}.png" for index in range(count)],
-        )
+        paths = [root / f"page-{index:04}.png" for index in range(count)]
+        for path in paths:
+            path.write_bytes(b"synthetic-stat-test")
+        self.project = SimpleNamespace(root=root, images=paths)
         self.workspace_mode = "正常"
         self.jobs = []
 
@@ -35,18 +41,59 @@ class _FakeApp:
         return None
 
 
+class _Tasks:
+    def __init__(self, *, failed=()):
+        self.calls = []
+        self.pending = []
+        self.failed = set(failed)
+        self.serial = 0
+
+    @property
+    def active(self):
+        return len(self.pending)
+
+    def submit(self, index, token, root, source, names):
+        assert names[str(source.resolve())] == source.stem + ".png"
+        assert self.active < 2
+        self.calls.append(index)
+        self.serial += 1
+        self.pending.append(ThumbnailResult(
+            self.serial, index, token,
+            Image.new("RGB", (320, 448), (index, 0, 0)),
+            "bad scan" if index in self.failed else None,
+        ))
+        return self.serial
+
+    def collect(self):
+        items = list(self.pending)
+        self.pending.clear()
+        return items
+
+    def cancel_pending(self):
+        self.pending.clear()
+
+
 class _Checked:
     def get(self):
         return True
 
 
-def _controller(app, rows):
+def _controller(app, rows, failed=()):
     preview = ui.PageThumbnailController.__new__(ui.PageThumbnailController)
     preview.app = app
     preview.tree = _FakeTree(rows)
     preview.enabled_var = _Checked()
-    preview._warm_job = None
-    preview._warm_cursor = 0
+    preview.width = ui.DEFAULT_THUMBNAIL_WIDTH
+    preview._tasks = _Tasks(failed=failed)
+    preview._photos = OrderedDict()
+    preview._attached = {}
+    preview._generation = 0
+    preview._worker_pending = {}
+    preview._worker_failures = {}
+    preview._refresh_job = None
+    preview._poll_job = None
+    preview._visible_order = []
+    preview._empty_view_retries = 0
     preview._warm_project_key = None
     preview._warm_priority_key = None
     preview._warm_done = set()
@@ -56,10 +103,11 @@ def _controller(app, rows):
     return preview
 
 
-def _run_next(app):
-    assert app.jobs
-    _, callback = app.jobs.pop(0)
-    callback()
+def _finish_all(preview, expected):
+    for _ in range(expected):
+        if not preview._tasks.pending:
+            break
+        preview._collect_results()
 
 
 def test_prioritize_current_then_rows_below_in_sorted_index():
@@ -80,83 +128,85 @@ def test_filtered_rows_still_eventually_cover_all_pages():
     assert sorted(order) == list(range(6))
 
 
-def test_first_enable_warms_current_downward_then_other_rows(tmp_path, monkeypatch):
+def test_first_enable_queues_current_downward_then_other_rows(tmp_path):
     app = _FakeApp(tmp_path, 6)
     preview = _controller(app, ("2", "4", "1", "3", "5", "0"))
-    generated = []
-
-    def record(root, source, names=None):
-        assert root == tmp_path
-        assert names[str(Path(source).resolve())] == f"{Path(source).stem}.png"
-        generated.append(app.project.images.index(source))
-        return None
-
-    monkeypatch.setattr(ui, "get_page_thumbnail", record)
     preview._schedule_warm_cache()
-    for _ in range(6):
-        _run_next(app)
-    assert generated == [3, 5, 0, 2, 4, 1]
-    assert app.jobs == []
+    assert preview._tasks.calls == [3, 5]  # Only two jobs outstanding.
+    _finish_all(preview, 10)
+    assert preview._tasks.calls == [3, 5, 0, 2, 4, 1]
+    assert preview._warm_done == set(range(6))
+    assert not preview._tasks.pending
 
 
-def test_navigation_reprioritizes_pending_and_preserves_completed(tmp_path, monkeypatch):
+def test_navigation_reprioritizes_unsubmitted_work_and_keeps_completed(tmp_path):
     app = _FakeApp(tmp_path, 6)
     app.current_index = 1
     app._page_list_sort_column = None
     app._page_list_sort_descending = False
     preview = _controller(app, range(6))
-    generated = []
-    monkeypatch.setattr(
-        ui, "get_page_thumbnail",
-        lambda _root, source, _names=None: generated.append(app.project.images.index(source)),
-    )
     preview._schedule_warm_cache()
-    _run_next(app)
-    assert generated == [1]
+    assert preview._tasks.calls == [1, 2]
     app.current_index = 4
-    for _ in range(5):
-        _run_next(app)
-    assert generated == [1, 4, 5, 0, 2, 3]
-    assert len(set(generated)) == 6 and not app.jobs
+    _finish_all(preview, 10)
+    assert preview._tasks.calls == [1, 2, 4, 5, 0, 3]
+    assert preview._warm_done == set(range(6))
 
 
-def test_sort_reprioritizes_pending_in_display_order(tmp_path, monkeypatch):
+def test_sort_reprioritizes_pending_in_new_display_order(tmp_path):
     app = _FakeApp(tmp_path, 5)
     app.current_index = 0
     app._page_list_sort_column = None
     app._page_list_sort_descending = False
     preview = _controller(app, range(5))
-    generated = []
-    monkeypatch.setattr(
-        ui, "get_page_thumbnail",
-        lambda _root, source, _names=None: generated.append(app.project.images.index(source)),
-    )
     preview._schedule_warm_cache()
-    _run_next(app)
-    assert generated == [0]
+    assert preview._tasks.calls == [0, 1]
     preview.tree.rows = ("2", "0", "3", "1", "4")
     app._page_list_sort_column = "illustrations"
-    for _ in range(4):
-        _run_next(app)
-    assert generated == [0, 3, 1, 4, 2]
-    assert not app.jobs
+    _finish_all(preview, 10)
+    assert preview._tasks.calls == [0, 1, 3, 4, 2]
+    assert preview._warm_done == set(range(5))
 
 
-def test_unavailable_source_does_not_block_next_pages(tmp_path, monkeypatch):
+def test_failed_scan_is_quarantined_until_identity_changes(tmp_path):
     app = _FakeApp(tmp_path, 3)
     app.current_index = 1
-    preview = _controller(app, range(3))
-    seen = []
-
-    def failure_then_good(_root, source, _names=None):
-        idx = app.project.images.index(source)
-        seen.append(idx)
-        if idx == 1:
-            raise OSError("corrupt scan")
-
-    monkeypatch.setattr(ui, "get_page_thumbnail", failure_then_good)
+    preview = _controller(app, range(3), failed=(1,))
     preview._schedule_warm_cache()
-    for _ in range(3):
-        _run_next(app)
-    assert seen == [1, 2, 0]
+    _finish_all(preview, 10)
+    assert preview._tasks.calls == [1, 2, 0]
     assert len(preview._warm_done) == 3
+    assert 1 in preview._worker_failures
+    preview._dispatch_jobs()
+    assert preview._tasks.calls == [1, 2, 0]
+
+
+def test_worker_completion_exposes_no_tk_callback():
+    import threading
+    import time
+    from picture_capture import page_thumbnail_tasks as jobs
+
+    # Stub only file generation; prove worker code runs on another thread and
+    # the result is delivered by polling, not a Tk call from worker thread.
+    names = {}
+    observed = []
+    original = jobs.get_page_thumbnail
+    jobs.get_page_thumbnail = lambda *_args: (
+        observed.append(threading.current_thread().name)
+        or Image.new("RGB", (12, 16), "red")
+    )
+    task = jobs.ThumbnailTasks(workers=2)
+    try:
+        assert task.submit(7, ("identity",), Path("."), Path("no-scan"), names) == 1
+        deadline = time.monotonic() + 5
+        out = []
+        while time.monotonic() < deadline and not out:
+            out = task.collect()
+            if not out:
+                time.sleep(0.005)
+        assert len(out) == 1 and out[0].image.getpixel((0, 0)) == (255, 0, 0)
+        assert observed and observed[0].startswith("pc-thumb")
+        assert task.active == 0
+    finally:
+        task.shutdown()
+        jobs.get_page_thumbnail = original
