@@ -77,6 +77,19 @@ def binary_preview_image(source: Image.Image) -> Image.Image:
 
 
 
+def effective_overlay_column_width(geometry, column_index: int, configured_width: float) -> int:
+    """Use physical column width, not the final interval reaching the page edge."""
+    from statistics import median
+    widths = list(geometry.column_widths)
+    if not 0 <= column_index < len(widths):
+        raise IndexError(column_index)
+    actual = max(1, round(float(widths[column_index])))
+    if column_index < len(widths) - 1:
+        return actual
+    peers = [float(w) for w in widths[:-1] if float(w) > 0]
+    reference = median(peers) if peers else float(configured_width)
+    return min(actual, max(1, round(reference)))
+
 def canonical_headword_marker_span(
     column_x: float, column_width: float, right_ratio: float,
 ) -> tuple[int, int]:
