@@ -12921,7 +12921,12 @@ class PictureCaptureApp(tk.Tk):
                 self._save_current_page_by_mode(sync_editors=not review_saved)
         from .proofreading_transactions import recover_pending_for_page
         try:
-            if not recover_pending_for_page(self.project.images[index]):
+            target_page = self.project.images[index]
+            trusted_manual_path = (
+                ocr_cache_root(self.project.root)
+                / f"{target_page.stem}_manual_selection.json"
+            )
+            if not recover_pending_for_page(target_page, manual_path=trusted_manual_path):
                 self.status_var.set(
                     "R3 校对事务恢复需要人工处理：磁盘状态与恢复标记不匹配，本次未切页。"
                 )
