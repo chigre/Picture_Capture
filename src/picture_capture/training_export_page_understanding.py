@@ -14,6 +14,7 @@ from .layout_illustration_mask import mask_large_illustrations_for_layout
 from .page_sections import read_page_sections
 from .page_understanding import page_understanding_diagnostics
 from .layout_composition import understand_composed_page
+from .training_export_unified_layout import write_training_unified_layout_diagnostic
 
 
 def build_export_training_page_with_understanding(
@@ -87,6 +88,20 @@ def build_export_training_page_with_understanding(
                     image.close()
                 except Exception:
                     pass
+
+        # The Page Understanding summary above is not the same artifact as
+        # the explicitly exported unified Layout diagnostics button. Produce
+        # the complete, per-page, source-pixel-bound JSON in the training ZIP.
+        diagnostic = write_training_unified_layout_diagnostic(
+            Path(page), settings, staging_root, int(page_index),
+            str(record["image"]),
+        )
+        annotation.setdefault("artifacts", {})["unified_layout_diagnostic_json"] = (
+            diagnostic["json"]
+        )
+        annotation["unified_layout_diagnostics"] = diagnostic
+        record["unified_layout_diagnostic_json"] = diagnostic["json"]
+        record["unified_layout_diagnostic_available"] = bool(diagnostic["available"])
 
         annotation_path.write_text(
             json.dumps(annotation, ensure_ascii=False, indent=2),
