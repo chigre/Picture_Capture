@@ -19,10 +19,8 @@ from typing import Any
 from PIL import Image, ImageTk
 
 from picture_capture.project_storage import settings_path
-from picture_capture.page_thumbnail_cache import (
-    display_page_thumbnail, get_page_thumbnail, source_fingerprint,
-    thumbnail_name_map,
-)
+from picture_capture.page_thumbnail_cache import thumbnail_name_map
+from picture_capture.page_thumbnail_tasks import ThumbnailTasks
 
 
 DEFAULT_THUMBNAIL_WIDTH = 80
@@ -116,6 +114,11 @@ class PageThumbnailController:
         self._attached: dict[str, tuple] = {}
         self._refresh_job: str | None = None
         self._generation = 0
+        self._tasks = ThumbnailTasks(workers=2)
+        self._worker_pending: dict[int, tuple[int, tuple]] = {}
+        self._worker_failures: dict[int, tuple] = {}
+        self._poll_job: str | None = None
+        self._visible_order: list[str] = []
         self._warm_job: str | None = None
         self._warm_cursor = 0
         self._warm_project_key: tuple | None = None
@@ -145,6 +148,8 @@ class PageThumbnailController:
             button.pack(side="left", padx=(2, 0))
             self.buttons.append(button)
         self.tree.heading("#0", text="缩略图", anchor="center")
+        # Close on the Tk thread; no worker has a reference to Tk widgets.
+        self.tree.bind("<Destroy>", self._on_tree_destroy, add="+")
         self.load_preferences()
 
     def _allowed(self) -> bool:
@@ -251,22 +256,31 @@ class PageThumbnailController:
         if hasattr(self.app, "_schedule_page_cell_overlay_refresh"):
             self.app._schedule_page_cell_overlay_refresh()
 
+    def _on_tree_destroy(self, event: tk.Event) -> None:
+        if event.widget is self.tree:
+            self.close()
+
+    def close(self) -> None:
+        """Stop scheduling work without waiting for large scan decoding."""
+        self._clear_images()
+        self._tasks.shutdown()
+
     def _clear_images(self) -> None:
+        """Invalidate Tk-only images and ignore obsolete async completions."""
         self._generation += 1
         self._empty_view_retries = 0
-        if self._warm_job is not None:
-            try:
-                self.app.after_cancel(self._warm_job)
-            except tk.TclError:
-                pass
-            self._warm_job = None
-        if self._refresh_job is not None:
-            try:
-                self.app.after_cancel(self._refresh_job)
-            except tk.TclError:
-                pass
-            self._refresh_job = None
-        for iid in self._attached:
+        self._tasks.cancel_pending()
+        self._worker_pending.clear()
+        self._worker_failures.clear()
+        for name in ("_refresh_job", "_poll_job"):
+            job = getattr(self, name, None)
+            if job is not None:
+                try:
+                    self.app.after_cancel(job)
+                except tk.TclError:
+                    pass
+                setattr(self, name, None)
+        for iid in tuple(self._attached):
             try:
                 if self.tree.exists(iid):
                     self.tree.item(iid, image="")
@@ -274,9 +288,45 @@ class PageThumbnailController:
                 pass
         self._attached.clear()
         self._photos.clear()
+        self._visible_order = []
+
+    @staticmethod
+    def _source_token(path: Path) -> tuple:
+        """Fast identity check on Tk thread: no source image decode or hashing."""
+        stat = path.stat()
+        return (
+            str(path.resolve()), int(stat.st_dev), int(stat.st_ino),
+            int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ctime_ns),
+        )
+
+    def _cache_names_for_project(self) -> dict[str, str]:
+        """Collision-safe filenames computed once per image-set identity."""
+        project = getattr(self.app, "project", None)
+        if project is None:
+            return {}
+        key = (str(project.root), id(project), len(project.images))
+        if key != self._cache_project_key:
+            self._cache_names = thumbnail_name_map(project.images)
+            self._cache_project_key = key
+        return self._cache_names
+
+    def _current_project_id(self) -> tuple | None:
+        project = getattr(self.app, "project", None)
+        if project is None:
+            return None
+        return (str(project.root), id(project), len(project.images))
+
+    def _view_key(self, index: int) -> tuple | None:
+        project = getattr(self.app, "project", None)
+        if project is None or not 0 <= index < len(project.images):
+            return None
+        try:
+            return (self._current_project_id(), self._source_token(Path(project.images[index])), self.width)
+        except (OSError, TypeError, ValueError):
+            return None
 
     def request_visible(self) -> None:
-        """Coalesce scrolls and rapid sorts; decode on Tk's idle loop only."""
+        """Coalesce scrolling; only cheap stat/Tk operations on main thread."""
         if not self._visible_enabled() or self._refresh_job is not None:
             return
         try:
@@ -285,100 +335,50 @@ class PageThumbnailController:
             self._refresh_job = None
 
     def _render_visible(self) -> None:
+        """Attach already-decoded PhotoImages; enqueue misses without blocking."""
         self._refresh_job = None
         project = getattr(self.app, "project", None)
         if project is None or not self._visible_enabled():
             return
         try:
-            visible_rows = self.app._visible_page_list_iids()
-            visible = set(visible_rows)
-            if not visible and self.tree.get_children("") and self._empty_view_retries < 12:
-                # On project open, Treeview can be populated before it is mapped
-                # or sized. A one-shot after_idle then leaves previews blank.
+            rows = [str(iid) for iid in self.app._visible_page_list_iids()]
+            if not rows and self.tree.get_children("") and self._empty_view_retries < 12:
                 self._empty_view_retries += 1
                 self._refresh_job = self.app.after(100, self._render_visible)
                 return
             self._empty_view_retries = 0
+            if rows != self._visible_order:
+                self._warm_priority_key = None
+            self._visible_order = rows
+            visible = set(rows)
             for iid in set(self._attached) - visible:
                 if self.tree.exists(iid):
                     self.tree.item(iid, image="")
                 self._attached.pop(iid, None)
-            rendered = 0
-            # When the browsed page is visible, render it first, then the
-            # thumbnails below it; afterwards fill rows above it.
-            browsed = str(getattr(self.app, "current_index", -1))
-            if browsed in visible_rows:
-                pivot = visible_rows.index(browsed)
-                ordered_visible = visible_rows[pivot:] + visible_rows[:pivot]
-            else:
-                ordered_visible = visible_rows
-            for iid in ordered_visible:
+            for iid in rows:
                 try:
                     index = int(iid)
-                    path = Path(project.images[index])
-                    key = (str(path), source_fingerprint(path), self.width)
-                except (ValueError, IndexError, OSError, TypeError):
+                except (ValueError, TypeError):
                     continue
-                if self._attached.get(iid) == key:
+                key = self._view_key(index)
+                if key is None or self._attached.get(iid) == key:
                     continue
                 photo = self._photos.get(key)
-                if photo is None:
-                    try:
-                        photo = self._make_photo(path)
-                    except (OSError, ValueError, SyntaxError):
-                        # A damaged or missing scan leaves only this thumbnail
-                        # blank; neither project data nor the page index changes.
-                        continue
-                    self._photos[key] = photo
-                self._photos.move_to_end(key)
-                self.tree.item(iid, image=photo)
-                self._attached[iid] = key
-                rendered += 1
-                while len(self._photos) > PHOTO_CACHE_LIMIT:
-                    self._photos.popitem(last=False)
-                if rendered >= 2:
-                    break
-            if rendered:
-                # Fill additional visible rows without long synchronous stalls.
-                self._refresh_job = self.app.after(15, self._render_visible)
+                if photo is not None and self.tree.exists(iid):
+                    self._photos.move_to_end(key)
+                    self.tree.item(iid, image=photo)
+                    self._attached[iid] = key
+                else:
+                    if self.tree.exists(iid):
+                        self.tree.item(iid, image="")
+                    self._attached.pop(iid, None)
+            self._dispatch_jobs()
         except tk.TclError:
-            pass
-
-    def _cache_names_for_project(self) -> dict[str, str]:
-        """Build the collision-proof name plan once, not for every page."""
-        project = getattr(self.app, "project", None)
-        if project is None:
-            return {}
-        key = (str(project.root), id(project), len(project.images))
-        if key != getattr(self, "_cache_project_key", None):
-            self._cache_names = thumbnail_name_map(project.images)
-            self._cache_project_key = key
-        return self._cache_names
-
-    def _make_photo(self, path: Path) -> ImageTk.PhotoImage:
-        # A single cached master supports every [-]/[默]/[+] width.
-        preview = display_page_thumbnail(
-            self.app.project.root, path, self.width, self._cache_names_for_project(),
-        )
-        return ImageTk.PhotoImage(preview, master=self.tree)
-
-    def project_rows_ready(self) -> None:
-        """Called after the page Treeview has been populated for this project."""
-        self._empty_view_retries = 0
-        self._warm_priority_key = None  # Treeview now contains actual sorted rows.
-        if self._visible_enabled():
-            try:
-                self.tree.xview_moveto(0.0)
-            except tk.TclError:
-                pass
-        self.request_visible()
-        self._schedule_warm_cache()
+            return
 
     def _warm_priority(self, project: Any) -> tuple:
-        """Fast key used to reprioritize on current-page/sort changes."""
-        current = getattr(self.app, "current_index", 0)
         try:
-            current = int(current)
+            current = int(getattr(self.app, "current_index", 0))
         except (TypeError, ValueError):
             current = 0
         if not 0 <= current < len(project.images):
@@ -391,59 +391,138 @@ class PageThumbnailController:
 
     def _rebuild_warm_order(self, project: Any) -> None:
         priority = self._warm_priority(project)
-        if priority == getattr(self, "_warm_priority_key", None):
+        if priority == self._warm_priority_key:
             return
         try:
             displayed = self.tree.get_children("")
         except (AttributeError, tk.TclError):
             displayed = tuple(str(i) for i in range(len(project.images)))
         ordered = prioritized_page_indices(len(project.images), priority[0], displayed)
-        done = getattr(self, "_warm_done", set())
-        self._warm_order = [index for index in ordered if index not in done]
+        self._warm_order = [index for index in ordered if index not in self._warm_done]
         self._warm_cursor = 0
         self._warm_priority_key = priority
 
     def _schedule_warm_cache(self) -> None:
-        """Generate current page, followed by pages below it, then the rest."""
-        if not self._visible_enabled() or self._warm_job is not None:
-            return
+        """Keep cache-wide precomputation running in background, not Tk."""
+        if self._visible_enabled():
+            self._dispatch_jobs()
+
+    def _candidate_indices(self, project: Any) -> list[int]:
+        """Visible/current page first; below in sorted index, then all others."""
+        self._rebuild_warm_order(project)
+        visible = list(self._visible_order)
+        current = str(self._warm_priority(project)[0])
+        if current in visible:
+            pivot = visible.index(current)
+            visible = visible[pivot:] + visible[:pivot]
+        top = []
+        for iid in visible:
+            try:
+                index = int(iid)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= index < len(project.images) and index not in top:
+                top.append(index)
+        # The full-view current page takes precedence even if Treeview geometry
+        # has not yet mapped it on first project open.
+        current_index = self._warm_priority(project)[0]
+        if current_index not in top and current_index not in self._warm_done:
+            top.insert(0, current_index)
+        return top + [i for i in self._warm_order if i not in top]
+
+    def _dispatch_jobs(self) -> None:
         project = getattr(self.app, "project", None)
-        if project is None:
+        if project is None or not self._visible_enabled():
             return
-        project_key = (str(project.root), id(project))
-        if project_key != self._warm_project_key:
-            self._warm_project_key = project_key
+        project_id = self._current_project_id()
+        if project_id != self._warm_project_key:
+            self._warm_project_key = project_id
             self._warm_priority_key = None
             self._warm_done = set()
-        self._rebuild_warm_order(project)
-        if self._warm_cursor >= len(self._warm_order):
-            return
-        try:
-            self._warm_job = self.app.after(90, self._warm_step)
-        except tk.TclError:
-            self._warm_job = None
+        names = self._cache_names_for_project()
+        for index in self._candidate_indices(project):
+            if self._tasks.active >= 2:
+                break
+            key = self._view_key(index)
+            if key is None:
+                self._warm_done.add(index)
+                continue
+            iid = str(index)
+            if self._attached.get(iid) == key and index in self._warm_done:
+                continue
+            if index in self._worker_pending:
+                continue
+            if self._worker_failures.get(index) == key:
+                continue
+            if index in self._warm_done and iid not in self._visible_order:
+                continue
+            # Reuse Tk photo if a scrolled-out page becomes visible again.
+            photo = self._photos.get(key)
+            if photo is not None and iid in self._visible_order:
+                self._photos.move_to_end(key)
+                if self.tree.exists(iid):
+                    self.tree.item(iid, image=photo)
+                    self._attached[iid] = key
+                continue
+            token = (self._generation, key)
+            ticket = self._tasks.submit(
+                index, token, Path(project.root),
+                Path(project.images[index]), names,
+            )
+            if ticket is not None:
+                self._worker_pending[index] = (ticket, token)
+        self._schedule_poll()
 
-    def _warm_step(self) -> None:
-        self._warm_job = None
-        if not self._visible_enabled():
+    def _schedule_poll(self) -> None:
+        if self._poll_job is not None or not self._tasks.active:
             return
-        project = getattr(self.app, "project", None)
-        if project is None or (str(project.root), id(project)) != self._warm_project_key:
-            return
-        # A navigation jump can happen mid-generation. Process its nearby
-        # ungenerated pages next without losing earlier completed work.
-        self._rebuild_warm_order(project)
-        if self._warm_cursor >= len(self._warm_order):
-            return
-        index = self._warm_order[self._warm_cursor]
-        self._warm_cursor += 1
-        image = Path(project.images[index])
         try:
-            get_page_thumbnail(project.root, image, self._cache_names_for_project())
-        except (OSError, ValueError, SyntaxError):
-            # A corrupt/missing scan never blocks the rest of the project.
-            pass
-        self._warm_done.add(index)
+            self._poll_job = self.app.after(50, self._collect_results)
+        except tk.TclError:
+            self._poll_job = None
+
+    def _collect_results(self) -> None:
+        """Only Tk event loop touches Treeview and ImageTk.PhotoImage."""
+        self._poll_job = None
+        for result in self._tasks.collect():
+            pending = self._worker_pending.get(result.page_index)
+            if pending is not None and pending[0] == result.ticket:
+                del self._worker_pending[result.page_index]
+            generation, key = result.identity
+            if (generation != self._generation or
+                not self._visible_enabled() or
+                self._view_key(result.page_index) != key):
+                continue
+            if result.error:
+                # Failed scans remain failed until source identity changes,
+                # resize/reopen, or the user explicitly re-enables thumbnails.
+                self._worker_failures[result.page_index] = key
+                self._warm_done.add(result.page_index)
+                continue
+            self._warm_done.add(result.page_index)
+            iid = str(result.page_index)
+            if iid not in self._visible_order or not self.tree.exists(iid):
+                continue
+            try:
+                image = result.image.copy()
+                image.thumbnail(preview_bounds(self.width), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(image, master=self.tree)
+                self._photos[key] = photo
+                self._photos.move_to_end(key)
+                self.tree.item(iid, image=photo)
+                self._attached[iid] = key
+                while len(self._photos) > PHOTO_CACHE_LIMIT:
+                    self._photos.popitem(last=False)
+            except (OSError, ValueError, tk.TclError):
+                continue
+        if self._visible_enabled():
+            self._dispatch_jobs()
+
+    def project_rows_ready(self) -> None:
+        self._empty_view_retries = 0
+        self._warm_priority_key = None
+        self._visible_order = []
+        self.request_visible()
         self._schedule_warm_cache()
 
 
