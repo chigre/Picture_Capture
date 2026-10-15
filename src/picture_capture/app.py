@@ -90,6 +90,7 @@ from .layout_percent_helpers import (
 )
 
 from .page_list_helpers import (
+    bookmarked_page_indices,
     _fill_status_cell_style,
     _natural_text_key,
     _sorted_page_list_rows,
@@ -11195,8 +11196,7 @@ class PictureCaptureApp(tk.Tk):
         mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
         if mode == "current": return [self.current_index] if self.current_index >= 0 else []
         if mode == "bookmarks":
-            bookmarks = self._bookmark_stems()
-            return [i for i, page in enumerate(self.project.images) if page.stem in bookmarks]
+            return bookmarked_page_indices(self.project.images, self._bookmark_stems())
         if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
         if mode == "to_specified":
             indices = self._parse_page_spec(self.page_range_spec_var.get())
