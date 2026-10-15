@@ -287,6 +287,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     ref_box_auto_attach: bool = True
     ref_match_threshold: float = 0.88
     ref_match_scale_tolerance_percent: float = 25.0
+    # Include the matched guide template width in the generated REF region.
+    ref_box_include_guide_width: bool = False
     ref_ocr_quote_extraction: bool = True
     show_page_sections: bool = True
     show_column_guides: bool = True
