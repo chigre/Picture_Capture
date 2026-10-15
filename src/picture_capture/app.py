@@ -13625,12 +13625,11 @@ class PictureCaptureApp(tk.Tk):
         if self.ref_box_controller.editing:
             draw_ocr_crop_preview(self)
             draw_layout_visualization_if_enabled(self)
-            self.ref_box_controller.render()
-            self.ref_box_controller.bind_overlay_widgets()
         else:
             draw_ocr_crop_preview(self)
-            self.ref_box_controller.render()
-            self.ref_box_controller.bind_overlay_widgets()
+        self.ref_box_controller.render()
+        self.ref_box_controller.bind_overlay_widgets()
+        if not self.ref_box_controller.editing:
             draw_layout_visualization_if_enabled(self)
 
     def _update_view_zoom_label(self) -> None:
@@ -14157,8 +14156,7 @@ class PictureCaptureApp(tk.Tk):
 
     def canvas_left_click(self, event: tk.Event) -> None:
         if self.ref_box_controller.pointer_active:
-            if self.guard(): return self.ref_box_controller.press(*self.original_xy(event))
-            return
+            return self.ref_box_controller.press(*self.original_xy(event)) if self.guard() else "break"
         if not self.guard():
             return
         x, y = self.original_xy(event)
