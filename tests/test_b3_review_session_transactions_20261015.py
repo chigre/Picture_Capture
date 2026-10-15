@@ -447,3 +447,50 @@ def test_unowned_new_entry_during_save_cannot_create_deletion_undo(tmp_path):
     history = ReviewSessionHistory()
     assert not history.record(before, after)
     assert not history.undo_stack
+
+
+def test_candidate_ownership_is_frozen_at_snapshot_time(tmp_path):
+    """An Entry cannot acquire or shed an OCR owner after a saved snapshot."""
+    page, rows, review = _case(tmp_path)
+    before = snapshot_review(review)
+    assert before is not None
+    rows[0].candidate_id = "new-ocr-owner"
+    rows[1].word = "TWO"
+    review.vars[1].set("TWO")
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    after = snapshot_review(review)
+    assert after is not None
+    history = ReviewSessionHistory()
+    assert not history.record(before, after)
+    assert not history.undo_stack
+
+
+def test_candidate_ownership_drift_after_record_refuses_undo(tmp_path):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    unchanged = pdic_path(page).read_bytes()
+    rows[0].candidate_id = "linked-after-save"
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == unchanged
+    assert rows[0].word == "ONE"
+    assert not history.undo_stack
+
+
+@pytest.mark.parametrize("sidecar", ["manual_selection.json", "cache.json"])
+def test_external_sidecar_change_at_last_preflight_refuses_undo(tmp_path, monkeypatch, sidecar):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    original = module._publish_restored_snapshot
+
+    def concurrent_write(expected, target):
+        (tmp_path / sidecar).write_bytes(b"external-human-or-ocr-change")
+        return original(expected, target)
+
+    monkeypatch.setattr(module, "_publish_restored_snapshot", concurrent_write)
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert (tmp_path / sidecar).read_bytes() == b"external-human-or-ocr-change"
