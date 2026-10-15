@@ -86,12 +86,13 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
     )
     group = dialog._add_setting_group(
         page, "REF 文字与半透明显示", REF_BOX_STYLE_FIELDS,
-        intro="默认系统推荐字体、16 号、淡蓝色 50% 不透明度、无边框。"
-              "字号采用词条文本框的同一缩放策略（跟随缩放或固定），"
-              "颜色填 #RRGGBB；仅改变显示，不改变 rbox 坐标。",
+        intro="未填写文字：默认淡橙色 50% 不透明度；已填写文字：默认淡绿色 50% 不透明度。"
+              "两种底色和不透明度均可独立设置；无边框。"
+              "REF 文字可单独隐藏，保存内容不受影响；字体默认系统推荐、16 号，"
+              "字号与词条文本框采用相同的跟随缩放/固定策略。",
     )
     # The setting group owns the same tk.Variable used by autosave.
-    for name in ("ref_box_fill_color", "ref_box_text_color"):
+    for name in ("ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color"):
         v = dialog.vars.get(name)
         if v is None:
             continue
@@ -105,7 +106,10 @@ def build_ref_box_settings_tab(dialog, tab: ttk.Frame) -> None:
             ttk.Button(cell[0], text="选色…", command=choose).grid(
                 row=0, column=2, padx=(7, 0),
             )
-    dialog._add_check_group(page, "显示与默认挂靠", REF_BOX_CHECKS)
+    dialog._add_check_group(
+        page, "显示与默认挂靠", REF_BOX_CHECKS,
+        intro="隐藏 REF 文字只影响画布显示，已有文本仍会保留；框的橙/绿底色继续根据实际内容切换。",
+    )
     dialog._add_setting_group(
         page, "画框比例与图样匹配", REF_BOX_GEOMETRY_FIELDS,
         intro="单击按行高倍数创建默认框；拖动以真实坐标创建自定义大小。"
