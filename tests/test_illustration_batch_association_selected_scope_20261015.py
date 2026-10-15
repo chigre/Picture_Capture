@@ -212,7 +212,7 @@ def test_batch_scope_error_summary_survives_one_page_failure(tmp_path, monkeypat
     monkeypatch.setattr(ui, "confirm_illustration_association", lambda _app: True)
     monkeypatch.setattr(
         ui, "associate_existing_ppp_job",
-        lambda path, _settings, index: {
+        lambda path, _settings, index, _previous=None: {
             "page_index": index, "page": Path(path).name,
             "status": "failed", "error": "PermissionError: read-only",
         },
