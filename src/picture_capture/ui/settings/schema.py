@@ -61,6 +61,11 @@ FIELDS = [
         ("REF 框字体", "ref_box_font_family", str),
         ("REF 框字号", "ref_box_font_size", int),
         ("REF ×／编辑按钮位置", "ref_box_action_position", str),
+        ("REF 文本标签底色", "ref_text_label_background_color", str),
+        ("REF 文本标签底色不透明度 %", "ref_text_label_background_opacity", float),
+        ("REF 文本标签与原图框距离 px", "ref_text_label_gap", int),
+        ("REF 文本标签内边距 px", "ref_text_label_padding", int),
+        ("OCR REF 提取正则", "ref_ocr_extract_regex", str),
         ("REF 默认宽度（行高倍数）", "ref_box_width_lines", float),
         ("REF 默认高度（行高倍数）", "ref_box_height_lines", float),
         ("REF 样本最低匹配分 0.60–0.999", "ref_match_threshold", float),
@@ -299,13 +304,18 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
-    "ref_box_fill_color": "REF 未填写（空白或纯空格）时的底色，默认淡橙 #ffe0b2。可自选任意 #RRGGBB；一旦文字非空，会由独立的已填写底色设置接管，不修改扫描或 rbox 文件。",
-    "ref_box_fill_opacity": "REF 未填写时底色的不透明度，默认 50%。0 为完全透明、100 为不透明；仅作用于文字为空的 REF 框，与已填写底色的透明度独立。",
-    "ref_box_filled_color": "REF 已填写文字（排除纯空格）时自动使用的底色，默认淡绿 #c8e6c9。可自选任意 #RRGGBB，与空白 REF 的淡橙底色相互独立；即使隐藏文字也按保存的文本判断。",
-    "ref_box_filled_opacity": "REF 已填写时底色的不透明度，默认 50%。0 为完全透明、100 为不透明；修改后只影响有实际文字的框，纯空白框仍使用未填写状态的透明度。",
-    "ref_box_text_color": "REF 框中文字的显示颜色，默认深蓝。只影响可见文字，不影响 REF 底色状态判断；即使关闭显示 REF 文字，也不会清空已填写的内容或改变已填写时的淡绿色底色。",
+    "ref_box_fill_color": "原图 REF 定位框未填写文字时的填色，默认淡橙；默认透明度 0%，只显示轮廓，不遮挡原图。",
+    "ref_box_fill_opacity": "原图 REF 定位框未填写时的内部填色透明度，默认 0%，原图可直接看清；文字标签有独立底色。",
+    "ref_box_filled_color": "原图 REF 定位框已填写文字时的填色，默认淡绿；轮廓与文本标签独立，默认内部透明。",
+    "ref_box_filled_opacity": "原图 REF 定位框已填写时的内部填色透明度，默认 0%。文本标签具有自己的底色/不透明度参数。",
+    "ref_box_text_color": "REF 独立文本标签的文字颜色，默认深蓝。标签在原图定位框的右侧；靠近页面边缘自动移至左侧。",
     "ref_box_font_family": "REF 显示字体，默认根据系统字体与词典 OCR 语言推荐；可手动指定已安装字体。",
-    "ref_box_font_size": "REF 框中文字的基准字号，默认 16 号；与主词条文本框共用「跟随缩放」开关和页面显示宽度 / 1400px 的缩放算法。关闭跟随时保持固定字号。仅改变标注显示，不修改坐标或原扫描。",
+    "ref_box_font_size": "REF 独立文本标签的基准字号，默认 16 号；与主词条文本框采用相同的跟随缩放/固定策略。",
+    "ref_text_label_background_color": "REF OCR 文本标签的独立底色，不覆盖原图里的印刷文字。默认淡蓝，可在选色按钮直接预览。",
+    "ref_text_label_background_opacity": "REF OCR 文本标签底色的不透明度，默认 95%；独立于原图 REF 定位框底色。",
+    "ref_text_label_gap": "OCR 文本标签与 REF 原图定位框的间隔（显示像素），默认 6 px；页面右侧空间不足时自动移至左侧。",
+    "ref_text_label_padding": "OCR 文本标签内部上下左右留白（显示像素），默认 4 px。",
+    "ref_ocr_extract_regex": "【OCR REF】文本提取通用正则，与 AI 词头提取正则一样可直接编辑。若有捕获组，使用第一个参与匹配的捕获组（支持不同备选分支）；没有捕获组则取完整匹配。正则不匹配或留空时保留 OCR 原文；不覆盖手动文本。默认支持成对“…”/‘…’以及缺一侧引号时的截取。修改正则后需重新执行尚未填写的 REF OCR 才会生效。",
     "ref_box_action_position": "REF 文本编辑 ✎ 与删除 × 的操作按钮可以放在框的上方靠右、上方靠左或右侧。位置受页面边界自动约束，避免按钮落在页面外；默认上方靠右。",
     "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
     "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
@@ -642,11 +652,11 @@ SETTING_CHOICES = {
 CHECK_HELP = {
     "ref_box_include_guide_width": "默认关闭：自动画框紧邻引导图样。开启后将匹配图样也纳入 REF 框，宽度为 REF 默认宽度与图样实际匹配宽度之和；样本“向后”则从图样左缘开始，“向前”则向左覆盖文本并包含右侧图样。",
     "ref_box_show": "主画布是否显示已有 REF 框。关闭只隐藏标注，不删除本地 .rbox。进入编辑模式仍会显示。",
-    "ref_box_show_text": "仅控制 REF 框内已填写文字在主画布上的显示/隐藏，默认显示；关闭后仍保留框体、淡橙/淡绿底色、文本原始内容与编辑能力。文本非空的框仍按已填写状态着色。",
+    "ref_box_show_text": "控制 REF OCR 独立文本标签的显示与隐藏；不影响原图 REF 定位框、已保存文字及编辑。",
     "ref_box_delete_always_visible": "在【编辑 REF】模式下，每个 REF 都显示删除 × 按钮，即使尚未选中。关闭时仅选中的 REF 显示 ×。主界面普通浏览时不会显示可点击的删除按钮，避免误删；删除操作仍然只能单击 ×。",
     "ref_box_font_bold": "决定 REF 框文字是否使用粗体，默认关闭。启用后只调整界面字体粗细，不会重新识别框位置或改变已保存的文字。",
     "ref_box_font_italic": "决定 REF 框文字是否使用斜体，默认关闭。适合需要区别原书字体的标注风格；切换只改变画布显示，不影响文件数据。",
-    "ref_ocr_quote_extraction": "【OCR REF】识别后的文本提取：优先获取成对的“…”或‘…’里的内容。左引号缺少配对时删除左引号及之前文字；右引号缺少配对时删除右引号及之后文字；无引号保持原文。关闭后保留完整 OCR 文本。仅处理空白 REF，不覆盖手工文字。",
+
     "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
     "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
     "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
@@ -729,8 +739,18 @@ CHECK_HELP = {
 REF_BOX_STYLE_FIELDS = (
     "ref_box_fill_color", "ref_box_fill_opacity",
     "ref_box_filled_color", "ref_box_filled_opacity",
-    "ref_box_text_color", "ref_box_font_family", "ref_box_font_size",
     "ref_box_action_position",
+)
+REF_TEXT_LABEL_FIELDS = (
+    "ref_box_text_color", "ref_box_font_family", "ref_box_font_size",
+    "ref_text_label_background_color", "ref_text_label_background_opacity",
+    "ref_text_label_gap", "ref_text_label_padding",
+)
+REF_OCR_EXTRACTION_FIELDS = ("ref_ocr_extract_regex",)
+REF_TEXT_LABEL_CHECKS = (
+    ("显示 REF 文本标签", "ref_box_show_text"),
+    ("REF 文本标签字体加粗", "ref_box_font_bold"),
+    ("REF 文本标签字体斜体", "ref_box_font_italic"),
 )
 REF_BOX_GEOMETRY_FIELDS = (
     "ref_box_width_lines", "ref_box_height_lines", "ref_match_threshold",
@@ -742,12 +762,8 @@ REF_BOX_GEOMETRY_CHECKS = (
 
 REF_BOX_CHECKS = (
     ("显示 REF 框", "ref_box_show"),
-    ("显示 REF 框内文字", "ref_box_show_text"),
     ("编辑模式中所有 REF 一直显示 ×", "ref_box_delete_always_visible"),
-    ("REF 字体加粗", "ref_box_font_bold"),
-    ("REF 字体斜体", "ref_box_font_italic"),
     ("新框自动挂靠所在正文词条", "ref_box_auto_attach"),
-    ("OCR REF：提取引号内文字", "ref_ocr_quote_extraction"),
 )
 
 ILLUSTRATION_DETECTION_FIELDS = (
