@@ -198,9 +198,10 @@ class AuxiliaryLineController:
             app.overlay_widgets.append(button)
             chip_width = max(1, button.winfo_reqwidth())
             chip_height = max(1, button.winfo_reqheight())
-            right_edge = min(
-                max_x - 2.0, max(float(chip_width), line_right),
-            )
+            # Align the button's right border with the drawn horizontal
+            # segment's rightmost endpoint; never slide it toward the page
+            # edge or beyond the configured right_ratio.
+            right_edge = line_right
             top_edge = max(0.0, min(max_y - chip_height, line_y))
             # Legacy canvas-click hit routing is retained; the native widget
             # itself handles ordinary clicks and hover events.

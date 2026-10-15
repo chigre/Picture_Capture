@@ -5456,10 +5456,10 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     # The marker-owned [X] now occupies the resolved column end, rather
     # than borrowing the index label's screen position. The dedicated
     # runtime overlay test checks pixel geometry and four visibility states.
-    assert 'delete_x = column_end_screen_x' in overlay
+    assert 'delete_x = marker_right_screen_x' in overlay
     # Updated layout contract: [X] is outside the full-width editor at
     # the actual column boundary, mirrored for RTL.
-    assert 'delete_anchor = "ne" if rtl else "nw"' in overlay
+    assert 'delete_anchor = "ne"' in overlay
     assert 'horizontal_entry_editor_slot(' in overlay
 
 

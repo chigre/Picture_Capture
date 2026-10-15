@@ -6,6 +6,7 @@ are used; no private scans/PDIC fixtures and no claims about actual OCR accuracy
 from __future__ import annotations
 
 from types import SimpleNamespace
+import inspect
 
 import pytest
 from PIL import Image
@@ -141,6 +142,14 @@ class _Label(_Widget):
     pass
 
 
+class _Checkbutton(_Widget):
+    pass
+
+
+class _OCRMenu(_Widget):
+    pass
+
+
 class _Canvas:
     def __init__(self):
         self.windows = []
@@ -150,10 +159,12 @@ class _Canvas:
         return len(self.windows)
 
 
-def _render(monkeypatch, *, show_markers=True, show_labels=True, index=0, ratio=100):
+def _render(monkeypatch, *, show_markers=True, show_labels=True, index=0, ratio=100,
+            candidate=False, show_candidate=True, show_ocr=False):
     monkeypatch.setattr(builder.tk, "Entry", _Entry)
     monkeypatch.setattr(builder.tk, "Button", _Button)
     monkeypatch.setattr(builder.tk, "Label", _Label)
+    monkeypatch.setattr(builder.tk, "Checkbutton", _Checkbutton)
     monkeypatch.setattr(builder, "resolve_content_font_family", lambda *_args: "Arial")
     from picture_capture.ui import overlay_delete_button
     monkeypatch.setattr(builder, "fixed_overlay_control_font", lambda *_: ("Arial", 9, "bold"))
@@ -170,12 +181,14 @@ def _render(monkeypatch, *, show_markers=True, show_labels=True, index=0, ratio=
     app = SimpleNamespace(
         image=image, hide_var=_Var(False), quick_bool_vars={
             "show_headword_markers": _Var(show_markers),
+            "paddle_show_candidate_checkboxes": _Var(show_candidate),
         }, settings=settings, view_scale=1.0, canvas=_Canvas(),
         overlay_widgets=[], entry_editor_bindings=[],
         _entry_visuals={}, entries=entries, crop_preview_var=_Var(False),
         _style_entry_editor=lambda *_args: None,
-        _candidate_for_entry=lambda _entry: None,
-        _main_ocr_review_option_enabled=lambda _key: False,
+        _candidate_for_entry=lambda _entry: {"candidate_id": "one"} if candidate else None,
+        _main_ocr_review_option_enabled=lambda _key: show_ocr,
+        _create_main_ocr_menu=lambda *_args: _OCRMenu(None),
         _entry_keypress_batch_guard=lambda _event: None,
         _claim_page_for_manual_edit=lambda: True,
         _entry_sequence_text=lambda idx, total: f"{idx + 1}/{total}",
@@ -208,7 +221,7 @@ def test_real_overlay_builder_100_percent_and_editor_delete_slot(monkeypatch, in
         w for w in windows if isinstance(w[2], _Button)
     )
     assert options["width"] == max(1, round(right - editor_x))
-    assert (_bx, button_options["anchor"]) == (float(right), "nw")
+    assert (_bx, button_options["anchor"]) == (float(right), "ne")
     assert app._entry_visuals[id(entry)]["delete_widget"] is _button
 
 
@@ -228,3 +241,52 @@ def test_delete_button_follows_marker_not_headword_label(
     assert set(classes) == set(expected)
     assert bool(lines) is show_markers
     assert ("delete_widget" in app._entry_visuals[id(entry)]) is show_markers
+
+
+@pytest.mark.parametrize("index,ratio", [(0, 50), (1, 50), (0, 75), (1, 75), (0, 100), (1, 100)])
+def test_entry_x_right_edge_equals_marker_right_at_any_ratio(monkeypatch, index, ratio):
+    app, lines, entry, geometry = _render(monkeypatch, index=index, ratio=ratio)
+    assert len(lines) == 1
+    line_right = max(lines[0][0], lines[0][2])
+    bx, by, button, placement = next(
+        item for item in app.canvas.windows if isinstance(item[2], _Button)
+    )
+    assert bx == float(line_right)
+    assert placement["anchor"] == "ne"
+
+
+@pytest.mark.parametrize("candidate,show_candidate,expected_indicator", [
+    (True, True, True), (True, False, False), (False, True, False),
+])
+def test_candidate_box_left_aligns_and_ocr_sits_immediately_to_its_right(
+    monkeypatch, candidate, show_candidate, expected_indicator,
+):
+    app, lines, entry, _geometry = _render(
+        monkeypatch, index=0, ratio=50, candidate=candidate,
+        show_candidate=show_candidate, show_ocr=True,
+    )
+    right = max(lines[0][0], lines[0][2])
+    windows = app.canvas.windows
+    boxes = [v for v in windows if isinstance(v[2], _Checkbutton)]
+    menus = [v for v in windows if isinstance(v[2], _OCRMenu)]
+    assert len(boxes) == int(expected_indicator)
+    assert len(menus) == 1
+    menu = menus[0]
+    assert menu[3]["anchor"] == "nw"
+    assert menu[0] == right + (32 if expected_indicator else 0)
+    if expected_indicator:
+        box = boxes[0]
+        assert box[0] == right
+        assert box[3]["anchor"] == "nw"
+        assert box[2].options["state"] == "disabled"
+        assert box[1] == menu[1]
+
+
+@pytest.mark.parametrize("ratio", [50, 75, 100])
+def test_selector_starts_at_marker_end_without_candidate(monkeypatch, ratio):
+    app, lines, _entry, _geometry = _render(
+        monkeypatch, ratio=ratio, show_ocr=True, candidate=False,
+    )
+    menu = next(v for v in app.canvas.windows if isinstance(v[2], _OCRMenu))
+    assert menu[0] == max(lines[0][0], lines[0][2])
+    assert menu[3]["anchor"] == "nw"
