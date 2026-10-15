@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import unicodedata
 from typing import Iterable, Mapping
 
 from PIL import Image, ImageOps, PngImagePlugin
@@ -48,7 +49,7 @@ def _path_hash(source_path: Path) -> str:
 def _safe_stem(source_path: Path) -> str:
     """Keep ordinary names exactly, sanitizing only non-portable edge cases."""
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", Path(source_path).stem)
-    name = name.rstrip(" .")
+    name = unicodedata.normalize("NFC", name).rstrip(" .")
     if not name:
         name = "page"
     if name.casefold() in _WINDOWS_RESERVED:
