@@ -67,10 +67,12 @@ def _prefixed_multiline_display_head(
         and 0.70 <= width / height <= 1.50
         and width <= 3.50 * reference
         and 0.50 * reference <= float(x0) - first_x <= 1.45 * reference
-        # Printed superscripts/numbering may start the physical row before
-        # the large glyph ink. Keep the row-front contract (under half a row);
-        # a one-row-late ordinary character must not acquire this exception.
-        and abs(float(y0) - float(getattr(nearest, "y0", 0) or 0))
+        # A numbered glyph may start BELOW its printed row (the short prefix
+        # starts first), but not appreciably ABOVE it. The asymmetric window
+        # also rejects a candidate whose nearest row switches to the NEXT
+        # physical row after an artificial downward shift (page 080598).
+        and -0.12 * reference
+        <= float(y0) - float(getattr(nearest, "y0", 0) or 0)
         <= 0.40 * reference
     ):
         return False
