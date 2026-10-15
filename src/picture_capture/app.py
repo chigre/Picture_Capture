@@ -7044,7 +7044,7 @@ class PictureCaptureApp(tk.Tk):
         self.entry_editor_bindings: list[tuple[tk.Entry, WordEntry]] = []
         self.status_var = tk.StringVar(value="请选择一个词典扫描项目目录")
         self.cursor_status_var = tk.StringVar(value="坐标：—｜缩放 100%｜词条 0")
-        self.image_metadata_status_var = tk.StringVar(value="—×— px｜DPI —")
+        self.image_metadata_status_var = tk.StringVar(value="—×— px")
         self.hide_var = tk.BooleanVar(value=False)
         # polygon_var controls visibility of saved illustration polygons.
         # polygon_draw_var is a separate, explicit editing mode.
@@ -15375,7 +15375,8 @@ class PictureCaptureApp(tk.Tk):
             "精修画线",
             f"将重新调用现有 Y 精修逻辑处理所选 {len(indices)} 页：\n"
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
-            "\n\n只允许移动已有画线，不会新增或删除任何画线；"
+            "\n\n请先去设置中心的精修Y调整参数。\n"
+            "只允许移动已有画线，不会新增或删除任何画线；"
             "每条线的 Y 移动量不会超过当前精修搜索半径。是否继续？",
             parent=self,
         ):
@@ -15413,6 +15414,8 @@ class PictureCaptureApp(tk.Tk):
                 )
             if [entry.word for entry in refined] != original_words:
                 raise RuntimeError(f"{page.name} 精修意外修改了词条文本")
+            from .marker_refinement_guard import validate_refined_markers
+            validate_refined_markers(page, entries, refined, image.size)
             write_pdic(pdic_path(page), refined, image.width, pages_info[index])
             return {
                 "index": index,
@@ -15608,6 +15611,19 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
+        from .layout_mask_source_guard import missing_saved_illustrations
+        missing_ppp = missing_saved_illustrations(
+            (self.project.images[i] for i in indices), self.settings,
+        )
+        if missing_ppp:
+            names = "、".join(page.name for page in missing_ppp[:4])
+            suffix = f" 等 {len(missing_ppp)} 页" if len(missing_ppp) > 4 else ""
+            message = (f"这些页面缺少已保存的 PPP 插图数据：{names}{suffix}。\n"
+                       "请先运行插图识别，或在设置中心→插图关闭‘使用已有的插图数据’。\n"
+                       "本次画线未开始，其他页面的 PDIC 不会被部分覆盖。")
+            self.status_var.set(message)
+            messagebox.showerror("Layout 插图复用检查失败", message, parent=self)
+            return
         import time
         batch_started_at = time.time()
         self.save_pdic(silent=True)
@@ -15724,6 +15740,7 @@ class PictureCaptureApp(tk.Tk):
                 paddle_filter_rules_path=filter_path,
                 profile_page_index=index,
                 page_sections=sections,
+                source_image_path=page,
             )
             if tracing:
                 stages["ocr_detect_entries"] = time.perf_counter() - trace_tick

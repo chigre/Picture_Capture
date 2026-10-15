@@ -45,6 +45,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         (field, bool(getattr(settings, switch, True)))
         for field, switch in ORDINARY_AUTO_LAYOUT_FIELDS
     )
+    from .layout_mask_source_guard import saved_illustration_stamp
     return (
         id(getattr(app, "image", None)),
         int(getattr(app, "current_index", -1)),
@@ -57,6 +58,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         bool(getattr(settings, "layout_mask_illustrations_use_existing", False)),
         "layout_mask_illustrations",
         bool(getattr(settings, "layout_mask_illustrations", False)),
+        saved_illustration_stamp(getattr(app, "current_page", None), settings),
     )
 
 
@@ -131,11 +133,15 @@ def draw_layout_visualization(app: Any, *, minimal_text: bool = False) -> None:
     except Exception as exc:
         # Visualization is diagnostic-only. Never let a failed overlay break the
         # ordinary GUI or detection workflow.
+        reason = f"{type(exc).__name__}: {exc}"
+        status = getattr(app, "status_var", None)
+        if status is not None:
+            status.set(f"显示 LAYOUT 失败：{reason}")
         try:
             canvas.create_text(
                 12, 12,
                 anchor="nw",
-                text=f"Layout visualization unavailable: {type(exc).__name__}",
+                text=f"显示 LAYOUT 失败：{reason[:175]}",
                 fill="#b00020",
                 tags=(_LAYOUT_TAG,),
             )
