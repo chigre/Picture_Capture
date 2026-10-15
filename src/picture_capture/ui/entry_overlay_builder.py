@@ -12,7 +12,8 @@ import tkinter as tk
 from ..models import Entry as WordEntry
 from ..processing import column_index, line_box
 from ..overlay_layout_helpers import (
-    canonical_headword_marker_span, horizontal_entry_editor_slot,
+    canonical_headword_marker_span, effective_overlay_column_width,
+    horizontal_entry_editor_slot,
     effective_main_overlay_font_size, entry_index_label_layout,
     horizontal_ocr_menu_layout, horizontal_overlay_layout,
     scaled_overlay_line_width, transformed_entry_anchor,
@@ -37,9 +38,12 @@ def draw_entry_overlay(
     entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
     col = column_index(entry.x, geometry, entry.y)
     canonical_x = geometry.x_at(col, entry_v)
+    column_width = effective_overlay_column_width(
+        geometry, col, self.settings.column_width,
+    )
     record = {"widgets": [], "canvas_items": [], "index_widget": None}
     marker_left, marker_right = canonical_headword_marker_span(
-        canonical_x, geometry.column_widths[col], self.settings.right_ratio,
+        canonical_x, column_width, self.settings.right_ratio,
     )
     marker_start, marker_end = geometry.transform.canonical_marker_to_source(
         (marker_left, entry_v), (marker_right, entry_v),
@@ -47,7 +51,7 @@ def draw_entry_overlay(
     )
     column_end_source_x, _column_end_source_y = (
         geometry.transform.canonical_to_source_point(
-            round(canonical_x + geometry.column_widths[col]),
+            round(canonical_x + column_width),
             round(entry_v), geometry.source_size,
         )
     )
@@ -195,7 +199,7 @@ def draw_entry_overlay(
     if horizontal:
         (editor_x, editor_y), editor_anchor, horizontal_index, horizontal_index_anchor = (
             horizontal_overlay_layout(
-                geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
+                geometry.transform, canonical_x, entry_v, column_width,
                 float(self.settings.main_entry_x_ratio), geometry.source_size,
                 self.view_scale, rtl=rtl,
             )
@@ -209,7 +213,7 @@ def draw_entry_overlay(
         # Match horizontal semantics: apply main_entry_x_ratio within the
         # 当前栏 first, then transform that point to source space.
         editor_x, editor_y = transformed_entry_anchor(
-            geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
+            geometry.transform, canonical_x, entry_v, column_width,
             float(self.settings.main_entry_x_ratio), geometry.source_size, self.view_scale,
         )
     
