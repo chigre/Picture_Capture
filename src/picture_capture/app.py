@@ -14354,43 +14354,7 @@ class PictureCaptureApp(tk.Tk):
         self.change_page(1)
 
     def canvas_motion(self, event: tk.Event) -> None:
-        if self.image:
-            canvas_x = self.canvas.canvasx(event.x)
-            canvas_y = self.canvas.canvasy(event.y)
-            display_width = self.image.width * self.view_scale
-            display_height = self.image.height * self.view_scale
-            if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
-                if self._section_editing or self._preprocess_mode_active():
-                    self.cursor_canvas_xy = None
-                    self.canvas.delete("cursor-guide")
-                else:
-                    self.cursor_canvas_xy = (canvas_x, canvas_y)
-                    self.draw_cursor_guides(canvas_x, canvas_y)
-                source_x = round(canvas_x / self.view_scale)
-                source_y = round(canvas_y / self.view_scale)
-                if (
-                    not self._section_editing
-                    and not self._preprocess_mode_active()
-                    and self._ruler_hit_id(source_x, source_y) is not None
-                ):
-                    self._show_ruler_hint(event)
-                else:
-                    self._hide_ruler_hint()
-                if self._preprocess_mode_active():
-                    self.cursor_status_var.set(
-                        f"预处理预览 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%"
-                    )
-                else:
-                    self.cursor_status_var.set(
-                        f"原图 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
-                    )
-            else:
-                self.cursor_canvas_xy = None
-                self.canvas.delete("cursor-guide")
-                self._hide_ruler_hint()
-                self._set_idle_cursor_status()
+        self._canvas_controller_for_call().canvas_motion(event)
 
     def _confidence_bg(self, confidence: float | None) -> str:
         if confidence is None:
