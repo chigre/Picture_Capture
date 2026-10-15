@@ -178,6 +178,16 @@ def main() -> int:
                             raise RuntimeError("Cached PNG source filename does not match its page")
                         if cached.info.get(FINGERPRINT_KEY) != source_fingerprint(path):
                             raise RuntimeError("Cached PNG source fingerprint does not match its page")
+                from picture_capture.ui.page_list_grid import page_grid_segments
+                app._page_index_grid.repaint()
+                segments = page_grid_segments(app.page_list)
+                if not any(width == 1 for _x, _y, width, _h in segments):
+                    raise RuntimeError("No vertical cell gridlines found in real Tk Treeview")
+                if not any(height == 1 for _x, _y, _w, height in segments):
+                    raise RuntimeError("No horizontal cell gridlines found in real Tk Treeview")
+                if app._page_index_grid.visible_segment_count != len(segments):
+                    raise RuntimeError("Pale cell grid failed to place every visible divider")
+                _stage("page index grid: actual Tk horizontal and vertical dividers OK")
                 _stage("actual synthetic page images: visible pixels, sorted IDs, flat source-validated cache OK")
 
                 # Previous smoke used THREE pages: it could never catch the
@@ -227,7 +237,38 @@ def main() -> int:
                     time.sleep(0.02)
                 else:
                     raise RuntimeError("Sorted/reordered page 31 displayed a stale or missing thumbnail")
-                _stage("thumbnails after scrolling beyond page nine and reordering: actual pixels OK")
+                app._page_index_grid.repaint()
+                lines_after_sort = page_grid_segments(app.page_list)
+                if not lines_after_sort or app._page_index_grid.visible_segment_count != len(lines_after_sort):
+                    raise RuntimeError("Cell borders vanished after scrolling/reordering page index")
+                _stage("thumbnails and cell borders after scrolling and sorting: OK")
+                # A temporary synthetic project must not disappear while the
+                # bounded background workers still publish thumbnail PNGs.
+                # In particular Windows denies unlinking a worker-owned .tmp
+                # while the background os.replace is in flight. Drain the
+                # existing after/queue path and assert all pages are cached
+                # before leaving this TemporaryDirectory.
+                for _ in range(600):
+                    app.update()
+                    if (
+                        thumbs._tasks.active == 0
+                        and all(
+                            thumbnail_cache_path(project_root, path).is_file()
+                            for path in scans
+                        )
+                    ):
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise RuntimeError(
+                        "Synthetic thumbnail workers did not drain before "
+                        "temporary project cleanup"
+                    )
+                if list(thumbnail_cache_dir(project_root).glob(".thumbnail-*.tmp")):
+                    raise RuntimeError(
+                        "Thumbnail workers left unfinished temp files"
+                    )
+                _stage("36-page cache jobs fully drained before temp project removal")
             finally:
                 thumbs.enabled_var.set(False)
                 thumbs.width = 80

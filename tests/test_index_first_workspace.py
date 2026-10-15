@@ -85,7 +85,13 @@ def test_index_width_and_treeview_columns_fit_available_space():
     assert 'self.page_range_controls_row = range_row' in app
     assert 'min(preferred_sidebar_width(app), width - 160)' in tools
     assert 'font.nametofont("TkHeadingFont")' in app
-    assert 'orient="horizontal", command=self.page_list.xview' in app
+    assert 'orient="horizontal", command=self._page_list_hscroll' in app
+    horizontal_handler = app[
+        app.index('    def _page_list_hscroll('):
+        app.index('    def _page_list_yscroll(', app.index('    def _page_list_hscroll('))
+    ]
+    assert 'self.page_list.xview(*args)' in horizontal_handler
+    assert 'self._schedule_page_cell_overlay_refresh()' in horizontal_handler
     assert 'body_font.measure(name) for name in page_names' in app
     assert '"page": max(52, page_width)' in app
     assert 'self.page_list.column(column, width=width, anchor="center", stretch=False)' in app

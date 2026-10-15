@@ -137,6 +137,7 @@ from .ui.controllers import (
     ReviewController, SESSION_STATE_FILENAME, SessionController,
 )
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
+from .ui.page_list_grid import PageListGrid
 from .ui.text_wrap import (
     _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
     _wrap_mixed_ui_text,
@@ -8403,10 +8404,11 @@ class PictureCaptureApp(tk.Tk):
         self.page_list.column("fill_status", width=110, anchor="center", stretch=False)
         self.page_list.column("illustrations", width=58, anchor="center", stretch=False)
         self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
-        page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self.page_list.xview)
+        page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self._page_list_hscroll)
         self.page_list.configure(yscrollcommand=self._page_list_yscroll,
                                  xscrollcommand=page_hscroll.set)
         self.page_list.grid(row=0, column=0, sticky="nsew")
+        self._page_index_grid = PageListGrid(self.page_list)
         page_hscroll.grid(row=1, column=0, sticky="ew")
         self.page_scroll.grid(row=0, column=1, sticky="ns")
         self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
@@ -8578,8 +8580,7 @@ class PictureCaptureApp(tk.Tk):
 
         header_font = font.nametofont("TkHeadingFont")
         body_font = font.nametofont("TkDefaultFont")
-        # Size to content instead of giving "page" a disproportionate share
-        # of the entire sidebar width. Keep long filenames scrollable.
+        # Preserve content-sized page columns and horizontal scrolling.
         page_names = (
             page.stem for page in getattr(self.project, "images", ())
         ) if self.project else ()
@@ -8595,6 +8596,7 @@ class PictureCaptureApp(tk.Tk):
             label = self._page_list_heading_labels.get(column, column)
             width = max(base.get(column, 60), header_font.measure(label) + 6)
             self.page_list.column(column, width=width, anchor="center", stretch=False)
+        self._schedule_page_cell_overlay_refresh()
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
         popup = getattr(self, "_page_list_section_heading_hint", None)
@@ -8659,12 +8661,7 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def _schedule_page_cell_overlay_refresh(self) -> None:
-        """Coalesce Treeview cell-overlay repaints into one idle callback.
-
-        Treeview can emit many yscroll/configure callbacks while rows are being
-        inserted or metadata is filled.  Scheduling a repaint for each callback
-        made large projects appear to hang during startup.
-        """
+        """Coalesce visible table colors, cell borders and thumbnails on idle."""
         if not hasattr(self, "page_list"):
             return
         if self._page_overlay_refresh_job is not None:
@@ -8673,6 +8670,9 @@ class PictureCaptureApp(tk.Tk):
         def run() -> None:
             self._page_overlay_refresh_job = None
             self._refresh_lined_cell_overlays()
+            grid = self.__dict__.get("_page_index_grid")
+            if grid is not None:
+                grid.repaint(dark="dark" in str(getattr(self, "appearance_mode", "")).lower())
             previews = self.__dict__.get("_page_thumbnails")
             if previews is not None:
                 previews.request_visible()
@@ -8686,6 +8686,10 @@ class PictureCaptureApp(tk.Tk):
 
     def _page_list_scroll(self, *args) -> None:
         self.page_list.yview(*args)
+        self._schedule_page_cell_overlay_refresh()
+
+    def _page_list_hscroll(self, *args) -> None:
+        self.page_list.xview(*args)
         self._schedule_page_cell_overlay_refresh()
 
     def _page_list_yscroll(self, first: str, last: str) -> None:
@@ -9021,13 +9025,7 @@ class PictureCaptureApp(tk.Tk):
         return visible_page_iids(self.page_list) if hasattr(self, "page_list") else []
 
     def _refresh_lined_cell_overlays(self) -> None:
-        """Paint semantic colors only for visible page-list cells.
-
-        Tk/ttk Treeview tags color whole rows rather than individual cells, so
-        child Labels are placed over the relevant cells.  v2.9.13 keeps the
-        v2.9.12 color semantics but repaints only visible rows and coalesces
-        callbacks, preventing large projects from stalling during list startup.
-        """
+        """Paint status-cell labels for visible rows; grid paints afterwards."""
         if not hasattr(self, "page_list"):
             return
         self._clear_lined_cell_overlays()
