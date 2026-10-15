@@ -616,7 +616,7 @@ class RefBoxController:
                     dash=() if selected else (3, 3),
                     tags=("ref-box", "ref-box-border"),
                 )
-            if box.text and getattr(config, "ref_box_show_text", True):
+            if box.text.strip() and getattr(config, "ref_box_show_text", True):
                 app.canvas.create_text(
                     xx + 2, yy + 1, text=box.text, anchor="nw",
                     width=max(4, ww-4),
