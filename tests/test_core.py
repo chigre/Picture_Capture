@@ -1841,7 +1841,11 @@ def test_v2810_save_current_page_is_mode_specific():
     end = text.index("    def save_current_page(", start)
     block = text[start:end]
     assert 'if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):' in block
-    assert "write_ppp(target, self.polygons, self.current_page.stem)" in block
+    # PPP still has its own mode-specific save path, but now passes through
+    # the disk-first canonical-label writer rather than serializing raw labels.
+    assert "self._save_normalized_ppp()" in block
+    assert 'return target' in block
+    assert 'self._illustration_controller_for_call().persist_current()' in text
     assert "self.save_pdic(silent=True, sync_editors=sync_editors)" in block
     assert "self.polygon_var.get()" not in block
 
@@ -4463,15 +4467,19 @@ def test_v2101_auto_illustration_detection_writes_ppp_and_preserves_manual(tmp_p
     saved = read_ppp(page.with_suffix(".ppp"))
     assert first["manual"] == 1
     assert first["auto"] >= 1
-    assert any(r.label == "manual" for r in saved)
+    assert sum(r.points == manual.points for r in saved) == 1
+    assert all(r.label.startswith("P_") and f"|{page.stem}|" in r.label for r in saved)
     assert any("|AUTO_" in r.label for r in saved)
+    assert next(r for r in saved if r.points == manual.points).label.endswith("|xxx")
 
     # Rerun must replace AUTO polygons rather than append duplicates.
     second = detect_illustrations_to_ppp(page, settings)
     saved2 = read_ppp(page.with_suffix(".ppp"))
     assert second["manual"] == 1
     assert sum("|AUTO_" in r.label for r in saved2) == second["auto"]
-    assert sum(r.label == "manual" for r in saved2) == 1
+    assert sum(r.points == manual.points for r in saved2) == 1
+    assert not any("|AUTO_" in r.label for r in saved2 if r.points == manual.points)
+    assert len({r.label.split("|")[0] for r in saved2}) == len(saved2)
 
 
 def test_v2101_illustration_detection_button_uses_selected_scope_and_auto_ppp():
