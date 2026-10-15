@@ -16,6 +16,7 @@ from .entry_ocr_crop import (
     entry_ocr_crop_box,
     resolve_entry_ocr_row_metrics,
 )
+from .entry_ocr_visual_scale import visual_oversized_head_height
 
 
 REGULAR_COLOR = "#2B7FFF"
@@ -114,12 +115,19 @@ def draw_ocr_crop_preview(app: Any) -> None:
 
     for entry in list(getattr(app, "entries", []) or []):
         try:
+            # Keep preview and the actual 【仅OCR】 crop *identical*, even
+            # when a manually drawn large head was saved with regular role.
+            visual_height = visual_oversized_head_height(
+                canonical, entry, geometry, effective,
+                line_height=row_metrics.line_height,
+            )
             canonical_box = entry_ocr_crop_box(
                 entry,
                 geometry,
                 effective,
                 canonical_size,
                 row_metrics=row_metrics,
+                visual_head_height=visual_height,
             )
             source_box = geometry.transform.canonical_box_to_source(
                 canonical_box,
@@ -131,7 +139,7 @@ def draw_ocr_crop_preview(app: Any) -> None:
             continue
 
         active = _is_active_entry(entry, active_target)
-        oversized = str(meta.entry_scale) == "oversized"
+        oversized = str(meta.entry_scale) == "oversized" or visual_height > 0
         color = ACTIVE_COLOR if active else (OVERSIZED_COLOR if oversized else REGULAR_COLOR)
         width = 4 if active else 2
         dash = () if active else ((7, 3) if oversized else (4, 3))
