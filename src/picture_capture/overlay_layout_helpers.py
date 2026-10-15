@@ -88,7 +88,7 @@ def canonical_headword_marker_span(
     """
     left = int(round(float(column_x)))
     fraction = max(0.01, min(1.0, float(right_ratio) / 100.0))
-    right = int(round(float(column_x) + max(1.0, float(column_width)) * fraction))
+    right = left + max(1, int(round(max(1.0, float(column_width)) * fraction)))
     return left, max(left + 1, right)
 
 
