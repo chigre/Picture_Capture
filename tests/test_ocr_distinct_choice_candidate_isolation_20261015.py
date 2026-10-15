@@ -27,7 +27,7 @@ from picture_capture.review_text_helpers import (
     ({"paddle": {"lemma": ""}, "tesseract": {}, "word": "甲"}, False),
     ({"paddle": {"lemma": "甲"}, "tesseract": {"lemma": "乙"}, "word": "甲"}, True),
     ({"paddle": {"lemma": "甲"}, "lens": {"lemma": "乙"}, "word": "乙"}, True),
-    ({"paddle": {"lemma": "甲"}, "word": "乙"}, True),
+    ({"paddle": {"lemma": "甲"}, "word": "乙"}, False),\n    ({"paddle": {"lemma": "甲"}, "tesseract": {"lemma": "甲"}, "word": "乙"}, False),
 ])
 def test_choices_really_have_distinct_nonempty_text(candidate, available):
     assert _has_distinct_ocr_alternatives(candidate) is available
