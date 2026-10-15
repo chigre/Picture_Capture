@@ -15,9 +15,11 @@ from tkinter import messagebox
 from typing import Any
 
 from .crop import complete_crop_widths
-from ...formats import pdic_path, read_pdic, read_ppp, write_ppp
+from ...formats import pdic_path, read_ppp, write_ppp
 from ...models import PolygonRegion
-from ...illustration_labels import illustration_labels, label_text, user_edited_link
+from ...illustration_labels import (
+    illustration_labels, label_text, user_edited_link, previous_entry_ref_for_image,
+)
 from ...illustration_batch_association import associate_existing_ppp_job
 from ..illustration_association_dialog import confirm_illustration_association
 from ...processing import (
@@ -32,6 +34,13 @@ class IllustrationController:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+
+    def previous_entry_ref(self) -> tuple[str, int] | None:
+        """Last PDIC ordinal on the actual preceding project page."""
+        app = self.app
+        if app.project is None or app.current_index <= 0:
+            return None
+        return previous_entry_ref_for_image(app.project.images[app.current_index - 1])
 
     def preview_labels(self) -> list[str]:
         """Read-only visible captions in the same SECTION/column order as PDIC."""
@@ -60,12 +69,7 @@ class IllustrationController:
             return False
         current = list(app.polygons if proposed is None else proposed)
         try:
-            previous_ref = None
-            if associate and app.project is not None and app.current_index > 0:
-                preceding = app.project.images[app.current_index - 1]
-                previous_entries = read_pdic(pdic_path(preceding))
-                if previous_entries and len(previous_entries) <= 1000:
-                    previous_ref = (preceding.stem, len(previous_entries) - 1)
+            previous_ref = self.previous_entry_ref() if associate else None
             labels = illustration_labels(
                 current, page.stem, app._get_cached_display_geometry(),
                 app.page_sections,
@@ -381,7 +385,8 @@ class IllustrationController:
                 str(page), str(app._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
                 index,
-                *((True,) if config.get("illustration_transparent_background", False) else ()),
+                bool(config.get("illustration_transparent_background", False)),
+                str(project.images[index - 1]) if index > 0 else None,
             )
 
         def consume_result(_index: int, result):
