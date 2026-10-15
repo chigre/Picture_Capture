@@ -185,7 +185,7 @@ def test_auxiliary_length_matches_entry_marker_ratio_and_hit_bound(
     assert controller._nearest(end + 1, 100) is None
 
 
-def test_entry_delete_button_is_orange_gold_but_auxiliary_keeps_its_color(monkeypatch):
+def test_entry_delete_button_is_burgundy_but_auxiliary_is_orange_gold(monkeypatch):
     monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
     monkeypatch.setattr(
         overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial",
@@ -199,11 +199,12 @@ def test_entry_delete_button_is_orange_gold_but_auxiliary_keeps_its_color(monkey
         _Canvas(), kind="auxiliary", **opts,
     )
     assert entry.options["font"] == auxiliary.options["font"] == ("Arial", 9, "bold")
-    assert entry.options["bg"] == "#f5b83d"
-    assert entry.options["activebackground"] == "#e9a820"
-    assert entry.options["fg"] == "#222222"
-    assert auxiliary.options["bg"] == "#9d042f"
-    assert auxiliary.options["fg"] == "#ffffff"
+    assert entry.options["bg"] == "#9d042f"
+    assert entry.options["activebackground"] == "#9d042f"
+    assert entry.options["fg"] == "#ffffff"
+    assert auxiliary.options["bg"] == "#f5b83d"
+    assert auxiliary.options["activebackground"] == "#e9a820"
+    assert auxiliary.options["fg"] == "#222222"
     assert entry.options["cursor"] == auxiliary.options["cursor"] == "hand2"
 
 
