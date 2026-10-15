@@ -102,7 +102,7 @@ FIELDS = [
         ("AI 特殊符号正则", "paddle_special_symbol_regex", str),
         ("主界面字体", "main_entry_font_family", str),
         ("主界面字号（100%）", "main_entry_font_size", int),
-        ("主界面词框宽度（字符）", "main_entry_width_chars", int),
+        ("竖排词框长度（字符；横排自动至栏末）", "main_entry_width_chars", int),
         ("主界面词框横向位置（栏宽比例）", "main_entry_x_ratio", float),
         ("校对界面字体", "review_entry_font_family", str),
         ("校对界面字号", "review_entry_font_size", int),

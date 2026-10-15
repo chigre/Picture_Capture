@@ -195,7 +195,8 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     check(row, "缩放", qb["main_entry_follow_zoom"])
 
     row = line()
-    value(row, "宽度(字符)", "main_entry_width_chars", 3)
+    label(row, "横排自动适宽")
+    value(row, "竖排字数", "main_entry_width_chars", 3)
     value(row, "偏移%", "main_entry_x_ratio", 3)
     family_line("main_entry_font_family")
     font_style(line(), "main_entry_font_size",

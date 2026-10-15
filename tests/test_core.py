@@ -5450,7 +5450,12 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'bg="#9d042f"' in overlay
     assert 'activebackground="#9d042f"' in overlay
     assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in overlay
-    assert 'delete_x = float(index_x - index_width - 1)' in overlay
+    # The marker-owned [X] now occupies the resolved column end, rather
+    # than borrowing the index label's screen position. The dedicated
+    # runtime overlay test checks pixel geometry and four visibility states.
+    assert 'delete_x = column_end_screen_x' in overlay
+    assert 'delete_anchor = "nw" if rtl else "ne"' in overlay
+    assert 'horizontal_entry_editor_slot(' in overlay
 
 
 def test_platform_language_font_recommendations_and_auto_normalization():
