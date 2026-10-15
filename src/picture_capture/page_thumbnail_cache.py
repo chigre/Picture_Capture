@@ -21,8 +21,8 @@ from PIL import Image, ImageOps, PngImagePlugin
 
 from picture_capture.project_storage import storage_root
 
-CACHE_VERSION = "page-index-v3"
-CACHE_BOUNDS = (320, 448)
+CACHE_VERSION = "page-index-v4"
+CACHE_BOUNDS = (120, 120)
 FINGERPRINT_KEY = "picture_capture_source_fingerprint"
 SOURCE_KEY = "picture_capture_source_path_hash"
 SOURCE_FILENAME_KEY = "picture_capture_original_filename"
