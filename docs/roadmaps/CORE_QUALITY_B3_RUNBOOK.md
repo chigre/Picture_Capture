@@ -1,3 +1,9 @@
+## #519 已合并后 CI 验证：R3 部分交付，不是 R3 完成（2026-10-15）
+
+PR [#519](https://github.com/chigre/Picture_Capture/pull/519) head `16a6e8b2` [PR CI 38703019216](https://github.com/chigre/Picture_Capture/actions/runs/38703019216) 全绿（Windows/macOS/Ubuntu/Python 3.10，新增 real-Tk synthetic candidate delete、architecture、wheel）；CodeQL success。merge SHA `6987a4a2eac37a6b3524e6c63ae87a1b60f5ad7a`，[postmerge main CI 38703692439](https://github.com/chigre/Picture_Capture/actions/runs/38703692439)、[Push 38703694285](https://github.com/chigre/Picture_Capture/actions/runs/38703694285) success。确认继续使用事务日志/源指纹；未放宽旧 app.py ratchet。
+
+完成 OCR candidate-linked 删除的原子提交（manual_selection、PDIC、simplified，v2 crash recovery），保存成功才刷新 Entry、OCR candidate.selected、checkbox；失败和脏编辑 fail-closed。仍不提供 candidate-owned Undo/Redo；当前执行安全删除后清空已存 Undo/Redo，避免错误恢复。继续 #503：定义 candidate 状态精确双向拥有者、支持同一事务三文件恢复和 redo、新保存清 redo、连续20步、FocusOut/autosave/删中间行/跨页/关闭真实 Tk，以及真人 Windows R3 验收。不得因该部分包合并就标 R3 verified 或关闭 #503。R2/B2 in_progress，#483 未验收且开放；R2 证据 OFF，严禁原图训练上传。
+
 # PC-CQ/B3 — R3 校对事务化：实现与验收记录
 
 **#502 安全工程增量已合并**：PR head `e063ddf0d6de64bf9ae3f97cd62a0b81b72edf06` 的 [CI 38630143182](https://github.com/chigre/Picture_Capture/actions/runs/38630143182) 成功；合并 `main@910b889898efab1ffc2975cdfa613eb675be70ef` 的 [CI 38630567897](https://github.com/chigre/Picture_Capture/actions/runs/38630567897) 四平台成功。**R3.1/R3.2 整体仍 in_progress**，下一工作包 [#503](https://github.com/chigre/Picture_Capture/issues/503) 包含 OCR 候选删除/manual_selection/复杂组合编辑的所有权与跨文件撤销；相关真人 GUI 验收还未执行。R2/B2 用户明确暂不验收。以下 T1–T12 的合成回归在 CI 通过，但不能代替真实人工操作。
