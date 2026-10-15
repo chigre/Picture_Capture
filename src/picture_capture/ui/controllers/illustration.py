@@ -17,7 +17,9 @@ from typing import Any
 from .crop import complete_crop_widths
 from ...formats import pdic_path, read_ppp, write_ppp
 from ...models import PolygonRegion
-from ...illustration_labels import illustration_labels, label_text, user_edited_link
+from ...illustration_labels import (
+    illustration_labels, label_text, user_edited_link, previous_entry_ref_for_image,
+)
 from ...illustration_batch_association import associate_existing_ppp_job
 from ..illustration_association_dialog import confirm_illustration_association
 from ...processing import (
@@ -32,6 +34,13 @@ class IllustrationController:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+
+    def previous_entry_ref(self) -> tuple[str, int] | None:
+        """Last PDIC ordinal on the actual preceding project page."""
+        app = self.app
+        if getattr(app, "current_index", -1) <= 0 or getattr(app, "project", None) is None:
+            return None
+        return previous_entry_ref_for_image(app.project.images[app.current_index - 1])
 
     def preview_labels(self) -> list[str]:
         """Read-only visible captions in the same SECTION/column order as PDIC."""
@@ -60,11 +69,12 @@ class IllustrationController:
             return False
         current = list(app.polygons if proposed is None else proposed)
         try:
+            previous_ref = self.previous_entry_ref() if associate else None
             labels = illustration_labels(
                 current, page.stem, app._get_cached_display_geometry(),
                 app.page_sections,
                 entries=list(app._ordered_entries_reading_order()) if associate else (),
-                associate=associate,
+                associate=associate, previous_entry_ref=previous_ref,
             )
             if label_overrides:
                 for index, label in label_overrides.items():
@@ -258,7 +268,10 @@ class IllustrationController:
         current = int(app.current_index)
 
         def job(index: int, _position: int, _total: int):
-            return associate_existing_ppp_job(str(pages[index]), settings, index)
+            return associate_existing_ppp_job(
+                str(pages[index]), settings, index,
+                str(pages[index - 1]) if index > 0 else None,
+            )
 
         def done(completed, total, stopped, results, error):
             # Always reload: an I/O hook may fail after an atomic PPP replace,
@@ -372,7 +385,8 @@ class IllustrationController:
                 str(page), str(app._ppp_read_path(page)), str(out_dir), settings,
                 top_y, bottom_y, margin, str(pdic_path(page)), entry_left, entry_right, integrate_illustrations,
                 index,
-                *((True,) if config.get("illustration_transparent_background", False) else ()),
+                bool(config.get("illustration_transparent_background", False)),
+                str(project.images[index - 1]) if index > 0 else None,
             )
 
         def consume_result(_index: int, result):

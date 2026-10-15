@@ -13264,7 +13264,7 @@ class PictureCaptureApp(tk.Tk):
             integrate_illustrations=integrate_illustrations,
             profile_page_index=max(0, int(self.current_index)),
             page_sections=list(self.page_sections),
-            auxiliary_lines=list(self._auxiliary_edits.lines),
+            auxiliary_lines=list(self._auxiliary_edits.lines), page_stem=self.current_page.stem, previous_entry_ref=self._illustration_controller_for_call().previous_entry_ref(),
         )
 
     def _draw_crop_plan_preview(self) -> None:

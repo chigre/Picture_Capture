@@ -100,6 +100,7 @@ def illustration_labels(
     regions: Sequence[PolygonRegion], page_stem: str, geometry,
     page_sections: Sequence[PageSection] | None = None,
     *, entries: Sequence[Entry] = (), associate: bool = False,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> list[str]:
     """Return the target labels indexed by original polygon identity/order.
 
@@ -113,15 +114,48 @@ def illustration_labels(
     )
     result = [""] * len(regions)
     for ordinal, (index, region) in enumerate(keyed, 1):
+        target_page = page_stem
         if associate:
             entry_index = _nearest_above_entry(region, entries, geometry, sections)
             link = f"{entry_index:03d}" if entry_index is not None else ASSOCIATION_UNKNOWN
+            if entry_index is None and previous_entry_ref is not None:
+                # Only the very first reading lane may continue a word from
+                # the preceding page. Do not borrow the previous-page ID for
+                # another column or SECTION with no local predecessor.
+                section, column, _top, _left = _region_key(region, geometry, sections)
+                prior_page, prior_index = previous_entry_ref
+                if section == 0 and column == 0 and prior_page and 0 <= prior_index <= 999:
+                    target_page, link = prior_page, f"{prior_index:03d}"
         else:
             link = _existing_link(region.label)
+            existing = LABEL_PATTERN.match(str(region.label or "").strip())
+            # A saved cross-page continuation must survive manual movement,
+            # local renumbering and later ordinary PPP saves. A missing link
+            # (xxx) cannot confer foreign-page ownership.
+            if existing and link != ASSOCIATION_UNKNOWN:
+                target_page = existing.group(2)
         result[index] = (
-            f"P_{ordinal:02d}|{page_stem}|{link}{_origin_token(region.label)}"
+            f"P_{ordinal:02d}|{target_page}|{link}{_origin_token(region.label)}"
         )
     return result
+
+
+def previous_entry_ref_for_image(previous_image_path) -> tuple[str, int] | None:
+    """Return the last zero-based PDIC ID of a known preceding project page.
+
+    Caller supplies the actual project predecessor, not an inferred numeric
+    filename. Never create a link when that page has no readable PDIC entries.
+    """
+    if previous_image_path is None:
+        return None
+    from pathlib import Path
+    from .formats import pdic_path, read_pdic
+
+    previous = Path(previous_image_path)
+    entries = read_pdic(pdic_path(previous))
+    if not 1 <= len(entries) <= 1000:
+        return None
+    return previous.stem, len(entries) - 1
 
 
 def user_edited_link(original: str, typed: str) -> str:
@@ -177,5 +211,6 @@ def write_ordered_auto_ppp(
 
 __all__ = [
     "illustration_labels", "label_text", "user_edited_link",
+    "previous_entry_ref_for_image",
     "write_ordered_auto_ppp",
 ]

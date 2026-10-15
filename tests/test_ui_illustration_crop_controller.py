@@ -231,7 +231,7 @@ def test_phase4o_runner_snapshots_settings_and_preserves_default_payload(monkeyp
         _RunnerSettings(start_y=17, crop_parallel_workers=6),
         17, 0, 0,
         str(Path("/pdic/page001.pdic")),
-        0, 0, True, 0,
+        0, 0, True, 0, False, None,
     )
     assert payload[3] is not app.settings
     assert app.ppp_reads == [Path("/pages/page001.png")]

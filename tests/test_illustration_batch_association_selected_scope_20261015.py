@@ -212,7 +212,7 @@ def test_batch_scope_error_summary_survives_one_page_failure(tmp_path, monkeypat
     monkeypatch.setattr(ui, "confirm_illustration_association", lambda _app: True)
     monkeypatch.setattr(
         ui, "associate_existing_ppp_job",
-        lambda path, _settings, index: {
+        lambda path, _settings, index, _previous=None: {
             "page_index": index, "page": Path(path).name,
             "status": "failed", "error": "PermissionError: read-only",
         },
@@ -316,3 +316,46 @@ def test_two_distinct_case_variant_ppp_files_are_not_overwritten(tmp_path):
     assert result["status"] == "skipped_ambiguous_ppp"
     assert lower.read_bytes() == before_lower
     assert upper.read_bytes() == before_upper
+
+
+def test_first_figure_links_to_previous_saved_last_ordinal_and_preserves_pdic(tmp_path):
+    previous = setup_page(tmp_path, "080101", ppp=False)
+    current = setup_page(tmp_path, "080102")
+    # Put the local first headword below the opening illustration.
+    write_pdic(
+        current.with_suffix(".pdic"),
+        [Entry("current first", 15, 260)],
+        250, ("080102", "080101", "080103"),
+    )
+    from picture_capture.formats import write_ppp
+    source = ppp_read_path_for_image(current)
+    write_ppp(source, [
+        PolygonRegion("", [(20, 25), (90, 25), (90, 85), (20, 85)]),
+    ], current.stem)
+    current_pdic_bytes = current.with_suffix(".pdic").read_bytes()
+    previous_pdic_bytes = previous.with_suffix(".pdic").read_bytes()
+    result = associate_existing_ppp_page(current, AppSettings(), 1, previous)
+    assert result["status"] == "changed"
+    assert result["linked"] == 1
+    assert read_ppp(source)[0].label == "P_01|080101|002"
+    assert associate_existing_ppp_page(current, AppSettings(), 1, previous)["status"] == "unchanged"
+    assert current.with_suffix(".pdic").read_bytes() == current_pdic_bytes
+    assert previous.with_suffix(".pdic").read_bytes() == previous_pdic_bytes
+
+
+def test_previous_pdic_change_during_association_refuses_overwrite(tmp_path, monkeypatch):
+    previous = setup_page(tmp_path, "080201", ppp=False)
+    current = setup_page(tmp_path, "080202")
+    source = ppp_read_path_for_image(current)
+    before = source.read_bytes()
+    original = service.illustration_labels
+
+    def race(*args, **kwargs):
+        previous.with_suffix(".pdic").write_text("changed from outside\\n", encoding="utf-8")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service, "illustration_labels", race)
+    result = associate_existing_ppp_job(str(current), AppSettings(), 1, str(previous))
+    assert result["status"] == "failed"
+    assert "previous PDIC changed concurrently" in result["error"]
+    assert source.read_bytes() == before

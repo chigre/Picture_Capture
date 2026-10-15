@@ -30,8 +30,10 @@ from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
+from .illustration_labels import previous_entry_ref_for_image
 from .crop_plan_formatting import (
     _normalized_crop_name,
+    canonical_polygon_link,
     entry_crop_piece_filename,
     page_crop_plan_dict,
     polygon_display_name,
@@ -3111,10 +3113,13 @@ def build_page_crop_plan(
     entry_left_padding: int = 0, entry_right_padding: int = 0,
     integrate_illustrations: bool = True, profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None, auxiliary_lines=None,
+    page_stem: str | None = None,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> PageCropPlan:
     """Plan entry and PPP crops before any pixels are written.
 
-    PPP display names associate to headwords by normalized exact name.  Linked
+    Canonical PPP labels link by explicit page + zero-based PDIC ordinal;
+    historical free-text labels still link by normalized exact headword.
     PPPs contained by or intersecting their entry crop travel with that entry;
     linked PPPs completely outside become standalone P images. Unlinked PPPs are
     standalone and are removed from ordinary entry crops.
@@ -3141,6 +3146,15 @@ def build_page_crop_plan(
             piece_indices_by_entry.setdefault(piece.entry_ref_index,[]).append(pos)
     names: dict[str,list[int]] = {}
     for i,entry in enumerate(ordered): names.setdefault(_normalized_crop_name(entry.word),[]).append(i)
+    # Index -1 denotes the existing WW_000 previous-page continuation pieces;
+    # it never indexes the current PDIC. Keep the original output filenames.
+    previous_positions = [
+        pos for pos, piece in enumerate(pieces)
+        if piece.entry_ref_index is None and piece.output_index == 0
+    ]
+    if previous_entry_ref is not None and previous_positions:
+        boxes_by_entry[-1] = [pieces[pos].box for pos in previous_positions]
+        piece_indices_by_entry[-1] = previous_positions
     effective = effective_page_settings(settings, image.size, profile_page_index)
     illustration_top = effective.start_y if top_y is None else int(top_y)
     illustration_bottom = 0 if bottom_y is None else int(bottom_y)
@@ -3153,7 +3167,17 @@ def build_page_crop_plan(
     partial_merge: dict[int,list[int]] = {}
     for pi,region in enumerate(polygons):
         name=polygon_display_name(region,pi)
-        candidates=names.get(_normalized_crop_name(name),[])
+        saved_link = canonical_polygon_link(region)
+        if saved_link is None:
+            candidates = names.get(_normalized_crop_name(name), [])
+        else:
+            source_page, linked_index = saved_link
+            candidates = []
+            if linked_index is not None:
+                if page_stem is not None and source_page == page_stem and 0 <= linked_index < len(ordered):
+                    candidates = [linked_index]
+                elif previous_entry_ref == saved_link and previous_positions:
+                    candidates = [-1]
         chosen=None; relation="unassociated"
         if candidates:
             scored=[]
@@ -3166,7 +3190,8 @@ def build_page_crop_plan(
                 overlap=sum(_box_intersection_area(pbox,b) for b in boxes) if pbox else 0
                 scored.append((rank,overlap,-ei,ei,rel))
             _rank,_overlap,_neg,chosen,relation=max(scored)
-        word=ordered[chosen].word if chosen is not None else ""
+        word = (ordered[chosen].word if chosen is not None and chosen >= 0
+                else "_上页末词条_" if chosen == -1 else "")
         box=illustration_polygon_box(image,region,top=top,bottom=bottom,margin_px=margin_px)
         standalone = relation in {"outside", "unassociated"} or (relation == "partial" and not integrate_illustrations)
         illustrations.append(IllustrationCropPlan(pi,name,chosen,word,relation,standalone,box))
@@ -3179,6 +3204,9 @@ def build_page_crop_plan(
                 best=max(candidates_pieces,key=lambda pos:_box_intersection_area(pbox,pieces[pos].box) if pbox else 0)
                 partial_merge.setdefault(best,[]).append(pi)
     illustrated_entries=set(linked_inside)
+    if -1 in illustrated_entries:
+        for pos in previous_positions:
+            pieces[pos].entry_ref_index = -1
     for pos,piece in enumerate(pieces):
         if piece.entry_ref_index in illustrated_entries:
             piece.source_mode="linked_original"
@@ -3244,6 +3272,7 @@ def split_whole_entries(
     integrate_illustrations: bool = True, profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     transparent_background: bool = False,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
@@ -3256,6 +3285,7 @@ def split_whole_entries(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index, page_sections=page_sections,
         auxiliary_lines=read_auxiliary_lines(image_path),
+        page_stem=image_path.stem, previous_entry_ref=previous_entry_ref,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[CropRecord] = []
@@ -3565,6 +3595,7 @@ def split_illustrations(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     transparent_background: bool = False,
+    previous_entry_ref: tuple[str, int] | None = None,
 ) -> IllustrationSplitResult:
     """Export only PPPs that are not already carried by an associated entry crop."""
     with Image.open(image_path) as opened:
@@ -3581,6 +3612,7 @@ def split_illustrations(
             integrate_illustrations=integrate_illustrations,
             profile_page_index=profile_page_index, page_sections=page_sections,
             auxiliary_lines=read_auxiliary_lines(image_path),
+            page_stem=image_path.stem, previous_entry_ref=previous_entry_ref,
         )
     finally:
         rgb_for_plan.close()
@@ -3624,7 +3656,7 @@ def split_illustrations(
             draw.polygon([(x-box[0], y-box[1]) for x, y in region.points], fill=255)
             crop.putalpha(mask)
             formatted = prepare_crop_background(crop, transparent=transparent_background)
-            if decision.associated_entry_index is not None:
+            if decision.associated_entry_index is not None and decision.associated_entry_index >= 0:
                 ei = decision.associated_entry_index
                 p_counter[ei] = p_counter.get(ei, 0) + 1
                 filename = f"{image_path.stem}_WW_{ei:03d}(P{p_counter[ei]}).png"
@@ -3725,6 +3757,7 @@ def split_whole_entries_job(
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
     transparent_background: bool = False,
+    previous_image_path: str | Path | None = None,
 ) -> list[CropRecord]:
     """Spawn-safe worker: build the crop plan first, then execute it."""
     page = Path(image_path)
@@ -3736,6 +3769,7 @@ def split_whole_entries_job(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
         transparent_background=transparent_background,
+        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
     )
 
 
@@ -3753,6 +3787,7 @@ def split_illustrations_job(
     integrate_illustrations: bool = True,
     profile_page_index: int = 0,
     transparent_background: bool = False,
+    previous_image_path: str | Path | None = None,
 ) -> IllustrationSplitResult:
     """Spawn-safe worker: plan PPP/entry relations before exporting standalone PPPs."""
     page = Path(image_path)
@@ -3764,4 +3799,5 @@ def split_illustrations_job(
         integrate_illustrations=integrate_illustrations,
         profile_page_index=profile_page_index,
         transparent_background=transparent_background,
+        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
     )
