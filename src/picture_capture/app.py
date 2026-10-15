@@ -8485,6 +8485,9 @@ class PictureCaptureApp(tk.Tk):
         self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
         self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
         self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
+        self.canvas.bind("<Delete>", lambda e: self.ref_box_controller.delete_selected(e) if self.ref_box_controller.editing else None)
+        self.canvas.bind("<BackSpace>", lambda e: self.ref_box_controller.delete_selected(e) if self.ref_box_controller.editing else None)
+        self.canvas.bind("<F2>", lambda e: self.ref_box_controller.edit_properties() if self.ref_box_controller.editing else None)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
@@ -13410,7 +13413,6 @@ class PictureCaptureApp(tk.Tk):
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
-        self.ref_box_controller.render()
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
@@ -13425,6 +13427,8 @@ class PictureCaptureApp(tk.Tk):
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
             draw_ocr_crop_preview(self)
             draw_layout_visualization_if_enabled(self)
+            self.ref_box_controller.render()
+            self.ref_box_controller.bind_overlay_widgets()
             return
         hidden = bool(self.hide_var.get())
         geometry = self._get_cached_display_geometry()
@@ -13620,6 +13624,8 @@ class PictureCaptureApp(tk.Tk):
         self._apply_current_appearance(self.canvas)
         draw_ocr_crop_preview(self)
         draw_layout_visualization_if_enabled(self)
+        self.ref_box_controller.render()
+        self.ref_box_controller.bind_overlay_widgets()
 
     def _update_view_zoom_label(self) -> None:
         self._canvas_controller_for_call().update_view_zoom_label()
