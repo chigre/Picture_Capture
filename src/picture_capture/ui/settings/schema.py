@@ -297,7 +297,7 @@ SETTING_LABELS = {
 SETTING_HELP = {
     "ref_box_fill_color": "REF 标注覆盖层的底色，默认淡蓝 #b7d9f5；支持任意 #RRGGBB。仅改变屏幕显示，不修改图像或 rbox 数据。",
     "ref_box_fill_opacity": "REF 底色真实透明度，0 为完全透明、100 为不透明，默认 50%。不会改变词典原扫描图片。",
-    "ref_box_text_color": "REF 框文字颜色，默认深蓝。屏幕标注与原正文彼此独立。",
+    "ref_box_text_color": "REF 框中文字的显示颜色，默认深蓝。仅控制界面叠加文字的前景色，不修改原扫描、OCR 结果或 rbox 文件中的文字内容。建议与淡蓝背景保持足够对比度。",
     "ref_box_font_family": "REF 显示字体，默认根据系统字体与词典 OCR 语言推荐；可手动指定已安装字体。",
     "ref_box_font_size": "REF 框中的文字字号，默认 16；只改变界面显示，不修改持久化坐标。",
     "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
