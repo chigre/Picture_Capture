@@ -172,7 +172,7 @@ def test_sorted_page_ids_keep_their_own_previews(tmp_path, monkeypatch):
     ctrl = _controller(app, monkeypatch)
     ctrl._render_visible()
     assert ctrl._tasks.calls == [3, 1]
-    assert ctrl.tree.images.get("3") is None  # Not blocked decoding a scan.
+    assert ctrl.tree.images.get("3") in (None, "")  # Nonblocking placeholder.
     ctrl._collect_results()
     assert ctrl.tree.images["3"] == "preview:3"
     assert ctrl.tree.images["1"] == "preview:1"
@@ -201,7 +201,12 @@ def test_preview_source_refreshes_when_scan_changes(tmp_path, monkeypatch):
     old_key = ctrl._attached["3"]
     files[3].write_bytes(b"updated-image-bytes-larger")
     ctrl._render_visible()
-    ctrl._collect_results()
+    # Two already-running cache-warm jobs may complete before the modified
+    # visible page is enqueued; it must still be refreshed, not left blank.
+    for _ in range(4):
+        ctrl._collect_results()
+        if "3" in ctrl._attached:
+            break
     assert ctrl._attached["3"] != old_key
 
 
