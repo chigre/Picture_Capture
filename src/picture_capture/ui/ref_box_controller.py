@@ -24,6 +24,24 @@ from ..ref_box_detection import (
 )
 
 
+def ref_box_background(text: str, settings) -> tuple[str, float]:
+    """State-specific background; text visibility never changes this decision.
+
+    Whitespace-only content behaves as empty; the two colors and opacity
+    values can be configured independently in Settings Center.
+    """
+    filled = bool(text.strip())
+    if filled:
+        return (
+            str(getattr(settings, "ref_box_filled_color", "#c8e6c9")),
+            float(getattr(settings, "ref_box_filled_opacity", 50.0)),
+        )
+    return (
+        str(getattr(settings, "ref_box_fill_color", "#ffe0b2")),
+        float(getattr(settings, "ref_box_fill_opacity", 50.0)),
+    )
+
+
 class RefBoxController:
     def __init__(self, app):
         self.app = app
@@ -557,12 +575,6 @@ class RefBoxController:
         app = self.app
         s = app.view_scale
         config = app.settings
-        color = str(getattr(config, "ref_box_fill_color", "#b7d9f5"))
-        opacity = min(100.0, max(0.0, float(getattr(config, "ref_box_fill_opacity", 50))))
-        try:
-            rgb = ImageColor.getrgb(color)
-        except ValueError:
-            rgb = (183, 217, 245)
         from ..ui_compat import resolve_content_font_family
         family = resolve_content_font_family(
             app, getattr(config, "ref_box_font_family", "自动（系统推荐）"),
@@ -582,6 +594,12 @@ class RefBoxController:
         for box in self.boxes:
             xx, yy, ww, hh = (round(box.x*s), round(box.y*s),
                               max(1, round(box.w*s)), max(1, round(box.h*s)))
+            fill_color, fill_opacity = ref_box_background(box.text, config)
+            opacity = min(100.0, max(0.0, fill_opacity))
+            try:
+                rgb = ImageColor.getrgb(fill_color)
+            except ValueError:
+                rgb = (200, 230, 201) if box.text.strip() else (255, 224, 178)
             if opacity > 0:
                 rgba = Image.new("RGBA", (ww, hh), (*rgb, round(opacity*255/100)))
                 photo = ImageTk.PhotoImage(rgba)
@@ -598,7 +616,7 @@ class RefBoxController:
                     dash=() if selected else (3, 3),
                     tags=("ref-box", "ref-box-border"),
                 )
-            if box.text:
+            if box.text and getattr(config, "ref_box_show_text", True):
                 app.canvas.create_text(
                     xx + 2, yy + 1, text=box.text, anchor="nw",
                     width=max(4, ww-4),
