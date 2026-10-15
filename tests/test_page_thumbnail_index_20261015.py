@@ -151,9 +151,10 @@ def test_thumb_size_validation_bounds_and_full_image_ratio():
     assert normalized_thumbnail_width(None) == 80
     assert normalized_thumbnail_width("bad") == 80
     assert normalized_thumbnail_width(-999) == MIN_THUMBNAIL_WIDTH
-    assert normalized_thumbnail_width(999) == MAX_THUMBNAIL_WIDTH
+    assert normalized_thumbnail_width(999) == MAX_THUMBNAIL_WIDTH == 120
     assert preview_bounds(80) == (80, 112)
-    assert preview_bounds(160) == (160, 224)
+    assert preview_bounds(120) == (120, 120)
+    assert preview_bounds(160) == (120, 120)
 
 
 def test_preferences_round_trip_without_touching_legacy_fields(tmp_path):
