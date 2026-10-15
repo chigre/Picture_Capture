@@ -330,6 +330,21 @@ class CanvasController:
         app.canvas.create_line(canvas_x, 0, canvas_x, height, **style)
         app.canvas.tag_raise("cursor-guide")
 
+    def canvas_left_double_click(self, event: Any) -> str | None:
+        """Edit REF text or complete SECTION editing."""
+        app = self.app
+        if app.ref_box_controller.pointer_active:
+            return app.ref_box_controller.double_click(*app.original_xy(event))
+        if app._preprocess_mode_active():
+            return "break"
+        if not app._section_editing or app.image is None:
+            return None
+        x, y = app.original_xy(event)
+        if not (0 <= x < app.image.width and 0 <= y < app.image.height):
+            return None
+        app._finish_section_editing()
+        return "break"
+
     def canvas_motion(self, event: Any) -> None:
         app = self.app
         if app.image:
