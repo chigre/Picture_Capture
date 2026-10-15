@@ -55,7 +55,7 @@ def main() -> int:
             raise RuntimeError("First-column preview did not become visible")
         thumbs.width = 120
         thumbs.apply()
-        if int(ttk.Style(app).lookup("PC.Treeview", "rowheight")) != 176:
+        if int(ttk.Style(app).lookup("PC.Treeview", "rowheight")) != 128:
             raise RuntimeError("Thumbnail resizing did not increase page-row height")
         app.workspace_mode = "紧凑"
         thumbs.on_mode_change()
@@ -179,6 +179,55 @@ def main() -> int:
                         if cached.info.get(FINGERPRINT_KEY) != source_fingerprint(path):
                             raise RuntimeError("Cached PNG source fingerprint does not match its page")
                 _stage("actual synthetic page images: visible pixels, sorted IDs, flat source-validated cache OK")
+
+                # Previous smoke used THREE pages: it could never catch the
+                # user's regression where only the initial nine rows showed
+                # thumbnail pixels. Build enough pages for several viewports.
+                extended_colors = {}
+                for index in range(3, 36):
+                    color = ((index * 5) % 256, (index * 7) % 256, (index * 11) % 256)
+                    path = project_root / f"synthetic-{index}.png"
+                    Image.new("RGB", (240, 340), color).save(path)
+                    scans.append(path)
+                    extended_colors[str(index)] = color
+                    app.page_list.insert(
+                        "", "end", iid=str(index),
+                        values=("", path.stem, "", "", "", ""),
+                    )
+                thumbs.project_rows_ready()
+                app.page_list.yview_moveto(1.0)
+                app._schedule_page_cell_overlay_refresh()
+                app.update_idletasks()
+                bottom_iids = app._visible_page_list_iids()
+                if not bottom_iids or max(int(iid) for iid in bottom_iids) < 25:
+                    raise RuntimeError(f"Page-index viewport failed to scroll past page nine: {bottom_iids}")
+
+                for _ in range(110):
+                    app.update()
+                    bottom_iids = app._visible_page_list_iids()
+                    later = [iid for iid in bottom_iids if int(iid) >= 25]
+                    if later and all(pixel_for(iid) == extended_colors[iid] for iid in later):
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise RuntimeError(
+                        "After scrolling, actual visible page thumbnails did not refresh: "
+                        + str([(iid, pixel_for(iid)) for iid in bottom_iids])
+                    )
+
+                # Reorder a non-initial page to the top and check its true
+                # scan pixels remain bound to the stable Treeview page iid.
+                app.page_list.move("31", "", 0)
+                app.page_list.yview_moveto(0.0)
+                app._schedule_page_cell_overlay_refresh()
+                for _ in range(110):
+                    app.update()
+                    if "31" in app._visible_page_list_iids() and pixel_for("31") == extended_colors["31"]:
+                        break
+                    time.sleep(0.02)
+                else:
+                    raise RuntimeError("Sorted/reordered page 31 displayed a stale or missing thumbnail")
+                _stage("thumbnails after scrolling beyond page nine and reordering: actual pixels OK")
             finally:
                 thumbs.enabled_var.set(False)
                 thumbs.width = 80

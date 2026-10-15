@@ -25,7 +25,7 @@ from picture_capture.page_thumbnail_tasks import ThumbnailTasks
 
 DEFAULT_THUMBNAIL_WIDTH = 80
 MIN_THUMBNAIL_WIDTH = 40
-MAX_THUMBNAIL_WIDTH = 160
+MAX_THUMBNAIL_WIDTH = 120
 THUMBNAIL_STEP = 10
 PHOTO_CACHE_LIMIT = 96
 
@@ -42,39 +42,35 @@ def normalized_thumbnail_width(value: object) -> int:
 def preview_bounds(width: int) -> tuple[int, int]:
     """Keep the full source aspect ratio inside this bounding rectangle."""
     width = normalized_thumbnail_width(width)
-    return width, round(width * 1.4)
+    # Cache masters have a strict 120px longest side; avoid oversized UI rows.
+    return width, min(120, round(width * 1.4))
 
 
 def visible_page_iids(tree: ttk.Treeview) -> list[str]:
-    """Find viewport rows without scanning all items or mistaking heading for row.
+    """Report the rows ACTUALLY on screen, including after far-away scrolls.
 
-    Used by both line-status overlays and thumbnail display. The image index
-    may have very tall rows, so locate the first visible item by y coordinate,
-    then walk stable Treeview item links until the viewport ends.
+    The old next/bbox walker stopped at the first empty bbox. Tk/ttk returns
+    empty bboxes for rows it has not laid out after scrolling or resizing,
+    so the old walk could remain fixed to the first visible batch. Sampling
+    actual widget coordinates avoids that early-stop failure after scrolling,
+    reordering, or row-height changes. Cost depends on viewport height, not
+    on the total number of pages in the project.
     """
     try:
         height = max(1, int(tree.winfo_height()))
-        iid = ""
-        # The heading height and row heights vary across ttk themes and DPI.
-        # Probe the viewport rather than assuming 20/40px always hit a row.
-        for probe_y in range(1, height, 12):
-            iid = tree.identify_row(probe_y)
-            if iid:
-                break
-        result: list[str] = []
-        while iid:
-            bbox = tree.bbox(iid)
-            if not bbox:
-                break
-            _x, y, _width, row_height = bbox
-            if y >= height:
-                break
-            if y + row_height > 0:
-                result.append(str(iid))
-            iid = tree.next(iid)
-        return result
-    except tk.TclError:
+        # 8 pixels is below the smallest supported ttk row height. Probe the
+        # final pixel too to include a partially visible bottom row.
+        seen: set[str] = set()
+        visible: list[str] = []
+        for y in list(range(0, height, 8)) + [height - 1]:
+            iid = str(tree.identify_row(y) or "")
+            if iid and iid not in seen:
+                seen.add(iid)
+                visible.append(iid)
+        return visible
+    except (tk.TclError, ValueError, TypeError):
         return []
+
 
 
 def prioritized_page_indices(
