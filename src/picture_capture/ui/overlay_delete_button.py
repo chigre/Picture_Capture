@@ -45,10 +45,10 @@ def create_overlay_delete_button(
         padx=1,
         pady=0,
         cursor="hand2",
-        fg=("#222222" if kind == "entry" else "#ffffff"),
-        bg=("#f5b83d" if kind == "entry" else "#9d042f"),
-        activeforeground=("#222222" if kind == "entry" else "#ffffff"),
-        activebackground=("#e9a820" if kind == "entry" else "#9d042f"),
+        fg=("#ffffff" if kind == "entry" else "#222222"),
+        bg=("#9d042f" if kind == "entry" else "#f5b83d"),
+        activeforeground=("#ffffff" if kind == "entry" else "#222222"),
+        activebackground=("#9d042f" if kind == "entry" else "#e9a820"),
         command=command,
     )
     button._pc_skip_classic_appearance = True

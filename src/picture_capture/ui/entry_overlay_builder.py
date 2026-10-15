@@ -202,8 +202,8 @@ def draw_entry_overlay(
                 self.view_scale, rtl=rtl,
             )
         )
-        # Tk.Entry width= is measured in characters; the canvas window fills
-        # the exact visible distance to the column edge, with [X] OUTSIDE it.
+        # Canvas editor width uses the visible distance to the column end
+        # minus the actual [X] control width, if the marker is displayed.
         editor_req_width, _delete_x, _delete_anchor = horizontal_entry_editor_slot(
             editor_x, column_end_screen_x, delete_req_width, rtl=rtl,
         )
@@ -357,8 +357,8 @@ def draw_entry_overlay(
 
     if delete_button is not None:
         if horizontal:
-            # Align the button's RIGHT edge to the painted separator's
-            # RIGHT endpoint, for any right_ratio, including mirrored pages.
+            # The button's RIGHT edge remains aligned with the painted
+            # marker endpoint; editor width is reserved independently.
             delete_x = marker_right_screen_x
             delete_y = marker_right_screen_y
             delete_anchor = "ne"

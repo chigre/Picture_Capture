@@ -109,19 +109,18 @@ def horizontal_entry_editor_slot(
     editor_x: float, column_end_x: float, delete_width: int, *,
     rtl: bool = False, gap: int = 2,
 ) -> tuple[int, float, str]:
-    """Fit a horizontal editor EXACTLY from its starting X to the column end.
+    """Fit the horizontal editor to column end minus visible [X] width.
 
-    The [X] belongs *after* that boundary, outside the editable area, and
-    must never silently reduce the editor width.  Retain the historical
-    delete_width/gap parameters for callers; neither influences this width.
-    Canvas window width is expressed in screen pixels, with mirrored RTL
-    delete anchoring. Vertical word boxes use independent character lengths.
+    Reserve the actual requested delete-control width, not a fixed number of
+    characters. The editor regains that width when the marker and its [X]
+    are hidden. RTL keeps the mirrored direction; the line, button position,
+    OCR selector and stored Entry coordinates are handled independently.
     """
     remaining = (
         float(editor_x) - float(column_end_x) if rtl
         else float(column_end_x) - float(editor_x)
     )
-    pixels = max(1, int(round(remaining)))
+    pixels = max(1, int(round(remaining)) - max(0, int(delete_width)))
     return pixels, float(column_end_x), "ne" if rtl else "nw"
 
 
