@@ -283,3 +283,19 @@ def test_ref_ocr_button_wiring_is_immediately_after_ref_edit():
         ("编辑'REF'", "toggle_ref_box_edit"),
         ("OCR 'REF'", "ocr_ref_boxes"),
     ]
+
+
+def test_ref_ocr_applies_editable_regex_to_new_text_only(tmp_path):
+    page = create_page(tmp_path, "custom_regex.png", [
+        RefBox(1, 10, 12, 40, 20, None, ""),
+        RefBox(2, 70, 13, 35, 22, None, "人工内容"),
+        RefBox(3, 120, 25, 25, 17, None, ""),
+    ])
+    fake_session, _ = engine_session(["参见: apple; please", "no marker"])
+    settings = AppSettings(ref_ocr_extract_regex=r"参见:\s*([a-z]+)")
+    outcome = ocr_ref_boxes_page(page, settings, session_factory=fake_session)
+    assert outcome["status"] == "changed"
+    assert outcome["filled"] == 2
+    assert [b.text for b in read_ref_boxes(page)] == [
+        "apple", "人工内容", "no marker",
+    ]
