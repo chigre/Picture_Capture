@@ -190,7 +190,8 @@ def build_large_head_diagnostics(
                 from .layout_illustration_mask import mask_large_illustrations_for_layout
                 candidate_image, _stats = mask_large_illustrations_for_layout(
                     analysis, effective, profile_page_index=int(page_index),
-                    source_image_path=saved_ppp_source,
+                    **({"source_image_path": saved_ppp_source}
+                       if saved_ppp_source is not None else {}),
                 )
             try:
                 trace: list[dict[str, Any]] = []
@@ -225,7 +226,8 @@ def build_large_head_diagnostics(
                     image, settings, profile_page_index=int(page_index),
                     page_sections=page_sections,
                     debug_trace=pipeline_trace,
-                    source_image_path=saved_ppp_source,
+                    **({"source_image_path": saved_ppp_source}
+                       if saved_ppp_source is not None else {}),
                 )
                 result["ordinary_pipeline_stages"] = pipeline_trace.get("stages", [])
             result["final_lines"] = [{
