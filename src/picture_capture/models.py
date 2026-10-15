@@ -273,6 +273,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     page_list_show_lined: bool = True
     page_list_show_fill_status: bool = False
     page_list_show_illustrations: bool = True
+    # Read-only page-index preview preferences; legacy projects default OFF.
+    page_list_show_thumbnails: bool = False
+    page_list_thumbnail_size: int = 80
     page_bookmarks: list[str] = field(default_factory=list)
     darkness_threshold: int = 300
     dark_area_percent: float = 90.0
