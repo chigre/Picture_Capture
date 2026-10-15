@@ -14,7 +14,7 @@ _RGB = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def normalized_hex(text: str) -> str | None:
-    value = str(text).strip()
+    value = str(text)
     return value.lower() if _RGB.fullmatch(value) else None
 
 
@@ -29,6 +29,13 @@ def contrast_foreground(color: str) -> str:
               for channel in channels]
     luminance = sum(a * b for a, b in zip(linear, (0.2126, 0.7152, 0.0722)))
     return "#161616" if luminance > 0.179 else "#ffffff"
+
+
+def validate_color_controls(values: dict) -> None:
+    """Fail closed before settings autosave mutates any color field."""
+    for name, var in values.items():
+        if name.endswith("_color") and normalized_hex(str(var.get())) is None:
+            raise ValueError(f"{name} 必须是六位 #RRGGBB 颜色（不能有空格）。")
 
 
 def make_color_widget(parent: tk.Misc, value: tk.Variable) -> ttk.Frame:
