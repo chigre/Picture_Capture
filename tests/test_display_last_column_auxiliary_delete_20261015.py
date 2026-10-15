@@ -145,7 +145,7 @@ def test_auxiliary_hit_target_matches_visible_last_column_not_page_remainder(mon
     from picture_capture import auxiliary_line_controller as mod
     monkeypatch.setattr(mod, "column_index_for_click", lambda *_args: 1)
     app = SimpleNamespace(
-        settings=SimpleNamespace(column_width=400),
+        settings=SimpleNamespace(column_width=400, right_ratio=100, ocr_language="chi_sim"),
         view_scale=1.0,
         _auxiliary_edits=AuxiliaryLineEdits([AuxiliaryLine(520, 100)]),
         _get_cached_display_geometry=lambda: _geometry(),
