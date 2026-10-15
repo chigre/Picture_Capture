@@ -10,12 +10,47 @@ from hashlib import sha256
 from io import StringIO
 from pathlib import Path
 import csv
+import re
+
+from PIL import Image
 
 from .formats import write_text_atomic
 from .project_storage import is_managed_project, storage_root
 
 
-COLUMNS = ("id", "x", "y", "w", "h", "entry_index", "text")
+# Seven-field files remain readable without mutation; every successful edit
+# publishes this nine-field format. Percentages intentionally use page WIDTH
+# as the denominator for both dimensions, matching PDIC X% and Y%.
+LEGACY_COLUMNS = ("id", "x", "y", "w", "h", "entry_index", "text")
+COLUMNS = ("id", "x", "y", "w", "h", "w.ww%", "h.hh%", "entry_index", "text")
+_PERCENT_PATTERN = re.compile(r"^(?:0|[1-9][0-9]*)\.[0-9]{2}%$")
+
+
+def _source_image_width(image_path: Path) -> int:
+    """Displayed original image width, accounting for EXIF 90° rotations."""
+    with Image.open(image_path) as image:
+        width, height = image.size
+        try:
+            orientation = int(image.getexif().get(274, 1))
+        except (TypeError, ValueError, OverflowError):
+            orientation = 1
+        width = height if orientation in (5, 6, 7, 8) else width
+    if width <= 0:
+        raise ValueError("REF source image has no valid width")
+    return width
+
+
+def _percent(pixels: int, image_width: int) -> str:
+    # Use the same denominator and 2-digit precision as write_pdic().
+    return f"{pixels / image_width * 100:.2f}%"
+
+
+def _verify_percent(saved: str, pixels: int, image_width: int) -> None:
+    if _PERCENT_PATTERN.fullmatch(saved) is None:
+        raise ValueError("REF percentage must have two decimal places and %")
+    if saved != _percent(pixels, image_width):
+        raise ValueError("REF percentage does not match source-image width")
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,14 +110,17 @@ def validate_ref_boxes(boxes: list[RefBox] | tuple[RefBox, ...]) -> None:
             raise ValueError("REF text contains unsupported characters")
 
 
-def _serialize(boxes: list[RefBox] | tuple[RefBox, ...]) -> str:
+def _serialize(boxes: list[RefBox] | tuple[RefBox, ...], image_width: int) -> str:
     validate_ref_boxes(boxes)
+    if image_width <= 0:
+        raise ValueError("REF source image width must be positive")
     stream = StringIO(newline="")
     writer = csv.writer(stream, delimiter="\t", lineterminator="\n")
     writer.writerow(COLUMNS)
     for box in boxes:
         writer.writerow((
             box.id, box.x, box.y, box.w, box.h,
+            _percent(box.w, image_width), _percent(box.h, image_width),
             "" if box.entry_index is None else box.entry_index, box.text,
         ))
     return stream.getvalue()
@@ -96,18 +134,26 @@ def read_ref_boxes(image_path: Path) -> list[RefBox]:
         return []
     try:
         reader = csv.reader(StringIO(text, newline=""), delimiter="\t", strict=True)
-        if tuple(next(reader, ())) != COLUMNS:
+        header = tuple(next(reader, ()))
+        if header not in (COLUMNS, LEGACY_COLUMNS):
             raise ValueError("REF file has unexpected columns")
+        is_nine_column = header == COLUMNS
         results: list[RefBox] = []
+        image_width = _source_image_width(image_path) if is_nine_column else None
         for row in reader:
-            if len(row) != len(COLUMNS):
+            if len(row) != len(header):
                 raise ValueError("REF record has wrong column count")
-            results.append(RefBox(
+            box = RefBox(
                 id=int(row[0]), x=int(row[1]), y=int(row[2]),
                 w=int(row[3]), h=int(row[4]),
-                entry_index=int(row[5]) if row[5] != "" else None,
-                text=row[6],
-            ))
+                entry_index=int(row[7 if is_nine_column else 5])
+                    if row[7 if is_nine_column else 5] != "" else None,
+                text=row[8 if is_nine_column else 6],
+            )
+            if image_width is not None:
+                _verify_percent(row[5], box.w, image_width)
+                _verify_percent(row[6], box.h, image_width)
+            results.append(box)
         validate_ref_boxes(results)
         return results
     except (ValueError, csv.Error) as exc:
@@ -121,7 +167,10 @@ def write_ref_boxes(image_path: Path, boxes: list[RefBox] | tuple[RefBox, ...],
     A hash must be supplied from the last successful read (None means absent).
     If the on-disk file differs, raise without overwriting external edits.
     """
-    payload = _serialize(boxes)
+    # Validate first, before reading the image or attempting any disk write.
+    validate_ref_boxes(boxes)
+    image_width = _source_image_width(image_path)
+    payload = _serialize(boxes, image_width)
     target = ref_box_path(image_path)
     if ref_box_ticket(image_path) != expected_ticket:
         raise RuntimeError("REF file changed outside the editor; reload the page")
@@ -156,7 +205,7 @@ def reindex_ref_box(box: RefBox, entry_index: int | None) -> RefBox:
 
 
 __all__ = [
-    "RefBox", "COLUMNS", "ref_box_root", "ref_box_path", "ref_sample_root",
+    "RefBox", "COLUMNS", "LEGACY_COLUMNS", "ref_box_root", "ref_box_path", "ref_sample_root",
     "read_ref_boxes", "write_ref_boxes", "ref_box_ticket",
     "next_ref_id", "box_intersection_fraction", "validate_ref_boxes",
 ]
