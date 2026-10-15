@@ -84,10 +84,10 @@ def validate_ref_box_controls(values: dict[str, Any]) -> None:
             except ValueError as exc:
                 raise ValueError(f"{key} 必须是 #RRGGBB 颜色。") from exc
     if "ref_ocr_extract_regex" in values:
-        pattern = str(values["ref_ocr_extract_regex"].get()).strip()
+        pattern = str(values["ref_ocr_extract_regex"].get())
         if len(pattern) > 2000:
             raise ValueError("OCR REF 提取正则不能超过 2000 字符。")
-        if pattern:
+        if pattern.strip():
             try:
                 re.compile(pattern, re.DOTALL)
             except re.error as exc:
