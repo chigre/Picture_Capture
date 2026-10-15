@@ -298,3 +298,21 @@ def test_pending_current_page_polygon_changes_block_batch(tmp_path, monkeypatch)
     assert app.jobs == []
     assert "未保存" in app.errors[-1][1]
     assert before == [ppp_read_path_for_image(page).read_bytes() for page in pages]
+
+
+def test_two_distinct_case_variant_ppp_files_are_not_overwritten(tmp_path):
+    import os
+    page = setup_page(tmp_path, "080080")
+    lower = ppp_read_path_for_image(page)
+    upper = lower.with_suffix(".PPP")
+    upper.write_text("1\tseparate-legacy-annotation\t|10,10|20,10|20,20|10,20\n", encoding="utf-8")
+    # Skip this case on case-insensitive Windows/APFS, where the uppercase
+    # spelling addresses the SAME inode; the single-file behavior is tested
+    # separately above and must remain unchanged.
+    if lower.samefile(upper):
+        pytest.skip("Filesystem is case-insensitive")
+    before_lower, before_upper = lower.read_bytes(), upper.read_bytes()
+    result = associate_existing_ppp_page(page, AppSettings(), 0)
+    assert result["status"] == "skipped_ambiguous_ppp"
+    assert lower.read_bytes() == before_lower
+    assert upper.read_bytes() == before_upper
