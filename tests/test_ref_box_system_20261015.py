@@ -24,15 +24,17 @@ from picture_capture.ui.settings.schema import (
 )
 
 
-def test_ref_box_has_exact_seven_columns_and_tsv_roundtrip(tmp_path):
+def test_ref_box_nine_columns_with_width_based_percent_tsv_roundtrip(tmp_path):
     page = tmp_path / "090001.png"
+    Image.new("RGB", (200, 400), "white").save(page)
     box = RefBox(1, 12, 20, 52, 26, 0, "参见\t辞职\nsee also LEAVE")
     assert write_ref_boxes(page, [box], expected_ticket=None)
     target = ref_box_path(page)
     assert target == tmp_path / "data" / "ref_box" / "090001.rbox"
     assert target.read_text(encoding="utf-8").startswith(
-        "id\tx\ty\tw\th\tentry_index\ttext\n"
+        "id\tx\ty\tw\th\tw.ww%\th.hh%\tentry_index\ttext\n"
     )
+    assert "26.00%\t13.00%\t0\t" in target.read_text(encoding="utf-8")
     assert read_ref_boxes(page) == [box]
     assert next_ref_id([box, replace(box, id=4)]) == 5
     assert write_ref_boxes(page, [box], expected_ticket=ref_box_ticket(page))
@@ -41,6 +43,7 @@ def test_ref_box_has_exact_seven_columns_and_tsv_roundtrip(tmp_path):
 
 def test_rbox_does_not_erase_invalid_human_records(tmp_path):
     page = tmp_path / "090001.png"
+    Image.new("RGB", (200, 400), "white").save(page)
     path = ref_box_path(page)
     path.parent.mkdir(parents=True)
     source = "id\tx\ty\tw\th\tentry_index\ttext\n1\t10\t12\t20\t25\t0\tA\n2\tmalformed\n"
@@ -56,6 +59,7 @@ def test_rbox_does_not_erase_invalid_human_records(tmp_path):
 
 def test_external_change_rejects_stale_save_without_overwrite(tmp_path):
     page = tmp_path / "090002.png"
+    Image.new("RGB", (200, 400), "white").save(page)
     a = RefBox(1, 10, 20, 40, 26, None, "A")
     write_ref_boxes(page, [a], expected_ticket=None)
     ticket = ref_box_ticket(page)
@@ -95,6 +99,7 @@ class FakeApp:
     def __init__(self, page):
         self.current_page = page
         self.image = Image.new("RGB", (200, 200), "white")
+        self.image.save(page)
         self.status_var = FakeStatus()
         self.errors = []
         self.redraws = 0
@@ -300,3 +305,70 @@ def test_ref_sample_crop_uses_gui_exif_transposed_coordinates(tmp_path):
     with Image.open(sample) as opened:
         actual = np.asarray(opened.convert("RGB"))
     assert np.array_equal(actual, expected)
+
+
+def test_rbox_legacy_7_field_file_is_read_without_changes_then_upgraded(tmp_path):
+    page = tmp_path / "old.png"
+    Image.new("RGB", (1000, 1400), "white").save(page)
+    target = ref_box_path(page)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source = (
+        "id\tx\ty\tw\th\tentry_index\ttext\n"
+        "3\t100\t120\t250\t70\t2\t人工参见\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    original = target.read_bytes()
+    boxes = read_ref_boxes(page)
+    assert boxes == [RefBox(3, 100, 120, 250, 70, 2, "人工参见")]
+    assert target.read_bytes() == original  # viewing is strictly read-only
+    ticket = ref_box_ticket(page)
+    write_ref_boxes(page, boxes, expected_ticket=ticket)
+    converted = target.read_text(encoding="utf-8")
+    assert converted.startswith("id\tx\ty\tw\th\tw.ww%\th.hh%\tentry_index\ttext")
+    assert "25.00%\t7.00%\t2\t人工参见" in converted
+    assert read_ref_boxes(page) == boxes
+
+
+def test_rbox_width_denominator_matches_pdic_for_both_percent_fields(tmp_path):
+    from picture_capture.formats import write_pdic
+
+    page = tmp_path / "ratio.png"
+    Image.new("RGB", (200, 800), "white").save(page)
+    assert write_ref_boxes(
+        page, [RefBox(1, 12, 30, 50, 120, None, "SEE")],
+        expected_ticket=None,
+    )
+    # 50 / 200 = 25%, 120 / 200 = 60%; height is 800 but NOT the
+    # denominator, exactly as PDIC Y uses image_width rather than height.
+    row = ref_box_path(page).read_text(encoding="utf-8").splitlines()[1]
+    assert row.split("\t")[5:7] == ["25.00%", "60.00%"]
+
+
+def test_rbox_rejects_corrupt_or_stale_nine_field_percent_without_erasing(tmp_path):
+    page = tmp_path / "mismatch.png"
+    Image.new("RGB", (200, 800), "white").save(page)
+    box = RefBox(1, 5, 10, 50, 120, None, "跳转")
+    write_ref_boxes(page, [box], expected_ticket=None)
+    target = ref_box_path(page)
+    source = target.read_text(encoding="utf-8")
+    corrupt = source.replace("60.00%", "15.00%")
+    target.write_text(corrupt, encoding="utf-8")
+    assert target.read_text(encoding="utf-8") == corrupt
+    with pytest.raises(ValueError, match="invalid REF"):
+        read_ref_boxes(page)
+    with pytest.raises(ValueError):
+        write_ref_boxes(page, [box], expected_ticket=ref_box_ticket(page))
+    assert target.read_text(encoding="utf-8") == corrupt
+
+
+def test_rbox_exif_rotation_percent_uses_displayed_source_width(tmp_path):
+    page = tmp_path / "rotated.jpg"
+    exif = Image.Exif()
+    exif[274] = 6  # raw 800×200 rotates to displayed 200×800
+    Image.new("RGB", (800, 200), "white").save(page, exif=exif)
+    assert write_ref_boxes(
+        page, [RefBox(1, 30, 40, 50, 60, None, "")], expected_ticket=None,
+    )
+    row = ref_box_path(page).read_text(encoding="utf-8").splitlines()[1]
+    assert row.split("\t")[5:7] == ["25.00%", "30.00%"]
+    assert read_ref_boxes(page)[0].w == 50
