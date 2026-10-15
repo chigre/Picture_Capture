@@ -31,6 +31,7 @@ class _Var:
 class _Tree:
     def __init__(self):
         self.images: dict[str, object] = {}
+        self.texts: dict[str, str] = {}
 
     def exists(self, iid):
         return str(iid) in {"0", "1", "2", "3"}
@@ -38,6 +39,8 @@ class _Tree:
     def item(self, iid, **kwargs):
         if "image" in kwargs:
             self.images[str(iid)] = kwargs["image"]
+        if "text" in kwargs:
+            self.texts[str(iid)] = kwargs["text"]
 
     def get_children(self, _parent=""):
         return ("0", "1", "2", "3")
@@ -262,3 +265,42 @@ def test_old_project_result_is_discarded_after_new_project_loaded(tmp_path, monk
     ctrl._collect_results()
     assert ctrl._attached == {}
     assert ctrl.tree.images.get("3") in (None, "")
+
+
+def test_deleted_original_never_keeps_a_stale_thumbnail(tmp_path, monkeypatch):
+    files = _images(tmp_path)
+    app = _App(files)
+    ctrl = _controller(app, monkeypatch)
+    ctrl._render_visible()
+    ctrl._collect_results()
+    assert ctrl.tree.images["3"] == "preview:3"
+    files[3].unlink()
+    ctrl._render_visible()
+    assert ctrl.tree.images["3"] == ""
+    assert ctrl.tree.texts["3"] == "×"
+    assert "3" not in ctrl._attached
+
+
+def test_async_failed_image_reports_error_without_repeated_decode(tmp_path, monkeypatch):
+    app = _App(_images(tmp_path))
+    ctrl = _controller(app, monkeypatch)
+    ctrl._tasks.failed_index = 3
+    original_submit = ctrl._tasks.submit
+
+    def broken(index, key, root, path, names):
+        ticket = original_submit(index, key, root, path, names)
+        if index == 3:
+            result = ctrl._tasks.waiting[-1]
+            ctrl._tasks.waiting[-1] = ThumbnailResult(
+                result.ticket, result.page_index, result.identity, None, "unreadable",
+            )
+        return ticket
+
+    ctrl._tasks.submit = broken
+    ctrl._render_visible()
+    ctrl._collect_results()
+    assert ctrl.tree.images["3"] == ""
+    assert ctrl.tree.texts["3"] == "×"
+    calls = list(ctrl._tasks.calls)
+    ctrl._render_visible()
+    assert ctrl._tasks.calls == calls
