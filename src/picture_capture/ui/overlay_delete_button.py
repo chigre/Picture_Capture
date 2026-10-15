@@ -8,8 +8,20 @@ from __future__ import annotations
 import tkinter as tk
 from typing import Callable
 
+from ..ui_compat import AUTO_FONT_FAMILY, resolve_content_font_family
 
-DELETE_BUTTON_FONT = ("TkDefaultFont", 9, "bold")
+
+# Overlay controls use the OS/language recommended typeface, at a fixed
+# point size independent from document zoom and configurable entry fonts.
+OVERLAY_CONTROL_FONT_SIZE = 9
+
+
+def fixed_overlay_control_font(widget: tk.Misc, ocr_language: str) -> tuple:
+    return (
+        resolve_content_font_family(widget, AUTO_FONT_FAMILY, ocr_language),
+        OVERLAY_CONTROL_FONT_SIZE,
+        "bold",
+    )
 
 
 def create_overlay_delete_button(
@@ -17,13 +29,15 @@ def create_overlay_delete_button(
     command: Callable[[], None],
     attach_tooltip: Callable[[tk.Widget, str], None],
     tooltip: str,
+    ocr_language: str = "",
+    kind: str = "auxiliary",
 ) -> tk.Button:
     """Return a consistently styled, independently clickable separator X."""
     button = tk.Button(
         canvas,
         text="[X]",
         width=3,
-        font=DELETE_BUTTON_FONT,
+        font=fixed_overlay_control_font(canvas, ocr_language),
         takefocus=False,
         relief="flat",
         bd=0,
@@ -31,10 +45,10 @@ def create_overlay_delete_button(
         padx=1,
         pady=0,
         cursor="hand2",
-        fg="#ffffff",
-        bg="#9d042f",
-        activeforeground="#ffffff",
-        activebackground="#9d042f",
+        fg=("#222222" if kind == "entry" else "#ffffff"),
+        bg=("#f5b83d" if kind == "entry" else "#9d042f"),
+        activeforeground=("#222222" if kind == "entry" else "#ffffff"),
+        activebackground=("#e9a820" if kind == "entry" else "#9d042f"),
         command=command,
     )
     button._pc_skip_classic_appearance = True
