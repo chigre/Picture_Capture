@@ -224,3 +224,22 @@ def test_prepare_does_not_write_until_explicit_transaction_commit(tmp_path):
     # so only after the durability boundary.
     assert candidate["selected"] is True
     assert rows[0] in review.parent.entries
+
+
+def test_legacy_ocr_candidate_without_selected_flag_is_owned_by_live_entry(tmp_path):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    candidate.pop("selected")
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert [row.word for row in read_pdic(pdic_path(page))] == ["other"]
+    assert candidate["selected"] is False
+    assert review.parent.candidate_check_vars["ocr-id"].get() is False
+
+
+def test_explicit_false_ocr_selection_is_not_reactivated_by_delete(tmp_path):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    candidate["selected"] = False
+    original = pdic_path(page).read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic_path(page).read_bytes() == original
+    assert not manual.exists()
+    assert rows[0] in review.parent.entries
