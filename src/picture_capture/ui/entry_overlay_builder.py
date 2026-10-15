@@ -257,39 +257,9 @@ def draw_entry_overlay(
         record["canvas_items"].append(item)
 
     candidate = self._candidate_for_entry(entry)
-    candidate_checkbox = None
-    candidate_slot_width = 0
-    # This flag previously had no main-canvas consumer. Show a clearly
-    # read-only marker for an OCR candidate already matched to this Entry;
-    # rejected/unmatched candidates and manual overrides are NOT fabricated.
-    candidate_visible = (
-        self.quick_bool_vars["paddle_show_candidate_checkboxes"].get()
-        if hasattr(self, "quick_bool_vars")
-        and "paddle_show_candidate_checkboxes" in self.quick_bool_vars
-        else bool(getattr(self.settings, "paddle_show_candidate_checkboxes", False))
-    )
-    if horizontal and candidate_visible and candidate is not None:
-        candidate_checkbox = tk.Checkbutton(
-            self.canvas,
-            text="候选", state="disabled",
-            takefocus=False, padx=1, pady=0,
-            relief="flat", bd=0,
-        )
-        self._attach_tooltip(
-            candidate_checkbox,
-            "仅显示当前词条已匹配的候选；此处不执行候选接受/拒绝",
-        )
-        self.overlay_widgets.append(candidate_checkbox)
-        record["widgets"].append(candidate_checkbox)
-        candidate_slot_width = max(1, candidate_checkbox.winfo_reqwidth())
-        candidate_y = marker_right_screen_y + (
-            max(1, delete_button.winfo_reqheight()) + 2
-            if delete_button is not None else 2
-        )
-        record["canvas_items"].append(self.canvas.create_window(
-            marker_right_screen_x, candidate_y,
-            window=candidate_checkbox, anchor="nw",
-        ))
+    # OCR-line candidate acceptance/rejection is a separate workflow owned
+    # by the detection review layer.  Do not misrepresent an existing PDIC
+    # entry as a selectable (or disabled) detection candidate.
     ocr_menu = (
         self._create_main_ocr_menu(entry, editor, candidate)
         if self._main_ocr_review_option_enabled("review_main_show_ocr_choices")
@@ -318,13 +288,11 @@ def draw_entry_overlay(
                     self.settings.layout_writing_mode, size[0],
                 )
         else:
-            # The OCR selector starts at the ACTUAL painted marker endpoint.
-            # Its left edge is fixed there, never at the full column end.
-            # Candidate-indicator controls (when available) occupy the first
-            # slot; the OCR selector follows them on their right.
-            ocr_x = marker_right_screen_x + candidate_slot_width + (
-                2 if candidate_checkbox is not None else 0
-            )
+            # No false "candidate" checkbox for an already-saved Entry.
+            # A genuine OCR-line candidate reviewer can reserve its own
+            # approved slot in its own rendering layer; this OCR text menu
+            # begins directly at the visible marker right endpoint.
+            ocr_x = marker_right_screen_x
             ocr_y = marker_right_screen_y + (
                 max(1, delete_button.winfo_reqheight()) + 2
                 if delete_button is not None else 2

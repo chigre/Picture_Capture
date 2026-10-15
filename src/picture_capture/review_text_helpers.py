@@ -148,6 +148,31 @@ def _review_similarity_color(score: float | None) -> str:
     return "#f4cccc"
 
 
+
+def _has_distinct_ocr_alternatives(candidate: dict | None) -> bool:
+    """Display an OCR-choice menu only for two distinct recognized texts.
+
+    The fusion/final word is never a separate OCR-engine observation.
+    Do not count that duplicate as an additional OCR result. Preserve the
+    original engine rows and final result for genuinely divergent candidates.
+    A text difference must be real, not whitespace around identical text.
+    """
+    if not isinstance(candidate, dict):
+        return False
+    words: set[str] = set()
+    for engine in ("paddle", "tesseract", "lens"):
+        evidence = candidate.get(engine)
+        if not isinstance(evidence, dict):
+            continue
+        value = str(evidence.get("lemma") or "").strip()
+        if value:
+            words.add(value)
+    # The fused/manual-final word is not a separate OCR engine result.
+    # An edited final value must not turn a single-engine page into a
+    # misleading "multiple OCR results available" selector.
+    return len(words) > 1
+
+
 def _candidate_choice_rows(candidate: dict | None) -> list[tuple[str, str, str, float | None, bool]]:
     """Return compact, deterministic OCR choices for one review candidate.
 
