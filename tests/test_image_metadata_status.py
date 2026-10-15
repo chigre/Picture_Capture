@@ -5,9 +5,9 @@ from picture_capture.image_metadata_status import image_dpi, image_status
 
 
 def test_embedded_dpi_and_missing_resolution():
-    assert image_status(2400, 3200, (300, 300)) == "2400×3200 px｜DPI 300"
-    assert image_status(2400, 3200, (300, 200)) == "2400×3200 px｜DPI 300×200"
-    assert image_status(2400, 3200, None) == "2400×3200 px｜DPI 未标注"
+    assert image_status(2400, 3200, (300, 300)) == "2400×3200 px"
+    assert image_status(2400, 3200, (300, 200)) == "2400×3200 px"
+    assert image_status(2400, 3200, None) == "2400×3200 px"
     assert image_dpi({}) is None
     assert image_dpi({"dpi": (299.999, 299.999)}) == (299.999, 299.999)
     assert image_dpi({"dpi": (0, 300)}) is None

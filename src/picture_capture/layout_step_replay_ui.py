@@ -28,6 +28,9 @@ _ROLE_COLORS = {
 _STEP_TAG = "layout-replay-overlay"
 
 
+from .layout_mask_source_guard import saved_illustration_stamp as _saved_illustration_stamp
+
+
 def _app_key(app: Any) -> tuple[Any, ...]:
     from .adaptive_denoise import DENOISE_ENV
     return (
@@ -35,6 +38,7 @@ def _app_key(app: Any) -> tuple[Any, ...]:
         int(getattr(app, "current_index", -1)),
         repr(getattr(app, "settings", None)),
         repr(getattr(app, "page_sections", ())),
+        _saved_illustration_stamp(getattr(app, "current_page", None), getattr(app, "settings", None)),
         os.environ.get(DENOISE_ENV, "auto"),
     )
 
@@ -42,6 +46,7 @@ def _app_key(app: Any) -> tuple[Any, ...]:
 def _run_replay(
     source: Image.Image, settings: Any, page_index: int,
     page_sections: list[Any] | None = None,
+    source_image_path: Path | None = None,
 ) -> tuple[LayoutStepTrace, dict[str, Image.Image]]:
     """Run the *actual* ordinary-drawing facade, not a reduced Layout imitation.
 
@@ -81,6 +86,11 @@ def _run_replay(
         detect_entries(
             source, ordinary_settings, profile_page_index=int(page_index),
             page_sections=page_sections, debug_trace=pipeline,
+            # A visual replay is READ-ONLY: auto-detected candidates must not
+            # write PPP. Only explicit reuse mode needs a path to read PPP.
+            source_image_path=(source_image_path if bool(getattr(
+                ordinary_settings, "layout_mask_illustrations_use_existing", False
+            )) else None),
         )
         if not trace.stages:
             raise RuntimeError("普通画线未提供任何可回放阶段")
@@ -539,8 +549,10 @@ class LayoutStepReplayWindow:
         settings = copy.deepcopy(self.app.settings)
         page_index = int(getattr(self.app, "current_index", 0))
         page_sections = copy.deepcopy(list(getattr(self.app, "page_sections", []) or []))
+        current_page = getattr(self.app, "current_page", None)
+        source_path = Path(current_page) if current_page is not None else None
         future = self._executor.submit(
-            _run_replay, source, settings, page_index, page_sections,
+            _run_replay, source, settings, page_index, page_sections, source_path,
         )
         self._pending = future
 

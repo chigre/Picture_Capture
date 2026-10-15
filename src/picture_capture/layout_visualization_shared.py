@@ -102,7 +102,11 @@ def _shared_snapshot_for_app_impl(app: Any) -> Any:
             page_index=page_index,
             page_sections=page_sections,
             layout_only=True,
-            source_image_path=getattr(app, "current_page", None),
+            # Only existing-PPP reuse needs a source path. In automatic mask
+            # mode, the overlay must not persist PPP as a side effect.
+            source_image_path=(getattr(app, "current_page", None) if bool(
+                getattr(effective, "layout_mask_illustrations_use_existing", False)
+            ) else None),
         )
         if understanding is None:
             raise RuntimeError("Page Understanding 未能生成版面结果")

@@ -304,10 +304,18 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         row = _row(panel)
         for caption, method in group:
             button = _button(row, caption, getattr(app, method))
+            if caption == "精修画线":
+                app._attach_tooltip(
+                    button,
+                    "请先去设置中心的精修Y调整参数。此操作仅移动已有横线，"
+                    "不会重新识别词头；若词条关联简体副本则拒绝危险位移。",
+                )
             if caption == "编辑插图":
                 app.polygon_draw_button = button
                 if app.polygon_draw_var.get():
                     button.configure(text="结束编辑插图", style="PC.EditActive.TButton")
+    from .ocr_detection_inspector import show_ocr_decision_inspector
+    _button(_row(panel), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
     row = _row(panel)
     _check(row, "辅助线模式", app.auxiliary_mode_var, app.toggle_auxiliary_mode)
     _button(row, "撤销辅助线", app._auxiliary_controller.undo)
