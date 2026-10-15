@@ -10,11 +10,15 @@ algorithms remain outside this controller.
 """
 
 from dataclasses import replace
+from pathlib import Path
 from tkinter import messagebox
 from typing import Any
 
 from .crop import complete_crop_widths
 from ...formats import pdic_path, read_ppp, write_ppp
+from ...models import PolygonRegion
+from ...illustration_labels import illustration_labels, label_text, user_edited_link
+from ..illustration_association_dialog import confirm_illustration_association
 from ...processing import (
     append_crop_log, append_illustration_crop_log, detect_illustrations_job,
     split_illustrations_job,
@@ -27,6 +31,168 @@ class IllustrationController:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+
+    def preview_labels(self) -> list[str]:
+        """Read-only visible captions in the same SECTION/column order as PDIC."""
+        app = self.app
+        if not getattr(app, "polygons", None) or app.current_page is None:
+            return []
+        return illustration_labels(
+            app.polygons, app.current_page.stem,
+            app._get_cached_display_geometry(),
+            app.page_sections,
+        )
+
+    def persist_current(
+        self, proposed: list[PolygonRegion] | None = None,
+        *, associate: bool = False, redraw: bool = False,
+        label_overrides: dict[int, str] | None = None,
+    ) -> bool:
+        """Atomic disk-first PPP commit; publish edited labels only on success.
+
+        Staged PolygonRegion copies prevent write failures from partially
+        renumbering the live objects or changing their geometry/selection.
+        """
+        app = self.app
+        page = getattr(app, "current_page", None)
+        if page is None:
+            return False
+        current = list(app.polygons if proposed is None else proposed)
+        try:
+            labels = illustration_labels(
+                current, page.stem, app._get_cached_display_geometry(),
+                app.page_sections,
+                entries=list(app._ordered_entries_reading_order()) if associate else (),
+                associate=associate,
+            )
+            if label_overrides:
+                for index, label in label_overrides.items():
+                    if not 0 <= index < len(labels):
+                        raise ValueError("插图标签所指区域已不存在")
+                    labels[index] = label
+            staged = [
+                PolygonRegion(label, list(region.points))
+                for region, label in zip(current, labels)
+            ]
+            changed = write_ppp(app._ppp_write_path(page), staged, page.stem)
+        except Exception as exc:
+            # The canonical PPP writer uses atomic replacement. If its
+            # post-write sidecar hook failed, prefer the persisted source over
+            # the prior live snapshot and report the non-atomic hook failure.
+            try:
+                on_disk = read_ppp(app._ppp_read_path(page))
+                if (
+                    [(r.label, r.points) for r in on_disk]
+                    != [(r.label, r.points) for r in app.polygons]
+                ):
+                    app.polygons = on_disk
+                    if redraw:
+                        app.__dict__["_suppress_polygon_label_sync"] = True
+                        try:
+                            app.redraw()
+                        finally:
+                            app.__dict__["_suppress_polygon_label_sync"] = False
+            except Exception:
+                pass
+            app.show_error("保存PPP插图失败", exc)
+            return False
+        for region, label in zip(current, labels):
+            region.label = label
+        if proposed is not None:
+            app.polygons = current
+        if hasattr(app, "_update_page_row"):
+            app._update_page_row(app.current_index)
+        if redraw:
+            # Existing editor widgets hold the *old* association string.
+            # Do not let their FocusOut/redraw sync overwrite freshly
+            # persisted labels while Tk destroys and recreates editors.
+            app.__dict__["_suppress_polygon_label_sync"] = True
+            try:
+                app.redraw()
+            finally:
+                app.__dict__["_suppress_polygon_label_sync"] = False
+        return bool(changed)
+
+    def add_manual_polygon(self, points: list[tuple[int, int]]) -> bool:
+        app = self.app
+        if len(points) < 3:
+            return False
+        if getattr(app, "_batch_active", False) and getattr(app, "_batch_allow_pdic_edits", False):
+            app.status_var.set("插图识别期间暂不修改 PPP。")
+            return False
+        if not app.current_page:
+            return False
+        # The generated label is the only editable identifier. No prompt for a
+        # legacy arbitrary name (which could invalidate AUTO provenance).
+        added = PolygonRegion("", list(points))
+        before = len(app.polygons)
+        ok = self.persist_current(list(app.polygons) + [added], redraw=True)
+        # write_ppp reports False on an unchanged file, but an actual addition
+        # always changes bytes unless another process changed the target.
+        return ok or len(app.polygons) > before
+
+    def delete_polygon(self, region: PolygonRegion) -> bool:
+        app = self.app
+        if not app.current_page or not any(r is region for r in app.polygons):
+            return False
+        if getattr(app, "_batch_active", False) and getattr(app, "_batch_allow_pdic_edits", False):
+            app.status_var.set("插图识别期间暂不修改 PPP。")
+            return False
+        before = len(app.polygons)
+        remaining = [candidate for candidate in app.polygons if candidate is not region]
+        success = self.persist_current(remaining, redraw=True)
+        return bool(success or len(app.polygons) == before - 1)
+
+    def update_label(self, region: PolygonRegion, typed: str) -> bool:
+        app = self.app
+        if not any(r is region for r in app.polygons) or app.current_page is None:
+            return False
+        if getattr(app, "_batch_active", False) and getattr(app, "_batch_allow_pdic_edits", False):
+            return False
+        try:
+            index = next(i for i, r in enumerate(app.polygons) if r is region)
+            canonical = self.preview_labels()
+            old = canonical[index]
+            updated = user_edited_link(old, typed)
+            if updated == old and region.label == updated:
+                return True
+            # Keep original object identity: Tk label widgets and polygon
+            # vertex handles refer to these exact region objects.
+        except Exception as exc:
+            app.show_error("插图标签无效", exc)
+            return False
+        self.persist_current(label_overrides={index: updated}, redraw=False)
+        return app.polygons[index].label == updated
+
+    def associate_current_page(self) -> None:
+        app = self.app
+        if not app.guard():
+            return
+        if not app.polygons:
+            app.status_var.set("本页没有插图，未进行关联。")
+            return
+        if not confirm_illustration_association(app):
+            return
+        if getattr(app, "polygon_draw_var", None) is not None and app.polygon_draw_var.get():
+            app.status_var.set("请先结束【编辑插图】，再进行插图关联。")
+            return
+        # Refresh live text edits only after confirmation; no PDIC rewrite is
+        # performed. Association uses the current canonical reading order.
+        app._sync_entry_editor_texts()
+        app._sync_polygon_label_texts()
+        # Always re-link (including clearing stale associations if a word was
+        # removed); first persist, then update UI.
+        before = [r.label for r in app.polygons]
+        success = self.persist_current(associate=True, redraw=True)
+        if success or [r.label for r in app.polygons] != before:
+            total = len(app.polygons)
+            linked = sum(
+                label_text(region.label).split("|")[-1] != "xxx"
+                for region in app.polygons
+            )
+            app.status_var.set(f"插图关联已保存：{total} 个插图，{linked} 个关联到上方词条，{total - linked} 个未匹配")
+        elif [r.label for r in app.polygons] == before:
+            app.status_var.set("插图关联结果未变化；PPP 已核对。")
 
     def split_illustrations_selected_scope(self) -> None:
         app = self.app

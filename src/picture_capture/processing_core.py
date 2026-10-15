@@ -3459,9 +3459,8 @@ def detect_illustrations_to_ppp(
         if any(_overlap_fraction(box, mb) >= 0.25 for mb in manual_boxes):
             continue
         accepted.append(region)
-    for index, region in enumerate(accepted, 1):
-        region.label = f"{image_path.stem}|AUTO_{index:02d}|1|{image_path.stem}|"
-    write_ppp(write_path, manual + accepted, image_path.stem)
+    from .illustration_labels import write_ordered_auto_ppp
+    write_ordered_auto_ppp(write_path, manual, accepted, image_path, settings, profile_page_index)
     return {"manual": len(manual), "auto": len(accepted), "total": len(manual) + len(accepted)}
 
 

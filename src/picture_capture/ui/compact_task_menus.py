@@ -290,6 +290,7 @@ ACTION_GROUPS = (
     None,
     (("插图识别", "detect_illustrations_selected_scope"),
      ("编辑插图", "toggle_polygon_drawing")),
+    (("插图关联", "associate_illustrations"),),
     None,
     (("压缩OCR缓存", "cleanup_paddleocr_temp_selected_scope"),),
 )
@@ -310,6 +311,8 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                     "请先去设置中心的精修Y调整参数。此操作仅移动已有横线，"
                     "不会重新识别词头；若词条关联简体副本则拒绝危险位移。",
                 )
+            if caption == "插图关联":
+                app._attach_tooltip(button, "画线/插图校对后再进行本操作！")
             if caption == "编辑插图":
                 app.polygon_draw_button = button
                 if app.polygon_draw_var.get():
