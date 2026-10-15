@@ -84,18 +84,21 @@ def install_simple_page_controls(app: Any, host: ttk.Frame) -> ttk.Frame:
         remember("button", result)
         return result
 
-    # 80% font (applied by the sidebar) with equal native-indicator geometry.
-    for column, caption, value in (
+    # Four batch range choices share the same variable in compact mode.
+    # Its 120px rail cannot display four choices in a single horizontal row.
+    for position, caption, value in (
         (0, "当前", "current"),
         (1, "至末页", "to_end"),
         (2, "至指定", "to_specified"),
+        (3, "书签", "bookmarks"),
     ):
         radio(controls, caption, value).grid(
-            row=0, column=column, sticky="w", padx=0, pady=0,
+            row=position // 2, column=position % 2,
+            sticky="w", padx=0, pady=0,
         )
 
     spec = ttk.Frame(controls, style="PC.Sidebar.TFrame")
-    spec.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 1))
+    spec.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 1))
     spec.columnconfigure(1, weight=1)
     # The unlabeled selector and the text field share the same page variable.
     radio(spec, "", "specified").grid(
