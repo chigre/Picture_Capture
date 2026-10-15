@@ -30,6 +30,10 @@ def _normalized_crop_name(text: str) -> str:
 def polygon_display_name(region: PolygonRegion, index: int) -> str:
     label = str(region.label or "").strip()
     fields = label.split("|")
+    # New canonical PPP labels start with P_nn|page|entry_id. Legacy
+    # page|P_nn|... remains supported for historical crop manifests.
+    if len(fields) >= 3 and fields[0].startswith("P_"):
+        return fields[0]
     if len(fields) >= 3 and fields[1].strip():
         return fields[1].strip()
     return label or f"P_{index + 1:02d}"
