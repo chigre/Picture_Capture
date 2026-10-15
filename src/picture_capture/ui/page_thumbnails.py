@@ -283,7 +283,7 @@ class PageThumbnailController:
         for iid in tuple(self._attached):
             try:
                 if self.tree.exists(iid):
-                    self.tree.item(iid, image="")
+                    self.tree.item(iid, image="", text="")
             except tk.TclError:
                 pass
         self._attached.clear()
@@ -361,16 +361,21 @@ class PageThumbnailController:
                 except (ValueError, TypeError):
                     continue
                 key = self._view_key(index)
-                if key is None or self._attached.get(iid) == key:
+                if key is None:
+                    if self.tree.exists(iid):
+                        self.tree.item(iid, image="", text="×")
+                    self._attached.pop(iid, None)
+                    continue
+                if self._attached.get(iid) == key:
                     continue
                 photo = self._photos.get(key)
                 if photo is not None and self.tree.exists(iid):
                     self._photos.move_to_end(key)
-                    self.tree.item(iid, image=photo)
+                    self.tree.item(iid, image=photo, text="")
                     self._attached[iid] = key
                 else:
                     if self.tree.exists(iid):
-                        self.tree.item(iid, image="")
+                        self.tree.item(iid, image="", text="…")
                     self._attached.pop(iid, None)
             self._dispatch_jobs()
         except tk.TclError:
@@ -461,7 +466,7 @@ class PageThumbnailController:
             if photo is not None and iid in self._visible_order:
                 self._photos.move_to_end(key)
                 if self.tree.exists(iid):
-                    self.tree.item(iid, image=photo)
+                    self.tree.item(iid, image=photo, text="")
                     self._attached[iid] = key
                 continue
             token = (self._generation, key)
@@ -498,6 +503,9 @@ class PageThumbnailController:
                 # resize/reopen, or the user explicitly re-enables thumbnails.
                 self._worker_failures[result.page_index] = key
                 self._warm_done.add(result.page_index)
+                iid = str(result.page_index)
+                if iid in self._visible_order and self.tree.exists(iid):
+                    self.tree.item(iid, image="", text="×")
                 continue
             self._warm_done.add(result.page_index)
             iid = str(result.page_index)
@@ -509,7 +517,7 @@ class PageThumbnailController:
                 photo = ImageTk.PhotoImage(image, master=self.tree)
                 self._photos[key] = photo
                 self._photos.move_to_end(key)
-                self.tree.item(iid, image=photo)
+                self.tree.item(iid, image=photo, text="")
                 self._attached[iid] = key
                 while len(self._photos) > PHOTO_CACHE_LIMIT:
                     self._photos.popitem(last=False)
