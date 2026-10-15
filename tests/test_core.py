@@ -5446,10 +5446,13 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' not in app_text
     assert 'record["index_widget"] = index_label' in overlay
     assert 'record["delete_widget"] = delete_button' in overlay
-    assert 'text="[X]"' in overlay
-    assert 'bg="#9d042f"' in overlay
-    assert 'activebackground="#9d042f"' in overlay
-    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in overlay
+    shared_delete = (
+        Path(__file__).parents[1] / "src/picture_capture/ui/overlay_delete_button.py"
+    ).read_text(encoding="utf-8")
+    assert 'text="[X]"' in shared_delete
+    assert 'bg="#9d042f"' in shared_delete
+    assert 'activebackground="#9d042f"' in shared_delete
+    assert 'tooltip="点击删除该画线!"' in overlay
     # The marker-owned [X] now occupies the resolved column end, rather
     # than borrowing the index label's screen position. The dedicated
     # runtime overlay test checks pixel geometry and four visibility states.
