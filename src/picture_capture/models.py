@@ -274,9 +274,9 @@ class AppSettings(metaclass=_AppSettingsMeta):
     # Empty/whitespace-only REF uses pale orange; filled REF uses pale green.
     # Independent opacity settings default to 50% for both states.
     ref_box_fill_color: str = "#ffe0b2"
-    ref_box_fill_opacity: float = 50.0
+    ref_box_fill_opacity: float = 0.0
     ref_box_filled_color: str = "#c8e6c9"
-    ref_box_filled_opacity: float = 50.0
+    ref_box_filled_opacity: float = 0.0
     ref_box_text_color: str = "#15395b"
     ref_box_font_family: str = "自动（系统推荐）"
     ref_box_font_size: int = 16
@@ -289,7 +289,13 @@ class AppSettings(metaclass=_AppSettingsMeta):
     ref_match_scale_tolerance_percent: float = 25.0
     # Include the matched guide template width in the generated REF region.
     ref_box_include_guide_width: bool = False
-    ref_ocr_quote_extraction: bool = True
+    # Empty pattern leaves OCR output unchanged; captures select REF text.
+    ref_ocr_extract_regex: str = r'(?:“([^“”]+)”|‘([^‘’]+)’|[“‘]([^”’]+)$|^([^“‘]+)[”’])'
+    # Separate OCR text label, independent of the original-image REF target.
+    ref_text_label_background_color: str = "#dceefc"
+    ref_text_label_background_opacity: float = 95.0
+    ref_text_label_gap: int = 6
+    ref_text_label_padding: int = 4
     show_page_sections: bool = True
     show_column_guides: bool = True
     show_headword_markers: bool = True
