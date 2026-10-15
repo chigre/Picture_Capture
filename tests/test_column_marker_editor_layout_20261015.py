@@ -255,37 +255,26 @@ def test_entry_x_right_edge_equals_marker_right_at_any_ratio(monkeypatch, index,
     assert placement["anchor"] == "ne"
 
 
-@pytest.mark.parametrize("candidate,show_candidate,expected_indicator", [
-    (True, True, True), (True, False, False), (False, True, False),
+@pytest.mark.parametrize("candidate,show_candidate", [
+    (True, True), (True, False), (False, True), (False, False),
 ])
-def test_candidate_box_left_aligns_and_ocr_sits_immediately_to_its_right(
-    monkeypatch, candidate, show_candidate, expected_indicator,
+def test_saved_entry_never_claims_to_be_ocr_line_candidate(
+    monkeypatch, candidate, show_candidate,
 ):
-    app, lines, entry, _geometry = _render(
+    app, lines, _entry, _geometry = _render(
         monkeypatch, index=0, ratio=50, candidate=candidate,
         show_candidate=show_candidate, show_ocr=True,
     )
-    right = max(lines[0][0], lines[0][2])
-    windows = app.canvas.windows
-    boxes = [v for v in windows if isinstance(v[2], _Checkbutton)]
-    menus = [v for v in windows if isinstance(v[2], _OCRMenu)]
-    assert len(boxes) == int(expected_indicator)
-    assert len(menus) == 1
-    menu = menus[0]
+    assert not any(isinstance(w[2], _Checkbutton) for w in app.canvas.windows)
+    menu = next(w for w in app.canvas.windows if isinstance(w[2], _OCRMenu))
+    assert menu[0] == max(lines[0][0], lines[0][2])
     assert menu[3]["anchor"] == "nw"
-    assert menu[0] == right + (32 if expected_indicator else 0)
-    if expected_indicator:
-        box = boxes[0]
-        assert box[0] == right
-        assert box[3]["anchor"] == "nw"
-        assert box[2].options["state"] == "disabled"
-        assert box[1] == menu[1]
 
 
 @pytest.mark.parametrize("ratio", [50, 75, 100])
-def test_selector_starts_at_marker_end_without_candidate(monkeypatch, ratio):
+def test_selector_starts_at_marker_end_without_false_candidate(monkeypatch, ratio):
     app, lines, _entry, _geometry = _render(
-        monkeypatch, ratio=ratio, show_ocr=True, candidate=False,
+        monkeypatch, ratio=ratio, show_ocr=True, candidate=True,
     )
     menu = next(v for v in app.canvas.windows if isinstance(v[2], _OCRMenu))
     assert menu[0] == max(lines[0][0], lines[0][2])
