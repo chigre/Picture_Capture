@@ -8301,7 +8301,7 @@ class PictureCaptureApp(tk.Tk):
         )
         self.sidebar_canvas.pack(side="left", fill="both", expand=True)
         sidebar = ttk.Frame(
-            self.sidebar_canvas, padding=(7, 7, 6, 5), style="PC.Sidebar.TFrame"
+            self.sidebar_canvas, padding=(7, 0, 6, 5), style="PC.Sidebar.TFrame"
         )
         self._sidebar_window = self.sidebar_canvas.create_window((0, 0), window=sidebar, anchor="nw")
         sidebar.bind("<Configure>", self._resize_sidebar_content)
@@ -8319,9 +8319,9 @@ class PictureCaptureApp(tk.Tk):
         from .ui.workspace_tools import install_workspace_tools
         install_workspace_tools(self, sidebar, sidebar_host)
 
-        page_panel = ttk.Frame(sidebar, padding=(2, 2, 2, 0), style="PC.Sidebar.TFrame")
+        page_panel = ttk.Frame(sidebar, padding=(2, 0, 2, 0), style="PC.Sidebar.TFrame")
         self.page_panel = page_panel
-        page_panel.grid(row=0, column=0, rowspan=2, sticky="nsew", pady=(5, 0))
+        page_panel.grid(row=0, column=0, rowspan=2, sticky="nsew")
         page_panel.columnconfigure(0, weight=1)
         page_panel.rowconfigure(2, weight=1)
 
@@ -8335,9 +8335,9 @@ class PictureCaptureApp(tk.Tk):
         self.page_range_controls_row = range_row
         range_row.pack(fill="x", pady=(0, 3))
         for label, mode in (("当前", "current"), ("至末页", "to_end"),
-                            ("至指定", "to_specified")):
+                            ("至指定", "to_specified"), ("书签", "bookmarks")):
             ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
-                            value=mode).pack(side="left", padx=(0, 3))
+                            value=mode).pack(side="left", padx=(0, 1))
         spec_row = ttk.Frame(nav_area)
         spec_row.pack(fill="x", pady=(0, 4))
         ttk.Radiobutton(spec_row, text="", variable=self.page_range_var,
@@ -11194,6 +11194,9 @@ class PictureCaptureApp(tk.Tk):
         if not self.project: return []
         mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
         if mode == "current": return [self.current_index] if self.current_index >= 0 else []
+        if mode == "bookmarks":
+            bookmarks = self._bookmark_stems()
+            return [i for i, page in enumerate(self.project.images) if page.stem in bookmarks]
         if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
         if mode == "to_specified":
             indices = self._parse_page_spec(self.page_range_spec_var.get())
