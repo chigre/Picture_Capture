@@ -229,3 +229,98 @@ def test_latin_or_profile_disabled_marker_ocr_does_not_cut_bracket_words(monkeyp
     source = __import__("inspect").getsource(processing_core.ocr_existing_entry_words_from_markers)
     assert 'profile.uses_parser("cjk_bracketed")' in source
     assert 'profile_cjk_allow_bracketed_headword' in source
+
+
+
+def test_explicit_only_ocr_overwrites_previous_result_clears_failed_and_keeps_manual(monkeypatch):
+    """User-triggered pure OCR must replace auto text, not act as blank-fill."""
+    from picture_capture import processing_core, ocr_channel, dictionary_profile
+    from picture_capture import entry_ocr_crop
+
+    image = Image.new("RGB", (850, 580), "white")
+    settings = _settings(ocr_replace=False)
+    geometry = _Geometry(image)
+    entries = [
+        Entry("4【禾王】太平天国天王洪秀全自称", 100, 100,
+              ocr_source="ordinary_marker:tesseract"),
+        Entry("上次OCR錯誤", 100, 200, ocr_source="ordinary_marker:tesseract"),
+        Entry("人工核對", 100, 300, manually_selected=True),
+    ]
+    before = [(e.x, e.y) for e in entries]
+    monkeypatch.setattr(
+        processing_core, "_page_geometry_context",
+        lambda *_args: (image, settings, image, geometry),
+    )
+    monkeypatch.setattr(
+        processing_core, "sort_entries_reading_order",
+        lambda items, *_args: items,
+    )
+    monkeypatch.setattr(
+        entry_ocr_crop, "resolve_entry_ocr_row_metrics",
+        lambda *_args, **_kwargs: EntryOcrRowMetrics(40.0, 52.0),
+    )
+    monkeypatch.setattr(
+        dictionary_profile, "effective_project_profile_id",
+        lambda *_args: "cjk_visual",
+    )
+    monkeypatch.setattr(
+        dictionary_profile, "load_dictionary_profile",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            uses_parser=lambda mode: mode == "cjk_bracketed",
+        ),
+    )
+
+    class Channel:
+        calls = 0
+
+        def __init__(self, _settings):
+            pass
+
+        def recognize_crop(self, _crop, **_kwargs):
+            Channel.calls += 1
+            ok = Channel.calls == 1
+            return SimpleNamespace(
+                plan=object(),
+                candidates=[SimpleNamespace(
+                    ok=ok, engine="tesseract",
+                    text="4【禾王】太平天国" if ok else "",
+                    confidence=0.96 if ok else None, records=[],
+                )],
+            )
+
+    monkeypatch.setattr(ocr_channel, "OcrChannelSession", Channel)
+    monkeypatch.setattr(
+        ocr_channel, "choose_ocr_text",
+        lambda _plan, choices: (choices[0], True) if choices else (None, False),
+    )
+    changed, stats = processing_core.ocr_existing_entry_words_from_markers(
+        image, entries, settings, [], only_blank=False,
+    )
+    assert [e.word for e in changed] == ["禾王", "", "人工核對"]
+    assert changed[1].ocr_source == ""
+    assert changed[1].confidence is None
+    assert [(e.x, e.y) for e in changed] == before
+    assert stats["filled"] == 1
+    assert stats["failed"] == 1
+    assert stats["skipped_existing"] == 0
+    assert stats["skipped_manual"] == 1
+    assert Channel.calls == 2
+
+
+def test_explicit_only_ocr_button_uses_overwrite_not_combined_blank_fill():
+    from pathlib import Path
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "app.py"
+    ).read_text("utf-8")
+    body = source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1].split(
+        "\n    def run_combined_draw_action(", 1,
+    )[0]
+    assert "only_blank=False," in body
+    assert "only_blank=True," not in body
+    assert "if bool(entry.manually_selected)" in body
+    assert "OCR文字意外覆盖了人工选定文本" in body
+    assert "重新 OCR 并覆盖已有的自动 OCR 文本" in body
+    # Automatic combined rescue remains blank-only, as before.
+    combined = source.split("    def _detect_pages(", 1)[1]
+    assert "only_blank=True," in combined
