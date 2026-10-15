@@ -171,7 +171,9 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'if isinstance(widget, tk.Toplevel)' in app_source
     overlay = (ROOT / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
-    assert 'delete_button._pc_skip_classic_appearance = True' in overlay
+    shared = (ROOT / "src/picture_capture/ui/overlay_delete_button.py").read_text(encoding="utf-8")
+    assert 'button._pc_skip_classic_appearance = True' in shared
+    assert 'create_overlay_delete_button(' in overlay
     assert 'activebackground=colors["accent_soft"]' in guide_source
     assert 'highlightthickness=0, takefocus=False' in guide_source
     assert 'self.parent_app._apply_current_appearance(self)' in guide_source
