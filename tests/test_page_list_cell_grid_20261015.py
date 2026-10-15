@@ -195,3 +195,21 @@ def test_native_column_enumeration_keeps_all_boundaries_after_scroll_and_sort():
     assert [line[0] for line in page_grid_segments(tree) if line[2] == 1] == [
         50, 95, 225, 285,
     ]
+
+
+def test_tk_tcl_obj_show_values_include_thumbnail_tree_column():
+    class TclOption:
+        def __init__(self, text):
+            self.text = text
+
+        def __str__(self):
+            return self.text
+
+    tree = NativeColumnGeometry(width=310)
+    original_cget = tree.cget
+    tree.cget = lambda name: (
+        (TclOption("tree"), TclOption("headings"))
+        if name == "show" else original_cget(name)
+    )
+    borders = [x for x, _y, w, _h in page_grid_segments(tree) if w == 1]
+    assert borders == [90, 135, 265]
