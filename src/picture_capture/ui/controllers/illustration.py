@@ -240,18 +240,15 @@ class IllustrationController:
                 # non-selected page or fabricate a missing PPP.
                 app._flush_deferred_page_save()
                 app.save_pdic(silent=True)
-                # Polygon geometry edits must already be saved when leaving
-                # editor mode. Sync any pending label FocusOut before worker
-                # reads, but do not change association until disk commit.
-                app._sync_polygon_label_texts()
-                if not self.persist_current():
-                    # A normal unchanged PPP returns False; only proceed when
-                    # the on-disk snapshot agrees with what is shown on screen.
-                    disk_regions = read_ppp(app._ppp_read_path(app.current_page))
-                    if [(r.label, r.points) for r in disk_regions] != [
-                        (r.label, r.points) for r in app.polygons
-                    ]:
-                        raise RuntimeError("当前页 PPP 保存失败，批量关联已取消")
+                # Geometry must already be persisted when leaving edit mode.
+                # Do not rewrite existing PPP merely as a preflight: older
+                # projects may use uppercase .PPP. The batch worker owns its
+                # exact existing source path and remains disk-first.
+                on_disk = read_ppp(app._ppp_read_path(app.current_page))
+                if [region.points for region in on_disk] != [
+                    region.points for region in app.polygons
+                ]:
+                    raise RuntimeError("当前页仍有未保存的插图几何修改；请先保存/结束编辑")
         except Exception as exc:
             app.show_error("插图关联前保存当前页失败", exc)
             return
