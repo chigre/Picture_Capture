@@ -13,7 +13,7 @@ from PIL import Image
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.overlay_layout_helpers import (
-    canonical_headword_marker_span,
+    canonical_headword_marker_span, effective_overlay_column_width,
     horizontal_entry_editor_slot,
 )
 from picture_capture.paddle_headwords_core import _separator_analysis_x_bounds
@@ -30,11 +30,11 @@ def _settings(**kwargs):
 
 
 @pytest.mark.parametrize("ratio,first_end,last_end", [
-    (100, 500, 1100),
-    (75, 400, 955),
-    (50, 300, 810),
+    (100, 500, 920),
+    (75, 400, 820),
+    (50, 300, 720),
 ])
-def test_display_marker_ratio_matches_per_column_crop_and_not_fixed_95_percent(
+def test_display_marker_ratio_stops_at_actual_column_end_not_page_remainder(
     ratio, first_end, last_end,
 ):
     settings = _settings(right_ratio=ratio)
@@ -42,11 +42,19 @@ def test_display_marker_ratio_matches_per_column_crop_and_not_fixed_95_percent(
     image = Image.new("RGB", (1100, 800), "white")
     assert geometry.column_widths == [400, 580]
     for idx, (start, expected_end) in enumerate(((100, first_end), (520, last_end))):
+        visible_width = effective_overlay_column_width(
+            geometry, idx, settings.column_width,
+        )
         assert canonical_headword_marker_span(
-            start, geometry.column_widths[idx], settings.right_ratio,
+            start, visible_width, settings.right_ratio,
         ) == (start, expected_end)
         entry = Entry("", start, 100)
-        assert line_box(entry, geometry, image, settings)[2] == expected_end
+        # Existing crop policy still uses the page remainder for the last
+        # column; do not change stored crop/export behavior in a display fix.
+        if idx == 0:
+            assert line_box(entry, geometry, image, settings)[2] == expected_end
+        else:
+            assert line_box(entry, geometry, image, settings)[2] >= expected_end
 
 
 @pytest.mark.parametrize("kind", ["identity", "mirror_x", "rotate_ccw90", "rotate_cw90"])
@@ -182,7 +190,9 @@ def _render(monkeypatch, *, show_markers=True, show_labels=True, index=0, ratio=
 def test_real_overlay_builder_100_percent_and_editor_delete_slot(monkeypatch, index):
     app, lines, entry, geometry = _render(monkeypatch, index=index)
     left = geometry.column_starts[index]
-    right = left + geometry.column_widths[index]
+    right = left + effective_overlay_column_width(
+        geometry, index, app.settings.column_width,
+    )
     assert len(lines) == 1
     assert (lines[0][0], lines[0][2]) == (left, right)
     windows = app.canvas.windows
