@@ -221,3 +221,74 @@ def test_batch_scope_error_summary_survives_one_page_failure(tmp_path, monkeypat
     assert "错误 1 页" in app.statuses[-1]
     assert "跳过 1 页" in app.statuses[-1]
     assert "080041.png" in app.statuses[-1]
+
+
+def test_preexisting_uppercase_ppp_is_updated_in_place_not_duplicated(tmp_path):
+    import os
+
+    page = setup_page(tmp_path, "080051")
+    lower = ppp_write_path_for_image(page)
+    upper = lower.with_suffix(".PPP")
+    lower.rename(upper)
+    assert ppp_read_path_for_image(page).name.casefold() == upper.name.casefold()
+    result = associate_existing_ppp_page(page, AppSettings(), 0)
+    assert result["status"] == "changed"
+    assert read_ppp(upper)[0].label == "P_01|080051|001"
+    if os.name != "nt":
+        assert not lower.exists(), "Must not create lowercase sibling of original .PPP"
+
+
+def test_corrupted_ppp_skipped_without_rewriting_surviving_regions(tmp_path):
+    page = setup_page(tmp_path, "080052")
+    ppp = ppp_read_path_for_image(page)
+    # A broken second human polygon would be ignored by read_ppp. Rewriting
+    # only successfully parsed records would silently erase that polygon.
+    ppp.write_text(
+        ppp.read_text(encoding="utf-8") +
+        "2\tuser-defined-shape-with-incomplete-record\n",
+        encoding="utf-8",
+    )
+    before = ppp.read_bytes()
+    result = associate_existing_ppp_page(page, AppSettings(), 0)
+    assert result["status"] == "skipped_invalid_ppp"
+    assert ppp.read_bytes() == before
+
+
+def test_incomplete_polygon_has_no_destructive_batch_save(tmp_path):
+    page = setup_page(tmp_path, "080053")
+    ppp = ppp_read_path_for_image(page)
+    ppp.write_text("1\tmanual\t|15,120|20,130\n", encoding="utf-8")
+    before = ppp.read_bytes()
+    assert associate_existing_ppp_page(page, AppSettings(), 0)["status"] == "skipped_invalid_ppp"
+    assert ppp.read_bytes() == before
+
+
+def test_selected_current_page_refreshes_from_committed_ppp(tmp_path, monkeypatch):
+    pages = [setup_page(tmp_path, "080060"), setup_page(tmp_path, "080061")]
+    app = MockApp(pages)
+    app.polygons = read_ppp(ppp_read_path_for_image(pages[0]))
+    old_region = app.polygons[0]
+    monkeypatch.setattr(ui, "confirm_illustration_association", lambda _app: True)
+    ui.IllustrationController(app).associate_selected_scope()
+    assert app.jobs[0][1] == [0, 1]
+    assert app.saved == 2
+    assert app.redraws == 1
+    assert app.polygons[0] is not old_region
+    assert app.polygons[0].label == "P_01|080060|001"
+    assert [r.label for r in read_ppp(ppp_read_path_for_image(pages[0]))] == [
+        "P_01|080060|001",
+    ]
+    assert app.__dict__.get("_suppress_polygon_label_sync") is False
+
+
+def test_pending_current_page_polygon_changes_block_batch(tmp_path, monkeypatch):
+    pages = [setup_page(tmp_path, "080070"), setup_page(tmp_path, "080071")]
+    app = MockApp(pages)
+    app.polygons = read_ppp(ppp_read_path_for_image(pages[0]))
+    app.polygons[0].points[0] = (333, 444)  # Unsaved local vertex drag.
+    before = [ppp_read_path_for_image(page).read_bytes() for page in pages]
+    monkeypatch.setattr(ui, "confirm_illustration_association", lambda _app: True)
+    ui.IllustrationController(app).associate_selected_scope()
+    assert app.jobs == []
+    assert "未保存" in app.errors[-1][1]
+    assert before == [ppp_read_path_for_image(page).read_bytes() for page in pages]
