@@ -179,6 +179,7 @@ def test_template_capture_detects_any_color_not_blue_only(tmp_path):
     boxes = read_ref_boxes(page)
     assert len(boxes) == 1
     assert boxes[0].text == ""
+    assert (boxes[0].x, boxes[0].w) == (142, 54)
     assert boxes[0].entry_index is None
     assert detect_ref_boxes_page(page, AppSettings(ref_match_threshold=0.96), 0)["added"] == 0
 
@@ -207,7 +208,8 @@ def test_template_detection_preserves_manual_rectangle_and_does_not_overwrite(tm
     array[58:80, 94:142] = rng.integers(5, 220, (22, 48, 3), dtype=np.uint8)
     Image.fromarray(array).save(page)
     add_ref_sample(page, (94,58,142,80))
-    old = RefBox(21, 94, 58, 48, 22, 0, "人工参见字样")
+    # Manual REF is to the right of the matched guide, not ON the guide.
+    old = RefBox(21, 142, 56, 54, 27, 0, "人工参见字样")
     write_ref_boxes(page, [old], expected_ticket=None)
     result = detect_ref_boxes_page(page, AppSettings(ref_match_threshold=0.96), 0)
     assert result["added"] == 0
@@ -219,6 +221,8 @@ def test_template_detection_preserves_manual_rectangle_and_does_not_overwrite(tm
     ("ref_box_fill_opacity", "101"),
     ("ref_match_threshold", "0.5"),
     ("ref_match_threshold", "nan"),
+    ("ref_match_scale_tolerance_percent", "-1"),
+    ("ref_match_scale_tolerance_percent", "51"),
     ("ref_box_font_size", "5"),
     ("ref_box_width_lines", "0"),
     ("ref_box_text_color", "blue"),
@@ -242,6 +246,7 @@ def test_ref_defaults_and_schema():
     assert (s.ref_box_width_lines, s.ref_box_height_lines) == (2.0, 1.0)
     assert {"ref_box_font_family", "ref_box_fill_color"}.issubset(set(REF_BOX_STYLE_FIELDS))
     assert "ref_match_threshold" in REF_BOX_GEOMETRY_FIELDS
+    assert "ref_match_scale_tolerance_percent" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_box_show" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
     assert "ref_box_show_text" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
     assert {"ref_box_filled_color", "ref_box_filled_opacity"}.issubset(REF_BOX_STYLE_FIELDS)
