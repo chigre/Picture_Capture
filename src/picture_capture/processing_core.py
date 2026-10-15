@@ -2485,10 +2485,10 @@ def ocr_existing_entry_words_from_markers(
         if not bool(entry.manually_selected)
         and not (only_blank and str(entry.word or "").strip())
     ]
+    # Preserve the established blank-only stats contract: populated manual
+    # entries are also reported as pre-existing words in that legacy mode.
     stats["skipped_existing"] = sum(
-        1 for entry in ordered
-        if only_blank and str(entry.word or "").strip()
-        and not bool(entry.manually_selected)
+        1 for entry in ordered if only_blank and str(entry.word or "").strip()
     )
     stats["skipped_manual"] = sum(
         1 for entry in ordered
