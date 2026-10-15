@@ -1285,6 +1285,9 @@ def set_sidebar_mode(app: Any, mode: str) -> str:
     if mode not in {"极简", "紧凑", "正常", "最大"}:
         return "break"
     app.workspace_mode = mode
+    previews = app.__dict__.get("_page_thumbnails")
+    if previews is not None:
+        previews.on_mode_change()
     _refresh_window_mode_buttons(app)
     _apply_preset_page_index(app, mode)
     _apply_preset_rail_controls(app, mode)
