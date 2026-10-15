@@ -286,6 +286,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     ref_box_height_lines: float = 1.0
     ref_box_auto_attach: bool = True
     ref_match_threshold: float = 0.88
+    ref_match_scale_tolerance_percent: float = 25.0
     show_page_sections: bool = True
     show_column_guides: bool = True
     show_headword_markers: bool = True
