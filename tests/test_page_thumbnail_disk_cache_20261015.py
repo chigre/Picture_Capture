@@ -188,20 +188,18 @@ def test_content_sensitive_fingerprint_rejects_mtime_restored_edit(tmp_path):
     assert disk.get_page_thumbnail(tmp_path, scan).getpixel((2, 2)) == (25, 80, 200)
 
 
-def test_v1_nested_cache_migrates_to_flat_filename(tmp_path, monkeypatch):
+def test_v1_nested_cache_rebuilds_actual_source_and_removes_old_dir(tmp_path):
     from PIL import PngImagePlugin
     scan = make_scan(tmp_path / "scan-017.jpg", (10, 200, 90))
     legacy = disk._legacy_cache_path(tmp_path, scan)
     legacy.parent.mkdir(parents=True)
     old_meta = PngImagePlugin.PngInfo()
-    old_meta.add_text(disk.FINGERPRINT_KEY, disk._legacy_fingerprint(scan))
-    img = disk._build_thumbnail(scan)
-    img.save(legacy, format="PNG", pnginfo=old_meta)
-
-    def no_decode(_path):
-        raise AssertionError("Valid v1 cache should migrate without rescanning image")
-
-    monkeypatch.setattr(disk, "_build_thumbnail", no_decode)
+    # Old caches did not verify source-content samples. Even a plausible
+    # legacy cache can show a wrong scan, so it must be rebuilt from source.
+    old_meta.add_text(disk.FINGERPRINT_KEY, "a" * 64)
+    Image.new("RGB", (158, 224), (220, 10, 10)).save(
+        legacy, format="PNG", pnginfo=old_meta,
+    )
     result = disk.get_page_thumbnail(tmp_path, scan)
     assert result.getpixel((0, 0)) == (10, 200, 90)
     assert disk.thumbnail_cache_path(tmp_path, scan).name == "scan-017.png"
