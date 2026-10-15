@@ -437,12 +437,9 @@ class RefBoxController:
             "只新增不重写现有人工框。继续？", parent=app,
         ):
             return
-        try:
-            app._flush_deferred_page_save()
-            app.save_pdic(silent=True)
-        except Exception as exc:
-            app.show_error("REF 识别前保存词条失败", exc)
-            return
+        # REF association consumes existing on-disk PDIC only. In particular,
+        # never flush or autosave in-progress headword edits as a side effect
+        # of recognizing a separate annotation layer.
         from dataclasses import replace as settings_copy
         settings = settings_copy(app.settings)
         current = app.current_index
