@@ -117,3 +117,49 @@ def test_editing_only_changes_link_not_number_page_or_source():
         user_edited_link(original, "wrong")
     with pytest.raises(ValueError):
         user_edited_link("original fish caption", "P_01|page|006")
+
+
+def test_background_automatic_detection_persists_reading_order_and_auto_origin(tmp_path):
+    from PIL import Image
+    from picture_capture.formats import read_ppp, write_ppp
+    from picture_capture.illustration_detection import is_auto_illustration_region
+    from picture_capture.models import AppSettings
+    from picture_capture.processing_core import detect_illustrations_to_ppp
+    page = tmp_path / "scan.png"
+    Image.new("RGB", (240, 420), "white").save(page)
+    manual = fig(5, 220, 70, 270, "custom-manual-region")
+    write_ppp(page.with_suffix(".ppp"), [manual], page.stem)
+    result = detect_illustrations_to_ppp(
+        page,
+        AppSettings(columns=2, manual_x=0, column_width=100, gutter=10, start_y=0),
+        detected_regions=[
+            fig(118, 110, 205, 180), fig(8, 70, 75, 120),
+        ],
+    )
+    assert result == {"manual": 1, "auto": 2, "total": 3}
+    saved = read_ppp(page.with_suffix(".ppp"))
+    assert len(saved) == 3
+    assert [shape.label.split("|")[0] for shape in saved] == ["P_02", "P_03", "P_01"]
+    assert [is_auto_illustration_region(region) for region in saved] == [
+        False, True, True,
+    ]
+    # Redetection replaces ONLY the previous AUTO shapes, never manual PPP.
+    second = detect_illustrations_to_ppp(
+        page,
+        AppSettings(columns=2, manual_x=0, column_width=100, gutter=10, start_y=0),
+        detected_regions=[fig(115, 330, 210, 385)],
+    )
+    assert second == {"manual": 1, "auto": 1, "total": 2}
+    saved_again = read_ppp(page.with_suffix(".ppp"))
+    assert saved_again[0].points == manual.points
+    assert not is_auto_illustration_region(saved_again[0])
+    assert is_auto_illustration_region(saved_again[1])
+    assert [r.label.split("|")[0] for r in saved_again] == ["P_01", "P_02"]
+
+
+def test_empty_or_malformed_ppp_polygon_does_not_make_redraw_crash():
+    from picture_capture.illustration_labels import illustration_labels
+    regions = [PolygonRegion("old", []), fig(5, 100, 70, 120)]
+    labels = illustration_labels(regions, "page", geo())
+    assert labels[1].startswith("P_01|page|")
+    assert labels[0].startswith("P_02|page|")
