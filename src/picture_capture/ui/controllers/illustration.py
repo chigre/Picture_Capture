@@ -81,13 +81,17 @@ class IllustrationController:
             # the prior live snapshot and report the non-atomic hook failure.
             try:
                 on_disk = read_ppp(app._ppp_read_path(page))
-                if on_disk and (
+                if (
                     [(r.label, r.points) for r in on_disk]
                     != [(r.label, r.points) for r in app.polygons]
                 ):
                     app.polygons = on_disk
                     if redraw:
-                        app.redraw()
+                        app.__dict__["_suppress_polygon_label_sync"] = True
+                        try:
+                            app.redraw()
+                        finally:
+                            app.__dict__["_suppress_polygon_label_sync"] = False
             except Exception:
                 pass
             app.show_error("保存PPP插图失败", exc)
@@ -99,7 +103,14 @@ class IllustrationController:
         if hasattr(app, "_update_page_row"):
             app._update_page_row(app.current_index)
         if redraw:
-            app.redraw()
+            # Existing editor widgets hold the *old* association string.
+            # Do not let their FocusOut/redraw sync overwrite freshly
+            # persisted labels while Tk destroys and recreates editors.
+            app.__dict__["_suppress_polygon_label_sync"] = True
+            try:
+                app.redraw()
+            finally:
+                app.__dict__["_suppress_polygon_label_sync"] = False
         return bool(changed)
 
     def add_manual_polygon(self, points: list[tuple[int, int]]) -> bool:
