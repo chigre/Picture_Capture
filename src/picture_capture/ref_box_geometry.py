@@ -102,6 +102,67 @@ def transform_box(
     return replace(original, x=left, y=top, w=right - left, h=bottom - top)
 
 
+
+
+REF_ACTION_POSITIONS = ("above_right", "above_left", "right_side")
+
+
+def ref_action_buttons(
+    box: RefBox,
+    image_size: tuple[int, int],
+    scale: float,
+    placement: str = "above_right",
+    *,
+    show_edit: bool = True,
+    show_delete: bool = True,
+) -> list[tuple[str, int, int, int, int]]:
+    """Pixel-aligned REF action controls clamped to the source image bounds.
+
+    Coordinates are original image pixels, so the hit-test and rendered
+    buttons share the same geometry at every zoom. Above controls fall below
+    when there is no room; right-side controls fall to the left on page edge.
+    """
+    if placement not in REF_ACTION_POSITIONS:
+        placement = "above_right"
+    labels = (["edit"] if show_edit else []) + (["delete"] if show_delete else [])
+    if not labels:
+        return []
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return []
+    scale = max(float(scale), 0.08)
+    chip = max(1, min(round(22 / scale), width // 3 or 1, height // 3 or 1))
+    gap = max(1, min(round(3 / scale), max(1, chip // 4)))
+    count = len(labels)
+    def clamp(value: int, ceiling: int) -> int:
+        return max(0, min(max(0, ceiling), value))
+
+    if placement == "right_side":
+        stack_h = count * chip + (count - 1) * gap
+        left = box.x + box.w + gap
+        if left + chip > width:
+            left = box.x - chip - gap
+        left = clamp(left, width - chip)
+        top = clamp(box.y, height - stack_h)
+        return [
+            (name, left, top + i * (chip + gap),
+             left + chip, top + i * (chip + gap) + chip)
+            for i, name in enumerate(labels)
+        ]
+
+    total_w = count * chip + (count - 1) * gap
+    initial_x = box.x if placement == "above_left" else box.x + box.w - total_w
+    left = clamp(initial_x, width - total_w)
+    top = box.y - chip - gap
+    if top < 0:
+        top = box.y + box.h + gap
+    top = clamp(top, height - chip)
+    return [
+        (name, left + i * (chip + gap), top,
+         left + i * (chip + gap) + chip, top + chip)
+        for i, name in enumerate(labels)
+    ]
+
 def action_cursor(action: str) -> str:
     if action in {"left", "right"}:
         return "sb_h_double_arrow"
