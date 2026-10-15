@@ -8,7 +8,9 @@ for lazy preview without loading every scan (or writing scan-derived files).
 from __future__ import annotations
 
 from collections import OrderedDict
+import os
 from pathlib import Path
+import tempfile
 import tkinter as tk
 from tkinter import ttk
 from typing import Any
@@ -87,7 +89,18 @@ class PageThumbnailController:
         project = getattr(self.app, "project", None)
         if project is not None:
             try:
-                settings.to_json(settings_path(project.root))
+                destination = settings_path(project.root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                descriptor, temp_name = tempfile.mkstemp(
+                    prefix=".thumbnail-settings-", suffix=".tmp",
+                    dir=str(destination.parent),
+                )
+                os.close(descriptor)
+                try:
+                    settings.to_json(Path(temp_name))
+                    os.replace(temp_name, destination)
+                finally:
+                    Path(temp_name).unlink(missing_ok=True)
             except (OSError, ValueError, TypeError) as exc:
                 setattr(settings, key, previous)
                 status = getattr(self.app, "status_var", None)
