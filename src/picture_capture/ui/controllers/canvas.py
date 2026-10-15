@@ -331,7 +331,7 @@ class CanvasController:
         app.canvas.tag_raise("cursor-guide")
 
     def canvas_motion(self, event: Any) -> None:
-        app = app.app
+        app = self.app
         if app.image:
             canvas_x = app.canvas.canvasx(event.x)
             canvas_y = app.canvas.canvasy(event.y)
