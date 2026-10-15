@@ -8,6 +8,7 @@ used by the foreground editor. The only output is that page's PPP file.
 from __future__ import annotations
 
 from hashlib import sha256
+from glob import escape
 from pathlib import Path
 from PIL import Image
 
@@ -47,7 +48,7 @@ def associate_existing_ppp_page(
     # On Windows/macOS case-insensitive volumes the directory exposes only
     # one actual entry even if two differently-cased lookups both succeed.
     alternatives = [
-        sibling for sibling in source_ppp.parent.glob(f"{page.stem}.*")
+        sibling for sibling in source_ppp.parent.glob(f"{escape(page.stem)}.*")
         if sibling.is_file() and sibling.suffix.casefold() == ".ppp"
         and sibling.stem.casefold() == page.stem.casefold()
     ]
