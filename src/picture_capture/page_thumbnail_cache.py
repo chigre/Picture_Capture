@@ -183,18 +183,6 @@ def _legacy_cache_path(project_root: Path, source_path: Path) -> Path:
     return thumbnail_cache_dir(project_root) / digest[:2] / (digest + ".png")
 
 
-def _legacy_fingerprint(source_path: Path) -> str:
-    path = Path(source_path).resolve()
-    stat = path.stat()
-    payload = [
-        "page-index-v1", str(path), int(stat.st_dev), int(stat.st_ino),
-        int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ctime_ns),
-    ]
-    return hashlib.sha256(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "surrogatepass"),
-    ).hexdigest()
-
-
 def _retire_legacy_cache(project_root: Path, source_path: Path) -> None:
     """Remove only a specifically recognized old generated thumbnail, never unknown files."""
     old = _legacy_cache_path(project_root, source_path)
@@ -235,12 +223,10 @@ def get_page_thumbnail(
     if cached is not None:
         return cached
 
-    legacy = _legacy_cache_path(project_root, source_path)
-    previous = _read_valid_thumbnail(legacy, _legacy_fingerprint(source_path))
-    if previous is not None:
-        image = previous
-    else:
-        image = _build_thumbnail(source_path)
+    # V1's old hash-directory metadata only checked path/stat, not source
+    # image bytes. Never adopt an old thumbnail as proof of current pixels:
+    # rebuild once from the scan, then safely retire the old disposable file.
+    image = _build_thumbnail(source_path)
     # Never associate pixels decoded from an old source with a newer fingerprint.
     if source_fingerprint(source_path) != signature:
         raise OSError("Source image changed during thumbnail decode")
