@@ -59,9 +59,13 @@ def page_grid_segments(tree: Any) -> list[tuple[int, int, int, int]]:
             # the widget edge (and are offset from the real cell boundary).
             # Iterating bbox also includes a last-column border that remains
             # visible even when identify_column never transitions to "".
-            displayed = tuple(tree.tk.splitlist(tree.cget("displaycolumns")))
+            displayed = tuple(
+                str(item) for item in tree.tk.splitlist(tree.cget("displaycolumns"))
+            )
             if not displayed or displayed == ("#all",):
-                displayed = tuple(tree.tk.splitlist(tree.cget("columns")))
+                displayed = tuple(
+                    str(item) for item in tree.tk.splitlist(tree.cget("columns"))
+                )
             # Tk 8.6 can return Tcl_Obj index objects rather than Python str
             # for 'show'. Compare their string values, or #0 disappears.
             show = {str(item) for item in tree.tk.splitlist(tree.cget("show"))}
