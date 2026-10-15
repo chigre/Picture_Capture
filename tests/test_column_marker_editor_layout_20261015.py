@@ -278,3 +278,16 @@ def test_selector_starts_at_marker_end_without_false_candidate(monkeypatch, rati
     menu = next(v for v in app.canvas.windows if isinstance(v[2], _OCRMenu))
     assert menu[0] == max(lines[0][0], lines[0][2])
     assert menu[3]["anchor"] == "nw"
+
+
+def test_native_delete_key_edits_characters_not_entire_headword(monkeypatch):
+    app, _lines, _entry, _geometry = _render(monkeypatch)
+    editor = next(
+        item[2] for item in app.canvas.windows if isinstance(item[2], _Entry)
+    )
+    # No widget-specific binding consumes Delete. Native Tk Entry class
+    # bindings remain responsible for deleting the selected character(s).
+    assert "<Delete>" not in editor.bindings
+    assert "<FocusOut>" in editor.bindings
+    assert "<KeyPress>" in editor.bindings
+    assert "<Return>" in editor.bindings

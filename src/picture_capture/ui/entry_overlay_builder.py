@@ -184,7 +184,8 @@ def draw_entry_overlay(
     editor.bind("<Shift-Tab>", lambda e: self.focus_previous(e.widget))
     editor.bind("<Down>", lambda e: self.focus_next(e.widget))
     editor.bind("<Up>", lambda e: self.focus_previous(e.widget))
-    editor.bind("<Delete>", lambda _e, e=entry: self.delete_entry(e))
+    # Tk Entry keeps its native <Delete> binding: remove a character/selection,
+    # never the entire PDIC entry or its separator. [X] owns entry deletion.
     editor.bind("<KeyPress-grave>", lambda _e, e=entry: self.delete_entry(e))
     self.overlay_widgets.append(editor)
     record["widgets"].append(editor)
