@@ -12,7 +12,8 @@ import tkinter as tk
 from ..models import Entry as WordEntry
 from ..processing import column_index, line_box
 from ..overlay_layout_helpers import (
-    canonical_headword_marker_span, horizontal_entry_editor_slot,
+    canonical_headword_marker_span, effective_overlay_column_width,
+    horizontal_entry_editor_slot,
     effective_main_overlay_font_size, entry_index_label_layout,
     horizontal_ocr_menu_layout, horizontal_overlay_layout,
     scaled_overlay_line_width, transformed_entry_anchor,
@@ -22,6 +23,7 @@ from ..overlay_layout_helpers import (
 from ..overlay_opacity import create_alpha_canvas_line
 from ..review_text_helpers import _entry_font_spec
 from ..ui_compat import resolve_content_font_family
+from .overlay_delete_button import create_overlay_delete_button
 from .widgets.vertical_word import VerticalWordText
 
 
@@ -37,9 +39,12 @@ def draw_entry_overlay(
     entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
     col = column_index(entry.x, geometry, entry.y)
     canonical_x = geometry.x_at(col, entry_v)
+    column_width = effective_overlay_column_width(
+        geometry, col, self.settings.column_width,
+    )
     record = {"widgets": [], "canvas_items": [], "index_widget": None}
     marker_left, marker_right = canonical_headword_marker_span(
-        canonical_x, geometry.column_widths[col], self.settings.right_ratio,
+        canonical_x, column_width, self.settings.right_ratio,
     )
     marker_start, marker_end = geometry.transform.canonical_marker_to_source(
         (marker_left, entry_v), (marker_right, entry_v),
@@ -47,7 +52,7 @@ def draw_entry_overlay(
     )
     column_end_source_x, _column_end_source_y = (
         geometry.transform.canonical_to_source_point(
-            round(canonical_x + geometry.column_widths[col]),
+            round(canonical_x + column_width),
             round(entry_v), geometry.source_size,
         )
     )
@@ -84,27 +89,14 @@ def draw_entry_overlay(
     delete_button = None
     delete_req_width = 0
     if show_markers:
-        delete_button = tk.Button(
+        delete_button = create_overlay_delete_button(
             self.canvas,
-            text="[X]",
-            width=3,
-            takefocus=False,
-            relief="flat",
-            bd=0,
-            highlightthickness=0,
-            padx=1,
-            pady=0,
-            cursor="hand2",
-            fg="#ffffff",
-            bg="#9d042f",
-            activeforeground="#ffffff",
-            activebackground="#9d042f",
             command=lambda e=entry: self.delete_entry(e),
+            attach_tooltip=self._attach_tooltip,
+            tooltip="点击删除该画线!",
         )
-        delete_button._pc_skip_classic_appearance = True
         if processing_readonly:
             delete_button.configure(state="disabled")
-        self._attach_tooltip(delete_button, "点击删除该画线!")
         self.overlay_widgets.append(delete_button)
         record["widgets"].append(delete_button)
         record["delete_widget"] = delete_button
@@ -114,7 +106,7 @@ def draw_entry_overlay(
         # Suppress editor, sequence and OCR widgets only. Keep a visible,
         # actionable [X] attached to the marker at the column's far edge.
         if delete_button is not None:
-            button_anchor = "nw" if rtl or vertical else "ne"
+            button_anchor = "ne" if rtl else "nw"
             record["canvas_items"].append(self.canvas.create_window(
                 column_end_screen_x, marker_start[1] * self.view_scale,
                 window=delete_button, anchor=button_anchor,
@@ -195,13 +187,13 @@ def draw_entry_overlay(
     if horizontal:
         (editor_x, editor_y), editor_anchor, horizontal_index, horizontal_index_anchor = (
             horizontal_overlay_layout(
-                geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
+                geometry.transform, canonical_x, entry_v, column_width,
                 float(self.settings.main_entry_x_ratio), geometry.source_size,
                 self.view_scale, rtl=rtl,
             )
         )
-        # Tk.Entry width= is measured in characters; the canvas window's
-        # explicit pixel width is the authoritative per-column editor extent.
+        # Tk.Entry width= is measured in characters; the canvas window fills
+        # the exact visible distance to the column edge, with [X] OUTSIDE it.
         editor_req_width, _delete_x, _delete_anchor = horizontal_entry_editor_slot(
             editor_x, column_end_screen_x, delete_req_width, rtl=rtl,
         )
@@ -209,7 +201,7 @@ def draw_entry_overlay(
         # Match horizontal semantics: apply main_entry_x_ratio within the
         # 当前栏 first, then transform that point to source space.
         editor_x, editor_y = transformed_entry_anchor(
-            geometry.transform, canonical_x, entry_v, geometry.column_widths[col],
+            geometry.transform, canonical_x, entry_v, column_width,
             float(self.settings.main_entry_x_ratio), geometry.source_size, self.view_scale,
         )
     
@@ -357,10 +349,11 @@ def draw_entry_overlay(
     if delete_button is not None:
         if horizontal:
             # End of the resolved column in *source* pixels, not the index
-            # position. [X] sits immediately after the fitted editor.
+            # position. [X] sits AFTER the full-width editor, without taking
+            # any of the specified editor-to-column-end width.
             delete_x = column_end_screen_x
             delete_y = float(editor_y)
-            delete_anchor = "nw" if rtl else "ne"
+            delete_anchor = "ne" if rtl else "nw"
         else:
             # For vertical text there is no horizontal trailing word box;
             # use the physical right edge of its actual vertical widget.

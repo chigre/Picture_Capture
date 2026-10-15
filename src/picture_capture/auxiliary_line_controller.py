@@ -4,6 +4,8 @@ from __future__ import annotations
 from .auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits, read_auxiliary_lines, write_auxiliary_lines
 from .processing import column_index_for_click
 from .page_sections import v_is_inside_sections
+from .overlay_layout_helpers import effective_overlay_column_width
+from .ui.overlay_delete_button import create_overlay_delete_button
 
 
 class AuxiliaryLineController:
@@ -46,7 +48,9 @@ class AuxiliaryLineController:
             au, av = geometry.source_to_canonical(line.x, line.y)
             column = column_index_for_click(line.x, geometry, line.y)
             left = geometry.column_starts[column]
-            right = left + geometry.column_widths[column]
+            right = left + effective_overlay_column_width(
+                geometry, column, app.settings.column_width,
+            )
             if not left <= u <= right:
                 continue
             if abs(v - av) < distance:
@@ -86,10 +90,14 @@ class AuxiliaryLineController:
             self.app, "_auxiliary_delete_hitboxes", ()
         ):
             if left <= px <= right and top <= py <= bottom:
-                if self.app._auxiliary_edits.delete(index):
-                    self._persist("已删除")
+                self.delete_index(index)
                 return True
         return False
+
+    def delete_index(self, index: int) -> None:
+        """Delete the explicitly bound auxiliary row without touching PDIC."""
+        if self.app._auxiliary_edits.delete(index):
+            self._persist("已删除")
 
     def drag(self, x, y):
         app = self.app
@@ -143,7 +151,9 @@ class AuxiliaryLineController:
             _u, v = geometry.source_to_canonical(marker.x, marker.y)
             col = column_index_for_click(marker.x, geometry, marker.y)
             x0 = geometry.column_starts[col]
-            x1 = x0 + geometry.column_widths[col]
+            x1 = x0 + effective_overlay_column_width(
+                geometry, col, app.settings.column_width,
+            )
             left = geometry.canonical_to_source(x0, v)
             right = geometry.canonical_to_source(x1, v)
             app.canvas.create_line(
@@ -159,23 +169,35 @@ class AuxiliaryLineController:
                     fill="#ffffff", outline="#d97706",
                     tags=("auxiliary-overlay",),
                 )
-            # Visible and clickable on both normal and crop-preview canvases.
-            # Keep the delete target within the scanned page at narrow zooms.
-            max_x = max(0.0, app.image.width * scale)
-            max_y = max(0.0, app.image.height * scale)
+            # A native Tk Button shares font/colours/cursor/tooltip with
+            # headword [X]. Its cursor is hand2 only while hovered; on leaving
+            # Tk restores the normal canvas cursor automatically.
+            # Keep the widget in overlay_widgets for app.redraw cleanup.
+            max_x = float(app.image.width) * scale
+            max_y = float(app.image.height) * scale
             line_right = max(float(left[0]), float(right[0])) * scale
-            line_center_y = (float(left[1]) + float(right[1])) * 0.5 * scale
-            center_x = min(max_x - 13, max(13.0, line_right + 12.0))
-            center_y = min(max_y - 11, max(11.0, line_center_y))
-            box = (center_x - 13, center_y - 10,
-                   center_x + 13, center_y + 10)
-            app._auxiliary_delete_hitboxes.append((*box, i))
-            app.canvas.create_rectangle(
-                *box, fill="#fff7ed", outline="#c2410c", width=1,
-                tags=("auxiliary-overlay", "auxiliary-delete"),
+            line_y = (float(left[1]) + float(right[1])) * 0.5 * scale
+            button = create_overlay_delete_button(
+                app.canvas,
+                command=lambda index=i: self.delete_index(index),
+                attach_tooltip=app._attach_tooltip,
+                tooltip="点击删除该辅助线!",
             )
-            app.canvas.create_text(
-                center_x, center_y, text="[X]", fill="#9a3412",
-                anchor="center", font=("TkDefaultFont", 9, "bold"),
+            app.overlay_widgets.append(button)
+            chip_width = max(1, button.winfo_reqwidth())
+            chip_height = max(1, button.winfo_reqheight())
+            right_edge = min(
+                max_x - 2.0, max(float(chip_width), line_right),
+            )
+            top_edge = max(0.0, min(max_y - chip_height, line_y))
+            # Legacy canvas-click hit routing is retained; the native widget
+            # itself handles ordinary clicks and hover events.
+            box = (
+                right_edge - chip_width, top_edge,
+                right_edge, top_edge + chip_height,
+            )
+            app._auxiliary_delete_hitboxes.append((*box, i))
+            app.canvas.create_window(
+                right_edge, top_edge, window=button, anchor="ne",
                 tags=("auxiliary-overlay", "auxiliary-delete"),
             )

@@ -5446,15 +5446,20 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert 'marker_control_bg = str(self.settings.headword_marker_color)' not in app_text
     assert 'record["index_widget"] = index_label' in overlay
     assert 'record["delete_widget"] = delete_button' in overlay
-    assert 'text="[X]"' in overlay
-    assert 'bg="#9d042f"' in overlay
-    assert 'activebackground="#9d042f"' in overlay
-    assert 'self._attach_tooltip(delete_button, "点击删除该画线!")' in overlay
+    shared_delete = (
+        Path(__file__).parents[1] / "src/picture_capture/ui/overlay_delete_button.py"
+    ).read_text(encoding="utf-8")
+    assert 'text="[X]"' in shared_delete
+    assert 'bg="#9d042f"' in shared_delete
+    assert 'activebackground="#9d042f"' in shared_delete
+    assert 'tooltip="点击删除该画线!"' in overlay
     # The marker-owned [X] now occupies the resolved column end, rather
     # than borrowing the index label's screen position. The dedicated
     # runtime overlay test checks pixel geometry and four visibility states.
     assert 'delete_x = column_end_screen_x' in overlay
-    assert 'delete_anchor = "nw" if rtl else "ne"' in overlay
+    # Updated layout contract: [X] is outside the full-width editor at
+    # the actual column boundary, mirrored for RTL.
+    assert 'delete_anchor = "ne" if rtl else "nw"' in overlay
     assert 'horizontal_entry_editor_slot(' in overlay
 
 
@@ -8213,8 +8218,10 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'bg="#e6e6e6"' in overlay
     assert 'fg="#000000"' in overlay
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
-    assert 'text="[X]"' in overlay
-    assert 'bg="#9d042f"' in overlay
+    shared_button = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
+    assert 'text="[X]"' in shared_button
+    assert 'bg="#9d042f"' in shared_button
+    assert 'create_overlay_delete_button(' in overlay
     assert 'record["delete_widget"] = delete_button' in overlay
 
 
