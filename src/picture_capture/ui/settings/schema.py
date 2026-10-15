@@ -644,6 +644,7 @@ CHECK_HELP = {
     "ref_box_delete_always_visible": "在【编辑 REF】模式下，每个 REF 都显示删除 × 按钮，即使尚未选中。关闭时仅选中的 REF 显示 ×。主界面普通浏览时不会显示可点击的删除按钮，避免误删；删除操作仍然只能单击 ×。",
     "ref_box_font_bold": "决定 REF 框文字是否使用粗体，默认关闭。启用后只调整界面字体粗细，不会重新识别框位置或改变已保存的文字。",
     "ref_box_font_italic": "决定 REF 框文字是否使用斜体，默认关闭。适合需要区别原书字体的标注风格；切换只改变画布显示，不影响文件数据。",
+    "ref_ocr_quote_extraction": "【OCR REF】识别后的文本提取：优先获取成对的“…”或‘…’里的内容。左引号缺少配对时删除左引号及之前文字；右引号缺少配对时删除右引号及之后文字；无引号保持原文。关闭后保留完整 OCR 文本。仅处理空白 REF，不覆盖手工文字。",
     "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
     "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
     "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
@@ -740,6 +741,7 @@ REF_BOX_CHECKS = (
     ("REF 字体加粗", "ref_box_font_bold"),
     ("REF 字体斜体", "ref_box_font_italic"),
     ("新框自动挂靠所在正文词条", "ref_box_auto_attach"),
+    ("OCR REF：提取引号内文字", "ref_ocr_quote_extraction"),
 )
 
 ILLUSTRATION_DETECTION_FIELDS = (
