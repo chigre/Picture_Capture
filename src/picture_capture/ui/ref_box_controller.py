@@ -20,6 +20,7 @@ from ..ref_box_geometry import (
 )
 from ..overlay_layout_helpers import effective_main_overlay_font_size
 from ..review_text_helpers import _entry_font_spec
+from ..ref_box_ocr import ocr_ref_boxes_job, local_ref_ocr_plan
 from ..ref_box_detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
     list_ref_samples, default_ref_box_dimensions,
@@ -677,6 +678,72 @@ class RefBoxController:
         self._uncover_ref_from_tk_windows()
         # Canvas graphics are drawn last. Tk widgets overlapping a REF are
         # temporarily hidden only for REF edit mode; the rest forward events.
+
+    def ocr_selected_scope(self):
+        """OCR only existing REF rectangles in the selected page range."""
+        app = self.app
+        if not app.guard() or getattr(app, "_batch_active", False) or app.project is None:
+            return
+        if self.pointer_active:
+            app.status_var.set("请先结束 REF 编辑/样本采集，再执行 REF OCR")
+            return
+        try:
+            indices = list(app.selected_page_indices())
+        except Exception as exc:
+            app.show_error("REF OCR 页面范围无效", exc)
+            return
+        if not indices:
+            app.status_var.set("未选择 REF OCR 页面")
+            return
+        from ..ref_boxes import ref_box_path
+        project = app.project
+        pages = tuple(project.images)
+        eligible = [i for i in indices if ref_box_path(pages[i]).is_file()]
+        if not eligible:
+            app.status_var.set(
+                f"所选 {len(indices)} 页无 REF 文件，已跳过，不创建 .rbox"
+            )
+            return
+        if not local_ref_ocr_plan(app.settings).voting_engines:
+            app.status_var.set(
+                "REF OCR 仅使用本地 Paddle/Tesseract；当前未启用可用的本地 OCR 通道"
+            )
+            return
+        if not messagebox.askyesno(
+            "OCR 'REF'",
+            f"所选 {len(indices)} 页，其中 {len(eligible)} 页有 REF。"
+            "只 OCR 已存在 REF 框内的空白 text，"
+            "不会覆盖人工文字、修改 PDIC/PPP，也不会调用联网 Lens。继续？",
+            parent=app,
+        ):
+            return
+        settings = replace(app.settings)
+        current = app.current_page
+
+        def job(index, _position, _total):
+            return ocr_ref_boxes_job(str(pages[index]), settings)
+
+        def done(completed, total, stopped, results, error):
+            if app.project is project and app.current_page == current and current in pages:
+                self.load_page(current)
+                app.redraw()
+            filled = sum(item.get("filled", 0) for item in results)
+            protected = sum(item.get("skipped_existing", 0) for item in results)
+            failures = [item for item in results if item.get("status") == "failed"]
+            errors = sum(item.get("errors", 0) for item in results)
+            app.status_var.set(
+                f"REF OCR{'已停止' if stopped else '完成'}："
+                f"{completed}/{total} 页，填充 {filled} 框，"
+                f"保留已有文字 {protected} 框，OCR 错误 {errors}，失败 {len(failures)} 页"
+                + (f"；{failures[0].get('error', '')}" if failures else "")
+            )
+
+        app._start_batch_task(
+            "OCR REF", eligible, job, on_done=done,
+            item_label=lambda index: pages[index].name,
+            refresh_page_quality=False, allow_page_navigation=False,
+            allow_pdic_edits=False, flush_deferred_save=False,
+        )
 
     def recognize_selected_scope(self):
         app = self.app
