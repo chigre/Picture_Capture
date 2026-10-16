@@ -49,6 +49,7 @@ QUICK_FIELD_TYPES: dict[str, type] = {
     "crop_preview_font_size": int,
     "batch_interval": int,
     "right_ratio": float,
+    "crop_width_percent": float,
     "ocr_language": str,
     "paddle_band_width_ratio": float,
     "paddle_left_tolerance": int,
