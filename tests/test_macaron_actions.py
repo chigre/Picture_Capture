@@ -83,7 +83,9 @@ def test_header_footer_use_same_palette_and_keep_their_callbacks():
     main = Path(app_module.__file__).read_text(encoding="utf-8")
     assert 'app.workspace_macaron_buttons = []' in source
     assert '_create_macaron_action_button(\n            app, quick_host, ("普", "O", "校", "存")[index], command,' in source
-    assert '_create_macaron_action_button(app, host, label, callback)' in source
+    assert '_create_macaron_action_button(app, host, label, command)' in source
+    assert 'run_page_quick_action(app, role, normal)' in source
+    assert 'run_page_quick_action(app, role, callback)' in source
     assert '("普通画线", app.run_normal_draw_action)' in source
     assert '("OCR画线", app.run_ocr_draw_action)' in source
     assert '("词条校对", app.open_review)' in source
