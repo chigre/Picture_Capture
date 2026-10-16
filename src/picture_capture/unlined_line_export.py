@@ -321,13 +321,12 @@ def _save_unlined_rows(
                 crop.close()
 
         if not images:
-            _atomic_text(manifest, "")
+            manifest.unlink(missing_ok=True)
             for path in stale:
                 path.unlink(missing_ok=True)
             return 0, blank_rows, filtered_out, False
 
         replacements: list[tuple[Path, Path]] = []
-        names: list[str] = []
         merged = False
         if merge_by_page:
             name = f"{stem}_UL_PAGE.png"
@@ -345,7 +344,6 @@ def _save_unlined_rows(
             finally:
                 canvas.close()
             replacements.append((temp, target))
-            names.append(name)
             merged = True
         else:
             for index, image in enumerate(images):
@@ -354,16 +352,13 @@ def _save_unlined_rows(
                 temp = output_dir / f".{name}.tmp"
                 image.save(temp, format="PNG")
                 replacements.append((temp, target))
-                names.append(name)
 
-        manifest_temp = output_dir / f".{manifest.name}.tmp"
-        manifest_temp.write_text("\n".join(names) + "\n", encoding="utf-8")
         try:
             for temp, target in replacements:
                 os.replace(temp, target)
-            os.replace(manifest_temp, manifest)
+            # A legacy diagnostic list must not survive a PNG-only export.
+            manifest.unlink(missing_ok=True)
         except Exception:
-            manifest_temp.unlink(missing_ok=True)
             for temp, _target in replacements:
                 temp.unlink(missing_ok=True)
             raise
@@ -406,6 +401,8 @@ def export_unlined_page_job(
             page_index=int(page_index),
         )
         if layout is None:
+            # Even a skipped page must not retain the retired diagnostic list.
+            (output_dir / f"{image_path.stem}{MANIFEST_SUFFIX}").unlink(missing_ok=True)
             return UnlinedPageResult(
                 int(page_index), image_path.name, 0, 0, 0, 0, 0, 0, False, False
             )
