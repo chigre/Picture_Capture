@@ -117,17 +117,19 @@ def test_crop_width_lives_in_postproduction_and_reuses_live_float_setting():
     display = Path(compact_display_menu.__file__).read_text(encoding="utf-8")
     assert 'caption(ratio_row, "向右比例%", 15)' not in source
     assert 'textvariable=app.quick_vars["right_ratio"]' not in source
-    assert '"向右比例%"' not in display
+    assert 'value(row, "向右比例%", "right_ratio", 4)' in display
     assert post.index('_label(width_row, "切图宽度(%栏)")') < post.index(
         'for group in POSTPRODUCTION_ACTIONS:'
     )
-    assert 'width_row, app.quick_vars["right_ratio"], 6, app._quick_parameter_changed' in post
+    assert 'width_row, app.quick_vars["crop_width_percent"], 6, app._quick_parameter_changed' in post
     assert "ordinary_host.pack_forget()" in source
     assert "illustrated_host.pack(fill=" in source
     from picture_capture.models import AppSettings
     from picture_capture.ui.quick_state import QUICK_FIELD_TYPES
     assert AppSettings().right_ratio == 100.0
+    assert AppSettings().crop_width_percent == 100.0
     assert QUICK_FIELD_TYPES["right_ratio"] is float
+    assert QUICK_FIELD_TYPES["crop_width_percent"] is float
     app = (BASE / "app.py").read_text(encoding="utf-8")
     assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in app
 
