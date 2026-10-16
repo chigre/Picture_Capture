@@ -442,9 +442,12 @@ def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         "按当前栏宽百分比控制画线/未画线单行切图；与向右比例%独立。",
     )
     app._crop_width_equivalence = CropWidthEquivalence(app)
-    _label(width_row, "相当于整页宽(%):")
+    # The shared popup is 280px wide: keep the full label and editable value
+    # immediately below the column field instead of clipping either input.
+    page_width_row = _row(panel)
+    _label(page_width_row, "相当于整页宽(%):")
     page_width_entry = _entry(
-        width_row, app._crop_width_equivalence.page_percent_var, 5,
+        page_width_row, app._crop_width_equivalence.page_percent_var, 7,
         app._crop_width_equivalence.commit_page,
     )
     app._attach_tooltip(
