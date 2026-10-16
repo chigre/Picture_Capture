@@ -194,10 +194,12 @@ class IllustratedCanvasEditor:
         # Drag from a 16-screen-pixel on-image ruler to add a guide.
         margin=16/max(.08,self.app.view_scale)
         if shift and self.app.settings.illustrated_guides_visible and not self.app.settings.illustrated_guides_locked:
+            # Adobe-like ruler semantics: drag from TOP to create a
+            # horizontal guide (at release Y), from LEFT for a vertical one.
             if y<margin and x>=margin:
-                self.drag=("guide","vertical",x,y);return "break"
-            if x<margin and y>=margin:
                 self.drag=("guide","horizontal",x,y);return "break"
+            if x<margin and y>=margin:
+                self.drag=("guide","vertical",x,y);return "break"
         # Ctrl+drag an existing guide to reposition it. Shift+drag from the
         # rulers above creates guides and remains distinct from text selection.
         tol=self.app.settings.illustrated_snap_tolerance/max(.08,self.app.view_scale)
@@ -213,20 +215,20 @@ class IllustratedCanvasEditor:
         if hit:
             ids=self._ids_for(hit)
             self.key_id=hit.id
-            if (shift or control) and hit.id not in self.selected:
-                self.selected=self.selected|ids
-                self.drag=None
-            elif control:
-                self.selected=self.selected-ids
+            corner=(abs(x-(hit.x+hit.w))*self.app.view_scale<=10
+                    and abs(y-(hit.y+hit.h))*self.app.view_scale<=10)
+            # An already-selected single box can be resized at its handle.
+            # Otherwise Shift/Ctrl clicks consistently toggle selection.
+            if corner and hit.id in self.selected and not hit.locked and len(self.selected)==1:
+                self.drag=("resize",hit.id,x,y)
+            elif shift or control:
+                if hit.id in self.selected:self.selected.difference_update(ids)
+                else:self.selected.update(ids)
                 self.drag=None
             else:
                 if hit.id not in self.selected:self.selected=ids
-                corner=abs(x-(hit.x+hit.w))*self.app.view_scale<=10 and abs(y-(hit.y+hit.h))*self.app.view_scale<=10
-                if corner and not hit.locked and len(self.selected)==1:
-                    self.drag=("resize",hit.id,x,y)
-                else:
-                    self.drag=("copy" if bool(getattr(event,"state",0)&0x0008) else "move",
-                               x,y,list(self.entries))
+                self.drag=("copy" if bool(getattr(event,"state",0)&0x0008) else "move",
+                           x,y,list(self.entries))
         elif shift:
             self.drag=("marquee",x,y,None)
         else:
@@ -424,14 +426,18 @@ class IllustratedCanvasEditor:
         if not self._ready():return None
         scale=int(self.app.settings.illustrated_nudge_step)
         if getattr(event,"state",0)&0x1:scale*=10
-        ids={e.id for e in self._editable()}
-        new=[]
-        for e in self.entries:
-            if e.id in ids:
-                x,y,w,h=clamp_rect(e.x+dx*scale,e.y+dy*scale,e.w,e.h,self._size())
-                new.append(replace(e,x=x,y=y))
-            else:new.append(e)
-        self._commit(new)
+        targets=self._editable()
+        if not targets:return "break"
+        # Treat a selected layout group as one geometric translation; do not
+        # individually clamp its members and accidentally deform their spacing.
+        mx=dx*scale;my=dy*scale
+        mx=max(-min(e.x for e in targets),
+               min(mx,self._size()[0]-max(e.x+e.w for e in targets)))
+        my=max(-min(e.y for e in targets),
+               min(my,self._size()[1]-max(e.y+e.h for e in targets)))
+        ids={e.id for e in targets}
+        self._commit([replace(e,x=e.x+mx,y=e.y+my) if e.id in ids
+                      else e for e in self.entries])
         return "break"
     def semantic_merge(self):
         try:self._commit(merge_text_groups(self.entries,self.selected))
