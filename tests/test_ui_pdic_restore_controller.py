@@ -90,7 +90,8 @@ class _RestoreApp:
     def _schedule_page_cell_overlay_refresh(self) -> None:
         self.calls.append(("refresh_overlay",))
 
-    def load_page(self, index: int) -> None:
+    def load_page(self, index: int, *, skip_current_save: bool = False) -> None:
+        assert skip_current_save is True
         self.calls.append(("load_page", index))
 
 
