@@ -39,7 +39,6 @@ from .single_line_merge_settings import _trim_white_border, load_merge_by_page
 from .single_line_parallel import configured_single_line_workers
 from .unlined_export_filter_settings import (
     DEFAULT_BLANK_INK_PERCENT,  # Legacy utility default only.
-    DEFAULT_LEFT_WHITE_PERCENT,
     load_unlined_filter_settings,
 )
 from .unlined_physical_rows_resolver import resolve_unlined_physical_rows
