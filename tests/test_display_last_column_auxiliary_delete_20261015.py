@@ -131,8 +131,7 @@ def test_display_menu_moves_groups_and_removes_denoise_selector():
     label = source.index('check(row, "词头标签"')
     illustration = source.index('check(row, "插图形状:线"')
     assert label < illustration
-    assert '"向右比例%"' not in source
-    assert source.index('dropdown("显示模式",') < (
+    assert source.index('value(row, "向右比例%", "right_ratio", 4)') < (
         source.index('label(row, "切图预览标签:")')
     ) < source.index('check(row, "显示Layout",')
     assert "去噪强度" not in source
