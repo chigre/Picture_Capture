@@ -364,16 +364,30 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     # Spatial pages have their own operations and never invoke PDIC separator
     # drawing by accident. Traditional controls remain intact and reversible.
-    _button(_row(illustrated), "手动画文字框 / 校对",
+    row = _row(illustrated)
+    _button(row, "选择 V", lambda: open_illustrated_dictionary_editor(app, action="select"))
+    _button(row, "画框 B", lambda: open_illustrated_dictionary_editor(app, action="box"))
+    row = _row(illustrated)
+    _button(row, "显示/隐藏网格", lambda: open_illustrated_dictionary_editor(app, action="grid"))
+    _button(row, "管理辅助线…", lambda: open_illustrated_dictionary_editor(app, action="guides"))
+    row = _row(illustrated)
+    _button(row, "对齐 / 分布…", lambda: open_illustrated_dictionary_editor(app, action="align"))
+    _button(row, "组合 / 取消组合…", lambda: open_illustrated_dictionary_editor(app, action="align"))
+    row = _row(illustrated)
+    _button(row, "撤销", lambda: open_illustrated_dictionary_editor(app, action="undo"))
+    _button(row, "重做", lambda: open_illustrated_dictionary_editor(app, action="redo"))
+    _button(_row(illustrated), "主画布文字框编辑 / 校对",
             lambda: open_illustrated_dictionary_editor(app))
     _button(_row(illustrated), "全页 OCR 检测与文字组归并",
             lambda: open_illustrated_dictionary_editor(app, action="detect"))
+    _button(_row(illustrated), "接受本页 OCR 候选",
+            lambda: open_illustrated_dictionary_editor(app, action="accept"))
     _button(_row(illustrated), "图解词典多语言索引导出",
             lambda: open_illustrated_dictionary_editor(app, action="export"))
     ttk.Label(
         illustrated,
-        text="图解词条无栏位、无横线；OCR 只产生候选，接受后才写盘。"
-             "原图已有的指向线不需要额外建模。",
+        text="图解模式在主界面图片上编辑；Shift 多选、标尺拖出辅助线。"
+             "右键提供等距、等宽、锁定、拆分合并和更多对象操作。",
         wraplength=280, justify="left",
     ).pack(fill="x", pady=6)
 
