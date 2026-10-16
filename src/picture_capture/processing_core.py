@@ -2371,7 +2371,7 @@ def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: App
     character_height = _source_px(settings.character_height)
     vertical_pad = abs(row_padding)
     height = character_height + 2 * abs(row_padding)
-    width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.right_ratio)) / 100.0)
+    width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.crop_width_percent)) / 100.0)
     left_extension = round(geometry.column_starts[0] * 0.5)
     tracked_x = geometry.x_at(idx, entry_v)
     canonical_box = (
