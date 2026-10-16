@@ -161,7 +161,7 @@ def test_inline_zoom_is_visible_in_normal_and_compact_without_old_launcher():
     assert 'self.page_size_row = size_row' in app
     assert 'self.page_zoom_tools = zoom_tools' in app
     assert 'zoom_handle = ttk.Label(size_row, text="≣"' not in app
-    assert '("普", "O", "校")[index]' in tools
+    assert '("普", "O", "校", "存")[index]' in tools
     assert 'toggle_image_toolbar(app)' not in tools
     assert '("➖", lambda: app.zoom(0.87)' in tools
     assert '("➕", lambda: app.zoom(1.15)' in tools
@@ -406,7 +406,7 @@ def test_extreme_mode_icons_and_abbreviated_run_actions():
     assert '("上", -1), ("下", 1)' in tools
     assert 'app.workspace_extreme_page_navigation = extreme_nav' in tools
     assert 'command=lambda direction=delta: app.change_page(direction)' in tools
-    assert '("普", "O", "校")' in tools
+    assert '("普", "O", "校", "存")' in tools
 
 
 def test_extreme_zoom_is_vertical_and_compact_is_three_rows(monkeypatch):

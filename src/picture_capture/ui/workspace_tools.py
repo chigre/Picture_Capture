@@ -64,6 +64,10 @@ MACARON_ACTION_COLORS = {
         "light": ("#C4EAD8", "#245C47", "#AEDFC8"),
         "dark": ("#376A58", "#E9FFF3", "#477B65"),
     },
+    "存": {
+        "light": ("#FFF1B8", "#66501F", "#FFE69B"),
+        "dark": ("#6A5933", "#FFF4D2", "#806C40"),
+    },
 }
 
 
@@ -608,6 +612,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("普通画线", app.run_normal_draw_action),
         ("OCR画线", app.run_ocr_draw_action),
         ("词条校对", app.open_review),
+        ("保存当前页", app.save_current_page),
     )
     app.workspace_quick_action_buttons = []
     app.workspace_macaron_buttons = []
@@ -618,11 +623,11 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     for index, (label, command) in enumerate(quick_actions):
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = _create_macaron_action_button(
-            app, quick_host, ("普", "O", "校")[index], command,
+            app, quick_host, ("普", "O", "校", "存")[index], command,
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
-    # In the footer the edit-mode shortcuts remain directly below 普/O/校,
+    # In the footer the edit-mode shortcuts remain directly below the actions,
     # even when insufficient space hides optional *header* quick actions.
     app.workspace_edit_shortcut_buttons = []
     for caption, callback in (
@@ -876,8 +881,8 @@ def enforce_header_min_width(app: Any) -> None:
 def _refresh_header_toolbar(app: Any, width: int) -> None:
     """Fill actually available space, never applying an arbitrary 650px cutoff.
 
-    With room for the whole toolbar, show zoom and 普/O/校. With less room,
-    show 普/O/校 alone rather than hiding them and leaving a large blank gap.
+    With room for the whole toolbar, show zoom and 普/O/校/存. With less room,
+    show 普/O/校/存 alone rather than hiding them and leaving a large blank gap.
     The four permanent left-hand text buttons and window presets never hide.
     """
     shortcuts = getattr(app, "workspace_header_shortcut_buttons", ())
@@ -954,6 +959,7 @@ def install_header_quick_controls(app: Any) -> None:
         ("普", app.run_normal_draw_action, "普通画线"),
         ("O", app.run_ocr_draw_action, "OCR画线"),
         ("校", app.open_review, "词条校对"),
+        ("存", app.save_current_page, "保存当前页"),
     )
     for label, callback, tooltip in shortcuts:
         button = _create_macaron_action_button(app, host, label, callback)
@@ -1172,7 +1178,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
             sticky="ew", padx=0, pady=0,
         )
     for index, (button, title) in enumerate(zip(
-        app.workspace_quick_action_buttons, ("普", "O", "校"),
+        app.workspace_quick_action_buttons, ("普", "O", "校", "存"),
     )):
         button.configure(text=title, width=2)
         button.grid(
@@ -1182,7 +1188,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
     for index, button in enumerate(getattr(app, "workspace_edit_shortcut_buttons", ())):
         button.grid(
-            row=9 + index if extreme else 3,
+            row=10 + index if extreme else 3,
             column=0 if extreme else index,
             sticky="ew", padx=0, pady=0,
         )

@@ -15774,9 +15774,7 @@ class PictureCaptureApp(tk.Tk):
                 trace_tick = time.perf_counter()
             saved_pdic = pdic_path(page)
             if method in {"paddleocr", "combined"}:
-                # Mandatory lossless snapshot BEFORE replacing an existing
-                # PDIC. If preservation fails, abort this page rather than
-                # silently overwrite the user's only manual corrections.
+                # Preserve manual PDIC before automated OCR overwrites it.
                 from .ocr_pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])

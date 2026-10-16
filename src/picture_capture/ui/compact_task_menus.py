@@ -10,6 +10,7 @@ from tkinter import ttk
 from typing import Any, Callable
 
 from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
+from ..line_diff_bookmarks import bookmark_modified_line_pages
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
@@ -279,7 +280,7 @@ ACTION_GROUPS = (
     (("OCR画线（默认）", "run_ocr_draw_action"),),
     None,
     (("清除画线", "clear_entries"), ("清除文本", "clear_text")),
-    (("精修画线", "refine_lines_selected_scope"), ("保存当前页", "save_current_page")),
+    (("精修画线", "refine_lines_selected_scope"), ("标记线差异页", "bookmark_modified_line_pages")),
     None,
     (("词条校对", "open_review"),),
     (("选择词条文件", "select_existing_headwords_file"),
@@ -307,7 +308,8 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             continue
         row = _row(panel)
         for caption, method in group:
-            button = _button(row, caption, getattr(app, method))
+            command = (lambda: bookmark_modified_line_pages(app)) if method == "bookmark_modified_line_pages" else getattr(app, method)
+            button = _button(row, caption, command)
             if caption == "精修画线":
                 app._attach_tooltip(
                     button,
