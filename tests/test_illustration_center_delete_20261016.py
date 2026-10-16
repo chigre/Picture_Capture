@@ -22,7 +22,12 @@ def test_delete_control_tied_to_shape_not_editable_label():
                "picture_capture" / "illustration_delete_overlay.py").read_text(encoding="utf-8")
     assert "if show_shapes else None" in source
     assert "delete_button.pack" not in overlay
-    assert 'font=("TkDefaultFont", 16)' in overlay
+    assert 'font=fixed_overlay_control_font(app.canvas, app.settings.ocr_language)' in overlay
+    assert 'width=3' in overlay
+    assert 'padx=1' in overlay and 'pady=0' in overlay
+    shared = (Path(__file__).resolve().parents[1] / "src" /
+              "picture_capture" / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
+    assert "OVERLAY_CONTROL_FONT_SIZE = 9" in shared
     assert 'bg="#bdbdbd"' in overlay
     assert 'anchor="center"' in overlay
     assert 'f"ppp-delete-{region_index}"' in overlay
