@@ -557,7 +557,8 @@ def open_illustrated_dictionary_editor(app, *, action: str = "open") -> None:
         current.window.lift()
         current.window.focus_set()
         editor = current
-        if editor.project is app.project and app.current_page in editor.pages:
+        if (editor.project is app.project and app.current_page in editor.pages
+                and editor.page != app.current_page):
             editor._load_page(editor.pages.index(app.current_page))
     else:
         try:
