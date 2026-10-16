@@ -6,7 +6,7 @@ grouped locally; an isolated printed label remains a valid one-line group.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import median
 from typing import Any, Callable
@@ -14,6 +14,7 @@ from typing import Any, Callable
 from PIL import Image
 
 from .illustrated_entries import IllustratedEntry, make_entry
+from .illustrated_profile import effective_ocr_roi, tesseract_languages, languages
 from .image_utils import normalize_page_rgb
 from .ocr_channel import OcrChannelSession
 from .ref_box_ocr import local_ref_ocr_plan
@@ -77,7 +78,8 @@ def join_tesseract_words(lines: list[SpatialLine]) -> list[SpatialLine]:
 
 
 def group_spatial_lines(lines: list[SpatialLine], *,
-                        max_lines: int = 10) -> list[list[SpatialLine]]:
+                        max_lines: int = 10,
+                        mode: str = "auto") -> list[list[SpatialLine]]:
     """Cluster compact, vertically successive labels; never use global Y sort.
 
     Candidate line must be close vertically, start near the same X or share a
@@ -86,6 +88,10 @@ def group_spatial_lines(lines: list[SpatialLine], *,
     """
     if not lines:
         return []
+    if mode not in {"strict", "auto", "loose"}:
+        raise ValueError("Unsupported spatial grouping mode")
+    # All tolerances are ratios of the detected line height.
+    factor = {"strict": .67, "auto": 1., "loose": 1.35}[mode]
     groups: list[list[SpatialLine]] = []
     for row in sorted(lines, key=lambda v: (v.box[1], v.box[0])):
         x0, y0, x1, y1 = row.box
@@ -98,12 +104,12 @@ def group_spatial_lines(lines: list[SpatialLine], *,
             lx0, ly0, lx1, ly1 = last.box
             scale = max(5.0, median(v.height for v in group + [row]))
             gap = y0 - ly1
-            if not (-.10 * scale <= gap <= .95 * scale):
+            if not (-.10 * scale <= gap <= .95 * scale * factor):
                 continue
             group_center = median((v.box[0] + v.box[2]) / 2 for v in group)
             center = (x0 + x1) / 2
-            left_align = abs(x0 - median(v.box[0] for v in group)) <= 1.20 * scale
-            center_align = abs(center - group_center) <= 1.25 * scale
+            left_align = abs(x0 - median(v.box[0] for v in group)) <= 1.20 * scale * factor
+            center_align = abs(center - group_center) <= 1.25 * scale * factor
             overlap = max(0, min(lx1, x1) - max(lx0, x0))
             if not (left_align or center_align) or overlap <= 0:
                 continue
@@ -144,6 +150,10 @@ def proposal_overlaps(existing: IllustratedEntry, proposed: IllustratedEntry) ->
 
 def _session(settings, session_factory: Callable[..., Any]):
     plan = local_ref_ocr_plan(settings)
+    requested = languages(str(getattr(settings, "illustrated_ocr_languages", "eng")))
+    if len(requested) > 1 and "tesseract" not in plan.voting_engines:
+        raise RuntimeError("多语言图解 OCR 请先在共享 OCR 通道中启用本地 Tesseract")
+    settings = replace(settings, tesseract_language=tesseract_languages(settings))
     if not plan.voting_engines:
         raise RuntimeError("请在共享 OCR 设置中启用本地 Paddle 或 Tesseract")
     return session_factory(settings, plan=plan)
@@ -157,7 +167,12 @@ def propose_page_entries(page: Path, settings: Any, *,
     with Image.open(page) as opened:
         image = normalize_page_rgb(opened)
     try:
-        outcome = session.recognize_crop(image, tesseract_psm=11)
+        x0, y0, x1, y1 = effective_ocr_roi(settings, image.size)
+        active = image.crop((x0, y0, x1, y1))
+        try:
+            outcome = session.recognize_crop(active, tesseract_psm=11)
+        finally:
+            active.close()
         candidates = [c for c in outcome.candidates
                       if c.engine in ("paddle", "tesseract") and c.records and not c.error]
         if not candidates:
@@ -167,11 +182,27 @@ def propose_page_entries(page: Path, settings: Any, *,
             return []
         # Paddle returns recognized text-line rectangles. Tesseract produces
         # word boxes; combine them before multilingual label grouping.
-        preferred = next((v for v in candidates if v.engine == "paddle"), candidates[0])
-        lines = normalize_ocr_records(preferred.records, image.size)
+        multiple_languages = len(languages(str(getattr(settings, "illustrated_ocr_languages", "eng")))) > 1
+        preferred_engine = "tesseract" if multiple_languages else "paddle"
+        preferred = next((v for v in candidates if v.engine == preferred_engine), candidates[0])
+        lines = normalize_ocr_records(preferred.records, (x1-x0, y1-y0))
         if preferred.engine == "tesseract":
             lines = join_tesseract_words(lines)
-        return groups_to_entries(group_spatial_lines(lines))
+        # OCR coordinates are relative to the analysis ROI, but every stored
+        # illustrated rectangle must remain in original-image coordinates.
+        if x0 or y0:
+            lines = [
+                SpatialLine(line.text,
+                            (line.box[0]+x0, line.box[1]+y0,
+                             line.box[2]+x0, line.box[3]+y0),
+                            line.confidence)
+                for line in lines
+            ]
+        return groups_to_entries(group_spatial_lines(
+            lines,
+            max_lines=int(getattr(settings, "illustrated_group_max_lines", 10)),
+            mode=str(getattr(settings, "illustrated_grouping_mode", "auto")),
+        ))
     finally:
         image.close()
 
@@ -192,7 +223,12 @@ def ocr_one_group(page: Path, settings: Any, box: tuple[int, int, int, int],
                       and v.records and not v.error]
         if not candidates:
             return ()
-        chosen = next((v for v in candidates if v.engine == "paddle"), candidates[0])
+        preferred_engine = (
+            "tesseract"
+            if len(languages(str(getattr(settings, "illustrated_ocr_languages", "eng")))) > 1
+            else "paddle"
+        )
+        chosen = next((v for v in candidates if v.engine == preferred_engine), candidates[0])
         lines = normalize_ocr_records(chosen.records, (w, h))
         if chosen.engine == "tesseract":
             lines = join_tesseract_words(lines)
