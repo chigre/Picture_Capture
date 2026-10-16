@@ -14126,8 +14126,8 @@ class PictureCaptureApp(tk.Tk):
     def toggle_polygon_drawing(self) -> None:
         if self.ref_box_controller.pointer_active:
             self.ref_box_controller.stop_edit()
-        if self._batch_active and self._batch_allow_pdic_edits:
-            self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
+        if self._batch_active:
+            self.status_var.set("批量任务期间暂不编辑 PPP；可校对已开放的 PDIC。")
             return
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
