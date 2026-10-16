@@ -26,6 +26,14 @@ PROFILE_FIELDS = (
     "illustrated_ocr_top_percent",
     "illustrated_ocr_bottom_percent",
     "illustrated_ocr_side_percent",
+    "illustrated_grid_visible", "illustrated_grid_x", "illustrated_grid_y",
+    "illustrated_grid_subdivisions", "illustrated_grid_origin_x",
+    "illustrated_grid_origin_y", "illustrated_grid_color",
+    "illustrated_guide_color", "illustrated_grid_opacity",
+    "illustrated_guides_visible", "illustrated_guides_locked",
+    "illustrated_snap_grid", "illustrated_snap_guides",
+    "illustrated_snap_objects", "illustrated_snap_tolerance",
+    "illustrated_nudge_step", "illustrated_history_depth",
 )
 
 
@@ -87,6 +95,29 @@ def validate_illustrated_preferences(settings: Any) -> None:
             raise ValueError("OCR 页面边距必须在 0–40% 之间")
     if float(settings.illustrated_ocr_top_percent) + float(settings.illustrated_ocr_bottom_percent) >= 90:
         raise ValueError("顶部与底部 OCR 排除区域总和过大")
+    for key,low,high in (
+        ("illustrated_grid_x", 4, 2000), ("illustrated_grid_y", 4, 2000),
+        ("illustrated_grid_subdivisions", 1, 16),
+        ("illustrated_snap_tolerance", 1, 50),
+        ("illustrated_nudge_step", 1, 50),
+        ("illustrated_history_depth", 1, 200),
+        ("illustrated_grid_opacity", 0, 100),
+        ("illustrated_grid_origin_x", 0, 100000),
+        ("illustrated_grid_origin_y", 0, 100000),
+    ):
+        val=getattr(settings,key)
+        if type(val) is not int or not low<=val<=high:
+            raise ValueError(f"图解布局参数 {key} 应在 {low}–{high} 之间")
+    for key in ("illustrated_grid_color","illustrated_guide_color"):
+        val=getattr(settings,key)
+        if not isinstance(val,str) or not re.fullmatch(r"#[0-9a-fA-F]{6}",val):
+            raise ValueError("辅助线颜色须为 #RRGGBB")
+    for key in ("illustrated_grid_visible","illustrated_guides_visible",
+                "illustrated_guides_locked","illustrated_snap_grid",
+                "illustrated_snap_guides","illustrated_snap_objects"):
+        if type(getattr(settings,key)) is not bool:
+            raise ValueError("图解网格开关应为布尔值")
+
 
 
 def profile_payload(settings: Any) -> dict[str, Any]:
