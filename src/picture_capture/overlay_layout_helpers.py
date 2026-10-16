@@ -9,13 +9,16 @@ from .models import AppSettings
 
 def effective_main_overlay_font_size(
     image_width: int, view_scale: float, settings: AppSettings,
+    *, base_font_size: int | None = None,
 ) -> int:
     """Return the main overlay font size.
 
     1400 px displayed page width corresponds to the configured base font size.
     """
 
-    base_size = max(5, int(settings.main_entry_font_size))
+    base_size = max(5, int(
+        settings.main_entry_font_size if base_font_size is None else base_font_size
+    ))
 
     if settings.main_entry_follow_zoom:
         displayed_page_width = max(1.0, image_width * view_scale)
@@ -93,11 +96,10 @@ def effective_overlay_column_width(geometry, column_index: int, configured_width
 def canonical_headword_marker_span(
     column_x: float, column_width: float, right_ratio: float,
 ) -> tuple[int, int]:
-    """Use the same per-column rightward percentage as the saved crop box.
+    """Display-only per-column rightward span for markers and auxiliary hits.
 
-    Unlike the former overlay-only 95% shortcut, 100% reaches the actual end
-    of the resolved column (which excludes its gutter). No change to separator
-    detection/Y refinement or the source-space Entry coordinates is involved.
+    This setting is independent from the PNG/OCR crop-width percentage; 100%
+    reaches the resolved column end without changing stored Entry coordinates.
     """
     left = int(round(float(column_x)))
     fraction = max(0.01, min(1.0, float(right_ratio) / 100.0))

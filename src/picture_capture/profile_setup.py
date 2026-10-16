@@ -330,9 +330,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self._show_sample_loading_state()
         self._refresh_language_summary()
         self._refresh_summary()
-        # Let Tk paint the complete Wizard frame before any representative
-        # image files are opened. Thumbnail decoding then happens off the UI
-        # thread so clicking Project Profile never feels like a frozen window.
         self.after(20, self._start_sample_thumbnail_load)
 
         # Representative-page analysis starts after the user confirms reading
@@ -1000,6 +997,8 @@ class ProjectProfileWizard(tk.Toplevel):
             ).grid(row=0, column=column, sticky="w", padx=(0, 10), pady=3)
 
         self._build_language_section(tab, row=4)
+        from .ui.profile_wizard_illustrated import add_wizard_layout_selector
+        add_wizard_layout_selector(self, tab, row=6)
 
         ttk.Label(
             tab,
@@ -3089,7 +3088,8 @@ class ProjectProfileWizard(tk.Toplevel):
         current = self.notebook.index(self.notebook.select())
         target = max(0, min(len(self.tabs) - 1, current + int(delta)))
         self.notebook.select(self.tabs[target])
-        if current == 0 and target == 1 and not self._analysis_suggestion and not self._analysis_running:
+        if (current == 0 and target == 1 and self.working.dictionary_layout_kind != "illustrated"
+                and not self._analysis_suggestion and not self._analysis_running):
             self.analyze_representative_pages(auto_apply=True)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:

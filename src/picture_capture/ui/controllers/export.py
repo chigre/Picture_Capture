@@ -375,7 +375,7 @@ class ExportController:
             changed = sum(1 for result in results if result and result[2])
             records = sum(int(result[1]) for result in results if result)
             if app.current_index in existing:
-                app.load_page(app.current_index)
+                app.load_page(app.current_index, skip_current_save=True)
             state = "已停止" if stopped else "完成"
             app.status_var.set(
                 f"修复排序{state}：处理 {completed}/{total} 页；实际改序 {changed} 页；{records} 条记录"
@@ -732,7 +732,7 @@ class ExportController:
                 app._update_page_row(index)
             app._schedule_page_cell_overlay_refresh()
             if app.current_index in completed_indices:
-                app.load_page(app.current_index)
+                app.load_page(app.current_index, skip_current_save=True)
 
             unmatched = int(stats.get("unmatched", 0) or 0)
             if stopped:

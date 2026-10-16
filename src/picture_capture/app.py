@@ -131,6 +131,9 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.settings import illustration as _settings_illustration_ui
+from .ui.settings import ref_box as _settings_ref_box_ui
+from .ui.settings import color_picker as _settings_color_ui
+from .ui.ref_box_controller import RefBoxController
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
     HeadwordController, IllustrationController, PageController, ProjectController,
@@ -224,6 +227,7 @@ from .overlay_opacity import (
 )
 from .illustration_polygon_edit import nearest_polygon_segment
 from .illustration_labels import label_text, user_edited_link
+from .illustration_delete_overlay import create_illustration_delete_control, polygon_delete_center
 from .illustration_fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
@@ -618,7 +622,7 @@ class SettingsDialog(tk.Toplevel):
             widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
             return widget
-        if name in {"main_entry_font_family", "review_entry_font_family"}:
+        if name in {"main_entry_font_family", "review_entry_font_family", "ref_box_font_family"}:
             families = (
                 AUTO_FONT_FAMILY,
                 *tuple(sorted(set(font.families()), key=str.casefold)),
@@ -668,7 +672,8 @@ class SettingsDialog(tk.Toplevel):
             )
         if name == "layout_transform":
             return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
-        return ttk.Entry(parent, textvariable=var, width=28)
+        return (_settings_color_ui.make_color_widget(parent, var)
+                if name.endswith("_color") else ttk.Entry(parent, textvariable=var, width=28))
 
     def _add_setting_group(
         self,
@@ -1073,6 +1078,7 @@ class SettingsDialog(tk.Toplevel):
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
+        ref_box_tab = ttk.Frame(notebook)
         performance_tab = ttk.Frame(notebook)
         separator_y_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
@@ -1088,6 +1094,7 @@ class SettingsDialog(tk.Toplevel):
             (normal_tab, "普通画线"),
             (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
+            (ref_box_tab, "REF框"),
             (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
@@ -1103,6 +1110,7 @@ class SettingsDialog(tk.Toplevel):
             "normal": normal_tab,
             "separator_y": separator_y_tab,
             "illustration": illustration_tab,
+            "ref_box": ref_box_tab,
             "performance": performance_tab,
             "ocr": ocr_tab,
             "display": display_tab,
@@ -1309,6 +1317,7 @@ class SettingsDialog(tk.Toplevel):
         )
 
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
+        _settings_ref_box_ui.build_ref_box_settings_tab(self, ref_box_tab)
         performance_page = self._scrollable_settings_page(performance_tab)
         self._settings_intro(
             performance_page, "性能测试与诊断",
@@ -1781,6 +1790,8 @@ class SettingsDialog(tk.Toplevel):
         try:
             _settings_lifecycle_ui.validate_projection_width(self.vars)
             _settings_lifecycle_ui.validate_separator_gap_controls(self.vars)
+            _settings_lifecycle_ui.validate_ref_box_controls(self.vars)
+            _settings_color_ui.validate_color_controls(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)
@@ -1880,6 +1891,9 @@ class SettingsDialog(tk.Toplevel):
             )
             self.parent.settings.illustration_label_font_family = normalize_content_font_setting(
                 self.parent.settings.illustration_label_font_family
+            )
+            self.parent.settings.ref_box_font_family = normalize_content_font_setting(
+                self.parent.settings.ref_box_font_family
             )
             self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
             self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
@@ -4961,6 +4975,7 @@ class ReviewWindow(tk.Toplevel):
                 or self.__dict__.get("_r3_simplified_capture_blocked", False)):
             return
         records = self._simplified_page_records(stem)
+        # Preserve rendered row identities across section-order changes.
         rendered_entries = self._bound_row_entries()
         # Only capture against the currently rendered page.  During navigation
         # parent.current_page may already refer to the next page while the old
@@ -5877,6 +5892,7 @@ class ReviewWindow(tk.Toplevel):
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
         if self._rendered_page_stem and self._rendered_page_stem == current_stem:
             self._capture_simplified_edits(self._rendered_page_stem)
+        # Pending height-switch jobs belong to the outgoing rendered rows.
         for job in getattr(self, "_review_crop_height_jobs", {}).values():
             try:
                 self.after_cancel(job)
@@ -7213,10 +7229,7 @@ class PictureCaptureApp(tk.Tk):
         # large dictionaries that turned startup into thousands of redundant
         # full-list scans.  Keep at most one pending repaint instead.
         self._page_overlay_refresh_job: str | None = None
-        # Long-running multi-page work runs in a worker thread so Tk remains
-        # responsive. Pause/stop are cooperative and take effect at the next
-        # safe page boundary; the page currently being processed is allowed to
-        # finish so PDIC/PPP/cache files are never left half-written.
+        # Batch work runs off Tk; pause/stop at page boundaries.
         self._batch_queue: queue.Queue = queue.Queue()
         self._batch_thread: threading.Thread | None = None
         self._batch_pause_event = threading.Event()
@@ -7224,12 +7237,9 @@ class PictureCaptureApp(tk.Tk):
         self._batch_stop_event = threading.Event()
         self._batch_active = False
         self._batch_parallel = False
-        # v2.8.17: sequential drawing/OCR batches may coexist with foreground
-        # manual review. Page states are protected so background PDIC writes
-        # never race a user's edits on the same page.
+        # Foreground edits are page-state locked to protect background PDIC.
         self._batch_foreground_pages = False
-        # Read-only preprocessing batches may keep the page list navigable;
-        # mutating batches leave this False.
+        # Navigation is independent from the task write lock.
         self._batch_allow_page_navigation = False
         self._batch_allow_pdic_edits = False
         self._batch_page_states: dict[int, str] = {}
@@ -7305,6 +7315,7 @@ class PictureCaptureApp(tk.Tk):
             fill_page_entries=_fill_page_entries,
         )
         self.illustration_controller = IllustrationController(self)
+        self.ref_box_controller = RefBoxController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -8472,7 +8483,10 @@ class PictureCaptureApp(tk.Tk):
         # Explicit modifier binding keeps the new auxiliary gesture discoverable;
         # section and PPP editing retain their existing Shift-click behavior.
         self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
-        self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
+        self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
+        self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
+        self.canvas.bind("<F2>", lambda e: self.ref_box_controller.edit_properties() if self.ref_box_controller.editing else None)
+        self.canvas.bind("<Escape>", self.ref_box_controller.cancel_capture)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
@@ -9542,6 +9556,7 @@ class PictureCaptureApp(tk.Tk):
                 text="退出预处理模式" if active else "进入预处理模式"
             )
         if active:
+            self.ref_box_controller.stop_edit()
             self._section_editing = False
             self._drag_section_boundary = None
             self.polygon_draw_var.set(False)
@@ -10968,6 +10983,12 @@ class PictureCaptureApp(tk.Tk):
         """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
+            self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
+            return None
+        from .illustrated_profile import effective_page_kind
+        if effective_page_kind(self.settings, self.current_page) == "illustrated":
+            return None
         if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
             target = self._ppp_write_path(self.current_page)
             self._save_normalized_ppp()
@@ -11400,17 +11421,17 @@ class PictureCaptureApp(tk.Tk):
         return True
 
     def _can_save_current_during_batch_navigation(self) -> bool:
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return True
+        if not self._batch_foreground_pages:
+            return bool(self._batch_allow_pdic_edits)
         state = self._foreground_batch_state(self.current_index)
-        # Never write an old foreground copy over a page that the worker owns or
-        # has not yet started. Pending pages are saved only after a manual edit
-        # atomically converts them to manual_locked.
+        # Never overwrite worker-owned or pending pages with stale foreground data.
         return state not in {"pending", "processing"}
 
     def _entry_keypress_batch_guard(self, event: tk.Event) -> str | None:
         """Claim a pending page before a key can mutate a foreground Entry."""
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return None
         keysym = str(getattr(event, "keysym", ""))
         # Cursor/navigation/focus keys do not constitute a manual edit.
@@ -11427,8 +11448,9 @@ class PictureCaptureApp(tk.Tk):
         self, title: str, items, worker, on_done=None, item_label=None,
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
-        allow_page_navigation: bool = False,
+        allow_page_navigation: bool = True,
         allow_pdic_edits: bool = False,
+        flush_deferred_save: bool = True,
     ) -> bool:
         """ start batch task."""
         if self._batch_active:
@@ -11448,7 +11470,8 @@ class PictureCaptureApp(tk.Tk):
             return False
         if self._ui_close_requested:
             return False
-        self._flush_deferred_page_save()
+        if flush_deferred_save:
+            self._flush_deferred_page_save()
         items = list(items)
         if not items:
             self.status_var.set("没有需要处理的页面")
@@ -11478,7 +11501,8 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
-             else "可随时暂停或停止；操作在当前页完成后生效。")
+             else ("可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits
+                   else "可翻页查看；编辑保护开启，暂停/停止在当前页完成后生效。"))
         )
         if foreground_page_edit:
             for item in items:
@@ -11487,7 +11511,6 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     pass
 
-        # Drop stale events from a previous task before starting a new one.
         try:
             while True:
                 self._batch_queue.get_nowait()
@@ -11541,7 +11564,7 @@ class PictureCaptureApp(tk.Tk):
     def _start_parallel_batch_task(
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
-        *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
+        *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
     ) -> bool:
@@ -11614,7 +11637,8 @@ class PictureCaptureApp(tk.Tk):
              if gpu_preflight_func is not None else
              f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。")
             + "暂停/停止不会再派发新页面。"
-            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
+            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit
+               else " 可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits else "")
         )
 
         if foreground_page_edit:
@@ -11750,7 +11774,6 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        # Limit both elapsed time and events per Tk callback.
         from .batch_progress_budget import (
             SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
             start_batch_poll_budget,
@@ -12898,6 +12921,8 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not (0 <= index < len(self.project.images)):
             return
         from .ui.review_page_sync import save_review_before_page_change, refresh_review_after_page_change
+        if self._batch_active and not self._can_save_current_during_batch_navigation():
+            skip_current_save = True
         review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
@@ -12927,6 +12952,7 @@ class PictureCaptureApp(tk.Tk):
             return
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
+        self.ref_box_controller.load_page(self.current_page)
         use_preloaded = bool(
             preloaded
             and preloaded.get("index") == index
@@ -12938,9 +12964,7 @@ class PictureCaptureApp(tk.Tk):
             source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
             self.page_sections = list(preloaded.get("page_sections") or [])
-            # The background page decoder may have read SECTION before a
-            # sidecar edit/migration completed. Commit from the authoritative
-            # file before establishing main-canvas and review reading order.
+            # Use authoritative SECTION state after preload.
             latest_sections = read_page_sections(self.current_page)
             if latest_sections != self.page_sections:
                 self.page_sections = latest_sections
@@ -13396,6 +13420,9 @@ class PictureCaptureApp(tk.Tk):
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
+        from .ui.illustrated_main_canvas import render_illustrated_main_overlay
+        if render_illustrated_main_overlay(self):
+            return
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
@@ -13408,6 +13435,8 @@ class PictureCaptureApp(tk.Tk):
             )
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
+            self.ref_box_controller.render()
+            self.ref_box_controller.bind_overlay_widgets()
             draw_ocr_crop_preview(self)
             draw_layout_visualization_if_enabled(self)
             return
@@ -13566,14 +13595,6 @@ class PictureCaptureApp(tk.Tk):
                     label_entry.bind("<FocusOut>", lambda _e, r=region, w=label_entry: self._update_polygon_label(r, w))
                     label_entry.bind("<Return>", lambda _e, r=region, w=label_entry: self._commit_polygon_label_return(r, w))
                     label_entry.pack(side="left")
-                    delete_button = tk.Button(
-                        label_frame, text="×", width=2, height=1, padx=0, pady=0, relief="flat",
-                        bg=self.settings.illustration_label_fill_color,
-                        activebackground=self.settings.illustration_label_fill_color,
-                        highlightthickness=0, bd=0,
-                        command=lambda r=region: self._delete_polygon_region(r),
-                    )
-                    delete_button.pack(side="left", padx=(2, 0))
                     self.overlay_widgets.append(label_frame)
                     self.polygon_label_bindings.append((label_entry, region))
                     label_frame.update_idletasks()
@@ -13581,12 +13602,15 @@ class PictureCaptureApp(tk.Tk):
                     label_item = self.canvas.create_window(
                         label_x, label_y, window=label_frame, anchor="nw", tags=("ppp-overlay",)
                     )
+                delete_item = (create_illustration_delete_control(self, region, region_index)
+                               if show_shapes else None)
                 self._polygon_canvas_items[region_index] = {
                     "polygon": polygon_item,
                     "handles": handles,
                     "edge_handles": edge_handles,
                     "label_window": label_item,
                     "label_frame": label_frame,
+                    "delete_window": delete_item,
                 }
             if self.new_polygon:
                 coords = [value * self.view_scale for point in self.new_polygon for value in point]
@@ -13603,6 +13627,8 @@ class PictureCaptureApp(tk.Tk):
             self.draw_cursor_guides(*self.cursor_canvas_xy)
 
         self._apply_current_appearance(self.canvas)
+        self.ref_box_controller.render()
+        self.ref_box_controller.bind_overlay_widgets()
         draw_ocr_crop_preview(self)
         draw_layout_visualization_if_enabled(self)
 
@@ -13885,6 +13911,9 @@ class PictureCaptureApp(tk.Tk):
                     mx, my = mids[side]
                     cx, cy = mx * self.view_scale, my * self.view_scale
                     self.canvas.coords(item, cx - r, cy - r, cx + r, cy + r)
+            if record.get("delete_window") is not None:
+                center_x, center_y = polygon_delete_center(region, self.view_scale)
+                self.canvas.coords(record["delete_window"], center_x, center_y)
             if region.points and record.get("label_window") is not None:
                 label_frame = record.get("label_frame")
                 if label_frame is not None:
@@ -14083,11 +14112,24 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_auxiliary_mode(self) -> None:
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
         self._auxiliary_controller.toggle_mode()
 
+    def toggle_ref_box_edit(self) -> None:
+        self.ref_box_controller.toggle_edit()
+
+    def recognize_ref_boxes(self) -> None:
+        self.ref_box_controller.recognize_selected_scope()
+
+    def ocr_ref_boxes(self) -> None:
+        self.ref_box_controller.ocr_selected_scope()
+
     def toggle_polygon_drawing(self) -> None:
-        if self._batch_active and self._batch_allow_pdic_edits:
-            self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
+        if self._batch_active:
+            self.status_var.set("批量任务期间暂不编辑 PPP；可校对已开放的 PDIC。")
             return
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
@@ -14116,18 +14158,11 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_double_click(self, event: tk.Event) -> str | None:
-        """Finish SECTION editing by double-clicking anywhere on the page image."""
-        if self._preprocess_mode_active():
-            return "break"
-        if not self._section_editing or self.image is None:
-            return None
-        x, y = self.original_xy(event)
-        if not (0 <= x < self.image.width and 0 <= y < self.image.height):
-            return None
-        self._finish_section_editing()
-        return "break"
+        return self._canvas_controller_for_call().canvas_left_double_click(event)
 
     def canvas_left_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.press(*self.original_xy(event)) if self.guard() else "break"
         if not self.guard():
             return
         x, y = self.original_xy(event)
@@ -14211,6 +14246,8 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_drag(self, event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.drag(*self.original_xy(event))
         if self._preprocess_mode_active():
             return "break"
         if self.image is None:
@@ -14247,6 +14284,8 @@ class PictureCaptureApp(tk.Tk):
         return None
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.release(*self.original_xy(_event))
         if self._preprocess_mode_active():
             return "break"
         if self.auxiliary_mode_var.get():
@@ -14289,6 +14328,8 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_right_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.context_menu(event)
         if getattr(event, "state", 0) & 0x0001:
             self._canvas_shift_right_click(event)
             return
@@ -14318,43 +14359,7 @@ class PictureCaptureApp(tk.Tk):
         self.change_page(1)
 
     def canvas_motion(self, event: tk.Event) -> None:
-        if self.image:
-            canvas_x = self.canvas.canvasx(event.x)
-            canvas_y = self.canvas.canvasy(event.y)
-            display_width = self.image.width * self.view_scale
-            display_height = self.image.height * self.view_scale
-            if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
-                if self._section_editing or self._preprocess_mode_active():
-                    self.cursor_canvas_xy = None
-                    self.canvas.delete("cursor-guide")
-                else:
-                    self.cursor_canvas_xy = (canvas_x, canvas_y)
-                    self.draw_cursor_guides(canvas_x, canvas_y)
-                source_x = round(canvas_x / self.view_scale)
-                source_y = round(canvas_y / self.view_scale)
-                if (
-                    not self._section_editing
-                    and not self._preprocess_mode_active()
-                    and self._ruler_hit_id(source_x, source_y) is not None
-                ):
-                    self._show_ruler_hint(event)
-                else:
-                    self._hide_ruler_hint()
-                if self._preprocess_mode_active():
-                    self.cursor_status_var.set(
-                        f"预处理预览 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%"
-                    )
-                else:
-                    self.cursor_status_var.set(
-                        f"原图 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
-                    )
-            else:
-                self.cursor_canvas_xy = None
-                self.canvas.delete("cursor-guide")
-                self._hide_ruler_hint()
-                self._set_idle_cursor_status()
+        self._canvas_controller_for_call().canvas_motion(event)
 
     def _confidence_bg(self, confidence: float | None) -> str:
         if confidence is None:
@@ -14824,15 +14829,13 @@ class PictureCaptureApp(tk.Tk):
                 pass
         self._deferred_save_job = None
         snapshot = getattr(self, "_deferred_save_snapshot", None)
-        # A pending R3 rollback marker quarantines the queued write. Keep the
-        # exact snapshot for an explicit retry rather than clearing it early.
         if snapshot is not None:
             from .proofreading_transactions import _recovery_path
             if _recovery_path(snapshot[0]).exists():
                 raise RuntimeError("Unresolved R3 transaction; refusing deferred save")
             page, entries, image_width, pages, page_index = snapshot
             write_pdic(pdic_path(page), entries, image_width, pages)
-        # Both snapshot fields are cleared only after publication succeeded.
+        # Keep pending snapshot on write failure; clear after publication.
         self._deferred_save_snapshot = None
         self._deferred_save_page = None
         if snapshot is not None:
@@ -15443,7 +15446,7 @@ class PictureCaptureApp(tk.Tk):
             max_delta = max(
                 [int((row or {}).get("max_delta", 0)) for row in results] or [0]
             )
-            if self.current_index in indices:
+            if self.current_index in indices and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             suffix = f"，{limited} 条触及安全界限" if limited else ""
             stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
@@ -15458,6 +15461,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda i: pages[i].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
@@ -15557,7 +15561,7 @@ class PictureCaptureApp(tk.Tk):
         def done(completed, total, stopped, results, error):
             if error is not None:
                 return
-            if self.current_index in existing:
+            if self.current_index in existing and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             filled = sum(int((row or {}).get("filled", 0)) for row in results)
             large = sum(int((row or {}).get("large", 0)) for row in results)
@@ -15585,6 +15589,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda index: project.images[index].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def run_combined_draw_action(self) -> None:
@@ -15678,8 +15683,7 @@ class PictureCaptureApp(tk.Tk):
         cpu_pool_workers, cpu_inference_threads = (
             cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
         )
-        # The two experiments are mutually exclusive. Explicit CPU-only
-        # mode wins if both flags accidentally exist in the environment.
+        # CPU-only takes priority over staged GPU mode.
         gpu_staged = bool(
             method == "left_edge" and not cpu_pool
             and staged_pipeline_enabled(settings, len(indices))
@@ -15687,8 +15691,7 @@ class PictureCaptureApp(tk.Tk):
         if cpu_pool:
             ordinary_workers = cpu_pool_workers
         elif gpu_staged:
-            # Memory-conservative trial: ONE reusable GPU detector and at
-            # most two CPU page allocations; never six CUDA model copies.
+            # Never duplicate CUDA models across workers.
             ordinary_workers = 2
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
@@ -15781,9 +15784,7 @@ class PictureCaptureApp(tk.Tk):
                 trace_tick = time.perf_counter()
             saved_pdic = pdic_path(page)
             if method in {"paddleocr", "combined"}:
-                # Mandatory lossless snapshot BEFORE replacing an existing
-                # PDIC. If preservation fails, abort this page rather than
-                # silently overwrite the user's only manual corrections.
+                # Preserve manual PDIC before automated OCR overwrites it.
                 from .ocr_pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
@@ -16084,8 +16085,8 @@ class PictureCaptureApp(tk.Tk):
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
         if not self.project or not self.current_page or self.image is None: return
-        # Reject unresolved recovery before mutating Entry text, reordering
-        # rows, or dropping a pending checkbox-save snapshot.
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
+            return
         from .proofreading_transactions import _recovery_path
         if _recovery_path(self.current_page).exists():
             raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
@@ -16146,11 +16147,10 @@ class PictureCaptureApp(tk.Tk):
     def autosave_tick(self) -> None:
         self.autosave_job = None
         if self.autosave_var.get():
-            # Avoid overwriting an in-flight batch page.
-            if self._batch_active:
-                if not self._batch_foreground_pages or not self._can_save_current_during_batch_navigation():
-                    self.toggle_autosave()
-                    return
+            # Autosave PDIC only for editable batch pages; never autosave PPP.
+            if self._batch_active and not self._can_save_current_during_batch_navigation():
+                self.toggle_autosave()
+                return
             if self.project and self.current_page:
                 self._last_pdic_write_changed = False
                 review = self.review_window
@@ -16165,7 +16165,7 @@ class PictureCaptureApp(tk.Tk):
                         self.review_window = None
                 if not review_saved:
                     self.save_pdic(silent=True)
-                polygon_changed = self._save_normalized_ppp()
+                polygon_changed = False if self._batch_active else self._save_normalized_ppp()
                 if self._last_pdic_write_changed or polygon_changed:
                     self.status_var.set("已自动保存")
             self.toggle_autosave()

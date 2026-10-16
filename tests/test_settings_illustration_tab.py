@@ -39,4 +39,10 @@ def test_illustration_tab_placement_and_settings_persistence_wiring():
     assert "_settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)" in app
     assert "dialog._add_setting_group(" in settings_ui
     assert "dialog._add_check_group(" in settings_ui
-    assert "colorchooser.askcolor(" in settings_ui
+    # Color selection is now shared by all Settings Center *_color fields,
+    # including Illustration and REF, instead of feature-local plain buttons.
+    shared = (root / "ui" / "settings" / "color_picker.py").read_text(encoding="utf-8")
+    assert "_settings_color_ui.make_color_widget(parent, var)" in app
+    assert "colorchooser.askcolor(" in shared
+    assert "value.trace_add(" in shared
+    assert "for name in COLOR_FIELDS" not in settings_ui

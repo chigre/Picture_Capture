@@ -260,6 +260,7 @@ class CropController:
             done,
             item_label=lambda index: images[index].name,
             max_workers=workers,
+            allow_pdic_edits=True,
         )
         if not started:
             _set_job_button_state(app, False)
@@ -279,13 +280,13 @@ class CropController:
         output_dir = qt_root(project_root) / unlined_export.OUTPUT_DIRNAME
         output_dir.mkdir(parents=True, exist_ok=True)
         merge_by_page = load_merge_by_page(project_root)
-        filter_enabled, filter_blank, blank_threshold = load_unlined_filter_settings(
+        filter_enabled, filter_blank, left_white_threshold = load_unlined_filter_settings(
             project_root
         )
         workers = max(1, min(configured_single_line_workers(project_root), len(indices)))
         worker_text = "串行" if workers <= 1 else f"并行×{workers}"
         filter_text = (
-            f"；仅近空白≤{blank_threshold:g}%墨迹"
+            f"；左侧连续白宽>{left_white_threshold:g}%"
             if filter_enabled and filter_blank
             else ""
         )
@@ -304,7 +305,7 @@ class CropController:
                 bool(merge_by_page),
                 bool(filter_enabled),
                 bool(filter_blank),
-                float(blank_threshold),
+                float(left_white_threshold),
             )
 
         def done(completed, total_pages, stopped, results, error):
@@ -319,7 +320,7 @@ class CropController:
             )
             mode = "；按页合并" if merge_by_page else ""
             filtered = (
-                f"；空白过滤≤{blank_threshold:g}%墨迹"
+                f"；左侧连续白宽>{left_white_threshold:g}%"
                 if filter_enabled and filter_blank
                 else ""
             )
@@ -351,6 +352,7 @@ class CropController:
             on_done=done,
             item_label=lambda index: images[index].name,
             max_workers=workers,
+            allow_pdic_edits=True,
         )
         if not started:
             _set_unlined_job_button_state(app, False)

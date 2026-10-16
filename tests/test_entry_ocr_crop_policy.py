@@ -30,7 +30,7 @@ def test_regular_ocr_crop_uses_half_gap_above_and_full_gap_below():
         row_padding=20,
         gutter=50,
         entry_regular_crop_height=0,
-        right_ratio=60.0,
+        crop_width_percent=60.0,
     )
     entry = Entry(word="", x=100, y=200)
     register_entry_classification(entry, entry_source="indent", entry_scale="regular")
@@ -50,7 +50,7 @@ def test_physical_line_pitch_replaces_legacy_row_padding_for_regular_crop():
         row_padding=1,
         gutter=50,
         entry_regular_crop_height=0,
-        right_ratio=60.0,
+        crop_width_percent=60.0,
     )
     entry = Entry(word="", x=100, y=200)
     register_entry_classification(entry, entry_source="symbol_sample", entry_scale="regular")
@@ -88,7 +88,7 @@ def test_oversized_ocr_crop_changes_only_classified_content_height():
         row_padding=20,
         gutter=50,
         entry_oversized_crop_height=0,
-        right_ratio=60.0,
+        crop_width_percent=60.0,
     )
     entry = Entry(word="", x=100, y=200)
     register_entry_classification(
@@ -107,12 +107,13 @@ def test_oversized_ocr_crop_changes_only_classified_content_height():
     )
 
 
-def test_visible_right_ratio_controls_marker_ocr_without_changing_paddle_band(tmp_path: Path):
+def test_independent_crop_width_controls_marker_ocr_without_changing_display_or_paddle(tmp_path: Path):
     settings = AppSettings(
         character_height=40,
         row_padding=20,
         gutter=50,
-        right_ratio=72.5,
+        right_ratio=20.0,  # Display-only marker and auxiliary line length.
+        crop_width_percent=72.5,  # PNG and OCR crop width.
         paddle_band_width_ratio=61.0,
     )
     entry = Entry(word="", x=100, y=200)
@@ -120,40 +121,64 @@ def test_visible_right_ratio_controls_marker_ocr_without_changing_paddle_band(tm
 
     box = entry_ocr_crop_box(entry, _IdentityGeometry(), settings, (1000, 1500))
     assert box[2] == 306  # 100 + 250 * 0.725 + 25 half gutter
+    assert settings.right_ratio == 20.0
     assert settings.paddle_band_width_ratio == 61.0
 
     path = tmp_path / "settings.json"
     settings.to_json(path)
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert raw["right_ratio"] == 72.5
+    assert raw["right_ratio"] == 20.0
+    assert raw["crop_width_percent"] == 72.5
     assert raw["paddle_band_width_ratio"] == 61.0
     assert "entry_ocr_right_ratio" not in raw
 
     restored = AppSettings.from_json(path)
-    assert restored.right_ratio == 72.5
+    assert restored.right_ratio == 20.0
+    assert restored.crop_width_percent == 72.5
     assert restored.paddle_band_width_ratio == 61.0
 
 
-def test_transient_entry_ocr_right_ratio_migrates_to_visible_right_ratio(tmp_path: Path):
+def test_transient_entry_ocr_right_ratio_migrates_only_to_crop_width(tmp_path: Path):
     path = tmp_path / "settings.json"
-    AppSettings(right_ratio=72.5, paddle_band_width_ratio=61.0).to_json(path)
+    AppSettings(
+        right_ratio=72.5, crop_width_percent=80.0, paddle_band_width_ratio=61.0
+    ).to_json(path)
 
     raw = json.loads(path.read_text(encoding="utf-8"))
-    raw.pop("right_ratio", None)
+    raw.pop("crop_width_percent", None)
     raw["entry_ocr_right_ratio"] = 67.5
     path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
 
     restored = AppSettings.from_json(path)
-    assert restored.right_ratio == 67.5
+    assert restored.right_ratio == 72.5
+    assert restored.crop_width_percent == 67.5
     assert restored.paddle_band_width_ratio == 61.0
 
-    # If both keys exist, the established visible setting is authoritative.
-    raw["right_ratio"] = 74.0
+    # A canonical crop width wins over the obsolete transient alias.
+    raw["crop_width_percent"] = 74.0
     raw["entry_ocr_right_ratio"] = 55.0
     path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     restored = AppSettings.from_json(path)
-    assert restored.right_ratio == 74.0
+    assert restored.right_ratio == 72.5
+    assert restored.crop_width_percent == 74.0
     assert restored.paddle_band_width_ratio == 61.0
+
+
+def test_pre_split_project_inherits_old_crop_width_once(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    AppSettings(right_ratio=37.0).to_json(path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw.pop("crop_width_percent", None)
+    path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    restored = AppSettings.from_json(path)
+    assert restored.crop_width_percent == restored.right_ratio == 37.0
+
+    restored.right_ratio = 82.0
+    assert restored.crop_width_percent == 37.0
+    restored.to_json(path)
+    reopened = AppSettings.from_json(path)
+    assert reopened.right_ratio == 82.0
+    assert reopened.crop_width_percent == 37.0
 
 
 def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():

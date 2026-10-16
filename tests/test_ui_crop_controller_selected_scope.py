@@ -88,7 +88,7 @@ class _App:
         result_consumer=None,
         on_done=None,
         item_label=None,
-        max_workers=0,
+        max_workers=0, allow_pdic_edits=False,
     ) -> bool:
         self.calls.append(("start_parallel", title, list(items), max_workers))
         self.parallel = {
@@ -100,6 +100,7 @@ class _App:
             "on_done": on_done,
             "item_label": item_label,
             "max_workers": max_workers,
+            "allow_pdic_edits": allow_pdic_edits,
         }
         return True
 
@@ -163,7 +164,8 @@ def test_selected_scope_saves_then_starts_parallel_job_with_original_contract(mo
     assert app.parallel["title"] == "词条切图"
     assert app.parallel["items"] == [1]
     assert app.parallel["worker_func"] is crop_module.split_whole_entries_job
-    assert app.parallel["max_workers"] == 5
+    assert app.parallel["max_workers"] == 5 
+    assert app.parallel["allow_pdic_edits"] is False
     assert app.parallel["item_label"](1) == "page002.png"
 
 

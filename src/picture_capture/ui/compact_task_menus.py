@@ -10,6 +10,8 @@ from tkinter import ttk
 from typing import Any, Callable
 
 from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
+from .crop_width_equivalence import CropWidthEquivalence
+from ..line_diff_bookmarks import bookmark_modified_line_pages
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)
@@ -203,6 +205,7 @@ def _coded_select(
 def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     """Compact OCR runtime settings; all choices reuse the existing backend."""
     panel = _panel(parent)
+    traditional_only: list[ttk.Frame] = []
 
     row = _row(panel)
     _label(row, "识别策略")
@@ -218,6 +221,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _check(row, "Google Lens", app.quick_bool_vars["paddle_enable_lens"],
            app._quick_parameter_changed)
     from picture_capture.ocr_action_guard import LENS_MODE_VALUES
@@ -225,11 +229,13 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             command=app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "OCR语言")
     _entry(row, app.quick_vars["ocr_language"], 17,
            app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "识别带宽%")
     _entry(row, app.quick_vars["paddle_band_width_ratio"], 5,
            app._quick_parameter_changed)
@@ -238,6 +244,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
            app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "横线与文字安全距离px")
     _entry(row, app.quick_vars["paddle_separator_safety_px"], 5,
            app._quick_parameter_changed)
@@ -269,7 +276,28 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         app.workspace_tools_active = title
         choose_workspace_section(app, title)
 
-    _button(_row(panel), "OCR画线设置...", open_ocr_line_settings)
+    line_row = _row(panel)
+    traditional_only.append(line_row)
+    _button(line_row, "OCR画线设置...", open_ocr_line_settings)
+    illustrated_row = _row(panel)
+    ttk.Label(
+        illustrated_row,
+        text="图解 OCR：多语言集合、有效区域及归组参数请在【一、版面参数 / PROFILE】设置。"
+             "图解页只使用本地 OCR，不发送 Lens。",
+        wraplength=280, justify="left",
+    ).pack(fill="x")
+    from ..illustrated_profile import effective_page_kind
+    def refresh():
+        illustrated_row.pack_forget()
+        for row in traditional_only:
+            row.pack_forget()
+        if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+            illustrated_row.pack(fill="x", pady=(3, 4))
+        else:
+            for row in traditional_only:
+                row.pack(fill="x", pady=2)
+    panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
+    refresh()
     return panel
 
 ACTION_GROUPS = (
@@ -279,7 +307,7 @@ ACTION_GROUPS = (
     (("OCR画线（默认）", "run_ocr_draw_action"),),
     None,
     (("清除画线", "clear_entries"), ("清除文本", "clear_text")),
-    (("精修画线", "refine_lines_selected_scope"), ("保存当前页", "save_current_page")),
+    (("精修画线", "refine_lines_selected_scope"), ("标记线差异页", "bookmark_modified_line_pages")),
     None,
     (("词条校对", "open_review"),),
     (("选择词条文件", "select_existing_headwords_file"),
@@ -292,19 +320,27 @@ ACTION_GROUPS = (
      ("编辑插图", "toggle_polygon_drawing")),
     (("插图关联", "associate_illustrations"),),
     None,
+    (("识别'REF'", "recognize_ref_boxes"), ("编辑'REF'", "toggle_ref_box_edit"),
+     ("OCR 'REF'", "ocr_ref_boxes")),
+    None,
     (("压缩OCR缓存", "cleanup_paddleocr_temp_selected_scope"),),
 )
 
 
 def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     panel = _panel(parent)
+    ordinary = ttk.Frame(panel)
+    illustrated = ttk.Frame(panel)
+    from ..illustrated_profile import effective_page_kind
+    from .illustrated_dictionary_window import open_illustrated_dictionary_editor
     for group in ACTION_GROUPS:
         if group is None:
-            _separator(panel)
+            _separator(ordinary)
             continue
-        row = _row(panel)
+        row = _row(ordinary)
         for caption, method in group:
-            button = _button(row, caption, getattr(app, method))
+            command = (lambda: bookmark_modified_line_pages(app)) if method == "bookmark_modified_line_pages" else getattr(app, method)
+            button = _button(row, caption, command)
             if caption == "精修画线":
                 app._attach_tooltip(
                     button,
@@ -317,11 +353,54 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                 app.polygon_draw_button = button
                 if app.polygon_draw_var.get():
                     button.configure(text="结束编辑插图", style="PC.EditActive.TButton")
+            if caption == "编辑'REF'":
+                app._ref_box_edit_button = button
+                if app.ref_box_controller.editing:
+                    button.configure(text="结束编辑'REF'", style="PC.EditActive.TButton")
     from .ocr_detection_inspector import show_ocr_decision_inspector
-    _button(_row(panel), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
-    row = _row(panel)
+    _button(_row(ordinary), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
+    row = _row(ordinary)
     _check(row, "辅助线模式", app.auxiliary_mode_var, app.toggle_auxiliary_mode)
     _button(row, "撤销辅助线", app._auxiliary_controller.undo)
+
+    # Spatial pages have their own operations and never invoke PDIC separator
+    # drawing by accident. Traditional controls remain intact and reversible.
+    row = _row(illustrated)
+    _button(row, "选择 V", lambda: open_illustrated_dictionary_editor(app, action="select"))
+    _button(row, "画框 B", lambda: open_illustrated_dictionary_editor(app, action="box"))
+    row = _row(illustrated)
+    _button(row, "显示/隐藏网格", lambda: open_illustrated_dictionary_editor(app, action="grid"))
+    _button(row, "管理辅助线…", lambda: open_illustrated_dictionary_editor(app, action="guides"))
+    row = _row(illustrated)
+    _button(row, "对齐 / 分布…", lambda: open_illustrated_dictionary_editor(app, action="align"))
+    _button(row, "组合 / 取消组合…", lambda: open_illustrated_dictionary_editor(app, action="align"))
+    row = _row(illustrated)
+    _button(row, "撤销", lambda: open_illustrated_dictionary_editor(app, action="undo"))
+    _button(row, "重做", lambda: open_illustrated_dictionary_editor(app, action="redo"))
+    _button(_row(illustrated), "主画布文字框编辑 / 校对",
+            lambda: open_illustrated_dictionary_editor(app))
+    _button(_row(illustrated), "全页 OCR 检测与文字组归并",
+            lambda: open_illustrated_dictionary_editor(app, action="detect"))
+    _button(_row(illustrated), "接受本页 OCR 候选",
+            lambda: open_illustrated_dictionary_editor(app, action="accept"))
+    _button(_row(illustrated), "图解词典多语言索引导出",
+            lambda: open_illustrated_dictionary_editor(app, action="export"))
+    ttk.Label(
+        illustrated,
+        text="图解模式在主界面图片上编辑；Shift 多选、标尺拖出辅助线。"
+             "右键提供等距、等宽、锁定、拆分合并和更多对象操作。",
+        wraplength=280, justify="left",
+    ).pack(fill="x", pady=6)
+
+    def refresh():
+        illustrated.pack_forget()
+        ordinary.pack_forget()
+        if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+            illustrated.pack(fill="x")
+        else:
+            ordinary.pack(fill="x")
+    panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
+    refresh()
     return panel
 
 
@@ -339,8 +418,8 @@ POSTPRODUCTION_ACTIONS = (
 )
 
 POSTPRODUCTION_HELP = {
-    "画线行导出": "将选定范围内已画线的行按校对单行裁切逻辑导出到 QT/PSW。可在【设置中心 → 切图】配置按页合并和并行数。",
-    "未画线行导出": "从 Layout 恢复但未被 PDIC 横线覆盖的文字行导出到 QT/PSW_UNLINED；可在切图页配置空白过滤。",
+    "画线行导出": "使用上方【切图宽度(%栏)】按校对单行裁切逻辑导出至 QT/PSW；不生成 .PSWords。按页合并及并行数在【设置中心 → 切图】配置。",
+    "未画线行导出": "按【切图宽度(%栏)】截取栏左候选行；勾选设置中心的【未画线行导出过滤 → 空白】后，只输出左侧连续白宽占比超过阈值（默认50%）的完整原框PNG（不修剪左白边，可按页合并）。不生成清单文件。",
     "词条切图": "按照所选范围和【设置中心 → 切图】的参数导出完整词条 PNG。",
     "插图切图": "按所选范围导出 PPP 标注的独立插图 PNG。",
     "项目详情": "编辑词典名称、语言、正文页码范围等项目级元数据。",
@@ -351,8 +430,31 @@ POSTPRODUCTION_HELP = {
 
 
 def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    """New compact export menu; no visual or state dependency on legacy rows."""
+    """New compact export menu with independent crop and display widths."""
     panel = _panel(parent)
+    width_row = _row(panel)
+    _label(width_row, "切图宽度(%)")
+    width_entry = _entry(
+        width_row, app.quick_vars["crop_width_percent"], 5, app._quick_parameter_changed,
+    )
+    app._attach_tooltip(
+        width_entry,
+        "按当前栏宽百分比控制画线/未画线单行切图；与向右比例%独立。",
+    )
+    app._crop_width_equivalence = CropWidthEquivalence(app)
+    # The shared popup is 280px wide: keep the full label and editable value
+    # immediately below the column field instead of clipping either input.
+    page_width_row = _row(panel)
+    _label(page_width_row, "相当于整页宽(%):")
+    page_width_entry = _entry(
+        page_width_row, app._crop_width_equivalence.page_percent_var, 7,
+        app._crop_width_equivalence.commit_page,
+    )
+    app._attach_tooltip(
+        page_width_entry,
+        "对应当前页整图横向标尺的比例；按当前页第一栏的有效栏宽换算。"
+        "修改两者任一项都会联动；多栏宽度不同、旋转或自动版面变化时仅作参考。",
+    )
     for group in POSTPRODUCTION_ACTIONS:
         row = _row(panel)
         for caption, method in group:

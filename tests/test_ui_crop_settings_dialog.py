@@ -9,9 +9,9 @@ from picture_capture.app import (
 )
 from picture_capture.crop.settings import (
     CROP_SETTINGS_VERSION,
-    DEFAULT_UNLINED_BLANK_INK_PERCENT,
+    DEFAULT_UNLINED_LEFT_WHITE_PERCENT,
     SINGLE_LINE_MERGE_KEY,
-    UNLINED_BLANK_INK_PERCENT_KEY,
+    UNLINED_LEFT_WHITE_PERCENT_KEY,
     UNLINED_FILTER_BLANK_KEY,
     UNLINED_FILTER_ENABLED_KEY,
     normalize_crop_settings_payload,
@@ -56,18 +56,18 @@ def test_crop_settings_schema_remains_ui_free_and_preserves_coordinate_contract(
     assert payload[SINGLE_LINE_MERGE_KEY] is False
     assert payload[UNLINED_FILTER_ENABLED_KEY] is False
     assert payload[UNLINED_FILTER_BLANK_KEY] is False
-    assert payload[UNLINED_BLANK_INK_PERCENT_KEY] == DEFAULT_UNLINED_BLANK_INK_PERCENT
+    assert payload[UNLINED_LEFT_WHITE_PERCENT_KEY] == DEFAULT_UNLINED_LEFT_WHITE_PERCENT
 
     raw = dict(payload)
     raw[SINGLE_LINE_MERGE_KEY] = True
     raw[UNLINED_FILTER_ENABLED_KEY] = True
     raw[UNLINED_FILTER_BLANK_KEY] = True
-    raw[UNLINED_BLANK_INK_PERCENT_KEY] = 12.5
+    raw[UNLINED_LEFT_WHITE_PERCENT_KEY] = 112.5
     normalized = normalize_crop_settings_payload(raw, settings)
     assert normalized[SINGLE_LINE_MERGE_KEY] is True
     assert normalized[UNLINED_FILTER_ENABLED_KEY] is True
     assert normalized[UNLINED_FILTER_BLANK_KEY] is True
-    assert normalized[UNLINED_BLANK_INK_PERCENT_KEY] == 10.0
+    assert normalized[UNLINED_LEFT_WHITE_PERCENT_KEY] == 50.0
 
 
 def test_crop_settings_dialog_module_does_not_import_app() -> None:

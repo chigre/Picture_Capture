@@ -21,6 +21,7 @@ FIELDS = [
         ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", float),
         ("正文缩进", "body_indent", float), ("单行字高", "character_height", float),
         ("行间空白", "row_padding", float), ("向右比例 %", "right_ratio", float),
+        ("切图宽度(%栏)", "crop_width_percent", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
         ("物理行墨迹投影采样宽度（%栏宽）", "physical_row_projection_width_percent", float),
         ("微调判距", "horizontal_tolerance", float), ("标记线高", "marker_height", int),
@@ -53,6 +54,23 @@ FIELDS = [
         ("插图标签背景色", "illustration_label_fill_color", str),
         ("插图标签字体", "illustration_label_font_family", str),
         ("插图标签字号", "illustration_label_font_size", int),
+        ("REF 未填写底色（淡橙）", "ref_box_fill_color", str),
+        ("REF 未填写底色不透明度 %", "ref_box_fill_opacity", float),
+        ("REF 已填写底色（淡绿）", "ref_box_filled_color", str),
+        ("REF 已填写底色不透明度 %", "ref_box_filled_opacity", float),
+        ("REF 文本标签文字颜色", "ref_box_text_color", str),
+        ("REF 文本标签字体", "ref_box_font_family", str),
+        ("REF 文本标签字号", "ref_box_font_size", int),
+        ("REF ×／编辑按钮位置", "ref_box_action_position", str),
+        ("REF 文本标签底色", "ref_text_label_background_color", str),
+        ("REF 文本标签底色不透明度 %", "ref_text_label_background_opacity", float),
+        ("REF 文本标签与原图框距离 px", "ref_text_label_gap", int),
+        ("REF 文本标签内边距 px", "ref_text_label_padding", int),
+        ("OCR REF 提取正则", "ref_ocr_extract_regex", str),
+        ("REF 默认宽度（行高倍数）", "ref_box_width_lines", float),
+        ("REF 默认高度（行高倍数）", "ref_box_height_lines", float),
+        ("REF 样本最低匹配分 0.60–0.999", "ref_match_threshold", float),
+        ("REF 样本跨页缩放容差 ±%", "ref_match_scale_tolerance_percent", float),
         ("OCR 语言", "ocr_language", str),
         ("Tesseract 语言", "tesseract_language", str),
         ("书写模式", "layout_writing_mode", str),
@@ -142,10 +160,10 @@ PROFILE_CHECKS = [
 FIELD_GROUPS = [
         ("版面几何", [
             "gutter", "column_width", "start_y", "manual_x",
-            "body_indent", "character_height", "row_padding", "right_ratio",
+            "body_indent", "character_height", "row_padding", "crop_width_percent",
             "horizontal_tolerance", "darkness_threshold",
         ]),
-        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
+        ("词条线显示", ["right_ratio", "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
         ("主界面词条文本框", [
             "main_entry_font_family", "main_entry_font_size", "main_entry_width_chars", "main_entry_x_ratio",
         ]),
@@ -287,6 +305,24 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
+    "ref_box_fill_color": "REF 原图框未填写文字时为淡橙色，默认透明度 0%，不遮挡原始扫描文字，方便直接核对。",
+    "ref_box_fill_opacity": "原图 REF 定位框未填写时的内部填色透明度，默认 0%，原图可直接看清；文字标签有独立底色。",
+    "ref_box_filled_color": "REF 已填写文字时原图框可用淡绿填色，默认内部透明，不遮盖原图印刷文字，右侧文本标签独立。",
+    "ref_box_filled_opacity": "原图 REF 定位框已填写时的内部填色透明度，默认 0%。文本标签具有自己的底色/不透明度参数。",
+    "ref_box_text_color": "REF 独立标签文字颜色默认深蓝；标签通常位于原图框右侧，空间不足时移到左侧，原图字形不受影响。",
+    "ref_box_font_family": "REF 识别文字标签使用系统与 OCR 语言推荐字体，也可以手动指定已安装字体；不会改变原图 REF 框。",
+    "ref_box_font_size": "REF 独立文本标签的基准字号，默认 16 号；与主词条文本框采用相同的跟随缩放/固定策略。",
+    "ref_text_label_background_color": "REF OCR 文本标签的独立底色，不覆盖原图里的印刷文字。默认淡蓝，可在选色按钮直接预览。",
+    "ref_text_label_background_opacity": "OCR 文本标签底色默认不透明度 95%，与原图 REF 框填色分别控制；不修改 OCR 识别内容。",
+    "ref_text_label_gap": "OCR 文本标签与 REF 原图定位框的间隔（显示像素），默认 6 px；页面右侧空间不足时自动移至左侧。",
+    "ref_text_label_padding": "OCR 标签内边距默认 4 px，越大留白越宽；仅影响显示，不改动 REF 框的坐标和文字内容。",
+    "ref_ocr_extract_regex": "REF OCR 的可编辑 Python 正则：优先使用第一个命中的捕获组，否则使用完整匹配。无匹配保留原文，人工文字不受影响；只对新执行的 OCR 生效。",
+    "ref_box_action_position": "REF 文本编辑 ✎ 与删除 × 的操作按钮可以放在框的上方靠右、上方靠左或右侧。位置受页面边界自动约束，避免按钮落在页面外；默认上方靠右。",
+    "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
+    "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
+    "ref_match_threshold": "识别 REF 时的图案匹配最低分，默认 0.88；阈值越高误检越少，但可能漏检印刷略有变化的引导词；匹配时使用灰度对比度归一化，自动生成的框位于引导词右方。",
+    "ref_box_include_guide_width": "关闭时仅在图样对应方向画出 REF 默认宽度；开启后还将实际匹配图样包含在定位框内，宽度相加。向前的样本同样适用。",
+    "ref_match_scale_tolerance_percent": "引导词图样跨页匹配默认尝试 ±25% 缩放，允许 0–50%；0 表示不缩放。范围较大可能增加运算量与误报。",
         "separator_y_ink_safe_max_fraction": "原图白缝核验允许搜索的最大位移（行高比），默认0.25，另有0.30倍行高的安全上限。仅在开启实验性白缝核验后生效。\n\n增大更易找到远处白缝，但可能跳到相邻行；减小更保守，也可能无法修复穿字。",
         "separator_y_ink_safe_ink_threshold": "原图白缝核验对灰度图计算墨迹比例时，低于此阈值（默认185）的像素视为墨迹。仅在实验性白缝核验开启后生效。\n\n增大将浅色笔画也视作墨迹，但过高可能把灰背景当作文字；减小可能漏掉浅印字形。",
         "separator_y_ink_safe_existing_ink_ratio": "已有横线位置的墨迹占比不超过此值时不移动；默认0.045（4.5%）。仅在实验性白缝核验开启后生效。\n\n降低会更积极调整轻微穿字的线；提高更保守，可能允许线穿过部分文字。",
@@ -314,12 +350,13 @@ SETTING_HELP = {
         "body_indent": "作用：普通画线把它作为 VB.NET 原版【正文缩进】先验。界面按原图宽度百分比输入，后台换算为原图像素后用于二维墨迹确认和栏左跟踪。\n\n调整：应接近释义正文相对词头栏左缘的真实缩进。过小会让二维确认范围不足；过大则会引入更多上下邻行墨迹，但候选锚点仍受【微调判距 < 正文缩进】约束。",
         "character_height": "作用：项目的典型单行字高。界面按原图高度百分比显示和输入，后台换算为原图像素；普通画线、OCR 行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑都以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
         "row_padding": "作用：典型行周围的额外留白尺度。界面按原图高度百分比输入，后台换算为原图像素后参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
-        "right_ratio": "作用：词条单行矩形向右覆盖当前栏宽的百分比；当前实现会限制在 1%–100%。它主要影响词条矩形/单行切图的水平覆盖，不决定 OCR 是否把某行识别为词头。\n\n调整：减小可避免把过多释义或邻近内容纳入单行框；增大可保留更完整的同行上下文。它属于历史兼容参数，目前不在设置中心常用分组中，最终导出范围仍应以【切图设置】为准。",
+        "right_ratio": "向右比例%：控制主画布词头横线及辅助线的显示/点击长度；默认100%，范围1–100%。不改变裁图宽度。",
+        "crop_width_percent": "切图宽度(%栏)：控制画线行、未画线行及OCR单行裁剪；默认100%，范围1–100%。旧项目继承原裁图比例，不影响横线显示。",
         "horizontal_tolerance": "作用：严格对应 VB.NET Draw_Auto 的【微调判距】。界面按原图宽度百分比输入，后台换算为原图像素；普通画线在每个原图 Y 上，从当前动态栏左 LX(y) 开始向正文方向扫描到该距离。\n\n调整：数值太小会漏掉略微右移的真实词头，太大则会把正文起笔纳入锚点通道。旧项目保存的像素值会在界面中按当前原图宽度自动换算为百分比。",
         "analysis_threshold_mode": "作用：控制版面检测、栏位分析和倾斜/弯曲跟踪时如何把灰度转成墨迹。普通画线的最终词头锚点为保持同一本词典跨页稳定，重新使用独立的【词头锚点黑度阈值】；因此 auto/Otsu/adaptive 不再替代这个锚点门槛。\n\n选择：版面底色正常时保持 auto；阴影或书脊亮度明显不均时可试 adaptive。它主要影响版面几何，不应再拿来补偿普通词头误检。",
         "darkness_threshold": "作用：普通画线恢复 VB.NET 的固定词头黑色锚点门槛。RGB 和低于该值的像素才有资格成为栏左词头起点；默认 300 相当于灰度约 100。这个门槛跨页固定，不随每页 Otsu 分布漂移。\n\n调整：提高可接受更浅的印刷，但也更容易让灰噪声成为锚点；降低更严格。它只负责找到词头起点，随后还必须通过二维【候选区域白度上限】确认。",
         "dark_area_percent": "作用：对应 VB.NET IsPoint。找到栏左黑色锚点后，在原图上检查向正文方向【正文缩进 × 2×正文缩进】的二维区域，按原 VB 分母规则计算平均亮度；高于该百分比就拒绝。默认 90%。\n\n这一步与栏左锚点是两个独立门：前者限制起点位置，IsPoint 再确认附近确实存在一块词头文字。",
-        "ordinary_right_divisor": "作用：这是恢复出来的 VB.NET【向右比例 1/x】，只服务普通画线的横向白带分析，和当前【向右比例 %】词条框宽度完全分离。实际分析宽度约为 单栏宽 / 本值 × 0.98；默认 1.0，即检查接近整栏的 98%。\n\n值越大，Y 分隔判断看的横向范围越窄。不要用它调词条切图宽度。",
+        "ordinary_right_divisor": "作用：这是恢复出来的 VB.NET【向右比例 1/x】，只服务普通画线的横向白带分析，和【切图宽度(%栏)】词条框宽度完全分离。实际分析宽度约为 单栏宽 / 本值 × 0.98；默认 1.0，即检查接近整栏的 98%。\n\n值越大，Y 分隔判断看的横向范围越窄。不要用它调词条切图宽度。",
         "physical_row_projection_width_percent": (
             "作用：控制 Layout 重建物理行前，对每栏左侧进行墨迹行投影的采样宽度，"
             "单位为当前栏宽的百分比。范围 10–100%，默认 42%，旧项目保持原算法行为。"
@@ -594,6 +631,11 @@ SETTING_HELP_IMAGES = {
     }
 
 SETTING_CHOICES = {
+        "ref_box_action_position": {
+            "上方靠右（默认）": "above_right",
+            "上方靠左": "above_left",
+            "右侧": "right_side",
+        },
         "analysis_denoise_strength": {"关闭": "off", "弱": "weak", "自动": "auto", "强": "strong"},
         "analysis_threshold_mode": {
             "自动（推荐，等同 Otsu）": "auto",
@@ -610,6 +652,14 @@ SETTING_CHOICES = {
     }
 
 CHECK_HELP = {
+    "ref_box_include_guide_width": "默认关闭：自动画框紧邻引导图样。开启后将匹配图样也纳入 REF 框，宽度为 REF 默认宽度与图样实际匹配宽度之和；样本“向后”则从图样左缘开始，“向前”则向左覆盖文本并包含右侧图样。",
+    "ref_box_show": "主画布是否显示已有 REF 框。关闭只隐藏标注，不删除本地 .rbox。进入编辑模式仍会显示。",
+    "ref_box_show_text": "控制 REF OCR 独立文本标签的显示与隐藏；不影响原图 REF 定位框、已保存文字及编辑。",
+    "ref_box_delete_always_visible": "在【编辑 REF】模式下，每个 REF 都显示删除 × 按钮，即使尚未选中。关闭时仅选中的 REF 显示 ×。主界面普通浏览时不会显示可点击的删除按钮，避免误删；删除操作仍然只能单击 ×。",
+    "ref_box_font_bold": "决定 REF 框文字是否使用粗体，默认关闭。启用后只调整界面字体粗细，不会重新识别框位置或改变已保存的文字。",
+    "ref_box_font_italic": "决定 REF 框文字是否使用斜体，默认关闭。适合需要区别原书字体的标注风格；切换只改变画布显示，不影响文件数据。",
+
+    "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
     "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
     "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
     "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪；如需比较，建议同一批页面复测并核对 PDIC。",
@@ -687,6 +737,36 @@ CHECK_HELP = {
         "review_entry_font_bold": "开启后校对窗口“原词条”编辑框使用粗体；关闭为常规字重。只影响校对文字显示和字体测量，不改变原图裁图或保存内容。",
         "review_entry_font_italic": "开启后校对窗口“原词条”编辑框使用斜体；关闭为正体。只影响显示；若某字体斜体导致字符更宽，可见字符数可能略变，但词条数据不变。",
     }
+
+REF_BOX_STYLE_FIELDS = (
+    "ref_box_fill_color", "ref_box_fill_opacity",
+    "ref_box_filled_color", "ref_box_filled_opacity",
+    "ref_box_action_position",
+)
+REF_TEXT_LABEL_FIELDS = (
+    "ref_box_text_color", "ref_box_font_family", "ref_box_font_size",
+    "ref_text_label_background_color", "ref_text_label_background_opacity",
+    "ref_text_label_gap", "ref_text_label_padding",
+)
+REF_OCR_EXTRACTION_FIELDS = ("ref_ocr_extract_regex",)
+REF_TEXT_LABEL_CHECKS = (
+    ("显示 REF 文本标签", "ref_box_show_text"),
+    ("REF 文本标签字体加粗", "ref_box_font_bold"),
+    ("REF 文本标签字体斜体", "ref_box_font_italic"),
+)
+REF_BOX_GEOMETRY_FIELDS = (
+    "ref_box_width_lines", "ref_box_height_lines", "ref_match_threshold",
+    "ref_match_scale_tolerance_percent",
+)
+REF_BOX_GEOMETRY_CHECKS = (
+    ("图样宽度纳入画框", "ref_box_include_guide_width"),
+)
+
+REF_BOX_CHECKS = (
+    ("显示 REF 框", "ref_box_show"),
+    ("编辑模式中所有 REF 一直显示 ×", "ref_box_delete_always_visible"),
+    ("新框自动挂靠所在正文词条", "ref_box_auto_attach"),
+)
 
 ILLUSTRATION_DETECTION_FIELDS = (
     "illustration_detect_gray_threshold", "illustration_detect_parallel_workers",

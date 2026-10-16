@@ -131,6 +131,8 @@ def merge_page_line_images(
     image_path: Path,
     records: list[Any],
     output_dir: Path,
+    *,
+    write_manifest: bool = True,
 ) -> Path | None:
     """Trim and stack one page's generated line crops into one lossless PNG.
 
@@ -165,7 +167,10 @@ def merge_page_line_images(
         # A page can legitimately contain only false/empty line slices. Do not
         # manufacture a useless white page image in that case.
         if not images:
-            _write_manifest_atomic(manifest_path, "")
+            if write_manifest:
+                _write_manifest_atomic(manifest_path, "")
+            else:
+                manifest_path.unlink(missing_ok=True)
             merged_path.unlink(missing_ok=True)
             for path in existing:
                 path.unlink(missing_ok=True)
@@ -183,16 +188,20 @@ def merge_page_line_images(
         manifest_temp = output_dir / f".{manifest_path.name}.tmp"
         try:
             merged.save(merged_temp, format="PNG")
-            manifest_temp.write_text(merged_name + "\n", encoding="utf-8")
+            if write_manifest:
+                manifest_temp.write_text(merged_name + "\n", encoding="utf-8")
             os.replace(merged_temp, merged_path)
-            os.replace(manifest_temp, manifest_path)
+            if write_manifest:
+                os.replace(manifest_temp, manifest_path)
+            else:
+                manifest_path.unlink(missing_ok=True)
         except Exception:
             merged_temp.unlink(missing_ok=True)
             manifest_temp.unlink(missing_ok=True)
             raise
 
-        # Delete source slices only after the merged image and manifest have
-        # both been published successfully. Blank slices are removed here too.
+        # Delete source slices only after the merged image (and optional
+        # legacy manifest) has been published. Blank slices are removed too.
         for path in existing:
             if path != merged_path:
                 path.unlink(missing_ok=True)

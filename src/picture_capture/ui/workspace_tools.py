@@ -64,6 +64,10 @@ MACARON_ACTION_COLORS = {
         "light": ("#C4EAD8", "#245C47", "#AEDFC8"),
         "dark": ("#376A58", "#E9FFF3", "#477B65"),
     },
+    "存": {
+        "light": ("#FFF1B8", "#66501F", "#FFE69B"),
+        "dark": ("#6A5933", "#FFF4D2", "#806C40"),
+    },
 }
 
 
@@ -615,14 +619,19 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
     quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
     app.workspace_quick_actions_host = quick_host
+    from .illustrated_action_router import run_page_quick_action
     for index, (label, command) in enumerate(quick_actions):
+        normal_command = command
+        command = lambda callback=normal_command, role=("open", "ocr", "open")[index]: (
+            run_page_quick_action(app, role, callback)
+        )
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = _create_macaron_action_button(
             app, quick_host, ("普", "O", "校")[index], command,
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
-    # In the footer the edit-mode shortcuts remain directly below 普/O/校,
+    # In the footer the edit-mode shortcuts remain directly below the actions,
     # even when insufficient space hides optional *header* quick actions.
     app.workspace_edit_shortcut_buttons = []
     for caption, callback in (
@@ -749,10 +758,17 @@ def choose_workspace_section(app: Any, title: str) -> None:
         if title_label is not None:
             title_label.unbind("<Button-1>")
     section.pack(side="top", fill="x")
-    app.workspace_tools_heading.set(
-        next((label for label, _icon, section_title in TASK_GROUPS
-              if section_title == title), title)
+    from ..illustrated_profile import effective_page_kind
+    heading = next(
+        (label for label, _icon, section_title in TASK_GROUPS
+         if section_title == title), title,
     )
+    if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+        if title == "四、画线 / OCR / 插图 / 校对":
+            heading = "图解词条"
+        elif title == "一、版面参数":
+            heading = "图解 PROFILE"
+    app.workspace_tools_heading.set(heading)
     app.workspace_tools_canvas.yview_moveto(0)
     app.workspace_tools_content.update_idletasks()
     app.workspace_tools_scrollbar_refresh()
@@ -853,6 +869,15 @@ def refresh_compact_page_index(app: Any) -> None:
         size_compact_page_columns(app)
     except tk.TclError:
         pass
+    # Mixed volumes may change layout family on every page. If the workspace
+    # popup stays pinned, its active panel must follow the current page too.
+    section = getattr(app, "workspace_tools_sections", {}).get(
+        getattr(app, "workspace_tools_active", None),
+    )
+    if section is not None and section.winfo_manager() == "pack":
+        refresh = getattr(section, "refresh_from_settings", None)
+        if callable(refresh):
+            refresh()
 
 
 def required_header_width(app: Any) -> int:
@@ -876,8 +901,8 @@ def enforce_header_min_width(app: Any) -> None:
 def _refresh_header_toolbar(app: Any, width: int) -> None:
     """Fill actually available space, never applying an arbitrary 650px cutoff.
 
-    With room for the whole toolbar, show zoom and 普/O/校. With less room,
-    show 普/O/校 alone rather than hiding them and leaving a large blank gap.
+    With room for the whole toolbar, show zoom and 普/O/校/存. With less room,
+    show 普/O/校/存 alone rather than hiding them and leaving a large blank gap.
     The four permanent left-hand text buttons and window presets never hide.
     """
     shortcuts = getattr(app, "workspace_header_shortcut_buttons", ())
@@ -954,9 +979,14 @@ def install_header_quick_controls(app: Any) -> None:
         ("普", app.run_normal_draw_action, "普通画线"),
         ("O", app.run_ocr_draw_action, "OCR画线"),
         ("校", app.open_review, "词条校对"),
+        ("存", app.save_current_page, "保存当前页"),
     )
+    from .illustrated_action_router import run_page_quick_action
     for label, callback, tooltip in shortcuts:
-        button = _create_macaron_action_button(app, host, label, callback)
+        command = lambda normal=callback, role={"普": "open", "O": "ocr", "校": "open", "存": "save"}[label]: (
+            run_page_quick_action(app, role, normal)
+        )
+        button = _create_macaron_action_button(app, host, label, command)
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, tooltip)
         app.workspace_header_quick_buttons.append(button)

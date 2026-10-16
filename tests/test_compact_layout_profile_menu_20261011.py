@@ -110,18 +110,27 @@ def test_header_footer_side_and_ab_controls_use_profile_setup_semantics():
     assert "if not 0 <= val <= limit:" in source
 
 
-def test_right_ratio_returns_above_ordinary_visual_evidence_and_reuses_live_float():
+def test_crop_width_lives_in_postproduction_and_reuses_live_float_setting():
     source = Path(compact_layout_profile_menu.__file__).read_text(encoding="utf-8")
-    start = source.index('choice("profile_first_page_variant", "A/B起始页", ("A", "B"))')
-    ratio = source.index('caption(ratio_row, "向右比例%", 15)')
-    shared = source.index('textvariable=app.quick_vars["right_ratio"]')
-    ordinary = source.index("ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)")
-    assert start < ratio < shared < ordinary
-    assert 'width=8, justify="center"' in source
-    assert 'tk.StringVar(value=str(app.settings.right_ratio))' not in source
-    app = (BASE / "app.py").read_text(encoding="utf-8")
+    from picture_capture.ui import compact_task_menus, compact_display_menu
+    post = Path(compact_task_menus.__file__).read_text(encoding="utf-8")
+    display = Path(compact_display_menu.__file__).read_text(encoding="utf-8")
+    assert 'caption(ratio_row, "向右比例%", 15)' not in source
+    assert 'textvariable=app.quick_vars["right_ratio"]' not in source
+    assert 'value(row, "向右比例%", "right_ratio", 4)' in display
+    assert post.index('_label(width_row, "切图宽度(%)")') < post.index(
+        'for group in POSTPRODUCTION_ACTIONS:'
+    )
+    assert 'width_row, app.quick_vars["crop_width_percent"], 5, app._quick_parameter_changed' in post
+    assert "ordinary_host.pack_forget()" in source
+    assert "illustrated_host.pack(fill=" in source
+    from picture_capture.models import AppSettings
     from picture_capture.ui.quick_state import QUICK_FIELD_TYPES
+    assert AppSettings().right_ratio == 100.0
+    assert AppSettings().crop_width_percent == 100.0
     assert QUICK_FIELD_TYPES["right_ratio"] is float
+    assert QUICK_FIELD_TYPES["crop_width_percent"] is float
+    app = (BASE / "app.py").read_text(encoding="utf-8")
     assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in app
 
 

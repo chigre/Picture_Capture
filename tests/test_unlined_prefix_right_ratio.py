@@ -18,7 +18,7 @@ class Identity:
         return x, y
 
 
-def test_right_ratio_crops_from_column_left():
+def test_independent_crop_width_crops_from_column_left():
     line = SimpleNamespace(y0=20, y1=40, role="body")
     column = SimpleNamespace(index=0, left=30, right=230, lines=[line])
     layout = SimpleNamespace(
@@ -28,7 +28,7 @@ def test_right_ratio_crops_from_column_left():
     )
     whole, _, _ = unlined_rows_from_layout(layout, [], None)
     prefix, _, _ = unlined_rows_from_layout(
-        layout, [], None, right_ratio=10.0,
+        layout, [], None, crop_width_percent=10.0,
     )
     assert whole[0].source_box[0] == prefix[0].source_box[0] == 30
     assert whole[0].source_box[2] == 230
@@ -47,12 +47,12 @@ def test_blank_detection_is_on_left_prefix_even_if_row_has_body_text(tmp_path):
     draw = ImageDraw.Draw(source)
     # A body-text block later in the row, beyond the 10% diagnostic prefix.
     draw.rectangle((70, 18, 140, 30), fill="black")
-    rows, _, _ = unlined_rows_from_layout(layout, [], None, right_ratio=10.0)
+    rows, _, _ = unlined_rows_from_layout(layout, [], None, crop_width_percent=10.0)
     assert rows[0].source_box[0:3:2] == (10, 30)
     exported, blanks, filtered, merged = _save_unlined_rows(
         source, tmp_path / "page.png", rows, tmp_path / "output",
         merge_by_page=False, filter_enabled=True,
-        filter_blank=True, blank_ink_percent=0.8,
+        filter_blank=True, left_white_percent=50.0,
     )
     assert (exported, blanks, filtered, merged) == (1, 1, 0, False)
     with Image.open(tmp_path / "output" / "page_UL_000.png") as crop:

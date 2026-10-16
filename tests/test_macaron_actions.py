@@ -83,10 +83,25 @@ def test_header_footer_use_same_palette_and_keep_their_callbacks():
     main = Path(app_module.__file__).read_text(encoding="utf-8")
     assert 'app.workspace_macaron_buttons = []' in source
     assert '_create_macaron_action_button(\n            app, quick_host, ("普", "O", "校")[index], command,' in source
-    assert '_create_macaron_action_button(app, host, label, callback)' in source
+    assert '_create_macaron_action_button(app, host, label, command)' in source
+    assert 'run_page_quick_action(app, role, normal)' in source
+    assert 'run_page_quick_action(app, role, callback)' in source
     assert '("普通画线", app.run_normal_draw_action)' in source
     assert '("OCR画线", app.run_ocr_draw_action)' in source
     assert '("词条校对", app.open_review)' in source
+    assert '("存", app.save_current_page, "保存当前页")' in source
+    assert '("保存当前页", app.save_current_page)' not in source
+    footer = source.split("    quick_actions = (", 1)[1].split(
+        "    app.workspace_quick_action_buttons = []", 1
+    )[0]
+    header = source.split("    shortcuts = (", 1)[1].split(
+        "    for label, callback, tooltip in shortcuts:", 1
+    )[0]
+    assert footer.count("app.run_normal_draw_action") == 1
+    assert footer.count("app.run_ocr_draw_action") == 1
+    assert footer.count("app.open_review") == 1
+    assert "save_current_page" not in footer
+    assert header.count("app.save_current_page") == 1
     for command in ("app.run_normal_draw_action", "app.run_ocr_draw_action", "app.open_review"):
         assert command in source
     assert 'button._pc_skip_classic_appearance = True' in source

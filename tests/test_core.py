@@ -4956,7 +4956,7 @@ def test_v2111_ui_restores_hide_overlay_and_removes_crop_dialog_preview():
     assert 'preview_canvas' not in crop_class
     assert '主界面完整预览' not in crop_class
     assert '词条右侧额外留白' in crop_class
-    assert 'text="×"' in text
+    assert 'create_illustration_delete_control' in text
     assert 'edge_handles' in text
 
 

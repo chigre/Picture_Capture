@@ -44,6 +44,7 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
     assert [call["image_path"].name for call in calls] == ["page2.jpg", "page1.jpg"]
     assert [call["profile_page_index"] for call in calls] == [1, 0]
     assert [call["page_sections"] for call in calls] == [["section:page2"], ["section:page1"]]
+    assert all(call["write_manifest"] is False for call in calls)
     assert all(call["output_dir"] == root / "QT" / "PSW" for call in calls)
     assert all(call["settings"] is settings for call in calls)
     assert logged == [["record:page2"], ["record:page1"]]
@@ -69,7 +70,7 @@ class _App:
 
     def _start_parallel_batch_task(
         self, title, items, worker_func, job_builder, result_consumer=None,
-        on_done=None, item_label=None, max_workers=0,
+        on_done=None, item_label=None, max_workers=0, allow_pdic_edits=False,
     ) -> bool:
         self.parallel = {
             "title": title,
@@ -80,6 +81,7 @@ class _App:
             "on_done": on_done,
             "item_label": item_label,
             "max_workers": max_workers,
+            "allow_pdic_edits": allow_pdic_edits,
         }
         return True
 
@@ -104,7 +106,8 @@ def test_phase5d_selected_scope_uses_shared_parallel_batch_runner(tmp_path, monk
     assert app.parallel["title"] == "单行切图"
     assert app.parallel["items"] == [1, 0]
     assert app.parallel["worker_func"] is parallel.single_line_page_job
-    assert app.parallel["max_workers"] == 2
+    assert app.parallel["max_workers"] == 2 
+    assert app.parallel["allow_pdic_edits"] is True
     assert app.parallel["item_label"](1) == "p2.jpg"
     assert button_states == [True]
     assert app.status_var.values[-1] == "单行切图：准备处理 2 页（并行×2）…"
