@@ -1,6 +1,8 @@
 """REF settings, sample capture and local template management."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 
