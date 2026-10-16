@@ -37,8 +37,9 @@ def test_pdic_batch_mode_rejects_ppp_edits_and_save_paths():
     assert "self.save_pdic(silent=True" in source[start:end]
 
 
-def test_other_batch_tasks_remain_conservative_by_default():
+def test_other_batch_tasks_allow_read_only_navigation_by_default():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert "allow_page_navigation: bool = False" in source
+    assert "allow_page_navigation: bool = True" in source
     assert "allow_pdic_edits: bool = False" in source
     assert "self._batch_allow_pdic_edits = False" in source
+    assert "return bool(self._batch_allow_pdic_edits)" in source
