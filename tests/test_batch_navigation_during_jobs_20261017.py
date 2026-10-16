@@ -79,6 +79,7 @@ def test_read_only_batch_blocks_manual_save_and_unsafe_entry_typing():
     )
     assert PictureCaptureApp._save_current_page_by_mode(app) is None
     assert "只读" in status.value
+    assert PictureCaptureApp.save_pdic(app, silent=True) is None
 
     app._claim_page_for_manual_edit = lambda: False
     assert PictureCaptureApp._entry_keypress_batch_guard(
