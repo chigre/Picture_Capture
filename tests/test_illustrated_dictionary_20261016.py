@@ -155,6 +155,9 @@ def test_editor_is_exposed_in_drawing_panel_without_moving_old_pdic_actions():
     from picture_capture.ui import compact_task_menus
     source = Path(compact_task_menus.__file__).read_text(encoding="utf-8")
     assert 'open_illustrated_dictionary_editor(app)' in source
-    assert '"图解词典（自由文字框 / 全页 OCR）…"' in source
+    assert '"手动画文字框 / 校对"' in source
+    assert '"全页 OCR 检测与文字组归并"' in source
+    assert 'ordinary.pack_forget()' in source
+    assert 'illustrated.pack_forget()' in source
     assert '"run_normal_draw_action"' in source
     assert '"refine_lines_selected_scope"' in source
