@@ -71,3 +71,37 @@ def test_nudge_clamps_single_shared_delta_not_each_rectangle():
     assert len(recorded) == 1
     assert [(e.x, e.y) for e in recorded[0]] == [(0, 50), (117, 50)]
     assert recorded[0][1].x - recorded[0][0].x == 117
+
+
+def test_semantic_split_partitions_box_without_overlap_or_losing_lines():
+    from picture_capture.illustrated_geometry import split_text_group
+    from dataclasses import replace
+    entry = replace(make_entry(20, 30, 160, 100),
+                    lines=("hair", "les cheveux", "das Haar", "头发"))
+    top, bottom = split_text_group([entry], entry.id, 2)
+    assert top.id == entry.id and bottom.id != entry.id
+    assert top.lines == ("hair", "les cheveux")
+    assert bottom.lines == ("das Haar", "头发")
+    assert top.y + top.h == bottom.y
+    assert bottom.y + bottom.h == entry.y + entry.h
+    assert top.x == bottom.x == entry.x and top.w == bottom.w == entry.w
+
+
+def test_copy_paste_keeps_relative_positions_and_remaps_layout_group_id():
+    from dataclasses import replace
+    first = replace(make_entry(5, 10, 30, 20), group_id="group-a")
+    second = replace(make_entry(80, 10, 30, 20), group_id="group-a")
+    editor = editor_for_test([first, second])
+    editor.selected = {first.id, second.id}
+    editor.app.status_var = SimpleNamespace(set=lambda msg: None)
+    assert editor.copy_selected() == "break"
+    captured = []
+    editor._commit = lambda result: captured.append(result) or True
+    assert editor.paste_selected() == "break"
+    new = captured[0][2:]
+    assert len(new) == 2
+    assert [v.x for v in new] == [17, 92]
+    assert all(v.group_id != "group-a" for v in new)
+    assert new[0].group_id == new[1].group_id
+    assert {v.id for v in new} == editor.selected
+    assert {v.id for v in new}.isdisjoint({first.id, second.id})
