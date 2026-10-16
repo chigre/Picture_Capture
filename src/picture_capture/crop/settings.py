@@ -21,6 +21,13 @@ UNLINED_BLANK_INK_PERCENT_KEY = "unlined_export_blank_ink_percent"
 DEFAULT_UNLINED_BLANK_INK_PERCENT = 0.8
 MIN_UNLINED_BLANK_INK_PERCENT = 0.0
 MAX_UNLINED_BLANK_INK_PERCENT = 10.0
+# Filtering now compares the untrimmed leftmost continuous white run.
+# The former 0.8% total-ink setting is deliberately NOT migrated: its
+# numeric value expresses a different measurement.
+UNLINED_LEFT_WHITE_PERCENT_KEY = "unlined_export_left_white_percent"
+DEFAULT_UNLINED_LEFT_WHITE_PERCENT = 50.0
+MIN_UNLINED_LEFT_WHITE_PERCENT = 0.0
+MAX_UNLINED_LEFT_WHITE_PERCENT = 100.0
 
 
 def normalize_crop_settings_payload(
@@ -47,7 +54,7 @@ def normalize_crop_settings_payload(
         SINGLE_LINE_MERGE_KEY: False,
         UNLINED_FILTER_ENABLED_KEY: False,
         UNLINED_FILTER_BLANK_KEY: False,
-        UNLINED_BLANK_INK_PERCENT_KEY: DEFAULT_UNLINED_BLANK_INK_PERCENT,
+        UNLINED_LEFT_WHITE_PERCENT_KEY: DEFAULT_UNLINED_LEFT_WHITE_PERCENT,
         "special_pages": {},
     }
     if not isinstance(raw, dict):
@@ -89,18 +96,14 @@ def normalize_crop_settings_payload(
         raw.get(UNLINED_FILTER_BLANK_KEY, False)
     )
     try:
-        blank_ink_percent = float(
-            raw.get(
-                UNLINED_BLANK_INK_PERCENT_KEY,
-                DEFAULT_UNLINED_BLANK_INK_PERCENT,
-            )
-        )
-    except (TypeError, ValueError):
-        blank_ink_percent = DEFAULT_UNLINED_BLANK_INK_PERCENT
-    result[UNLINED_BLANK_INK_PERCENT_KEY] = max(
-        MIN_UNLINED_BLANK_INK_PERCENT,
-        min(MAX_UNLINED_BLANK_INK_PERCENT, blank_ink_percent),
-    )
+        left_white_percent = float(raw.get(
+            UNLINED_LEFT_WHITE_PERCENT_KEY, DEFAULT_UNLINED_LEFT_WHITE_PERCENT,
+        ))
+        if not 0.0 <= left_white_percent <= 100.0:
+            left_white_percent = DEFAULT_UNLINED_LEFT_WHITE_PERCENT
+    except (TypeError, ValueError, OverflowError):
+        left_white_percent = DEFAULT_UNLINED_LEFT_WHITE_PERCENT
+    result[UNLINED_LEFT_WHITE_PERCENT_KEY] = left_white_percent
     specials = raw.get("special_pages")
     if isinstance(specials, dict):
         cleaned: dict[str, dict[str, int]] = {}
@@ -126,6 +129,10 @@ __all__ = [
     "DEFAULT_UNLINED_BLANK_INK_PERCENT",
     "MIN_UNLINED_BLANK_INK_PERCENT",
     "MAX_UNLINED_BLANK_INK_PERCENT",
+    "UNLINED_LEFT_WHITE_PERCENT_KEY",
+    "DEFAULT_UNLINED_LEFT_WHITE_PERCENT",
+    "MIN_UNLINED_LEFT_WHITE_PERCENT",
+    "MAX_UNLINED_LEFT_WHITE_PERCENT",
     "normalize_crop_settings_payload",
 ]
 
