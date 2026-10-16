@@ -16,6 +16,11 @@ def delete_owned_review_candidate(
     review: Any, index: int, row_entries: list[Any],
 ) -> str:
     app = review.parent
+    # A queued double-click or stale Tk row event must not select another row
+    # through Python negative indexing, or raise after an async repaint.
+    if index < 0 or index >= len(row_entries):
+        app.status_var.set("候选词条删除未执行：行绑定已变化，请等待页面刷新。")
+        return "break"
     entry = row_entries[index]
     cid = str(getattr(entry, "candidate_id", "") or "")
     candidates = [
