@@ -13589,14 +13589,6 @@ class PictureCaptureApp(tk.Tk):
                     label_entry.bind("<FocusOut>", lambda _e, r=region, w=label_entry: self._update_polygon_label(r, w))
                     label_entry.bind("<Return>", lambda _e, r=region, w=label_entry: self._commit_polygon_label_return(r, w))
                     label_entry.pack(side="left")
-                    delete_button = tk.Button(
-                        label_frame, text="×", width=2, height=1, padx=0, pady=0, relief="flat",
-                        bg=self.settings.illustration_label_fill_color,
-                        activebackground=self.settings.illustration_label_fill_color,
-                        highlightthickness=0, bd=0,
-                        command=lambda r=region: self._delete_polygon_region(r),
-                    )
-                    delete_button.pack(side="left", padx=(2, 0))
                     self.overlay_widgets.append(label_frame)
                     self.polygon_label_bindings.append((label_entry, region))
                     label_frame.update_idletasks()
@@ -13604,12 +13596,31 @@ class PictureCaptureApp(tk.Tk):
                     label_item = self.canvas.create_window(
                         label_x, label_y, window=label_frame, anchor="nw", tags=("ppp-overlay",)
                     )
+                # The delete control belongs to the illustration SHAPE, not
+                # to the independently visible editable illustration label.
+                delete_item = None
+                if show_shapes:
+                    delete_button = tk.Button(
+                        self.canvas, text="[X]", padx=3, pady=1,
+                        relief="flat", bd=0, highlightthickness=0,
+                        bg="#bdbdbd", activebackground="#a5a5a5",
+                        fg="#202020", activeforeground="#202020",
+                        font=("TkDefaultFont", 16),
+                        command=lambda r=region: self._delete_polygon_region(r),
+                    )
+                    self.overlay_widgets.append(delete_button)
+                    center_x, center_y = self._polygon_delete_center(region)
+                    delete_item = self.canvas.create_window(
+                        center_x, center_y, window=delete_button,
+                        anchor="center", tags=("ppp-overlay", f"ppp-delete-{region_index}"),
+                    )
                 self._polygon_canvas_items[region_index] = {
                     "polygon": polygon_item,
                     "handles": handles,
                     "edge_handles": edge_handles,
                     "label_window": label_item,
                     "label_frame": label_frame,
+                    "delete_window": delete_item,
                 }
             if self.new_polygon:
                 coords = [value * self.view_scale for point in self.new_polygon for value in point]
@@ -13856,6 +13867,15 @@ class PictureCaptureApp(tk.Tk):
             y = min(max(margin, min_y + gap), max(margin, canvas_height - label_height - margin))
         return x, y
 
+    def _polygon_delete_center(self, region: PolygonRegion) -> tuple[float, float]:
+        """Center the delete button inside the illustrated polygon."""
+        points = region.points
+        if not points:
+            return (0.0, 0.0)
+        from .illustration_delete_geometry import interior_polygon_center
+        x, y = interior_polygon_center(points)
+        return x * self.view_scale, y * self.view_scale
+
     def _polygon_label_canvas_position(self, region: PolygonRegion, widget: tk.Widget) -> tuple[float, float]:
         if not region.points:
             return 2.0, 2.0
@@ -13910,6 +13930,9 @@ class PictureCaptureApp(tk.Tk):
                     mx, my = mids[side]
                     cx, cy = mx * self.view_scale, my * self.view_scale
                     self.canvas.coords(item, cx - r, cy - r, cx + r, cy + r)
+            if record.get("delete_window") is not None:
+                center_x, center_y = self._polygon_delete_center(region)
+                self.canvas.coords(record["delete_window"], center_x, center_y)
             if region.points and record.get("label_window") is not None:
                 label_frame = record.get("label_frame")
                 if label_frame is not None:
