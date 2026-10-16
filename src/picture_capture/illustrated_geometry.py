@@ -133,10 +133,17 @@ def split_text_group(entries:list[IllustratedEntry],target_id:str,
     target=next((e for e in entries if e.id==target_id),None)
     if target is None or target.locked or not (0<split_at<len(target.lines)):
         raise ValueError("请在未锁定文字组的有效行间拆分")
-    first=replace(target,lines=target.lines[:split_at],
+    # Partition the original annotation region proportionally by line count;
+    # two new groups must not occupy exactly the same rectangle on the canvas.
+    # When the box is too short, refuse rather than create out-of-bounds boxes.
+    if target.h<2:
+        raise ValueError("文字框高度不足，无法拆分；请先调整框范围")
+    upper_h=max(1,min(target.h-1,round(target.h*split_at/len(target.lines))))
+    first=replace(target,h=upper_h,lines=target.lines[:split_at],
                   primary=target.lines[0],aliases=(),group_id="",status="draft")
-    second=replace(target,id=uuid4().hex,lines=target.lines[split_at:],
-                   primary=target.lines[split_at],aliases=(),group_id="",status="draft")
+    second=replace(target,id=uuid4().hex,y=target.y+upper_h,h=target.h-upper_h,
+                   lines=target.lines[split_at:],primary=target.lines[split_at],
+                   aliases=(),group_id="",status="draft")
     return [first,second] + [e for e in entries if e.id != target_id]
 
 def duplicate(entries:list[IllustratedEntry],ids:set[str],page:tuple[int,int],
