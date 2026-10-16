@@ -304,18 +304,18 @@ SETTING_LABELS = {
     }
 
 SETTING_HELP = {
-    "ref_box_fill_color": "原图 REF 定位框未填写文字时的填色，默认淡橙；默认透明度 0%，只显示轮廓，不遮挡原图。",
+    "ref_box_fill_color": "REF 原图框未填文字时为淡橙色，默认透明度 0%，不遮挡扫描字形。",
     "ref_box_fill_opacity": "原图 REF 定位框未填写时的内部填色透明度，默认 0%，原图可直接看清；文字标签有独立底色。",
-    "ref_box_filled_color": "原图 REF 定位框已填写文字时的填色，默认淡绿；轮廓与文本标签独立，默认内部透明。",
+    "ref_box_filled_color": "REF 已填写文字时原图框可用淡绿填色，默认内部透明，文本标签独立。",
     "ref_box_filled_opacity": "原图 REF 定位框已填写时的内部填色透明度，默认 0%。文本标签具有自己的底色/不透明度参数。",
-    "ref_box_text_color": "REF 独立文本标签的文字颜色，默认深蓝。标签在原图定位框的右侧；靠近页面边缘自动移至左侧。",
+    "ref_box_text_color": "REF 标签文字颜色，默认深蓝；标签通常位于原图框右侧，空间不足时移到左侧。",
     "ref_box_font_family": "REF 标签字体由系统及 OCR 语言推荐，也可指定已安装字体。",
     "ref_box_font_size": "REF 独立文本标签的基准字号，默认 16 号；与主词条文本框采用相同的跟随缩放/固定策略。",
     "ref_text_label_background_color": "REF OCR 文本标签的独立底色，不覆盖原图里的印刷文字。默认淡蓝，可在选色按钮直接预览。",
-    "ref_text_label_background_opacity": "REF OCR 文本标签底色的不透明度，默认 95%；独立于原图 REF 定位框底色。",
+    "ref_text_label_background_opacity": "OCR 文本标签底色默认不透明度 95%，与原图 REF 框填色分开控制。",
     "ref_text_label_gap": "OCR 文本标签与 REF 原图定位框的间隔（显示像素），默认 6 px；页面右侧空间不足时自动移至左侧。",
     "ref_text_label_padding": "OCR 文本标签的四周内边距（以显示像素计），默认 4 px。数值越大，识别文本和标签底色边缘之间的留白越宽；不改变原图定位框和 OCR 保存结果。",
-    "ref_ocr_extract_regex": "【OCR REF】文本提取通用正则，与 AI 词头提取正则一样可直接编辑。若有捕获组，使用第一个参与匹配的捕获组（支持不同备选分支）；没有捕获组则取完整匹配。正则不匹配或留空时保留 OCR 原文；不覆盖手动文本。默认支持成对“…”/‘…’以及缺一侧引号时的截取。修改正则后需重新执行尚未填写的 REF OCR 才会生效。",
+    "ref_ocr_extract_regex": "REF OCR 的可编辑 Python 正则：优先使用第一个命中的捕获组，否则使用完整匹配。无匹配保留原文，人工文字不受影响；只对新执行的 OCR 生效。",
     "ref_box_action_position": "REF 文本编辑 ✎ 与删除 × 的操作按钮可以放在框的上方靠右、上方靠左或右侧。位置受页面边界自动约束，避免按钮落在页面外；默认上方靠右。",
     "ref_box_width_lines": "手动单击新建 REF 时的默认宽度（典型行高倍数），默认 2 倍。拖框绘制时使用实际拖出的宽度。",
     "ref_box_height_lines": "手动单击新建 REF 时的默认高度（典型行高倍数），默认 1 倍。拖框绘制时使用实际拖出的高度。",
