@@ -307,17 +307,34 @@ def test_candidate_toggle_rejects_partial_or_ambiguous_commits(tmp_path):
     assert not (tmp_path / "ProofreadingEvidence").exists()
 
 
+def _pdic_save_regions():
+    """Audit effective save bodies, including the extracted deferred helper."""
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    helper = (root / "proofreading_deferred_save.py").read_text(encoding="utf-8")
+    wrapper = app[app.index("    def _flush_deferred_page_save("):]
+    wrapper = wrapper[:wrapper.index("\n    def ")]
+    # The GUI remains a thin call-time adapter to the same persistence API.
+    assert "flush_deferred_page_save(self, write_pdic=write_pdic, pdic_path=pdic_path)" in wrapper
+    regions = []
+    for source, method, indentation, prefix in (
+        (app, "save_pdic(", "    ", "self."),
+        (helper, "flush_deferred_page_save(", "", "app."),
+    ):
+        start = source.index(indentation + "def " + method)
+        end = source.find("\n" + indentation + "def ", start + 8)
+        regions.append((source[start:end if end != -1 else None], prefix))
+    return app, regions
+
+
 def test_ocr_checkbox_flushes_after_both_pdic_and_override_writes():
-    source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    for method in ("_flush_deferred_page_save(", "save_pdic("):
-        begin = source.index("    def " + method)
-        end = source.find("\n    def ", begin + 8)
-        snippet = source[begin:end if end != -1 else None]
-        assert snippet.index("self._flush_pending_manual_override()") < snippet.index(
-            "self._flush_proofreading_candidate_evidence()"
+    app, regions = _pdic_save_regions()
+    for snippet, prefix in regions:
+        assert snippet.index(prefix + "_flush_pending_manual_override()") < snippet.index(
+            prefix + "_flush_proofreading_candidate_evidence()"
         )
-    assert "self._queue_proofreading_candidate_evidence(cand, selected)" in source
-    assert 'state["_pending_evidence_toggle"] = False' in source
+    assert "self._queue_proofreading_candidate_evidence(cand, selected)" in app
+    assert 'state["_pending_evidence_toggle"] = False' in app
 
 
 def test_proven_single_canvas_addition_creates_unverified_local_event(tmp_path):
@@ -377,12 +394,10 @@ def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
     assert click.index('queue_add(source_x, source_y)') < click.index(
         'self.entries.append(WordEntry("", source_x, source_y))'
     )
-    for method in ("_flush_deferred_page_save(", "save_pdic("):
-        start = app.index("    def " + method)
-        end = app.find("\n    def ", start + 8)
-        part = app[start:end if end != -1 else None]
+    _, regions = _pdic_save_regions()
+    for part, prefix in regions:
         assert part.index("write_pdic(") < part.index(
-            "self._flush_proofreading_add_evidence()"
+            prefix + "_flush_proofreading_add_evidence()"
         )
     assert 'state["_pending_evidence_add"] = False' in app
 
