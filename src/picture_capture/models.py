@@ -776,6 +776,14 @@ class AppSettings(metaclass=_AppSettingsMeta):
         # both normalized immediately rather than only at render/save time.
         if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
             value = _normalize_display_opacity(value)
+        if name == "crop_width_percent":
+            try:
+                ratio = float(value)
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise ValueError("切图宽度须在1–100%之间") from exc
+            if not 1.0 <= ratio <= 100.0:
+                raise ValueError("切图宽度须在1–100%之间")
+            value = ratio
         if name == "physical_row_projection_width_percent":
             try:
                 value = float(value)
