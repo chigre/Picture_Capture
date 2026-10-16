@@ -46,7 +46,10 @@ class IllustratedDictionaryEditor:
         self.photo: ImageTk.PhotoImage | None = None
         self.status = tk.StringVar(value="")
         self.show_labels = tk.BooleanVar(value=False)
-        self.split_aliases = tk.StringVar(value="多语言拆分索引")
+        self.split_aliases = tk.StringVar(
+            value="多语言拆分索引" if getattr(app.settings, "illustrated_export_split_aliases", True)
+            else "每组一条索引"
+        )
         self.export_pages = tk.StringVar(value="全项目")
         self.window = tk.Toplevel(app)
         self.window.title("图解词典 · 空间词条框与多语言 OCR")
@@ -418,11 +421,13 @@ class IllustratedDictionaryEditor:
         if not added:
             self.status.set("OCR 候选都与已有文字框重叠；未覆盖人工内容")
             return
-        if not messagebox.askyesno(
-            "接受图解 OCR 候选", f"将保存 {len(added)} 个候选文字组为待校对状态。继续？",
-            parent=self.window,
-        ):
-            return
+        if getattr(self.app.settings, "illustrated_require_review", True):
+            if not messagebox.askyesno(
+                "接受图解 OCR 候选",
+                f"将保存 {len(added)} 个候选文字组为待校对状态。继续？",
+                parent=self.window,
+            ):
+                return
         if self._commit([*self.entries, *added]):
             ids = {v.id for v in added}
             self.proposals = [v for v in self.proposals if v.id not in ids]
@@ -535,7 +540,7 @@ class IllustratedDictionaryEditor:
         messagebox.showinfo("图解词典索引", f"导出 {count} 条\n{dest}", parent=self.window)
 
 
-def open_illustrated_dictionary_editor(app) -> None:
+def open_illustrated_dictionary_editor(app, *, action: str = "open") -> None:
     """One nonmodal illustrated editor per main window and active project."""
     if not app.project or app.current_page is None:
         messagebox.showinfo("图解词典", "请先打开项目及页面。", parent=app)
@@ -547,9 +552,18 @@ def open_illustrated_dictionary_editor(app) -> None:
     if current is not None and current.window.winfo_exists():
         current.window.lift()
         current.window.focus_set()
-        return
-    try:
-        editor = IllustratedDictionaryEditor(app)
-        app._illustrated_dictionary_window = editor
-    except (ValueError, OSError) as exc:
-        messagebox.showerror("图解词典", str(exc), parent=app)
+        editor = current
+        if editor.project is app.project and app.current_page in editor.pages:
+            editor._load_page(editor.pages.index(app.current_page))
+    else:
+        try:
+            editor = IllustratedDictionaryEditor(app)
+            app._illustrated_dictionary_window = editor
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("图解词典", str(exc), parent=app)
+            return
+    if action == "detect":
+        editor.propose_page()
+    elif action == "export":
+        editor.export()
+
