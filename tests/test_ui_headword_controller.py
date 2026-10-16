@@ -151,7 +151,8 @@ class _FillApp:
     def _persist_word_fill_status(self) -> None:
         self.calls.append(("persist_fill_status",))
 
-    def load_page(self, index: int) -> None:
+    def load_page(self, index: int, *, skip_current_save: bool = False) -> None:
+        assert skip_current_save is True
         self.calls.append(("load_page", index))
 
 
