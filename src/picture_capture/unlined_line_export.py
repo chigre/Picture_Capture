@@ -10,14 +10,13 @@ matched rows`` rather than treating ``role == body`` as synonymous with
 still unambiguous.
 
 The exported crop is the leftmost selected percentage of each column using
-the independent “切图宽度(%栏)” setting. Near-blank detection applies to this
-small prefix rather than to the entire physical text row, allowing users to
-find candidate lines lacking headwords/entry markers.
+the independent “切图宽度(%栏)” setting. The optional 空白 filter measures
+ONLY the consecutive white columns starting at the left edge of that prefix;
+it does not use the total amount of ink in the crop.
 
-Optional export filters are evaluated on the original Layout row crop before any
-white-border trimming.  That ordering is essential for the ``blank`` filter: a
-nearly empty full-width row must not become a tiny high-density speck crop before
-its blankness is measured.
+Optional export filters are evaluated on the original Layout row crop before
+white-border trimming. Selected rows retain their left whitespace and original
+row frame, whether exported individually or stacked into a page image.
 """
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -39,7 +38,8 @@ from .project_storage import qt_root
 from .single_line_merge_settings import _trim_white_border, load_merge_by_page
 from .single_line_parallel import configured_single_line_workers
 from .unlined_export_filter_settings import (
-    DEFAULT_BLANK_INK_PERCENT,
+    DEFAULT_BLANK_INK_PERCENT,  # Legacy utility default only.
+    DEFAULT_LEFT_WHITE_PERCENT,
     load_unlined_filter_settings,
 )
 from .unlined_physical_rows_resolver import resolve_unlined_physical_rows
@@ -252,6 +252,30 @@ def is_near_blank_row(
     return row_ink_percent(image) <= limit
 
 
+def left_contiguous_white_percent(image: Image.Image) -> float:
+    """Percent of original crop width blank from its *left edge* to first ink.
+
+    A column is ink-bearing when at least two pixels and >=5% of its height
+    are noticeably darker than the row's estimated paper background. This
+    column vote suppresses isolated dust pixels without shrinking the crop.
+    The denominator is the entire selected prefix width, not the whole column.
+    """
+    gray_image = image.convert("L")
+    try:
+        pixels = np.asarray(gray_image, dtype=np.uint8)
+    finally:
+        gray_image.close()
+    if pixels.size == 0 or pixels.ndim != 2 or pixels.shape[1] == 0:
+        return 0.0
+    background = float(np.percentile(pixels, 90.0))
+    cutoff = int(max(0.0, min(235.0, background - 18.0)))
+    ink_counts = np.count_nonzero(pixels <= cutoff, axis=0)
+    minimum = max(2, int(np.ceil(pixels.shape[0] * 0.05)))
+    occupied = np.flatnonzero(ink_counts >= minimum)
+    left_white_cols = int(occupied[0]) if occupied.size else int(pixels.shape[1])
+    return 100.0 * left_white_cols / pixels.shape[1]
+
+
 def _atomic_text(path: Path, text: str) -> None:
     temp = path.with_name(f".{path.name}.tmp")
     try:
@@ -271,16 +295,14 @@ def _save_unlined_rows(
     merge_by_page: bool,
     filter_enabled: bool,
     filter_blank: bool,
-    blank_ink_percent: float,
+    left_white_percent: float,
 ) -> tuple[int, int, int, bool]:
     """Filter then save unlined rows, optionally merging one page vertically.
 
-    Blank filtering uses the untrimmed Layout crop. When that filter is active,
-    retained images intentionally preserve their original row frame so users can
-    visually see that the row is nearly empty. Without the blank filter, normal
-    content rows are white-trimmed for compact output, while a genuinely all-white
-    row is retained rather than silently discarded because this exporter is a
-    diagnostic surface.
+    The 空白 filter selects crops where the continuous left-edge white run
+    exceeds a configurable percentage of the selected crop width. Retained
+    crops are not white-trimmed, so missing line/headword evidence remains
+    visible. With filtering disabled, traditional white trimming is retained.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = image_path.stem
@@ -295,18 +317,17 @@ def _save_unlined_rows(
         for row in rows:
             crop = source.crop(row.source_box)
             try:
-                ink_percent = row_ink_percent(crop)
-                near_blank = ink_percent <= max(0.0, float(blank_ink_percent))
-                if near_blank:
+                left_white = left_contiguous_white_percent(crop)
+                matches_white_run = left_white > float(left_white_percent)
+                if matches_white_run:
                     blank_rows += 1
-                if blank_filter_active and not near_blank:
+                if blank_filter_active and not matches_white_run:
                     filtered_out += 1
                     continue
 
                 if blank_filter_active:
-                    # Preserve the whole row frame: trimming a near-blank slice
-                    # down to one dust speck would destroy the visual evidence
-                    # that it was almost entirely blank.
+                    # Preserve the original left-edge white run and full row
+                    # frame; this is the evidence used to spot missed markers.
                     images.append(crop.convert("RGB"))
                     continue
 
@@ -381,7 +402,7 @@ def export_unlined_page_job(
     merge_by_page: bool,
     filter_enabled: bool,
     filter_blank: bool,
-    blank_ink_percent: float,
+    left_white_percent: float,
 ) -> UnlinedPageResult:
     """Spawn-safe one-page exporter using physical-row-only recovery."""
     project_root = Path(project_root)
@@ -420,7 +441,7 @@ def export_unlined_page_job(
             merge_by_page=bool(merge_by_page),
             filter_enabled=bool(filter_enabled),
             filter_blank=bool(filter_blank),
-            blank_ink_percent=float(blank_ink_percent),
+            left_white_percent=float(left_white_percent),
         )
         return UnlinedPageResult(
             int(page_index),
@@ -450,7 +471,7 @@ def run_unlined_export(
     output_dir = qt_root(project_root) / OUTPUT_DIRNAME
     output_dir.mkdir(parents=True, exist_ok=True)
     merge_by_page = load_merge_by_page(project_root)
-    filter_enabled, filter_blank, blank_ink_percent = load_unlined_filter_settings(
+    filter_enabled, filter_blank, left_white_percent = load_unlined_filter_settings(
         project_root
     )
     total = len(indices)
@@ -473,7 +494,7 @@ def run_unlined_export(
         bool(merge_by_page),
         bool(filter_enabled),
         bool(filter_blank),
-        float(blank_ink_percent),
+        float(left_white_percent),
     )
 
     if workers <= 1:
@@ -516,6 +537,7 @@ __all__ = [
     "UnlinedRow",
     "export_unlined_page_job",
     "is_near_blank_row",
+    "left_contiguous_white_percent",
     "matched_lined_row_keys",
     "row_ink_percent",
     "run_unlined_export",
