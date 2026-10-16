@@ -220,6 +220,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _check(row, "Google Lens", app.quick_bool_vars["paddle_enable_lens"],
            app._quick_parameter_changed)
     from picture_capture.ocr_action_guard import LENS_MODE_VALUES
@@ -227,6 +228,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             command=app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "OCR语言")
     _entry(row, app.quick_vars["ocr_language"], 17,
            app._quick_parameter_changed)
