@@ -307,7 +307,7 @@ class DetectionController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
-            app.load_page(app.current_index)
+            app.load_page(app.current_index, skip_current_save=True)
             if stopped:
                 app.status_var.set(
                     f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条"
