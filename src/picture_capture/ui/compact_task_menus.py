@@ -418,7 +418,7 @@ POSTPRODUCTION_ACTIONS = (
 
 POSTPRODUCTION_HELP = {
     "画线行导出": "使用上方【切图宽度(%栏)】按校对单行裁切逻辑导出至 QT/PSW；不生成 .PSWords。按页合并及并行数在【设置中心 → 切图】配置。",
-    "未画线行导出": "按上方【切图宽度(%栏)】导出 Layout 恢复但无 PDIC 横线的行至 QT/PSW_UNLINED；不生成 .PSWords，可配置空白过滤。",
+    "未画线行导出": "按上方【切图宽度(%栏)】导出 Layout 恢复但无 PDIC 横线的行至 QT/PSW_UNLINED；仅输出 PNG，不生成 .PSWords/.UnlinedLines。可配置空白过滤。",
     "词条切图": "按照所选范围和【设置中心 → 切图】的参数导出完整词条 PNG。",
     "插图切图": "按所选范围导出 PPP 标注的独立插图 PNG。",
     "项目详情": "编辑词典名称、语言、正文页码范围等项目级元数据。",
@@ -429,17 +429,17 @@ POSTPRODUCTION_HELP = {
 
 
 def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    """New compact export menu; share the persisted legacy crop-width setting."""
+    """New compact export menu with independent crop and display widths."""
     panel = _panel(parent)
     width_row = _row(panel)
     _label(width_row, "切图宽度(%栏)")
     width_entry = _entry(
-        width_row, app.quick_vars["right_ratio"], 6, app._quick_parameter_changed,
+        width_row, app.quick_vars["crop_width_percent"], 6, app._quick_parameter_changed,
     )
     app._attach_tooltip(
         width_entry,
         "默认100%；按当前栏宽百分比控制画线/未画线单行切图的横向范围。"
-        "沿用旧项目 right_ratio 保存值；不等于普通画线 VB 向右比例 1/x。",
+        "与【显示参数 → 向右比例%】独立；已有项目首次升级时保留旧切图宽度。",
     )
     for group in POSTPRODUCTION_ACTIONS:
         row = _row(panel)
