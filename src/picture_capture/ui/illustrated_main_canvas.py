@@ -192,6 +192,17 @@ class IllustratedCanvasEditor:
                 self.drag=("guide","vertical",x,y);return "break"
             if x<margin and y>=margin:
                 self.drag=("guide","horizontal",x,y);return "break"
+        # Ctrl+drag an existing guide to reposition it. Shift+drag from the
+        # rulers above creates guides and remains distinct from text selection.
+        tol=self.app.settings.illustrated_snap_tolerance/max(.08,self.app.view_scale)
+        if control and self.app.settings.illustrated_guides_visible and not self.app.settings.illustrated_guides_locked:
+            for axis,pos in (
+                [("vertical",v) for v in self.guides["vertical"]] +
+                [("horizontal",v) for v in self.guides["horizontal"]]
+            ):
+                if abs((x if axis=="vertical" else y)-pos)<=tol:
+                    self.drag=("guide-edit",axis,pos,0)
+                    return "break"
         hit=self._hit(x,y)
         if hit:
             ids=self._ids_for(hit)
@@ -200,7 +211,11 @@ class IllustratedCanvasEditor:
                 self.drag=None
             else:
                 if hit.id not in self.selected:self.selected=ids
-                self.drag=("move",x,y,list(self.entries))
+                corner=abs(x-(hit.x+hit.w))*self.app.view_scale<=10 and abs(y-(hit.y+hit.h))*self.app.view_scale<=10
+                if corner and not hit.locked and len(self.selected)==1:
+                    self.drag=("resize",hit.id,x,y)
+                else:
+                    self.drag=("move",x,y,list(self.entries))
         elif shift:
             self.drag=("marquee",x,y,None)
         else:
@@ -221,10 +236,15 @@ class IllustratedCanvasEditor:
                 nx,ny,_,_=clamp_rect(e.x+x-px,e.y+y-py,e.w,e.h,self._size())
                 c.create_rectangle(nx*z,ny*z,(nx+e.w)*z,(ny+e.h)*z,
                                    outline="#ef4444",dash=(4,3),width=2,tags="ill-preview")
+        elif kind=="resize":
+            target=next((a for a in self.entries if a.id==px),None)
+            if target is not None:
+                c.create_rectangle(target.x*z,target.y*z,x*z,y*z,
+                                   outline="#ef4444",dash=(4,3),width=2,tags="ill-preview")
         elif kind in {"create","marquee"}:
             c.create_rectangle(min(px,x)*z,min(py,y)*z,max(px,x)*z,max(py,y)*z,
                                outline="#ef4444",dash=(4,3),width=2,tags="ill-preview")
-        elif kind=="guide":
+        elif kind in ("guide","guide-edit"):
             axis="vertical" if px=="vertical" else "horizontal"
             pos=x if axis=="vertical" else y
             if axis=="vertical":coords=(pos*z,0,pos*z,self.app.image.height*z)
@@ -249,7 +269,8 @@ class IllustratedCanvasEditor:
                 settings=self.app.settings
                 nx,ny=snap_position(first.x+delta_x,first.y+delta_y,
                     (first.x,first.y,first.w,first.h),
-                    grid=(settings.illustrated_grid_x,settings.illustrated_grid_y),
+                    grid=(max(1,settings.illustrated_grid_x//settings.illustrated_grid_subdivisions),
+                          max(1,settings.illustrated_grid_y//settings.illustrated_grid_subdivisions)),
                     origin=(settings.illustrated_grid_origin_x,settings.illustrated_grid_origin_y),
                     vertical_guides=self.guides["vertical"],horizontal_guides=self.guides["horizontal"],
                     other_boxes=other,tolerance=settings.illustrated_snap_tolerance,
@@ -262,13 +283,33 @@ class IllustratedCanvasEditor:
                 dx=max(-min(e.x for e in chosen),min(dx,self.app.image.width-max(e.x+e.w for e in chosen)))
                 dy=max(-min(e.y for e in chosen),min(dy,self.app.image.height-max(e.y+e.h for e in chosen)))
                 self._commit([replace(v,x=v.x+dx,y=v.y+dy) if v in chosen else v for v in self.entries])
+        elif action=="resize":
+            target=next((a for a in self.entries if a.id==x0),None)
+            if target is not None and not target.locked:
+                settings=self.app.settings
+                sx,sy=snap_position(
+                    x,y,(x,y,1,1),
+                    grid=(max(1,settings.illustrated_grid_x//settings.illustrated_grid_subdivisions),
+                          max(1,settings.illustrated_grid_y//settings.illustrated_grid_subdivisions)),
+                    origin=(settings.illustrated_grid_origin_x,settings.illustrated_grid_origin_y),
+                    vertical_guides=self.guides["vertical"],horizontal_guides=self.guides["horizontal"],
+                    other_boxes=[v for v in self.entries if v.id!=target.id and not v.hidden],
+                    tolerance=settings.illustrated_snap_tolerance,scale=z,
+                    snap_grid=settings.illustrated_snap_grid,snap_guides=settings.illustrated_snap_guides,
+                    snap_objects=settings.illustrated_snap_objects,
+                )
+                width=max(1,min(self.app.image.width-target.x,sx-target.x))
+                height=max(1,min(self.app.image.height-target.y,sy-target.y))
+                self._commit([replace(e,w=width,h=height) if e.id==target.id else e
+                              for e in self.entries])
         elif action=="create":
             left,top=min(x,x0),min(y,y0)
             w,h=abs(x-x0),abs(y-y0)
             if w>=4 and h>=4:
                 s=self.app.settings
                 nx,ny=snap_position(left,top,(left,top,w,h),
-                    grid=(s.illustrated_grid_x,s.illustrated_grid_y),
+                    grid=(max(1,s.illustrated_grid_x//s.illustrated_grid_subdivisions),
+                          max(1,s.illustrated_grid_y//s.illustrated_grid_subdivisions)),
                     origin=(s.illustrated_grid_origin_x,s.illustrated_grid_origin_y),
                     vertical_guides=self.guides["vertical"],horizontal_guides=self.guides["horizontal"],
                     other_boxes=self.entries,tolerance=s.illustrated_snap_tolerance,scale=z,
@@ -283,12 +324,14 @@ class IllustratedCanvasEditor:
                   v.x>=x0 and v.y>=y0 and v.x+v.w<=x1 and v.y+v.h<=y1}
             self.selected=hits|{v.id for v in self.entries if v.group_id and
                                  any(z.id in hits and z.group_id==v.group_id for z in self.entries)}
-        elif action=="guide":
+        elif action in ("guide","guide-edit"):
             axis=x0;pos=x if axis=="vertical" else y
             proposed={k:list(v) for k,v in self.guides.items()}
+            if action=="guide-edit" and y0 in proposed[axis]:
+                proposed[axis].remove(y0)
             if pos not in proposed[axis]:
                 proposed[axis].append(pos);proposed[axis].sort()
-                self._commit(proposed,which="guides")
+            self._commit(proposed,which="guides")
         self.app.redraw()
         return "break"
 
