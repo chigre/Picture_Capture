@@ -66,7 +66,8 @@ assert settings.review_regular_crop_height == 41
 assert settings.entry_oversized_crop_height == 93
 assert settings.review_single_cjk_line_height == 93
 assert settings.entry_ocr_right_ratio == 67.5
-assert settings.right_ratio == 67.5
+assert settings.crop_width_percent == 67.5
+assert settings.right_ratio == 100.0
 
 copied = replace(settings)
 assert copied.separator_y_search_ratio == 0.27
@@ -89,7 +90,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert reopened.separator_y_search_ratio == 0.27
     assert reopened.entry_regular_crop_height == 41
     assert reopened.entry_oversized_crop_height == 93
-    assert reopened.right_ratio == 67.5
+    assert reopened.crop_width_percent == 67.5
+    assert reopened.right_ratio == 100.0
 """
     result = subprocess.run(
         [sys.executable, "-c", script],
@@ -116,6 +118,7 @@ def test_migration_helper_preserves_native_right_ratio_upgrade() -> None:
     assert result is raw
     assert raw["ordinary_right_divisor"] == 2.0
     assert raw["right_ratio"] == 50.0
+    assert raw["crop_width_percent"] == 50.0
     assert raw["right_ratio_percent_version"] == 1
     assert raw["profile_side_percent_a"] == 9.0
     assert raw["profile_side_percent_b"] == 9.0
@@ -144,6 +147,7 @@ def test_static_compatibility_keys_still_cross_native_migration(
     # key normalization and the historical migration now share one native path.
     raw["right_ratio_percent_version"] = 0
     raw["right_ratio"] = 2.0
+    raw.pop("crop_width_percent", None)
     raw.pop("ordinary_right_divisor", None)
     path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
 
@@ -153,3 +157,4 @@ def test_static_compatibility_keys_still_cross_native_migration(
     assert restored.entry_oversized_crop_height == 93
     assert restored.ordinary_right_divisor == 2.0
     assert restored.right_ratio == 50.0
+    assert restored.crop_width_percent == 50.0
