@@ -213,6 +213,6 @@ def test_shortcuts_are_located_and_wired_in_permanent_main_toolbar():
     ):
         assert text in shortcuts.MODE_TOOLTIPS.values()
     assert 'theme_toggle.pack(side="left", padx=(0, 2))' in source
-    assert 'row=10 + index if extreme else 3' in source
+    assert 'row=9 + index if extreme else 3' in source
     assert "refresh_workspace_mode_shortcut_buttons(self)" in app
     assert "app.workspace_edit_shortcut_buttons.append(button)" in source
