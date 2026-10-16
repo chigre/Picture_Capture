@@ -230,9 +230,10 @@ class AppSettings(metaclass=_AppSettingsMeta):
     body_indent: int = 26
     character_height: int = 26
     row_padding: int = 1
-    # Percentage of the detected column width used by rightward entry boxes.
-    # This is intentionally separate from the VB ordinary-drawing divisor below.
+    # Display-only marker/auxiliary length, independent of export crop width.
     right_ratio: float = 100.0
+    # A separate percentage controls lined/unlined and OCR entry crop widths.
+    crop_width_percent: float = 100.0
     right_ratio_percent_version: int = 1
     # VB.NET NumericUpDown10: separator analysis width = column_width / value * 0.98.
     ordinary_right_divisor: float = 1.0
@@ -767,7 +768,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     separator_y_column_margin = _app_settings_storage_alias("paddle_separator_column_margin")
     entry_regular_crop_height = _app_settings_storage_alias("review_regular_crop_height")
     entry_oversized_crop_height = _app_settings_storage_alias("review_single_cjk_line_height")
-    entry_ocr_right_ratio = _app_settings_storage_alias("right_ratio")
+    entry_ocr_right_ratio = _app_settings_storage_alias("crop_width_percent")
 
     def __setattr__(self, name: str, value: object) -> None:
         # Preserve the former runtime-property contract now that these values
