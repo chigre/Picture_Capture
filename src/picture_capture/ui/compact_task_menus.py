@@ -204,6 +204,7 @@ def _coded_select(
 def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     """Compact OCR runtime settings; all choices reuse the existing backend."""
     panel = _panel(parent)
+    traditional_only: list[ttk.Frame] = []
 
     row = _row(panel)
     _label(row, "识别策略")
@@ -231,6 +232,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
            app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "识别带宽%")
     _entry(row, app.quick_vars["paddle_band_width_ratio"], 5,
            app._quick_parameter_changed)
@@ -239,6 +241,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
            app._quick_parameter_changed)
 
     row = _row(panel)
+    traditional_only.append(row)
     _label(row, "横线与文字安全距离px")
     _entry(row, app.quick_vars["paddle_separator_safety_px"], 5,
            app._quick_parameter_changed)
@@ -270,7 +273,28 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         app.workspace_tools_active = title
         choose_workspace_section(app, title)
 
-    _button(_row(panel), "OCR画线设置...", open_ocr_line_settings)
+    line_row = _row(panel)
+    traditional_only.append(line_row)
+    _button(line_row, "OCR画线设置...", open_ocr_line_settings)
+    illustrated_row = _row(panel)
+    ttk.Label(
+        illustrated_row,
+        text="图解 OCR：多语言集合、有效区域及归组参数请在【一、版面参数 / PROFILE】设置。"
+             "图解页只使用本地 OCR，不发送 Lens。",
+        wraplength=280, justify="left",
+    ).pack(fill="x")
+    from ..illustrated_profile import effective_page_kind
+    def refresh():
+        illustrated_row.pack_forget()
+        for row in traditional_only:
+            row.pack_forget()
+        if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+            illustrated_row.pack(fill="x", pady=(3, 4))
+        else:
+            for row in traditional_only:
+                row.pack(fill="x", pady=2)
+    panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
+    refresh()
     return panel
 
 ACTION_GROUPS = (
