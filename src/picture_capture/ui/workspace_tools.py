@@ -627,7 +627,7 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
-    # In the footer the edit-mode shortcuts remain directly below 普/O/校,
+    # In the footer the edit-mode shortcuts remain directly below the actions,
     # even when insufficient space hides optional *header* quick actions.
     app.workspace_edit_shortcut_buttons = []
     for caption, callback in (
@@ -881,8 +881,8 @@ def enforce_header_min_width(app: Any) -> None:
 def _refresh_header_toolbar(app: Any, width: int) -> None:
     """Fill actually available space, never applying an arbitrary 650px cutoff.
 
-    With room for the whole toolbar, show zoom and 普/O/校. With less room,
-    show 普/O/校 alone rather than hiding them and leaving a large blank gap.
+    With room for the whole toolbar, show zoom and 普/O/校/存. With less room,
+    show 普/O/校/存 alone rather than hiding them and leaving a large blank gap.
     The four permanent left-hand text buttons and window presets never hide.
     """
     shortcuts = getattr(app, "workspace_header_shortcut_buttons", ())
@@ -1188,7 +1188,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
     for index, button in enumerate(getattr(app, "workspace_edit_shortcut_buttons", ())):
         button.grid(
-            row=9 + index if extreme else 3,
+            row=10 + index if extreme else 3,
             column=0 if extreme else index,
             sticky="ew", padx=0, pady=0,
         )
