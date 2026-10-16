@@ -3088,7 +3088,8 @@ class ProjectProfileWizard(tk.Toplevel):
         current = self.notebook.index(self.notebook.select())
         target = max(0, min(len(self.tabs) - 1, current + int(delta)))
         self.notebook.select(self.tabs[target])
-        if current == 0 and target == 1 and not self._analysis_suggestion and not self._analysis_running:
+        if (current == 0 and target == 1 and self.working.dictionary_layout_kind != "illustrated"
+                and not self._analysis_suggestion and not self._analysis_running):
             self.analyze_representative_pages(auto_apply=True)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:
