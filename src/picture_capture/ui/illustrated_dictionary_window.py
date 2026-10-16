@@ -541,34 +541,6 @@ class IllustratedDictionaryEditor:
 
 
 def open_illustrated_dictionary_editor(app, *, action: str = "open") -> None:
-    """One nonmodal illustrated editor per main window and active project."""
-    if not app.project or app.current_page is None:
-        messagebox.showinfo("图解词典", "请先打开项目及页面。", parent=app)
-        return
-    if app._preprocess_mode_active():
-        app.status_var.set("请先退出预处理模式，再编辑图解词典")
-        return
-    current = getattr(app, "_illustrated_dictionary_window", None)
-    if current is not None and current.window.winfo_exists() and current.project is not app.project:
-        # Never show/commit labels from the previous project after a project switch.
-        current.close()
-        current = None
-    if current is not None and current.window.winfo_exists():
-        current.window.lift()
-        current.window.focus_set()
-        editor = current
-        if (editor.project is app.project and app.current_page in editor.pages
-                and editor.page != app.current_page):
-            editor._load_page(editor.pages.index(app.current_page))
-    else:
-        try:
-            editor = IllustratedDictionaryEditor(app)
-            app._illustrated_dictionary_window = editor
-        except (ValueError, OSError) as exc:
-            messagebox.showerror("图解词典", str(exc), parent=app)
-            return
-    if action == "detect":
-        editor.propose_page()
-    elif action == "export":
-        editor.export()
-
+    """Open the integrated main-canvas illustrated editor, not a second viewer."""
+    from .illustrated_main_canvas import illustrated_main_action
+    illustrated_main_action(app, action=action)
