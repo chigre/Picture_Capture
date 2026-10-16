@@ -111,7 +111,7 @@ def test_ocr_and_drawing_panels_keep_existing_handlers_in_requested_order():
         "run_normal_draw_action", "ocr_ordinary_lines_text_selected_scope",
         "run_combined_draw_action", "run_ocr_draw_action",
         "clear_entries", "clear_text", "refine_lines_selected_scope",
-        "save_current_page", "open_review", "select_existing_headwords_file",
+        "bookmark_modified_line_pages", "open_review", "select_existing_headwords_file",
         "compare_old_new_selected_scope", "fill_existing_headwords",
         "repair_pdic_order_selected_scope", "backup_pdic",
         "restore_from_pdic_backup", "detect_illustrations_selected_scope",
