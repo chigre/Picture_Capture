@@ -27,8 +27,8 @@ def test_menu_placement_and_profile_refresh_owner():
 
     layout_src = Path(layout.__file__).read_text(encoding="utf-8")
     first = layout_src.index('choice("profile_first_page_variant", "A/B起始页", ("A", "B"))')
-    second = layout_src.index("_divider(panel)", first)
-    third = layout_src.index("build_ordinary_visual_evidence(app, panel)", second)
+    second = layout_src.index("_divider(ordinary_host)", first)
+    third = layout_src.index("build_ordinary_visual_evidence(app, ordinary_host)", second)
     assert first < second < third
     assert "ordinary_visual_panel.refresh_from_settings()" in layout_src
 
