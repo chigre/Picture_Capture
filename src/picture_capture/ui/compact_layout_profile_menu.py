@@ -164,7 +164,6 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     # Project metadata: all four fields are the original Profile setting keys.
     for title, key in PROFILE_TEXT_FIELDS:
         text_field(key, title)
-    choice("layout_reading_label", "阅读方式", tuple(READING_LABELS.values()))
     # Independent family selector. Ordinary settings are preserved but hidden
     # for spatial pages; mixed mode uses exact filename overrides.
     from .illustrated_profile_menu import (
@@ -184,6 +183,8 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     kind_refresh = build_layout_kind_control(app, panel, refresh_visibility)
     layout_container = ordinary_host
+    choice("layout_reading_label", "阅读方式", tuple(READING_LABELS.values()))
+    choice("profile_indent_label", "缩进版式", INDENT_TYPE_CHOICES)
     _divider(ordinary_host)
 
     master = app.quick_bool_vars.get("ordinary_auto_layout")
