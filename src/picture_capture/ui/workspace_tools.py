@@ -759,10 +759,17 @@ def choose_workspace_section(app: Any, title: str) -> None:
         if title_label is not None:
             title_label.unbind("<Button-1>")
     section.pack(side="top", fill="x")
-    app.workspace_tools_heading.set(
-        next((label for label, _icon, section_title in TASK_GROUPS
-              if section_title == title), title)
+    from ..illustrated_profile import effective_page_kind
+    heading = next(
+        (label for label, _icon, section_title in TASK_GROUPS
+         if section_title == title), title,
     )
+    if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+        if title == "四、画线 / OCR / 插图 / 校对":
+            heading = "图解词条"
+        elif title == "一、版面参数":
+            heading = "图解 PROFILE"
+    app.workspace_tools_heading.set(heading)
     app.workspace_tools_canvas.yview_moveto(0)
     app.workspace_tools_content.update_idletasks()
     app.workspace_tools_scrollbar_refresh()
