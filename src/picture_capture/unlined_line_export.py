@@ -10,7 +10,7 @@ matched rows`` rather than treating ``role == body`` as synonymous with
 still unambiguous.
 
 The exported crop is the leftmost selected percentage of each column using
-the project's visible “向右比例” setting. Near-blank detection applies to this
+the independent “切图宽度(%栏)” setting. Near-blank detection applies to this
 small prefix rather than to the entire physical text row, allowing users to
 find candidate lines lacking headwords/entry markers.
 
@@ -137,7 +137,7 @@ def matched_lined_row_keys(layout: Any, entries: list[Any]) -> set[tuple[int, in
     return result
 
 
-def _source_box_for_line(layout: Any, column: Any, line: Any, *, right_ratio: float = 100.0) -> tuple[int, int, int, int]:
+def _source_box_for_line(layout: Any, column: Any, line: Any, *, crop_width_percent: float = 100.0) -> tuple[int, int, int, int]:
     """Convert one canonical Layout row rectangle back to a source-image box."""
     source_width, source_height = tuple(getattr(layout, "source_size", (0, 0)) or (0, 0))
     if source_width <= 0 or source_height <= 0:
@@ -148,7 +148,7 @@ def _source_box_for_line(layout: Any, column: Any, line: Any, *, right_ratio: fl
     x0 = int(getattr(column, "left", 0))
     column_right = int(getattr(column, "right", x0 + 1))
     try:
-        ratio = float(right_ratio)
+        ratio = float(crop_width_percent)
     except (TypeError, ValueError, OverflowError):
         ratio = 100.0
     if not np.isfinite(ratio):
@@ -181,7 +181,7 @@ def unlined_rows_from_layout(
     entries: list[Any],
     page_sections: list[Any] | None,
     *,
-    right_ratio: float = 100.0,
+    crop_width_percent: float = 100.0,
 ) -> tuple[list[UnlinedRow], int, int]:
     """Return physical rows with no matched PDIC marker in reading order."""
     lined = matched_lined_row_keys(layout, entries)
@@ -206,7 +206,7 @@ def unlined_rows_from_layout(
                 column_index=column_index,
                 line_index=int(line_index),
                 role=str(getattr(line, "role", "unknown") or "unknown"),
-                source_box=_source_box_for_line(layout, column, line, right_ratio=right_ratio),
+                source_box=_source_box_for_line(layout, column, line, crop_width_percent=crop_width_percent),
                 section_index=section_index_for_v(
                     center_v, page_sections, body_top, body_bottom,
                 ),
@@ -413,7 +413,7 @@ def export_unlined_page_job(
             layout,
             entries,
             sections,
-            right_ratio=getattr(settings, "right_ratio", 100.0),
+            crop_width_percent=getattr(settings, "crop_width_percent", 100.0),
         )
         exported, blanks, filtered_out, merged = _save_unlined_rows(
             source,
