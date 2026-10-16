@@ -620,7 +620,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     quick_host = ttk.Frame(footer, style="PC.Footer.TFrame")
     quick_host.grid(row=0, column=0, sticky="ew", pady=(0, 2))
     app.workspace_quick_actions_host = quick_host
+    from .illustrated_action_router import run_page_quick_action
     for index, (label, command) in enumerate(quick_actions):
+        normal_command = command
+        command = lambda callback=normal_command, role=("open", "ocr", "open", "save")[index]: (
+            run_page_quick_action(app, role, callback)
+        )
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = _create_macaron_action_button(
             app, quick_host, ("普", "O", "校", "存")[index], command,
@@ -961,8 +966,12 @@ def install_header_quick_controls(app: Any) -> None:
         ("校", app.open_review, "词条校对"),
         ("存", app.save_current_page, "保存当前页"),
     )
+    from .illustrated_action_router import run_page_quick_action
     for label, callback, tooltip in shortcuts:
-        button = _create_macaron_action_button(app, host, label, callback)
+        command = lambda normal=callback, role={"普": "open", "O": "ocr", "校": "open", "存": "save"}[label]: (
+            run_page_quick_action(app, role, normal)
+        )
+        button = _create_macaron_action_button(app, host, label, command)
         button.pack(side="left", padx=(1, 0))
         app._attach_tooltip(button, tooltip)
         app.workspace_header_quick_buttons.append(button)
