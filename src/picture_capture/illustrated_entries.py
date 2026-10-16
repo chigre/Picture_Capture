@@ -31,6 +31,9 @@ class IllustratedEntry:
     aliases: tuple[str, ...] = ()
     status: str = "draft"
     source: str = "manual"
+    group_id: str = ""
+    locked: bool = False
+    hidden: bool = False
 
     @property
     def text(self) -> str:
@@ -85,6 +88,10 @@ def validate(entries: list[IllustratedEntry], *,
         if image_size and (item.x + item.w > image_size[0]
                            or item.y + item.h > image_size[1]):
             raise ValueError("图解词条矩形超出原图")
+        if not isinstance(item.group_id, str) or len(item.group_id)>128:
+            raise ValueError("图解对象组 ID 无效")
+        if type(item.locked) is not bool or type(item.hidden) is not bool:
+            raise ValueError("图解对象锁定/隐藏状态无效")
         if item.status not in STATUSES or item.source not in {"manual", "ocr"}:
             raise ValueError("图解词条来源或校对状态无效")
         if not isinstance(item.primary, str) or not isinstance(item.lines, tuple):
@@ -117,6 +124,9 @@ def read_entries(project_root: Path, image_path: Path) -> list[IllustratedEntry]
                 aliases=_clean_lines(row.get("aliases", [])),
                 status=row.get("status", "draft"),
                 source=row.get("source", "manual"),
+                group_id=row.get("group_id", ""),
+                locked=row.get("locked", False),
+                hidden=row.get("hidden", False),
             )
             for row in rows
         ]
