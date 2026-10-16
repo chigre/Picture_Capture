@@ -503,6 +503,23 @@ class AppSettings(metaclass=_AppSettingsMeta):
     illustrated_ocr_top_percent: float = 0.0
     illustrated_ocr_bottom_percent: float = 0.0
     illustrated_ocr_side_percent: float = 0.0
+    illustrated_grid_visible: bool = False
+    illustrated_grid_x: int = 40
+    illustrated_grid_y: int = 40
+    illustrated_grid_subdivisions: int = 1
+    illustrated_grid_origin_x: int = 0
+    illustrated_grid_origin_y: int = 0
+    illustrated_grid_color: str = "#9dbed8"
+    illustrated_guide_color: str = "#d94f97"
+    illustrated_grid_opacity: int = 45
+    illustrated_guides_visible: bool = True
+    illustrated_guides_locked: bool = False
+    illustrated_snap_grid: bool = True
+    illustrated_snap_guides: bool = True
+    illustrated_snap_objects: bool = True
+    illustrated_snap_tolerance: int = 8
+    illustrated_nudge_step: int = 1
+    illustrated_history_depth: int = 40
     dictionary_profile_id: str = "latin_structured_symbols"
     # Project-specific display name for the built-in stable "custom" headword
     # profile. The profile key remains "custom"; only the human-facing label is
