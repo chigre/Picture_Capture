@@ -1,56 +1,44 @@
-"""Evidence-based bookmark marking for manually changed PDIC line positions.
+"""Compare existing automatic PDIC baselines with edited line positions.
 
-Only an explicitly captured automated-drawing coordinate baseline is evidence
-of changes. Missing baselines are *unknown*, never assumed unchanged.
+Uses the established data/PDIC/*.auto-baseline.json record; no competing
+snapshot is created. Text corrections do not count as changed lines.
 """
 from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
-import json
 
-from .formats import pdic_path, read_pdic, write_text_atomic
+from .formats import pdic_path, read_pdic
 from .project_storage import settings_path
+from .training_baseline import baseline_path_for_pdic, load_automatic_baseline
 
 
-def baseline_path(project_root: Path, page: Path) -> Path:
-    return Path(project_root) / "data" / "line_baselines" / (page.stem + ".json")
-
-
-def marker_positions(entries) -> list[list[int]]:
-    return sorted([[int(entry.x), int(entry.y)] for entry in entries])
-
-
-def record_original_lines(project_root: Path, page: Path, entries) -> None:
-    """Store the automatic geometry immediately following a successful draw."""
-    path = baseline_path(project_root, page)
-    payload = {
-        "format": 1, "page": page.name,
-        "coordinates": marker_positions(entries),
-    }
-    write_text_atomic(path, json.dumps(payload, ensure_ascii=False) + "\n")
+def marker_positions(entries) -> list[tuple[int, int]]:
+    return [(int(entry.x), int(entry.y)) for entry in entries]
 
 
 def page_has_manual_line_difference(project_root: Path, page: Path) -> bool | None:
-    """True/False for comparable pages; None for absent/invalid provenance."""
-    path = baseline_path(project_root, page)
-    if not path.is_file():
-        return None
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if (not isinstance(data, dict) or data.get("format") != 1
-            or data.get("page") != page.name):
-        raise ValueError(f"Invalid original-line baseline for {page.name}")
-    positions = data.get("coordinates")
-    if (not isinstance(positions, list)
-            or any(not isinstance(row, list) or len(row) != 2
-                   or any(type(value) is not int for value in row)
-                   for row in positions)):
-        raise ValueError(f"Invalid original-line coordinates for {page.name}")
+    """Compare source_x/source_y with .pdic; unknown if baseline is absent."""
     saved = pdic_path(page)
+    if not baseline_path_for_pdic(saved).is_file():
+        return None
+    data = load_automatic_baseline(saved)
+    if not data:
+        raise ValueError(f"原始自动画线基准文件无效：{page.name}")
+    rows = data.get("entries")
+    if not isinstance(rows, list):
+        raise ValueError(f"原始自动画线基准缺少 entries：{page.name}")
+    try:
+        original = [
+            (int(row["source_x"]), int(row["source_y"]))
+            for row in rows
+        ]
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"原始自动画线坐标无效：{page.name}") from exc
     if not saved.is_file():
-        return bool(positions)
+        return bool(original)
     current = marker_positions(read_pdic(saved))
-    return Counter(map(tuple, positions)) != Counter(map(tuple, current))
+    return Counter(original) != Counter(current)
 
 
 def modified_line_page_stems(project_root: Path, pages) -> tuple[set[str], int]:
