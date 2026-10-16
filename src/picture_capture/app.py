@@ -7227,10 +7227,7 @@ class PictureCaptureApp(tk.Tk):
         # large dictionaries that turned startup into thousands of redundant
         # full-list scans.  Keep at most one pending repaint instead.
         self._page_overlay_refresh_job: str | None = None
-        # Long-running multi-page work runs in a worker thread so Tk remains
-        # responsive. Pause/stop are cooperative and take effect at the next
-        # safe page boundary; the page currently being processed is allowed to
-        # finish so PDIC/PPP/cache files are never left half-written.
+        # Batch work runs off Tk; pause/stop at page boundaries.
         self._batch_queue: queue.Queue = queue.Queue()
         self._batch_thread: threading.Thread | None = None
         self._batch_pause_event = threading.Event()
@@ -7238,12 +7235,9 @@ class PictureCaptureApp(tk.Tk):
         self._batch_stop_event = threading.Event()
         self._batch_active = False
         self._batch_parallel = False
-        # v2.8.17: sequential drawing/OCR batches may coexist with foreground
-        # manual review. Page states are protected so background PDIC writes
-        # never race a user's edits on the same page.
+        # Foreground edits are page-state locked to protect background PDIC.
         self._batch_foreground_pages = False
-        # Read-only preprocessing batches may keep the page list navigable;
-        # mutating batches leave this False.
+        # Navigation is independent from the task write lock.
         self._batch_allow_page_navigation = False
         self._batch_allow_pdic_edits = False
         self._batch_page_states: dict[int, str] = {}
@@ -11422,8 +11416,10 @@ class PictureCaptureApp(tk.Tk):
         return True
 
     def _can_save_current_during_batch_navigation(self) -> bool:
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return True
+        if not self._batch_foreground_pages:
+            return bool(self._batch_allow_pdic_edits)
         state = self._foreground_batch_state(self.current_index)
         # Never write an old foreground copy over a page that the worker owns or
         # has not yet started. Pending pages are saved only after a manual edit
@@ -11432,7 +11428,7 @@ class PictureCaptureApp(tk.Tk):
 
     def _entry_keypress_batch_guard(self, event: tk.Event) -> str | None:
         """Claim a pending page before a key can mutate a foreground Entry."""
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return None
         keysym = str(getattr(event, "keysym", ""))
         # Cursor/navigation/focus keys do not constitute a manual edit.
@@ -11449,7 +11445,7 @@ class PictureCaptureApp(tk.Tk):
         self, title: str, items, worker, on_done=None, item_label=None,
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
-        allow_page_navigation: bool = False,
+        allow_page_navigation: bool = True,
         allow_pdic_edits: bool = False,
         flush_deferred_save: bool = True,
     ) -> bool:
@@ -11502,7 +11498,7 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
-             else "可随时暂停或停止；操作在当前页完成后生效。")
+             else "可翻页查看；编辑保护开启，暂停/停止在当前页完成后生效。")
         )
         if foreground_page_edit:
             for item in items:
@@ -11565,7 +11561,7 @@ class PictureCaptureApp(tk.Tk):
     def _start_parallel_batch_task(
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
-        *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
+        *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
     ) -> bool:
@@ -12922,6 +12918,8 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not (0 <= index < len(self.project.images)):
             return
         from .ui.review_page_sync import save_review_before_page_change, refresh_review_after_page_change
+        if self._batch_active and not self._can_save_current_during_batch_navigation():
+            skip_current_save = True
         review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
