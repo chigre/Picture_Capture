@@ -330,6 +330,10 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
     if observed != [new for _, _, new in items]:
         for path, before, _ in items:
             _publish(path, before)
+        # A silently skipped rollback must retain the marker and quarantine
+        # page reloads rather than exposing a mixed persisted state.
+        if any(_bytes_or_absent(path) != before for path, before, _ in items):
+            return False
     marker.unlink()
     return True
 
@@ -390,6 +394,10 @@ def publish_owned_review_bundle(
     try:
         for role, _, data in changes:
             _publish(paths[role], data)
+        # Do not advance Entry/candidate/Tk state on a silent storage no-op.
+        if any(_bytes_or_absent(paths[role]) != data
+               for role, _, data in changes):
+            raise RuntimeError("R3 bundle post-publication bytes mismatch")
     except (OSError, RuntimeError, ValueError):
         # Roll back only files still identical to our documented old/new
         # versions. A concurrent third-party write leaves marker in place,
@@ -439,13 +447,21 @@ def _publish_restored_snapshot(
     # write-ahead recovery so crash/restart cannot silently mis-pair them.
     if len(changes) == 1:
         role, _, data = changes[0]
-        _publish(pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page), data)
+        path = pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page)
+        _publish(path, data)
+        if _bytes_or_absent(path) != data:
+            raise RuntimeError("R3 single-file restore bytes mismatch")
         return True
     marker = _stage_recovery(page, changes)
     try:
         for role, _, data in changes:
             _publish(pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page), data)
-    except OSError:
+        if any(
+            _bytes_or_absent(pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page)) != data
+            for role, _, data in changes
+        ):
+            raise RuntimeError("R3 multi-file restore bytes mismatch")
+    except (OSError, RuntimeError):
         # If any write failed, revert all under the same recovery marker.
         # An interrupted rollback keeps marker so next page load can recover.
         recover_pending_for_page(page)

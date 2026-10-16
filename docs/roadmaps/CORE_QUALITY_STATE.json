@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-16T00:00:00Z",
+  "updated_at_utc": "2026-10-16T09:13:21Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -36,19 +36,14 @@
         "R3.2"
       ]
     },
-    "implementation_head_sha": "71f85ec2ae274e8b9a4e9b58c20d2a4ae1960de0",
-    "latest_verified_main_sha": "46f9f4679591af6eccdd160b0f4da18edd7e11cd",
+    "implementation_head_sha": "8b52b344d75513cd263e9d8c0fe2526a2ec030a5",
+    "latest_verified_main_sha": "8ed4dd04bce0cd105c9f546a70d34cc4ac89d220",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
         "type": "candidate_history_ui_integration_pending",
         "message": "CandidateReviewHistory and synthetic tests are on branch, but candidate delete UI still invalidates history; no user-visible Undo until exact postcommit wiring is implemented.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
-      },
-      {
-        "type": "github_connector_write_guard",
-        "message": "GitHub connector refused PR creation and update of existing candidate delete coordinator; branch retained for safe continuation. CI cannot be claimed.",
-        "url": "https://github.com/chigre/Picture_Capture/tree/feat/pc-cq-b3-candidate-undo-redo-20261015"
       },
       {
         "type": "r2_human_acceptance_pending",
@@ -64,10 +59,15 @@
         "type": "stale_simplified_capture_pending",
         "message": "ReviewWindow render_rows captures old simplified_vars before destroying old rows. After candidate Undo/Redo, this could repopulate the just-cleared simplified cache from stale Tk bindings; suspected from source, not yet reproduced. Must test and fail closed before claiming Undo safe.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
+      },
+      {
+        "type": "r3_postpublish_validation_pending",
+        "message": "Post-publication readback and rollback-marker quarantine added; focused pytest, real-Tk smoke, architecture and four-platform CI are not yet executed. A double I/O fault can leave mixed disk bytes under a retained recovery marker; no strict cross-file atomicity claim.",
+        "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "B3/#503: verify candidate delete Undo/Redo and stale Tk FocusOut regression on branch 71f85ec2; only open production PR #535 has failing CI, so keep R3 branch and defer R3 PR until sole active PR slot is free. R2/B2 stays in_progress; #483 remains open.",
-    "last_test_evidence": "Code a7951b4c and Tk guard 71f85ec2 committed; no R3 pytest, architecture or four-platform CI run. #535 CI 38797241611 failed.",
+    "required_next_action": "B3/#503: run focused pytest, synthetic real-Tk and architecture guards against branch feat/pc-cq-b3-candidate-undo-redo-20261015 after post-publication readback patch; PR #536 is the only open production PR and its CI is red, so do not open R3 PR. Then record actual CI and operator acceptance; R2/B2 remains in_progress and #483 open.",
+    "last_test_evidence": "New R3 readback + rollback quarantine + four synthetic regressions staged in branch commit; tests/architecture/Tk/CI NOT run, no cross-file OS atomicity claimed. main@8ed4dd04 postmerge four-platform CI 38876986096 success; #536 CI 38878591544 failure.",
     "active_batch": "B3",
     "next_batch": "B3"
   },
@@ -615,6 +615,28 @@
       "sha": "71f85ec2ae274e8b9a4e9b58c20d2a4ae1960de0",
       "ci": "not_run",
       "blocker": "only active PR #535 CI failing"
+    },
+    {
+      "type": "b3_r3_readback_hardening_branch_commit",
+      "status": "code_committed_unverified",
+      "date_utc": "2026-10-16T09:13:21Z",
+      "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
+      "base_branch_head": "8b52b344d75513cd263e9d8c0fe2526a2ec030a5",
+      "main_sha": "8ed4dd04bce0cd105c9f546a70d34cc4ac89d220",
+      "files": [
+        "src/picture_capture/proofreading_transactions.py",
+        "tests/test_b3_candidate_owned_deletion_20261015.py",
+        "tests/test_b3_review_session_transactions_20261015.py"
+      ],
+      "scope": "readback exact bytes after 1-/2-/3-file publish; retain recovery marker after silent rollback failure; invalid row, silent no-op and undo negative tests",
+      "tests": "not_run",
+      "architecture": "not_run",
+      "r3_pr": "not_open_due_to_single_open_pr_536",
+      "other_pr_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38878591544",
+      "other_pr_ci_conclusion": "failure",
+      "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38876986096",
+      "human_windows": "pending",
+      "notes": "No OS-level cross-file atomicity claim; R2/B2 and R3/B3 in_progress; #483/#503 open."
     }
   ],
   "rules_for_updates": {
@@ -780,8 +802,8 @@
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/519",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": "R3 partial scope #519 merged/main CI green. Candidate-owned Undo/Redo and real human Windows R3 still pending; #483 R2 deferred remains open and in_progress.",
-      "active_implementation_branch": null,
-      "active_head_sha": "16a6e8b28c983b31a11b23682777f9be2efaf882",
+      "active_implementation_branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
+      "active_head_sha": "8b52b344d75513cd263e9d8c0fe2526a2ec030a5",
       "unit_evidence": {
         "R3.1": {
           "status": "in_progress",

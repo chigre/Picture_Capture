@@ -279,3 +279,46 @@ def test_real_delete_ui_records_candidate_history_and_replays_bytes(tmp_path):
     assert history.redo(review)
     assert pdic_path(page).read_bytes() == after
     assert candidate["selected"] is False
+
+
+def test_invalid_candidate_row_index_fails_closed(tmp_path):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    before_pdic = pdic_path(page).read_bytes()
+    before_simplified = simplified.read_bytes()
+    for stale_rows, index in ((rows, -1), (rows, len(rows)), ([], 0)):
+        assert delete_owned_review_candidate(review, index, stale_rows) == "break"
+        assert pdic_path(page).read_bytes() == before_pdic
+        assert simplified.read_bytes() == before_simplified
+        assert not manual.exists()
+        assert candidate["selected"] is True
+        assert review.parent.entries == rows
+        assert review.parent.candidate_check_vars["ocr-id"].get() is True
+        assert not actions
+
+
+def test_silent_partial_publisher_refuses_candidate_commit(tmp_path, monkeypatch):
+    """No false success if a storage adapter returns without writing bytes."""
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    old_pdic = pdic_path(page).read_bytes()
+    old_simplified = simplified.read_bytes()
+    original_publish = storage._publish
+    skipped = False
+
+    def silent_manual_noop(path, data):
+        nonlocal skipped
+        if path == manual and not skipped:
+            skipped = True
+            return None
+        return original_publish(path, data)
+
+    monkeypatch.setattr(storage, "_publish", silent_manual_noop)
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert skipped
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert not manual.exists()
+    assert not storage._recovery_path(page).exists()
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not actions
