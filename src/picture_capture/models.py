@@ -490,6 +490,19 @@ class AppSettings(metaclass=_AppSettingsMeta):
     detection_method: str = "paddleocr"
     # v2.10 dictionary detection profile. Stable IDs describe layout families,
     # while project-specific numeric edits are persisted as overrides.
+    # Project layout family is separate from the traditional parser preset.
+    # Per-page mixed-mode overrides use exact image filenames, never ordinals.
+    dictionary_layout_kind: str = "traditional"  # traditional / illustrated / mixed
+    illustrated_page_overrides: dict[str, str] = field(default_factory=dict)
+    illustrated_primary_language: str = "eng"
+    illustrated_ocr_languages: str = "eng"
+    illustrated_grouping_mode: str = "auto"  # strict / auto / loose
+    illustrated_group_max_lines: int = 10
+    illustrated_require_review: bool = True
+    illustrated_export_split_aliases: bool = True
+    illustrated_ocr_top_percent: float = 0.0
+    illustrated_ocr_bottom_percent: float = 0.0
+    illustrated_ocr_side_percent: float = 0.0
     dictionary_profile_id: str = "latin_structured_symbols"
     # Project-specific display name for the built-in stable "custom" headword
     # profile. The profile key remains "custom"; only the human-facing label is
