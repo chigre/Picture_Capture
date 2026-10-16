@@ -80,14 +80,19 @@ def test_main_canvas_creates_persists_selects_resizes_and_undoes(tmp_path):
 
 def test_guides_are_page_local_shift_created_and_movable(tmp_path):
     app,editor,_=setup(tmp_path)
+    # Dragging from the TOP ruler creates a horizontal guide at release Y.
     editor.press(event(160,5,1))
     editor.release(event(168,135,1))
-    assert read_guides(tmp_path,app.current_page)["vertical"]==[168]
-    editor.press(event(168,150,4))
+    assert read_guides(tmp_path,app.current_page)["horizontal"]==[135]
+    editor.press(event(168,135,4))
     editor.release(event(180,150,4))
-    assert read_guides(tmp_path,app.current_page)["vertical"]==[180]
+    assert read_guides(tmp_path,app.current_page)["horizontal"]==[150]
     editor.undo()
-    assert read_guides(tmp_path,app.current_page)["vertical"]==[168]
+    assert read_guides(tmp_path,app.current_page)["horizontal"]==[135]
+    # LEFT ruler is the source of vertical guides.
+    editor.press(event(5,170,1))
+    editor.release(event(190,170,1))
+    assert read_guides(tmp_path,app.current_page)["vertical"]==[190]
     app.image.close()
 
 
