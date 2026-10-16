@@ -14821,30 +14821,9 @@ class PictureCaptureApp(tk.Tk):
         self._deferred_save_job = self.after(self._deferred_save_delay_ms, self._flush_deferred_page_save)
 
     def _flush_deferred_page_save(self) -> None:
-        """Commit queued checkbox edits before any page/batch ownership change."""
-        if self._deferred_save_job is not None:
-            try:
-                self.after_cancel(self._deferred_save_job)
-            except tk.TclError:
-                pass
-        self._deferred_save_job = None
-        snapshot = getattr(self, "_deferred_save_snapshot", None)
-        if snapshot is not None:
-            from .proofreading_transactions import _recovery_path
-            if _recovery_path(snapshot[0]).exists():
-                raise RuntimeError("Unresolved R3 transaction; refusing deferred save")
-            page, entries, image_width, pages, page_index = snapshot
-            write_pdic(pdic_path(page), entries, image_width, pages)
-        # Keep pending snapshot on write failure; clear after publication.
-        self._deferred_save_snapshot = None
-        self._deferred_save_page = None
-        if snapshot is not None:
-            if self.project and 0 <= page_index < len(self.project.images) and self.project.images[page_index] == page:
-                self._refresh_word_fill_check_from_line_count(page_index, len(entries), persist=True)
-                self._update_page_row(page_index)
-        self._flush_pending_manual_override()
-        self._flush_proofreading_candidate_evidence()
-        self._flush_proofreading_add_evidence()
+        """Flush pending PDIC edits without discarding a failed snapshot."""
+        from .proofreading_deferred_save import flush_deferred_page_save
+        flush_deferred_page_save(self, write_pdic=write_pdic, pdic_path=pdic_path)
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
         return self._review_controller_for_call().entry_for_candidate(cand)
