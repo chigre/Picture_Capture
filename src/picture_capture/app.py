@@ -15454,6 +15454,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda i: pages[i].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
@@ -15581,6 +15582,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda index: project.images[index].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def run_combined_draw_action(self) -> None:
@@ -15674,8 +15676,7 @@ class PictureCaptureApp(tk.Tk):
         cpu_pool_workers, cpu_inference_threads = (
             cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
         )
-        # The two experiments are mutually exclusive. Explicit CPU-only
-        # mode wins if both flags accidentally exist in the environment.
+        # CPU-only takes priority over staged GPU mode.
         gpu_staged = bool(
             method == "left_edge" and not cpu_pool
             and staged_pipeline_enabled(settings, len(indices))
@@ -16137,11 +16138,10 @@ class PictureCaptureApp(tk.Tk):
     def autosave_tick(self) -> None:
         self.autosave_job = None
         if self.autosave_var.get():
-            # Avoid overwriting an in-flight batch page.
-            if self._batch_active:
-                if not self._batch_foreground_pages or not self._can_save_current_during_batch_navigation():
-                    self.toggle_autosave()
-                    return
+            # Autosave PDIC only for editable batch pages; never autosave PPP.
+            if self._batch_active and not self._can_save_current_during_batch_navigation():
+                self.toggle_autosave()
+                return
             if self.project and self.current_page:
                 self._last_pdic_write_changed = False
                 review = self.review_window
@@ -16156,7 +16156,7 @@ class PictureCaptureApp(tk.Tk):
                         self.review_window = None
                 if not review_saved:
                     self.save_pdic(silent=True)
-                polygon_changed = self._save_normalized_ppp()
+                polygon_changed = False if self._batch_active else self._save_normalized_ppp()
                 if self._last_pdic_write_changed or polygon_changed:
                     self.status_var.set("已自动保存")
             self.toggle_autosave()
