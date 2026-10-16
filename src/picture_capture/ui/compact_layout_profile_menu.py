@@ -65,9 +65,10 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     profile_buttons: dict[str, ttk.Widget] = {}
     auto_buttons: list[ttk.Checkbutton] = []
     ui_syncing = False
+    layout_container = panel
 
     def row() -> ttk.Frame:
-        result = ttk.Frame(panel)
+        result = ttk.Frame(layout_container)
         result.pack(fill="x", pady=(2, 2))
         return result
 
@@ -164,9 +165,26 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     for title, key in PROFILE_TEXT_FIELDS:
         text_field(key, title)
     choice("layout_reading_label", "阅读方式", tuple(READING_LABELS.values()))
-    choice("profile_indent_label", "缩进版式", INDENT_TYPE_CHOICES)
+    # Independent family selector. Ordinary settings are preserved but hidden
+    # for spatial pages; mixed mode uses exact filename overrides.
+    from .illustrated_profile_menu import (
+        build_illustrated_profile_controls, build_layout_kind_control,
+    )
+    from ..illustrated_profile import effective_page_kind
 
-    _divider(panel)
+    ordinary_host = ttk.Frame(panel)
+    illustrated_host = ttk.Frame(panel)
+    def refresh_visibility() -> None:
+        if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+            ordinary_host.pack_forget()
+            illustrated_host.pack(fill="x", padx=2, pady=3)
+        else:
+            illustrated_host.pack_forget()
+            ordinary_host.pack(fill="x", padx=2, pady=3)
+
+    kind_refresh = build_layout_kind_control(app, panel, refresh_visibility)
+    layout_container = ordinary_host
+    _divider(ordinary_host)
 
     master = app.quick_bool_vars.get("ordinary_auto_layout")
     if master is None:
@@ -358,8 +376,9 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         width=8, justify="center",
     ).pack(side="left", padx=0, pady=0)
 
-    _divider(panel)
-    ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)
+    _divider(ordinary_host)
+    ordinary_visual_panel = build_ordinary_visual_evidence(app, ordinary_host)
+    illustrated_panel = build_illustrated_profile_controls(app, illustrated_host)
 
     # Sync the compact menu after Project Profile edits or project changes.
     def refresh() -> None:
@@ -394,6 +413,8 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             ui_syncing = False
         refresh_enabled()
         ordinary_visual_panel.refresh_from_settings()
+        illustrated_panel.refresh_from_settings()
+        kind_refresh()
 
     panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
     refresh()
