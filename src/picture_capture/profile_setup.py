@@ -330,9 +330,6 @@ class ProjectProfileWizard(tk.Toplevel):
         self._show_sample_loading_state()
         self._refresh_language_summary()
         self._refresh_summary()
-        # Let Tk paint the complete Wizard frame before any representative
-        # image files are opened. Thumbnail decoding then happens off the UI
-        # thread so clicking Project Profile never feels like a frozen window.
         self.after(20, self._start_sample_thumbnail_load)
 
         # Representative-page analysis starts after the user confirms reading
@@ -1000,6 +997,8 @@ class ProjectProfileWizard(tk.Toplevel):
             ).grid(row=0, column=column, sticky="w", padx=(0, 10), pady=3)
 
         self._build_language_section(tab, row=4)
+        from .ui.profile_wizard_illustrated import add_wizard_layout_selector
+        add_wizard_layout_selector(self, tab, row=6)
 
         ttk.Label(
             tab,
