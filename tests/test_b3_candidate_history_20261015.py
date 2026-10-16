@@ -233,3 +233,52 @@ def test_failed_candidate_undo_does_not_enter_repaint_guard(tmp_path):
     review.vars[0].set("unsaved")
     assert history.undo(review) is False
     assert review.__dict__.get("_r3_simplified_capture_blocked") is None
+
+def test_recovery_rollback_io_failure_quarantines_until_verified_reload(tmp_path, monkeypatch):
+    """A second I/O failure may leave a journal; never claim atomic rollback."""
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, _, after = committed_delete(page, owned, review, candidate)
+    original_publish = tx._publish
+    faults = {"manual": False, "rollback": False}
+
+    def fail_commit_then_rollback(path, data):
+        if path == manual and not faults["manual"]:
+            faults["manual"] = True
+            raise OSError("injected manual publication failure")
+        if path == pdic_path(page) and faults["manual"] and not faults["rollback"]:
+            faults["rollback"] = True
+            raise OSError("injected rollback failure")
+        return original_publish(path, data)
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(tx, "_publish", fail_commit_then_rollback)
+        assert history.undo(review) is False
+    assert faults == {"manual": True, "rollback": True}
+    assert tx._recovery_path(page).exists()
+    assert tx.snapshot_review(review) is None
+    assert candidate["selected"] is False
+    assert owned not in review.parent.entries
+
+    assert tx.recover_pending_for_page(page, manual_path=manual)
+    assert not tx._recovery_path(page).exists()
+    assert pdic_path(page).read_bytes() == after.pdic_bytes
+    assert candidate["selected"] is False
+    review.vars = [Var(row.word) for row in review.parent.entries]
+    assert history.undo(review)
+    assert owned in review.parent.entries
+
+
+def test_candidate_delete_twenty_repeated_undo_redo_roundtrips(tmp_path):
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, before, after = committed_delete(page, owned, review, candidate)
+    for _ in range(20):
+        review.vars = [Var(row.word) for row in review.parent.entries]
+        assert history.undo(review)
+        assert pdic_path(page).read_bytes() == before.pdic_bytes
+        assert candidate.get("selected", True) is True
+        review.vars = [Var(row.word) for row in review.parent.entries]
+        assert history.redo(review)
+        assert pdic_path(page).read_bytes() == after.pdic_bytes
+        assert candidate["selected"] is False
+    assert len(history.undo_stack) == 1
+    assert len(history.redo_stack) == 0
