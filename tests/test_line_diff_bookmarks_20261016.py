@@ -6,8 +6,9 @@ from PIL import Image
 
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
+from picture_capture.training_baseline import baseline_path_for_pdic, save_automatic_baseline
 from picture_capture.line_diff_bookmarks import (
-    baseline_path, marker_positions, record_original_lines,
+    marker_positions,
     page_has_manual_line_difference, modified_line_page_stems,
     bookmark_modified_line_pages,
 )
@@ -25,8 +26,8 @@ def test_auto_baseline_then_position_only_changes(tmp_path):
     initial = [Entry(word="apple", x=10, y=20), Entry(word="banana", x=10, y=60)]
     _write(page, initial)
     assert page_has_manual_line_difference(tmp_path, page) is None
-    record_original_lines(tmp_path, page, initial)
-    assert baseline_path(tmp_path, page).is_file()
+    save_automatic_baseline(pdic_path(page), initial, 300, (page.stem, "@", "@"))
+    assert baseline_path_for_pdic(pdic_path(page)).is_file()
     assert page_has_manual_line_difference(tmp_path, page) is False
     # Text-only edits do not make a line difference.
     _write(page, [Entry(word="new", x=10, y=20), Entry(word="other", x=10, y=60)])
@@ -42,8 +43,8 @@ def test_only_known_difference_pages_are_marked(tmp_path):
     for page in pages:
         Image.new("RGB", (300, 100), "white").save(page)
         _write(page, [Entry(word="one", x=11, y=20)])
-    record_original_lines(tmp_path, pages[0], [Entry(word="one", x=11, y=20)])
-    record_original_lines(tmp_path, pages[1], [Entry(word="one", x=11, y=20)])
+    save_automatic_baseline(pdic_path(pages[0]), [Entry(word="one", x=11, y=20)], 300, (pages[0].stem, "@", "@"))
+    save_automatic_baseline(pdic_path(pages[1]), [Entry(word="one", x=11, y=20)], 300, (pages[1].stem, "@", "@"))
     _write(pages[1], [Entry(word="one", x=11, y=24)])
     changed, unknown = modified_line_page_stems(tmp_path, pages)
     assert changed == {pages[1].stem}
