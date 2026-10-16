@@ -23,6 +23,7 @@ from picture_capture import proofreading_transactions as tx
 from picture_capture.ui.review_candidate_delete_actions import (
     delete_owned_review_candidate,
 )
+from picture_capture.ui.review_transaction_actions import _history
 
 
 def run() -> None:
@@ -104,6 +105,22 @@ def run() -> None:
             assert manual.exists()
             assert not tx._recovery_path(page).exists()
             assert page.exists() and not simplified.exists()
+
+            # Real Tk variables must rebind after a candidate-owned delete.
+            committed = pdic_path(page).read_bytes()
+            review.vars = [tk.StringVar(root, value=row.word) for row in app.entries]
+            assert _history(review).undo(review)
+            assert pdic_path(page).read_bytes() == before
+            assert app.entries == [head, other]
+            assert candidate["selected"] is True and checker.get()
+            assert not manual.exists()
+            review.vars = [tk.StringVar(root, value=row.word) for row in app.entries]
+            assert _history(review).redo(review)
+            assert pdic_path(page).read_bytes() == committed
+            assert app.entries == [other]
+            assert candidate["selected"] is False and not checker.get()
+            assert manual.exists()
+            review.vars = vars_
 
             # A fresh page can retry after failed disk publication; no stale
             # GUI checkbox or list membership changes before durability.

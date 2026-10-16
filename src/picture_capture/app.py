@@ -4957,10 +4957,10 @@ class ReviewWindow(tk.Toplevel):
 
     def _capture_simplified_edits(self, page_stem: str | None = None) -> None:
         stem = str(page_stem or "")
-        if not stem or not getattr(self, "simplified_vars", []):
+        if (not stem or not getattr(self, "simplified_vars", [])
+                or self.__dict__.get("_r3_simplified_capture_blocked", False)):
             return
         records = self._simplified_page_records(stem)
-        # Preserve rendered row identities across section-order changes.
         rendered_entries = self._bound_row_entries()
         # Only capture against the currently rendered page.  During navigation
         # parent.current_page may already refer to the next page while the old
@@ -5877,7 +5877,6 @@ class ReviewWindow(tk.Toplevel):
         current_stem = self.parent.current_page.stem if self.parent.current_page else ""
         if self._rendered_page_stem and self._rendered_page_stem == current_stem:
             self._capture_simplified_edits(self._rendered_page_stem)
-        # Pending height-switch jobs belong to the outgoing rendered rows.
         for job in getattr(self, "_review_crop_height_jobs", {}).values():
             try:
                 self.after_cancel(job)
@@ -5897,6 +5896,7 @@ class ReviewWindow(tk.Toplevel):
         from .ui.review_transaction_actions import history_page_changed
         history_page_changed(self, current_stem)
         self._rendered_page_stem = current_stem
+        self.__dict__.pop("_r3_simplified_capture_blocked", None)
         simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
         if not self.parent.image:
             return
