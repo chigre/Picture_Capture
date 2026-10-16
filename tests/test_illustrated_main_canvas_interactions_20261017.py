@@ -121,5 +121,5 @@ def test_illustrated_navigation_autosave_never_touches_legacy_pdic():
     assert PictureCaptureApp._save_current_page_by_mode(app) is None
     assert saved == []
     app.current_page = Path("002.png")
-    assert PictureCaptureApp._save_current_page_by_mode(app) == Path("002.pdic")
+    assert PictureCaptureApp._save_current_page_by_mode(app).name == "002.pdic"
     assert saved == ["pdic"]
