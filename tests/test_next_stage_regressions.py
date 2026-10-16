@@ -3595,7 +3595,7 @@ def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
     ).read_text(encoding="utf-8")
-    assert '("向右比例 %", "right_ratio", float)' in schema_source
+    assert '("切图宽度(%栏)", "right_ratio", float)' in schema_source
     assert '("VB 向右比例 1/x", "ordinary_right_divisor", float)' in schema_source
     for name in (
         "white_threshold_high", "white_threshold_low", "whitespace_adjustment",
