@@ -214,11 +214,13 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     divider()
 
-    # Group 5: appearance and exclusive display mode. Crop width lives in
-    # 后期制作, not in display-only parameters.
+    # Group 5: appearance and exclusive display mode. Keep the independent
+    # marker/auxiliary-line width here, not the PNG cropping width.
     dropdown("颜色模式", app.appearance_mode_var,
              ("浅色", "深色", "跟随系统"), app._appearance_mode_selected)
     dropdown("显示模式", app.display_mode_var, DISPLAY_MODES, app._apply_display_mode)
+    row = line()
+    value(row, "向右比例%", "right_ratio", 4)
 
     divider()
 
