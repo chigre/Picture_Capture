@@ -16,11 +16,26 @@ def polygon_delete_center(region, scale: float) -> tuple[float, float]:
 
 def create_illustration_delete_control(app, region, region_index: int) -> int:
     button = tk.Button(
-        app.canvas, text="[X]", width=3, padx=1, pady=0, relief="flat", bd=0,
-        highlightthickness=0, bg="#bdbdbd", activebackground="#a5a5a5",
-        fg="#202020", activeforeground="#202020", font=fixed_overlay_control_font(app.canvas, app.settings.ocr_language),
+        app.canvas,
+        text="[X]",
+        width=3,
+        font=fixed_overlay_control_font(app.canvas, app.settings.ocr_language),
+        takefocus=False,
+        relief="flat",
+        bd=0,
+        highlightthickness=0,
+        padx=1,
+        pady=0,
+        cursor="hand2",
+        fg="#222222",
+        bg="#bdbdbd",
+        activeforeground="#222222",
+        activebackground="#a5a5a5",
         command=lambda: app._delete_polygon_region(region),
     )
+    button._pc_skip_classic_appearance = True
+    if callable(getattr(app, "_attach_tooltip", None)):
+        app._attach_tooltip(button, "删除插图")
     app.overlay_widgets.append(button)
     x, y = polygon_delete_center(region, app.view_scale)
     return app.canvas.create_window(
