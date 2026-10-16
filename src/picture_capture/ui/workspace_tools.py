@@ -870,6 +870,15 @@ def refresh_compact_page_index(app: Any) -> None:
         size_compact_page_columns(app)
     except tk.TclError:
         pass
+    # Mixed volumes may change layout family on every page. If the workspace
+    # popup stays pinned, its active panel must follow the current page too.
+    section = getattr(app, "workspace_tools_sections", {}).get(
+        getattr(app, "workspace_tools_active", None),
+    )
+    if section is not None and section.winfo_manager() == "pack":
+        refresh = getattr(section, "refresh_from_settings", None)
+        if callable(refresh):
+            refresh()
 
 
 def required_header_width(app: Any) -> int:
