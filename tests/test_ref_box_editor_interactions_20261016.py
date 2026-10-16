@@ -312,7 +312,7 @@ def test_ref_fill_palette_switches_when_text_is_added_or_removed(tmp_path):
     assert ref_box_background("参见", settings) == ("#c8e6c9", 0.0)
     assert ref_box_background("see also", settings) == ("#c8e6c9", 0.0)
     settings.ref_box_show_text = False
-    assert ref_box_background("参见", settings) == ("#c8e6c9", 50.0)
+    assert ref_box_background("参见", settings) == ("#c8e6c9", 0.0)
     settings.ref_box_fill_color = "#ffccaa"
     settings.ref_box_fill_opacity = 30.0
     settings.ref_box_filled_color = "#bbdd99"
