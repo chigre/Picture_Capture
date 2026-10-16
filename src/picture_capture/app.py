@@ -13418,6 +13418,9 @@ class PictureCaptureApp(tk.Tk):
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
+        from .ui.illustrated_main_canvas import render_illustrated_main_overlay
+        if render_illustrated_main_overlay(self):
+            return
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
