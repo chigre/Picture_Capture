@@ -4,6 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from .illustration_delete_geometry import interior_polygon_center
+from .ui.overlay_delete_button import fixed_overlay_control_font
 
 
 def polygon_delete_center(region, scale: float) -> tuple[float, float]:
@@ -15,9 +16,9 @@ def polygon_delete_center(region, scale: float) -> tuple[float, float]:
 
 def create_illustration_delete_control(app, region, region_index: int) -> int:
     button = tk.Button(
-        app.canvas, text="[X]", padx=3, pady=1, relief="flat", bd=0,
+        app.canvas, text="[X]", width=3, padx=1, pady=0, relief="flat", bd=0,
         highlightthickness=0, bg="#bdbdbd", activebackground="#a5a5a5",
-        fg="#202020", activeforeground="#202020", font=("TkDefaultFont", 16),
+        fg="#202020", activeforeground="#202020", font=fixed_overlay_control_font(app.canvas, app.settings.ocr_language),
         command=lambda: app._delete_polygon_region(region),
     )
     app.overlay_widgets.append(button)
