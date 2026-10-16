@@ -100,7 +100,7 @@ class CropWidthEquivalence:
 
     def __init__(self, app: Any):
         self.app = app
-        self.page_percent_var = tk.StringVar(master=app, value="—")
+        self.page_percent_var = tk.StringVar(\n            master=app.quick_vars["crop_width_percent"]._root, value="—",\n        )
         self._updating = False
         # The main column field already has a debounced autosave trace.
         # These additional traces only synchronize the computed second field.
