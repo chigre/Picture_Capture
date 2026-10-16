@@ -9,7 +9,7 @@ from picture_capture.crop.settings import (
     SINGLE_LINE_MERGE_KEY,
     UNLINED_FILTER_ENABLED_KEY,
     UNLINED_FILTER_BLANK_KEY,
-    UNLINED_BLANK_INK_PERCENT_KEY,
+    UNLINED_LEFT_WHITE_PERCENT_KEY,
 )
 
 
@@ -50,7 +50,7 @@ def test_every_custom_crop_setting_has_specialized_help():
     # The other four crop controls already use explicit merge/filter help
     # rather than this registry.
     for key in (SINGLE_LINE_MERGE_KEY, UNLINED_FILTER_ENABLED_KEY,
-                UNLINED_FILTER_BLANK_KEY, UNLINED_BLANK_INK_PERCENT_KEY):
+                UNLINED_FILTER_BLANK_KEY, UNLINED_LEFT_WHITE_PERCENT_KEY):
         assert key not in crop.CROP_CONTROL_HELP
 
 
