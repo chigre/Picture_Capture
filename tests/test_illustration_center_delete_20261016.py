@@ -1,0 +1,26 @@
+"""PPP [X] display is tied to shape visibility, not labels."""
+from pathlib import Path
+
+from picture_capture.illustration_delete_geometry import interior_polygon_center
+
+
+def test_rectangular_illustration_x_at_center():
+    assert interior_polygon_center([(10, 20), (110, 20), (110, 80), (10, 80)]) == (60, 50)
+
+
+def test_concave_illustration_x_remains_inside():
+    from picture_capture.illustration_delete_geometry import _inside
+    polygon = [(0, 0), (80, 0), (80, 20), (20, 20), (20, 80), (0, 80)]
+    x, y = interior_polygon_center(polygon)
+    assert _inside(x, y, [(float(a), float(b)) for a, b in polygon])
+
+
+def test_delete_control_tied_to_shape_not_editable_label():
+    source = (Path(__file__).resolve().parents[1] / "src" /
+              "picture_capture" / "app.py").read_text(encoding="utf-8")
+    assert 'if show_shapes:\n                    delete_button = tk.Button(' in source
+    assert 'font=("TkDefaultFont", 16)' in source
+    assert 'bg="#bdbdbd"' in source
+    assert 'anchor="center", tags=("ppp-overlay", f"ppp-delete-{region_index}")' in source
+    assert 'self.canvas.coords(record["delete_window"], center_x, center_y)' in source
+    assert 'delete_button.pack(side="left"' not in source
