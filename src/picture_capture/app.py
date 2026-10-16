@@ -14824,11 +14824,18 @@ class PictureCaptureApp(tk.Tk):
                 pass
         self._deferred_save_job = None
         snapshot = getattr(self, "_deferred_save_snapshot", None)
+        # A pending R3 rollback marker quarantines the queued write. Keep the
+        # exact snapshot for an explicit retry rather than clearing it early.
+        if snapshot is not None:
+            from .proofreading_transactions import _recovery_path
+            if _recovery_path(snapshot[0]).exists():
+                raise RuntimeError("Unresolved R3 transaction; refusing deferred save")
+            page, entries, image_width, pages, page_index = snapshot
+            write_pdic(pdic_path(page), entries, image_width, pages)
+        # Both snapshot fields are cleared only after publication succeeded.
         self._deferred_save_snapshot = None
         self._deferred_save_page = None
         if snapshot is not None:
-            page, entries, image_width, pages, page_index = snapshot
-            write_pdic(pdic_path(page), entries, image_width, pages)
             if self.project and 0 <= page_index < len(self.project.images) and self.project.images[page_index] == page:
                 self._refresh_word_fill_check_from_line_count(page_index, len(entries), persist=True)
                 self._update_page_row(page_index)
@@ -16077,6 +16084,11 @@ class PictureCaptureApp(tk.Tk):
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
         if not self.project or not self.current_page or self.image is None: return
+        # Reject unresolved recovery before mutating Entry text, reordering
+        # rows, or dropping a pending checkbox-save snapshot.
+        from .proofreading_transactions import _recovery_path
+        if _recovery_path(self.current_page).exists():
+            raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
         # Commit live state; cancel any older queued checkbox snapshot.
         deferred_job = self.__dict__.get("_deferred_save_job")
         if deferred_job is not None:

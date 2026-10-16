@@ -86,6 +86,11 @@ def read_pdic(path: Path) -> list[Entry]:
 
 
 def write_pdic(path: Path, entries: list[Entry], image_width: int, pages: tuple[str, str, str]) -> bool:
+    # Shared persistence boundary: callers include deferred saves and batch
+    # writers, which do not always pass through the GUI save method.
+    marker = path.with_name(f".{path.name}.r3-inflight.json")
+    if marker.exists():
+        raise RuntimeError("Unresolved R3 transaction; refusing PDIC write")
     path.parent.mkdir(parents=True, exist_ok=True)
     current, previous, following = pages
     records: list[str] = []
