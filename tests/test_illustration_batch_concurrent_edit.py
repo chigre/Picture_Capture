@@ -30,7 +30,7 @@ def test_pdic_batch_mode_rejects_ppp_edits_and_save_paths():
     assert '_batch_allow_pdic_edits' in source[start:end]
     start = source.index("    def toggle_polygon_drawing(")
     end = source.index("\n    def ", start + 10)
-    assert "self._batch_allow_pdic_edits" in source[start:end]
+    assert "if self._batch_active:" in source[start:end]
     start = source.index("    def _save_current_page_by_mode(")
     end = source.index("\n    def ", start + 10)
     assert 'and not getattr(self, "_batch_allow_pdic_edits", False)' in source[start:end]
