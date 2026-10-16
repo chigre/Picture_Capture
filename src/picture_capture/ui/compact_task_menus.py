@@ -429,8 +429,18 @@ POSTPRODUCTION_HELP = {
 
 
 def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
-    """New compact export menu; no visual or state dependency on legacy rows."""
+    """New compact export menu; share the persisted legacy crop-width setting."""
     panel = _panel(parent)
+    width_row = _row(panel)
+    _label(width_row, "切图宽度(%栏)")
+    width_entry = _entry(
+        width_row, app.quick_vars["right_ratio"], 6, app._quick_parameter_changed,
+    )
+    app._attach_tooltip(
+        width_entry,
+        "默认100%；按当前栏宽百分比控制画线/未画线单行切图的横向范围。"
+        "沿用旧项目 right_ratio 保存值；不等于普通画线 VB 向右比例 1/x。",
+    )
     for group in POSTPRODUCTION_ACTIONS:
         row = _row(panel)
         for caption, method in group:
