@@ -330,6 +330,63 @@ class CanvasController:
         app.canvas.create_line(canvas_x, 0, canvas_x, height, **style)
         app.canvas.tag_raise("cursor-guide")
 
+    def canvas_left_double_click(self, event: Any) -> str | None:
+        """Edit REF text or complete SECTION editing."""
+        app = self.app
+        if app.ref_box_controller.pointer_active:
+            return app.ref_box_controller.double_click(*app.original_xy(event))
+        if app._preprocess_mode_active():
+            return "break"
+        if not app._section_editing or app.image is None:
+            return None
+        x, y = app.original_xy(event)
+        if not (0 <= x < app.image.width and 0 <= y < app.image.height):
+            return None
+        app._finish_section_editing()
+        return "break"
+
+    def canvas_motion(self, event: Any) -> None:
+        app = self.app
+        if app.image:
+            canvas_x = app.canvas.canvasx(event.x)
+            canvas_y = app.canvas.canvasy(event.y)
+            display_width = app.image.width * app.view_scale
+            display_height = app.image.height * app.view_scale
+            if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
+                if app._section_editing or app._preprocess_mode_active():
+                    app.cursor_canvas_xy = None
+                    app.canvas.delete("cursor-guide")
+                else:
+                    app.cursor_canvas_xy = (canvas_x, canvas_y)
+                    app.draw_cursor_guides(canvas_x, canvas_y)
+                source_x = round(canvas_x / app.view_scale)
+                source_y = round(canvas_y / app.view_scale)
+                if app.ref_box_controller.pointer_active:
+                    app.ref_box_controller.hover(source_x, source_y)
+                if (
+                    not app._section_editing
+                    and not app._preprocess_mode_active()
+                    and app._ruler_hit_id(source_x, source_y) is not None
+                ):
+                    app._show_ruler_hint(event)
+                else:
+                    app._hide_ruler_hint()
+                if app._preprocess_mode_active():
+                    app.cursor_status_var.set(
+                        f"预处理预览 X,Y {source_x}, {source_y}｜"
+                        f"缩放 {round(app.view_scale * 100)}%"
+                    )
+                else:
+                    app.cursor_status_var.set(
+                        f"原图 X,Y {source_x}, {source_y}｜"
+                        f"缩放 {round(app.view_scale * 100)}%｜词条 {len(app.entries)}"
+                    )
+            else:
+                app.cursor_canvas_xy = None
+                app.canvas.delete("cursor-guide")
+                app._hide_ruler_hint()
+                app._set_idle_cursor_status()
+
     def canvas_leave(self, _event: Any) -> None:
         app = self.app
         app.cursor_canvas_xy = None

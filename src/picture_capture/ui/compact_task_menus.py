@@ -292,6 +292,9 @@ ACTION_GROUPS = (
      ("编辑插图", "toggle_polygon_drawing")),
     (("插图关联", "associate_illustrations"),),
     None,
+    (("识别'REF'", "recognize_ref_boxes"), ("编辑'REF'", "toggle_ref_box_edit"),
+     ("OCR 'REF'", "ocr_ref_boxes")),
+    None,
     (("压缩OCR缓存", "cleanup_paddleocr_temp_selected_scope"),),
 )
 
@@ -317,6 +320,10 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                 app.polygon_draw_button = button
                 if app.polygon_draw_var.get():
                     button.configure(text="结束编辑插图", style="PC.EditActive.TButton")
+            if caption == "编辑'REF'":
+                app._ref_box_edit_button = button
+                if app.ref_box_controller.editing:
+                    button.configure(text="结束编辑'REF'", style="PC.EditActive.TButton")
     from .ocr_detection_inspector import show_ocr_decision_inspector
     _button(_row(panel), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
     row = _row(panel)

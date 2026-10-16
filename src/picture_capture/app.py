@@ -131,6 +131,9 @@ from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.settings import illustration as _settings_illustration_ui
+from .ui.settings import ref_box as _settings_ref_box_ui
+from .ui.settings import color_picker as _settings_color_ui
+from .ui.ref_box_controller import RefBoxController
 from .ui.controllers import (
     CanvasController, CropController, DetectionController, ExportController,
     HeadwordController, IllustrationController, PageController, ProjectController,
@@ -224,6 +227,7 @@ from .overlay_opacity import (
 )
 from .illustration_polygon_edit import nearest_polygon_segment
 from .illustration_labels import label_text, user_edited_link
+from .illustration_delete_overlay import create_illustration_delete_control, polygon_delete_center
 from .illustration_fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
@@ -618,7 +622,7 @@ class SettingsDialog(tk.Toplevel):
             widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
             widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
             return widget
-        if name in {"main_entry_font_family", "review_entry_font_family"}:
+        if name in {"main_entry_font_family", "review_entry_font_family", "ref_box_font_family"}:
             families = (
                 AUTO_FONT_FAMILY,
                 *tuple(sorted(set(font.families()), key=str.casefold)),
@@ -668,7 +672,8 @@ class SettingsDialog(tk.Toplevel):
             )
         if name == "layout_transform":
             return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
-        return ttk.Entry(parent, textvariable=var, width=28)
+        return (_settings_color_ui.make_color_widget(parent, var)
+                if name.endswith("_color") else ttk.Entry(parent, textvariable=var, width=28))
 
     def _add_setting_group(
         self,
@@ -1073,6 +1078,7 @@ class SettingsDialog(tk.Toplevel):
         common_tab = ttk.Frame(notebook)
         normal_tab = ttk.Frame(notebook)
         illustration_tab = ttk.Frame(notebook)
+        ref_box_tab = ttk.Frame(notebook)
         performance_tab = ttk.Frame(notebook)
         separator_y_tab = ttk.Frame(notebook)
         ocr_tab = ttk.Frame(notebook)
@@ -1088,6 +1094,7 @@ class SettingsDialog(tk.Toplevel):
             (normal_tab, "普通画线"),
             (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
+            (ref_box_tab, "REF框"),
             (performance_tab, "性能与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
@@ -1103,6 +1110,7 @@ class SettingsDialog(tk.Toplevel):
             "normal": normal_tab,
             "separator_y": separator_y_tab,
             "illustration": illustration_tab,
+            "ref_box": ref_box_tab,
             "performance": performance_tab,
             "ocr": ocr_tab,
             "display": display_tab,
@@ -1309,6 +1317,7 @@ class SettingsDialog(tk.Toplevel):
         )
 
         _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
+        _settings_ref_box_ui.build_ref_box_settings_tab(self, ref_box_tab)
         performance_page = self._scrollable_settings_page(performance_tab)
         self._settings_intro(
             performance_page, "性能测试与诊断",
@@ -1781,6 +1790,8 @@ class SettingsDialog(tk.Toplevel):
         try:
             _settings_lifecycle_ui.validate_projection_width(self.vars)
             _settings_lifecycle_ui.validate_separator_gap_controls(self.vars)
+            _settings_lifecycle_ui.validate_ref_box_controls(self.vars)
+            _settings_color_ui.validate_color_controls(self.vars)
             previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
             previous_backend = {
                 name: getattr(self.parent.settings, name, None)
@@ -1880,6 +1891,9 @@ class SettingsDialog(tk.Toplevel):
             )
             self.parent.settings.illustration_label_font_family = normalize_content_font_setting(
                 self.parent.settings.illustration_label_font_family
+            )
+            self.parent.settings.ref_box_font_family = normalize_content_font_setting(
+                self.parent.settings.ref_box_font_family
             )
             self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
             self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
@@ -7305,6 +7319,7 @@ class PictureCaptureApp(tk.Tk):
             fill_page_entries=_fill_page_entries,
         )
         self.illustration_controller = IllustrationController(self)
+        self.ref_box_controller = RefBoxController(self)
         self.project_controller = ProjectController(self)
         self.page_controller = PageController(self)
         self.review_controller = ReviewController(self)
@@ -8472,7 +8487,10 @@ class PictureCaptureApp(tk.Tk):
         # Explicit modifier binding keeps the new auxiliary gesture discoverable;
         # section and PPP editing retain their existing Shift-click behavior.
         self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
-        self.canvas.bind("<Control-z>", self._auxiliary_controller.undo)
+        self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
+        self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
+        self.canvas.bind("<F2>", lambda e: self.ref_box_controller.edit_properties() if self.ref_box_controller.editing else None)
+        self.canvas.bind("<Escape>", self.ref_box_controller.cancel_capture)
         self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
         self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
         self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
@@ -9542,6 +9560,7 @@ class PictureCaptureApp(tk.Tk):
                 text="退出预处理模式" if active else "进入预处理模式"
             )
         if active:
+            self.ref_box_controller.stop_edit()
             self._section_editing = False
             self._drag_section_boundary = None
             self.polygon_draw_var.set(False)
@@ -11429,6 +11448,7 @@ class PictureCaptureApp(tk.Tk):
         refresh_page_quality: bool = True,
         allow_page_navigation: bool = False,
         allow_pdic_edits: bool = False,
+        flush_deferred_save: bool = True,
     ) -> bool:
         """ start batch task."""
         if self._batch_active:
@@ -11448,7 +11468,8 @@ class PictureCaptureApp(tk.Tk):
             return False
         if self._ui_close_requested:
             return False
-        self._flush_deferred_page_save()
+        if flush_deferred_save:
+            self._flush_deferred_page_save()
         items = list(items)
         if not items:
             self.status_var.set("没有需要处理的页面")
@@ -12927,6 +12948,7 @@ class PictureCaptureApp(tk.Tk):
             return
         self.current_index = index; self.current_page = self.project.images[index]
         self._auxiliary_controller.load_page(self.current_page)
+        self.ref_box_controller.load_page(self.current_page)
         use_preloaded = bool(
             preloaded
             and preloaded.get("index") == index
@@ -13408,6 +13430,8 @@ class PictureCaptureApp(tk.Tk):
             )
             if self.cursor_canvas_xy is not None:
                 self.draw_cursor_guides(*self.cursor_canvas_xy)
+            self.ref_box_controller.render()
+            self.ref_box_controller.bind_overlay_widgets()
             draw_ocr_crop_preview(self)
             draw_layout_visualization_if_enabled(self)
             return
@@ -13566,14 +13590,6 @@ class PictureCaptureApp(tk.Tk):
                     label_entry.bind("<FocusOut>", lambda _e, r=region, w=label_entry: self._update_polygon_label(r, w))
                     label_entry.bind("<Return>", lambda _e, r=region, w=label_entry: self._commit_polygon_label_return(r, w))
                     label_entry.pack(side="left")
-                    delete_button = tk.Button(
-                        label_frame, text="×", width=2, height=1, padx=0, pady=0, relief="flat",
-                        bg=self.settings.illustration_label_fill_color,
-                        activebackground=self.settings.illustration_label_fill_color,
-                        highlightthickness=0, bd=0,
-                        command=lambda r=region: self._delete_polygon_region(r),
-                    )
-                    delete_button.pack(side="left", padx=(2, 0))
                     self.overlay_widgets.append(label_frame)
                     self.polygon_label_bindings.append((label_entry, region))
                     label_frame.update_idletasks()
@@ -13581,12 +13597,15 @@ class PictureCaptureApp(tk.Tk):
                     label_item = self.canvas.create_window(
                         label_x, label_y, window=label_frame, anchor="nw", tags=("ppp-overlay",)
                     )
+                delete_item = (create_illustration_delete_control(self, region, region_index)
+                               if show_shapes else None)
                 self._polygon_canvas_items[region_index] = {
                     "polygon": polygon_item,
                     "handles": handles,
                     "edge_handles": edge_handles,
                     "label_window": label_item,
                     "label_frame": label_frame,
+                    "delete_window": delete_item,
                 }
             if self.new_polygon:
                 coords = [value * self.view_scale for point in self.new_polygon for value in point]
@@ -13603,6 +13622,8 @@ class PictureCaptureApp(tk.Tk):
             self.draw_cursor_guides(*self.cursor_canvas_xy)
 
         self._apply_current_appearance(self.canvas)
+        self.ref_box_controller.render()
+        self.ref_box_controller.bind_overlay_widgets()
         draw_ocr_crop_preview(self)
         draw_layout_visualization_if_enabled(self)
 
@@ -13885,6 +13906,9 @@ class PictureCaptureApp(tk.Tk):
                     mx, my = mids[side]
                     cx, cy = mx * self.view_scale, my * self.view_scale
                     self.canvas.coords(item, cx - r, cy - r, cx + r, cy + r)
+            if record.get("delete_window") is not None:
+                center_x, center_y = polygon_delete_center(region, self.view_scale)
+                self.canvas.coords(record["delete_window"], center_x, center_y)
             if region.points and record.get("label_window") is not None:
                 label_frame = record.get("label_frame")
                 if label_frame is not None:
@@ -14083,9 +14107,22 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def toggle_auxiliary_mode(self) -> None:
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
         self._auxiliary_controller.toggle_mode()
 
+    def toggle_ref_box_edit(self) -> None:
+        self.ref_box_controller.toggle_edit()
+
+    def recognize_ref_boxes(self) -> None:
+        self.ref_box_controller.recognize_selected_scope()
+
+    def ocr_ref_boxes(self) -> None:
+        self.ref_box_controller.ocr_selected_scope()
+
     def toggle_polygon_drawing(self) -> None:
+        if self.ref_box_controller.pointer_active:
+            self.ref_box_controller.stop_edit()
         if self._batch_active and self._batch_allow_pdic_edits:
             self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
             return
@@ -14116,18 +14153,11 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_double_click(self, event: tk.Event) -> str | None:
-        """Finish SECTION editing by double-clicking anywhere on the page image."""
-        if self._preprocess_mode_active():
-            return "break"
-        if not self._section_editing or self.image is None:
-            return None
-        x, y = self.original_xy(event)
-        if not (0 <= x < self.image.width and 0 <= y < self.image.height):
-            return None
-        self._finish_section_editing()
-        return "break"
+        return self._canvas_controller_for_call().canvas_left_double_click(event)
 
     def canvas_left_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.press(*self.original_xy(event)) if self.guard() else "break"
         if not self.guard():
             return
         x, y = self.original_xy(event)
@@ -14211,6 +14241,8 @@ class PictureCaptureApp(tk.Tk):
         self.redraw()
 
     def canvas_left_drag(self, event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.drag(*self.original_xy(event))
         if self._preprocess_mode_active():
             return "break"
         if self.image is None:
@@ -14247,6 +14279,8 @@ class PictureCaptureApp(tk.Tk):
         return None
 
     def canvas_left_release(self, _event: tk.Event) -> str | None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.release(*self.original_xy(_event))
         if self._preprocess_mode_active():
             return "break"
         if self.auxiliary_mode_var.get():
@@ -14289,6 +14323,8 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def canvas_right_click(self, event: tk.Event) -> None:
+        if self.ref_box_controller.pointer_active:
+            return self.ref_box_controller.context_menu(event)
         if getattr(event, "state", 0) & 0x0001:
             self._canvas_shift_right_click(event)
             return
@@ -14318,43 +14354,7 @@ class PictureCaptureApp(tk.Tk):
         self.change_page(1)
 
     def canvas_motion(self, event: tk.Event) -> None:
-        if self.image:
-            canvas_x = self.canvas.canvasx(event.x)
-            canvas_y = self.canvas.canvasy(event.y)
-            display_width = self.image.width * self.view_scale
-            display_height = self.image.height * self.view_scale
-            if 0 <= canvas_x < display_width and 0 <= canvas_y < display_height:
-                if self._section_editing or self._preprocess_mode_active():
-                    self.cursor_canvas_xy = None
-                    self.canvas.delete("cursor-guide")
-                else:
-                    self.cursor_canvas_xy = (canvas_x, canvas_y)
-                    self.draw_cursor_guides(canvas_x, canvas_y)
-                source_x = round(canvas_x / self.view_scale)
-                source_y = round(canvas_y / self.view_scale)
-                if (
-                    not self._section_editing
-                    and not self._preprocess_mode_active()
-                    and self._ruler_hit_id(source_x, source_y) is not None
-                ):
-                    self._show_ruler_hint(event)
-                else:
-                    self._hide_ruler_hint()
-                if self._preprocess_mode_active():
-                    self.cursor_status_var.set(
-                        f"预处理预览 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%"
-                    )
-                else:
-                    self.cursor_status_var.set(
-                        f"原图 X,Y {source_x}, {source_y}｜"
-                        f"缩放 {round(self.view_scale * 100)}%｜词条 {len(self.entries)}"
-                    )
-            else:
-                self.cursor_canvas_xy = None
-                self.canvas.delete("cursor-guide")
-                self._hide_ruler_hint()
-                self._set_idle_cursor_status()
+        self._canvas_controller_for_call().canvas_motion(event)
 
     def _confidence_bg(self, confidence: float | None) -> str:
         if confidence is None:

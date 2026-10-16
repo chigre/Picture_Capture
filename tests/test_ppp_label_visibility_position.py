@@ -40,4 +40,5 @@ def test_ppp_label_border_width_is_fixed_and_background_is_consistent():
     assert 'highlightcolor=self.settings.illustration_label_border_color' in block
     assert 'padx=label_border_width' not in block
     assert 'bg=self.settings.illustration_label_fill_color' in block
-    assert 'activebackground=self.settings.illustration_label_fill_color' in block
+    assert 'delete_button.pack(side="left"' not in block
+    assert 'create_illustration_delete_control' in source
