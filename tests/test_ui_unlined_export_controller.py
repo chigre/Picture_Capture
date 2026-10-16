@@ -67,7 +67,7 @@ def test_unlined_action_uses_shared_runner_and_runtime_fast_path_indirection(tmp
     monkeypatch.setattr(crop_module, "_snapshot_scope", lambda _app: (project_root, images, (1, 0), settings))
     monkeypatch.setattr(crop_module, "configured_single_line_workers", lambda _root: 4)
     monkeypatch.setattr(crop_module, "load_merge_by_page", lambda _root: True)
-    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (True, True, 1.2))
+    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (True, True, 60.0))
     monkeypatch.setattr(crop_module, "_set_unlined_job_button_state", lambda _app, active: states.append(bool(active)))
     monkeypatch.setattr(crop_module.unlined_export, "export_unlined_page_job", sentinel_worker)
 
@@ -80,12 +80,12 @@ def test_unlined_action_uses_shared_runner_and_runtime_fast_path_indirection(tmp
     assert app.parallel["max_workers"] == 2
     assert app.parallel["item_label"](1) == "p2.jpg"
     assert states == [True]
-    assert app.status_var.values[-1] == "未画线行导出：准备分析 2 页（并行×2；仅近空白≤1.2%墨迹）…"
+    assert app.status_var.values[-1] == "未画线行导出：准备分析 2 页（并行×2；左侧连续白宽>60%）…"
 
     payload = app.parallel["job_builder"](1, 1, 2)
     assert payload == (
         str(project_root), str(images[1]), 1, settings,
-        True, True, True, 1.2,
+        True, True, True, 60.0,
     )
     assert (project_root / "QT" / "PSW_UNLINED").is_dir()
 
@@ -98,7 +98,7 @@ def test_unlined_done_aggregates_success_and_restores_buttons(tmp_path, monkeypa
     monkeypatch.setattr(crop_module, "_snapshot_scope", lambda _app: (project_root, images, (0, 1), SimpleNamespace()))
     monkeypatch.setattr(crop_module, "configured_single_line_workers", lambda _root: 2)
     monkeypatch.setattr(crop_module, "load_merge_by_page", lambda _root: True)
-    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (True, True, 0.8))
+    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (True, True, 50.0))
     monkeypatch.setattr(crop_module, "_set_unlined_job_button_state", lambda _app, active: states.append(bool(active)))
 
     CropController(app).export_unlined_rows_selected_scope()
@@ -112,7 +112,7 @@ def test_unlined_done_aggregates_success_and_restores_buttons(tmp_path, monkeypa
 
     assert states == [True, False]
     assert app.status_var.values[-1] == (
-        f"未画线行导出完成：2 页，发现 7 个未画线行，输出 1 张；空白过滤≤0.8%墨迹；"
+        f"未画线行导出完成：2 页，发现 7 个未画线行，输出 1 张；左侧连续白宽>50%；"
         f"按页合并；Layout不可靠跳过 1 页；并行×2；保存到 {project_root / 'QT' / 'PSW_UNLINED'}"
     )
 
@@ -125,7 +125,7 @@ def test_unlined_stopped_and_error_paths_restore_buttons(tmp_path, monkeypatch):
     monkeypatch.setattr(crop_module, "_snapshot_scope", lambda _app: (project_root, images, (0, 1), SimpleNamespace()))
     monkeypatch.setattr(crop_module, "configured_single_line_workers", lambda _root: 1)
     monkeypatch.setattr(crop_module, "load_merge_by_page", lambda _root: False)
-    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (False, False, 0.8))
+    monkeypatch.setattr(crop_module, "load_unlined_filter_settings", lambda _root: (False, False, 50.0))
     monkeypatch.setattr(crop_module, "_set_unlined_job_button_state", lambda _app, active: states.append(bool(active)))
 
     CropController(app).export_unlined_rows_selected_scope()
