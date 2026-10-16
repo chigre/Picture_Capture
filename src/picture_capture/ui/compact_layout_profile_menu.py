@@ -339,7 +339,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
             ).pack(side="left", padx=0, pady=0)
             ttk.Label(frame, text="px", width=2).pack(side="left", padx=0, pady=0)
 
-    _divider(panel)
+    _divider(ordinary_host)
 
     for title, name, labels in PROFILE_TEMPLATE_FIELDS:
         choice(name, title, tuple(labels))
