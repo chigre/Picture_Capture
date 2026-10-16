@@ -10981,7 +10981,7 @@ class PictureCaptureApp(tk.Tk):
         """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
-        if getattr(self, "_batch_active", False) and not self._can_save_current_during_batch_navigation():
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
             self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
             return None
         from .illustrated_profile import effective_page_kind
@@ -16078,7 +16078,7 @@ class PictureCaptureApp(tk.Tk):
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
         if not self.project or not self.current_page or self.image is None: return
-        if getattr(self, "_batch_active", False) and not self._can_save_current_during_batch_navigation():
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
             return
         # Commit live state; cancel any older queued checkbox snapshot.
         deferred_job = self.__dict__.get("_deferred_save_job")
