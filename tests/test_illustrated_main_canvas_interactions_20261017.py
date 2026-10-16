@@ -105,3 +105,21 @@ def test_copy_paste_keeps_relative_positions_and_remaps_layout_group_id():
     assert new[0].group_id == new[1].group_id
     assert {v.id for v in new} == editor.selected
     assert {v.id for v in new}.isdisjoint({first.id, second.id})
+
+
+def test_illustrated_navigation_autosave_never_touches_legacy_pdic():
+    from pathlib import Path
+    from picture_capture.app import PictureCaptureApp
+    saved = []
+    app = SimpleNamespace(
+        project=object(), current_page=Path("001.png"), image=object(),
+        settings=AppSettings(dictionary_layout_kind="mixed",
+                             illustrated_page_overrides={"001.png": "illustrated"}),
+        polygon_draw_var=SimpleNamespace(get=lambda: False),
+        save_pdic=lambda **_kw: saved.append("pdic"),
+    )
+    assert PictureCaptureApp._save_current_page_by_mode(app) is None
+    assert saved == []
+    app.current_page = Path("002.png")
+    assert PictureCaptureApp._save_current_page_by_mode(app) == Path("002.pdic")
+    assert saved == ["pdic"]
