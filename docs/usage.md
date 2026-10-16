@@ -277,7 +277,7 @@ uv run picture-capture-cli "D:\Dictionary" split-whole
 - 图片区域支持鼠标滚轮上下滚动、`Shift + 滚轮` 横向滚动、`Ctrl + 滚轮` 缩放。
 - 可选择 Tesseract 5 或 PaddleOCR 识别当前页/全部页面已有的词条行；支持旧版 `_Replace.txt` 的普通替换 `N` 和正则替换 `R`。
 - 导出/导入旧版 `.OCRed` 文本。
-- 【后期制作 → 画线行导出】输出词条单行图到 `QT/PSW`（按页合并亦然），不生成 `.PSWords`；旧版命令行 `split-lines` 仍保留清单兼容行为。
+- 【后期制作 → 画线行导出】输出词条单行图到 `QT/PSW`（按页合并亦然），不生成 `.PSWords`；【未画线行导出】输出 PNG 到 `QT/PSW_UNLINED`，不生成 `.UnlinedLines`；旧版命令行 `split-lines` 仍保留清单兼容行为。
 - 按同栏下一词头、跨栏延续和跨页延续切出完整词条到 `QT/PWW`，并生成 `.PWWords`。
 - 识别 `QT/_SpecialPages.txt` 中的特殊上下边界，生成兼容的 `_file_log.txt`。
 - 校对窗口：默认宽度和高度均为当前屏幕的 70% 并居中；左侧切词+文本框区域支持滚轮，点击某个文本框后右侧显示 PaddleOCR/Tesseract/Lens 候选并可单击填入，同时保留 `wordslist.txt`、批量填充和变音字符。
