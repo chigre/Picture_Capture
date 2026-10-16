@@ -183,6 +183,8 @@ def propose_page_entries(page: Path, settings: Any, *,
         # Paddle returns recognized text-line rectangles. Tesseract produces
         # word boxes; combine them before multilingual label grouping.
         multiple_languages = len(languages(str(getattr(settings, "illustrated_ocr_languages", "eng")))) > 1
+        if multiple_languages and not any(c.engine == "tesseract" for c in candidates):
+            raise RuntimeError("多语言 Tesseract 未返回有效文本框；请核对引擎和语言包，未使用单语 Paddle 结果代替")
         preferred_engine = "tesseract" if multiple_languages else "paddle"
         preferred = next((v for v in candidates if v.engine == preferred_engine), candidates[0])
         lines = normalize_ocr_records(preferred.records, (x1-x0, y1-y0))
@@ -228,6 +230,8 @@ def ocr_one_group(page: Path, settings: Any, box: tuple[int, int, int, int],
             if len(languages(str(getattr(settings, "illustrated_ocr_languages", "eng")))) > 1
             else "paddle"
         )
+        if preferred_engine == "tesseract" and not any(v.engine == "tesseract" for v in candidates):
+            raise RuntimeError("多语言 Tesseract 未返回有效文本框；未使用单语 Paddle 结果代替")
         chosen = next((v for v in candidates if v.engine == preferred_engine), candidates[0])
         lines = normalize_ocr_records(chosen.records, (w, h))
         if chosen.engine == "tesseract":
