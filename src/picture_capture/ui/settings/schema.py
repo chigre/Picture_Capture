@@ -20,7 +20,8 @@ FIELDS = [
         ("单栏宽距", "column_width", float), ("起始点 Y", "start_y", float),
         ("正文结束 Y", "bottom_y", int), ("首栏 X", "manual_x", float),
         ("正文缩进", "body_indent", float), ("单行字高", "character_height", float),
-        ("行间空白", "row_padding", float), ("切图宽度(%栏)", "right_ratio", float),
+        ("行间空白", "row_padding", float), ("向右比例 %", "right_ratio", float),
+        ("切图宽度(%栏)", "crop_width_percent", float),
         ("VB 向右比例 1/x", "ordinary_right_divisor", float),
         ("物理行墨迹投影采样宽度（%栏宽）", "physical_row_projection_width_percent", float),
         ("微调判距", "horizontal_tolerance", float), ("标记线高", "marker_height", int),
@@ -159,10 +160,10 @@ PROFILE_CHECKS = [
 FIELD_GROUPS = [
         ("版面几何", [
             "gutter", "column_width", "start_y", "manual_x",
-            "body_indent", "character_height", "row_padding", "right_ratio",
+            "body_indent", "character_height", "row_padding", "crop_width_percent",
             "horizontal_tolerance", "darkness_threshold",
         ]),
-        ("词条线显示", ["marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
+        ("词条线显示", ["right_ratio", "marker_height", "headword_marker_opacity", "guide_width", "guide_opacity"]),
         ("主界面词条文本框", [
             "main_entry_font_family", "main_entry_font_size", "main_entry_width_chars", "main_entry_x_ratio",
         ]),
@@ -349,7 +350,8 @@ SETTING_HELP = {
         "body_indent": "作用：普通画线把它作为 VB.NET 原版【正文缩进】先验。界面按原图宽度百分比输入，后台换算为原图像素后用于二维墨迹确认和栏左跟踪。\n\n调整：应接近释义正文相对词头栏左缘的真实缩进。过小会让二维确认范围不足；过大则会引入更多上下邻行墨迹，但候选锚点仍受【微调判距 < 正文缩进】约束。",
         "character_height": "作用：项目的典型单行字高。界面按原图高度百分比显示和输入，后台换算为原图像素；普通画线、OCR 行距/空白判断、横线 Y 精修和部分 CJK 视觉逻辑都以它作为尺度基准。\n\n调整：应接近正文常规印刷行高，而不是某个特别大的词头字高。",
         "row_padding": "作用：典型行周围的额外留白尺度。界面按原图高度百分比输入，后台换算为原图像素后参与普通画线行盒、词条单行框高度以及 OCR 词头前空白/分隔位置等计算。\n\n调整：增大可给文字上下更多安全空间，但过大会让相邻行更容易重叠/合并；过小则可能让横线或单行切图贴字过紧。应和【典型行高】一起校准。",
-        "right_ratio": "作用：【后期制作 → 切图宽度(%栏)】复用旧字段 right_ratio，默认100%，范围 1%–100%。控制画线行、未画线行等单行裁剪的栏宽百分比，以及 OCR 单行词条框的宽度；当前也用于主画布词头横线与辅助线的长度。不会改变 VB 普通画线分隔白带分析的宽度。\n\n调整：减小可避免过多正文进入单行裁剪，但画布词头横线也会变短。已有项目沿用原值；不要与【VB 向右比例 1/x】混淆。",
+        "right_ratio": "作用：【显示参数 → 向右比例%】独立控制主画布词头横线长度、辅助线点击范围和长度，默认100%，范围1–100%。不影响任何单行切图或OCR裁剪。\n\n调整：只缩短画布横线与辅助线的横向范围，切图宽度请另设【后期制作 → 切图宽度(%栏)】。",
+        "crop_width_percent": "作用：【后期制作 → 切图宽度(%栏)】控制画线行、未画线行及OCR单行裁剪宽度，默认100%，范围1–100%，与画布线条向右比例相互独立。\n\n已有项目首次加载时继承原切图比例以避免历史输出变化。",
         "horizontal_tolerance": "作用：严格对应 VB.NET Draw_Auto 的【微调判距】。界面按原图宽度百分比输入，后台换算为原图像素；普通画线在每个原图 Y 上，从当前动态栏左 LX(y) 开始向正文方向扫描到该距离。\n\n调整：数值太小会漏掉略微右移的真实词头，太大则会把正文起笔纳入锚点通道。旧项目保存的像素值会在界面中按当前原图宽度自动换算为百分比。",
         "analysis_threshold_mode": "作用：控制版面检测、栏位分析和倾斜/弯曲跟踪时如何把灰度转成墨迹。普通画线的最终词头锚点为保持同一本词典跨页稳定，重新使用独立的【词头锚点黑度阈值】；因此 auto/Otsu/adaptive 不再替代这个锚点门槛。\n\n选择：版面底色正常时保持 auto；阴影或书脊亮度明显不均时可试 adaptive。它主要影响版面几何，不应再拿来补偿普通词头误检。",
         "darkness_threshold": "作用：普通画线恢复 VB.NET 的固定词头黑色锚点门槛。RGB 和低于该值的像素才有资格成为栏左词头起点；默认 300 相当于灰度约 100。这个门槛跨页固定，不随每页 Otsu 分布漂移。\n\n调整：提高可接受更浅的印刷，但也更容易让灰噪声成为锚点；降低更严格。它只负责找到词头起点，随后还必须通过二维【候选区域白度上限】确认。",
