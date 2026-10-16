@@ -214,17 +214,15 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     divider()
 
-    # Group 5: appearance and exclusive display mode. Keep right-ratio directly
-    # below display mode while preserving the pre-existing quick variable.
+    # Group 5: appearance and exclusive display mode. Crop width lives in
+    # 后期制作, not in display-only parameters.
     dropdown("颜色模式", app.appearance_mode_var,
              ("浅色", "深色", "跟随系统"), app._appearance_mode_selected)
     dropdown("显示模式", app.display_mode_var, DISPLAY_MODES, app._apply_display_mode)
-    row = line()
-    value(row, "向右比例%", "right_ratio", 4)
 
     divider()
 
-    # Crop-preview label controls immediately below the rightward ratio.
+    # Crop-preview label appearance is independent of crop geometry.
     row = line()
     label(row, "切图预览标签:")
     font_style(row, "crop_preview_font_size",
