@@ -279,7 +279,7 @@ ACTION_GROUPS = (
     (("OCR画线（默认）", "run_ocr_draw_action"),),
     None,
     (("清除画线", "clear_entries"), ("清除文本", "clear_text")),
-    (("精修画线", "refine_lines_selected_scope"), ("保存当前页", "save_current_page")),
+    (("精修画线", "refine_lines_selected_scope"), ("标记线差异页", "bookmark_modified_line_pages")),
     None,
     (("词条校对", "open_review"),),
     (("选择词条文件", "select_existing_headwords_file"),
