@@ -133,7 +133,7 @@ def test_unlined_export_without_filter_keeps_blank_diagnostic_rows(tmp_path):
     third = output / "page001_UL_002.png"
     assert first.is_file() and blank.is_file() and third.is_file()
     assert not list(output.glob("*.PSWords"))
-    assert (output / "page001.UnlinedLines").is_file()
+    assert not (output / "page001.UnlinedLines").exists()
     with Image.open(first) as image:
         assert image.size == (30, 10)
     # All-white diagnostic keeps the original row frame instead of disappearing.
@@ -226,9 +226,7 @@ def test_unlined_export_can_merge_trimmed_rows_per_page(tmp_path):
     assert target.is_file()
     with Image.open(target) as image:
         assert image.size == (30, 20)
-    assert (output / "page002.UnlinedLines").read_text(encoding="utf-8") == (
-        "page002_UL_PAGE.png\n"
-    )
+    assert not (output / "page002.UnlinedLines").exists()
 
 
 def test_unlined_filter_settings_share_crop_store_and_preserve_existing_keys(tmp_path):
