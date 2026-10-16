@@ -10907,8 +10907,6 @@ class PictureCaptureApp(tk.Tk):
                     raise ValueError("Y精修横向分析范围必须在 10–100% 之间。")
                 if name == "right_ratio" and not 1 <= float(value) <= 100:
                     raise ValueError("向右比例必须在 1–100% 之间。")
-                if name == "crop_width_percent" and not 1 <= float(value) <= 100:
-                    raise ValueError("切图宽度必须在 1–100% 栏宽之间。")
                 if name == "main_entry_x_ratio":
                     if not 0 <= float(value) <= 125:
                         raise ValueError("词条文本框偏移必须在 0–125% 之间。")
