@@ -10981,7 +10981,7 @@ class PictureCaptureApp(tk.Tk):
         """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
-        if self._batch_active and not self._can_save_current_during_batch_navigation():
+        if getattr(self, "_batch_active", False) and not self._can_save_current_during_batch_navigation():
             self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
             return None
         from .illustrated_profile import effective_page_kind
