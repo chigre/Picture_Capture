@@ -94,6 +94,30 @@ def build_illustrated_profile_controls(app: Any, parent: ttk.Frame):
     percent_field("illustrated_ocr_top_percent", "顶部排除 %")
     percent_field("illustrated_ocr_bottom_percent", "底部排除 %")
     percent_field("illustrated_ocr_side_percent", "两侧排除 %")
+    ttk.Separator(root).pack(fill="x", pady=(9, 6))
+    ttk.Label(root, text="图解对象 · 网格、标尺与智能吸附").pack(anchor="w")
+    checkbox("illustrated_grid_visible", "显示网格")
+    text_field("illustrated_grid_x", "水平间距 px", caster=int)
+    text_field("illustrated_grid_y", "垂直间距 px", caster=int)
+    text_field("illustrated_grid_subdivisions", "网格细分数", caster=int)
+    text_field("illustrated_grid_origin_x", "网格原点 X", caster=int)
+    text_field("illustrated_grid_origin_y", "网格原点 Y", caster=int)
+    text_field("illustrated_grid_color", "网格颜色 #")
+    text_field("illustrated_guide_color", "辅助线颜色 #")
+    text_field("illustrated_grid_opacity", "网格不透明度 %", caster=int)
+    checkbox("illustrated_guides_visible", "显示水平/垂直辅助线")
+    checkbox("illustrated_guides_locked", "锁定辅助线")
+    checkbox("illustrated_snap_grid", "吸附到网格")
+    checkbox("illustrated_snap_guides", "吸附到辅助线")
+    checkbox("illustrated_snap_objects", "智能吸附到其他文字框")
+    text_field("illustrated_snap_tolerance", "吸附距离 屏幕px", caster=int)
+    text_field("illustrated_nudge_step", "方向键微移 px", caster=int)
+    text_field("illustrated_history_depth", "撤销历史步数", caster=int)
+    ttk.Label(root, text="在主图上 Shift 从上方标尺拖出垂直线，"
+              "从左侧标尺拖出水平线；右键可增加/清空线，"
+              "并操作对齐、分布、组合与锁定。",
+              justify="left", wraplength=285).pack(fill="x", pady=4)
+    ttk.Separator(root).pack(fill="x", pady=(8, 5))
     ttk.Label(root, text="OCR 语言以 + 或逗号分隔，如 eng+fra+deu+jpn+chi_sim。\n"
               "多语言须启用已安装语言包的本地 Tesseract；Paddle 单模型不会被当作多语言模型。",
               justify="left", wraplength=285).pack(fill="x", pady=4)
