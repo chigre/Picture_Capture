@@ -86,9 +86,7 @@ def test_manual_claim_skips_pending_worker_and_blocks_processing_page():
     assert claim(app, 1) is True
     assert app._batch_page_states[1] == "manual_locked"
     assert claim(app, 2) is True
-    assert "人工锁定" in status.messages[-1] if False else (
-        "人工锁定" in status.messages[-1] or "人工锁定" in status.messages[-2]
-    )
+    assert "人工锁定" in status.messages[-1]
     app._foreground_batch_state = lambda index: app._batch_page_states[index]
     app.current_index = 0
     assert PictureCaptureApp._can_save_current_during_batch_navigation(app) is False
