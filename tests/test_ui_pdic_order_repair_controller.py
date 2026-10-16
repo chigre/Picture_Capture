@@ -54,7 +54,8 @@ class _RepairApp:
             pages[index + 1].stem if index + 1 < len(pages) else "@",
         )
 
-    def load_page(self, index):
+    def load_page(self, index, *, skip_current_save: bool = False):
+        assert skip_current_save is True
         self.loaded.append(index)
 
     def _start_batch_task(self, title, items, worker, done, **kwargs):
