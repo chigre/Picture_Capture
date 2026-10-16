@@ -64,6 +64,9 @@ class IllustrationController:
         renumbering the live objects or changing their geometry/selection.
         """
         app = self.app
+        if getattr(app, "_batch_active", False):
+            app.status_var.set("批量任务运行中禁止修改 PPP；可继续校对允许编辑的 PDIC。")
+            return False
         page = getattr(app, "current_page", None)
         if page is None:
             return False
