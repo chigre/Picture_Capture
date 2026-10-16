@@ -616,6 +616,10 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
         return
     layout = raw.get("layout") or {}
     ocr = raw.get("ocr") or {}
+    # Illustrated/mixed settings are an explicit v3 component, independent
+    # of legacy ordinary-column and headword parser grammar.
+    from .illustrated_profile import apply_profile_payload
+    apply_profile_payload(settings, raw.get("illustrated"))
     visual_templates = raw.get("visual_marker_templates") or {}
     structure = raw.get("headword_structure") or {}
     starts = structure.get("starts") or {}
@@ -715,10 +719,12 @@ def write_project_profile(
     if not isinstance(template_payload, dict):
         template_payload = {"version": 1, "samples": []}
 
+    from .illustrated_profile import profile_payload
     payload = {
         "format": PROFILE_FORMAT_V3,
         "schema_version": 3,
         "preset": selected,
+        "illustrated": profile_payload(settings),
         "language": str(getattr(settings, "ocr_language", "") or ""),
         "layout": {
             "writing_mode": str(getattr(settings, "layout_writing_mode", "horizontal-tb")),
