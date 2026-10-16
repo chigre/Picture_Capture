@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-16T21:30:00Z",
+  "updated_at_utc": "2026-10-16T21:34:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -27,16 +27,16 @@
     "active_work_item": "R3.2",
     "work_in_progress": true,
     "implementation_pr": {
-      "number": null,
-      "url": null,
+      "number": 542,
+      "url": "https://github.com/chigre/Picture_Capture/pull/542",
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "branch_v4_v8_committed_ci_unverified",
+      "status": "draft_ci_pending",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "ded1117abff9365e5ba6d451f1df900fa1cbfec5",
+    "implementation_head_sha": "162764a1669ef337facf2da7193d1551e679d751",
     "latest_verified_main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
     "last_completed_work_item": "R1.3",
     "blockers": [
@@ -56,28 +56,35 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       },
       {
-        "type": "r3_v4_v8_fixed_head_ci_and_human_acceptance_pending",
-        "message": "Real branch code commits 16e00f2 (rollback intent and marker acknowledgment) and ded1117 (save quarantine) landed. New synthetic fault tests committed; NO focused pytest, Tk smoke, architecture guard or four-platform R3 CI conclusion yet. Human Windows acceptance remains pending. Main@05d345f8 four-platform CI 38966764059 attempt 2 SUCCESS.",
-        "url": "https://github.com/chigre/Picture_Capture/issues/503"
+        "type": "r3_pr_542_ci_and_human_acceptance_pending",
+        "message": "PR #542 draft; latest source commit 162764a after CI 38969942123 failure (legacy assertion hard-coded to app.py). Await fresh four-platform CI and audit after extracting helper. No human Windows acceptance; do not merge.",
+        "url": "https://github.com/chigre/Picture_Capture/pull/542"
       }
     ],
-    "required_next_action": "Open the single draft R3 PR from feat/pc-cq-b3-candidate-undo-redo-20261015 against live main (currently 05d345f8), run exact-head CI across Windows/macOS/Ubuntu/Python3.10, inspect failures, fix without relaxing tests/ratchet, reconcile 6 behind-main commits before merge; full R3 acceptance including human Windows GUI remains pending.",
-    "last_test_evidence": "2026-10-17 B3: GitHub R3 branch commits 16e00f2120e0c24bdd3d1d676a2b8595ad1936ac and ded1117abff9365e5ba6d451f1df900fa1cbfec5 applied v4-v8 safety logic and synthetic negative tests. Text-context checks and repository size-ratchet preflight only; full pytest/Tk/architecture/Windows/macOS/Ubuntu/Python3.10 R3 CI NOT executed yet. Main@05d345f8 run 38966764059 attempt2 SUCCESS; R2/B2 and R3/B3 in_progress, #483/#503 open.",
+    "required_next_action": "PR #542: inspect the newly triggered fixed-head Windows/macOS/Ubuntu/Python3.10 CI after test assertion update 162764a and branch merge 3d8c157; fix any real failures while preserving source fingerprint / recovery contracts, rerun architecture and Tk smoke. Do not merge or verify R3 before green gates, strict Undo/Redo write-chain review and human Windows GUI acceptance; #483 W1-W11 R2/B2 still in_progress.",
+    "last_test_evidence": "R3 PR #542 draft. main@05d345f8 CI 38966764059 attempt 2 SUCCESS all jobs. R3 PR CI 38969777363 on 3d8c157 failed app.py architecture ratchet (785355 > 784737); refactor 8b2186 extracted deferred saver and reduced app.py to 784233 without raising ratchet. CI 38969942123 on 8b2186: Ubuntu architecture passed; full suite failed two source-location assertions following legitimate extraction (2800 passed, 2 failed, 3 skipped); assertion-location fix committed 162764a preserving PDIC-before-evidence ordering checks. Fresh fixed-head R3 CI pending; NOT verified. R2/B2 and R3/B3 in_progress; human #483 W1-W11 and #503 outstanding.",
     "active_batch": "B3",
     "next_batch": "B3",
     "r3_patch_chain": {
       "scope": "v4-v8",
-      "status": "branch_committed_unverified",
+      "status": "draft_pr_unverified",
       "commits": [
         "16e00f2120e0c24bdd3d1d676a2b8595ad1936ac",
         "ded1117abff9365e5ba6d451f1df900fa1cbfec5"
       ],
-      "tests": "committed but not executed",
+      "tests": "new fixed-head CI pending",
       "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38966764059",
       "main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
       "r2_b2": "in_progress",
       "r3_b3": "in_progress",
-      "human_acceptance": "pending"
+      "human_acceptance": "pending",
+      "pr_url": "https://github.com/chigre/Picture_Capture/pull/542",
+      "code_head_sha": "162764a1669ef337facf2da7193d1551e679d751",
+      "merged_main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
+      "merge_commit": "3d8c15775b09fadf249c36f3009cd5fe5ad74161",
+      "architecture_fix": "8b2186b674fee871ee382d1dcfe7258747f93243",
+      "test_fix": "162764a1669ef337facf2da7193d1551e679d751",
+      "latest_failed_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38969942123"
     }
   },
   "units": {
