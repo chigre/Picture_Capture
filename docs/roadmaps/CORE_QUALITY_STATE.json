@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-16T09:13:21Z",
+  "updated_at_utc": "2026-10-16T21:30:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -30,21 +30,16 @@
       "number": null,
       "url": null,
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "branch_wiring_committed_unverified",
+      "status": "branch_v4_v8_committed_ci_unverified",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "2b3ee173a8b1f353eebf9c0ab0f16c7f484ee3e7",
+    "implementation_head_sha": "ded1117abff9365e5ba6d451f1df900fa1cbfec5",
     "latest_verified_main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
     "last_completed_work_item": "R1.3",
     "blockers": [
-      {
-        "type": "candidate_history_ui_integration_pending",
-        "message": "CandidateReviewHistory and synthetic tests are on branch, but candidate delete UI still invalidates history; no user-visible Undo until exact postcommit wiring is implemented.",
-        "url": "https://github.com/chigre/Picture_Capture/issues/503"
-      },
       {
         "type": "r2_human_acceptance_pending",
         "message": "#483 reopened after live audit found it closed; W1-W11 remain unperformed, B2 in_progress.",
@@ -56,25 +51,34 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       },
       {
-        "type": "stale_simplified_capture_pending",
-        "message": "ReviewWindow render_rows captures old simplified_vars before destroying old rows. After candidate Undo/Redo, this could repopulate the just-cleared simplified cache from stale Tk bindings; suspected from source, not yet reproduced. Must test and fail closed before claiming Undo safe.",
-        "url": "https://github.com/chigre/Picture_Capture/issues/503"
-      },
-      {
         "type": "r3_postpublish_validation_pending",
         "message": "Post-publication readback and rollback-marker quarantine added; focused pytest, real-Tk smoke, architecture and four-platform CI are not yet executed. A double I/O fault can leave mixed disk bytes under a retained recovery marker; no strict cross-file atomicity claim.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       },
       {
-        "type": "r3_local_checkout_and_validation_pending",
-        "message": "Staged v4-v8 remain unmerged and unexecuted in a complete R3 checkout; branch is behind main (#539 included). No R3 CI, Windows human acceptance, or OS-level cross-file atomicity proof.",
+        "type": "r3_v4_v8_fixed_head_ci_and_human_acceptance_pending",
+        "message": "Real branch code commits 16e00f2 (rollback intent and marker acknowledgment) and ded1117 (save quarantine) landed. New synthetic fault tests committed; NO focused pytest, Tk smoke, architecture guard or four-platform R3 CI conclusion yet. Human Windows acceptance remains pending. Main@05d345f8 four-platform CI 38966764059 attempt 2 SUCCESS.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "B3/R3 #503: apply local v4, corrected v5, v6, v7, v8 candidate transaction safety patches sequentially to a complete, current R3 branch checkout, run fault-injection pytest/Tk/architecture guard, reconcile current main without clobbering #539, then open a single R3 PR and run four-platform CI; retain R2/B2 in_progress and #483 W1-W11 pending.",
-    "last_test_evidence": "2026-10-17: main@05d345f8 (#539) first push CI 38966764059 attempt 1: Windows pytest 1 Tcl init.tcl environment failure (2767 passed, 1 failed, 2 skipped), Ubuntu/macOS/Python3.10 passed. Retried failed workflow via GitHub Actions; attempt 2 SUCCESS, all four jobs green, same SHA, no code modifications: https://github.com/chigre/Picture_Capture/actions/runs/38966764059 . This validates main CI only, NOT pending R3 v4-v8 tests or R3 acceptance.",
+    "required_next_action": "Open the single draft R3 PR from feat/pc-cq-b3-candidate-undo-redo-20261015 against live main (currently 05d345f8), run exact-head CI across Windows/macOS/Ubuntu/Python3.10, inspect failures, fix without relaxing tests/ratchet, reconcile 6 behind-main commits before merge; full R3 acceptance including human Windows GUI remains pending.",
+    "last_test_evidence": "2026-10-17 B3: GitHub R3 branch commits 16e00f2120e0c24bdd3d1d676a2b8595ad1936ac and ded1117abff9365e5ba6d451f1df900fa1cbfec5 applied v4-v8 safety logic and synthetic negative tests. Text-context checks and repository size-ratchet preflight only; full pytest/Tk/architecture/Windows/macOS/Ubuntu/Python3.10 R3 CI NOT executed yet. Main@05d345f8 run 38966764059 attempt2 SUCCESS; R2/B2 and R3/B3 in_progress, #483/#503 open.",
     "active_batch": "B3",
-    "next_batch": "B3"
+    "next_batch": "B3",
+    "r3_patch_chain": {
+      "scope": "v4-v8",
+      "status": "branch_committed_unverified",
+      "commits": [
+        "16e00f2120e0c24bdd3d1d676a2b8595ad1936ac",
+        "ded1117abff9365e5ba6d451f1df900fa1cbfec5"
+      ],
+      "tests": "committed but not executed",
+      "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38966764059",
+      "main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
+      "r2_b2": "in_progress",
+      "r3_b3": "in_progress",
+      "human_acceptance": "pending"
+    }
   },
   "units": {
     "R0.1": "verified",
