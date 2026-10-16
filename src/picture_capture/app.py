@@ -15778,8 +15778,6 @@ class PictureCaptureApp(tk.Tk):
                 from .ocr_pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
-            from .line_diff_bookmarks import record_original_lines
-            record_original_lines(project.root, page, entries)
             if tracing:
                 stages["ocr_preserve_and_pdic"] = time.perf_counter() - trace_tick
                 trace_tick = time.perf_counter()
