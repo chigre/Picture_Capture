@@ -434,6 +434,21 @@ class IllustratedCanvasEditor:
         if messagebox.askyesno("清除辅助线","清除本页所有图解辅助线？",parent=self.app):
             self._commit({"vertical":[],"horizontal":[]},which="guides")
         return "break"
+    def remove_nearest_guide(self):
+        if self.app.settings.illustrated_guides_locked:return "break"
+        x,y=self.last_pointer
+        values=[(abs(x-pos),"vertical",pos) for pos in self.guides["vertical"]]
+        values += [(abs(y-pos),"horizontal",pos) for pos in self.guides["horizontal"]]
+        if not values:return "break"
+        delta,axis,pos=min(values)
+        if delta*self.app.view_scale>self.app.settings.illustrated_snap_tolerance:
+            self.app.status_var.set("指针附近没有辅助线")
+            return "break"
+        proposed={k:list(v) for k,v in self.guides.items()}
+        proposed[axis].remove(pos)
+        self._commit(proposed,which="guides")
+        return "break"
+
     def add_guide(self,axis):
         if self.app.settings.illustrated_guides_locked:return "break"
         point=self.last_pointer[0 if axis=="vertical" else 1]
@@ -468,7 +483,9 @@ class IllustratedCanvasEditor:
             ("显示/隐藏网格",self.toggle_grid),
             ("添加横向辅助线",lambda:self.add_guide("horizontal")),
             ("添加垂直辅助线",lambda:self.add_guide("vertical")),
+            ("删除最近辅助线",self.remove_nearest_guide),
             ("清除本页辅助线",self.clear_guides),
+            ("接受全部 OCR 候选",self.accept_proposals),
             ("撤销 Ctrl+Z",self.undo),("重做 Ctrl+Y",self.redo),
         ):
             c.add_command(label=name,command=action)
@@ -515,15 +532,21 @@ class IllustratedCanvasEditor:
             c.create_line(*pts,fill=color,dash=dash,width=width,tags=("illustrated-overlay",))
         # Avoid thousands of grid lines at high zoom or tiny spacing.
         if s.illustrated_grid_visible:
+            # Tk Canvas has no line alpha: blend the requested color against
+            # white for a stable, non-destructive visual approximation.
+            def blend(hexcolor,amount):
+                v=[int(hexcolor[i:i+2],16) for i in (1,3,5)]
+                a=amount/100
+                return "#"+"".join(f"{round(255*(1-a)+n*a):02x}" for n in v)
             dx=max(1,s.illustrated_grid_x//s.illustrated_grid_subdivisions)
             dy=max(1,s.illustrated_grid_y//s.illustrated_grid_subdivisions)
-            color=s.illustrated_grid_color
+            color=blend(s.illustrated_grid_color,s.illustrated_grid_opacity)
             if w//dx<450:
                 for i,x in enumerate(range(s.illustrated_grid_origin_x%dx,w+1,dx)):
-                    line(x*z,0,x*z,h*z,color=color,width=2 if x%s.illustrated_grid_x==0 else 1)
+                    line(x*z,0,x*z,h*z,color=color,width=2 if (x-s.illustrated_grid_origin_x)%s.illustrated_grid_x==0 else 1)
             if h//dy<450:
                 for y in range(s.illustrated_grid_origin_y%dy,h+1,dy):
-                    line(0,y*z,w*z,y*z,color=color,width=2 if y%s.illustrated_grid_y==0 else 1)
+                    line(0,y*z,w*z,y*z,color=color,width=2 if (y-s.illustrated_grid_origin_y)%s.illustrated_grid_y==0 else 1)
         if s.illustrated_guides_visible:
             for x in self.guides["vertical"]:
                 line(x*z,0,x*z,h*z,color=s.illustrated_guide_color,dash=(6,3))
@@ -594,7 +617,14 @@ def illustrated_main_action(app,action="open"):
                 split_aliases=app.settings.illustrated_export_split_aliases)
             app.status_var.set(f"导出 {count} 条图解索引：{path}")
         except (ValueError,OSError) as exc:messagebox.showerror("图解导出",str(exc),parent=app)
-    elif action=="align":editor.context(SimpleEvent(app.canvas))
+    elif action in {"align","guides"}:editor.context(SimpleEvent(app.canvas))
+    elif action=="select":editor.switch_mode("select")
+    elif action=="box":editor.switch_mode("box")
+    elif action=="group":editor.group()
+    elif action=="ungroup":editor.ungroup()
+    elif action=="undo":editor.undo()
+    elif action=="redo":editor.redo()
+    elif action=="grid":editor.toggle_grid()
     else:
         app.canvas.focus_set()
         app.status_var.set("主画布图解编辑：B 新建框／V 选择／Shift 多选或拖出标尺辅助线／右键对象操作")
