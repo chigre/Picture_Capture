@@ -11424,9 +11424,7 @@ class PictureCaptureApp(tk.Tk):
         if not self._batch_foreground_pages:
             return bool(self._batch_allow_pdic_edits)
         state = self._foreground_batch_state(self.current_index)
-        # Never write an old foreground copy over a page that the worker owns or
-        # has not yet started. Pending pages are saved only after a manual edit
-        # atomically converts them to manual_locked.
+        # Never overwrite worker-owned or pending pages with stale foreground data.
         return state not in {"pending", "processing"}
 
     def _entry_keypress_batch_guard(self, event: tk.Event) -> str | None:
@@ -16080,6 +16078,8 @@ class PictureCaptureApp(tk.Tk):
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
         if not self.project or not self.current_page or self.image is None: return
+        if getattr(self, "_batch_active", False) and not self._can_save_current_during_batch_navigation():
+            return
         # Commit live state; cancel any older queued checkbox snapshot.
         deferred_job = self.__dict__.get("_deferred_save_job")
         if deferred_job is not None:
