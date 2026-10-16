@@ -612,7 +612,6 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
         ("普通画线", app.run_normal_draw_action),
         ("OCR画线", app.run_ocr_draw_action),
         ("词条校对", app.open_review),
-        ("保存当前页", app.save_current_page),
     )
     app.workspace_quick_action_buttons = []
     app.workspace_macaron_buttons = []
@@ -623,12 +622,12 @@ def install_workspace_tools(app: Any, sidebar: ttk.Frame, sidebar_host: ttk.Fram
     from .illustrated_action_router import run_page_quick_action
     for index, (label, command) in enumerate(quick_actions):
         normal_command = command
-        command = lambda callback=normal_command, role=("open", "ocr", "open", "save")[index]: (
+        command = lambda callback=normal_command, role=("open", "ocr", "open")[index]: (
             run_page_quick_action(app, role, callback)
         )
         quick_host.columnconfigure(index, weight=1, uniform="quickrail")
         button = _create_macaron_action_button(
-            app, quick_host, ("普", "O", "校", "存")[index], command,
+            app, quick_host, ("普", "O", "校")[index], command,
         )
         button.grid(row=0, column=index, sticky="ew", padx=0, pady=0)
         app.workspace_quick_action_buttons.append(button)
@@ -1203,7 +1202,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
             sticky="ew", padx=0, pady=0,
         )
     for index, (button, title) in enumerate(zip(
-        app.workspace_quick_action_buttons, ("普", "O", "校", "存"),
+        app.workspace_quick_action_buttons, ("普", "O", "校"),
     )):
         button.configure(text=title, width=2)
         button.grid(
@@ -1213,7 +1212,7 @@ def _apply_preset_rail_controls(app: Any, mode: str) -> None:
         )
     for index, button in enumerate(getattr(app, "workspace_edit_shortcut_buttons", ())):
         button.grid(
-            row=10 + index if extreme else 3,
+            row=9 + index if extreme else 3,
             column=0 if extreme else index,
             sticky="ew", padx=0, pady=0,
         )
