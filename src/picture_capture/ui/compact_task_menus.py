@@ -326,6 +326,16 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                 app._ref_box_edit_button = button
                 if app.ref_box_controller.editing:
                     button.configure(text="结束编辑'REF'", style="PC.EditActive.TButton")
+    # Independent page-local spatial labels, outside column/PDIC drawing mode.
+    from .illustrated_dictionary_window import open_illustrated_dictionary_editor
+    button = _button(
+        _row(panel), "图解词典（自由文字框 / 全页 OCR）…",
+        lambda: open_illustrated_dictionary_editor(app),
+    )
+    app._attach_tooltip(
+        button, "任意位置框选多语言文字组；OCR 先生成候选，确认后再保存。"
+                "图解词条独立存储，不修改普通画线/REF/插图。",
+    )
     from .ocr_detection_inspector import show_ocr_decision_inspector
     _button(_row(panel), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
     row = _row(panel)
