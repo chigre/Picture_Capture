@@ -59,8 +59,8 @@ def test_mark_action_preserves_bookmarks_if_no_line_baselines(tmp_path, monkeypa
     settings_path = tmp_path / "settings.json"
     events = []
     monkeypatch.setattr(mod, "settings_path", lambda _root: settings_path)
-    monkeypatch.setattr(mod.messagebox if hasattr(mod, "messagebox") else __import__("tkinter").messagebox,
-                        "showwarning", lambda *args, **kwargs: events.append("warning"))
+    from tkinter import messagebox
+    monkeypatch.setattr(messagebox, "showwarning", lambda *args, **kwargs: events.append("warning"))
     project = SimpleNamespace(root=tmp_path, images=[page], settings=settings)
     app = SimpleNamespace(
         project=project, settings=settings, _batch_active=False,
