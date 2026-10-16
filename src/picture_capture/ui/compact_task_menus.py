@@ -10,6 +10,7 @@ from tkinter import ttk
 from typing import Any, Callable
 
 from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
+from .crop_width_equivalence import CropWidthEquivalence
 from ..line_diff_bookmarks import bookmark_modified_line_pages
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
@@ -432,14 +433,27 @@ def build_postproduction_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     """New compact export menu with independent crop and display widths."""
     panel = _panel(parent)
     width_row = _row(panel)
-    _label(width_row, "切图宽度(%栏)")
+    _label(width_row, "切图宽度(%)")
     width_entry = _entry(
-        width_row, app.quick_vars["crop_width_percent"], 6, app._quick_parameter_changed,
+        width_row, app.quick_vars["crop_width_percent"], 5, app._quick_parameter_changed,
     )
     app._attach_tooltip(
         width_entry,
-        "默认100%；按当前栏宽百分比控制画线/未画线单行切图的横向范围。"
-        "与【显示参数 → 向右比例%】独立；已有项目首次升级时保留旧切图宽度。",
+        "按当前栏宽百分比控制画线/未画线单行切图；与向右比例%独立。",
+    )
+    app._crop_width_equivalence = CropWidthEquivalence(app)
+    # The shared popup is 280px wide: keep the full label and editable value
+    # immediately below the column field instead of clipping either input.
+    page_width_row = _row(panel)
+    _label(page_width_row, "相当于整页宽(%):")
+    page_width_entry = _entry(
+        page_width_row, app._crop_width_equivalence.page_percent_var, 7,
+        app._crop_width_equivalence.commit_page,
+    )
+    app._attach_tooltip(
+        page_width_entry,
+        "对应当前页整图横向标尺的比例；按当前页第一栏的有效栏宽换算。"
+        "修改两者任一项都会联动；多栏宽度不同、旋转或自动版面变化时仅作参考。",
     )
     for group in POSTPRODUCTION_ACTIONS:
         row = _row(panel)

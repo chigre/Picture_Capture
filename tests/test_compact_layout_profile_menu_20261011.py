@@ -118,10 +118,10 @@ def test_crop_width_lives_in_postproduction_and_reuses_live_float_setting():
     assert 'caption(ratio_row, "向右比例%", 15)' not in source
     assert 'textvariable=app.quick_vars["right_ratio"]' not in source
     assert 'value(row, "向右比例%", "right_ratio", 4)' in display
-    assert post.index('_label(width_row, "切图宽度(%栏)")') < post.index(
+    assert post.index('_label(width_row, "切图宽度(%)")') < post.index(
         'for group in POSTPRODUCTION_ACTIONS:'
     )
-    assert 'width_row, app.quick_vars["crop_width_percent"], 6, app._quick_parameter_changed' in post
+    assert 'width_row, app.quick_vars["crop_width_percent"], 5, app._quick_parameter_changed' in post
     assert "ordinary_host.pack_forget()" in source
     assert "illustrated_host.pack(fill=" in source
     from picture_capture.models import AppSettings
