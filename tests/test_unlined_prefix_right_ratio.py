@@ -52,7 +52,7 @@ def test_blank_detection_is_on_left_prefix_even_if_row_has_body_text(tmp_path):
     exported, blanks, filtered, merged = _save_unlined_rows(
         source, tmp_path / "page.png", rows, tmp_path / "output",
         merge_by_page=False, filter_enabled=True,
-        filter_blank=True, blank_ink_percent=0.8,
+        filter_blank=True, left_white_percent=50.0,
     )
     assert (exported, blanks, filtered, merged) == (1, 1, 0, False)
     with Image.open(tmp_path / "output" / "page_UL_000.png") as crop:
