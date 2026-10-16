@@ -15439,7 +15439,7 @@ class PictureCaptureApp(tk.Tk):
             max_delta = max(
                 [int((row or {}).get("max_delta", 0)) for row in results] or [0]
             )
-            if self.current_index in indices:
+            if self.current_index in indices and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             suffix = f"，{limited} 条触及安全界限" if limited else ""
             stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
@@ -15554,7 +15554,7 @@ class PictureCaptureApp(tk.Tk):
         def done(completed, total, stopped, results, error):
             if error is not None:
                 return
-            if self.current_index in existing:
+            if self.current_index in existing and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             filled = sum(int((row or {}).get("filled", 0)) for row in results)
             large = sum(int((row or {}).get("large", 0)) for row in results)
@@ -15684,8 +15684,7 @@ class PictureCaptureApp(tk.Tk):
         if cpu_pool:
             ordinary_workers = cpu_pool_workers
         elif gpu_staged:
-            # Memory-conservative trial: ONE reusable GPU detector and at
-            # most two CPU page allocations; never six CUDA model copies.
+            # Never duplicate CUDA models across workers.
             ordinary_workers = 2
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
