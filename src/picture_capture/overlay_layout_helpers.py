@@ -96,11 +96,10 @@ def effective_overlay_column_width(geometry, column_index: int, configured_width
 def canonical_headword_marker_span(
     column_x: float, column_width: float, right_ratio: float,
 ) -> tuple[int, int]:
-    """Use the same per-column rightward percentage as the saved crop box.
+    """Display-only per-column rightward span for markers and auxiliary hits.
 
-    Unlike the former overlay-only 95% shortcut, 100% reaches the actual end
-    of the resolved column (which excludes its gutter). No change to separator
-    detection/Y refinement or the source-space Entry coordinates is involved.
+    This setting is independent from the PNG/OCR crop-width percentage; 100%
+    reaches the resolved column end without changing stored Entry coordinates.
     """
     left = int(round(float(column_x)))
     fraction = max(0.01, min(1.0, float(right_ratio) / 100.0))
