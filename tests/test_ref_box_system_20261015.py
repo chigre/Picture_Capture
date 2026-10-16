@@ -244,7 +244,9 @@ def test_ref_defaults_and_schema():
     assert s.ref_box_show_text is True
     assert (s.ref_box_font_size, s.ref_box_font_bold, s.ref_box_font_italic) == (16, False, False)
     assert (s.ref_box_width_lines, s.ref_box_height_lines) == (2.0, 1.0)
-    assert {"ref_box_font_family", "ref_box_fill_color"}.issubset(set(REF_BOX_STYLE_FIELDS))
+    assert "ref_box_fill_color" in REF_BOX_STYLE_FIELDS
+    from picture_capture.ui.settings.schema import REF_TEXT_LABEL_FIELDS
+    assert "ref_box_font_family" in REF_TEXT_LABEL_FIELDS
     assert "ref_match_threshold" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_match_scale_tolerance_percent" in REF_BOX_GEOMETRY_FIELDS
     assert "ref_box_show" in dict((name, code) for name, code in REF_BOX_CHECKS).values()
