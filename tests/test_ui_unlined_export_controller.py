@@ -24,7 +24,7 @@ class _App:
 
     def _start_parallel_batch_task(
         self, title, items, worker_func, job_builder, result_consumer=None,
-        on_done=None, item_label=None, max_workers=0,
+        on_done=None, item_label=None, max_workers=0, allow_pdic_edits=False,
     ) -> bool:
         self.parallel = {
             "title": title,
@@ -35,6 +35,7 @@ class _App:
             "on_done": on_done,
             "item_label": item_label,
             "max_workers": max_workers,
+            "allow_pdic_edits": allow_pdic_edits,
         }
         return True
 
@@ -77,7 +78,8 @@ def test_unlined_action_uses_shared_runner_and_runtime_fast_path_indirection(tmp
     assert app.parallel["title"] == "未画线行导出"
     assert app.parallel["items"] == [1, 0]
     assert app.parallel["worker_func"] is sentinel_worker
-    assert app.parallel["max_workers"] == 2
+    assert app.parallel["max_workers"] == 2 
+    assert app.parallel["allow_pdic_edits"] is True
     assert app.parallel["item_label"](1) == "p2.jpg"
     assert states == [True]
     assert app.status_var.values[-1] == "未画线行导出：准备分析 2 页（并行×2；左侧连续白宽>60%）…"

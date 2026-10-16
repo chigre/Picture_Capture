@@ -235,7 +235,7 @@ class HeadwordController:
             if completed_indices:
                 app._persist_word_fill_status()
             if app.current_index in completed_indices:
-                app.load_page(app.current_index)
+                app.load_page(app.current_index, skip_current_save=True)
 
             source_name = txt_path.name
             if stopped:

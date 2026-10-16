@@ -7227,10 +7227,7 @@ class PictureCaptureApp(tk.Tk):
         # large dictionaries that turned startup into thousands of redundant
         # full-list scans.  Keep at most one pending repaint instead.
         self._page_overlay_refresh_job: str | None = None
-        # Long-running multi-page work runs in a worker thread so Tk remains
-        # responsive. Pause/stop are cooperative and take effect at the next
-        # safe page boundary; the page currently being processed is allowed to
-        # finish so PDIC/PPP/cache files are never left half-written.
+        # Batch work runs off Tk; pause/stop at page boundaries.
         self._batch_queue: queue.Queue = queue.Queue()
         self._batch_thread: threading.Thread | None = None
         self._batch_pause_event = threading.Event()
@@ -7238,12 +7235,9 @@ class PictureCaptureApp(tk.Tk):
         self._batch_stop_event = threading.Event()
         self._batch_active = False
         self._batch_parallel = False
-        # v2.8.17: sequential drawing/OCR batches may coexist with foreground
-        # manual review. Page states are protected so background PDIC writes
-        # never race a user's edits on the same page.
+        # Foreground edits are page-state locked to protect background PDIC.
         self._batch_foreground_pages = False
-        # Read-only preprocessing batches may keep the page list navigable;
-        # mutating batches leave this False.
+        # Navigation is independent from the task write lock.
         self._batch_allow_page_navigation = False
         self._batch_allow_pdic_edits = False
         self._batch_page_states: dict[int, str] = {}
@@ -10987,6 +10981,9 @@ class PictureCaptureApp(tk.Tk):
         """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
+            self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
+            return None
         from .illustrated_profile import effective_page_kind
         if effective_page_kind(self.settings, self.current_page) == "illustrated":
             return None
@@ -11422,17 +11419,17 @@ class PictureCaptureApp(tk.Tk):
         return True
 
     def _can_save_current_during_batch_navigation(self) -> bool:
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return True
+        if not self._batch_foreground_pages:
+            return bool(self._batch_allow_pdic_edits)
         state = self._foreground_batch_state(self.current_index)
-        # Never write an old foreground copy over a page that the worker owns or
-        # has not yet started. Pending pages are saved only after a manual edit
-        # atomically converts them to manual_locked.
+        # Never overwrite worker-owned or pending pages with stale foreground data.
         return state not in {"pending", "processing"}
 
     def _entry_keypress_batch_guard(self, event: tk.Event) -> str | None:
         """Claim a pending page before a key can mutate a foreground Entry."""
-        if not self._batch_active or not self._batch_foreground_pages:
+        if not self._batch_active:
             return None
         keysym = str(getattr(event, "keysym", ""))
         # Cursor/navigation/focus keys do not constitute a manual edit.
@@ -11449,7 +11446,7 @@ class PictureCaptureApp(tk.Tk):
         self, title: str, items, worker, on_done=None, item_label=None,
         *, foreground_page_edit: bool = False, page_indexer=None,
         refresh_page_quality: bool = True,
-        allow_page_navigation: bool = False,
+        allow_page_navigation: bool = True,
         allow_pdic_edits: bool = False,
         flush_deferred_save: bool = True,
     ) -> bool:
@@ -11502,7 +11499,8 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
-             else "可随时暂停或停止；操作在当前页完成后生效。")
+             else ("可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits
+                   else "可翻页查看；编辑保护开启，暂停/停止在当前页完成后生效。"))
         )
         if foreground_page_edit:
             for item in items:
@@ -11511,7 +11509,6 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     pass
 
-        # Drop stale events from a previous task before starting a new one.
         try:
             while True:
                 self._batch_queue.get_nowait()
@@ -11565,7 +11562,7 @@ class PictureCaptureApp(tk.Tk):
     def _start_parallel_batch_task(
         self, title: str, items, worker_func, job_builder, result_consumer=None,
         on_done=None, item_label=None, max_workers: int = 0,
-        *, allow_page_navigation: bool = False, allow_pdic_edits: bool = False,
+        *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
     ) -> bool:
@@ -11638,7 +11635,8 @@ class PictureCaptureApp(tk.Tk):
              if gpu_preflight_func is not None else
              f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。")
             + "暂停/停止不会再派发新页面。"
-            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
+            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit
+               else " 可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits else "")
         )
 
         if foreground_page_edit:
@@ -11774,7 +11772,6 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        # Limit both elapsed time and events per Tk callback.
         from .batch_progress_budget import (
             SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
             start_batch_poll_budget,
@@ -12922,6 +12919,8 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not (0 <= index < len(self.project.images)):
             return
         from .ui.review_page_sync import save_review_before_page_change, refresh_review_after_page_change
+        if self._batch_active and not self._can_save_current_during_batch_navigation():
+            skip_current_save = True
         review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
         self._pending_page_index = None
         self._invalidate_ui_worker("page-load")
@@ -14127,8 +14126,8 @@ class PictureCaptureApp(tk.Tk):
     def toggle_polygon_drawing(self) -> None:
         if self.ref_box_controller.pointer_active:
             self.ref_box_controller.stop_edit()
-        if self._batch_active and self._batch_allow_pdic_edits:
-            self.status_var.set("插图识别期间可编辑 PDIC；PPP 编辑请等待识别结束。")
+        if self._batch_active:
+            self.status_var.set("批量任务期间暂不编辑 PPP；可校对已开放的 PDIC。")
             return
         if not self.guard(): return
         active = not self.polygon_draw_var.get()
@@ -15440,7 +15439,7 @@ class PictureCaptureApp(tk.Tk):
             max_delta = max(
                 [int((row or {}).get("max_delta", 0)) for row in results] or [0]
             )
-            if self.current_index in indices:
+            if self.current_index in indices and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             suffix = f"，{limited} 条触及安全界限" if limited else ""
             stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
@@ -15455,6 +15454,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda i: pages[i].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
@@ -15554,7 +15554,7 @@ class PictureCaptureApp(tk.Tk):
         def done(completed, total, stopped, results, error):
             if error is not None:
                 return
-            if self.current_index in existing:
+            if self.current_index in existing and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
             filled = sum(int((row or {}).get("filled", 0)) for row in results)
             large = sum(int((row or {}).get("large", 0)) for row in results)
@@ -15582,6 +15582,7 @@ class PictureCaptureApp(tk.Tk):
             worker,
             done,
             item_label=lambda index: project.images[index].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def run_combined_draw_action(self) -> None:
@@ -15675,8 +15676,7 @@ class PictureCaptureApp(tk.Tk):
         cpu_pool_workers, cpu_inference_threads = (
             cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
         )
-        # The two experiments are mutually exclusive. Explicit CPU-only
-        # mode wins if both flags accidentally exist in the environment.
+        # CPU-only takes priority over staged GPU mode.
         gpu_staged = bool(
             method == "left_edge" and not cpu_pool
             and staged_pipeline_enabled(settings, len(indices))
@@ -15684,8 +15684,7 @@ class PictureCaptureApp(tk.Tk):
         if cpu_pool:
             ordinary_workers = cpu_pool_workers
         elif gpu_staged:
-            # Memory-conservative trial: ONE reusable GPU detector and at
-            # most two CPU page allocations; never six CUDA model copies.
+            # Never duplicate CUDA models across workers.
             ordinary_workers = 2
         normal_executor = (
             ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
@@ -16079,6 +16078,8 @@ class PictureCaptureApp(tk.Tk):
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
         if not self.project or not self.current_page or self.image is None: return
+        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
+            return
         # Commit live state; cancel any older queued checkbox snapshot.
         deferred_job = self.__dict__.get("_deferred_save_job")
         if deferred_job is not None:
@@ -16136,11 +16137,10 @@ class PictureCaptureApp(tk.Tk):
     def autosave_tick(self) -> None:
         self.autosave_job = None
         if self.autosave_var.get():
-            # Avoid overwriting an in-flight batch page.
-            if self._batch_active:
-                if not self._batch_foreground_pages or not self._can_save_current_during_batch_navigation():
-                    self.toggle_autosave()
-                    return
+            # Autosave PDIC only for editable batch pages; never autosave PPP.
+            if self._batch_active and not self._can_save_current_during_batch_navigation():
+                self.toggle_autosave()
+                return
             if self.project and self.current_page:
                 self._last_pdic_write_changed = False
                 review = self.review_window
@@ -16155,7 +16155,7 @@ class PictureCaptureApp(tk.Tk):
                         self.review_window = None
                 if not review_saved:
                     self.save_pdic(silent=True)
-                polygon_changed = self._save_normalized_ppp()
+                polygon_changed = False if self._batch_active else self._save_normalized_ppp()
                 if self._last_pdic_write_changed or polygon_changed:
                     self.status_var.set("已自动保存")
             self.toggle_autosave()

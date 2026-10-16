@@ -30,15 +30,16 @@ def test_pdic_batch_mode_rejects_ppp_edits_and_save_paths():
     assert '_batch_allow_pdic_edits' in source[start:end]
     start = source.index("    def toggle_polygon_drawing(")
     end = source.index("\n    def ", start + 10)
-    assert "self._batch_allow_pdic_edits" in source[start:end]
+    assert "if self._batch_active:" in source[start:end]
     start = source.index("    def _save_current_page_by_mode(")
     end = source.index("\n    def ", start + 10)
     assert 'and not getattr(self, "_batch_allow_pdic_edits", False)' in source[start:end]
     assert "self.save_pdic(silent=True" in source[start:end]
 
 
-def test_other_batch_tasks_remain_conservative_by_default():
+def test_other_batch_tasks_allow_read_only_navigation_by_default():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert "allow_page_navigation: bool = False" in source
+    assert "allow_page_navigation: bool = True" in source
     assert "allow_pdic_edits: bool = False" in source
     assert "self._batch_allow_pdic_edits = False" in source
+    assert "return bool(self._batch_allow_pdic_edits)" in source

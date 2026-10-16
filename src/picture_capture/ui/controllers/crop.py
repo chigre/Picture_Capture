@@ -260,6 +260,7 @@ class CropController:
             done,
             item_label=lambda index: images[index].name,
             max_workers=workers,
+            allow_pdic_edits=True,
         )
         if not started:
             _set_job_button_state(app, False)
@@ -351,6 +352,7 @@ class CropController:
             on_done=done,
             item_label=lambda index: images[index].name,
             max_workers=workers,
+            allow_pdic_edits=True,
         )
         if not started:
             _set_unlined_job_button_state(app, False)

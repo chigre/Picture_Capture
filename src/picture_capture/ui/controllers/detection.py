@@ -263,6 +263,10 @@ class DetectionController:
         ):
             return
 
+        # Preserve the newest visible text before a worker claims this page.
+        if callable(getattr(app, "save_pdic", None)):
+            app._sync_entry_editor_texts()
+            app.save_pdic(silent=True, sync_editors=False)
         project = app.project
         settings = replace(app.settings)
         rules = load_replace_rules(replace_rules_path(project.root))
@@ -307,7 +311,8 @@ class DetectionController:
             if error is not None:
                 return
             count = sum(int(value or 0) for value in results)
-            app.load_page(app.current_index)
+            if not getattr(app, "_batch_foreground_pages", False):
+                app.load_page(app.current_index, skip_current_save=True)
             if stopped:
                 app.status_var.set(
                     f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条"
@@ -321,6 +326,7 @@ class DetectionController:
             worker,
             done,
             item_label=lambda i: project.images[i].name,
+            foreground_page_edit=True, allow_pdic_edits=True,
         )
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
