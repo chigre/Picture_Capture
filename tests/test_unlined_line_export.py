@@ -299,3 +299,32 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
     assert "UNLINED_BLANK_INK_PERCENT_KEY" in crop_schema
     assert "save_unlined_filter_settings(" in crop_ui
     assert "filter_threshold_spin" in crop_ui
+
+
+def test_png_only_unlined_export_removes_stale_lists_for_content_and_empty_pages(tmp_path):
+    output = tmp_path / "PSW_UNLINED"
+    output.mkdir()
+    source = Image.new("RGB", (80, 30), "white")
+    ImageDraw.Draw(source).rectangle((5, 5, 25, 16), fill="black")
+
+    page = tmp_path / "page.jpg"
+    old_list = output / "page.UnlinedLines"
+    old_list.write_text("obsolete output list\n", encoding="utf-8")
+    rows = [UnlinedRow(0, 0, "body", (0, 0, 50, 20), 0)]
+    exported, *_ = _save(source, page, rows, output)
+    assert exported == 1
+    assert (output / "page_UL_000.png").exists()
+    assert not old_list.exists()
+
+    old_list.write_text("obsolete output list\n", encoding="utf-8")
+    exported, *_ = _save(source, page, [], output)
+    assert exported == 0
+    assert not old_list.exists()
+    assert not (output / "page_UL_000.png").exists()
+
+    old_list.write_text("obsolete output list\n", encoding="utf-8")
+    exported, *_ = _save(source, page, rows, output, merge=True)
+    assert exported == 1
+    assert (output / "page_UL_PAGE.png").exists()
+    assert not old_list.exists()
+    source.close()
