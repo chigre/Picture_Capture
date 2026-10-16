@@ -7,6 +7,7 @@ Geometry is always in original-image pixels. Draft OCR proposals are transient.
 from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
+from uuid import uuid4
 from tkinter import Menu, messagebox, simpledialog
 import tkinter as tk
 
@@ -31,6 +32,7 @@ class IllustratedCanvasEditor:
         self.ticket=None
         self.guide_version=None
         self.selected:set[str]=set()
+        self.key_id:str|None=None
         self.last_pointer=(0,0)
         self.drag=None
         self.mode="box"
@@ -57,6 +59,8 @@ class IllustratedCanvasEditor:
             ("<Control-z>",lambda e:self.undo()),("<Control-y>",lambda e:self.redo()),
             ("<Delete>",lambda e:self.delete()),("<Control-a>",lambda e:self.select_all()),
             ("<Control-g>",lambda e:self.group()),("<Control-G>",lambda e:self.ungroup()),
+            ("<Control-Shift-g>",lambda e:self.ungroup()),
+            ("<F2>",lambda e:self.edit_selected()),
             ("<Control-d>",lambda e:self.duplicate()),
             ("<Left>",lambda e:self.nudge(-1,0,e)),("<Right>",lambda e:self.nudge(1,0,e)),
             ("<Up>",lambda e:self.nudge(0,-1,e)),("<Down>",lambda e:self.nudge(0,1,e)),
@@ -126,7 +130,9 @@ class IllustratedCanvasEditor:
         return {row.id}
 
     def _editable(self):
-        return [e for e in self.entries if e.id in self.selected and not e.locked]
+        locked_groups={e.group_id for e in self.entries if e.group_id and e.locked}
+        return [e for e in self.entries if e.id in self.selected and not e.locked
+                and e.group_id not in locked_groups]
 
     def _commit(self,proposal,*,which="entries",remember=True):
         if not self._sync() or self.busy:return False
@@ -206,8 +212,12 @@ class IllustratedCanvasEditor:
         hit=self._hit(x,y)
         if hit:
             ids=self._ids_for(hit)
-            if shift or control:
-                self.selected=self.selected-ids if ids<=self.selected else self.selected|ids
+            self.key_id=hit.id
+            if (shift or control) and hit.id not in self.selected:
+                self.selected=self.selected|ids
+                self.drag=None
+            elif control:
+                self.selected=self.selected-ids
                 self.drag=None
             else:
                 if hit.id not in self.selected:self.selected=ids
@@ -215,7 +225,8 @@ class IllustratedCanvasEditor:
                 if corner and not hit.locked and len(self.selected)==1:
                     self.drag=("resize",hit.id,x,y)
                 else:
-                    self.drag=("move",x,y,list(self.entries))
+                    self.drag=("copy" if bool(getattr(event,"state",0)&0x0008) else "move",
+                               x,y,list(self.entries))
         elif shift:
             self.drag=("marquee",x,y,None)
         else:
@@ -231,7 +242,7 @@ class IllustratedCanvasEditor:
         c.delete("ill-preview")
         kind,px,py,_=self.drag
         z=self.app.view_scale
-        if kind=="move":
+        if kind in ("move","copy"):
             for e in self._editable():
                 nx,ny,_,_=clamp_rect(e.x+x-px,e.y+y-py,e.w,e.h,self._size())
                 c.create_rectangle(nx*z,ny*z,(nx+e.w)*z,(ny+e.h)*z,
@@ -260,8 +271,11 @@ class IllustratedCanvasEditor:
         self.drag=None
         x,y=self._source(event)
         z=self.app.view_scale
-        if action=="move":
+        if action in ("move","copy"):
             delta_x,delta_y=x-x0,y-y0
+            if getattr(event,"state",0)&0x1:
+                if abs(delta_x)>=abs(delta_y):delta_y=0
+                else:delta_x=0
             chosen=self._editable()
             if chosen and (delta_x or delta_y):
                 first=chosen[0]
@@ -282,7 +296,14 @@ class IllustratedCanvasEditor:
                 # offset to all selected bounds (not each object's own delta).
                 dx=max(-min(e.x for e in chosen),min(dx,self.app.image.width-max(e.x+e.w for e in chosen)))
                 dy=max(-min(e.y for e in chosen),min(dy,self.app.image.height-max(e.y+e.h for e in chosen)))
-                self._commit([replace(v,x=v.x+dx,y=v.y+dy) if v in chosen else v for v in self.entries])
+                if action=="copy":
+                    copies=[replace(e,id=uuid4().hex,x=e.x+dx,y=e.y+dy,
+                                    group_id="",locked=False,status="draft")
+                            for e in chosen]
+                    if self._commit(self.entries+copies):
+                        self.selected={e.id for e in copies}
+                else:
+                    self._commit([replace(v,x=v.x+dx,y=v.y+dy) if v in chosen else v for v in self.entries])
         elif action=="resize":
             target=next((a for a in self.entries if a.id==x0),None)
             if target is not None and not target.locked:
@@ -353,6 +374,25 @@ class IllustratedCanvasEditor:
         except ValueError as exc:self.app.status_var.set(str(exc))
         return "break"
     def align(self,method):return self._operate(method)
+    def align_to_key(self,method):
+        return self._operate(method,reference="key",key_id=self.key_id)
+    def align_to_page(self,method):
+        return self._operate(method,reference="page")
+    def distribute_with_gap(self,horizontal=True):
+        gap=simpledialog.askinteger("指定等间距","输入对象间的空白距离（原图像素）",
+                                    parent=self.app,minvalue=0,maxvalue=10000)
+        if gap is not None:
+            return self._operate("distribute_x" if horizontal else "distribute_y",gap=gap)
+        return "break"
+    def edit_selected(self):
+        if len(self.selected)!=1:return "break"
+        target=next((e for e in self.entries if e.id in self.selected),None)
+        if target is not None:
+            edit_illustrated_group(self.app,target,
+                 lambda updated:self._commit([
+                     updated if e.id==target.id else e for e in self.entries
+                 ]))
+        return "break"
 
     def group(self):
         self._commit(group_objects(self.entries,self.selected))
@@ -474,6 +514,12 @@ class IllustratedCanvasEditor:
             ("垂直等间距",lambda:self.align("distribute_y")),
             ("等宽",lambda:self.align("equal_width")),
             ("等高",lambda:self.align("equal_height")),
+            ("以关键对象左对齐",lambda:self.align_to_key("left")),
+            ("对齐到页面水平中心",lambda:self.align_to_page("center_x")),
+            ("对齐到页面垂直中心",lambda:self.align_to_page("center_y")),
+            ("设置水平间距…",lambda:self.distribute_with_gap(True)),
+            ("设置垂直间距…",lambda:self.distribute_with_gap(False)),
+            ("编辑文字 F2",self.edit_selected),
             ("组合 Ctrl+G",self.group),("取消组合 Ctrl+Shift+G",self.ungroup),
             ("复制 Ctrl+D",self.duplicate),("锁定选中",lambda:self.lock(True)),
             ("解锁选中",lambda:self.lock(False)),("隐藏选中",lambda:self.hide(True)),
