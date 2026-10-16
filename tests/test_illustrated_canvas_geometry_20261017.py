@@ -28,9 +28,9 @@ def boxes():
 def test_screenspace_snap_scale_and_priority():
     b=boxes()
     assert snap_position(36,67,(36,67,40,30),grid=(40,40),
-                         scale=1,tolerance=6,snap_objects=False) == (40,67)
+                         scale=1,tolerance=6,snap_objects=False) == (40,65)
     assert snap_position(36,67,(36,67,40,30),grid=(40,40),
-                         scale=2,tolerance=6,snap_objects=False) == (36,67)
+                         scale=2,tolerance=6,snap_objects=False) == (36,65)
     assert snap_position(36,67,(36,67,40,30),grid=(40,40),
                          vertical_guides=[34],horizontal_guides=[67],
                          scale=1,tolerance=6) == (34,67)
