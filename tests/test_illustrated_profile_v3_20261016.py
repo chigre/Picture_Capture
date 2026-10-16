@@ -67,6 +67,17 @@ def test_profile_settings_roundtrip_and_profile_sidecar(tmp_path):
         assert getattr(seeded, field) == getattr(settings, field)
 
 
+def test_parameter_template_excludes_page_specific_mixed_overrides():
+    from picture_capture.project_parameter_templates import capture_parameters
+    settings = AppSettings(
+        dictionary_layout_kind="mixed",
+        illustrated_page_overrides={"volume1_001.png": "illustrated"},
+    )
+    snapshot = capture_parameters(settings)
+    assert snapshot["settings"]["dictionary_layout_kind"] == "mixed"
+    assert "illustrated_page_overrides" not in snapshot["settings"]
+
+
 def test_languages_validation_and_normalized_roi():
     settings = AppSettings(illustrated_ocr_languages="eng, fra+jpn, chi_sim",
                            illustrated_ocr_top_percent=10.,
