@@ -549,6 +549,10 @@ def open_illustrated_dictionary_editor(app, *, action: str = "open") -> None:
         app.status_var.set("请先退出预处理模式，再编辑图解词典")
         return
     current = getattr(app, "_illustrated_dictionary_window", None)
+    if current is not None and current.window.winfo_exists() and current.project is not app.project:
+        # Never show/commit labels from the previous project after a project switch.
+        current.close()
+        current = None
     if current is not None and current.window.winfo_exists():
         current.window.lift()
         current.window.focus_set()
