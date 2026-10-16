@@ -36,8 +36,8 @@
         "R3.2"
       ]
     },
-    "implementation_head_sha": "8b52b344d75513cd263e9d8c0fe2526a2ec030a5",
-    "latest_verified_main_sha": "8ed4dd04bce0cd105c9f546a70d34cc4ac89d220",
+    "implementation_head_sha": "2b3ee173a8b1f353eebf9c0ab0f16c7f484ee3e7",
+    "latest_verified_main_sha": "cf9bf41eb7f16bb474e1e5092f50536b27dd7bd3",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
@@ -64,10 +64,15 @@
         "type": "r3_postpublish_validation_pending",
         "message": "Post-publication readback and rollback-marker quarantine added; focused pytest, real-Tk smoke, architecture and four-platform CI are not yet executed. A double I/O fault can leave mixed disk bytes under a retained recovery marker; no strict cross-file atomicity claim.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
+      },
+      {
+        "type": "r3_local_checkout_and_validation_pending",
+        "message": "R3 branch 12 ahead/4 behind main cf9bf41e; staged v4-v7 not applied or executed; do not claim atomic Undo/Redo or verified.",
+        "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "B3/#503: run focused pytest, synthetic real-Tk and architecture guards against branch feat/pc-cq-b3-candidate-undo-redo-20261015 after post-publication readback patch; PR #536 is the only open production PR and its CI is red, so do not open R3 PR. Then record actual CI and operator acceptance; R2/B2 remains in_progress and #483 open.",
-    "last_test_evidence": "New R3 readback + rollback quarantine + four synthetic regressions staged in branch commit; tests/architecture/Tk/CI NOT run, no cross-file OS atomicity claimed. main@8ed4dd04 postmerge four-platform CI 38876986096 success; #536 CI 38878591544 failure.",
+    "required_next_action": "Apply staged v4-v7 safety patches to a checkout of the R3 branch in order, run fault-injection pytest, Tk synthetic and architecture guard; only then open single R3 PR and obtain Windows/macOS/Ubuntu/Python3.10 CI. Main and branch diverged (12 ahead, 4 behind); reconcile without overwriting unrelated main changes.",
+    "last_test_evidence": "2026-10-17: v4-v7 are local proposed patches only; git patch structural validation is not pytest, Tk, architecture or CI. No R3 PR/CI. GitHub live PR search returned zero open PRs; main cf9bf41e. R2/B2 and R3/B3 remain in_progress; #483/#503 human acceptance pending.",
     "active_batch": "B3",
     "next_batch": "B3"
   },
