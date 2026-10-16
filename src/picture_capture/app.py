@@ -11499,7 +11499,8 @@ class PictureCaptureApp(tk.Tk):
         self.status_var.set(
             f"{title}开始：共 {len(items)} 页。" +
             ("可切换并校对其他页面；人工修改的待处理页会自动锁定并由后台跳过。" if foreground_page_edit
-             else "可翻页查看；编辑保护开启，暂停/停止在当前页完成后生效。")
+             else ("可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits
+                   else "可翻页查看；编辑保护开启，暂停/停止在当前页完成后生效。"))
         )
         if foreground_page_edit:
             for item in items:
@@ -11508,7 +11509,6 @@ class PictureCaptureApp(tk.Tk):
                 except Exception:
                     pass
 
-        # Drop stale events from a previous task before starting a new one.
         try:
             while True:
                 self._batch_queue.get_nowait()
@@ -11635,7 +11635,8 @@ class PictureCaptureApp(tk.Tk):
              if gpu_preflight_func is not None else
              f"{title}开始：共 {len(items)} 页，CPU并行 {workers} 进程。")
             + "暂停/停止不会再派发新页面。"
-            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit else "")
+            + (" 可校对其他待处理页；手工锁定页面将安全跳过。" if foreground_page_edit
+               else " 可翻页编辑 PDIC；PPP 只读。" if allow_pdic_edits else "")
         )
 
         if foreground_page_edit:
@@ -11771,7 +11772,6 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        # Limit both elapsed time and events per Tk callback.
         from .batch_progress_budget import (
             SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
             start_batch_poll_budget,
