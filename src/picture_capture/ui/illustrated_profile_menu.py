@@ -135,7 +135,8 @@ def build_layout_kind_control(app: Any, parent: ttk.Frame,
                               state="readonly", values=tuple(PAGE_LABELS.values()))
     page_combo.pack(side="left", fill="x", expand=True)
     info_var = tk.StringVar()
-    ttk.Label(parent, textvariable=info_var, wraplength=295).pack(fill="x")
+    info_label = ttk.Label(parent, textvariable=info_var, wraplength=295)
+    info_label.pack(fill="x")
 
     updating = [False]
 
@@ -158,10 +159,6 @@ def build_layout_kind_control(app: Any, parent: ttk.Frame,
         finally:
             updating[0] = False
         refresh_others()
-
-    # Tk pack 'before' requires the destination widget (not the variable).
-    info_label = next(widget for widget in parent.winfo_children()
-                      if isinstance(widget, ttk.Label) and widget.cget("textvariable") == str(info_var))
 
     def set_kind(_event=None):
         if updating[0] or not profile_changes_allowed(app):
