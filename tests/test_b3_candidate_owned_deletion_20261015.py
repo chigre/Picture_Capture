@@ -243,3 +243,39 @@ def test_explicit_false_ocr_selection_is_not_reactivated_by_delete(tmp_path):
     assert pdic_path(page).read_bytes() == original
     assert not manual.exists()
     assert rows[0] in review.parent.entries
+
+
+
+def test_missing_tk_row_binding_refuses_candidate_delete_before_write(tmp_path):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    before_pdic = pdic_path(page).read_bytes()
+    before_simplified = simplified.read_bytes()
+    review.vars = review.vars[:1]
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic_path(page).read_bytes() == before_pdic
+    assert simplified.read_bytes() == before_simplified
+    assert not manual.exists()
+    assert candidate["selected"] is True
+    assert review.parent.entries == rows
+    assert not actions
+
+
+def test_real_delete_ui_records_candidate_history_and_replays_bytes(tmp_path):
+    from picture_capture.ui.review_transaction_actions import _history
+
+    page, rows, review, candidate, manual, simplified, _ = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    after = pdic_path(page).read_bytes()
+    history = _history(review)
+    assert len(history.undo_stack) == 1
+    review.vars = [Var(row.word) for row in review.parent.entries]
+    assert history.undo(review)
+    assert pdic_path(page).read_bytes() == original
+    assert not manual.exists()
+    assert rows[0] in review.parent.entries
+    assert candidate["selected"] is True
+    review.vars = [Var(row.word) for row in review.parent.entries]
+    assert history.redo(review)
+    assert pdic_path(page).read_bytes() == after
+    assert candidate["selected"] is False

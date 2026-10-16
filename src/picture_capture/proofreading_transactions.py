@@ -536,7 +536,10 @@ class ReviewSessionHistory:
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):
             return False
-        for entry, var in zip(review._bound_row_entries(), review.vars):
+        bound = review._bound_row_entries()
+        if len(bound) != len(review.vars):
+            return False
+        for entry, var in zip(bound, review.vars):
             if var.get().strip() != entry.word:
                 return False
         try:
@@ -544,6 +547,8 @@ class ReviewSessionHistory:
                 return False
         except (OSError, RuntimeError, ValueError):
             return False
+        # Block obsolete simplified Tk bindings until render_rows rebinds them.
+        review.__dict__["_r3_simplified_capture_blocked"] = True
         # Disk commit succeeded; only now restore model membership AND words
         # to the original Entry instances, never by current row index.
         review.parent.entries[:] = [entry for entry, _, _, _ in target.entries]

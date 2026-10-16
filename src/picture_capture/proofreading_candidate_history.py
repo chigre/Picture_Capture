@@ -117,6 +117,17 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
         self._candidate_frames[id(frame)] = replay
         return True
 
+    def record(self, before: tx.SavedSnapshot | None,
+               after: tx.SavedSnapshot | None) -> bool:
+        recorded = super().record(before, after)
+        # New ordinary saves clear redo; discard stale candidate replay IDs.
+        self._candidate_frames = {
+            id(frame): self._candidate_frames[id(frame)]
+            for frame in self.undo_stack + self.redo_stack
+            if id(frame) in self._candidate_frames
+        }
+        return recorded
+
     def _apply(self, review: Any, *, redo: bool) -> bool:
         stack = self.redo_stack if redo else self.undo_stack
         if not stack or id(stack[-1]) not in self._candidate_frames:
@@ -142,8 +153,10 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):
             return False
-        if any(var.get().strip() != entry.word
-               for entry, var in zip(review._bound_row_entries(), review.vars)):
+        bound = review._bound_row_entries()
+        if (len(bound) != len(review.vars)
+                or any(var.get().strip() != entry.word
+                       for entry, var in zip(bound, review.vars))):
             return False
         matches = [row for row in getattr(app, "ocr_review_candidates", ())
                    if isinstance(row, dict)
@@ -168,6 +181,9 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             return False
         if not committed:
             return False
+
+        # FocusOut/async render must not capture obsolete simplified Tk rows.
+        review.__dict__["_r3_simplified_capture_blocked"] = True
 
         # Durable commit first. Then change only the uniquely owned Entry and
         # checkbox; all surviving Entry instances keep their identity.

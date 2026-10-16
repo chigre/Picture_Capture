@@ -180,3 +180,56 @@ def test_compound_source_is_not_misclassified_as_candidate_delete(tmp_path):
     review.vars = []
     after = snapshot_review(review, allow_unbound=True)
     assert after is None  # Surviving row remains on disk; no guessed ownership.
+
+
+
+def test_partial_tk_variable_bindings_refuse_candidate_undo(tmp_path):
+    page, owned, review, candidate, manual = setup_case(tmp_path, count=3)
+    history, _, after = committed_delete(page, owned, review, candidate)
+    review.vars = review.vars[:1]
+    assert history.undo(review) is False
+    assert pdic_path(page).read_bytes() == after.pdic_bytes
+    assert candidate["selected"] is False
+    assert owned not in review.parent.entries
+
+
+def test_new_ordinary_save_after_candidate_undo_clears_redo_and_replay_refs(tmp_path):
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, _, _ = committed_delete(page, owned, review, candidate)
+    assert history.undo(review)
+    assert len(history.redo_stack) == 1
+    review.vars = [Var(row.word) for row in review.parent.entries]
+    before = snapshot_review(review)
+    assert before is not None
+    ordinary = review.parent.entries[-1]
+    ordinary.word = "renamed"
+    write_pdic(pdic_path(page), review.parent.entries, 200, ("synthetic", "@", "@"))
+    review.vars[-1].set("renamed")
+    after = snapshot_review(review)
+    assert after is not None
+    assert history.record(before, after)
+    assert history.redo_stack == []
+    assert history._candidate_frames == {}
+    assert history.redo(review) is False
+    assert pdic_path(page).read_bytes() == after.pdic_bytes
+
+
+def test_candidate_undo_blocks_stale_simplified_focusout_capture(tmp_path):
+    from picture_capture.app import ReviewWindow
+
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, _, _ = committed_delete(page, owned, review, candidate)
+    review.vars = [Var(row.word) for row in review.parent.entries]
+    assert history.undo(review)
+    assert review.__dict__.get("_r3_simplified_capture_blocked") is True
+    review.simplified_vars = [Var("stale value")]
+    ReviewWindow._capture_simplified_edits(review, page.stem)
+    assert review._simplified_page_cache == {}
+
+
+def test_failed_candidate_undo_does_not_enter_repaint_guard(tmp_path):
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, _, _ = committed_delete(page, owned, review, candidate)
+    review.vars[0].set("unsaved")
+    assert history.undo(review) is False
+    assert review.__dict__.get("_r3_simplified_capture_blocked") is None
