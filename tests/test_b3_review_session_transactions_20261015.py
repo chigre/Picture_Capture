@@ -797,3 +797,49 @@ def test_silent_single_file_undo_does_not_mutate_ui(tmp_path, monkeypatch):
     assert pdic_path(page).read_bytes() == committed
     assert rows[0].word == "ONE"
     assert len(history.undo_stack) == 1
+
+
+
+def test_live_rollback_only_marker_recovers_before_even_if_all_files_landed(tmp_path):
+    page, _, _, override, _cache = _manual_owned_case(tmp_path)
+    old = pdic_path(page).read_bytes()
+    stages = [
+        ("pdic", old, old.replace(b"two", b"TWO")),
+        ("manual", None, b'{"selected":false}'),
+    ]
+    marker = module._stage_recovery(
+        page, stages, manual_path=override, rollback_required=True,
+    )
+    for role, _, contents in stages:
+        module._publish(pdic_path(page) if role == "pdic" else override, contents)
+    assert module.recover_pending_for_page(page, manual_path=override)
+    assert pdic_path(page).read_bytes() == old
+    assert not override.exists()
+    assert not marker.exists()
+
+
+def test_single_file_write_then_raise_undo_restores_before_state(tmp_path, monkeypatch):
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    target = history.undo_stack[-1].before.pdic_bytes
+    original_publish = module._publish
+    raised = False
+
+    def write_then_raise(path, contents):
+        nonlocal raised
+        result = original_publish(path, contents)
+        if path == pdic_path(page) and contents == target and not raised:
+            raised = True
+            raise OSError("post-replace bookkeeping failed")
+        return result
+
+    monkeypatch.setattr(module, "_publish", write_then_raise)
+    assert not history.undo(review)
+    assert raised
+    assert pdic_path(page).read_bytes() == committed
+    assert rows[0].word == "ONE"
+    assert review.vars[0].get() == "ONE"
+    assert len(history.undo_stack) == 1
+    assert not module._recovery_path(page).exists()

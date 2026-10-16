@@ -322,3 +322,117 @@ def test_silent_partial_publisher_refuses_candidate_commit(tmp_path, monkeypatch
     assert candidate["selected"] is True
     assert review.parent.candidate_check_vars["ocr-id"].get() is True
     assert not actions
+
+
+
+def test_last_file_write_then_raise_candidate_delete_forces_before_state(
+    tmp_path, monkeypatch,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    old_pdic = pdic_path(page).read_bytes()
+    old_simplified = simplified.read_bytes()
+    original_publish = storage._publish
+    raised = False
+
+    def write_then_raise(path, contents):
+        nonlocal raised
+        result = original_publish(path, contents)
+        if path == simplified and not raised:
+            raised = True
+            raise OSError("last write committed, then raised")
+        return result
+
+    monkeypatch.setattr(storage, "_publish", write_then_raise)
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert raised
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert not manual.exists()
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not actions
+    assert not storage._recovery_path(page).exists()
+
+
+def test_failed_final_write_plus_failed_rollback_quarantines_page(
+    tmp_path, monkeypatch,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    old_pdic = pdic_path(page).read_bytes()
+    original_publish = storage._publish
+    raised = False
+
+    def double_fault(path, contents):
+        nonlocal raised
+        if path == pdic_path(page) and contents == old_pdic:
+            return None
+        result = original_publish(path, contents)
+        if path == simplified and not raised:
+            raised = True
+            raise OSError("last write landed before failure")
+        return result
+
+    monkeypatch.setattr(storage, "_publish", double_fault)
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert raised
+    assert storage._recovery_path(page).exists()
+    assert not storage.recover_pending_for_page(page, manual_path=manual)
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert not actions
+    monkeypatch.setattr(storage, "_publish", original_publish)
+    assert storage.recover_pending_for_page(page, manual_path=manual)
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert not storage._recovery_path(page).exists()
+
+
+def test_missing_recovery_marker_silent_noop_refuses_bundle(tmp_path, monkeypatch):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    old_pdic = pdic_path(page).read_bytes()
+    old_simplified = simplified.read_bytes()
+    original_atomic = storage._atomic_bytes
+    marker = storage._recovery_path(page)
+
+    def silent_marker_noop(path, data):
+        if path == marker:
+            return None
+        return original_atomic(path, data)
+
+    monkeypatch.setattr(storage, "_atomic_bytes", silent_marker_noop)
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert not manual.exists()
+    assert not marker.exists()
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert not actions
+
+
+def test_silent_marker_unlink_cannot_report_success_and_rollback_on_restart(
+    tmp_path, monkeypatch,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    old_pdic = pdic_path(page).read_bytes()
+    old_simplified = simplified.read_bytes()
+    marker = storage._recovery_path(page)
+    real_unlink = Path.unlink
+
+    def silent_marker_unlink(self, *args, **kwargs):
+        if self == marker:
+            return None
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", silent_marker_unlink)
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert marker.exists()
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert not manual.exists()
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert not actions
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    assert storage.recover_pending_for_page(page, manual_path=manual)
+    assert not marker.exists()

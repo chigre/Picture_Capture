@@ -246,7 +246,7 @@ def _valid_manual_path(page: Path, path: Path | None) -> bool:
 
 def _stage_recovery(
     page: Path, changes: list[tuple[str, bytes | None, bytes | None]],
-    *, manual_path: Path | None = None,
+    *, manual_path: Path | None = None, rollback_required: bool = False,
 ) -> Path:
     marker = _recovery_path(page)
     if marker.exists():
@@ -261,6 +261,7 @@ def _stage_recovery(
         "format": "picture_capture_r3_transient_recovery",
         "version": 2 if owns_manual else 1,
         "page": str(page.resolve()),
+        "rollback_required": rollback_required,
         "files": [
             {"role": role, "before": _encode(old), "after": _encode(new)}
             for role, old, new in changes
@@ -272,7 +273,11 @@ def _stage_recovery(
         doc["manual_path"] = str(Path(manual_path).resolve())
     # The marker exists only during a multi-file commit and is deleted
     # immediately. It is NOT a persistent Undo/Redo journal.
-    _atomic_bytes(marker, json.dumps(doc, ensure_ascii=False).encode("utf-8"))
+    marker_bytes = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+    _atomic_bytes(marker, marker_bytes)
+    # Never write owned page files unless the rollback intent is durable.
+    if _bytes_or_absent(marker) != marker_bytes:
+        raise RuntimeError("R3 recovery marker readback mismatch")
     return marker
 
 
@@ -309,6 +314,8 @@ def _verified_recovery(
         result.append((known[role], _decode(row.get("before")), _decode(row.get("after"))))
     if ("manual" in found) != (doc["version"] == 2):
         raise ValueError("R3 recovery marker/manual path schema mismatch")
+    if not isinstance(doc.get("rollback_required", False), bool):
+        raise ValueError("Invalid R3 recovery rollback policy")
     return marker, result
 
 
@@ -327,7 +334,11 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
     for current, (_, before, after) in zip(observed, items):
         if current not in (before, after):
             return False
-    if observed != [new for _, _, new in items]:
+    # If a live GUI action reported failure, even a complete after-state
+    # must be restored before the page can be reopened.
+    rollback_required = json.loads(marker.read_text(encoding="utf-8")).get(
+        "rollback_required", False)
+    if rollback_required or observed != [new for _, _, new in items]:
         for path, before, _ in items:
             _publish(path, before)
         # A silently skipped rollback must retain the marker and quarantine
@@ -335,7 +346,53 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
         if any(_bytes_or_absent(path) != before for path, before, _ in items):
             return False
     marker.unlink()
-    return True
+    # A silent no-op unlink leaves the page quarantined.
+    return not marker.exists()
+
+
+def _rollback_failed_publish(
+    page: Path, *, manual_path: Path | None = None,
+) -> bool:
+    """Restore exact before-state on a reported live action failure.
+
+    The marker is left in place if rollback is not provably complete.
+    This recovery contract is not cross-file OS-level atomicity.
+    """
+    pending = _verified_recovery(page, manual_path=manual_path)
+    if pending is None:
+        return False
+    marker, items = pending
+    raw = marker.read_bytes()
+    doc = json.loads(raw)
+    if marker.read_bytes() != raw:
+        return False
+    if doc.get("rollback_required") is not True:
+        doc["rollback_required"] = True
+        policy = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+        _atomic_bytes(marker, policy)
+        if _bytes_or_absent(marker) != policy:
+            return False
+    if any(_bytes_or_absent(path) not in (before, after)
+           for path, before, after in items):
+        return False
+    for path, before, after in items:
+        current = _bytes_or_absent(path)
+        if current == before:
+            continue
+        if current != after:
+            return False
+        try:
+            _publish(path, before)
+        except (OSError, RuntimeError, ValueError):
+            # The write may have succeeded immediately before raising.
+            pass
+    if any(_bytes_or_absent(path) != before for path, before, _ in items):
+        return False
+    try:
+        marker.unlink()
+    except OSError:
+        return False
+    return not marker.exists()
 
 
 def publish_owned_review_bundle(
@@ -387,7 +444,7 @@ def publish_owned_review_bundle(
         "manual": manual_path,
         "simplified": simplified_review_path_for_image(page),
     }
-    marker = _stage_recovery(page, changes, manual_path=manual_path)
+    marker = _stage_recovery(page, changes, manual_path=manual_path, rollback_required=True)
     if not source_unchanged():
         marker.unlink()
         return False
@@ -398,19 +455,21 @@ def publish_owned_review_bundle(
         if any(_bytes_or_absent(paths[role]) != data
                for role, _, data in changes):
             raise RuntimeError("R3 bundle post-publication bytes mismatch")
+        try:
+            marker.unlink()
+        except OSError:
+            if marker.exists():
+                raise
+        if marker.exists():
+            raise RuntimeError("R3 bundle recovery marker cleanup did not persist")
     except (OSError, RuntimeError, ValueError):
-        # Roll back only files still identical to our documented old/new
-        # versions. A concurrent third-party write leaves marker in place,
-        # and all subsequent page loads must refuse unsafe reopening.
-        recover_pending_for_page(page, manual_path=manual_path)
+        # Report failure only after attempting exact before-state rollback.
+        # Retain the marker whenever the disk state cannot be proven safe.
+        try:
+            _rollback_failed_publish(page, manual_path=manual_path)
+        except (OSError, RuntimeError, ValueError):
+            pass
         raise
-    # The durable files now contain the after-state. If cleanup fails, future
-    # page loads will observe complete-after and safely clear the marker; do
-    # not falsely tell callers that committed disk bytes were rolled back.
-    try:
-        marker.unlink()
-    except OSError:
-        pass
     return True
 
 
@@ -443,35 +502,33 @@ def _publish_restored_snapshot(
             or _bytes_or_absent(expected.section_path) != expected.section_bytes
             or _bytes_or_absent(expected.profile_path) != expected.profile_bytes):
         return False
-    # One-file restore is already atomic. Two files require short-lived
-    # write-ahead recovery so crash/restart cannot silently mis-pair them.
-    if len(changes) == 1:
-        role, _, data = changes[0]
-        path = pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page)
-        _publish(path, data)
-        if _bytes_or_absent(path) != data:
-            raise RuntimeError("R3 single-file restore bytes mismatch")
-        return True
-    marker = _stage_recovery(page, changes)
+    # Even single-file replacement can land and then raise; the GUI cannot
+    # advance until success is proven, so stage both single and multi-file edits.
+    marker = _stage_recovery(page, changes, rollback_required=True)
     try:
         for role, _, data in changes:
-            _publish(pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page), data)
+            path = (pdic_path(page) if role == "pdic"
+                    else simplified_review_path_for_image(page))
+            _publish(path, data)
         if any(
-            _bytes_or_absent(pdic_path(page) if role == "pdic" else simplified_review_path_for_image(page)) != data
+            _bytes_or_absent(pdic_path(page) if role == "pdic"
+                             else simplified_review_path_for_image(page)) != data
             for role, _, data in changes
         ):
-            raise RuntimeError("R3 multi-file restore bytes mismatch")
-    except (OSError, RuntimeError):
-        # If any write failed, revert all under the same recovery marker.
-        # An interrupted rollback keeps marker so next page load can recover.
-        recover_pending_for_page(page)
+            raise RuntimeError("R3 restore bytes mismatch")
+        try:
+            marker.unlink()
+        except OSError:
+            if marker.exists():
+                raise
+        if marker.exists():
+            raise RuntimeError("R3 restore recovery marker cleanup did not persist")
+    except (OSError, RuntimeError, ValueError):
+        try:
+            _rollback_failed_publish(page)
+        except (OSError, RuntimeError, ValueError):
+            pass
         raise
-    # Disk publication has succeeded; inability to remove a temporary
-    # recovery marker must not cause the GUI to retain the old in-memory words.
-    try:
-        marker.unlink()
-    except OSError:
-        pass
     return True
 
 
