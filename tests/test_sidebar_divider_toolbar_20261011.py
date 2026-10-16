@@ -138,8 +138,8 @@ def test_zoom_toolbar_is_inline_in_every_mode_without_old_launcher():
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app_source = (Path(__file__).resolve().parents[1] / "src" /
                   "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert '("普", "O", "校", "存")[index]' in source
-    assert 'app.workspace_quick_action_buttons, ("普", "O", "校", "存")' in source
+    assert '("普", "O", "校")[index]' in source
+    assert 'app.workspace_quick_action_buttons, ("普", "O", "校")' in source
     assert '"≣")[index]' not in source
     assert 'toggle_image_toolbar(app)' not in source
     assert 'row=index if extreme else index // 3' in source

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from picture_capture.crop.settings import (
     SINGLE_LINE_MERGE_KEY,
-    UNLINED_BLANK_INK_PERCENT_KEY,
+    UNLINED_LEFT_WHITE_PERCENT_KEY,
     UNLINED_FILTER_BLANK_KEY,
     UNLINED_FILTER_ENABLED_KEY,
 )
@@ -59,7 +59,7 @@ def test_settings_crop_extraction_keeps_dialog_wrappers_and_save_boundary() -> N
     assert "save_merge_by_page(project_root, enabled)" in helper
     assert "UNLINED_FILTER_ENABLED_KEY" in helper
     assert "UNLINED_FILTER_BLANK_KEY" in helper
-    assert "UNLINED_BLANK_INK_PERCENT_KEY" in helper
+    assert "UNLINED_LEFT_WHITE_PERCENT_KEY" in helper
     assert "save_unlined_filter_settings(" in helper
 
     assert '(crop_tab, "切图")' in settings
@@ -92,7 +92,7 @@ def test_integrated_crop_payload_owns_single_line_merge_flag() -> None:
             SINGLE_LINE_MERGE_KEY: _Var(True),
             UNLINED_FILTER_ENABLED_KEY: _Var(True),
             UNLINED_FILTER_BLANK_KEY: _Var(True),
-            UNLINED_BLANK_INK_PERCENT_KEY: _Var("1.2"),
+            UNLINED_LEFT_WHITE_PERCENT_KEY: _Var("62.5"),
         },
         _crop_specials={},
     )
@@ -102,5 +102,5 @@ def test_integrated_crop_payload_owns_single_line_merge_flag() -> None:
     assert payload[SINGLE_LINE_MERGE_KEY] is True
     assert payload[UNLINED_FILTER_ENABLED_KEY] is True
     assert payload[UNLINED_FILTER_BLANK_KEY] is True
-    assert payload[UNLINED_BLANK_INK_PERCENT_KEY] == 1.2
+    assert payload[UNLINED_LEFT_WHITE_PERCENT_KEY] == 62.5
     assert payload["parallel_workers"] == 2

@@ -24,7 +24,7 @@ TEMPLATE_VERSION = 1
 IDENTITY_FIELDS = frozenset({
     "dictionary_full_name", "dictionary_abbreviation", "dictionary_isbn",
     "dictionary_body_page_range", "image_suffix", "page_bookmarks",
-    "wordslist_path",
+    "wordslist_path", "illustrated_page_overrides",
 })
 
 

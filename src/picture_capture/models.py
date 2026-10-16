@@ -230,9 +230,10 @@ class AppSettings(metaclass=_AppSettingsMeta):
     body_indent: int = 26
     character_height: int = 26
     row_padding: int = 1
-    # Percentage of the detected column width used by rightward entry boxes.
-    # This is intentionally separate from the VB ordinary-drawing divisor below.
+    # Display-only marker/auxiliary length, independent of export crop width.
     right_ratio: float = 100.0
+    # A separate percentage controls lined/unlined and OCR entry crop widths.
+    crop_width_percent: float = 100.0
     right_ratio_percent_version: int = 1
     # VB.NET NumericUpDown10: separator analysis width = column_width / value * 0.98.
     ordinary_right_divisor: float = 1.0
@@ -490,6 +491,36 @@ class AppSettings(metaclass=_AppSettingsMeta):
     detection_method: str = "paddleocr"
     # v2.10 dictionary detection profile. Stable IDs describe layout families,
     # while project-specific numeric edits are persisted as overrides.
+    # Project layout family is separate from the traditional parser preset.
+    # Per-page mixed-mode overrides use exact image filenames, never ordinals.
+    dictionary_layout_kind: str = "traditional"  # traditional / illustrated / mixed
+    illustrated_page_overrides: dict[str, str] = field(default_factory=dict)
+    illustrated_primary_language: str = "eng"
+    illustrated_ocr_languages: str = "eng"
+    illustrated_grouping_mode: str = "auto"  # strict / auto / loose
+    illustrated_group_max_lines: int = 10
+    illustrated_require_review: bool = True
+    illustrated_export_split_aliases: bool = True
+    illustrated_ocr_top_percent: float = 0.0
+    illustrated_ocr_bottom_percent: float = 0.0
+    illustrated_ocr_side_percent: float = 0.0
+    illustrated_grid_visible: bool = False
+    illustrated_grid_x: int = 40
+    illustrated_grid_y: int = 40
+    illustrated_grid_subdivisions: int = 1
+    illustrated_grid_origin_x: int = 0
+    illustrated_grid_origin_y: int = 0
+    illustrated_grid_color: str = "#9dbed8"
+    illustrated_guide_color: str = "#d94f97"
+    illustrated_grid_opacity: int = 45
+    illustrated_guides_visible: bool = True
+    illustrated_guides_locked: bool = False
+    illustrated_snap_grid: bool = True
+    illustrated_snap_guides: bool = True
+    illustrated_snap_objects: bool = True
+    illustrated_snap_tolerance: int = 8
+    illustrated_nudge_step: int = 1
+    illustrated_history_depth: int = 40
     dictionary_profile_id: str = "latin_structured_symbols"
     # Project-specific display name for the built-in stable "custom" headword
     # profile. The profile key remains "custom"; only the human-facing label is
@@ -737,7 +768,7 @@ class AppSettings(metaclass=_AppSettingsMeta):
     separator_y_column_margin = _app_settings_storage_alias("paddle_separator_column_margin")
     entry_regular_crop_height = _app_settings_storage_alias("review_regular_crop_height")
     entry_oversized_crop_height = _app_settings_storage_alias("review_single_cjk_line_height")
-    entry_ocr_right_ratio = _app_settings_storage_alias("right_ratio")
+    entry_ocr_right_ratio = _app_settings_storage_alias("crop_width_percent")
 
     def __setattr__(self, name: str, value: object) -> None:
         # Preserve the former runtime-property contract now that these values
@@ -745,6 +776,14 @@ class AppSettings(metaclass=_AppSettingsMeta):
         # both normalized immediately rather than only at render/save time.
         if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
             value = _normalize_display_opacity(value)
+        if name == "crop_width_percent":
+            try:
+                ratio = float(value)
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise ValueError("切图宽度须在1–100%之间") from exc
+            if not 1.0 <= ratio <= 100.0:
+                raise ValueError("切图宽度须在1–100%之间")
+            value = ratio
         if name == "physical_row_projection_width_percent":
             try:
                 value = float(value)

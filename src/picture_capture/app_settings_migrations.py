@@ -29,8 +29,8 @@ TRANSIENT_ENTRY_OCR_RIGHT_RATIO = "entry_ocr_right_ratio"
 def normalize_app_settings_compat_keys(values: dict[str, Any]) -> dict[str, Any]:
     """Translate canonical/transient compatibility keys to dataclass storage keys."""
     transient_ratio = values.pop(TRANSIENT_ENTRY_OCR_RIGHT_RATIO, None)
-    if transient_ratio is not None and "right_ratio" not in values:
-        values["right_ratio"] = transient_ratio
+    if transient_ratio is not None and "crop_width_percent" not in values:
+        values["crop_width_percent"] = transient_ratio
 
     for mapping in (
         SEPARATOR_Y_LEGACY_TO_CANONICAL,
@@ -69,6 +69,10 @@ def migrate_app_settings_payload(
         raw.setdefault("ordinary_right_divisor", old_divisor)
         raw["right_ratio"] = 100.0 / old_divisor
         raw["right_ratio_percent_version"] = 1
+    # Previous releases coupled line/auxiliary display length to PNG/OCR crop
+    # width. On first load, preserve an established crop width; fresh projects
+    # default both independent controls to 100%.
+    raw.setdefault("crop_width_percent", raw.get("right_ratio", 100.0))
     # Transparently upgrade the untouched v1.4 default regex. Without this
     # migration, an existing project would keep matching only the first
     # syllable of display forms such as ``a·ga·rrón``. User-customized

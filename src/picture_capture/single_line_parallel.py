@@ -60,10 +60,13 @@ def single_line_page_job(
         output_dir,
         profile_page_index=int(page_index),
         page_sections=sections,
+        write_manifest=False,  # 后期制作只输出图片，不生成 .PSWords。
     )
     merged = False
     if merge_by_page:
-        merged = merge_page_line_images(image_path, records, output_dir) is not None
+        merged = merge_page_line_images(
+            image_path, records, output_dir, write_manifest=False,
+        ) is not None
     return int(page_index), image_path.name, list(records), bool(merged)
 
 

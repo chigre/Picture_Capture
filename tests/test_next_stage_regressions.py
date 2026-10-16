@@ -1184,7 +1184,7 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         "column_track_radius", "column_track_block_height", "column_track_max_step",
         "paddle_band_width_ratio", "paddle_left_tolerance",
         "paddle_separator_roi_width_ratio", "paddle_header_search_height",
-        "right_ratio", "review_zoom_percent",
+        "right_ratio", "crop_width_percent", "review_zoom_percent",
     )
     for name in percent_float_fields:
         assert f'"{name}", float' in schema, name
@@ -3596,6 +3596,7 @@ def test_restored_vb_controls_are_exposed_separately_from_modern_right_ratio():
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
     ).read_text(encoding="utf-8")
     assert '("向右比例 %", "right_ratio", float)' in schema_source
+    assert '("切图宽度(%栏)", "crop_width_percent", float)' in schema_source
     assert '("VB 向右比例 1/x", "ordinary_right_divisor", float)' in schema_source
     for name in (
         "white_threshold_high", "white_threshold_low", "whitespace_adjustment",

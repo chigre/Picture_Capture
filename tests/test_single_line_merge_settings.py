@@ -193,9 +193,10 @@ def test_single_line_merge_is_output_only_and_page_worker_reads_crop_option():
     assert "setattr(dialog" not in merge_source
     assert "_trim_white_border(opened)" in merge_source
     assert "split_single_lines(" in worker_source
-    assert "merge_page_line_images(image_path, records, output_dir)" in worker_source
+    assert "write_manifest=False" in worker_source
+    assert "merge_page_line_images(" in worker_source
     assert worker_source.index("split_single_lines(") < worker_source.index(
-        "merge_page_line_images(image_path, records, output_dir)"
+        "merge_page_line_images("
     )
     assert "load_merge_by_page(project_root)" in worker_source
     assert "character_height" not in merge_source

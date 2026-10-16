@@ -2371,7 +2371,7 @@ def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: App
     character_height = _source_px(settings.character_height)
     vertical_pad = abs(row_padding)
     height = character_height + 2 * abs(row_padding)
-    width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.right_ratio)) / 100.0)
+    width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.crop_width_percent)) / 100.0)
     left_extension = round(geometry.column_starts[0] * 0.5)
     tracked_x = geometry.x_at(idx, entry_v)
     canonical_box = (
@@ -2769,6 +2769,7 @@ def _stage_crop(
 def split_single_lines(
     image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
     *, profile_page_index: int = 0, page_sections: list[PageSection] | None = None,
+    write_manifest: bool = True,
 ) -> list[CropRecord]:
     with Image.open(image_path) as opened:
         image = normalize_page_rgb(opened)
@@ -2793,13 +2794,23 @@ def split_single_lines(
             records.append(CropRecord(image_path.name, index, entry.word, filename, box))
             manifest.append(filename)
         manifest_target = output_dir / f"{image_path.stem}.PSWords"
-        manifest_temp = _stage_text_file(
-            manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
-        )
-        staged.append(manifest_temp)
-        replacements.append((manifest_temp, manifest_target))
+        if write_manifest:
+            manifest_temp = _stage_text_file(
+                manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
+            )
+            staged.append(manifest_temp)
+            replacements.append((manifest_temp, manifest_target))
         stale = list(output_dir.glob(f"{image_path.stem}_SW_*.png"))
-        _publish_file_transaction(replacements, stale_paths=stale)
+        if not write_manifest:
+            # Remove a previously generated legacy manifest as part of the
+            # same rollback-safe page publish as the replacement PNGs.
+            stale.append(manifest_target)
+        if replacements:
+            _publish_file_transaction(replacements, stale_paths=stale)
+        else:
+            # An empty manifest-free page has no replacement file to publish.
+            for path in stale:
+                path.unlink(missing_ok=True)
     except Exception:
         for temp in staged:
             temp.unlink(missing_ok=True)

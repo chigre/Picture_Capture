@@ -50,12 +50,9 @@ def test_display_marker_ratio_stops_at_actual_column_end_not_page_remainder(
             start, visible_width, settings.right_ratio,
         ) == (start, expected_end)
         entry = Entry("", start, 100)
-        # Existing crop policy still uses the page remainder for the last
-        # column; do not change stored crop/export behavior in a display fix.
-        if idx == 0:
-            assert line_box(entry, geometry, image, settings)[2] == expected_end
-        else:
-            assert line_box(entry, geometry, image, settings)[2] >= expected_end
+        # Display percentage does not change PNG crop width. The crop uses
+        # independent crop_width_percent=100% even when marker span is shorter.
+        assert line_box(entry, geometry, image, settings)[2] == (500 if idx == 0 else 1100)
 
 
 @pytest.mark.parametrize("kind", ["identity", "mirror_x", "rotate_ccw90", "rotate_cw90"])

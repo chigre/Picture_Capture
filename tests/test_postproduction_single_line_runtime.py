@@ -44,6 +44,7 @@ def test_single_line_worker_reuses_proofreading_crop_path(tmp_path, monkeypatch)
     assert [call["image_path"].name for call in calls] == ["page2.jpg", "page1.jpg"]
     assert [call["profile_page_index"] for call in calls] == [1, 0]
     assert [call["page_sections"] for call in calls] == [["section:page2"], ["section:page1"]]
+    assert all(call["write_manifest"] is False for call in calls)
     assert all(call["output_dir"] == root / "QT" / "PSW" for call in calls)
     assert all(call["settings"] is settings for call in calls)
     assert logged == [["record:page2"], ["record:page1"]]

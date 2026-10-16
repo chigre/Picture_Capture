@@ -60,6 +60,7 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
     assert 'value(row, "宽", "guide_width", 2)' in source
     assert 'value(row, "宽:", "guide_width", 2)' not in source
     assert 'value(row, "向右比例%", "right_ratio", 4)' in source
+    assert '"crop_width_percent"' not in source
     assert 'SWATCH_VERTICAL_PADDING_FRACTION = 0.25' in source
     assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
     assert "ocr_crop_preview_checkbox" not in source
@@ -147,6 +148,7 @@ def test_display_integer_field_casts_and_loaded_value_formatting():
 
     assert QUICK_FIELD_TYPES["batch_interval"] is int
     assert QUICK_FIELD_TYPES["right_ratio"] is float
+    assert QUICK_FIELD_TYPES["crop_width_percent"] is float
     assert QUICK_FIELD_TYPES["main_entry_x_ratio"] is int
     assert QUICK_FIELD_TYPES["guide_opacity"] is int
     assert _initial_field_text(AppSettings(main_entry_x_ratio=0.43),

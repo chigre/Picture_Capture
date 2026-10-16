@@ -10987,6 +10987,9 @@ class PictureCaptureApp(tk.Tk):
         """ save current page by mode."""
         if not self.project or not self.current_page or self.image is None:
             return None
+        from .illustrated_profile import effective_page_kind
+        if effective_page_kind(self.settings, self.current_page) == "illustrated":
+            return None
         if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
             target = self._ppp_write_path(self.current_page)
             self._save_normalized_ppp()
@@ -12960,9 +12963,7 @@ class PictureCaptureApp(tk.Tk):
             source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
             self.page_sections = list(preloaded.get("page_sections") or [])
-            # The background page decoder may have read SECTION before a
-            # sidecar edit/migration completed. Commit from the authoritative
-            # file before establishing main-canvas and review reading order.
+            # Use authoritative SECTION state after preload.
             latest_sections = read_page_sections(self.current_page)
             if latest_sections != self.page_sections:
                 self.page_sections = latest_sections
@@ -13418,6 +13419,9 @@ class PictureCaptureApp(tk.Tk):
             return
         photo = self._get_cached_display_photo(size)
         self.canvas.create_image(0, 0, image=photo, anchor="nw", tags="page")
+        from .ui.illustrated_main_canvas import render_illustrated_main_overlay
+        if render_illustrated_main_overlay(self):
+            return
         if self.crop_preview_var.get():
             self._draw_crop_plan_preview()
             crop_geometry = self._get_cached_display_geometry()
