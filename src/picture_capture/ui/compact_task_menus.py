@@ -302,11 +302,15 @@ ACTION_GROUPS = (
 
 def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     panel = _panel(parent)
+    ordinary = ttk.Frame(panel)
+    illustrated = ttk.Frame(panel)
+    from ..illustrated_profile import effective_page_kind
+    from .illustrated_dictionary_window import open_illustrated_dictionary_editor
     for group in ACTION_GROUPS:
         if group is None:
-            _separator(panel)
+            _separator(ordinary)
             continue
-        row = _row(panel)
+        row = _row(ordinary)
         for caption, method in group:
             command = (lambda: bookmark_modified_line_pages(app)) if method == "bookmark_modified_line_pages" else getattr(app, method)
             button = _button(row, caption, command)
@@ -326,21 +330,36 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
                 app._ref_box_edit_button = button
                 if app.ref_box_controller.editing:
                     button.configure(text="结束编辑'REF'", style="PC.EditActive.TButton")
-    # Independent page-local spatial labels, outside column/PDIC drawing mode.
-    from .illustrated_dictionary_window import open_illustrated_dictionary_editor
-    button = _button(
-        _row(panel), "图解词典（自由文字框 / 全页 OCR）…",
-        lambda: open_illustrated_dictionary_editor(app),
-    )
-    app._attach_tooltip(
-        button, "任意位置框选多语言文字组；OCR 先生成候选，确认后再保存。"
-                "图解词条独立存储，不修改普通画线/REF/插图。",
-    )
     from .ocr_detection_inspector import show_ocr_decision_inspector
-    _button(_row(panel), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
-    row = _row(panel)
+    _button(_row(ordinary), "OCR／融合画线决策可视化（只读）", lambda: show_ocr_decision_inspector(app))
+    row = _row(ordinary)
     _check(row, "辅助线模式", app.auxiliary_mode_var, app.toggle_auxiliary_mode)
     _button(row, "撤销辅助线", app._auxiliary_controller.undo)
+
+    # Spatial pages have their own operations and never invoke PDIC separator
+    # drawing by accident. Traditional controls remain intact and reversible.
+    _button(_row(illustrated), "手动画文字框 / 校对",
+            lambda: open_illustrated_dictionary_editor(app))
+    _button(_row(illustrated), "全页 OCR 检测与文字组归并",
+            lambda: open_illustrated_dictionary_editor(app, action="detect"))
+    _button(_row(illustrated), "图解词典多语言索引导出",
+            lambda: open_illustrated_dictionary_editor(app, action="export"))
+    ttk.Label(
+        illustrated,
+        text="图解词条无栏位、无横线；OCR 只产生候选，接受后才写盘。"
+             "原图已有的指向线不需要额外建模。",
+        wraplength=280, justify="left",
+    ).pack(fill="x", pady=6)
+
+    def refresh():
+        illustrated.pack_forget()
+        ordinary.pack_forget()
+        if effective_page_kind(app.settings, getattr(app, "current_page", None)) == "illustrated":
+            illustrated.pack(fill="x")
+        else:
+            ordinary.pack(fill="x")
+    panel.refresh_from_settings = refresh  # type: ignore[attr-defined]
+    refresh()
     return panel
 
 
