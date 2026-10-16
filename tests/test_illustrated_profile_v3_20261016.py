@@ -170,6 +170,6 @@ def test_profile_menu_and_draw_menu_are_layout_specific_without_app_monkeypatch(
     assert 'build_illustrated_profile_controls' in profile
     assert 'effective_page_kind(app.settings' in drawing
     assert 'ordinary.pack_forget()' in drawing
-    assert '"手动画文字框 / 校对"' in drawing
+    assert '"主画布文字框编辑 / 校对"' in drawing
     assert '"全页 OCR 检测与文字组归并"' in drawing
     assert 'ACTION_GROUPS = (' in drawing
