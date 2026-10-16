@@ -126,6 +126,30 @@ def test_multilingual_full_page_ocr_uses_tesseract_and_roi_offsets(tmp_path):
         propose_page_entries(page, settings, session_factory=FakeSession)
 
 
+
+def test_multilingual_ocr_fails_closed_when_tesseract_language_packs_are_missing(tmp_path):
+    page = tmp_path / "scan.png"
+    Image.new("RGB", (200, 160), "white").save(page)
+    settings = AppSettings(
+        illustrated_ocr_languages="eng+fra",
+        paddle_use_paddleocr=True,
+        paddle_compare_tesseract=True,
+    )
+    plan = OcrChannelPlan(("paddle", "tesseract"), ("paddle", "tesseract"))
+    paddle = OcrChannelCandidate(
+        engine="paddle", text="hair",
+        records=(OcrChannelRecord("hair", .95, (10, 12, 55, 30)),),
+    )
+    tess = OcrChannelCandidate(engine="tesseract", error="fra.traineddata not found")
+    class FakeSession:
+        def __init__(self, _settings, *, plan):
+            pass
+        def recognize_crop(self, _image, *, tesseract_psm):
+            return OcrChannelResult(plan, (paddle, tess))
+    with pytest.raises(RuntimeError, match="Tesseract"):
+        propose_page_entries(page, settings, session_factory=FakeSession)
+
+
 def test_profile_menu_and_draw_menu_are_layout_specific_without_app_monkeypatch():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui"
     profile = (root / "compact_layout_profile_menu.py").read_text(encoding="utf-8")
