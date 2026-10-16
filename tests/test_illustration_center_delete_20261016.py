@@ -18,9 +18,13 @@ def test_concave_illustration_x_remains_inside():
 def test_delete_control_tied_to_shape_not_editable_label():
     source = (Path(__file__).resolve().parents[1] / "src" /
               "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert 'if show_shapes:\n                    delete_button = tk.Button(' in source
-    assert 'font=("TkDefaultFont", 16)' in source
-    assert 'bg="#bdbdbd"' in source
-    assert 'anchor="center", tags=("ppp-overlay", f"ppp-delete-{region_index}")' in source
+    overlay = (Path(__file__).resolve().parents[1] / "src" /
+               "picture_capture" / "illustration_delete_overlay.py").read_text(encoding="utf-8")
+    assert "if show_shapes else None" in source
+    assert "delete_button.pack" not in overlay
+    assert 'font=("TkDefaultFont", 16)' in overlay
+    assert 'bg="#bdbdbd"' in overlay
+    assert 'anchor="center"' in overlay
+    assert 'f"ppp-delete-{region_index}"' in overlay
     assert 'self.canvas.coords(record["delete_window"], center_x, center_y)' in source
     assert 'delete_button.pack(side="left"' not in source
