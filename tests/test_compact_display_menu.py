@@ -45,7 +45,7 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
         "栏左垂线", "词头横线", "词头标签",
         "插图形状:线", "插图标签:线", "显示OCR内容选择器",
         "显示OCR对比底色结果", "显示单行画线候选框",
-        "颜色模式", "显示模式", "向右比例%", "切图预览标签:",
+        "颜色模式", "显示模式", "切图预览标签:",
         "显示Layout",
     )
     starts = [source.index('"' + caption + '"') for caption in captions]
@@ -59,7 +59,8 @@ def test_display_controls_are_in_requested_order_and_share_existing_variables():
     assert 'width=chars + 2' in source
     assert 'value(row, "宽", "guide_width", 2)' in source
     assert 'value(row, "宽:", "guide_width", 2)' not in source
-    assert 'value(row, "向右比例%", "right_ratio", 4)' in source
+    assert '"向右比例%"' not in source
+    assert '"right_ratio"' not in source
     assert 'SWATCH_VERTICAL_PADDING_FRACTION = 0.25' in source
     assert "relheight=1 - 2 * SWATCH_VERTICAL_PADDING_FRACTION" in source
     assert "ocr_crop_preview_checkbox" not in source
