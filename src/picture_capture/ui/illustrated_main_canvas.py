@@ -33,6 +33,7 @@ class IllustratedCanvasEditor:
         self.guide_version=None
         self.selected:set[str]=set()
         self.key_id:str|None=None
+        self.clipboard=[]  # in-app page-object clipboard, not the OS clipboard
         self.last_pointer=(0,0)
         self.drag=None
         self.mode="box"
@@ -62,6 +63,8 @@ class IllustratedCanvasEditor:
             ("<Control-Shift-g>",lambda e:self.ungroup()),
             ("<F2>",lambda e:self.edit_selected()),
             ("<Control-d>",lambda e:self.duplicate()),
+            ("<Control-c>",lambda e:self.copy_selected()),
+            ("<Control-v>",lambda e:self.paste_selected()),
             ("<Left>",lambda e:self.nudge(-1,0,e)),("<Right>",lambda e:self.nudge(1,0,e)),
             ("<Up>",lambda e:self.nudge(0,-1,e)),("<Down>",lambda e:self.nudge(0,1,e)),
             ("<Escape>",lambda e:self.escape()),
@@ -420,7 +423,38 @@ class IllustratedCanvasEditor:
         return "break"
     def duplicate(self):
         proposed,ids=duplicate(self.entries,self.selected,self._size())
-        if self._commit(proposed):self.selected=ids
+        if self._commit(proposed):
+            self.selected=ids
+            self.app.redraw()
+        return "break"
+
+    def copy_selected(self):
+        if not self._sync():return "break"
+        self.clipboard=[e for e in self.entries if e.id in self.selected and not e.hidden]
+        self.app.status_var.set(f"已复制 {len(self.clipboard)} 个文字框；Ctrl+V 粘贴")
+        return "break"
+
+    def paste_selected(self):
+        if not self._sync() or not self.clipboard:return "break"
+        original=self.clipboard
+        width,height=self._size()
+        left=min(e.x for e in original);top=min(e.y for e in original)
+        right=max(e.x+e.w for e in original);bottom=max(e.y+e.h for e in original)
+        # One common offset preserves alignment and distances within the set.
+        dx=max(-left,min(12,width-right))
+        dy=max(-top,min(12,height-bottom))
+        group_mapping={}
+        additions=[]
+        for e in original:
+            gid=""
+            if e.group_id:
+                gid=group_mapping.setdefault(e.group_id,uuid4().hex)
+            additions.append(replace(e,id=uuid4().hex,x=e.x+dx,y=e.y+dy,
+                                     group_id=gid,locked=False,hidden=False,
+                                     status="draft"))
+        if self._commit([*self.entries,*additions]):
+            self.selected={e.id for e in additions}
+            self.app.redraw()
         return "break"
     def nudge(self,dx,dy,event):
         if not self._ready():return None
@@ -527,7 +561,10 @@ class IllustratedCanvasEditor:
             ("设置垂直间距…",lambda:self.distribute_with_gap(False)),
             ("编辑文字 F2",self.edit_selected),
             ("组合 Ctrl+G",self.group),("取消组合 Ctrl+Shift+G",self.ungroup),
-            ("复制 Ctrl+D",self.duplicate),("锁定选中",lambda:self.lock(True)),
+            ("复制 Ctrl+D",self.duplicate),
+            ("复制到剪贴板 Ctrl+C",self.copy_selected),
+            ("粘贴 Ctrl+V",self.paste_selected),
+            ("锁定选中",lambda:self.lock(True)),
             ("解锁选中",lambda:self.lock(False)),("隐藏选中",lambda:self.hide(True)),
             ("全部显示",self.show_all),("精确坐标…",self.numeric_position),
             ("合并为一个多语言词条",self.semantic_merge),
