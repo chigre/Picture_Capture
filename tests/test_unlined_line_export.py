@@ -132,6 +132,8 @@ def test_unlined_export_without_filter_keeps_blank_diagnostic_rows(tmp_path):
     blank = output / "page001_UL_001.png"
     third = output / "page001_UL_002.png"
     assert first.is_file() and blank.is_file() and third.is_file()
+    assert not list(output.glob("*.PSWords"))
+    assert (output / "page001.UnlinedLines").is_file()
     with Image.open(first) as image:
         assert image.size == (30, 10)
     # All-white diagnostic keeps the original row frame instead of disappearing.
