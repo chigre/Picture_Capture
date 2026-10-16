@@ -30,13 +30,13 @@
       "number": null,
       "url": null,
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "unmerged_branch_candidate_history_packet_PR_creation_blocked",
+      "status": "branch_wiring_committed_unverified",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "c32e06da5b4c82d52f6f372d80233e66df70d6ff",
+    "implementation_head_sha": "71f85ec2ae274e8b9a4e9b58c20d2a4ae1960de0",
     "latest_verified_main_sha": "46f9f4679591af6eccdd160b0f4da18edd7e11cd",
     "last_completed_work_item": "R1.3",
     "blockers": [
@@ -66,8 +66,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "B3/#503: add fail-closed guard against stale simplified Tk row capture during asynchronous candidate Undo/Redo repaint; then integrate existing three local patches, run focused/Tk/architecture gates and fixed-SHA four-platform CI. Only one active production PR (#535 currently open). R2/B2 stays in_progress and #483 open.",
-    "last_test_evidence": "Live main@46f9f467 CI 38746689476 SUCCESS; B3 branch c3dcad83 candidate-history unit tests added but not yet executed; PR creation and candidate-delete UI modification blocked by connector safety checks; no merge.",
+    "required_next_action": "B3/#503: verify candidate delete Undo/Redo and stale Tk FocusOut regression on branch 71f85ec2; only open production PR #535 has failing CI, so keep R3 branch and defer R3 PR until sole active PR slot is free. R2/B2 stays in_progress; #483 remains open.",
+    "last_test_evidence": "Code a7951b4c and Tk guard 71f85ec2 committed; no R3 pytest, architecture or four-platform CI run. #535 CI 38797241611 failed.",
     "active_batch": "B3",
     "next_batch": "B3"
   },
@@ -608,6 +608,13 @@
       "branch_head": "c32e06da5b4c82d52f6f372d80233e66df70d6ff",
       "main_sha": "46f9f4679591af6eccdd160b0f4da18edd7e11cd",
       "note": "R2 stage waiver already documented in PLAN. #535 sole open PR; R3 candidate delete still invalidates history; 3 local proposed patches not committed or tested. Stale simplified capture after asynchronous repaint is unproven risk; no verified claim."
+    },
+    {
+      "type": "b3_r3_candidate_wiring_checkpoint",
+      "status": "code_committed_tests_pending",
+      "sha": "71f85ec2ae274e8b9a4e9b58c20d2a4ae1960de0",
+      "ci": "not_run",
+      "blocker": "only active PR #535 CI failing"
     }
   ],
   "rules_for_updates": {
