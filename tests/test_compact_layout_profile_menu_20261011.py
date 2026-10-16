@@ -115,8 +115,10 @@ def test_right_ratio_returns_above_ordinary_visual_evidence_and_reuses_live_floa
     start = source.index('choice("profile_first_page_variant", "A/B起始页", ("A", "B"))')
     ratio = source.index('caption(ratio_row, "向右比例%", 15)')
     shared = source.index('textvariable=app.quick_vars["right_ratio"]')
-    ordinary = source.index("ordinary_visual_panel = build_ordinary_visual_evidence(app, panel)")
+    ordinary = source.index("ordinary_visual_panel = build_ordinary_visual_evidence(app, ordinary_host)")
     assert start < ratio < shared < ordinary
+    assert "ordinary_host.pack_forget()" in source
+    assert "illustrated_host.pack(fill=" in source
     assert 'width=8, justify="center"' in source
     assert 'tk.StringVar(value=str(app.settings.right_ratio))' not in source
     app = (BASE / "app.py").read_text(encoding="utf-8")
