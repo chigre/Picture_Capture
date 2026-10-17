@@ -2186,7 +2186,7 @@ def _refine_existing_entries_with_geometry(
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
-    # Keep existing-button and legacy Y engines separate.
+    # Keep button and legacy Y engines separate.
     if align_to_ink_top:
         from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
     else:
