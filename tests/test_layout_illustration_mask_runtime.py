@@ -21,14 +21,13 @@ def _rect(x0: int, y0: int, x1: int, y1: int) -> PolygonRegion:
 def test_layout_mask_checkbox_has_dedicated_check_help_contract():
     from picture_capture.ui.settings.schema import CHECK_HELP
 
-    expected = (
-        "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
-        "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-        "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
-        "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
-        "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
-    )
-    assert CHECK_HELP[SETTING_NAME] == expected
+    help_text = CHECK_HELP[SETTING_NAME]
+    assert "普通画线" in help_text and "显示 Layout" in help_text
+    assert "Page Understanding" in help_text
+    assert "原始扫描图、OCR、PDIC 与切图文件都不会被修改" in help_text
+    assert "仅【精修画线】只填白分析副本，不持久化新 PPP" in help_text
+    assert "接近大字头尺寸且近方形" in help_text
+    assert "关闭时完全保持原有 Layout 流程" in help_text
     assert "不重新识别" in CHECK_HELP["layout_mask_illustrations_use_existing"]
 
 
