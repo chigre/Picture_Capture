@@ -170,3 +170,45 @@ def test_manually_locked_pending_page_still_skips_without_publication(monkeypatc
     assert [e[0] for e in events].count("skipped") == 1
     assert events[-1][0] == "done"
     assert events[-1][1:4] == (4, 4, False)
+
+
+def test_single_gpu_worker_remains_spawn_isolated_across_multiple_pages(monkeypatch):
+    """The one-model safety cap must NOT run Paddle inside the GUI process."""
+    from picture_capture import app as app_module
+    created = []
+    real_executor = ThreadPoolExecutor
+
+    def executor_double(*, max_workers, mp_context):
+        created.append((max_workers, mp_context.get_start_method()))
+        return real_executor(max_workers=max_workers)
+
+    monkeypatch.setattr(app_module, "ProcessPoolExecutor", executor_double)
+    app = _fake_app()
+    consumed = []
+
+    def compute(index):
+        return {"index": index}
+
+    def publish(index, result):
+        consumed.append(index)
+        assert result["index"] == index
+        return result
+
+    assert PictureCaptureApp._start_parallel_batch_task(
+        app, "精修画线", list(range(8)), compute,
+        lambda index, _position, _total: (index,),
+        result_consumer=publish,
+        max_workers=1, respect_cpu_workers=True, isolate_worker=True,
+        foreground_page_edit=True, allow_pdic_edits=True,
+    )
+    app._batch_thread.join(timeout=10)
+    assert not app._batch_thread.is_alive()
+    assert created == [(1, "spawn")]
+    assert consumed == list(range(8))
+    assert app._batch_page_states == {i: "done" for i in range(8)}
+    events = []
+    while not app._batch_queue.empty():
+        events.append(app._batch_queue.get_nowait())
+    assert [event[0] for event in events].count("parallel_progress") == 8
+    assert events[-1][0] == "done"
+    assert events[-1][1:4] == (8, 8, False)
