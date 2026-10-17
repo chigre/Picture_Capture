@@ -45,6 +45,30 @@ def whiten_illustrations_for_refinement(
     return masked
 
 
+def whiten_illustrations_for_export(
+    image: Image.Image,
+    settings,
+    page_index: int,
+    *,
+    source_image_path: Path,
+) -> Image.Image:
+    """In PPP-reuse mode, a page without illustrations exports unchanged.
+
+    This exception applies ONLY to row export. Existing PPP is still read by
+    the shared masker; corrupt/unreadable PPP remains an error, and no detection
+    or PPP write occurs on pages that lack a companion file.
+    """
+    if (bool(getattr(settings, "layout_mask_illustrations", False))
+            and bool(getattr(settings, "layout_mask_illustrations_use_existing", False))):
+        from .project_storage import ppp_read_path_for_image
+
+        if not ppp_read_path_for_image(Path(source_image_path)).is_file():
+            return image
+    return whiten_illustrations_for_refinement(
+        image, settings, page_index, source_image_path=source_image_path,
+    )
+
+
 def prepare_refinement_analysis(
     image: Image.Image,
     settings,
