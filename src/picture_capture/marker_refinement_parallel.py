@@ -25,10 +25,27 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
                for _field, switch in AUTO_LAYOUT_FIELDS)
 
 
+def _page_has_usable_refinement_json(page: Path, page_index: int,
+                                    settings: AppSettings) -> bool:
+    """Cheap parent-side preflight; no decoding scan pixels or launching Paddle."""
+    from PIL import Image
+    from .marker_refinement_layoutrows import cached_refinement_settings
+
+    try:
+        with Image.open(page) as opened:
+            size = opened.size
+        return cached_refinement_settings(
+            page, size, settings, int(page_index),
+        ) is not None
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def configured_refine_workers(page_count: int, *, cpus: int | None = None,
                               configured: str | None = None,
                               settings: AppSettings | None = None,
-                              fixed_half_gutter: bool = False) -> int:
+                              fixed_half_gutter: bool = False,
+                              cache_pages: tuple[tuple[Path, int], ...] | None = None) -> int:
     """Bound GPU model ownership and full-page illustration masking.
 
     A Paddle-backed per-page Auto Layout estimate can allocate a full GPU
@@ -46,8 +63,13 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
     workers = max(1, min(int(page_count) or 1, available, max(1, requested)))
     if settings is not None and not fixed_half_gutter and refinement_uses_page_layout(settings):
-        # Windows spawn otherwise constructs N Paddle GPU models concurrently.
-        return 1
+        # All pages must be proven safe for GPU-free processing BEFORE spawning
+        # multiple children. A mixed or changed batch remains single-GPU-owner.
+        if not cache_pages or not all(
+            _page_has_usable_refinement_json(page, index, settings)
+            for page, index in cache_pages
+        ):
+            return 1
     if fixed_half_gutter or bool(getattr(settings, "layout_mask_illustrations", False)):
         # Full-resolution illustration masking can hold several image copies.
         return min(workers, 2)
