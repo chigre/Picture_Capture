@@ -117,7 +117,8 @@ def _fingerprints(paths: tuple[Path, ...]) -> tuple[tuple[str, str | None], ...]
 
 
 def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
-                    fixed_half_gutter: bool = False) -> dict[str, Any]:
+                    fixed_half_gutter: bool = False,
+                    require_cached_layout: bool = False) -> dict[str, Any]:
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
     from .formats import read_pdic, pdic_path
@@ -147,6 +148,12 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
         with Image.open(page) as opened:
             image = normalize_page_rgb(opened)
         try:
+            if require_cached_layout and not _page_has_usable_refinement_json(
+                page, page_index, settings,
+            ):
+                raise RuntimeError(
+                    "并行模式所需 LayoutRows 缓存已失效；拒绝在 CPU 并行进程中启动 GPU 重评估"
+                )
             kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
             token = reset_refinement_layout_audit()
             source_token = reset_refinement_layout_source()
