@@ -2144,6 +2144,7 @@ def refine_existing_entries(
     *,
     profile_page_index: int = 0,
     source_image_path: Path | None = None,
+    fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
     """Refine all saved PDIC lines, including manual ones; preserve row identities."""
     if source_image_path is None:
@@ -2160,12 +2161,13 @@ def refine_existing_entries(
 
     source, effective, analysis_source = prepare_refinement_analysis(
         image, settings, profile_page_index, source_image_path=source_image_path,
+        fixed_half_gutter=fixed_half_gutter,
     )
     try:
         geometry = derive_geometry(analysis_source, effective)
         return _refine_existing_entries_with_geometry(
             entries, effective, analysis_source, geometry,
-            align_to_ink_top=True,
+            align_to_ink_top=True, fixed_half_gutter=fixed_half_gutter,
         )
     finally:
         analysis_source.close()
@@ -2179,6 +2181,7 @@ def _refine_existing_entries_with_geometry(
     geometry: Geometry,
     *,
     align_to_ink_top: bool = False,
+    fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
     """Apply local Y-refinement without repeating Layout role classification."""
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
@@ -2215,6 +2218,12 @@ def _refine_existing_entries_with_geometry(
             gray.shape[1],
             column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
         )
+        if fixed_half_gutter:
+            from .marker_refinement_fixed_band import fixed_half_gutter_band
+            column_x, column_right = fixed_half_gutter_band(
+                geometry, col, int(canonical_v), gray.shape[1],
+                int(effective.column_width), int(effective.gutter),
+            )
         new_v = int(canonical_v)
         if column_right > column_x:
             if align_to_ink_top:
