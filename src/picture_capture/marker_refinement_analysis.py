@@ -18,6 +18,19 @@ from .profile_semantics import effective_page_settings, page_template_analysis_i
 # Per-task evidence, not a shared page-layout cache or persisted setting.
 # Windows workers may be reused: each page resets this counter explicitly.
 _PAGE_LAYOUT_MEASURES: ContextVar[int] = ContextVar("refine_page_layout_measures", default=0)
+_PAGE_LAYOUT_SOURCE: ContextVar[str] = ContextVar("refine_page_layout_source", default="unknown")
+
+
+def reset_refinement_layout_source():
+    return _PAGE_LAYOUT_SOURCE.set("unknown")
+
+
+def read_refinement_layout_source() -> str:
+    return _PAGE_LAYOUT_SOURCE.get()
+
+
+def finish_refinement_layout_source(token) -> None:
+    _PAGE_LAYOUT_SOURCE.reset(token)
 
 
 def reset_refinement_layout_audit():
@@ -151,7 +164,15 @@ def prepare_refinement_analysis(
                         field: int(value) for field, value in _applied.items()
                     })
                     effective.manual_columns = False
+                    _PAGE_LAYOUT_SOURCE.set("layoutrows_cache")
                 else:
+                    reason = "layoutrows_no_source_path"
+                    if source_image_path is not None:
+                        from .marker_refinement_layoutrows import refinement_cache_miss_reason
+                        reason = refinement_cache_miss_reason(
+                            Path(source_image_path), source.size, settings, int(page_index)
+                        )
+                    _PAGE_LAYOUT_SOURCE.set("full_detector:" + reason)
                     effective, _estimate, _applied = resolve_page_layout_policy(
                         analysis, effective, page_index=int(page_index),
                     )

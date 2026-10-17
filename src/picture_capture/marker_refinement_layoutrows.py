@@ -34,6 +34,15 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
     layout = load_layout_rows_cache(
         page.parent, page, int(page_index), settings, source_size=source_size,
     )
+    if layout is None and bool(getattr(settings, "paddle_refine_separator_y", False)):
+        # The explicit refine button forces this processing-only flag ON.
+        # LayoutRows was commonly saved before that transient override, and
+        # the flag has no bearing on cached physical column/row geometry.
+        cache_settings = replace(settings, paddle_refine_separator_y=False)
+        layout = load_layout_rows_cache(
+            page.parent, page, int(page_index), cache_settings,
+            source_size=source_size,
+        )
     if layout is None:
         return None
     columns = sorted(layout.columns, key=lambda column: int(column.index))
@@ -73,3 +82,44 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
         applied[field] = value
     result.manual_columns = False
     return result, applied
+
+def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
+                                 settings: Any, page_index: int) -> str:
+    """Explain why an existing JSON cannot safely replace fresh detection."""
+    import json
+    from .layout_rows_cache import (
+        layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
+        _settings_fingerprint, _same_image_fingerprint,
+    )
+    path = layout_rows_cache_path(Path(page).parent, Path(page))
+    if not path.is_file():
+        return "layoutrows_missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return "layoutrows_invalid_json"
+    if not isinstance(payload, dict):
+        return "layoutrows_invalid_payload"
+    if (payload.get("format") != CACHE_FORMAT
+            or payload.get("algorithm_version") != CACHE_ALGORITHM_VERSION):
+        return "layoutrows_wrong_format"
+    if payload.get("page_index") != int(page_index):
+        return "layoutrows_page_index_mismatch"
+    if not _same_image_fingerprint(payload, Path(page), source_size):
+        return "layoutrows_image_changed"
+    if payload.get("settings_fingerprint") != _settings_fingerprint(settings):
+        if (bool(getattr(settings, "paddle_refine_separator_y", False))
+                and payload.get("settings_fingerprint") == _settings_fingerprint(
+                    replace(settings, paddle_refine_separator_y=False)
+                )):
+            return "layoutrows_geometry_insufficient"
+        return "layoutrows_settings_changed"
+    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    requested = {
+        field for field, switch in AUTO_LAYOUT_FIELDS
+        if bool(getattr(settings, switch, False))
+    }
+    if "row_padding" in requested:
+        return "layoutrows_lacks_row_padding"
+    return "layoutrows_geometry_insufficient"
+
