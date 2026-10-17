@@ -107,6 +107,6 @@ def test_refinement_and_lined_exports_inherit_navigable_batch_runner_defaults():
     refine = source.split("    def refine_lines_selected_scope(", 1)[1].split(
         "    def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
-    assert 'self._start_parallel_batch_task(\n            "精修画线",' in refine
+    assert 'self._start_batch_task(\n            "精修画线",' in refine
     assert "foreground_page_edit=True" in refine
     assert '"单行切图",\n            indices,' in crop
