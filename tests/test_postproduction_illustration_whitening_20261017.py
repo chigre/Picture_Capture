@@ -35,14 +35,17 @@ def _mask_spy(monkeypatch):
     return calls
 
 
-@pytest.mark.parametrize("reuse", [False, True])
-def test_lined_png_uses_refinement_mask_without_editing_source(tmp_path, monkeypatch, reuse):
+@pytest.mark.parametrize("mode", ["auto", "reuse_existing", "reuse_missing"])
+def test_lined_png_uses_refinement_mask_without_editing_source(tmp_path, monkeypatch, mode):
     page = tmp_path / "page.png"
     _scan(page)
     original = page.read_bytes()
     settings = AppSettings()
     settings.layout_mask_illustrations = True
-    settings.layout_mask_illustrations_use_existing = reuse
+    settings.layout_mask_illustrations_use_existing = mode.startswith("reuse")
+    if mode == "reuse_existing":
+        # A mocked masker consumes no PPP bytes; presence must still be checked.
+        page.with_suffix(".ppp").write_bytes(b"test-existing-ppp")
     calls = _mask_spy(monkeypatch)
 
     monkeypatch.setattr(
@@ -66,24 +69,41 @@ def test_lined_png_uses_refinement_mask_without_editing_source(tmp_path, monkeyp
 
     assert len(records) == 1
     with Image.open(output / "page_SW_000.png") as exported:
-        assert exported.getpixel((6, 6)) == (255, 255, 255)
-    assert calls == [(4, {"source_image_path": page} if reuse else {})]
+        assert exported.getpixel((6, 6)) == (
+            (0, 0, 0) if mode == "reuse_missing" else (255, 255, 255)
+        )
+    assert calls == (
+        [] if mode == "reuse_missing"
+        else [(4, {"source_image_path": page} if mode == "reuse_existing" else {})]
+    )
     assert page.read_bytes() == original
-    assert not list(tmp_path.glob("*.PPP"))
+    if mode == "reuse_existing":
+        assert page.with_suffix(".ppp").read_bytes() == b"test-existing-ppp"
+    else:
+        assert not page.with_suffix(".ppp").exists()
     assert not list(tmp_path.glob("*.PSWords"))
 
 
-@pytest.mark.parametrize("enabled,merge", [(True, False), (True, True), (False, False)])
+@pytest.mark.parametrize("enabled,merge,reuse,has_ppp", [
+    (True, False, False, False),
+    (True, True, False, False),
+    (False, False, False, False),
+    (True, False, True, False),
+    (True, False, True, True),
+])
 def test_unlined_layout_and_png_see_same_temporary_mask(
-    tmp_path, monkeypatch, enabled, merge,
+    tmp_path, monkeypatch, enabled, merge, reuse, has_ppp,
 ):
     page = tmp_path / "page.png"
     _scan(page)
     original = page.read_bytes()
     settings = AppSettings()
     settings.layout_mask_illustrations = enabled
-    settings.layout_mask_illustrations_use_existing = False
+    settings.layout_mask_illustrations_use_existing = reuse
+    if has_ppp:
+        page.with_suffix(".ppp").write_bytes(b"test-existing-ppp")
     calls = _mask_spy(monkeypatch)
+    masked = enabled and (not reuse or has_ppp)
     seen = []
 
     monkeypatch.setattr(unlined_line_export.formats, "read_pdic", lambda path: [])
@@ -105,14 +125,40 @@ def test_unlined_layout_and_png_see_same_temporary_mask(
     )
 
     assert result.exported_images == 1
-    assert seen == [(2, (255, 255, 255) if enabled else (0, 0, 0))]
-    assert calls == ([(2, {})] if enabled else [])
+    assert seen == [(2, (255, 255, 255) if masked else (0, 0, 0))]
+    assert calls == (
+        [(2, {"source_image_path": page} if reuse else {})] if masked else []
+    )
     output = tmp_path / "QT" / "PSW_UNLINED"
     target = output / ("page_UL_PAGE.png" if merge else "page_UL_000.png")
     with Image.open(target) as exported:
-        if enabled:
+        if masked:
             assert exported.getpixel((6, 6)) == (255, 255, 255)
         else:
             assert exported.getpixel((0, 0)) == (0, 0, 0)
     assert page.read_bytes() == original
-    assert not list(tmp_path.glob("*.PPP"))
+    if has_ppp:
+        assert page.with_suffix(".ppp").read_bytes() == b"test-existing-ppp"
+    else:
+        assert not page.with_suffix(".ppp").exists()
+
+
+def test_only_exports_tolerate_missing_ppp_in_reuse_mode(tmp_path):
+    from picture_capture.marker_refinement_analysis import (
+        whiten_illustrations_for_export, whiten_illustrations_for_refinement,
+    )
+
+    page = tmp_path / "ordinary.png"
+    _scan(page)
+    settings = AppSettings()
+    settings.layout_mask_illustrations = True
+    settings.layout_mask_illustrations_use_existing = True
+    with Image.open(page) as image:
+        assert whiten_illustrations_for_export(
+            image, settings, 0, source_image_path=page,
+        ) is image
+        with pytest.raises(FileNotFoundError, match="PPP"):
+            whiten_illustrations_for_refinement(
+                image, settings, 0, source_image_path=page,
+            )
+    assert not page.with_suffix(".ppp").exists()

@@ -32,7 +32,7 @@ from PIL import Image
 from . import dictionary_page_design as page_design
 from . import formats
 from .image_utils import build_analysis_image, normalize_page_rgb
-from .marker_refinement_analysis import whiten_illustrations_for_refinement
+from .marker_refinement_analysis import whiten_illustrations_for_export
 from .layout_core_understanding import understand_layout_core
 from .page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
 from .project_storage import qt_root
@@ -403,7 +403,7 @@ def export_unlined_page_job(
     try:
         # Use the refinement button's exact opt-in illustration-mask policy.
         # Mask only an ephemeral image; do not change original scans, PPP or PDIC.
-        export_image = whiten_illustrations_for_refinement(
+        export_image = whiten_illustrations_for_export(
             source, settings, int(page_index), source_image_path=image_path,
         )
         layout, _resolved_source = resolve_unlined_physical_rows(

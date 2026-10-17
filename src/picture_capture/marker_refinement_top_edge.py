@@ -107,6 +107,9 @@ def refine_existing_marker_to_ink_top(
     full_ink = (full <= max(185, threshold)).sum(axis=1)
     allowed = max(1, int(round(full.shape[1] * .003)))
     max_gap = max(min_gap + 3, int(round(line_height * .40)))
+    # Rank clearance first: the preferred Y is ink_top - configured_safety.
+    # Three-row whole-column evidence is still a hard admission gate, so
+    # moving closer to the word may never cut a glyph elsewhere in the column.
     candidates: list[tuple[int, int, int, int, int]] = []
     for start, end in _runs(ink_rows):
         if start == 0 or end - start < max(4, round(line_height * .28)):
@@ -121,7 +124,7 @@ def refine_existing_marker_to_ink_top(
             triple = full_ink[i - 1:i + 2]
             if len(triple) != 3 or np.any(triple > allowed):
                 continue
-            candidates.append((int(triple.sum()), ink_top - y,
+            candidates.append((ink_top - y, int(triple.sum()),
                                abs(y - coarse), y, ink_top))
     details.update({"threshold": threshold, "full_width_ink_tolerance": allowed,
                     "full_roi_x0": safe_left, "full_roi_x1": safe_right,
@@ -130,10 +133,10 @@ def refine_existing_marker_to_ink_top(
                     "candidates": len(candidates)})
     if not candidates:
         return coarse, {**details, "reason": "no_whole_column_blank_y"}
-    # Whiteness beats positional convenience. Among equally clean candidates,
-    # use the Y closest above the CURRENT line's real top, not valley centre.
+    # Among verified near-white rows choose the nearest safe Y *above* the
+    # current ink top. More whitespace is not automatically a better result.
     candidates.sort()
-    score, gap, _, chosen, ink_top = candidates[0]
+    gap, score, _, chosen, ink_top = candidates[0]
     return int(chosen), {**details, "reason": "verified_whole_column_blank",
                          "ink_top": int(ink_top), "gap": int(gap),
                          "whole_column_ink_score": int(score),
