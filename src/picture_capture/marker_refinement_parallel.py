@@ -17,12 +17,12 @@ from .models import AppSettings
 
 
 def refinement_uses_page_layout(settings: AppSettings) -> bool:
-    """Whether the explicit Y refinement invokes the heavyweight page detector."""
+    """Whether explicit Y refinement needs per-page physical fields (JSON or GPU)."""
     if not bool(getattr(settings, "ordinary_auto_layout", False)):
         return False
-    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
-    return any(bool(getattr(settings, switch, False))
-               for _field, switch in AUTO_LAYOUT_FIELDS)
+    from .marker_refinement_layoutrows import requested_refinement_fields
+
+    return bool(requested_refinement_fields(settings))
 
 
 def _page_has_usable_refinement_json(page: Path, page_index: int,
