@@ -136,9 +136,25 @@ def prepare_refinement_analysis(
             )
             if any(bool(getattr(effective, flag, False))
                    for _field, flag in AUTO_LAYOUT_FIELDS):
-                effective, _estimate, _applied = resolve_page_layout_policy(
-                    analysis, effective, page_index=int(page_index),
-                )
+                cached = None
+                if source_image_path is not None:
+                    from .marker_refinement_layoutrows import cached_refinement_settings
+                    # Cache fingerprint uses the original persisted Project
+                    # settings, not the per-page/header-adjusted copy.
+                    cached = cached_refinement_settings(
+                        Path(source_image_path), source.size, settings,
+                        int(page_index),
+                    )
+                if cached is not None:
+                    cached_settings, _applied = cached
+                    effective = replace(effective, **{
+                        field: int(value) for field, value in _applied.items()
+                    })
+                    effective.manual_columns = False
+                else:
+                    effective, _estimate, _applied = resolve_page_layout_policy(
+                        analysis, effective, page_index=int(page_index),
+                    )
                 _PAGE_LAYOUT_MEASURES.set(_PAGE_LAYOUT_MEASURES.get() + 1)
 
         template = page_template_analysis_image(
