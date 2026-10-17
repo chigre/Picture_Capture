@@ -163,3 +163,87 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
     assert [row.y for row in old] == [20, 55]
     assert stats["total"] == stats["moved"] == 2
     image.close()
+
+
+def test_auto_policy_cache_reuses_only_same_image_and_settings(monkeypatch, tmp_path):
+    settings = AppSettings()
+    settings.analysis_denoise_enabled = False
+    settings.layout_mask_illustrations = False
+    settings.ordinary_auto_layout = True
+    prep.clear_refinement_auto_policy_cache()
+    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
+    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
+    from picture_capture import dictionary_page_layout_policy
+    calls = []
+    def policy(image, effective, *, page_index):
+        calls.append(page_index)
+        return replace(effective, character_height=41), object(), {"character_height": 41}
+    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", policy)
+    image = _make_image()
+    page = tmp_path / "scan.png"
+    try:
+        for _ in range(2):
+            source, effective, analysis = prep.prepare_refinement_analysis(
+                image, settings, 6, source_image_path=page,
+            )
+            assert effective.character_height == 41
+            source.close()
+            analysis.close()
+        assert calls == [6]  # Second press reuses physical parameters.
+        image.putpixel((20, 20), (0, 0, 0))
+        source, effective, analysis = prep.prepare_refinement_analysis(
+            image, settings, 6, source_image_path=page,
+        )
+        source.close()
+        analysis.close()
+        assert calls == [6, 6]  # Changed original pixels invalidate the cache.
+        settings.character_height += 3
+        source, _, analysis = prep.prepare_refinement_analysis(
+            image, settings, 6, source_image_path=page,
+        )
+        source.close()
+        analysis.close()
+        assert calls == [6, 6, 6]  # Changed Profile/settings invalidate it.
+    finally:
+        image.close()
+        prep.clear_refinement_auto_policy_cache()
+
+
+def test_auto_policy_cache_invalidates_on_existing_ppp_bytes(monkeypatch, tmp_path):
+    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
+    from picture_capture import project_storage
+
+    settings = AppSettings()
+    settings.analysis_denoise_enabled = False
+    settings.layout_mask_illustrations = True
+    settings.layout_mask_illustrations_use_existing = True
+    settings.ordinary_auto_layout = True
+    prep.clear_refinement_auto_policy_cache()
+    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
+    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
+    monkeypatch.setattr(
+        layout_illustration_mask, "mask_large_illustrations_for_layout",
+        lambda image, *_args, **_kwargs: (image.copy(), object()),
+    )
+    ppp = tmp_path / "page.ppp"
+    ppp.write_bytes(b"old")
+    monkeypatch.setattr(project_storage, "ppp_read_path_for_image", lambda _: ppp)
+    calls = []
+    def policy(image, effective, *, page_index):
+        calls.append(page_index)
+        return replace(effective), object(), {}
+    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", policy)
+    image = _make_image()
+    page = tmp_path / "page.png"
+    try:
+        for value in (b"old", b"old", b"new"):
+            ppp.write_bytes(value)
+            source, _, analysis = prep.prepare_refinement_analysis(
+                image, settings, 2, source_image_path=page,
+            )
+            source.close()
+            analysis.close()
+        assert calls == [2, 2]
+    finally:
+        image.close()
+        prep.clear_refinement_auto_policy_cache()
