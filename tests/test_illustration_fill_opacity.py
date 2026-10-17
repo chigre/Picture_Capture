@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-import picture_capture.illustration_fill_opacity as fill
+import picture_capture.illustration.fill_opacity as fill
 from picture_capture.models import AppSettings, PolygonRegion
 from picture_capture.ui.settings import schema
 
