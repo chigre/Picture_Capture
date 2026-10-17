@@ -2145,14 +2145,7 @@ def refine_existing_entries(
     profile_page_index: int = 0,
     source_image_path: Path | None = None,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine all existing markers, including manually drawn or moved entries.
-
-    The current PDIC markers are treated as the coarse localization.  The same
-    local ink-valley refiner used by automatic drawing is called again in
-    canonical layout space.  Each marker is constrained to the refiner's own
-    local search radius, which acts as a hard safety bound on canonical Y
-    movement.  Entry text/order/count and every non-coordinate field are kept.
-    """
+    """Refine all saved PDIC lines, including manual ones; preserve row identities."""
     if source_image_path is None:
         # Compatibility for injected/synthetic geometry callers. The GUI always
         # passes the page path to enable the settings-aware production pipeline.
