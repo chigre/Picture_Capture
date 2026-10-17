@@ -15399,60 +15399,50 @@ class PictureCaptureApp(tk.Tk):
         # The explicit button means "run refinement now" even if automatic
         # refinement was disabled for normal detection.
         settings.paddle_refine_separator_y = True
-        pages_info = {i: self.pages_tuple(i) for i in indices}
+        from .marker_refinement_parallel import (
+            configured_refine_workers, refine_page_job, commit_refined_page_result,
+        )
+        workers = configured_refine_workers(len(indices))
 
-        def worker(index: int, _position: int, _total: int):
-            page = pages[index]
-            entries = read_pdic(pdic_path(page))
-            original_count = len(entries)
-            original_words = [entry.word for entry in entries]
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            refined, stats = refine_existing_entries(
-                image, entries, settings, profile_page_index=index,
-                source_image_path=page,
-            )
-            if len(refined) != original_count:
-                raise RuntimeError(
-                    f"{page.name} 精修前后画线数变化：{original_count} → {len(refined)}"
-                )
-            if [entry.word for entry in refined] != original_words:
-                raise RuntimeError(f"{page.name} 精修意外修改了词条文本")
-            from .marker_refinement_guard import validate_refined_markers
-            validate_refined_markers(page, entries, refined, image.size)
-            write_pdic(pdic_path(page), refined, image.width, pages_info[index])
-            return {
-                "index": index,
-                "page": page.name,
-                **stats,
-            }
+        def job_builder(index: int, _position: int, _total: int):
+            return str(pages[index]), settings, index
+
+        def page_owned(index: int) -> bool:
+            with self._batch_state_lock:
+                return self._batch_page_states.get(int(index)) == "processing"
+
+        def save_result(index: int, computed):
+            # This consumer executes in ONE parent runner thread, never in a
+            # child process. Worker results never write files or access Tk.
+            return commit_refined_page_result(index, computed, page_owned)
 
         def done(completed, total, stopped, results, error) -> None:
             if error is not None:
                 return
             moved = sum(int((row or {}).get("moved", 0)) for row in results)
-            limited = sum(int((row or {}).get("limited", 0)) for row in results)
+            skipped = [row for row in results if (row or {}).get("skipped")]
+            uncertain = sum(int((row or {}).get("unverified", 0)) for row in results)
             max_delta = max(
                 [int((row or {}).get("max_delta", 0)) for row in results] or [0]
             )
-            if self.current_index in indices and not self._batch_foreground_pages:
-                self.load_page(self.current_index, skip_current_save=True)
-            uncertain = sum(int((row or {}).get("unverified", 0)) for row in results)
-            suffix = f"，{limited} 条触及位移上限" if limited else ""
+            parts = [f"移动 {moved} 条", f"最大允许位移 {max_delta}px",
+                     f"计算进程 {workers}"]
             if uncertain:
-                suffix += f"，{uncertain} 条未找到整栏空白Y未移动"
-            stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
-            self.status_var.set(
-                f"精修画线完成{stopped_text}：移动 {moved} 条；"
-                f"单条允许最大 Y 位移 {max_delta}px{suffix}"
-            )
+                parts.append(f"{uncertain} 条未确认全栏空白")
+            if skipped:
+                parts.append(f"跳过 {len(skipped)} 页")
+                parts.append("；".join(
+                    f"{row['page']}: {str(row.get('reason', ''))[:70]}"
+                    for row in skipped[:3]
+                ))
+            if stopped:
+                parts.insert(0, f"提前停止 {completed}/{total} 页")
+            self.status_var.set("精修画线完成：" + "；".join(parts))
 
-        self._start_batch_task(
-            "精修画线",
-            indices,
-            worker,
-            done,
+        self._start_parallel_batch_task(
+            "精修画线", indices, refine_page_job, job_builder, save_result, done,
             item_label=lambda i: pages[i].name,
+            max_workers=workers,
             foreground_page_edit=True, allow_pdic_edits=True,
         )
 

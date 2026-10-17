@@ -47,6 +47,12 @@ def test_refine_button_has_settings_hint_and_shared_y_engine():
     assert "请先去设置中心的精修Y调整参数" in app
     assert "请先去设置中心的精修Y调整参数" in menu
     assert "settings.paddle_refine_separator_y = True" in app
-    assert "refine_existing_entries(" in app
-    assert "refine_separator_y(" in core
-    assert "validate_refined_markers(" in app
+    parallel = (src / "marker_refinement_parallel.py").read_text(encoding="utf-8")
+    assert "refine_page_job" in app
+    assert "refine_existing_entries(" in parallel
+    assert "refine_separator_y(" in core  # Unmodified legacy automatic-refinement path
+    assert "commit_refined_page_result" in app
+    assert "validate_refined_markers(" in parallel
+    assert "write_pdic(" not in app.split("    def refine_lines_selected_scope(", 1)[1].split(
+        "    def ocr_ordinary_lines_text_selected_scope(", 1
+    )[0]
