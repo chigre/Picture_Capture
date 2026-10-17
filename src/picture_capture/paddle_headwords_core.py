@@ -35,7 +35,7 @@ from .paddle_cache_storage import (
     regenerable_sidecars_impl as _cache_regenerable_sidecars_impl,
 )
 
-from .paddle_diagnostic_formatting import (
+from .quality.paddle_diagnostic_formatting import (
     candidate_reason_impl as _diag_candidate_reason_impl,
     candidate_tsv_row_impl as _diag_candidate_tsv_row_impl,
     comparison_text_impl as _diag_comparison_text_impl,
