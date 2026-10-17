@@ -86,26 +86,21 @@ def prepare_refinement_analysis(
                 analysis = masked
 
         if bool(getattr(effective, "ordinary_auto_layout", False)):
-            from .dictionary_page_layout_policy import resolve_page_layout_policy
+            from .dictionary_page_layout_policy import (
+                AUTO_LAYOUT_FIELDS, resolve_page_layout_policy,
+            )
 
-            # Per-field ordinary_auto_* switches are applied in this existing
-            # physical policy.  It is not a full Layout/entry-role rebuild.
-            key = _policy_cache_key(analysis, effective, int(page_index), source_image_path)
-            applied = _AUTO_POLICY_CACHE.get(key)
-            if applied is not None:
-                _AUTO_POLICY_CACHE.move_to_end(key)
+            # A master switch with every field unchecked must not launch the
+            # expensive physical detector merely to return unchanged values.
+            if not any(bool(getattr(effective, switch, False))
+                       for _field, switch in AUTO_LAYOUT_FIELDS):
                 effective = replace(effective)
-                for field_name, value in applied.items():
-                    setattr(effective, field_name, int(value))
                 effective.manual_columns = False
             else:
-                effective, _estimate, applied = resolve_page_layout_policy(
-                    analysis, effective, page_index=int(page_index),
+                effective = _resolve_refinement_auto_fields(
+                    analysis, effective, int(page_index), source_image_path,
+                    resolve_page_layout_policy,
                 )
-                _AUTO_POLICY_CACHE[key] = dict(applied)
-                _AUTO_POLICY_CACHE.move_to_end(key)
-                if len(_AUTO_POLICY_CACHE) > _AUTO_POLICY_CACHE_LIMIT:
-                    _AUTO_POLICY_CACHE.popitem(last=False)
 
         template = page_template_analysis_image(analysis, effective, int(page_index))
         if template is not analysis:
@@ -117,3 +112,22 @@ def prepare_refinement_analysis(
             analysis.close()
         source.close()
         raise
+
+
+def _resolve_refinement_auto_fields(image, effective, index, page, policy):
+    """Cache selected physical scalars; no Layout role materialization."""
+    key = _policy_cache_key(image, effective, index, page)
+    applied = _AUTO_POLICY_CACHE.get(key)
+    if applied is not None:
+        _AUTO_POLICY_CACHE.move_to_end(key)
+        resolved = replace(effective)
+        for field_name, value in applied.items():
+            setattr(resolved, field_name, int(value))
+        resolved.manual_columns = False
+        return resolved
+    resolved, _estimate, applied = policy(image, effective, page_index=index)
+    _AUTO_POLICY_CACHE[key] = dict(applied)
+    _AUTO_POLICY_CACHE.move_to_end(key)
+    if len(_AUTO_POLICY_CACHE) > _AUTO_POLICY_CACHE_LIMIT:
+        _AUTO_POLICY_CACHE.popitem(last=False)
+    return resolved
