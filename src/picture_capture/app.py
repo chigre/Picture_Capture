@@ -11589,7 +11589,7 @@ class PictureCaptureApp(tk.Tk):
             return False
 
         workers = resolve_crop_worker_count(max_workers)
-        # Light single-worker jobs use the sequential runner.
+        # Lightweight single-worker fallback.
         if workers <= 1 and gpu_preflight_func is None and not single_process_model:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
