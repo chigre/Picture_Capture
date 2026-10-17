@@ -4325,11 +4325,11 @@ class ReviewWindow(tk.Toplevel):
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         from .proofreading_save_safety import protect_review_pdic_commit
+        from .proofreading_review_bundle import commit_review_bundle
         with protect_review_pdic_commit(self):
             self._commit_edits()
+            commit_review_bundle(self, transaction_before)
             self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-            self.parent.save_pdic(silent=True, sync_editors=False)
-        self._persist_simplified_page(current_stem)
         self._review_evidence_after_save(evidence_before)
         record_review_after(self, transaction_before)
         return True
@@ -6795,12 +6795,11 @@ class ReviewWindow(tk.Toplevel):
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
         from .proofreading_save_safety import protect_review_pdic_commit
+        from .proofreading_review_bundle import commit_review_bundle
         with protect_review_pdic_commit(self):
             self._commit_edits()
+            commit_review_bundle(self, transaction_before)
             self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-            self.parent.save_pdic(sync_editors=False)
-        if self.parent.current_page:
-            self._persist_simplified_page(self.parent.current_page.stem)
         self._review_evidence_after_save(evidence_before)
         record_review_after(self, transaction_before)
         if self.parent.project:
