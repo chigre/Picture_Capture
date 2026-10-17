@@ -2191,7 +2191,6 @@ def _refine_existing_entries_with_geometry(
     else:
         from .paddle_headwords import refine_separator_y
 
-    canonical_width = canonical.width
     line_height = max(
         2,
         _source_px(effective.character_height),
@@ -2214,7 +2213,7 @@ def _refine_existing_entries_with_geometry(
         column_x = max(0, round(geometry.x_at(col, canonical_v)))
         column_right = min(
             gray.shape[1],
-            column_x + max(10, int(geometry.column_widths[col])),
+            column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
         )
         new_v = int(canonical_v)
         if column_right > column_x:
