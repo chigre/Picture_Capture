@@ -1,7 +1,7 @@
 """Whole-column white-line Y refinement for explicit existing-PDIC markers.
 
 This is not OCR or Layout classification. Existing PDIC owns every marker and its
-text; failure to prove a safe local text edge leaves its Y unchanged.
+text; failure to prove a near-white full-column position preserves its Y.
 """
 from __future__ import annotations
 
