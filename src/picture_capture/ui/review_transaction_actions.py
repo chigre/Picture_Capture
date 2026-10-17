@@ -16,7 +16,9 @@ def _history(review: Any) -> CandidateReviewHistory:
 
 
 def capture_review_before(review: Any):
-    return snapshot_review(review)
+    # Capture exact source for safe persistence even if R2 evidence is opt-in.
+    # The after-snapshot still blocks R3 Undo history in evidence mode.
+    return snapshot_review(review, allow_evidence=True)
 
 
 def record_review_after(review: Any, before: Any, *, allow_unbound: bool = False) -> None:

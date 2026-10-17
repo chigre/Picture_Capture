@@ -100,3 +100,33 @@ def test_external_pdic_modification_blocks_and_preserves_human_bytes(tmp_path):
             review._commit_edits()
             commit_review_bundle(review, source)
     assert pdic_path(page).read_bytes() == b"external human data"
+
+
+def test_success_discards_stale_deferred_checkbox_snapshot(tmp_path):
+    page, entry, review = case(tmp_path)
+    review.parent._deferred_save_job = "job-1"
+    review.parent._deferred_save_snapshot = ("stale",)
+    review.parent._deferred_save_page = page
+    cancelled = []
+    review.parent.after_cancel = cancelled.append
+    before = snapshot_review(review)
+    with protect_review_pdic_commit(review):
+        review._commit_edits()
+        commit_review_bundle(review, before)
+    assert cancelled == ["job-1"]
+    assert review.parent._deferred_save_snapshot is None
+    assert review.parent._deferred_save_page is None
+
+
+def test_r2_opt_in_source_can_commit_but_undo_remains_denied(tmp_path):
+    from picture_capture.ui.review_transaction_actions import capture_review_before
+    page, entry, review = case(tmp_path)
+    review.parent.settings.proofreading_event_capture = True
+    assert snapshot_review(review) is None
+    before = capture_review_before(review)
+    assert before is not None
+    with protect_review_pdic_commit(review):
+        review._commit_edits()
+        commit_review_bundle(review, before)
+    assert entry.word == "new"
+    assert snapshot_review(review) is None

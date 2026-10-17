@@ -67,7 +67,7 @@ def _bytes_or_absent(path: Path | None) -> bytes | None:
         return None
 
 
-def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapshot | None:
+def snapshot_review(review: Any, *, allow_unbound: bool = False, allow_evidence: bool = False) -> SavedSnapshot | None:
     """Require exact saved PDIC and object identities, no pending OCR owners."""
     app = review.parent
     page = getattr(app, "current_page", None)
@@ -76,7 +76,7 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False) -> SavedSnapsho
             or getattr(review, "_rendered_page_stem", "") != page.stem
             or getattr(app, "_batch_active", False)
             or getattr(app, "_pending_manual_override_payload", None) is not None
-            or getattr(app.settings, "proofreading_event_capture", False)):
+            or (getattr(app.settings, "proofreading_event_capture", False) and not allow_evidence)):
         return None
     try:
         pdic = pdic_path(page)

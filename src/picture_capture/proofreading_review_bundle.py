@@ -22,6 +22,8 @@ from .simplified_review import write_records
 
 def commit_review_bundle(review: Any, source) -> None:
     app = review.parent
+    if app.__dict__.get("_deferred_save_uncertain", False):
+        raise RuntimeError("R3 先前保存结果不确定，禁止覆盖，需重新加载核对")
     page = app.current_page
     if (source is None or page is None or source.page != page
             or getattr(review, "_rendered_page_stem", "") != page.stem):
@@ -91,6 +93,17 @@ def commit_review_bundle(review: Any, source) -> None:
                     pass
             raise
 
+    # ReviewWindow supersedes any queued checkbox snapshot for this page.
+    # Cancel it only after the two canonical files are durably committed.
+    queued = app.__dict__.get("_deferred_save_job")
+    if queued is not None:
+        try:
+            app.after_cancel(queued)
+        except Exception:
+            pass
+    app.__dict__["_deferred_save_job"] = None
+    app.__dict__["_deferred_save_snapshot"] = None
+    app.__dict__["_deferred_save_page"] = None
     review._simplified_dirty_pages.discard(page.stem)
     changed = source.pdic_bytes != target_pdic
     app._last_pdic_write_changed = changed
