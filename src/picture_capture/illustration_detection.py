@@ -6,7 +6,7 @@ from PIL import Image, ImageFilter
 
 from .models import AppSettings, PolygonRegion
 from .illustration.candidate_size import illustration_candidate_min_dimensions
-from .illustration_cross_column import spanning_figure_boxes
+from .illustration.cross_column import spanning_figure_boxes
 
 
 AUTO_ILLUSTRATION_LABEL_TOKEN = "|AUTO_"
