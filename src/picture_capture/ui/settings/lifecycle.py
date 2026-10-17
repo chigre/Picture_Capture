@@ -158,7 +158,7 @@ def close_validated(dialog: Any) -> None:
     reason = str(getattr(dialog, "_last_settings_error", "") or "当前设置存在无效输入")
     if messagebox.askyesno(
         "设置未保存",
-        f"{reason}\\n\\n是否放弃未保存的输入并关闭设置中心？\\n选择“否”可返回继续修改。",
+        f"{reason}\n\n是否放弃未保存的输入并关闭设置中心？\n选择“否”可返回继续修改。",
         parent=dialog,
         default="no",
     ):
