@@ -142,7 +142,7 @@ def prepared_page(tmp_path, monkeypatch):
 
 def test_spawn_page_computes_without_writing_and_parent_preserves_text(prepared_page):
     page, pdic, original = prepared_page
-    computed = parallel.refine_page_job(str(page), AppSettings(), 7)
+    computed = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     assert "fingerprints" in computed
     assert pdic.read_bytes() == original
     saved = parallel.commit_refined_page_result(
@@ -158,13 +158,13 @@ def test_spawn_page_computes_without_writing_and_parent_preserves_text(prepared_
 
 def test_changed_pdic_or_page_blocks_commit(prepared_page):
     page, pdic, original = prepared_page
-    result = parallel.refine_page_job(str(page), AppSettings(), 7)
+    result = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     pdic.write_bytes(original.replace(b"manual", b"human!"))
     outcome = parallel.commit_refined_page_result(7, result)
     assert outcome["skipped"] == 1
     assert pdic.read_bytes().startswith(b"human!")
     pdic.write_bytes(original)
-    result = parallel.refine_page_job(str(page), AppSettings(), 7)
+    result = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     image_bytes = page.read_bytes()
     page.write_bytes(image_bytes + b"external")
     assert parallel.commit_refined_page_result(7, result)["skipped"] == 1
@@ -183,7 +183,7 @@ def test_ppp_section_or_review_change_blocks_commit(prepared_page):
         sidecar.parent.mkdir(parents=True, exist_ok=True)
         if sidecar.exists():
             sidecar.unlink()
-        result = parallel.refine_page_job(str(page), AppSettings(), 7)
+        result = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
         sidecar.write_text("human change", encoding="utf-8")
         assert parallel.commit_refined_page_result(7, result)["skipped"] == 1
         assert pdic.read_bytes() == original
@@ -192,7 +192,7 @@ def test_ppp_section_or_review_change_blocks_commit(prepared_page):
 
 def test_manual_ownership_conflict_does_not_publish(prepared_page):
     page, pdic, original = prepared_page
-    result = parallel.refine_page_job(str(page), AppSettings(), 7)
+    result = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     out = parallel.commit_refined_page_result(
         7, result, ownership_check=lambda _: False,
     )
@@ -203,7 +203,7 @@ def test_manual_ownership_conflict_does_not_publish(prepared_page):
 def test_no_existing_pdic_does_not_create_new_file(tmp_path):
     page = tmp_path / "empty.png"
     Image.new("RGB", (100, 120), "white").save(page)
-    result = parallel.refine_page_job(str(page), AppSettings(), 0)
+    result = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 0)
     assert result["skipped"] == 1
     assert parallel.commit_refined_page_result(0, result)["skipped"] == 1
     assert not page.with_suffix(".pdic").exists()
@@ -219,7 +219,7 @@ def test_same_coords_never_replace_original(prepared_page, monkeypatch):
                             "limited": 0, "unverified": 0}
         ),
     )
-    raw = parallel.refine_page_job(str(page), AppSettings(), 7)
+    raw = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     assert parallel.commit_refined_page_result(7, raw)["saved"] == 0
     assert pdic.read_bytes() == original
 
@@ -242,7 +242,7 @@ def test_parallel_parent_coordinator_gui_contract():
 def test_replace_failure_does_not_modify_pdic_or_leave_temp(prepared_page, monkeypatch):
     from picture_capture import marker_refinement_parallel as module
     page, pdic, original = prepared_page
-    computed = module.refine_page_job(str(page), AppSettings(), 7)
+    computed = module.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
 
     def injected_failure(*_args, **_kwargs):
         raise PermissionError("injected atomic replace failure")
@@ -264,6 +264,6 @@ def test_unparseable_original_bytes_do_not_normalize_pdic():
 
 def test_wrong_page_identity_refuses_commit(prepared_page):
     page, pdic, original = prepared_page
-    computed = parallel.refine_page_job(str(page), AppSettings(), 7)
+    computed = parallel.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
     assert parallel.commit_refined_page_result(8, computed)["skipped"] == 1
     assert pdic.read_bytes() == original
