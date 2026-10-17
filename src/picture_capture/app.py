@@ -626,7 +626,7 @@ class SettingsDialog(tk.Toplevel):
         if name in {"main_entry_font_family", "review_entry_font_family", "ref_box_font_family"}:
             families = (
                 AUTO_FONT_FAMILY,
-                *tuple(sorted(set(font.families()), key=str.casefold)),
+                *tuple(sorted((f for f in font.families() if not f.startswith("@")), key=str.casefold)),
             )
             return ttk.Combobox(
                 parent, textvariable=var, values=families, state="normal", width=26,
@@ -1662,7 +1662,7 @@ class SettingsDialog(tk.Toplevel):
                 _var.trace_add("write", lambda *_args: self._schedule_autosave())
             except Exception:
                 pass
-        # Scroll regions update on Configure; keep the dialog modeless.
+        # Keep the dialog modeless.
         # Do not use transient()/grab_set(), which would keep this window in
         # front and block interaction with the main workspace.
 
