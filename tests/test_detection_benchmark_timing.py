@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture.performance_metrics import timing_summary_ms
+from picture_capture.quality.performance_metrics import timing_summary_ms
 
 
 def test_timing_summary_ms_reports_deterministic_distribution() -> None:

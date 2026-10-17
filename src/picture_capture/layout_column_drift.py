@@ -27,7 +27,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from . import dictionary_page_design as base
-from .layout_gutter_rule import gutter_divider_right_edge as _gutter_divider_right_edge
+from .geometry.layout_gutter_rule import gutter_divider_right_edge as _gutter_divider_right_edge
 
 
 def _left_safety(reference: float, column_width: int) -> int:

@@ -371,7 +371,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self.app._start_ui_worker(f"environment-center-{id(self)}", worker, done, failed)
 
     def _open_draw_performance_reports(self) -> None:
-        from .draw_performance_profile import _directory
+        from .quality.draw_performance_profile import _directory
         directory = _directory() / "reports"
         directory.mkdir(parents=True, exist_ok=True)
         try:
@@ -389,7 +389,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
     def _refresh_inference_status(self) -> None:
         """Report observed model initialization, not estimated GPU utilization."""
         import time
-        from .inference_monitor import recent_model_events
+        from .quality.inference_monitor import recent_model_events
         events = recent_model_events(time.time() - 3600)
         label = self._status_labels.get("inference")
         if label is None:

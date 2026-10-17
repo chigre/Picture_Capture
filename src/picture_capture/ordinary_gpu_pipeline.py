@@ -133,7 +133,7 @@ def prepare_gpu_layout_job(
     from .layout_detection import detect_layout_parameters
 
     from time import perf_counter
-    from .draw_performance_profile import enabled as profile_enabled, record_page
+    from .quality.draw_performance_profile import enabled as profile_enabled, record_page
     profiling = profile_enabled()
     tick = perf_counter()
     stages = {}

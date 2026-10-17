@@ -1273,7 +1273,7 @@ def test_settings_center_uses_native_compact_right_pane_help():
     source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     helper_source = (
-        root / "src" / "picture_capture" / "layout_percent_helpers.py"
+        root / "src" / "picture_capture" / "geometry" / "layout_percent_helpers.py"
     ).read_text(encoding="utf-8")
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
@@ -2261,7 +2261,7 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     source = root / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
     helper_source = (
-        root / "src" / "picture_capture" / "layout_percent_helpers.py"
+        root / "src" / "picture_capture" / "geometry" / "layout_percent_helpers.py"
     ).read_text(encoding="utf-8")
     schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
     assert '"start_y": "height"' in helper_source

@@ -20,7 +20,7 @@ from PIL import Image
 
 from picture_capture.illustration_detection import _rle_components
 from picture_capture.ordinary_bracket_pair import _bracket_side
-from picture_capture.visual_boundary_locator import safe_gap_above
+from picture_capture.geometry.visual_boundary_locator import safe_gap_above
 
 
 # First number is expected visible real bracketed entries; second records

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from picture_capture import inference_monitor
+from picture_capture.quality import inference_monitor
 
 
 def test_model_events_report_actual_constructor_arguments(tmp_path: Path, monkeypatch):

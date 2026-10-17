@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .entry_classification import get_layout_line_classification
+from ..entry_classification import get_layout_line_classification
 
 
 @dataclass(frozen=True, slots=True)

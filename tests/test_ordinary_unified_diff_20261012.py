@@ -1,5 +1,5 @@
 """Differential diagnostics: old v1 exports and new unified v2 exports."""
-from picture_capture.ordinary_unified_diff import compare_ordinary_diagnostics
+from picture_capture.quality.ordinary_unified_diff import compare_ordinary_diagnostics
 
 
 def _line(y, source="ordinary_layout_role"):

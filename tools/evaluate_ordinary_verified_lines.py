@@ -24,7 +24,7 @@ import sys
 # Make direct invocation from a source checkout work without installing pip.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from picture_capture.ordinary_verified_evaluation import evaluate_ordinary_page
+from picture_capture.quality.ordinary_verified_evaluation import evaluate_ordinary_page
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import time
 
-from .runtime_environment import user_data_root
+from ..runtime_environment import user_data_root
 
 
 def _root() -> Path:

@@ -89,7 +89,7 @@ def resolve_page_layout_policy(
     the column origin.
     """
     from time import perf_counter as _perf
-    from .draw_performance_profile import enabled as _enabled, record_page
+    from .quality.draw_performance_profile import enabled as _enabled, record_page
     _timed = _enabled()
     _tick = _perf() if _timed else 0.0
     _segments = {}
@@ -220,7 +220,7 @@ def infer_dictionary_page_layout(
 ) -> tuple[base.DictionaryPageLayout, AppSettings, dict[str, int]]:
     """Infer one page instance while respecting project fixed/auto field policy."""
     from time import perf_counter as _pc
-    from .draw_performance_profile import enabled as _enabled, record_page
+    from .quality.draw_performance_profile import enabled as _enabled, record_page
     _profile = _enabled()
     _tick = _pc() if _profile else 0.0
     _stages = {}

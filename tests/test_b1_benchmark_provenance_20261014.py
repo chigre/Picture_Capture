@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.benchmark_provenance import (
+from picture_capture.quality.benchmark_provenance import (
     build_quality_report,
     markdown_quality_report,
     quality_rows,

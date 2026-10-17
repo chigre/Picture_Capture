@@ -5,7 +5,7 @@ import json
 
 from picture_capture.models import AppSettings
 from picture_capture.ui.settings import schema
-from picture_capture import draw_performance_profile as profile
+from picture_capture.quality import draw_performance_profile as profile
 
 
 def test_performance_settings_are_persisted(tmp_path):

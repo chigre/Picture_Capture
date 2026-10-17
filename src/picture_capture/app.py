@@ -76,7 +76,7 @@ from .review_crop_extension import (
     extended_review_crop_box, parse_review_crop_multiplier,
 )
 
-from .layout_percent_helpers import (
+from .geometry.layout_percent_helpers import (
     LAYOUT_PERCENT_AXES,
     _column_percent_to_pixels,
     _column_pixels_to_percent,
@@ -15661,7 +15661,7 @@ class PictureCaptureApp(tk.Tk):
 
         def worker(index: int, _position: int, _total: int):
             page = project.images[index]
-            from .draw_performance_profile import enabled as profile_enabled, record_page
+            from .quality.draw_performance_profile import enabled as profile_enabled, record_page
             tracing = profile_enabled() and method in {"paddleocr", "combined"}
             stages = {}
             trace_tick = time.perf_counter()
@@ -15885,7 +15885,7 @@ class PictureCaptureApp(tk.Tk):
                         f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
                         + (f"（{', '.join(names)}{more}）" if names else "")
                     )
-            from .inference_monitor import recent_model_events
+            from .quality.inference_monitor import recent_model_events
             elapsed_seconds = max(0.001, time.time() - batch_started_at)
             observed_events = recent_model_events(batch_started_at)
             observed_devices = sorted({str(row["device"]) for row in observed_events})
@@ -15911,7 +15911,7 @@ class PictureCaptureApp(tk.Tk):
                 if observed_dnn:
                     monitor_text += f"；oneDNN 配置 {'/'.join(observed_dnn)}"
             quality_text += monitor_text
-            from .draw_performance_profile import (
+            from .quality.draw_performance_profile import (
                 enabled as profiling_enabled, recent_profiles, export_batch_report,
             )
             if profiling_enabled():

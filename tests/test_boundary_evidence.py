@@ -1,7 +1,7 @@
 """Boundary provenance is a non-destructive side channel, not a new PDIC."""
 from types import SimpleNamespace
 
-from picture_capture.boundary_evidence import (
+from picture_capture.geometry.boundary_evidence import (
     proposed_layout_boundaries, serialize_proposals,
 )
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PIL import Image
 
-from picture_capture import app, layout_percent_helpers as layout
+from picture_capture import app
+from picture_capture.geometry import layout_percent_helpers as layout
 
 
 def test_phase7g_app_reexports_layout_percent_helpers() -> None:

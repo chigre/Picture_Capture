@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from picture_capture import draw_performance_profile as profile
+from picture_capture.quality import draw_performance_profile as profile
 
 
 def test_profile_is_opt_in_and_preserves_stage_values(tmp_path, monkeypatch):

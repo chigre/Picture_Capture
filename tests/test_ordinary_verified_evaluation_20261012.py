@@ -1,4 +1,4 @@
-from picture_capture.ordinary_verified_evaluation import (
+from picture_capture.quality.ordinary_verified_evaluation import (
     TRUTH_SCHEMA, evaluate_ordinary_page,
 )
 

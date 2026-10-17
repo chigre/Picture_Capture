@@ -246,7 +246,7 @@ def _refine_column_geometry(
     # persistent *moving* stroke inside the inter-column gutter as well, so
     # it cannot redefine the next column's text start.
     if len(starts) >= 2:
-        from .layout_gutter_rule import gutter_divider_right_edge
+        from .geometry.layout_gutter_rule import gutter_divider_right_edge
         for index in range(1, len(starts)):
             corridor_left = max(0, int(rights[index - 1]) + 1)
             semantic_left = int(starts[index])
