@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from picture_capture.illustrated_entries import (
+from picture_capture.illustration.entries import (
     IllustratedEntry, entry_path, file_ticket, make_entry,
     read_entries, write_entries,
 )
-from picture_capture.illustrated_export import export_illustrated_index
-from picture_capture.illustrated_ocr import (
+from picture_capture.illustration.export import export_illustrated_index
+from picture_capture.illustration.ocr import (
     SpatialLine, group_spatial_lines, groups_to_entries, join_tesseract_words,
     proposal_overlaps, propose_page_entries, ocr_one_group,
 )

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from picture_capture.models import AppSettings
-from picture_capture.illustration_fill_opacity import (
+from picture_capture.illustration.fill_opacity import (
     DEFAULT_DISPLAY_OPACITY, render_alpha_polygon_overlay,
 )
 
