@@ -2145,14 +2145,7 @@ def refine_existing_entries(
     profile_page_index: int = 0,
     source_image_path: Path | None = None,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine all existing markers, including manually drawn or moved entries.
-
-    The current PDIC markers are treated as the coarse localization.  The same
-    local ink-valley refiner used by automatic drawing is called again in
-    canonical layout space.  Each marker is constrained to the refiner's own
-    local search radius, which acts as a hard safety bound on canonical Y
-    movement.  Entry text/order/count and every non-coordinate field are kept.
-    """
+    """Refine all saved PDIC lines, including manual ones; preserve row identities."""
     if source_image_path is None:
         # Compatibility for injected/synthetic geometry callers. The GUI always
         # passes the page path to enable the settings-aware production pipeline.
@@ -2172,6 +2165,7 @@ def refine_existing_entries(
         geometry = derive_geometry(analysis_source, effective)
         return _refine_existing_entries_with_geometry(
             entries, effective, analysis_source, geometry,
+            align_to_ink_top=True,
         )
     finally:
         analysis_source.close()
@@ -2183,12 +2177,19 @@ def _refine_existing_entries_with_geometry(
     effective: AppSettings,
     analysis_source: Image.Image,
     geometry: Geometry,
+    *,
+    align_to_ink_top: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
     """Apply local Y-refinement without repeating Layout role classification."""
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
-    from .paddle_headwords import refine_separator_y
+    # Only the explicit button uses the verified text-top anchor. Legacy callers
+    # retain the shared valley engine until their own parity gates are passed.
+    if align_to_ink_top:
+        from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
+    else:
+        from .paddle_headwords import refine_separator_y
 
     canonical_width = canonical.width
     line_height = max(
@@ -2197,11 +2198,16 @@ def _refine_existing_entries_with_geometry(
     )
     source_pixel_scale = 1.0
     search_ratio = max(0.05, min(0.80, float(effective.paddle_separator_search_ratio)))
-    max_delta = max(2, round(line_height * search_ratio))
+    max_delta = (
+        max(0, round(line_height * max(0.0, min(1.5, float(effective.separator_y_max_shift_ratio)))))
+        if align_to_ink_top
+        else max(2, round(line_height * search_ratio))
+    )
 
     refined_entries: list[Entry] = []
     moved = 0
     limited = 0
+    unverified = 0
     for entry in entries:
         canonical_u, canonical_v = geometry.source_to_canonical(entry.x, entry.y)
         col = column_index(entry.x, geometry, entry.y)
@@ -2212,14 +2218,25 @@ def _refine_existing_entries_with_geometry(
         )
         new_v = int(canonical_v)
         if column_right > column_x:
-            candidate_v, _details = refine_separator_y(
-                gray[:, column_x:column_right],
-                int(canonical_v),
-                line_height,
-                effective,
-                pixel_scale=source_pixel_scale,
-                lower_bound=max(0, int(geometry.top)),
-            )
+            if align_to_ink_top:
+                candidate_v, _details = refine_existing_marker_to_ink_top(
+                    gray, int(canonical_v), line_height, effective,
+                    anchor_x=int(canonical_u),
+                    column_left=column_x, column_right=column_right,
+                    lower_bound=max(0, int(geometry.top)),
+                    upper_bound=int(geometry.bottom),
+                )
+                if _details.get("reason") != "verified_ink_top":
+                    unverified += 1
+            else:
+                candidate_v, _details = refine_separator_y(
+                    gray[:, column_x:column_right],
+                    int(canonical_v),
+                    line_height,
+                    effective,
+                    pixel_scale=source_pixel_scale,
+                    lower_bound=max(0, int(geometry.top)),
+                )
             delta = int(candidate_v) - int(canonical_v)
             if abs(delta) > max_delta:
                 limited += 1
@@ -2236,6 +2253,7 @@ def _refine_existing_entries_with_geometry(
         "moved": moved,
         "limited": limited,
         "max_delta": int(max_delta),
+        "unverified": unverified,
     }
 
 

@@ -15358,12 +15358,7 @@ class PictureCaptureApp(tk.Tk):
 
 
     def refine_lines_selected_scope(self) -> None:
-        """Re-run only Y refinement for existing PDIC markers in the selected range.
-
-        This operation never detects new headwords and never deletes rows.  Each
-        existing marker is treated as the coarse position and may move only
-        within the refiner's local search radius, which is the hard safety bound.
-        """
+        """Align all saved PDIC markers near proven first-row ink without OCR."""
         if not self.guard() or not self.apply_quick_settings(show_status=False):
             return
         if self._batch_active:
@@ -15385,7 +15380,7 @@ class PictureCaptureApp(tk.Tk):
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
             "\n\n请先去设置中心的精修Y调整参数。\n"
             "全部已有画线（含人工线）参与精修，不会新增或删除画线；"
-            "每条线的 Y 移动量不会超过当前精修搜索半径。是否继续？",
+            "Y 位移不超过设置上限；不能确认字顶则保持旧线。继续？",
             parent=self,
         ):
             return
@@ -15442,11 +15437,14 @@ class PictureCaptureApp(tk.Tk):
             )
             if self.current_index in indices and not self._batch_foreground_pages:
                 self.load_page(self.current_index, skip_current_save=True)
-            suffix = f"，{limited} 条触及安全界限" if limited else ""
+            uncertain = sum(int((row or {}).get("unverified", 0)) for row in results)
+            suffix = f"，{limited} 条触及位移上限" if limited else ""
+            if uncertain:
+                suffix += f"，{uncertain} 条字顶无法确认未移动"
             stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
             self.status_var.set(
                 f"精修画线完成{stopped_text}：移动 {moved} 条；"
-                f"单条最大安全 Y 差值 {max_delta}px{suffix}"
+                f"单条允许最大 Y 位移 {max_delta}px{suffix}"
             )
 
         self._start_batch_task(
