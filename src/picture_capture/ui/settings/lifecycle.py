@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 import re
 import tkinter as tk
+from tkinter import messagebox
 
 
 def validate_projection_width(values: dict[str, Any]) -> None:
@@ -35,12 +37,16 @@ def validate_separator_gap_controls(values: dict[str, Any]) -> None:
     for name, (lower, upper) in limits.items():
         if name not in values:
             continue
+        raw = str(values[name].get()).strip()
         try:
-            numeric = float(values[name].get())
+            numeric = float(raw)
         except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(f"{name} 只能输入数字。") from exc
+            raise ValueError(f"{name} 当前输入 {raw!r} 不是有效数字；请使用小数点，如 0.25。") from exc
         if not lower <= numeric <= upper:
-            raise ValueError(f"{name} 必须在 {lower}–{upper} 之间。")
+            raise ValueError(
+                f"{name} 当前输入 {raw!r}（读取值 {numeric:g}），"
+                f"必须在 {lower}–{upper} 之间。"
+            )
         if name == "separator_y_ink_safe_ink_threshold" and not numeric.is_integer():
             raise ValueError(f"{name} 必须为整数。")
 
@@ -108,9 +114,20 @@ def schedule_autosave(dialog: Any) -> None:
     dialog._autosave_job = dialog.after(450, dialog._run_autosave)
 
 
+def _save_without_partial_settings(dialog: Any, *, close: bool, show_errors: bool) -> bool:
+    """A rejected save must not leave some settings changed in memory."""
+    settings = dialog.parent.settings
+    snapshot = deepcopy(vars(settings))
+    ok = dialog.save(close=close, show_errors=show_errors)
+    if not ok:
+        for name, value in snapshot.items():
+            setattr(settings, name, value)
+    return ok
+
+
 def run_autosave(dialog: Any) -> None:
     dialog._autosave_job = None
-    ok = dialog.save(close=False, show_errors=False)
+    ok = _save_without_partial_settings(dialog, close=False, show_errors=False)
     if hasattr(dialog, "_settings_save_status_var"):
         dialog._settings_save_status_var.set(
             "✓ 已自动保存"
@@ -120,7 +137,7 @@ def run_autosave(dialog: Any) -> None:
 
 
 def validate_settings_now(dialog: Any) -> bool:
-    ok = dialog.save(close=False, show_errors=True)
+    ok = _save_without_partial_settings(dialog, close=False, show_errors=True)
     if hasattr(dialog, "_settings_save_status_var"):
         dialog._settings_save_status_var.set(
             "✓ 当前设置有效并已保存" if ok else "⚠ 请修正无效设置"
@@ -136,4 +153,13 @@ def close_validated(dialog: Any) -> None:
         except tk.TclError:
             pass
         dialog._autosave_job = None
-    dialog.save(close=True, show_errors=True)
+    if _save_without_partial_settings(dialog, close=True, show_errors=False):
+        return
+    reason = str(getattr(dialog, "_last_settings_error", "") or "当前设置存在无效输入")
+    if messagebox.askyesno(
+        "设置未保存",
+        f"{reason}\\n\\n是否放弃未保存的输入并关闭设置中心？\\n选择“否”可返回继续修改。",
+        parent=dialog,
+        default="no",
+    ):
+        dialog.destroy()
