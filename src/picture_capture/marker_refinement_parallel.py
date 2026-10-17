@@ -95,6 +95,8 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
     from .marker_refinement_analysis import (
         reset_refinement_layout_audit, read_refinement_layout_audit,
         finish_refinement_layout_audit,
+        reset_refinement_layout_source, read_refinement_layout_source,
+        finish_refinement_layout_source,
     )
     from PIL import Image
 
@@ -116,13 +118,16 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
         try:
             kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
             token = reset_refinement_layout_audit()
+            source_token = reset_refinement_layout_source()
             try:
                 refined, stats = refine_existing_entries(
                     image, entries, settings, profile_page_index=int(page_index),
                     source_image_path=page, **kwargs,
                 )
                 measured = read_refinement_layout_audit()
+                layout_source = read_refinement_layout_source()
             finally:
+                finish_refinement_layout_source(source_token)
                 finish_refinement_layout_audit(token)
             if expects_layout and measured != 1:
                 raise RuntimeError(
@@ -138,6 +143,7 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
         return {
             "page": image_path, "index": int(page_index),
             "mode": mode, "layout_measured": int(measured),
+            "layout_source": layout_source,
             "fingerprints": before_hashes,
             "before": tuple((e.word, int(e.x), int(e.y)) for e in entries),
             "after": tuple((int(e.x), int(e.y)) for e in refined),
@@ -267,7 +273,8 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
             return {"index": int(page_index), "page": page.name,
                     **result["stats"], "skipped": 0, "saved": 0,
                     "mode": result.get("mode"),
-                    "layout_measured": int(result.get("layout_measured", 0))}
+                    "layout_measured": int(result.get("layout_measured", 0)),
+                    "layout_source": result.get("layout_source", "unknown")}
         pdic = pdic_path(page)
         raw = pdic.read_bytes()
         expected = dict(snapshot).get(str(pdic))
@@ -283,7 +290,8 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
         return {"index": int(page_index), "page": page.name,
                 **result["stats"], "skipped": 0, "saved": int(saved),
                 "mode": result.get("mode"),
-                "layout_measured": int(result.get("layout_measured", 0))}
+                "layout_measured": int(result.get("layout_measured", 0)),
+                "layout_source": result.get("layout_source", "unknown")}
     except (ValueError, OSError, UnicodeError) as exc:
         return {"index": int(page_index), "page": page.name,
                 "skipped": 1, "reason": str(exc)}
