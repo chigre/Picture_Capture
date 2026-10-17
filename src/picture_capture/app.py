@@ -16067,6 +16067,8 @@ class PictureCaptureApp(tk.Tk):
         from .proofreading_transactions import _recovery_path
         if _recovery_path(self.current_page).exists():
             raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
+        if self.__dict__.get("_deferred_save_uncertain", False):
+            raise RuntimeError("R3 PDIC write outcome uncertain; reload/recover before saving")
         # Commit live state; cancel any older queued checkbox snapshot.
         deferred_job = self.__dict__.get("_deferred_save_job")
         if deferred_job is not None:

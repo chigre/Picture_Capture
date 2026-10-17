@@ -123,3 +123,18 @@ def test_app_save_pdic_does_not_drop_deferred_snapshot_on_failure(tmp_path, monk
     assert app._deferred_save_snapshot == ("queued",)
     assert app._deferred_save_page == page
     assert entry.word == "before"
+
+
+def test_uncertain_deferred_snapshot_cannot_overwrite_committed_pdic(tmp_path):
+    from picture_capture.proofreading_deferred_save import flush_deferred_page_save
+
+    app, entry, page = _app(tmp_path)
+    app._deferred_save_job = None
+    app._deferred_save_uncertain = True
+    app._deferred_save_snapshot = (page, [Entry("stale", 10, 20)], 100,
+                                   ("synthetic", "@", "@"), 0)
+    original = pdic_path(page).read_bytes()
+    with pytest.raises(RuntimeError, match="uncertain"):
+        flush_deferred_page_save(app, write_pdic=write_pdic, pdic_path=pdic_path)
+    assert pdic_path(page).read_bytes() == original
+    assert app._deferred_save_snapshot[0] == page
