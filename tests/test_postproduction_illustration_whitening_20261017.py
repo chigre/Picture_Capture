@@ -77,7 +77,10 @@ def test_lined_png_uses_refinement_mask_without_editing_source(tmp_path, monkeyp
         else [(4, {"source_image_path": page} if mode == "reuse_existing" else {})]
     )
     assert page.read_bytes() == original
-    assert not list(tmp_path.glob("*.PPP"))
+    if mode == "reuse_existing":
+        assert page.with_suffix(".ppp").read_bytes() == b"test-existing-ppp"
+    else:
+        assert not page.with_suffix(".ppp").exists()
     assert not list(tmp_path.glob("*.PSWords"))
 
 
@@ -134,7 +137,10 @@ def test_unlined_layout_and_png_see_same_temporary_mask(
         else:
             assert exported.getpixel((0, 0)) == (0, 0, 0)
     assert page.read_bytes() == original
-    assert not list(tmp_path.glob("*.PPP"))
+    if has_ppp:
+        assert page.with_suffix(".ppp").read_bytes() == b"test-existing-ppp"
+    else:
+        assert not page.with_suffix(".ppp").exists()
 
 
 def test_only_exports_tolerate_missing_ppp_in_reuse_mode(tmp_path):
