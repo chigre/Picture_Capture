@@ -39,7 +39,8 @@ def test_settings_lifecycle_extraction_keeps_dialog_wrappers_and_save_boundary()
         assert f"_settings_lifecycle_ui.{helper_name}(" in settings
 
     assert "def save(" in settings
-    assert "dialog.save(close=False, show_errors=False)" in helper
-    assert "dialog.save(close=False, show_errors=True)" in helper
-    assert "dialog.save(close=True, show_errors=True)" in helper
+    assert "dialog.save(close=close, show_errors=show_errors)" in helper
+    assert "_save_without_partial_settings(dialog, close=False, show_errors=False)" in helper
+    assert "_save_without_partial_settings(dialog, close=False, show_errors=True)" in helper
+    assert "_save_without_partial_settings(dialog, close=True, show_errors=False)" in helper
     assert "dialog.after(450, dialog._run_autosave)" in helper
