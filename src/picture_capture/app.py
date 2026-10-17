@@ -15388,8 +15388,19 @@ class PictureCaptureApp(tk.Tk):
             cache_pages=tuple((pages[index], index) for index in indices),
         )
 
+        cache_only_workers = (
+            workers > 1 and not fixed_half_gutter
+            and bool(getattr(settings, "ordinary_auto_layout", False))
+            and any(bool(getattr(settings, switch, False)) for _field, switch
+                    in __import__(
+                        "picture_capture.dictionary_page_layout_policy",
+                        fromlist=["AUTO_LAYOUT_FIELDS"],
+                    ).AUTO_LAYOUT_FIELDS)
+        )
+
         def job_builder(index: int, _position: int, _total: int):
-            return str(pages[index]), settings, index, fixed_half_gutter
+            return (str(pages[index]), settings, index, fixed_half_gutter,
+                    cache_only_workers)
 
         def page_owned(index: int) -> bool:
             with self._batch_state_lock:
