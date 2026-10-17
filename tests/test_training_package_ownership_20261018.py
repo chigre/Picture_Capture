@@ -3,8 +3,7 @@ from pathlib import Path
 import importlib
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-MOVED = ("training_baseline", "training_export", "training_export_complete_dialog",
-         "training_export_composed", "training_export_page_understanding",
+MOVED = ("training_export_page_understanding",
          "training_export_unified_layout", "training_export_v3")
 
 
@@ -21,4 +20,6 @@ def test_training_imports_are_canonical():
 
 
 def test_legacy_training_export_ui_compatibility_entry_is_preserved():
-    assert (ROOT / "training_export_ui.py").is_file()
+    for name in ("training_baseline.py", "training_export.py", "training_export_composed.py",
+                 "training_export_complete_dialog.py", "training_export_ui.py"):
+        assert (ROOT / name).is_file()
