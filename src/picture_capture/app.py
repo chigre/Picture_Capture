@@ -15399,8 +15399,6 @@ class PictureCaptureApp(tk.Tk):
         # The explicit button means "run refinement now" even if automatic
         # refinement was disabled for normal detection.
         settings.paddle_refine_separator_y = True
-        pages_info = {i: self.pages_tuple(i) for i in indices}
-
         from .marker_refinement_parallel import (
             configured_refine_workers, refine_page_job, commit_refined_page_result,
         )
