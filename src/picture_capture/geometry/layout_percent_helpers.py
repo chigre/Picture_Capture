@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from .models import AppSettings
+from ..models import AppSettings
 
 
 # User-facing layout geometry is expressed as percentages of the current source
