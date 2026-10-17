@@ -15,7 +15,7 @@ def flush_deferred_page_save(app, *, write_pdic, pdic_path) -> None:
         except tk.TclError:
             pass
     app._deferred_save_job = None
-    if getattr(app, "_deferred_save_uncertain", False):
+    if app.__dict__.get("_deferred_save_uncertain", False):
         raise RuntimeError("R3 PDIC write outcome uncertain; refusing stale deferred save")
     snapshot = getattr(app, "_deferred_save_snapshot", None)
     if snapshot is not None:

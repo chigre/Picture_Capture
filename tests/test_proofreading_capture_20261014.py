@@ -216,9 +216,18 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
         assert snippet.index("_review_evidence_before_save()") < snippet.index(
             "self._commit_edits()"
         )
-        assert snippet.index("self.parent.save_pdic(") < snippet.index(
+        # ReviewWindow now publishes PDIC and simplified in one recoverable
+        # bundle; the old sequential parent.save_pdic call was unsafe.
+        assert snippet.index("commit_review_bundle(self, transaction_before)") < snippet.index(
             "_review_evidence_after_save(evidence_before)"
         )
+    bundle = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+        / "proofreading_review_bundle.py"
+    ).read_text(encoding="utf-8")
+    assert "_stage_recovery(page, changes, rollback_required=True)" in bundle
+    assert "_rollback_failed_publish(page)" in bundle
+    assert "_bytes_or_absent(owned[role]) != new" in bundle
     assert "proofreading_event_capture" in review
 
 
