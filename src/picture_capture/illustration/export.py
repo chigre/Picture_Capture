@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from .formats import write_text_atomic
-from .illustrated_entries import IllustratedEntry, read_entries
-from .project_storage import exports_root
+from ..formats import write_text_atomic
+from .entries import IllustratedEntry, read_entries
+from ..project_storage import exports_root
 
 COLUMNS = ("lookup", "page", "group_id", "x", "y", "w", "h",
            "primary", "languages_json", "aliases_json", "status")
