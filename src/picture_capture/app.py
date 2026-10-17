@@ -15377,7 +15377,7 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages = list(project.images)
         settings = replace(self.settings)
-        # Explicit action overrides ordinary auto-refine.
+        # Explicit refine.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
             configured_refine_workers, refinement_uses_page_layout,
@@ -15394,7 +15394,7 @@ class PictureCaptureApp(tk.Tk):
                 return self._batch_page_states.get(int(index)) == "processing"
 
         def save_result(index: int, computed):
-            # Only the coordinator publishes validated PDIC.
+            # Guarded PDIC commit.
             return commit_refined_page_result(index, computed, page_owned)
 
         def done(completed, total, stopped, results, error) -> None:
