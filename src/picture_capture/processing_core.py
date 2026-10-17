@@ -2226,7 +2226,7 @@ def _refine_existing_entries_with_geometry(
                     lower_bound=max(0, int(geometry.top)),
                     upper_bound=int(geometry.bottom),
                 )
-                if _details.get("reason") != "verified_ink_top":
+                if _details.get("reason") != "verified_whole_column_blank":
                     unverified += 1
             else:
                 candidate_v, _details = refine_separator_y(

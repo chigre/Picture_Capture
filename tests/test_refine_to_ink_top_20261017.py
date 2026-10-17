@@ -50,7 +50,7 @@ def test_large_and_small_blank_gaps_use_same_true_ink_top_margin():
 def test_marker_within_printed_glyph_can_move_up_to_safe_top():
     position, details = _refine(_page(40, prior=(6, 25)), 42)
     assert position == 38
-    assert details["reason"] == "verified_ink_top"
+    assert details["reason"] == "verified_whole_column_blank"
     assert details["ink_top"] == 40
 
 
@@ -58,7 +58,7 @@ def test_safety_distance_controls_gap_and_zero_still_never_cuts_ink():
     image = _page(40, prior=(6, 25))
     assert _refine(image, 36, _settings(paddle_separator_safety_px=4))[0] == 36
     assert _refine(image, 36, _settings(paddle_separator_safety_px=2))[0] == 38
-    assert _refine(image, 36, _settings(paddle_separator_safety_px=0))[0] == 39
+    assert _refine(image, 36, _settings(paddle_separator_safety_px=0))[0] == 38
 
 
 def test_no_ink_or_isolated_scratch_does_not_move():
@@ -67,21 +67,21 @@ def test_no_ink_or_isolated_scratch_does_not_move():
     white[40, 15:85] = 0
     value, details = _refine(white, 35)
     assert value == 35
-    assert details["reason"] == "no_verified_headword_top"
+    assert details["reason"] == "no_whole_column_blank_y"
 
 
 def test_neighbouring_row_beyond_allowed_shift_is_not_used():
     distant = _page(100, prior=(10, 30))
     refined, details = _refine(distant, 48)
     assert refined == 48
-    assert details["reason"] == "no_verified_headword_top"
+    assert details["reason"] == "no_whole_column_blank_y"
 
 
 def test_when_previous_descender_occupies_safe_gap_keep_original():
     image = _page(40, prior=(21, 38))
     position, details = _refine(image, 33)
     assert position == 33
-    assert details["reason"] == "no_verified_headword_top"
+    assert details["reason"] == "no_whole_column_blank_y"
 
 
 def test_zero_max_shift_is_explicit_noop():
@@ -96,6 +96,46 @@ def test_zero_max_shift_is_explicit_noop():
 def test_settings_center_explains_automatic_and_manual_scope_accurately():
     assert "字顶" in schema.SETTING_HELP["paddle_separator_safety_px"]
     assert "最大" in schema.SETTING_HELP["separator_y_max_shift_ratio"]
-    assert "已保存 PDIC" in schema.SETTING_HELP["paddle_refine_separator_y"]
-    assert "与此实验开关无关" in schema.SETTING_HELP["separator_y_ink_safe_gap"]
+    assert "已有 PDIC 横线" in schema.SETTING_HELP["paddle_refine_separator_y"]
+    assert "不依赖此实验开关" in schema.SETTING_HELP["separator_y_ink_safe_gap"]
     assert any("手动按钮独立" in label for label, _ in schema.SEPARATOR_Y_CHECKS)
+
+
+def test_far_right_tall_character_requires_a_whiter_full_column_y():
+    # The word-head anchor is blank at Y38, but another tall glyph far to
+    # the right occupies Y37–39. Fixed ink_top-2 would slice that glyph.
+    image = _page(40, prior=(6, 25))
+    image[37:40, 96:100] = 0
+    refined, details = _refine(image, 36)
+    assert refined == 35
+    assert details["reason"] == "verified_whole_column_blank"
+    assert details["full_roi_x1"] > details["anchor_roi_x1"]
+    assert details["whole_column_ink_score"] == 0
+    # All three verification rows must have no black pixels across the column.
+    assert not np.any(image[refined - 1:refined + 2, 10:110] < 185)
+
+
+def test_no_whole_column_white_position_must_not_force_a_local_only_line():
+    # A vertical extension on the far right occupies *all* feasible Y rows
+    # above the detected headword. A locally blank word ROI is not enough.
+    image = _page(40)
+    image[26:40, 95:105] = 0
+    refined, details = _refine(image, 34)
+    assert refined == 34
+    assert details["reason"] == "no_whole_column_blank_y"
+
+
+def test_whole_column_selection_moves_up_or_down_from_saved_marker():
+    image = _page(40, prior=(6, 25))
+    assert _refine(image, 32)[0] == 38    # downward towards the first line
+    assert _refine(image, 42)[0] == 38    # upward out of the first-line glyph
+
+
+def test_full_column_whiteness_is_preferred_to_fixed_safety_offset():
+    image = _page(40, prior=(6, 25))
+    image[38, 96:100] = 0
+    image[37, 96:100] = 0
+    refined, diagnostics = _refine(image, 36)
+    assert refined == 35
+    assert diagnostics["gap"] == 5
+    assert diagnostics["whole_column_ink_score"] == 0

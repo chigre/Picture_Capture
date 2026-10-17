@@ -15380,7 +15380,7 @@ class PictureCaptureApp(tk.Tk):
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
             "\n\n请先去设置中心的精修Y调整参数。\n"
             "全部已有画线（含人工线）参与精修，不会新增或删除画线；"
-            "Y 位移不超过设置上限；不能确认字顶则保持旧线。继续？",
+            "在首行上缘附近寻找整栏空白Y；无安全位置则保留旧线。继续？",
             parent=self,
         ):
             return
@@ -15440,7 +15440,7 @@ class PictureCaptureApp(tk.Tk):
             uncertain = sum(int((row or {}).get("unverified", 0)) for row in results)
             suffix = f"，{limited} 条触及位移上限" if limited else ""
             if uncertain:
-                suffix += f"，{uncertain} 条字顶无法确认未移动"
+                suffix += f"，{uncertain} 条未找到整栏空白Y未移动"
             stopped_text = f"（提前停止：{completed}/{total} 页）" if stopped else ""
             self.status_var.set(
                 f"精修画线完成{stopped_text}：移动 {moved} 条；"
