@@ -2146,10 +2146,9 @@ def refine_existing_entries(
     source_image_path: Path | None = None,
     fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine all saved PDIC lines, including manual ones; preserve row identities."""
+    """Refine saved Y while preserving entry identity and text."""
     if source_image_path is None:
-        # Compatibility for injected/synthetic geometry callers. The GUI always
-        # passes the page path to enable the settings-aware production pipeline.
+        # Path-less legacy calls use their original geometry path.
         source, effective, analysis_source, geometry = _page_geometry_context(
             image, settings, profile_page_index,
         )
@@ -2183,12 +2182,11 @@ def _refine_existing_entries_with_geometry(
     align_to_ink_top: bool = False,
     fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Apply local Y-refinement without repeating Layout role classification."""
+    """Refine Y without reclassifying Layout rows."""
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
-    # Only the explicit button uses the verified text-top anchor. Legacy callers
-    # retain the shared valley engine until their own parity gates are passed.
+    # Keep existing-button and legacy Y engines separate.
     if align_to_ink_top:
         from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
     else:
