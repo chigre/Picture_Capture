@@ -92,7 +92,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
         ttk.Separator(panel, orient="horizontal").pack(fill="x", pady=(7, 6))
 
     def family(row: ttk.Frame, name: str) -> ttk.Combobox:
-        families = ("自动（系统推荐）", *tuple(sorted(set(font.families()), key=str.casefold)))
+        families = ("自动（系统推荐）", *tuple(sorted((f for f in font.families() if not f.startswith("@")), key=str.casefold)))
         combo = ttk.Combobox(
             row, textvariable=qv[name], values=families, state="normal",
             style="PC.Display.TCombobox",
