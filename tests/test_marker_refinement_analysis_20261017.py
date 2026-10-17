@@ -247,3 +247,29 @@ def test_auto_policy_cache_invalidates_on_existing_ppp_bytes(monkeypatch, tmp_pa
     finally:
         image.close()
         prep.clear_refinement_auto_policy_cache()
+
+
+def test_auto_master_on_but_every_field_off_skips_detector(monkeypatch):
+    from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    from picture_capture import dictionary_page_layout_policy
+
+    settings = AppSettings()
+    settings.analysis_denoise_enabled = False
+    settings.layout_mask_illustrations = False
+    settings.ordinary_auto_layout = True
+    for _field, switch in AUTO_LAYOUT_FIELDS:
+        setattr(settings, switch, False)
+
+    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
+    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("No selected automatic fields: no detector allowed")
+    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", forbidden)
+    image = _make_image()
+    source, effective, analysis = prep.prepare_refinement_analysis(
+        image, settings, 0, source_image_path=Path("dummy.png"),
+    )
+    assert not effective.manual_columns
+    source.close()
+    analysis.close()
+    image.close()
