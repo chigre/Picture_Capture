@@ -15381,7 +15381,8 @@ class PictureCaptureApp(tk.Tk):
         # Explicit refinement includes manual lines.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
-            configured_refine_workers, refine_page_job, commit_refined_page_result,
+            configured_refine_workers, refinement_uses_page_layout,
+            refine_page_job, commit_refined_page_result,
         )
         workers = configured_refine_workers(
             len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
@@ -15390,12 +15391,7 @@ class PictureCaptureApp(tk.Tk):
 
         cache_only_workers = (
             workers > 1 and not fixed_half_gutter
-            and bool(getattr(settings, "ordinary_auto_layout", False))
-            and any(bool(getattr(settings, switch, False)) for _field, switch
-                    in __import__(
-                        "picture_capture.dictionary_page_layout_policy",
-                        fromlist=["AUTO_LAYOUT_FIELDS"],
-                    ).AUTO_LAYOUT_FIELDS)
+            and refinement_uses_page_layout(settings)
         )
 
         def job_builder(index: int, _position: int, _total: int):
