@@ -2215,7 +2215,10 @@ def _refine_existing_entries_with_geometry(
             gray.shape[1],
             column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
         )
-        if fixed_half_gutter:
+        if align_to_ink_top:
+            # Normal and fast explicit Y refinement share the same physical
+            # X evidence band: column width plus at most half a gutter on
+            # either side. Their sole difference is how geometry is obtained.
             from .marker_refinement_fixed_band import fixed_half_gutter_band
             column_x, column_right = fixed_half_gutter_band(
                 geometry, col, int(canonical_v), gray.shape[1],
@@ -2231,7 +2234,9 @@ def _refine_existing_entries_with_geometry(
                     lower_bound=max(0, int(geometry.top)),
                     upper_bound=int(geometry.bottom),
                 )
-                if _details.get("reason") != "verified_whole_column_blank":
+                if _details.get("reason") not in {
+                    "verified_whole_column_blank", "verified_whole_column_valley",
+                }:
                     unverified += 1
             else:
                 candidate_v, _details = refine_separator_y(
