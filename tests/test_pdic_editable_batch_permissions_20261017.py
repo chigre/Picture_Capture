@@ -69,7 +69,7 @@ def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
         assert "_start_batch_task(" in segment
     # A final blanket reload would discard proofreading performed after a
     # worker finishes, so only the page-completion event may reload the page.
-    assert "and not self._batch_foreground_pages" in refiner
+    assert "save_result" in refiner
     assert "and not self._batch_foreground_pages" in only_ocr
     assert 'not getattr(app, "_batch_foreground_pages", False)' in batch_ocr
 
