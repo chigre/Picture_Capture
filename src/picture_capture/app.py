@@ -11805,7 +11805,7 @@ class PictureCaptureApp(tk.Tk):
                 if item_index is not None:
                     self._update_page_row(int(item_index))
                     if int(item_index) == self.current_index and self._foreground_batch_state(int(item_index)) == "done":
-                        # Same index reload does not save the stale foreground copy.
+                        # Reload without stale save.
                         self.load_page(int(item_index))
                 if not self._batch_pause_event.is_set() and not self._batch_stop_event.is_set():
                     self.batch_text_var.set(f"{self._batch_title}：已暂停 {completed}/{total}")
@@ -11843,8 +11843,7 @@ class PictureCaptureApp(tk.Tk):
                     self._update_page_row(item_index)
                     if (item_index == self.current_index
                             and self._foreground_batch_state(item_index) == "done"):
-                        # Reload the worker's saved PDIC instead of serializing
-                        # the stale foreground copy of the completed page.
+                        # Reload saved PDIC after worker commit.
                         self.load_page(item_index)
                 if not self._batch_pause_event.is_set() and not self._batch_stop_event.is_set():
                     if active:
@@ -11880,7 +11879,7 @@ class PictureCaptureApp(tk.Tk):
                 break
 
         if self._batch_active and not finished:
-            # Let Tk service button clicks before draining the backlog.
+            # Yield to Tk.
             delay = SATURATED_BATCH_POLL_DELAY_MS if yielded else 80
             self._batch_poll_job = self.after(delay, self._poll_batch_queue)
 
