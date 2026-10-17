@@ -4282,22 +4282,8 @@ class ReviewWindow(tk.Toplevel):
         self.parent.redraw()
 
     def _close_review(self) -> None:
-        if getattr(self, "_filter_rows_active", False):
-            self._flush_focused_changes_now()
-            if self._filter_save_running or self._filter_pending_changes:
-                self._filter_close_after_save = True
-                self.parent.status_var.set("正在保存筛选校对修改，完成后关闭校对窗口。")
-                return
-            self._finish_close_review()
-            return
-        try:
-            if self.save() is False:
-                return
-        except Exception as exc:
-            self.parent.status_var.set(f"校对保存失败，窗口保持打开：{exc}")
-            messagebox.showerror("校对未保存", f"保存失败，校对窗口不会关闭。\\n{exc}", parent=self)
-            return
-        self._finish_close_review()
+        from .ui.review_close_actions import close_review
+        close_review(self, showerror=messagebox.showerror)
 
     def autosave_commit(self) -> bool:
         """Commit review edits for the shared main-window autosave timer."""

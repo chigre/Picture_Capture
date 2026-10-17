@@ -24,7 +24,7 @@ def _bytes_or_absent(path):
 
 def _editor_state(app: Any):
     result = []
-    for editor, entry in tuple(getattr(app, "entry_editor_bindings", ())):
+    for editor, entry in tuple(app.__dict__.get("entry_editor_bindings", ())):
         try:
             result.append((editor, entry, str(editor.get())))
         except (tk.TclError, RuntimeError):
