@@ -1880,9 +1880,7 @@ class SettingsDialog(tk.Toplevel):
                 for name, value in derived.items():
                     if not hasattr(self.parent.settings, name):
                         continue
-                    # Respect an explicit advanced backend override made in this
-                    # dialog; only stale values inherited from the old language
-                    # are replaced automatically.
+                    # Keep overrides, replacing only old language defaults.
                     if name not in previous_backend or getattr(self.parent.settings, name) == previous_backend[name]:
                         setattr(self.parent.settings, name, value)
             self.parent.settings.paddle_lens_language = str(
@@ -1950,6 +1948,7 @@ class SettingsDialog(tk.Toplevel):
                 self.destroy()
             return True
         except Exception as exc:
+            self._last_settings_error = str(exc)
             if show_errors:
                 messagebox.showerror("参数无效", str(exc), parent=self)
             return False
