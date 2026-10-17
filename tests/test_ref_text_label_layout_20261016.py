@@ -1,6 +1,6 @@
 """REF OCR label presentation, independent from source bounding box."""
 from picture_capture.models import AppSettings
-from picture_capture.ref_text_label_layout import ref_text_label_rect
+from picture_capture.ref.text_label_layout import ref_text_label_rect
 from picture_capture.ui.settings import schema
 
 

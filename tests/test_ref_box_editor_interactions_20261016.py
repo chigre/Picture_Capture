@@ -11,7 +11,7 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.ref_box_geometry import hit_test, transform_box
+from picture_capture.ref.box_geometry import hit_test, transform_box
 from picture_capture.ref_boxes import RefBox, read_ref_boxes
 from picture_capture.ui.ref_box_controller import RefBoxController
 

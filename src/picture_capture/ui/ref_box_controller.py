@@ -15,11 +15,11 @@ from PIL import Image, ImageColor, ImageTk
 from ..ref_boxes import (
     RefBox, next_ref_id, read_ref_boxes, ref_box_ticket, write_ref_boxes,
 )
-from ..ref_box_geometry import (
+from ..ref.box_geometry import (
     hit_test, transform_box, action_cursor, ref_action_buttons,
 )
 from ..overlay_layout_helpers import effective_main_overlay_font_size
-from ..ref_text_label_layout import ref_text_label_rect
+from ..ref.text_label_layout import ref_text_label_rect
 from ..review_text_helpers import _entry_font_spec
 from ..ref_box_ocr import ocr_ref_boxes_job, local_ref_ocr_plan
 from ..ref_box_detection import (
