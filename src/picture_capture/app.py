@@ -11562,7 +11562,6 @@ class PictureCaptureApp(tk.Tk):
         *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
-        single_process_model: bool = False,
         respect_cpu_workers: bool = False,
     ) -> bool:
         """Run bounded page jobs; optional one-process GPU preflight before CPU."""
@@ -11595,7 +11594,7 @@ class PictureCaptureApp(tk.Tk):
             else resolve_crop_worker_count(max_workers)
         )
         # Light single-worker jobs use the sequential runner.
-        if workers <= 1 and gpu_preflight_func is None and not single_process_model:
+        if workers <= 1 and gpu_preflight_func is None:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -11627,11 +11626,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_in_item = False
         self.batch_progress_var.set(0.0)
         self.batch_progress.configure(maximum=100.0)
-        self.batch_text_var.set(
-            f"{title}：0/{len(items)}，等待首批版面模型初始化（1进程）"
-            if single_process_model else
-            f"{title}：准备并行处理 0/{len(items)}（{workers}进程）"
-        )
+        self.batch_text_var.set(f"{title}：准备并行处理 0/{len(items)}（{workers}进程）")
         self.batch_pause_button.configure(text="暂停", state="normal")
         self.batch_stop_button.configure(text="停止", state="normal")
         if not self.batch_bar.winfo_manager():
@@ -11834,9 +11829,7 @@ class PictureCaptureApp(tk.Tk):
                 self._batch_in_item = active > 0
                 self.batch_text_var.set(
                     f"{self._batch_title}：{completed}/{total}，"
-                    + ("逐页版面测定中（首批加载模型）"
-                       if self._batch_title == "精修画线" and workers == 1
-                       else f"并行 {active}/{workers} 页")
+                    + f"并行 {active}/{workers} 页"
                 )
                 self.status_var.set(
                     f"{self._batch_title}并行处理中：完成 {completed}/{total}，当前 {active} 页运行；最近派发 {label}"
