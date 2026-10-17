@@ -222,6 +222,12 @@ def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch,
     monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
     monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
     path = tmp_path / "scan.png"
+    # Exercise the existing-PPP branch, not the absent-PPP identity path.
+    monkeypatch.setattr(
+        "picture_capture.project_storage.ppp_read_path_for_image",
+        lambda _: tmp_path / "saved.ppp",
+    )
+    (tmp_path / "saved.ppp").write_text("fixture", encoding="utf-8")
     seen = []
 
     def mask(image, effective, *, profile_page_index, **kwargs):
@@ -243,16 +249,24 @@ def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch,
         image.close()
 
 
-def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path):
+def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path, monkeypatch):
+    from picture_capture import dictionary_page_layout_policy as policy
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True
+    settings.ordinary_auto_layout = False
+    monkeypatch.setattr(policy, "resolve_page_layout_policy", _forbidden)
     image = _page()
     try:
-        with pytest.raises(FileNotFoundError, match="PPP"):
-            prep.prepare_refinement_analysis(
-                image, settings, 0, source_image_path=tmp_path / "no_page.png",
-            )
+        source, _, analysis = prep.prepare_refinement_analysis(
+            image, settings, 0, source_image_path=tmp_path / "no_page.png",
+        )
+        try:
+            assert analysis.tobytes() == source.tobytes()
+            assert not (tmp_path / "no_page.ppp").exists()
+        finally:
+            analysis.close()
+            source.close()
     finally:
         image.close()
 
