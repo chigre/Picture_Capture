@@ -183,7 +183,8 @@ def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = False
-    settings.ordinary_auto_layout = True
+    # This test isolates optional whitening, not per-page physical detection.
+    settings.ordinary_auto_layout = False
     stages = []
     monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", _forbidden)
     monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
@@ -215,6 +216,7 @@ def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_
 def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch, tmp_path):
     from picture_capture import layout_illustration_mask
     settings = AppSettings()
+    settings.ordinary_auto_layout = False
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True
     monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
@@ -258,6 +260,7 @@ def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path):
 def test_disabled_whitefill_does_not_call_detector(monkeypatch):
     from picture_capture import layout_illustration_mask
     settings = AppSettings()
+    settings.ordinary_auto_layout = False
     settings.layout_mask_illustrations = False
     monkeypatch.setattr(
         layout_illustration_mask, "mask_large_illustrations_for_layout", _forbidden,
