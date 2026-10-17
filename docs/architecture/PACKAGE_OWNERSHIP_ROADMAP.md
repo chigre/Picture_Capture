@@ -60,6 +60,6 @@ This organization change is *not* a source-code compression project. An expanded
 
 ## Training package cohort (Issue #562)
 
-- Physically move three training services to `training/`: `export_page_understanding.py`, `export_unified_layout.py`, `export_v3.py`. No root shims for these seven.
-- Keep `training_baseline.py`, `training_export.py`, `training_export_composed.py`, `training_export_complete_dialog.py`, and `training_export_ui.py` as a documented thin compatibility entry point delegating to `ui/controllers/export.py`. Preserve v2/v3 training manifest identifiers, PDIC automatic baseline, export ZIP, and selected-page GUI semantics.
+- Physically move three training services to `training/`: `export_page_understanding.py`, `export_unified_layout.py`, `export_v3.py`. No root shims for these three.
+- Retain `training_baseline.py` (PDIC baseline interface), `training_export.py` (stable v2 export), `training_export_composed.py` (GUI composition entry), `training_export_complete_dialog.py` (GUI completion hook), and `training_export_ui.py` (legacy GUI delegation) at their existing root paths. These are distinct compatibility boundaries, not duplicate shims. Preserve v2/v3 training manifest identifiers, PDIC automatic baseline, export ZIP, and selected-page GUI semantics.
 - Expected root Python count after merge: **230 → 227**; verify with main and full CI.
