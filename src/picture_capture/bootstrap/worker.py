@@ -38,7 +38,7 @@ def build_worker_services() -> WorkerServices:
     processing_module = core_services.processing
 
     from ..layout_rows_cache import capture_layout_rows
-    from ..training.baseline import save_automatic_baseline
+    from ..training_baseline import save_automatic_baseline
 
     # PDIC sidecar persistence is already owned by build_core_services(). Entry
     # materialization/cropping/OCR classification is static processing code.
