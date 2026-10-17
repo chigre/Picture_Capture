@@ -92,31 +92,52 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
     from .formats import read_pdic, pdic_path
     from .image_utils import normalize_page_rgb
     from .processing_core import refine_existing_entries
+    from .marker_refinement_analysis import (
+        reset_refinement_layout_audit, read_refinement_layout_audit,
+        finish_refinement_layout_audit,
+    )
     from PIL import Image
 
+    expects_layout = (
+        not fixed_half_gutter and refinement_uses_page_layout(settings)
+    )
+    mode = ("fixed_half_gutter" if fixed_half_gutter else
+            "per_page_layout" if expects_layout else "profile_geometry")
     try:
         inputs = _inputs_for_page(page)
         before_hashes = _fingerprints(inputs)
         entries = read_pdic(pdic_path(page))
         if not entries:
             return {"page": image_path, "index": int(page_index),
-                    "skipped": 1, "reason": "当前页没有已有 PDIC 词条"}
+                    "skipped": 1, "mode": mode,
+                    "reason": "当前页没有已有 PDIC 词条；版面测量未执行"}
         with Image.open(page) as opened:
             image = normalize_page_rgb(opened)
         try:
             kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
-            refined, stats = refine_existing_entries(
-                image, entries, settings, profile_page_index=int(page_index),
-                source_image_path=page, **kwargs,
-            )
+            token = reset_refinement_layout_audit()
+            try:
+                refined, stats = refine_existing_entries(
+                    image, entries, settings, profile_page_index=int(page_index),
+                    source_image_path=page, **kwargs,
+                )
+                measured = read_refinement_layout_audit()
+            finally:
+                finish_refinement_layout_audit(token)
+            if expects_layout and measured != 1:
+                raise RuntimeError(
+                    f"本页应执行一次版面参数测量，实际执行 {measured} 次；拒绝提交"
+                )
             size = image.size
         finally:
             image.close()
         if _fingerprints(inputs) != before_hashes:
             return {"page": image_path, "index": int(page_index),
-                    "skipped": 1, "reason": "计算期间原图或相关文件发生变化"}
+                    "skipped": 1, "mode": mode,
+                    "reason": "计算期间原图或相关文件发生变化"}
         return {
             "page": image_path, "index": int(page_index),
+            "mode": mode, "layout_measured": int(measured),
             "fingerprints": before_hashes,
             "before": tuple((e.word, int(e.x), int(e.y)) for e in entries),
             "after": tuple((int(e.x), int(e.y)) for e in refined),
@@ -125,7 +146,8 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
     except Exception as exc:
         # Other pages can finish; this page has not written anything.
         return {"page": image_path, "index": int(page_index),
-                "skipped": 1, "reason": f"{type(exc).__name__}: {exc}"}
+                "skipped": 1, "mode": mode,
+                "reason": f"{type(exc).__name__}: {exc}"}
 
 
 def _edit_original_pdic(raw: bytes, before: tuple, after: tuple,
@@ -213,7 +235,8 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
     page = Path(result["page"])
     if result.get("skipped"):
         return {"index": int(page_index), "page": page.name,
-                "skipped": 1, "reason": result.get("reason", "跳过")}
+                "skipped": 1, "mode": result.get("mode"),
+                "reason": result.get("reason", "跳过")}
     if int(page_index) != int(result["index"]):
         return {"index": int(page_index), "page": page.name,
                 "skipped": 1, "reason": "页面身份不符"}
@@ -242,7 +265,9 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
         validate_refined_markers(page, stored, refined, tuple(result["size"]))
         if not any((a.x, a.y) != (b.x, b.y) for a, b in zip(stored, refined)):
             return {"index": int(page_index), "page": page.name,
-                    **result["stats"], "skipped": 0, "saved": 0}
+                    **result["stats"], "skipped": 0, "saved": 0,
+                    "mode": result.get("mode"),
+                    "layout_measured": int(result.get("layout_measured", 0))}
         pdic = pdic_path(page)
         raw = pdic.read_bytes()
         expected = dict(snapshot).get(str(pdic))
@@ -256,7 +281,9 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
             raise ValueError("提交前关联文件版本变化")
         saved = _atomic_bytes(pdic, payload, expected_sha=expected)
         return {"index": int(page_index), "page": page.name,
-                **result["stats"], "skipped": 0, "saved": int(saved)}
+                **result["stats"], "skipped": 0, "saved": int(saved),
+                "mode": result.get("mode"),
+                "layout_measured": int(result.get("layout_measured", 0))}
     except (ValueError, OSError, UnicodeError) as exc:
         return {"index": int(page_index), "page": page.name,
                 "skipped": 1, "reason": str(exc)}
