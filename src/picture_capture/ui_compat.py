@@ -101,7 +101,10 @@ def normalize_content_font_setting(value: str | None) -> str:
     text = str(value or "").strip()
     if not text or text.casefold() in {"auto", "system", "default"} or text.startswith("自动"):
         return AUTO_FONT_FAMILY
-    return text
+    # Windows lists '@Family' GDI vertical faces alongside horizontal
+    # families. In a horizontal Tk Entry those faces rotate CJK glyphs.
+    # Orientation belongs to layout_writing_mode, never to a font prefix.
+    return text.lstrip("@") or AUTO_FONT_FAMILY
 
 
 def resolve_content_font_family(
@@ -124,17 +127,24 @@ def preferred_font_family(
 ) -> str:
     """Return the first installed family, else the active Tk named-font family."""
     try:
-        available = {name.casefold(): name for name in tkfont.families(widget)}
+        available = {
+            name.casefold(): name for name in tkfont.families(widget)
+            if not str(name).startswith("@")
+        }
     except tk.TclError:
         available = {}
     for candidate in candidates:
-        found = available.get(str(candidate).casefold())
+        normal = normalize_content_font_setting(str(candidate))
+        if normal == AUTO_FONT_FAMILY:
+            continue
+        found = available.get(normal.casefold())
         if found:
             return found
     try:
-        return str(tkfont.nametofont(fallback_named_font, root=widget).actual("family"))
+        fallback = str(tkfont.nametofont(fallback_named_font, root=widget).actual("family"))
+        return normalize_content_font_setting(fallback)
     except (tk.TclError, TypeError):
-        return str(next(iter(candidates), "TkDefaultFont"))
+        return normalize_content_font_setting(next(iter(candidates), "TkDefaultFont"))
 
 
 def screen_work_area(widget: tk.Misc) -> tuple[int, int, int, int]:
