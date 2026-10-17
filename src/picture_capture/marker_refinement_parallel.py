@@ -16,13 +16,25 @@ from typing import Any
 from .models import AppSettings
 
 
-def configured_refine_workers(page_count: int, *, cpus: int | None = None,
-                              configured: str | None = None) -> int:
-    """Reuse Environment Center CPU worker setting, with a RAM-safe cap.
+def refinement_uses_page_layout(settings: AppSettings) -> bool:
+    """Whether the explicit Y refinement invokes the heavyweight page detector."""
+    if not bool(getattr(settings, "ordinary_auto_layout", False)):
+        return False
+    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    return any(bool(getattr(settings, switch, False))
+               for _field, switch in AUTO_LAYOUT_FIELDS)
 
-    auto=2, explicit 1=serial, explicit 2-4 honored, larger values capped at 4.
-    Unlike normal drawing, this task never creates Paddle text-detection models.
+
+def configured_refine_workers(page_count: int, *, cpus: int | None = None,
+                              configured: str | None = None,
+                              settings: AppSettings | None = None) -> int:
+    """CPU-only refinement uses up to four; per-page model detection uses one.
+
+    Layout detector may initialize PaddleOCR; serializing that work in a
+    long-lived spawned process prevents competing Windows model initializers.
     """
+    if settings is not None and refinement_uses_page_layout(settings):
+        return 1
     if configured is None:
         from .runtime_environment import runtime_setting
         configured = str(runtime_setting("paddle_cpu_workers", "auto") or "auto")

@@ -18,6 +18,56 @@ def test_reuse_environment_worker_setting_with_refine_memory_cap():
     assert parallel.configured_refine_workers(1, cpus=8, configured="auto") == 1
 
 
+def test_auto_layout_refine_caps_worker_to_one_persistent_model_process():
+    from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+
+    settings = AppSettings()
+    settings.ordinary_auto_layout = True
+    for _field, switch in AUTO_LAYOUT_FIELDS:
+        setattr(settings, switch, False)
+
+    assert not parallel.refinement_uses_page_layout(settings)
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="4", cpus=16,
+    ) == 4
+
+    settings.ordinary_auto_column_width = True
+    assert parallel.refinement_uses_page_layout(settings)
+    for configured in ("auto", "1", "4", "16"):
+        assert parallel.configured_refine_workers(
+            20, settings=settings, configured=configured, cpus=16,
+        ) == 1
+    assert parallel.configured_refine_workers(
+        1, settings=settings, configured="4", cpus=16,
+    ) == 1
+    settings.ordinary_auto_layout = False
+    assert not parallel.refinement_uses_page_layout(settings)
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="4", cpus=16,
+    ) == 4
+
+
+def test_refinement_heavy_batch_uses_spawn_not_gui_thread():
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    ).read_text(encoding="utf-8")
+    scope = source.split("    def refine_lines_selected_scope(", 1)[1].split(
+        "    def ocr_ordinary_lines_text_selected_scope(", 1
+    )[0]
+    assert "needs_layout = refinement_uses_page_layout(settings)" in scope
+    assert "configured_refine_workers(len(indices), settings=settings)" in scope
+    assert "single_process_model=needs_layout" in scope
+
+    dispatcher = source.split("    def _start_parallel_batch_task(", 1)[1].split(
+        "    def _poll_batch_queue(", 1
+    )[0]
+    assert "and not single_process_model" in dispatcher
+    assert "ProcessPoolExecutor(max_workers=workers, mp_context=context)" in dispatcher
+    assert 'multiprocessing.get_context("spawn")' in dispatcher
+    assert "等待首批版面模型初始化" in dispatcher
+    assert "single_process_model else" in dispatcher
+
+
 def test_roundtrip_changes_only_coordinates_not_pdic_format():
     original = (b"word#10#30#1.00#3.000#page#prev#next#EXTRA\r\n"
                 b"\r\n"

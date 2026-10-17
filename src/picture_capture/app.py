@@ -11562,6 +11562,7 @@ class PictureCaptureApp(tk.Tk):
         *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
+        single_process_model: bool = False,
     ) -> bool:
         """Run bounded page jobs; optional one-process GPU preflight before CPU."""
         if self._batch_active:
@@ -11588,9 +11589,8 @@ class PictureCaptureApp(tk.Tk):
             return False
 
         workers = resolve_crop_worker_count(max_workers)
-        # A one-worker request is intentionally routed through the existing
-        # sequential runner, useful for low-memory machines and diagnostics.
-        if workers <= 1 and gpu_preflight_func is None:
+        # Light single-worker jobs use the sequential runner.
+        if workers <= 1 and gpu_preflight_func is None and not single_process_model:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -11622,7 +11622,11 @@ class PictureCaptureApp(tk.Tk):
         self._batch_in_item = False
         self.batch_progress_var.set(0.0)
         self.batch_progress.configure(maximum=100.0)
-        self.batch_text_var.set(f"{title}：准备并行处理 0/{len(items)}（{workers}进程）")
+        self.batch_text_var.set(
+            f"{title}：0/{len(items)}，等待首批版面模型初始化（1进程）"
+            if single_process_model else
+            f"{title}：准备并行处理 0/{len(items)}（{workers}进程）"
+        )
         self.batch_pause_button.configure(text="暂停", state="normal")
         self.batch_stop_button.configure(text="停止", state="normal")
         if not self.batch_bar.winfo_manager():
@@ -11665,8 +11669,7 @@ class PictureCaptureApp(tk.Tk):
             )
             try:
                 while True:
-                    # Fill only the currently free worker slots. This is what
-                    # makes pause/stop meaningful instead of pre-queuing all pages.
+                    # Bound submissions so pause/stop halts new dispatches.
                     while (
                         self._batch_pause_event.is_set()
                         and not self._batch_stop_event.is_set()
@@ -11679,9 +11682,7 @@ class PictureCaptureApp(tk.Tk):
                         item_index = page_id(item) if foreground_page_edit else None
                         next_index += 1
                         if foreground_page_edit:
-                            # The same lock protects the foreground editor's
-                            # pending -> manual_locked claim. No submit, and
-                            # therefore no PDIC overwrite, after that claim.
+                            # Lock protects pending/manual ownership.
                             with self._batch_state_lock:
                                 state = self._batch_page_states.get(item_index, "pending")
                                 if state == "manual_locked":
@@ -11699,11 +11700,7 @@ class PictureCaptureApp(tk.Tk):
                         if gpu_executor is not None:
                             if gpu_job_builder is None:
                                 raise RuntimeError("Missing GPU preflight job builder")
-                            # Exactly ONE long-lived model-owning spawn process
-                            # does each full Layout detector preflight. Never
-                            # initialize CUDA/Paddle inside the CPU workers.
-                            # This synchronous handoff intentionally bounds
-                            # in-flight pages to 1 GPU + <= workers CPU.
+                            # Model preflight uses one persistent GPU process.
                             gpu_args = gpu_job_builder(item, position, total)
                             self._batch_queue.put((
                                 "pipeline_stage", position, total, label, "GPU版面预检",
@@ -11831,7 +11828,10 @@ class PictureCaptureApp(tk.Tk):
                 _kind, completed, total, active, label, workers = event
                 self._batch_in_item = active > 0
                 self.batch_text_var.set(
-                    f"{self._batch_title}：{completed}/{total}，并行 {active}/{workers} 页"
+                    f"{self._batch_title}：{completed}/{total}，"
+                    + ("逐页版面测定中（首批加载模型）"
+                       if self._batch_title == "精修画线" and workers == 1
+                       else f"并行 {active}/{workers} 页")
                 )
                 self.status_var.set(
                     f"{self._batch_title}并行处理中：完成 {completed}/{total}，当前 {active} 页运行；最近派发 {label}"
@@ -15381,9 +15381,11 @@ class PictureCaptureApp(tk.Tk):
         # refinement was disabled for normal detection.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
-            configured_refine_workers, refine_page_job, commit_refined_page_result,
+            configured_refine_workers, refinement_uses_page_layout,
+            refine_page_job, commit_refined_page_result,
         )
-        workers = configured_refine_workers(len(indices))
+        needs_layout = refinement_uses_page_layout(settings)
+        workers = configured_refine_workers(len(indices), settings=settings)
 
         def job_builder(index: int, _position: int, _total: int):
             return str(pages[index]), settings, index
@@ -15423,7 +15425,7 @@ class PictureCaptureApp(tk.Tk):
         self._start_parallel_batch_task(
             "精修画线", indices, refine_page_job, job_builder, save_result, done,
             item_label=lambda i: pages[i].name,
-            max_workers=workers,
+            max_workers=workers, single_process_model=needs_layout,
             foreground_page_edit=True, allow_pdic_edits=True,
         )
 
