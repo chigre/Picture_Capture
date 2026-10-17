@@ -93,8 +93,9 @@ def test_unrelated_setting_change_still_reuses_physical_json(tmp_path, monkeypat
     assert seen == []
 
 
-def test_missing_requested_row_padding_requires_detector(tmp_path, monkeypatch):
+def test_unrelated_row_padding_switch_reuses_needed_json_fields(tmp_path, monkeypatch):
     from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture import marker_refinement_parallel as batch
     settings = _settings()
     settings.ordinary_auto_row_padding = True
     page = tmp_path / "page.png"
@@ -102,18 +103,48 @@ def test_missing_requested_row_padding_requires_detector(tmp_path, monkeypatch):
     assert write_layout_rows_cache(
         tmp_path, page, 0, settings, _cached_layout(75, 10),
     ) is not None
-    seen = []
-    def fake_policy(image, current, *, page_index):
-        seen.append(page_index)
-        return current, None, {}
-    monkeypatch.setattr(policy, "resolve_page_layout_policy", fake_policy)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("row padding alone must not invalidate JSON geometry")
+
+    monkeypatch.setattr(policy, "resolve_page_layout_policy", forbidden)
+    assert batch._page_has_usable_refinement_json(page, 0, settings)
     with Image.open(page) as image:
-        source, _, analysis = prep.prepare_refinement_analysis(
+        source, effective, analysis = prep.prepare_refinement_analysis(
             image, settings, 0, source_image_path=page,
         )
+        try:
+            assert (effective.column_width, effective.character_height) == (75, 12)
+            assert prep.read_refinement_layout_source() == "layoutrows_cache"
+        finally:
+            source.close()
+            analysis.close()
+
+
+def test_row_padding_only_requires_no_layout_detector(tmp_path, monkeypatch):
+    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture import marker_refinement_parallel as batch
+    settings = _settings()
+    for _field, flag in policy.AUTO_LAYOUT_FIELDS:
+        setattr(settings, flag, False)
+    settings.ordinary_auto_row_padding = True
+    assert not batch.refinement_uses_page_layout(settings)
+    monkeypatch.setattr(
+        policy, "resolve_page_layout_policy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unnecessary GPU detector")
+        ),
+    )
+    image = Image.new("RGB", (180, 150), "white")
+    source, effective, analysis = prep.prepare_refinement_analysis(
+        image, settings, 0, source_image_path=tmp_path / "page.png",
+    )
+    try:
+        assert effective.row_padding == settings.row_padding
+    finally:
         source.close()
         analysis.close()
-    assert seen == [0]
+        image.close()
 
 
 def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path, monkeypatch):
