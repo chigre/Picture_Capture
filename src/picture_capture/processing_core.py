@@ -2830,12 +2830,22 @@ def split_single_lines(
     manifest: list[str] = []
     replacements: list[tuple[Path, Path]] = []
     staged: list[Path] = []
+    # The saved marker locations and crop boxes remain authoritative. Only the
+    # raster written to PNG is white-filled, using exactly the refinement
+    # button's masking policy; no PDIC/PPP/source image is modified.
+    from .marker_refinement_analysis import whiten_illustrations_for_refinement
+
+    export_image = source
     try:
+        export_image = whiten_illustrations_for_refinement(
+            source, effective, int(profile_page_index),
+            source_image_path=Path(image_path),
+        )
         for index, entry in enumerate(sort_entries_reading_order(entries, geometry, page_sections)):
             filename = f"{image_path.stem}_SW_{index:03d}.png"
             target = output_dir / filename
             box, temp = _stage_crop(
-                source, target, line_box(entry, geometry, source, effective),
+                export_image, target, line_box(entry, geometry, source, effective),
             )
             staged.append(temp)
             replacements.append((temp, target))
@@ -2863,6 +2873,14 @@ def split_single_lines(
         for temp in staged:
             temp.unlink(missing_ok=True)
         raise
+    finally:
+        if export_image is not source:
+            export_image.close()
+        if _analysis_source is not None and _analysis_source is not source:
+            _analysis_source.close()
+        if source is not image:
+            source.close()
+        image.close()
     return records
 
 
