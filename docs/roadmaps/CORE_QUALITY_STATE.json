@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-17T07:29:47.282Z",
+  "updated_at_utc": "2026-10-17T07:30:48.744Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -37,7 +37,7 @@
       ]
     },
     "implementation_head_sha": "f80daf07d7421f5bd8d20cce0c86fce160813697",
-    "latest_verified_main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
+    "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
       {
@@ -49,20 +49,15 @@
         "type": "r3_human_acceptance_waived_for_current_merge",
         "message": "User explicit 2026-10-17 authorization: defer actual R3 Windows operator acceptance and assume it will pass for merge decision. This is a documented waiver NOT evidence of human validation, and is not R3 operator verified. #503 remain as follow-up for true operator evidence.",
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
-      },
-      {
-        "type": "r3_postmerge_windows_runner_retry",
-        "message": "Postmerge main CI 39013602419 attempt 1 Windows test failed on hosted Python3.13 Tcl init.tcl read (2847 tests passed, one Tcl init error); failed Windows job rerun attempt 2 in progress when docs PR drafted; never claim overall green until rerun success.",
-        "url": "https://github.com/chigre/Picture_Capture/actions/runs/39013602419"
       }
     ],
-    "required_next_action": "Confirm postmerge main CI 39013602419 Windows rerun success. Review/green-gate docs-only PR created because main protected; merge docs only after full CI/CodeQL, then verify docs postmerge main CI. R2/#483 W1-W11 and R3/#503 actual Windows human acceptance remain waived/deferred NOT PERFORMED.",
-    "last_test_evidence": "PR #542 fixed final head f80daf07d7421f5bd8d20cce0c86fce160813697 merged squash main e12a9db4cc9199069e93d2c3ef12df97fcafd403; PR Windows/macOS/Ubuntu/Python3.10 CI 39013417928 SUCCESS, CodeQL 39013415268 SUCCESS; main CodeQL 39013601837 SUCCESS. First postmerge main CI 39013602419 attempt 1: 3 platforms SUCCESS, hosted Windows 3.13 Tcl init.tcl environment error (2847 passed, 1 failed); retry attempt 2 pending when drafted. R3 human test waived for current merge explicitly 2026-10-17 but actually NOT PERFORMED. R2/B2 human W1-W11 not performed. R3 recovery is NOT OS cross-file atomicity.",
+    "required_next_action": "Protected main: verify documentation-only PR #548 latest-head CI/CodeQL and merge only after green; then verify docs postmerge main CI. #542 R3 engineering delivered/merged. Human Windows #503 and R2 W1-W11 #483 explicitly not performed (user waiver), keep issues open.",
+    "last_test_evidence": "#542 final PR f80daf07: CI https://github.com/chigre/Picture_Capture/actions/runs/39013417928 SUCCESS all Windows/macOS/Ubuntu/Python3.10; PR CodeQL 39013415268 SUCCESS; squash main e12a9db4cc9199069e93d2c3ef12df97fcafd403; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/39013602419 SUCCESS on attempt 2 after Windows hosted Tcl init.tcl transient failure attempt 1; main CodeQL https://github.com/chigre/Picture_Capture/actions/runs/39013601837 SUCCESS. Real Windows operator checks R3/#503 and R2/#483 explicitly NOT PERFORMED; waived for R3 engineering merge only; OS cross-file atomicity not claimed.",
     "active_batch": "B3",
     "next_batch": "B3",
     "r3_patch_chain": {
       "scope": "v4-v8",
-      "status": "engineering_merged_human_waived_postmerge_ci_retry",
+      "status": "engineering_merged_main_ci_success_human_waived",
       "commits": [
         "16e00f2120e0c24bdd3d1d676a2b8595ad1936ac",
         "ded1117abff9365e5ba6d451f1df900fa1cbfec5"
@@ -86,7 +81,10 @@
       "pr_gate": "https://github.com/chigre/Picture_Capture/actions/runs/39013415268",
       "pr_gate_conclusion": "success",
       "human_windows": "deferred_not_performed_user_waiver",
-      "postmerge_main_ci_status": "retry_pending"
+      "postmerge_main_ci_status": "success_attempt_2",
+      "postmerge_main_ci_conclusion": "success",
+      "postmerge_main_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/39013602419",
+      "postmerge_main_codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/39013601837"
     },
     "main_sync": {
       "main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
@@ -862,7 +860,7 @@
       "status": "engineering_merged_human_deferred",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/542",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "R3 engineering #542 merged main e12a9db4; PR CI 39013417928 and CodeQL 39013415268 green. Postmerge Windows hosted Tcl runner retry 39013602419 pending, operator human acceptance deferred NOT PERFORMED; R2/B2 #483 remains in_progress.",
+      "blocker": "R3 engineering #542 delivered and merged, PR and postmerge main CI green (39013602419 attempt 2; main CodeQL 39013601837). R3 human Windows NOT PERFORMED per user waiver, #503 remains open; R2/B2 #483 W1–W11 pending.",
       "active_implementation_branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
       "active_head_sha": "f80daf07d7421f5bd8d20cce0c86fce160813697",
       "unit_evidence": {
@@ -881,9 +879,11 @@
         "head_sha": "f80daf07d7421f5bd8d20cce0c86fce160813697",
         "url": "https://github.com/chigre/Picture_Capture/actions/runs/39013417928",
         "postmerge_main_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/39013602419",
-        "postmerge_main_ci_status": "retry_pending",
+        "postmerge_main_ci_status": "completed",
         "postmerge_main_ci_conclusion": "success",
-        "main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403"
+        "main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
+        "postmerge_main_ci_attempt": 2,
+        "postmerge_main_codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/39013601837"
       },
       "latest_merged_pr": "https://github.com/chigre/Picture_Capture/pull/519",
       "latest_merge_sha": "6987a4a2eac37a6b3524e6c63ae87a1b60f5ad7a",
