@@ -8,7 +8,7 @@ from dataclasses import replace
 from math import hypot
 from typing import Iterable
 from uuid import uuid4
-from .illustrated_entries import IllustratedEntry
+from .entries import IllustratedEntry
 
 def bounding(items: Iterable[IllustratedEntry]) -> tuple[int,int,int,int]:
     rows=list(items)
