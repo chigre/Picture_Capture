@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 
-from .models import Entry
+from ..models import Entry
 
 
 AUTO_BASELINE_FORMAT = "picture-capture-auto-baseline-v1"
