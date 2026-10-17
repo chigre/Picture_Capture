@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-17T06:06:21Z",
+  "updated_at_utc": "2026-10-17T06:17:18.480Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -30,13 +30,13 @@
       "number": 542,
       "url": "https://github.com/chigre/Picture_Capture/pull/542",
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "draft_ci_green_diverged_22_main_commits_human_pending",
+      "status": "draft_main_synced_pending_fresh_ci_and_human_acceptance",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "9e45487e9b21ccd046c478ec00314548818e8554",
+    "implementation_head_sha": "0511b30a20be57ba79d378eded03d4a1f0f7c9bf",
     "latest_verified_main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
     "last_completed_work_item": "R1.3",
     "blockers": [
@@ -51,18 +51,18 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       },
       {
-        "type": "r3_main_divergence",
-        "message": "PR #542 head 9e45487e and live main db746ec4 diverged; main is 22 commits ahead, branch 5 commits ahead; prior green CI is not merged-head evidence.",
-        "url": "https://github.com/chigre/Picture_Capture/pull/542"
-      },
-      {
         "type": "r3_ui_disk_save_failure",
         "message": "Source-confirmed unhandled failure paths: ReviewWindow._close_review finally destroys window after save error; ReviewWindow.save/autosave_commit mutate shared Entry/editor before PDIC persistence; PictureCaptureApp.save_pdic clears deferred snapshot before write; repair and regression required.",
         "url": "https://github.com/chigre/Picture_Capture/pull/542"
+      },
+      {
+        "type": "r3_merged_head_ci_pending",
+        "message": "PR #542 is synced with main@db746ec4 via safe two-parent merge 0511b30a; main 0 ahead of PR branch and PR 24 ahead before documentation checkpoint. Fresh merged-head Windows/macOS/Ubuntu/Python3.10 CI is not confirmed; previous green CI belongs to earlier SHA.",
+        "url": "https://github.com/chigre/Picture_Capture/pull/542/checks"
       }
     ],
-    "required_next_action": "On sole Draft PR #542, add fail-before failure-injection regressions for ReviewWindow.save/autosave/_close_review and app.save_pdic deferred snapshot, then repair UI/PDIC rollback and close refusal. Reconcile main@db746ec4 without mixing independent refinement feature, run fixed merged-head four-platform CI; require real Windows R3/#503 before merge. Keep R2/#483 W1-W11 pending and in_progress.",
-    "last_test_evidence": "Live main@db746ec4: 39007936775 four-platform SUCCESS; 39007936618 CodeQL actions/python SUCCESS. #546 whitefill-only and #547 parallel refinement are MERGED independently, refine feature branch no longer exists. #542@9e45487e CI 38970650901 four-platform SUCCESS, but GitHub compare against main reports diverged (22 commits behind, 5 ahead); no combined-head CI. R3 human Windows #503 and R2 W1-W11 #483 pending. Source audit: ReviewWindow._close_review() uses finally close even on save failure; save/autosave commit shared Entry and canvas before PDIC write; app.save_pdic() clears deferred snapshot before write; no proven cross-file OS atomicity.",
+    "required_next_action": "On sole Draft PR #542, add failure-injection regressions for ReviewWindow.save/autosave/_close_review and app.save_pdic deferred snapshot and repair UI/disk rollback; run fixed latest-head Windows/macOS/Ubuntu/Python3.10 CI, then genuine Windows R3/#503 acceptance before any production merge. R2/#483 W1-W11 pending, B2 in_progress.",
+    "last_test_evidence": "2026-10-17: PR #542 prior HEAD 41f14fe55b0bd4f465e86f6e7314f30910e85281, CI https://github.com/chigre/Picture_Capture/actions/runs/39008787964 SUCCESS; safe main sync created 0511b30a20be57ba79d378eded03d4a1f0f7c9bf with first parent PR head and second main db746ec4; GitHub compare main...branch => behind=0, ahead=24, no main mismatch. No new merged-head CI result at checkpoint; document-only commit will supersede HEAD and require new fixed-SHA CI. No real Windows R3 acceptance.",
     "active_batch": "B3",
     "next_batch": "B3",
     "r3_patch_chain": {
@@ -91,6 +91,17 @@
       "pr_gate": "https://github.com/chigre/Picture_Capture/actions/runs/38970237522",
       "pr_gate_conclusion": "success",
       "human_windows": "pending"
+    },
+    "main_sync": {
+      "main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
+      "branch_before_sha": "41f14fe55b0bd4f465e86f6e7314f30910e85281",
+      "merge_sha": "0511b30a20be57ba79d378eded03d4a1f0f7c9bf",
+      "merge_strategy": "two-parent merge, preserved GitHub no-conflict test merge tree; no force push",
+      "ahead_by": 24,
+      "behind_by": 0,
+      "fresh_ci": "pending",
+      "human_r3": "pending",
+      "timestamp_utc": "2026-10-17T06:17:18.480Z"
     }
   },
   "units": {
@@ -845,11 +856,11 @@
         "R3.2"
       ],
       "status": "in_progress",
-      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/519",
+      "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/542",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "R3 partial scope #519 merged/main CI green. Candidate-owned Undo/Redo and real human Windows R3 still pending; #483 R2 deferred remains open and in_progress.",
+      "blocker": "Main divergence resolved at 0511b30a; integrated four-platform CI, UI/disk failure injections, #503 Windows R3 human acceptance pending. #483/B2 remains deferred and open.",
       "active_implementation_branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "active_head_sha": "8b52b344d75513cd263e9d8c0fe2526a2ec030a5",
+      "active_head_sha": "0511b30a20be57ba79d378eded03d4a1f0f7c9bf",
       "unit_evidence": {
         "R3.1": {
           "status": "in_progress",
