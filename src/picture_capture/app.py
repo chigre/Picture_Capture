@@ -15358,7 +15358,7 @@ class PictureCaptureApp(tk.Tk):
             f"精修所选 {len(indices)} 页：\n"
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
             ("\n\n快速模式：临时填白插图，使用固定栏宽及两侧半栏距；不做逐页版式识别。\n"
-             if fixed_half_gutter else "\n\n请先去设置中心的精修Y调整参数。\n")
+             if fixed_half_gutter else "\n\n请先去设置中心的精修Y调整参数。\n") +
             "全部已有画线（含人工线）参与精修，不会新增或删除画线；"
             "在首行上缘附近寻找整栏空白Y；无安全位置则保留旧线。继续？",
             parent=self,
