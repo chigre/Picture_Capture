@@ -15386,17 +15386,13 @@ class PictureCaptureApp(tk.Tk):
         )
         workers = configured_refine_workers(
             len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
-            cache_pages=tuple((pages[index], index) for index in indices),
-        )
-
-        cache_only_workers = (
-            workers > 1 and not fixed_half_gutter
-            and refinement_uses_page_layout(settings)
+            cache_pages=tuple((pages[i], i) for i in indices),
         )
 
         def job_builder(index: int, _position: int, _total: int):
             return (str(pages[index]), settings, index, fixed_half_gutter,
-                    cache_only_workers)
+                    workers > 1 and refinement_uses_page_layout(settings)
+                    and not fixed_half_gutter)
 
         def page_owned(index: int) -> bool:
             with self._batch_state_lock:
