@@ -6,6 +6,7 @@ existing PDIC markers are refined. Whitefill uses only an in-memory copy.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,6 +14,23 @@ from PIL import Image
 
 from .image_utils import normalize_page_rgb
 from .profile_semantics import effective_page_settings, page_template_analysis_image
+
+# Per-task evidence, not a shared page-layout cache or persisted setting.
+# Windows workers may be reused: each page resets this counter explicitly.
+_PAGE_LAYOUT_MEASURES: ContextVar[int] = ContextVar("refine_page_layout_measures", default=0)
+
+
+def reset_refinement_layout_audit():
+    return _PAGE_LAYOUT_MEASURES.set(0)
+
+
+def read_refinement_layout_audit() -> int:
+    return _PAGE_LAYOUT_MEASURES.get()
+
+
+def finish_refinement_layout_audit(token) -> None:
+    _PAGE_LAYOUT_MEASURES.reset(token)
+
 
 
 def whiten_illustrations_for_refinement(
@@ -111,6 +129,7 @@ def prepare_refinement_analysis(
                 effective, _estimate, _applied = resolve_page_layout_policy(
                     analysis, effective, page_index=int(page_index),
                 )
+                _PAGE_LAYOUT_MEASURES.set(_PAGE_LAYOUT_MEASURES.get() + 1)
 
         template = page_template_analysis_image(
             analysis, effective, int(page_index),
