@@ -2824,28 +2824,20 @@ def split_single_lines(
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
     )
+    from .marker_refinement_analysis import whiten_illustrations_for_refinement as whiten
+    source = whiten(source, effective, profile_page_index, source_image_path=image_path)
     if page_sections is None:
         page_sections = read_page_sections(image_path)
     records: list[CropRecord] = []
     manifest: list[str] = []
     replacements: list[tuple[Path, Path]] = []
     staged: list[Path] = []
-    # The saved marker locations and crop boxes remain authoritative. Only the
-    # raster written to PNG is white-filled, using exactly the refinement
-    # button's masking policy; no PDIC/PPP/source image is modified.
-    from .marker_refinement_analysis import whiten_illustrations_for_refinement
-
-    export_image = source
     try:
-        export_image = whiten_illustrations_for_refinement(
-            source, effective, int(profile_page_index),
-            source_image_path=Path(image_path),
-        )
         for index, entry in enumerate(sort_entries_reading_order(entries, geometry, page_sections)):
             filename = f"{image_path.stem}_SW_{index:03d}.png"
             target = output_dir / filename
             box, temp = _stage_crop(
-                export_image, target, line_box(entry, geometry, source, effective),
+                source, target, line_box(entry, geometry, source, effective),
             )
             staged.append(temp)
             replacements.append((temp, target))
@@ -2860,27 +2852,16 @@ def split_single_lines(
             replacements.append((manifest_temp, manifest_target))
         stale = list(output_dir.glob(f"{image_path.stem}_SW_*.png"))
         if not write_manifest:
-            # Remove a previously generated legacy manifest as part of the
-            # same rollback-safe page publish as the replacement PNGs.
             stale.append(manifest_target)
         if replacements:
             _publish_file_transaction(replacements, stale_paths=stale)
         else:
-            # An empty manifest-free page has no replacement file to publish.
             for path in stale:
                 path.unlink(missing_ok=True)
     except Exception:
         for temp in staged:
             temp.unlink(missing_ok=True)
         raise
-    finally:
-        if export_image is not source:
-            export_image.close()
-        if _analysis_source is not None and _analysis_source is not source:
-            _analysis_source.close()
-        if source is not image:
-            source.close()
-        image.close()
     return records
 
 
