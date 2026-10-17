@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from copy import deepcopy
+from dataclasses import fields
 import re
 import tkinter as tk
 from tkinter import messagebox
@@ -122,7 +123,10 @@ def schedule_autosave(dialog: Any) -> None:
 def _save_without_partial_settings(dialog: Any, *, close: bool, show_errors: bool) -> bool:
     """A rejected save must not leave some settings changed in memory."""
     settings = dialog.parent.settings
-    snapshot = deepcopy(vars(settings))
+    snapshot = {
+        field.name: deepcopy(getattr(settings, field.name))
+        for field in fields(settings)
+    }
     ok = dialog.save(close=close, show_errors=show_errors)
     if not ok:
         for name, value in snapshot.items():
