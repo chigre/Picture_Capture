@@ -1,6 +1,6 @@
 """Candidate width and height thresholds, including pixel and percentage units."""
 from picture_capture.models import AppSettings
-from picture_capture.illustration_candidate_size import illustration_candidate_min_dimensions
+from picture_capture.illustration.candidate_size import illustration_candidate_min_dimensions
 
 
 def test_percent_dimensions_follow_analysis_crop_axes():
