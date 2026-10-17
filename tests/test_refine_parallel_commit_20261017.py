@@ -18,7 +18,7 @@ def test_reuse_environment_worker_setting_with_refine_memory_cap():
     assert parallel.configured_refine_workers(1, cpus=8, configured="auto") == 1
 
 
-def test_auto_layout_refine_respects_explicit_cpu_page_process_count():
+def test_auto_layout_refinement_serializes_gpu_model_even_with_six_cpu_workers():
     from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
 
     settings = AppSettings()
@@ -33,22 +33,23 @@ def test_auto_layout_refine_respects_explicit_cpu_page_process_count():
 
     settings.ordinary_auto_column_width = True
     assert parallel.refinement_uses_page_layout(settings)
-    for configured, expected in (
-        ("auto", 2), ("1", 1), ("2", 2), ("3", 3),
-        ("4", 4), ("6", 6), ("8", 8), ("12", 12), ("16", 16),
-    ):
+    for configured in ("auto", "1", "2", "3", "4", "6", "8", "12", "16", "24"):
         assert parallel.configured_refine_workers(
             20, settings=settings, configured=configured, cpus=16,
-        ) == expected
-    assert parallel.configured_refine_workers(
-        20, settings=settings, configured="24", cpus=16,
-    ) == 16
+        ) == 1  # exactly one Paddle model-owning spawned process
     assert parallel.configured_refine_workers(
         3, settings=settings, configured="16", cpus=16,
-    ) == 3
-    assert parallel.configured_refine_workers(
-        1, settings=settings, configured="4", cpus=16,
     ) == 1
+    # The quick fixed-band mode skips GPU layout, but caps image memory.
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="6", cpus=16,
+        fixed_half_gutter=True,
+    ) == 2
+    settings.layout_mask_illustrations = True
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="6", cpus=16,
+        fixed_half_gutter=True,
+    ) == 2
     settings.ordinary_auto_layout = False
     assert not parallel.refinement_uses_page_layout(settings)
     assert parallel.configured_refine_workers(
@@ -63,7 +64,9 @@ def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
     scope = source.split("    def refine_lines_selected_scope(", 1)[1].split(
         "    def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
-    assert "configured_refine_workers(len(indices), settings=settings)" in scope
+    assert "fixed_half_gutter=fixed_half_gutter" in scope
+    assert "configured_refine_workers(" in scope
+    assert "isolate_worker=True" in scope
     assert "max_workers=workers, respect_cpu_workers=True," in scope
     assert "single_process_model" not in scope
     assert "_start_parallel_batch_task(" in scope
