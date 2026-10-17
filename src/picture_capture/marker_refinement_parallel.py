@@ -28,11 +28,11 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
 def configured_refine_workers(page_count: int, *, cpus: int | None = None,
                               configured: str | None = None,
                               settings: AppSettings | None = None) -> int:
-    """Keep PR #547 concurrent dispatch; limit heavy layout to two workers.
+    """Use the CPU page-worker setting, regardless of Auto Layout switches.
 
-    Selected Auto Layout fields do not disable multi-page refinement. Capping
-    model-owning processes to two keeps the previous parallel wave behavior
-    without allowing four simultaneous heavyweight Paddle detectors.
+    Auto keeps the existing conservative default of two. An explicit positive
+    setting is bounded only by logical CPUs and selected page count. The
+    parent coordinator remains the sole writer of validated PDIC changes.
     """
     if configured is None:
         from .runtime_environment import runtime_setting
@@ -42,8 +42,7 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     except (TypeError, ValueError):
         requested = 2
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
-    ceiling = 2 if settings is not None and refinement_uses_page_layout(settings) else 4
-    return max(1, min(int(page_count) or 1, available, max(1, requested), ceiling))
+    return max(1, min(int(page_count) or 1, available, max(1, requested)))
 
 
 def _inputs_for_page(page: Path) -> tuple[Path, ...]:

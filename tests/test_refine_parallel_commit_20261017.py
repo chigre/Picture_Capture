@@ -13,12 +13,12 @@ def test_reuse_environment_worker_setting_with_refine_memory_cap():
     assert parallel.configured_refine_workers(50, cpus=12, configured="auto") == 2
     assert parallel.configured_refine_workers(50, cpus=12, configured="1") == 1
     assert parallel.configured_refine_workers(50, cpus=12, configured="4") == 4
-    assert parallel.configured_refine_workers(50, cpus=12, configured="16") == 4
+    assert parallel.configured_refine_workers(50, cpus=12, configured="16") == 12
     assert parallel.configured_refine_workers(50, cpus=2, configured="4") == 2
     assert parallel.configured_refine_workers(1, cpus=8, configured="auto") == 1
 
 
-def test_auto_layout_refine_keeps_two_concurrent_workers_with_memory_cap():
+def test_auto_layout_refine_respects_explicit_cpu_page_process_count():
     from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
 
     settings = AppSettings()
@@ -33,10 +33,19 @@ def test_auto_layout_refine_keeps_two_concurrent_workers_with_memory_cap():
 
     settings.ordinary_auto_column_width = True
     assert parallel.refinement_uses_page_layout(settings)
-    for configured, expected in (("auto", 2), ("1", 1), ("4", 2), ("16", 2)):
+    for configured, expected in (
+        ("auto", 2), ("1", 1), ("2", 2), ("3", 3),
+        ("4", 4), ("6", 6), ("8", 8), ("12", 12), ("16", 16),
+    ):
         assert parallel.configured_refine_workers(
             20, settings=settings, configured=configured, cpus=16,
         ) == expected
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="24", cpus=16,
+    ) == 16
+    assert parallel.configured_refine_workers(
+        3, settings=settings, configured="16", cpus=16,
+    ) == 3
     assert parallel.configured_refine_workers(
         1, settings=settings, configured="4", cpus=16,
     ) == 1
@@ -55,14 +64,15 @@ def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
         "    def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
     assert "configured_refine_workers(len(indices), settings=settings)" in scope
-    assert "max_workers=workers," in scope
-    assert "single_process_model=needs_layout" not in scope
+    assert "max_workers=workers, respect_cpu_workers=True," in scope
+    assert "single_process_model" not in scope
     assert "_start_parallel_batch_task(" in scope
 
     dispatcher = source.split("    def _start_parallel_batch_task(", 1)[1].split(
         "    def _poll_batch_queue(", 1
     )[0]
-    assert "and not single_process_model" in dispatcher
+    assert "and not single_process_model" not in dispatcher
+    assert "if respect_cpu_workers and int(max_workers) > 0" in dispatcher
     assert "ProcessPoolExecutor(max_workers=workers, mp_context=context)" in dispatcher
     assert 'multiprocessing.get_context("spawn")' in dispatcher
     assert "len(futures) < workers" in dispatcher

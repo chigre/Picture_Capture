@@ -87,8 +87,9 @@ def build_inference_performance_group(dialog, parent: ttk.Frame) -> None:
     ttk.Label(
         group,
         text="CPU 并行数用于 CPU 专用普通画线实验和【精修画线】多页计算；"
-             "精修自动=2、手动1=串行，最多并行4页；仅主进程保存PDIC。"
-             "更高进程数增加内存使用。oneDNN 自动优先尝试启用，初始化不兼容时回退，"
+             "精修自动=2；手动值按实际 CPU 核心数及剩余页面数执行，不再固定限 2 或 4 页；"
+             "仅主协调进程保存 PDIC。设置过高会同时加载多个版面检测模型，可能耗尽内存。"
+             "oneDNN 自动优先尝试启用，初始化不兼容时回退，"
              "若推理出错请改为“关闭”。",
         wraplength=650, justify="left",
     ).pack(anchor="w", pady=(0, 8))

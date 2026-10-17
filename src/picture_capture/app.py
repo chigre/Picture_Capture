@@ -11562,7 +11562,7 @@ class PictureCaptureApp(tk.Tk):
         *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
-        single_process_model: bool = False,
+        respect_cpu_workers: bool = False,
     ) -> bool:
         """Run bounded page jobs; optional one-process GPU preflight before CPU."""
         if self._batch_active:
@@ -11588,9 +11588,13 @@ class PictureCaptureApp(tk.Tk):
             self.status_var.set("没有需要处理的页面")
             return False
 
-        workers = resolve_crop_worker_count(max_workers)
+        workers = (
+            max(1, min(int(max_workers), len(items), os.cpu_count() or 1))
+            if respect_cpu_workers and int(max_workers) > 0
+            else resolve_crop_worker_count(max_workers)
+        )
         # Light single-worker jobs use the sequential runner.
-        if workers <= 1 and gpu_preflight_func is None and not single_process_model:
+        if workers <= 1 and gpu_preflight_func is None:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -11622,11 +11626,7 @@ class PictureCaptureApp(tk.Tk):
         self._batch_in_item = False
         self.batch_progress_var.set(0.0)
         self.batch_progress.configure(maximum=100.0)
-        self.batch_text_var.set(
-            f"{title}：0/{len(items)}，等待首批版面模型初始化（1进程）"
-            if single_process_model else
-            f"{title}：准备并行处理 0/{len(items)}（{workers}进程）"
-        )
+        self.batch_text_var.set(f"{title}：准备并行处理 0/{len(items)}（{workers}进程）")
         self.batch_pause_button.configure(text="暂停", state="normal")
         self.batch_stop_button.configure(text="停止", state="normal")
         if not self.batch_bar.winfo_manager():
@@ -11700,7 +11700,7 @@ class PictureCaptureApp(tk.Tk):
                         if gpu_executor is not None:
                             if gpu_job_builder is None:
                                 raise RuntimeError("Missing GPU preflight job builder")
-                            # Model preflight uses one persistent GPU process.
+                            # GPU preflight is a single long-lived process.
                             gpu_args = gpu_job_builder(item, position, total)
                             self._batch_queue.put((
                                 "pipeline_stage", position, total, label, "GPU版面预检",
@@ -11829,9 +11829,7 @@ class PictureCaptureApp(tk.Tk):
                 self._batch_in_item = active > 0
                 self.batch_text_var.set(
                     f"{self._batch_title}：{completed}/{total}，"
-                    + ("逐页版面测定中（首批加载模型）"
-                       if self._batch_title == "精修画线" and workers == 1
-                       else f"并行 {active}/{workers} 页")
+                    + f"并行 {active}/{workers} 页"
                 )
                 self.status_var.set(
                     f"{self._batch_title}并行处理中：完成 {completed}/{total}，当前 {active} 页运行；最近派发 {label}"
@@ -15377,8 +15375,7 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages = list(project.images)
         settings = replace(self.settings)
-        # The explicit button means "run refinement now" even if automatic
-        # refinement was disabled for normal detection.
+        # Explicit refinement includes manual lines.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
             configured_refine_workers, refine_page_job, commit_refined_page_result,
@@ -15423,7 +15420,7 @@ class PictureCaptureApp(tk.Tk):
         self._start_parallel_batch_task(
             "精修画线", indices, refine_page_job, job_builder, save_result, done,
             item_label=lambda i: pages[i].name,
-            max_workers=workers,
+            max_workers=workers, respect_cpu_workers=True,
             foreground_page_edit=True, allow_pdic_edits=True,
         )
 
