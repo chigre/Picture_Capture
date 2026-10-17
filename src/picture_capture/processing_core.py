@@ -41,7 +41,7 @@ from .crop_plan_formatting import (
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop_logging import append_crop_log, append_illustration_crop_log
 from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
-from .illustration_candidate_size import illustration_candidate_min_dimensions
+from .illustration.candidate_size import illustration_candidate_min_dimensions
 
 
 _COLUMN_TRACK_ADAPTIVE_BLOCK = 19
