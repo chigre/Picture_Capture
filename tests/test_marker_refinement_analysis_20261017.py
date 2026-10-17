@@ -323,3 +323,78 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
         assert stats["total"] == stats["moved"] == 2
     finally:
         image.close()
+
+
+def test_full_refine_pipeline_uses_per_page_column_width_and_line_height(
+    monkeypatch, tmp_path,
+):
+    from picture_capture import (
+        dictionary_page_layout_policy as policy,
+        marker_refinement_top_edge, processing_core,
+    )
+
+    @dataclass
+    class Row:
+        word: str
+        x: int
+        y: int
+
+    class Geometry:
+        top = 0
+        bottom = 150
+        # Final-column geometry historically extends to page image edge.
+        column_widths = [200]
+        transform = SimpleNamespace(canonical_image_for_analysis=lambda image: image)
+        def source_to_canonical(self, x, y):
+            return x, y
+        def canonical_to_source(self, x, y):
+            return x, y
+        def x_at(self, col, y):
+            return 10
+
+    settings = AppSettings()
+    settings.ordinary_auto_layout = True
+    for _field, switch in policy.AUTO_LAYOUT_FIELDS:
+        setattr(settings, switch, False)
+    settings.ordinary_auto_column_width = True
+    settings.ordinary_auto_character_height = True
+    effective_values = ((42, 20), (67, 30))
+    seen = []
+
+    def resolve(image, current, *, page_index):
+        from dataclasses import replace
+        page_settings = replace(current)
+        page_settings.column_width, page_settings.character_height = (
+            effective_values[page_index]
+        )
+        return page_settings, None, {
+            "column_width": page_settings.column_width,
+            "character_height": page_settings.character_height,
+        }
+
+    def refine(gray, coarse_y, line_height, current, *, column_left, column_right, **kw):
+        seen.append((line_height, column_left, column_right, current.column_width))
+        return coarse_y - 3, {"reason": "verified_whole_column_blank"}
+
+    monkeypatch.setattr(policy, "resolve_page_layout_policy", resolve)
+    monkeypatch.setattr(processing_core, "derive_geometry", lambda *_: Geometry())
+    monkeypatch.setattr(processing_core, "column_index", lambda *_: 0)
+    monkeypatch.setattr(
+        marker_refinement_top_edge, "refine_existing_marker_to_ink_top", refine,
+    )
+    image = _page()
+    entry = Row("entry", 15, 40)
+    try:
+        results = []
+        for page_index in (0, 1):
+            refined, stats = processing_core.refine_existing_entries(
+                image, [entry], settings, profile_page_index=page_index,
+                source_image_path=tmp_path / f"page{page_index}.png",
+            )
+            results.append((refined[0].y, stats["moved"]))
+        assert results == [(37, 1), (37, 1)]
+        assert seen == [(20, 10, 52, 42), (30, 10, 77, 67)]
+        assert entry.y == 40
+        assert settings.character_height not in (20, 30)
+    finally:
+        image.close()
