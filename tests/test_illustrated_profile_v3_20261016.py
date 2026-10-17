@@ -9,11 +9,11 @@ from picture_capture.models import AppSettings
 from picture_capture.dictionary_profile import (
     apply_project_profile_components, write_project_profile,
 )
-from picture_capture.illustrated_profile import (
+from picture_capture.illustration.profile import (
     effective_page_kind, set_page_kind, validate_illustrated_preferences,
     languages, tesseract_languages, effective_ocr_roi,
 )
-from picture_capture.illustrated_ocr import (
+from picture_capture.illustration.ocr import (
     SpatialLine, group_spatial_lines, propose_page_entries,
 )
 from picture_capture.ocr_channel import (

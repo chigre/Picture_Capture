@@ -4,8 +4,8 @@ from pathlib import Path
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.illustrated_entries import read_entries
-from picture_capture.illustrated_guides import read_guides
+from picture_capture.illustration.entries import read_entries
+from picture_capture.illustration.guides import read_guides
 from picture_capture.ui.illustrated_main_canvas import IllustratedCanvasEditor
 
 

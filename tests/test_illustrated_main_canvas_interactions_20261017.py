@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 
 from picture_capture.models import AppSettings
-from picture_capture.illustrated_entries import make_entry
+from picture_capture.illustration.entries import make_entry
 from picture_capture.ui.illustrated_main_canvas import IllustratedCanvasEditor
 
 
@@ -74,7 +74,7 @@ def test_nudge_clamps_single_shared_delta_not_each_rectangle():
 
 
 def test_semantic_split_partitions_box_without_overlap_or_losing_lines():
-    from picture_capture.illustrated_geometry import split_text_group
+    from picture_capture.illustration.geometry import split_text_group
     from dataclasses import replace
     entry = replace(make_entry(20, 30, 160, 100),
                     lines=("hair", "les cheveux", "das Haar", "头发"))

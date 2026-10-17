@@ -41,6 +41,10 @@ The directory name describes **ownership**, not a blanket permission to import i
 - The package `ref/__init__.py` does not eagerly import domain modules, avoiding circular imports and preserving Windows spawn behavior. Geometry and label placement algorithms are unchanged; the only code edit inside the moved modules is the `RefBox` relative import adjustment.
 - This is a **partial P7 step**, not a claim that the entire `ref/` migration or final acceptance is complete. Root Python file count after merge: **242 → 240** (main@37756ff; two refinement modules were added after the Issue #562 baseline) (including `__init__.py` and entry points).
 
+## Illustration helper cohort
+
+Ten illustrated dictionary and overlay modules now reside in `illustration/`. Remaining illustration detection and association modules will migrate in a later PR. Root Python count: 240 to 230 after merge, pending verification.
+
 ## Migration gate for each following cohort
 
 1. Capture the exact GitHub `main` SHA and open PR inventory; never overlap production PRs.

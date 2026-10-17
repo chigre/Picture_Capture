@@ -13,11 +13,11 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from ..illustrated_entries import (
+from ..illustration.entries import (
     IllustratedEntry, file_ticket, make_entry, read_entries, write_entries,
 )
-from ..illustrated_export import export_illustrated_index
-from ..illustrated_ocr import (
+from ..illustration.export import export_illustrated_index
+from ..illustration.ocr import (
     ocr_one_group, proposal_overlaps, propose_page_entries,
 )
 from ..image_utils import normalize_page_rgb

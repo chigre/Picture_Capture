@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable
 
-from ..illustrated_entries import IllustratedEntry
+from ..illustration.entries import IllustratedEntry
 
 
 def edit_illustrated_group(parent, group: IllustratedEntry,

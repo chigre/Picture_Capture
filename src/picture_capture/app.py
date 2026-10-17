@@ -226,10 +226,10 @@ from .overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
 )
-from .illustration_polygon_edit import nearest_polygon_segment
+from .illustration.polygon_edit import nearest_polygon_segment
 from .illustration_labels import label_text, user_edited_link
-from .illustration_delete_overlay import create_illustration_delete_control, polygon_delete_center
-from .illustration_fill_opacity import (
+from .illustration.delete_overlay import create_illustration_delete_control, polygon_delete_center
+from .illustration.fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
@@ -10981,7 +10981,7 @@ class PictureCaptureApp(tk.Tk):
         if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
             self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
             return None
-        from .illustrated_profile import effective_page_kind
+        from .illustration.profile import effective_page_kind
         if effective_page_kind(self.settings, self.current_page) == "illustrated":
             return None
         if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):

@@ -11,10 +11,10 @@ from uuid import uuid4
 from tkinter import Menu, messagebox, simpledialog
 import tkinter as tk
 
-from ..illustrated_entries import make_entry, read_entries, write_entries, file_ticket
-from ..illustrated_guides import read_guides, write_guides, guide_ticket
-from ..illustrated_profile import effective_page_kind
-from ..illustrated_geometry import (
+from ..illustration.entries import make_entry, read_entries, write_entries, file_ticket
+from ..illustration.guides import read_guides, write_guides, guide_ticket
+from ..illustration.profile import effective_page_kind
+from ..illustration.geometry import (
     clamp_rect,snap_position,transform_selection,group_objects,ungroup_objects,
     merge_text_groups,split_text_group,duplicate,
 )
@@ -585,7 +585,7 @@ class IllustratedCanvasEditor:
     def detect(self):
         if self.busy or not self._sync():return
         from dataclasses import replace as clone
-        from ..illustrated_ocr import propose_page_entries,proposal_overlaps
+        from ..illustration.ocr import propose_page_entries,proposal_overlaps
         page=self.page;root=self.root
         settings=clone(self.app.settings)
         self.busy=True
@@ -700,7 +700,7 @@ def illustrated_main_action(app,action="open"):
     if action=="detect":editor.detect()
     elif action=="accept":editor.accept_proposals()
     elif action=="export":
-        from ..illustrated_export import export_illustrated_index
+        from ..illustration.export import export_illustrated_index
         try:
             path,count=export_illustrated_index(app.project.root,app.project.images,
                 split_aliases=app.settings.illustrated_export_split_aliases)

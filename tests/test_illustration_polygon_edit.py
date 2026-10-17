@@ -1,7 +1,7 @@
 """Editing tests for vertices added to saved automatic PPP rectangles."""
 from types import SimpleNamespace
 
-from picture_capture.illustration_polygon_edit import nearest_polygon_segment
+from picture_capture.illustration.polygon_edit import nearest_polygon_segment
 
 
 def test_rectangle_top_edge_inserts_between_original_corners():

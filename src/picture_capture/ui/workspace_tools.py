@@ -758,7 +758,7 @@ def choose_workspace_section(app: Any, title: str) -> None:
         if title_label is not None:
             title_label.unbind("<Button-1>")
     section.pack(side="top", fill="x")
-    from ..illustrated_profile import effective_page_kind
+    from ..illustration.profile import effective_page_kind
     heading = next(
         (label for label, _icon, section_title in TASK_GROUPS
          if section_title == title), title,

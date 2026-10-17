@@ -169,7 +169,7 @@ def build_layout_profile_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     from .illustrated_profile_menu import (
         build_illustrated_profile_controls, build_layout_kind_control,
     )
-    from ..illustrated_profile import effective_page_kind
+    from ..illustration.profile import effective_page_kind
 
     ordinary_host = ttk.Frame(panel)
     illustrated_host = ttk.Frame(panel)

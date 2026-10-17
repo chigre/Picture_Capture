@@ -5,15 +5,15 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.illustrated_entries import make_entry,read_entries,write_entries
-from picture_capture.illustrated_geometry import (
+from picture_capture.illustration.entries import make_entry,read_entries,write_entries
+from picture_capture.illustration.geometry import (
     snap_position,transform_selection,group_objects,ungroup_objects,
     merge_text_groups,split_text_group,duplicate,
 )
-from picture_capture.illustrated_guides import (
+from picture_capture.illustration.guides import (
     guide_path,guide_ticket,read_guides,write_guides,
 )
-from picture_capture.illustrated_profile import (
+from picture_capture.illustration.profile import (
     validate_illustrated_preferences,profile_payload,apply_profile_payload,
 )
 
