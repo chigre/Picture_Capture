@@ -1,0 +1,165 @@
+"""PR #547 multi-page Y refinement must advance after its first worker wave.
+
+Runs the production dispatcher with a controlled thread-backed process-pool
+double. This exercises scheduling, result consumption and page ownership
+without loading Tk, PaddleOCR or changing any PDIC.
+"""
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+import queue
+import threading
+import time
+from types import SimpleNamespace
+
+from picture_capture.app import PictureCaptureApp
+
+
+class _Var:
+    def __init__(self):
+        self.values = []
+    def set(self, value):
+        self.values.append(value)
+
+
+class _Widget:
+    def configure(self, **_kwargs):
+        pass
+    def winfo_manager(self):
+        return True
+    def pack(self, **_kwargs):
+        pass
+
+
+def _fake_app():
+    app = SimpleNamespace(
+        _batch_active=False,
+        _batch_state_lock=threading.Lock(),
+        _batch_page_states={},
+        _batch_queue=queue.Queue(),
+        _batch_stop_event=threading.Event(),
+        _batch_pause_event=threading.Event(),
+        _ui_close_requested=False,
+        _ui_worker_key_active=lambda _key: False,
+        _flush_deferred_page_save=lambda: None,
+        _update_page_row=lambda _index: None,
+        _poll_batch_queue=lambda: None,
+        _batch_text_var=None,
+        batch_progress_var=_Var(),
+        batch_text_var=_Var(),
+        status_var=_Var(),
+        batch_progress=_Widget(),
+        batch_pause_button=_Widget(),
+        batch_stop_button=_Widget(),
+        batch_bar=_Widget(),
+        after=lambda *_args: None,
+    )
+    return app
+
+
+def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
+    from picture_capture import app as app_module
+
+    # Maintain the true executor scheduling API while avoiding external
+    # process spawning in the unit test. The first two workers must overlap.
+    monkeypatch.setattr(
+        app_module, "ProcessPoolExecutor",
+        lambda *, max_workers, mp_context: ThreadPoolExecutor(max_workers=max_workers),
+    )
+    app = _fake_app()
+    first_wave = threading.Barrier(2)
+    lock = threading.Lock()
+    active = 0
+    maximum = 0
+    computed = []
+    committed = []
+    coordinator_thread_ids = []
+
+    def compute(index):
+        nonlocal active, maximum
+        with lock:
+            active += 1
+            maximum = max(maximum, active)
+            computed.append(index)
+        if index in (0, 1):
+            first_wave.wait(timeout=5)
+        time.sleep(.01)
+        with lock:
+            active -= 1
+        return {"index": index}
+
+    def publish(index, result):
+        assert result["index"] == index
+        with app._batch_state_lock:
+            assert app._batch_page_states[index] == "processing"
+        committed.append(index)
+        coordinator_thread_ids.append(threading.get_ident())
+        return result
+
+    main_thread_id = threading.get_ident()
+    assert PictureCaptureApp._start_parallel_batch_task(
+        app, "精修画线", list(range(6)), compute,
+        lambda index, _position, _total: (index,),
+        result_consumer=publish,
+        item_label=lambda i: f"page{i:03}",
+        max_workers=2,
+        foreground_page_edit=True,
+        allow_pdic_edits=True,
+    )
+    app._batch_thread.join(timeout=10)
+    assert not app._batch_thread.is_alive(), "First worker wave completed but next wave was not dispatched"
+
+    events = []
+    while not app._batch_queue.empty():
+        events.append(app._batch_queue.get_nowait())
+    assert [r[0] for r in events].count("parallel_progress") == 6
+    assert events[-1][0] == "done"
+    assert events[-1][1:4] == (6, 6, False)
+    assert maximum == 2
+    assert sorted(computed) == sorted(committed) == list(range(6))
+    assert set(coordinator_thread_ids) != {main_thread_id}
+    assert app._batch_page_states == {i: "done" for i in range(6)}
+
+
+def test_manually_locked_pending_page_still_skips_without_publication(monkeypatch):
+    from picture_capture import app as app_module
+    monkeypatch.setattr(
+        app_module, "ProcessPoolExecutor",
+        lambda *, max_workers, mp_context: ThreadPoolExecutor(max_workers=max_workers),
+    )
+    app = _fake_app()
+    started = threading.Barrier(3)
+    release = threading.Event()
+    committed = []
+
+    def compute(index):
+        if index in (0, 1):
+            started.wait(timeout=5)
+            assert release.wait(timeout=5)
+        return {"index": index}
+
+    def publish(index, result):
+        committed.append(index)
+        return result
+
+    assert PictureCaptureApp._start_parallel_batch_task(
+        app, "精修画线", [0, 1, 2, 3], compute,
+        lambda index, _position, _total: (index,),
+        result_consumer=publish, max_workers=2,
+        foreground_page_edit=True, allow_pdic_edits=True,
+    )
+    started.wait(timeout=5)
+    with app._batch_state_lock:
+        assert app._batch_page_states[3] == "pending"
+        app._batch_page_states[3] = "manual_locked"
+    release.set()
+    app._batch_thread.join(timeout=10)
+    assert not app._batch_thread.is_alive()
+    assert sorted(committed) == [0, 1, 2]
+    assert app._batch_page_states[3] == "manual_locked"
+    events = []
+    while not app._batch_queue.empty():
+        events.append(app._batch_queue.get_nowait())
+    assert [e[0] for e in events].count("skipped") == 1
+    assert events[-1][0] == "done"
+    assert events[-1][1:4] == (4, 4, False)

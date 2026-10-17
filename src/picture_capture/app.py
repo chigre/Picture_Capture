@@ -15381,10 +15381,8 @@ class PictureCaptureApp(tk.Tk):
         # refinement was disabled for normal detection.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
-            configured_refine_workers, refinement_uses_page_layout,
-            refine_page_job, commit_refined_page_result,
+            configured_refine_workers, refine_page_job, commit_refined_page_result,
         )
-        needs_layout = refinement_uses_page_layout(settings)
         workers = configured_refine_workers(len(indices), settings=settings)
 
         def job_builder(index: int, _position: int, _total: int):
@@ -15425,7 +15423,7 @@ class PictureCaptureApp(tk.Tk):
         self._start_parallel_batch_task(
             "精修画线", indices, refine_page_job, job_builder, save_result, done,
             item_label=lambda i: pages[i].name,
-            max_workers=workers, single_process_model=needs_layout,
+            max_workers=workers,
             foreground_page_edit=True, allow_pdic_edits=True,
         )
 
