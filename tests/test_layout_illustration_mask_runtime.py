@@ -24,8 +24,11 @@ def test_layout_mask_checkbox_has_dedicated_check_help_contract():
     help_text = CHECK_HELP[SETTING_NAME]
     assert "普通画线" in help_text and "显示 Layout" in help_text
     assert "Page Understanding" in help_text
-    assert "原始扫描图、OCR、PDIC 与切图文件都不会被修改" in help_text
-    assert "仅【精修画线】只填白分析副本，不持久化新 PPP" in help_text
+    assert "原始扫描图、OCR 和 PDIC 不会被修改" in help_text
+    assert "【精修画线】仅填白分析副本" in help_text
+    assert "【画线行导出】及【未画线行导出】" in help_text
+    assert "写入新导出的 PNG" in help_text
+    assert "不持久化新 PPP" in help_text
     assert "接近大字头尺寸且近方形" in help_text
     assert "关闭时完全保持原有 Layout 流程" in help_text
     assert "不重新识别" in CHECK_HELP["layout_mask_illustrations_use_existing"]
