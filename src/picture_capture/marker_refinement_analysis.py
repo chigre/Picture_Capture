@@ -1,8 +1,8 @@
 """Disposable illustration whitening for explicit refinement of existing PDIC Y.
 
-Do not run Page Understanding, whole-page layout detectors, OCR or extra
-denoising here. The existing Profile/geometry and Y-refinement owners remain
-authoritative. Illustration whitening only changes an in-memory analysis copy.
+Do not run semantic Page Understanding, OCR recognition or extra denoising.
+Selected physical Auto Layout scalars are measured for each page before
+existing PDIC markers are refined. Whitefill uses only an in-memory copy.
 """
 from __future__ import annotations
 
@@ -80,7 +80,8 @@ def prepare_refinement_analysis(
 
     Layout illustration masking is opt-in. Reuse mode reads the saved PPP;
     automatic mode may detect illustrations, but MUST NOT write any PPP here.
-    Neither mode performs automatic layout parameter estimation or changes PDIC.
+    Only checked physical Auto Layout fields may be measured per page; no OCR,
+    semantic Layout rows, original scan or PDIC mutations occur here.
     """
     source = normalize_page_rgb(image)
     analysis = source
