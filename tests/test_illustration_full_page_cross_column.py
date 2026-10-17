@@ -1,7 +1,7 @@
 """Full-page cross-column reconciliation regression tests."""
 from PIL import Image, ImageDraw
 
-from picture_capture.illustration_cross_column import spanning_figure_boxes
+from picture_capture.illustration.cross_column import spanning_figure_boxes
 
 
 def test_continuous_ink_figure_crossing_real_gutter_reunites_split_boxes():
