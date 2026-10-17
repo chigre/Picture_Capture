@@ -93,7 +93,8 @@ def prepare_refinement_analysis(
             # Explicit quick path: fixed Profile geometry, no model-based layout
             # or page-dependent column following. Whitefill stays in memory.
             effective = replace(effective, layout_mask_illustrations=True,
-                                follow_column_deformation=False)
+                                follow_column_deformation=False,
+                                paddle_separator_column_margin=0)
         analysis = whiten_illustrations_for_refinement(
             analysis, effective, int(page_index),
             source_image_path=source_image_path,
