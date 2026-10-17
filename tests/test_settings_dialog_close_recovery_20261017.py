@@ -18,14 +18,20 @@ class Var:
     def get(self):
         return self.raw
 
+    def set(self, value):
+        self.raw = value
 
-@pytest.mark.parametrize("raw", ["0.01", "0.25", "0.3", " 0.30 "])
+
+@pytest.mark.parametrize(
+    "raw", ["0.01", "0.25", "0.3", " 0.30 ", "0，25", "0,25", "0．25", "0。25"],
+)
 def test_separator_fraction_valid_including_endpoints(raw):
+    var = Var(raw)
     lifecycle.validate_separator_gap_controls({
-        "separator_y_ink_safe_max_fraction": Var(raw),
+        "separator_y_ink_safe_max_fraction": var,
     })
     settings = AppSettings()
-    settings.separator_y_ink_safe_max_fraction = float(raw)
+    settings.separator_y_ink_safe_max_fraction = float(var.get())
     assert 0.01 <= settings.separator_y_ink_safe_max_fraction <= 0.30
 
 
@@ -59,7 +65,6 @@ class Dialog:
     def save(self, *, close, show_errors):
         # Simulate the historical partial-setting mutation before failure.
         self.parent.settings.columns = 7
-        self.calls.append((close, show_errors)) if hasattr(self, "calls") else None
         if close and self.ok:
             self.destroy()
         return self.ok
