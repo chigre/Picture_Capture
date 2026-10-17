@@ -844,8 +844,7 @@ SEPARATOR_Y_FIELDS = (
 )
 
 SEPARATOR_Y_CHECKS = (
-    ("自动画线 Y 精修（手动按钮独立）", "paddle_refine_separator_y"),
-    ("实验：原图白缝核验横线 Y", "separator_y_ink_safe_gap"),
+    ("自动画线 Y 精修（含墨迹安全检查）", "paddle_refine_separator_y"),
 )
 
 DISPLAY_STYLE_CHECKS = (
