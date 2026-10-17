@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
-from picture_capture.visual_boundary_locator import safe_gap_above
+from picture_capture.geometry.visual_boundary_locator import safe_gap_above
 
 
 def _pair(image: Image.Image, x: int, y: int, distance: int = 130):

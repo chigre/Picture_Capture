@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import picture_capture.paddle_headwords as ph
-from picture_capture import paddle_diagnostic_formatting
+from picture_capture.quality import paddle_diagnostic_formatting
 
 
 def _column_counts(text: str) -> list[int]:
