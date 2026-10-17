@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 from .image_utils import build_analysis_image, normalize_page_rgb
+from .adaptive_denoise import resolve_denoise_strength
 from .profile_semantics import effective_page_settings, page_template_analysis_image
 
 
@@ -33,7 +34,12 @@ def prepare_refinement_analysis(
     analysis = None
     try:
         effective = effective_page_settings(settings, source.size, int(page_index))
-        analysis = build_analysis_image(source, effective)
+        # Avoid full-page neighbourhood filtering entirely when the user
+        # disabled the shared denoiser (including explicit strength='off').
+        analysis = (
+            source.copy() if resolve_denoise_strength(effective) == "off"
+            else build_analysis_image(source, effective)
+        )
 
         if bool(getattr(effective, "layout_mask_illustrations", False)):
             from .layout_illustration_mask import mask_large_illustrations_for_layout
