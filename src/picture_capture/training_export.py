@@ -10,18 +10,18 @@ import zipfile
 
 from PIL import Image, ImageOps
 
-from ..formats import pdic_path, read_pdic, read_ppp
-from ..image_utils import normalize_page_rgb
-from ..models import AppSettings
-from ..coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
-from ..processing import column_index, derive_geometry
-from ..profile_semantics import (
+from .formats import pdic_path, read_pdic, read_ppp
+from .image_utils import normalize_page_rgb
+from .models import AppSettings
+from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
+from .processing import column_index, derive_geometry
+from .profile_semantics import (
     effective_page_settings,
     excluded_source_side,
     excluded_source_side_percent,
     page_template_analysis_image,
 )
-from ..project_storage import (
+from .project_storage import (
     headword_filter_rules_path, ocr_cache_root, ppp_read_path_for_image,
     profile_path, replace_rules_path, settings_path,
 )
