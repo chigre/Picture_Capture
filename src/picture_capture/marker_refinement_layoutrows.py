@@ -10,6 +10,27 @@ from pathlib import Path
 from typing import Any
 
 
+# Only physical scalars consumed by Y refinement/its column geometry.
+# Row padding and unrelated Auto Layout switches are not a reason to load GPU.
+REFINEMENT_GEOMETRY_FIELDS = frozenset({
+    "columns", "start_y", "manual_x", "column_width", "gutter",
+    "character_height",
+})
+
+
+def requested_refinement_fields(settings: Any) -> set[str]:
+    """Resolve the *small* set of per-page fields useful to Y refinement."""
+    if not bool(getattr(settings, "ordinary_auto_layout", False)):
+        return set()
+    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+
+    return {
+        field for field, switch in AUTO_LAYOUT_FIELDS
+        if field in REFINEMENT_GEOMETRY_FIELDS
+        and bool(getattr(settings, switch, False))
+    }
+
+
 def cached_refinement_settings(page: Path, source_size: tuple[int, int],
                                settings: Any, page_index: int):
     """Return selected physical fields and evidence, or None for full detection.
@@ -19,21 +40,14 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
     reason to rerun the heavyweight detector for explicit Y refinement.
     Missing physical fields still fall back safely.
     """
-    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
     import json
     from .layout_rows_cache import (
         layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
         _same_image_fingerprint, _layout_from_payload,
     )
 
-    requested = {
-        field for field, switch in AUTO_LAYOUT_FIELDS
-        if bool(getattr(settings, switch, False))
-    }
-    if not requested or not requested <= {
-        "columns", "start_y", "manual_x", "column_width",
-        "gutter", "character_height",
-    }:
+    requested = requested_refinement_fields(settings)
+    if not requested:
         return None
     page = Path(page)
     try:
@@ -114,12 +128,7 @@ def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
         return "layoutrows_page_index_mismatch"
     if not _same_image_fingerprint(payload, Path(page), source_size):
         return "layoutrows_image_changed"
-    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
-    requested = {
-        field for field, switch in AUTO_LAYOUT_FIELDS
-        if bool(getattr(settings, switch, False))
-    }
-    if "row_padding" in requested:
-        return "layoutrows_lacks_row_padding"
+    if not requested_refinement_fields(settings):
+        return "layoutrows_no_required_fields"
     return "layoutrows_geometry_insufficient"
 

@@ -410,7 +410,8 @@ def test_full_refine_pipeline_uses_per_page_column_width_and_line_height(
             )
             results.append((refined[0].y, stats["moved"]))
         assert results == [(37, 1), (37, 1)]
-        assert seen == [(20, 10, 52, 42), (30, 10, 77, 67)]
+        # Full source column with +/- half-gutter, clipped to image bounds.
+        assert seen == [(20, 0, 77, 42), (30, 0, 102, 67)]
         assert entry.y == 40
         assert settings.character_height not in (20, 30)
     finally:

@@ -120,15 +120,19 @@ def test_y_engine_checks_the_actual_fast_band_without_entering_next_column(monke
     image = Image.new("RGB", (210, 120), "white")
     entries = [Entry(word="first", x=10, y=40),
                Entry(word="next", x=100, y=60)]
-    result, stats = processing_core._refine_existing_entries_with_geometry(
-        entries, settings, image, geo,
-        align_to_ink_top=True, fixed_half_gutter=True,
-    )
-    assert calls == [(0, 90, 10, 40), (90, 180, 100, 60)]
-    assert [(x.word, x.x, x.y) for x in result] == [
-        ("first", 10, 40), ("next", 100, 60),
-    ]
-    assert stats["moved"] == 0
+    # Both explicit button modes must examine the exact same full column
+    # +/- half-gutter evidence; only the source of geometry may differ.
+    for fast in (False, True):
+        calls.clear()
+        result, stats = processing_core._refine_existing_entries_with_geometry(
+            entries, settings, image, geo,
+            align_to_ink_top=True, fixed_half_gutter=fast,
+        )
+        assert calls == [(0, 90, 10, 40), (90, 180, 100, 60)]
+        assert [(x.word, x.x, x.y) for x in result] == [
+            ("first", 10, 40), ("next", 100, 60),
+        ]
+        assert stats["moved"] == 0
 
 
 def test_fast_button_and_spawn_worker_have_isolated_mode():

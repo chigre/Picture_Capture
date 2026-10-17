@@ -55,19 +55,19 @@ def refine_separator_y(
         **kwargs,
     )
     payload = dict(details or {})
-    # A fully reversible, opt-in safety check: verify that a proposed marker
-    # does not cross dark ink when a nearby 3-row white valley exists.
-    if bool(getattr(settings, "separator_y_ink_safe_gap", False)):
-        from .ink_safe_separator import refine_to_verified_white_gap
-        refined_y, gap_details = refine_to_verified_white_gap(
-            gray, int(refined_y), int(coarse_y),
-            max(2, int(round(float(line_height or 0)))),
-            max_fraction=float(settings.separator_y_ink_safe_max_fraction),
-            ink_threshold=int(settings.separator_y_ink_safe_ink_threshold),
-            existing_ink_ratio=float(settings.separator_y_ink_safe_existing_ink_ratio),
-            gap_ink_ratio=float(settings.separator_y_ink_safe_gap_ink_ratio),
-        )
-        payload.update(gap_details)
+    # The same automatic-Y checkbox owns both the local valley refinement
+    # and its ink-safety verification. The old independent gap flag is retained
+    # only for loading historical project settings, never consulted here.
+    from .ink_safe_separator import refine_to_verified_white_gap
+    refined_y, gap_details = refine_to_verified_white_gap(
+        gray, int(refined_y), int(coarse_y),
+        max(2, int(round(float(line_height or 0)))),
+        max_fraction=float(settings.separator_y_ink_safe_max_fraction),
+        ink_threshold=int(settings.separator_y_ink_safe_ink_threshold),
+        existing_ink_ratio=float(settings.separator_y_ink_safe_existing_ink_ratio),
+        gap_ink_ratio=float(settings.separator_y_ink_safe_gap_ink_ratio),
+    )
+    payload.update(gap_details)
     payload.setdefault("refiner", "shared_separator_y")
     payload.setdefault("enabled", True)
     payload.setdefault(

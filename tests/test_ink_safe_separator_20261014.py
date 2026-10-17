@@ -53,29 +53,37 @@ def test_shared_refiner_is_reversible_and_does_not_change_candidate_classificati
         shared, "_ENGINE_REFINE_SEPARATOR_Y",
         lambda *a, **k: (50, {"reason": "original"}),
     )
-    settings = AppSettings()
-    assert settings.separator_y_ink_safe_gap is False
-    legacy_y, legacy_diag = shared.refine_separator_y(ink, 50, 28, settings)
-    assert legacy_y == 50 and "ink_gap_guard" not in legacy_diag
+    settings = AppSettings(paddle_refine_separator_y=False)
+    disabled_y, disabled_diag = shared.refine_separator_y(ink, 50, 28, settings)
+    assert disabled_y == 50 and disabled_diag["enabled"] is False
 
-    settings.separator_y_ink_safe_gap = True
-    experimental_y, info = shared.refine_separator_y(ink, 50, 28, settings)
-    assert experimental_y < legacy_y
+    settings.paddle_refine_separator_y = True
+    refined_y, info = shared.refine_separator_y(ink, 50, 28, settings)
+    assert refined_y < disabled_y
     assert info["ink_gap_guard"] and info["gap_corrected"]
     assert info["reason"] == "original"
 
+    # The old independently saved flag is ignored: there is only one switch.
     settings.separator_y_ink_safe_gap = False
-    assert shared.refine_separator_y(ink, 50, 28, settings)[0] == legacy_y
+    assert shared.refine_separator_y(ink, 50, 28, settings)[0] == refined_y
+    settings.paddle_refine_separator_y = False
+    settings.separator_y_ink_safe_gap = True
+    assert shared.refine_separator_y(ink, 50, 28, settings)[0] == disabled_y
 
 
-def test_ink_gap_toggle_visible_in_settings_center_with_specific_explanation(tmp_path):
-    assert any(name == "separator_y_ink_safe_gap"
-               for _title, name in schema.SEPARATOR_Y_CHECKS)
-    assert "默认关闭" in schema.CHECK_HELP["separator_y_ink_safe_gap"]
-    settings = AppSettings(separator_y_ink_safe_gap=True)
+def test_one_y_toggle_controls_both_steps_and_old_settings_remain_loadable(tmp_path):
+    assert [key for _title, key in schema.SEPARATOR_Y_CHECKS] == [
+        "paddle_refine_separator_y",
+    ]
+    assert "原图白缝" in schema.CHECK_HELP["paddle_refine_separator_y"]
+    settings = AppSettings(
+        paddle_refine_separator_y=False, separator_y_ink_safe_gap=True,
+    )
     location = tmp_path / "settings.json"
     settings.to_json(location)
-    assert AppSettings.from_json(location).separator_y_ink_safe_gap is True
+    loaded = AppSettings.from_json(location)
+    assert loaded.paddle_refine_separator_y is False
+    assert loaded.separator_y_ink_safe_gap is True  # obsolete storage remains readable
 
 
 def test_experimental_white_gap_thresholds_roundtrip_and_ui_help(tmp_path):
@@ -129,7 +137,7 @@ def test_white_gap_thresholds_are_actually_consumed_by_shared_refiner(monkeypatc
         shared, "_ENGINE_REFINE_SEPARATOR_Y",
         lambda *args, **kwargs: (50, {"reason": "unchanged"}),
     )
-    settings = AppSettings(separator_y_ink_safe_gap=True)
+    settings = AppSettings(paddle_refine_separator_y=True)
     default_y, _ = shared.refine_separator_y(gray, 50, 28, settings)
     assert default_y < 48
     settings.separator_y_ink_safe_max_fraction = 0.05
