@@ -12,6 +12,8 @@ import threading
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from picture_capture.app import PictureCaptureApp
 
 
@@ -57,7 +59,8 @@ def _fake_app():
     return app
 
 
-def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
+@pytest.mark.parametrize("workers", [2, 4])
+def test_multiple_parallel_waves_complete_and_parent_commits_each_page(monkeypatch, workers):
     from picture_capture import app as app_module
 
     # Maintain the true executor scheduling API while avoiding external
@@ -67,7 +70,7 @@ def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
         lambda *, max_workers, mp_context: ThreadPoolExecutor(max_workers=max_workers),
     )
     app = _fake_app()
-    first_wave = threading.Barrier(2)
+    first_wave = threading.Barrier(workers)
     lock = threading.Lock()
     active = 0
     maximum = 0
@@ -81,7 +84,7 @@ def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
             active += 1
             maximum = max(maximum, active)
             computed.append(index)
-        if index in (0, 1):
+        if index < workers:
             first_wave.wait(timeout=5)
         time.sleep(.01)
         with lock:
@@ -97,12 +100,13 @@ def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
         return result
 
     main_thread_id = threading.get_ident()
+    total = workers * 3
     assert PictureCaptureApp._start_parallel_batch_task(
-        app, "精修画线", list(range(6)), compute,
+        app, "精修画线", list(range(total)), compute,
         lambda index, _position, _total: (index,),
         result_consumer=publish,
         item_label=lambda i: f"page{i:03}",
-        max_workers=2,
+        max_workers=workers, respect_cpu_workers=True,
         foreground_page_edit=True,
         allow_pdic_edits=True,
     )
@@ -112,13 +116,13 @@ def test_two_parallel_waves_complete_and_parent_commits_each_page(monkeypatch):
     events = []
     while not app._batch_queue.empty():
         events.append(app._batch_queue.get_nowait())
-    assert [r[0] for r in events].count("parallel_progress") == 6
+    assert [r[0] for r in events].count("parallel_progress") == total
     assert events[-1][0] == "done"
-    assert events[-1][1:4] == (6, 6, False)
-    assert maximum == 2
-    assert sorted(computed) == sorted(committed) == list(range(6))
+    assert events[-1][1:4] == (total, total, False)
+    assert maximum == workers
+    assert sorted(computed) == sorted(committed) == list(range(total))
     assert set(coordinator_thread_ids) != {main_thread_id}
-    assert app._batch_page_states == {i: "done" for i in range(6)}
+    assert app._batch_page_states == {i: "done" for i in range(total)}
 
 
 def test_manually_locked_pending_page_still_skips_without_publication(monkeypatch):
@@ -145,7 +149,7 @@ def test_manually_locked_pending_page_still_skips_without_publication(monkeypatc
     assert PictureCaptureApp._start_parallel_batch_task(
         app, "精修画线", [0, 1, 2, 3], compute,
         lambda index, _position, _total: (index,),
-        result_consumer=publish, max_workers=2,
+        result_consumer=publish, max_workers=2, respect_cpu_workers=True,
         foreground_page_edit=True, allow_pdic_edits=True,
     )
     started.wait(timeout=5)
