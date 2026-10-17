@@ -252,28 +252,14 @@ def is_near_blank_row(
 
 
 def left_contiguous_white_percent(image: Image.Image) -> float:
-    """Percent of original crop width blank from its *left edge* to first ink.
+    """Left-edge white width, tolerant of isolated small dust components.
 
-    A column is ink-bearing when at least two pixels and >=5% of its height
-    are noticeably darker than the row's estimated paper background. This
-    column vote suppresses isolated dust pixels without shrinking the crop.
-    The denominator is the entire selected prefix width, not the whole column.
+    The computation is on the ORIGINAL crop; no pixels are removed from the
+    exported image. See unlined_blank_detection for the conservative definition
+    of a meaningful ink component.
     """
-    gray_image = image.convert("L")
-    try:
-        pixels = np.asarray(gray_image, dtype=np.uint8)
-    finally:
-        gray_image.close()
-    if pixels.size == 0 or pixels.ndim != 2 or pixels.shape[1] == 0:
-        return 0.0
-    background = float(np.percentile(pixels, 90.0))
-    cutoff = int(max(0.0, min(235.0, background - 18.0)))
-    ink_counts = np.count_nonzero(pixels <= cutoff, axis=0)
-    minimum = max(2, int(np.ceil(pixels.shape[0] * 0.05)))
-    occupied = np.flatnonzero(ink_counts >= minimum)
-    left_white_cols = int(occupied[0]) if occupied.size else int(pixels.shape[1])
-    return 100.0 * left_white_cols / pixels.shape[1]
-
+    from .unlined_blank_detection import noise_tolerant_left_white_percent
+    return noise_tolerant_left_white_percent(image)
 
 def _atomic_text(path: Path, text: str) -> None:
     temp = path.with_name(f".{path.name}.tmp")
