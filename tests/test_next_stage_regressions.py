@@ -3403,7 +3403,7 @@ def test_ordinary_only_controls_stay_out_of_main_layout_section():
     normal_checks_end = schema.index("OCR_COMMON_CHECKS = (", normal_checks_start)
     normal_checks = schema[normal_checks_start:normal_checks_end]
     assert '("自动精修横线 Y", "paddle_refine_separator_y")' not in normal_checks
-    assert '("自动精修横线 Y（普通画线与 OCR 共用）", "paddle_refine_separator_y")' in schema
+    assert '("自动画线 Y 精修（手动按钮独立）", "paddle_refine_separator_y")' in schema
     assert '("使用自动版面参数", "ordinary_auto_layout")' in normal_checks
 
     # Ordinary-only controls belong in Settings Center, not the compact
