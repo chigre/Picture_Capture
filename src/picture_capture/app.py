@@ -129,6 +129,7 @@ from .ui.settings import rules as _settings_rules_ui
 from .ui.settings import lifecycle as _settings_lifecycle_ui
 from .ui.settings import window as _settings_window_ui
 from .ui.settings import crop as _settings_crop_ui
+from .ui.settings import inference_performance as _settings_inference_ui
 from .ui.settings import project as _settings_project_ui
 from .ui.settings import illustration as _settings_illustration_ui
 from .ui.settings import ref_box as _settings_ref_box_ui
@@ -1095,7 +1096,7 @@ class SettingsDialog(tk.Toplevel):
             (separator_y_tab, "横线 Y 精修"),
             (illustration_tab, "插图"),
             (ref_box_tab, "REF框"),
-            (performance_tab, "性能与诊断"),
+            (performance_tab, "性能测试与诊断"),
             (display_tab, "显示/校对"),
             (project_tab, "项目/批量"),
             (crop_tab, "切图"),
@@ -1332,6 +1333,7 @@ class SettingsDialog(tk.Toplevel):
             ),
             intro="复用功能可能改变重复去噪语义，务必先比较完整 PDIC。",
         )
+        _settings_inference_ui.build_inference_performance_group(self, performance_page)
 
         ocr_page = self._scrollable_settings_page(ocr_tab)
         self._settings_intro(
