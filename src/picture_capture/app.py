@@ -11864,28 +11864,8 @@ class PictureCaptureApp(tk.Tk):
                         f"{self._batch_title}：已完成 {completed}/{total}（并行 {active}/{workers} 页）"
                     )
                 if self._batch_title == "精修画线" and isinstance(_result, dict):
-                    if _result.get("skipped"):
-                        detail = str(_result.get("reason", "未知原因"))
-                        self.batch_text_var.set(
-                            f"精修画线：{completed}/{total}，跳过 {label}"
-                        )
-                        self.status_var.set(
-                            f"精修跳过 {label}：{detail[:180]}"
-                        )
-                        print(f"[精修画线][SKIPPED] {label}: {detail}", flush=True)
-                    else:
-                        measured = int(_result.get("layout_measured", 0))
-                        mode = str(_result.get("mode", "unknown"))
-                        saved = int(_result.get("saved", 0))
-                        self.status_var.set(
-                            f"精修 {completed}/{total}：{label}；"
-                            f"版面测量 {measured} 次；PDIC更新 {saved} 次；模式 {mode}"
-                        )
-                        print(
-                            f"[精修画线][PAGE] {label}: mode={mode}"
-                            f" layout_measured={measured} pdic_saved={saved}",
-                            flush=True,
-                        )
+                    from .marker_refinement_progress import report_refinement_page
+                    report_refinement_page(self, completed, total, label, _result)
             elif kind == "done":
                 _kind, completed, total, stopped, results = event
                 finished = True
