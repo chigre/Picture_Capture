@@ -2824,7 +2824,7 @@ def split_single_lines(
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
     )
-    from .marker_refinement_analysis import whiten_illustrations_for_refinement as whiten
+    from .marker_refinement_analysis import whiten_illustrations_for_export as whiten
     source = whiten(source, effective, profile_page_index, source_image_path=image_path)
     if page_sections is None:
         page_sections = read_page_sections(image_path)
