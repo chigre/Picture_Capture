@@ -54,6 +54,7 @@ def _app():
         batch_stop_button=_Widget(),
         batch_bar=_Widget(),
         after=lambda *_: None,
+        _poll_batch_queue=lambda: None,
     )
     app._start_batch_task = lambda *args, **kwargs: gui.PictureCaptureApp._start_batch_task(
         app, *args, **kwargs,
