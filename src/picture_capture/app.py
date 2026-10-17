@@ -15379,22 +15379,21 @@ class PictureCaptureApp(tk.Tk):
         # Explicit refinement includes manual lines.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
-            configured_refine_workers, refine_page_job, commit_refined_page_result,
+            refine_page_job, commit_refined_page_result,
         )
-        workers = configured_refine_workers(
-            len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
-        )
-
-        def job_builder(index: int, _position: int, _total: int):
-            return str(pages[index]), settings, index, fixed_half_gutter
+        # Restore the proven pre-#547 sequential per-page dispatcher: every
+        # page finishes its own Layout measurement and guarded PDIC commit
+        # before the next page starts. Never spawn multiple Paddle models.
+        workers = 1
 
         def page_owned(index: int) -> bool:
             with self._batch_state_lock:
                 return self._batch_page_states.get(int(index)) == "processing"
 
-        def save_result(index: int, computed):
-            # This consumer executes in ONE parent runner thread, never in a
-            # child process. Worker results never write files or access Tk.
+        def worker(index: int, _position: int, _total: int):
+            computed = refine_page_job(
+                str(pages[index]), settings, index, fixed_half_gutter,
+            )
             return commit_refined_page_result(index, computed, page_owned)
 
         def done(completed, total, stopped, results, error) -> None:
@@ -15420,12 +15419,10 @@ class PictureCaptureApp(tk.Tk):
                 parts.insert(0, f"提前停止 {completed}/{total} 页")
             self.status_var.set("精修画线完成：" + "；".join(parts))
 
-        self._start_parallel_batch_task(
-            "精修画线", indices, refine_page_job, job_builder, save_result, done,
+        self._start_batch_task(
+            "精修画线", indices, worker, done,
             item_label=lambda i: pages[i].name,
-            max_workers=workers, respect_cpu_workers=True,
             foreground_page_edit=True, allow_pdic_edits=True,
-            isolate_worker=True,
         )
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
