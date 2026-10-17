@@ -38,8 +38,11 @@ def validate_separator_gap_controls(values: dict[str, Any]) -> None:
         if name not in values:
             continue
         raw = str(values[name].get()).strip()
+        # Tk Spinbox may receive Chinese/full-width decimal punctuation on
+        # Windows IMEs. Normalize only decimal marks, never relax the bounds.
+        canonical = raw.translate(str.maketrans("，,．。", "...."))
         try:
-            numeric = float(raw)
+            numeric = float(canonical)
         except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{name} 当前输入 {raw!r} 不是有效数字；请使用小数点，如 0.25。") from exc
         if not lower <= numeric <= upper:
@@ -49,6 +52,8 @@ def validate_separator_gap_controls(values: dict[str, Any]) -> None:
             )
         if name == "separator_y_ink_safe_ink_threshold" and not numeric.is_integer():
             raise ValueError(f"{name} 必须为整数。")
+        if canonical != raw and hasattr(values[name], "set"):
+            values[name].set(canonical)
 
 
 def validate_ref_box_controls(values: dict[str, Any]) -> None:
