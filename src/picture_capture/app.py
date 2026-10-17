@@ -11669,7 +11669,7 @@ class PictureCaptureApp(tk.Tk):
             )
             try:
                 while True:
-                    # Bound submissions so pause/stop halts new dispatches.
+                    # Pause/stop block new submissions.
                     while (
                         self._batch_pause_event.is_set()
                         and not self._batch_stop_event.is_set()
@@ -15377,8 +15377,7 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages = list(project.images)
         settings = replace(self.settings)
-        # The explicit button means "run refinement now" even if automatic
-        # refinement was disabled for normal detection.
+        # Explicit action overrides ordinary auto-refine.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
             configured_refine_workers, refinement_uses_page_layout,
@@ -15395,8 +15394,7 @@ class PictureCaptureApp(tk.Tk):
                 return self._batch_page_states.get(int(index)) == "processing"
 
         def save_result(index: int, computed):
-            # This consumer executes in ONE parent runner thread, never in a
-            # child process. Worker results never write files or access Tk.
+            # Only the coordinator publishes validated PDIC.
             return commit_refined_page_result(index, computed, page_owned)
 
         def done(completed, total, stopped, results, error) -> None:
