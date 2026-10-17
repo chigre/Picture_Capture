@@ -34,6 +34,15 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
     layout = load_layout_rows_cache(
         page.parent, page, int(page_index), settings, source_size=source_size,
     )
+    if layout is None and bool(getattr(settings, "paddle_refine_separator_y", False)):
+        # The explicit refine button forces this processing-only flag ON.
+        # LayoutRows was commonly saved before that transient override, and
+        # the flag has no bearing on cached physical column/row geometry.
+        cache_settings = replace(settings, paddle_refine_separator_y=False)
+        layout = load_layout_rows_cache(
+            page.parent, page, int(page_index), cache_settings,
+            source_size=source_size,
+        )
     if layout is None:
         return None
     columns = sorted(layout.columns, key=lambda column: int(column.index))
@@ -99,6 +108,11 @@ def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
     if not _same_image_fingerprint(payload, Path(page), source_size):
         return "layoutrows_image_changed"
     if payload.get("settings_fingerprint") != _settings_fingerprint(settings):
+        if (bool(getattr(settings, "paddle_refine_separator_y", False))
+                and payload.get("settings_fingerprint") == _settings_fingerprint(
+                    replace(settings, paddle_refine_separator_y=False)
+                )):
+            return "layoutrows_geometry_insufficient"
         return "layoutrows_settings_changed"
     from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
     requested = {
