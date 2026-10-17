@@ -91,7 +91,7 @@ def detect_text_polygons(image, settings, *, limit_side_len: int = 2400):
 
 def detect_layout_parameters(image, settings):
     from time import perf_counter
-    from .draw_performance_profile import enabled, record_page
+    from .quality.draw_performance_profile import enabled, record_page
     tracking = enabled()
     tick = perf_counter() if tracking else 0.0
     stages = {}

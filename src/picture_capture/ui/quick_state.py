@@ -10,7 +10,7 @@ import os
 import tkinter as tk
 from typing import Any
 
-from ..layout_percent_helpers import LAYOUT_PERCENT_AXES
+from ..geometry.layout_percent_helpers import LAYOUT_PERCENT_AXES
 from ..ocr_action_guard import LENS_MODE_LABELS
 from ..ui_compat import normalize_content_font_setting
 from ..overlay_opacity import normalize_opacity as line_opacity

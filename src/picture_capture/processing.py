@@ -556,7 +556,7 @@ def detect_entries(
     assignment. OCR/combined retain the full enriched Page Understanding path.
     """
     from time import perf_counter as _pc
-    from .draw_performance_profile import enabled as _profile_on
+    from .quality.draw_performance_profile import enabled as _profile_on
     _timing = _profile_on() and str(getattr(settings, "detection_method", "")).lower() == "left_edge"
     _nested = {}
     _tick = _pc() if _timing else 0.0
@@ -809,7 +809,7 @@ def detect_entries(
             )
             _mark("inner_sort")
             if _timing:
-                from .draw_performance_profile import record_page
+                from .quality.draw_performance_profile import record_page
                 record_page("<substage>", profile_page_index, _nested,
                             stage_group="detect_entries_inner")
             return sorted_entries, geometry
@@ -888,7 +888,7 @@ def detect_entries_job(
     """
     from contextlib import nullcontext
     from time import perf_counter
-    from .draw_performance_profile import enabled as profile_enabled, record_page, bind_page, unbind_page
+    from .quality.draw_performance_profile import enabled as profile_enabled, record_page, bind_page, unbind_page
     profiling = profile_enabled()
     stages = {}
     total_start = perf_counter()

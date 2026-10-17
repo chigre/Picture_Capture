@@ -393,7 +393,7 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
             f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{last_exc}"
         ) from last_exc
 
-    from .inference_monitor import record_model_event
+    from .quality.inference_monitor import record_model_event
     record_model_event("PaddleOCR", policy.device, policy.mkldnn, policy.cpu_threads)
 
     clear_ocr_channel_paddle_engine_cache(keep_key=key)

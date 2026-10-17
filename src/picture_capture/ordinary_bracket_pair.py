@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 from .models import Entry
-from .visual_boundary_locator import safe_gap_above
+from .geometry.visual_boundary_locator import safe_gap_above
 
 
 

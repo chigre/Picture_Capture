@@ -168,7 +168,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
         except Exception as exc:
             last_exc = exc
             continue
-        from .inference_monitor import record_model_event
+        from .quality.inference_monitor import record_model_event
         record_model_event("TextDetection", policy.device, policy.mkldnn, policy.cpu_threads)
         _TEXT_DETECTION_CACHE.clear()
         _TEXT_DETECTION_CACHE[key] = detector
@@ -869,7 +869,7 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     installed Paddle/PaddleX stack still cannot execute detection.
     """
     from time import perf_counter as _perf
-    from .draw_performance_profile import enabled as _profile_enabled, record_page
+    from .quality.draw_performance_profile import enabled as _profile_enabled, record_page
     _tracking = _profile_enabled()
     _tick = _perf() if _tracking else 0.0
     _steps = {}

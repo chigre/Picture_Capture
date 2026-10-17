@@ -192,7 +192,7 @@ def _projection_estimate(cleaned_source: Image.Image, settings: AppSettings, bac
 def _paddle_estimate(cleaned_source: Image.Image, settings: AppSettings, backend: Any) -> Any:
     """Run the normal Paddle layout path, without treating successful execution as reliability."""
     from time import perf_counter
-    from .draw_performance_profile import enabled, record_page
+    from .quality.draw_performance_profile import enabled, record_page
     tracking = enabled()
     tick = perf_counter() if tracking else 0.0
     steps = {}
@@ -478,7 +478,7 @@ def _fuse_detected_geometry(primary: Any, secondary: Any, image_size: tuple[int,
 def detect_layout_parameters_reliable(image: Image.Image, settings: AppSettings, backend: Any) -> Any:
     """Noise-robust, cross-checked replacement for detect_layout_parameters."""
     from time import perf_counter
-    from .draw_performance_profile import enabled, record_page
+    from .quality.draw_performance_profile import enabled, record_page
     tracking = enabled()
     tick = perf_counter() if tracking else 0.0
     steps = {}

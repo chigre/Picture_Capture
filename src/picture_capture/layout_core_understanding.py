@@ -519,7 +519,7 @@ def understand_layout_core(
     isolated diagnostic run never mutates the normal cached Layout objects.
     """
     from time import perf_counter as _perf
-    from .draw_performance_profile import enabled as _prof_on, record_page
+    from .quality.draw_performance_profile import enabled as _prof_on, record_page
     _profiling = _prof_on()
     _last = _perf() if _profiling else 0.0
     _stages = {}
@@ -685,7 +685,7 @@ def understand_layout_core(
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
     # before changing this canonical ordinary-mode output.
-    from .boundary_evidence import proposed_layout_boundaries, serialize_proposals
+    from .geometry.boundary_evidence import proposed_layout_boundaries, serialize_proposals
     result.boundary_proposals = serialize_proposals(proposed_layout_boundaries(result))
     layout.reason += (
         f"; page_understanding={role_model}:layout_core"

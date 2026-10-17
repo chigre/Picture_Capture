@@ -1818,7 +1818,7 @@ def _fuse_detection_entries(
             delta = abs(int(ocr_v) - int(ordinary_v))
             if delta <= tolerance:
                 pair_edges.append((delta, ordinary_index, ocr_index))
-    from .ordered_marker_matching import match_ordered_markers
+    from .quality.ordered_marker_matching import match_ordered_markers
 
     matched_ocr = match_ordered_markers(
         len(ordinary_rows), len(ocr_rows), pair_edges,

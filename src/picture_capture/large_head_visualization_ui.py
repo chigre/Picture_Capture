@@ -221,7 +221,7 @@ def export_large_head_debug_json(app: Any) -> None:
 def compare_large_head_debug_json(app: Any) -> None:
     """Compare a selected older export to current unified Layout evidence."""
     from tkinter import filedialog, messagebox
-    from .ordinary_unified_diff import compare_ordinary_diagnostics
+    from .quality.ordinary_unified_diff import compare_ordinary_diagnostics
 
     if getattr(app, "image", None) is None:
         return
