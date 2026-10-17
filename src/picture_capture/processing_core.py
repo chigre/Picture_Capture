@@ -2824,6 +2824,8 @@ def split_single_lines(
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
     )
+    from .marker_refinement_analysis import whiten_illustrations_for_refinement as whiten
+    source = whiten(source, effective, profile_page_index, source_image_path=image_path)
     if page_sections is None:
         page_sections = read_page_sections(image_path)
     records: list[CropRecord] = []
@@ -2850,13 +2852,10 @@ def split_single_lines(
             replacements.append((manifest_temp, manifest_target))
         stale = list(output_dir.glob(f"{image_path.stem}_SW_*.png"))
         if not write_manifest:
-            # Remove a previously generated legacy manifest as part of the
-            # same rollback-safe page publish as the replacement PNGs.
             stale.append(manifest_target)
         if replacements:
             _publish_file_transaction(replacements, stale_paths=stale)
         else:
-            # An empty manifest-free page has no replacement file to publish.
             for path in stale:
                 path.unlink(missing_ok=True)
     except Exception:

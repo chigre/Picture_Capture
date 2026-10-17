@@ -14,6 +14,37 @@ from .image_utils import normalize_page_rgb
 from .profile_semantics import effective_page_settings, page_template_analysis_image
 
 
+def whiten_illustrations_for_refinement(
+    image: Image.Image,
+    settings,
+    page_index: int,
+    *,
+    source_image_path: Path | None = None,
+) -> Image.Image:
+    """Apply the refinement button's opt-in mask to an in-memory image.
+
+    When disabled, return the input unchanged. Reuse mode reads the existing
+    PPP and never redetects. Automatic mode must not persist detected polygons:
+    the shared masker receives a source path ONLY when reading existing PPP.
+    Callers own and close a distinct returned image; the source is never edited.
+    """
+    if not bool(getattr(settings, "layout_mask_illustrations", False)):
+        return image
+
+    from .layout_illustration_mask import mask_large_illustrations_for_layout
+
+    reuse = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
+    if reuse and source_image_path is None:
+        raise ValueError("复用已有插图白化需要当前页原图路径，不能忽略 PPP 配置")
+    path_kwargs = {"source_image_path": Path(source_image_path)} if reuse else {}
+    masked, _stats = mask_large_illustrations_for_layout(
+        image, settings,
+        profile_page_index=int(page_index),
+        **path_kwargs,
+    )
+    return masked
+
+
 def prepare_refinement_analysis(
     image: Image.Image,
     settings,
@@ -31,23 +62,10 @@ def prepare_refinement_analysis(
     analysis = source
     try:
         effective = effective_page_settings(settings, source.size, int(page_index))
-        if bool(getattr(effective, "layout_mask_illustrations", False)):
-            from .layout_illustration_mask import mask_large_illustrations_for_layout
-
-            reuse = bool(getattr(effective, "layout_mask_illustrations_use_existing", False))
-            if reuse and source_image_path is None:
-                raise ValueError("复用已有插图白化需要当前页原图路径，不能忽略 PPP 配置")
-            # The masker writes auto candidates to PPP when given a source path
-            # in auto mode. Only pass the path when reading existing PPP.
-            path_kwargs = (
-                {"source_image_path": Path(source_image_path)} if reuse else {}
-            )
-            masked, _stats = mask_large_illustrations_for_layout(
-                analysis, effective,
-                profile_page_index=int(page_index),
-                **path_kwargs,
-            )
-            analysis = masked
+        analysis = whiten_illustrations_for_refinement(
+            analysis, effective, int(page_index),
+            source_image_path=source_image_path,
+        )
 
         template = page_template_analysis_image(
             analysis, effective, int(page_index),
