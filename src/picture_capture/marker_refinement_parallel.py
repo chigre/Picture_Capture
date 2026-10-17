@@ -63,15 +63,24 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
     workers = max(1, min(int(page_count) or 1, available, max(1, requested)))
     if settings is not None and not fixed_half_gutter and refinement_uses_page_layout(settings):
-        # All pages must be proven safe for GPU-free processing BEFORE spawning
-        # multiple children. A mixed or changed batch remains single-GPU-owner.
+        # The optional illustration auto-detection can own GPU resources too.
+        mask_enabled = bool(getattr(settings, "layout_mask_illustrations", False))
+        mask_reuse = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
+        if mask_enabled and not mask_reuse:
+            return 1
+        # Check EVERY selected page; mixed cache misses still use one persistent
+        # GPU worker. Fully cached batches never enter the heavy detector.
         if not cache_pages or not all(
             _page_has_usable_refinement_json(page, index, settings)
             for page, index in cache_pages
         ):
             return 1
+        # Existing JSON + optional existing PPP: safe to dispatch 4 by default
+        # or honor the explicit Environment Center 8-worker configuration.
+        if str(configured).lower() in ("auto", "", "none"):
+            workers = min(max(1, int(page_count)), available, 4)
+        return workers
     if fixed_half_gutter or bool(getattr(settings, "layout_mask_illustrations", False)):
-        # Full-resolution illustration masking can hold several image copies.
         return min(workers, 2)
     return workers
 
