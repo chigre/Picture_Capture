@@ -15385,6 +15385,7 @@ class PictureCaptureApp(tk.Tk):
         )
         workers = configured_refine_workers(
             len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
+            cache_pages=tuple((pages[index], index) for index in indices),
         )
 
         def job_builder(index: int, _position: int, _total: int):
