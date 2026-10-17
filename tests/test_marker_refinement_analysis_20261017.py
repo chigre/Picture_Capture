@@ -1,5 +1,5 @@
-"""Button preparation is Profile geometry + optional illustration whitening only."""
-from dataclasses import dataclass
+"""Button preparation applies selected page-local Auto Layout geometry without OCR."""
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,38 +20,162 @@ def _forbidden(*_args, **_kwargs):
     raise AssertionError("Refine existing lines must not run heavy layout/OCR/denoise")
 
 
-def test_explicit_refine_does_not_rerun_layout_or_denoise(monkeypatch, tmp_path):
-    """Even when ordinary auto-layout/denoise are ON, button only adds masking."""
+def test_explicit_refine_uses_selected_per_page_layout_without_ocr_or_denoise(
+    monkeypatch, tmp_path,
+):
     from picture_capture import dictionary_page_layout_policy, image_utils
     settings = AppSettings()
     settings.analysis_denoise_enabled = True
     settings.ordinary_auto_layout = True
     settings.ordinary_auto_start_y = True
     settings.ordinary_auto_manual_x = True
+    settings.ordinary_auto_column_width = True
+    settings.ordinary_auto_character_height = True
     settings.layout_mask_illustrations = False
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", _forbidden)
-    monkeypatch.setattr(image_utils, "build_analysis_image", _forbidden)
     stages = []
+
+    def physical_policy(image, current, *, page_index):
+        stages.append(("physical", page_index, image.getpixel((22, 22))))
+        resolved = replace(current)
+        resolved.start_y = 16
+        resolved.manual_x = 8
+        resolved.column_width = 74
+        resolved.character_height = 22
+        return resolved, object(), {
+            "start_y": 16, "manual_x": 8, "column_width": 74,
+            "character_height": 22,
+        }
+
+    monkeypatch.setattr(
+        dictionary_page_layout_policy, "resolve_page_layout_policy",
+        physical_policy,
+    )
+    monkeypatch.setattr(image_utils, "build_analysis_image", _forbidden)
     monkeypatch.setattr(
         prep, "effective_page_settings",
         lambda current, size, index: (stages.append(("profile", size, index)) or current),
     )
     monkeypatch.setattr(
         prep, "page_template_analysis_image",
-        lambda image, current, index: (stages.append(("template", index)) or image.copy()),
+        lambda image, current, index: (
+            stages.append(("template", index, current.column_width)) or image.copy()
+        ),
     )
     original = _page()
     source, effective, prepared = prep.prepare_refinement_analysis(
         original, settings, 7, source_image_path=tmp_path / "page.png",
     )
     try:
-        assert stages == [("profile", original.size, 7), ("template", 7)]
-        assert effective is settings
+        assert stages == [
+            ("profile", original.size, 7),
+            ("physical", 7, (0, 0, 0)),
+            ("template", 7, 74),
+        ]
+        assert effective is not settings
+        assert (effective.start_y, effective.manual_x,
+                effective.column_width, effective.character_height) == (16, 8, 74, 22)
+        assert effective.gutter == settings.gutter
+        assert settings.column_width != 74
         assert source.tobytes() == prepared.tobytes() == original.tobytes()
     finally:
         source.close()
         prepared.close()
         original.close()
+
+
+@pytest.mark.parametrize("master", [False, True])
+def test_refine_skips_physical_detector_without_enabled_auto_fields(
+    monkeypatch, master,
+):
+    from picture_capture import dictionary_page_layout_policy
+    settings = AppSettings()
+    settings.ordinary_auto_layout = master
+    for _field, switch in dictionary_page_layout_policy.AUTO_LAYOUT_FIELDS:
+        setattr(settings, switch, False)
+    monkeypatch.setattr(
+        dictionary_page_layout_policy, "resolve_page_layout_policy", _forbidden,
+    )
+    image = _page()
+    source, effective, prepared = prep.prepare_refinement_analysis(
+        image, settings, 1,
+    )
+    try:
+        assert effective.column_width == settings.column_width
+        assert source.tobytes() == prepared.tobytes()
+    finally:
+        source.close()
+        prepared.close()
+        image.close()
+
+
+def test_auto_policy_only_updates_checked_fields_and_is_page_local(monkeypatch):
+    from picture_capture import dictionary_page_layout_policy as policy
+    settings = AppSettings()
+    settings.ordinary_auto_layout = True
+    for _field, switch in policy.AUTO_LAYOUT_FIELDS:
+        setattr(settings, switch, False)
+    settings.ordinary_auto_column_width = True
+    settings.ordinary_auto_character_height = True
+    settings.ordinary_auto_manual_x = True
+    prior_gutter = settings.gutter
+    prior_start = settings.start_y
+    prior_columns = settings.columns
+    observed = []
+
+    def estimate(image, detector_settings):
+        marker = image.getpixel((22, 22))[0]
+        observed.append(marker)
+        return SimpleNamespace(
+            columns=8, start_y=91, manual_x=99,
+            column_width=60 if marker == 0 else 80,
+            gutter=30, character_height=22 if marker == 0 else 26,
+            row_padding=15,
+        )
+
+    monkeypatch.setattr(policy, "detect_layout_parameters", estimate)
+    monkeypatch.setattr(
+        policy.base, "_analysis_page",
+        lambda image, current, page_index: (image, image, None, current),
+    )
+    monkeypatch.setattr(
+        policy, "register_page_manual_x",
+        lambda canonical, current, estimation: SimpleNamespace(
+            value=12 if canonical.getpixel((22, 22))[0] == 0 else 18,
+        ),
+    )
+    first = _page()
+    second = _page()
+    second.putpixel((22, 22), (255, 255, 255))
+    try:
+        values = []
+        for index, image in enumerate((first, second)):
+            source, effective, prepared = prep.prepare_refinement_analysis(
+                image, settings, index,
+            )
+            try:
+                values.append((
+                    effective.column_width,
+                    effective.character_height,
+                    effective.manual_x,
+                    effective.gutter,
+                    effective.start_y,
+                    effective.columns,
+                ))
+            finally:
+                source.close()
+                prepared.close()
+        assert observed == [0, 255]
+        assert values == [
+            (60, 22, 12, prior_gutter, prior_start, prior_columns),
+            (80, 26, 18, prior_gutter, prior_start, prior_columns),
+        ]
+        assert (settings.gutter, settings.start_y, settings.columns) == (
+            prior_gutter, prior_start, prior_columns,
+        )
+        assert settings.manual_x != values[1][2]
+    finally:
+        first.close()
+        second.close()
 
 
 def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_path):
