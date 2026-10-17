@@ -138,3 +138,24 @@ def test_uncertain_deferred_snapshot_cannot_overwrite_committed_pdic(tmp_path):
         flush_deferred_page_save(app, write_pdic=write_pdic, pdic_path=pdic_path)
     assert pdic_path(page).read_bytes() == original
     assert app._deferred_save_snapshot[0] == page
+
+
+def test_autosave_review_failure_keeps_review_owner_and_rearms():
+    status = []
+    calls = []
+    review = SimpleNamespace(
+        winfo_exists=lambda: True,
+        autosave_commit=lambda: (_ for _ in ()).throw(OSError("synthetic full disk")),
+    )
+    fake = SimpleNamespace(
+        autosave_job="previous",
+        autosave_var=SimpleNamespace(get=lambda: True),
+        _batch_active=False, project=object(), current_page="synthetic.png",
+        review_window=review, status_var=SimpleNamespace(set=status.append),
+        toggle_autosave=lambda: calls.append("rearmed"),
+        save_pdic=lambda **_kw: pytest.fail("no stale main-canvas fallback"),
+    )
+    PictureCaptureApp.autosave_tick(fake)
+    assert calls == ["rearmed"]
+    assert fake.review_window is review
+    assert any("自动保存失败" in value for value in status)

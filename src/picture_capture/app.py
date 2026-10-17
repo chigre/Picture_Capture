@@ -16129,10 +16129,12 @@ class PictureCaptureApp(tk.Tk):
 
     def autosave_tick(self) -> None:
         self.autosave_job = None
-        if self.autosave_var.get():
-            # Autosave PDIC only for editable batch pages; never autosave PPP.
+        if not self.autosave_var.get():
+            return
+        try:
+            # Autosave PDIC only for editable batch pages; never autosave PPP
+            # while a background batch owns the current page.
             if self._batch_active and not self._can_save_current_during_batch_navigation():
-                self.toggle_autosave()
                 return
             if self.project and self.current_page:
                 self._last_pdic_write_changed = False
@@ -16151,6 +16153,12 @@ class PictureCaptureApp(tk.Tk):
                 polygon_changed = False if self._batch_active else self._save_normalized_ppp()
                 if self._last_pdic_write_changed or polygon_changed:
                     self.status_var.set("已自动保存")
+        except (OSError, RuntimeError, ValueError) as exc:
+            # In particular, never fall back to stale main-canvas buffers when
+            # ReviewWindow's PDIC transaction failed.
+            self.status_var.set(f"自动保存失败，校对修改仍保留：{exc}")
+        finally:
+            # Failed I/O must not silently disable the next autosave tick.
             self.toggle_autosave()
 
     def open_settings(self, initial_tab: str | None = None) -> None:
