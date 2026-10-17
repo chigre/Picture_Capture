@@ -143,7 +143,7 @@ def test_unlined_layout_and_png_see_same_temporary_mask(
         assert not page.with_suffix(".ppp").exists()
 
 
-def test_only_exports_tolerate_missing_ppp_in_reuse_mode(tmp_path):
+def test_exports_and_refinement_tolerate_missing_ppp_in_reuse_mode(tmp_path):
     from picture_capture.marker_refinement_analysis import (
         whiten_illustrations_for_export, whiten_illustrations_for_refinement,
     )
@@ -157,8 +157,7 @@ def test_only_exports_tolerate_missing_ppp_in_reuse_mode(tmp_path):
         assert whiten_illustrations_for_export(
             image, settings, 0, source_image_path=page,
         ) is image
-        with pytest.raises(FileNotFoundError, match="PPP"):
-            whiten_illustrations_for_refinement(
-                image, settings, 0, source_image_path=page,
-            )
+        assert whiten_illustrations_for_refinement(
+            image, settings, 0, source_image_path=page,
+        ) is image
     assert not page.with_suffix(".ppp").exists()
