@@ -102,11 +102,14 @@ def test_neighbouring_row_beyond_allowed_shift_is_not_used():
     assert details["reason"] == "no_whole_column_blank_y"
 
 
-def test_when_previous_descender_occupies_safe_gap_keep_original():
+def test_descender_near_headword_uses_a_local_valley_without_white_triple():
     image = _page(40, prior=(21, 38))
     position, details = _refine(image, 33)
-    assert position == 33
-    assert details["reason"] == "no_whole_column_blank_y"
+    # The centre Y is clear but the row above still has previous-line ink.
+    # A strict three-row white gate would incorrectly freeze the original Y.
+    assert position == 38
+    assert details["reason"] == "verified_whole_column_valley"
+    assert details["gap"] == 2
 
 
 def test_zero_max_shift_is_explicit_noop():
@@ -164,3 +167,27 @@ def test_full_column_whiteness_is_preferred_to_fixed_safety_offset():
     assert refined == 35
     assert diagnostics["gap"] == 5
     assert diagnostics["whole_column_ink_score"] == 0
+
+
+
+def test_skewed_far_side_ink_uses_a_real_valley_and_is_idempotent():
+    image = _page(40, prior=(6, 25))
+    # Far-right text descenders/scan curvature: every possible near-headword
+    # triple includes ink, but a clear relative trough exists at Y36--37.
+    for y in range(28, 40):
+        width = 5 if 35 <= y <= 38 else 16
+        image[y, 92:92 + width] = 0
+    refined, details = _refine(image, 32)
+    assert details["reason"] == "verified_whole_column_valley"
+    assert 35 <= refined <= 38
+    again, repeat_details = _refine(image, refined)
+    assert again == refined
+    assert repeat_details["reason"] == "verified_whole_column_valley"
+
+
+def test_flat_whole_column_ink_without_valley_keeps_saved_y():
+    image = _page(40)
+    image[27:40, 92:105] = 0
+    result, details = _refine(image, 34)
+    assert result == 34
+    assert details["reason"] == "no_whole_column_blank_y"
