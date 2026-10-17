@@ -62,3 +62,48 @@ def test_refinement_rejects_other_page_json(tmp_path):
     cfg = AppSettings()
     assert write_layout_rows_cache(tmp_path, page, 3, cfg, layout) is not None
     assert cached_refinement_settings(page, (250, 350), cfg, 4) is None
+
+
+def test_cached_batch_restores_four_or_eight_workers(tmp_path):
+    from picture_capture.marker_refinement_parallel import configured_refine_workers
+
+    settings = AppSettings(columns=1, manual_x=11, column_width=80)
+    settings.ordinary_auto_layout = True
+    settings.ordinary_auto_columns = True
+    settings.ordinary_auto_start_y = True
+    settings.ordinary_auto_manual_x = True
+    settings.ordinary_auto_column_width = True
+    settings.ordinary_auto_gutter = False
+    settings.ordinary_auto_row_padding = False
+    settings.ordinary_auto_character_height = True
+    settings.layout_mask_illustrations = True
+    settings.layout_mask_illustrations_use_existing = True
+    pages = []
+    rows = [SimpleNamespace(y0=12+i*25, y1=30+i*25, first_x=3, anchor_x=10)
+            for i in range(6)]
+    layout = SimpleNamespace(
+        transform=LayoutTransform("identity"),
+        source_size=(250, 350), canonical_size=(250, 350),
+        body_top=12, body_bottom=250, ordinary_line_height=25,
+        columns=[SimpleNamespace(index=0, left=11, right=91, lines=rows)],
+    )
+    for index in range(8):
+        page = tmp_path / f"{index:06}.png"
+        Image.new("RGB", (250, 350), "white").save(page)
+        assert write_layout_rows_cache(tmp_path, page, index, settings, layout) is not None
+        pages.append((page, index))
+    settings.paddle_refine_separator_y = True
+    assert configured_refine_workers(
+        8, cpus=12, configured="auto", settings=settings,
+        cache_pages=tuple(pages),
+    ) == 4
+    assert configured_refine_workers(
+        8, cpus=12, configured="8", settings=settings,
+        cache_pages=tuple(pages),
+    ) == 8
+    # A cache miss must not cause multiple GPU model instances.
+    pages[-1][0].unlink()
+    assert configured_refine_workers(
+        8, cpus=12, configured="8", settings=settings,
+        cache_pages=tuple(pages),
+    ) == 1
