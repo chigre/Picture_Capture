@@ -91,6 +91,18 @@ def prepare_refinement_analysis(
             source_image_path=source_image_path,
         )
 
+        # Respect only the per-page geometry switches explicitly selected in
+        # Auto Layout. Do not build semantic Layout rows or alter saved PDIC.
+        if bool(getattr(effective, "ordinary_auto_layout", False)):
+            from .dictionary_page_layout_policy import (
+                AUTO_LAYOUT_FIELDS, resolve_page_layout_policy,
+            )
+            if any(bool(getattr(effective, flag, False))
+                   for _field, flag in AUTO_LAYOUT_FIELDS):
+                effective, _estimate, _applied = resolve_page_layout_policy(
+                    analysis, effective, page_index=int(page_index),
+                )
+
         template = page_template_analysis_image(
             analysis, effective, int(page_index),
         )
