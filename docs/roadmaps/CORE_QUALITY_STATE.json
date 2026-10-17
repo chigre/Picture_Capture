@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-16T21:40:00Z",
+  "updated_at_utc": "2026-10-17T06:06:21Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -30,14 +30,14 @@
       "number": 542,
       "url": "https://github.com/chigre/Picture_Capture/pull/542",
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "draft_ci_green_operator_acceptance_pending",
+      "status": "draft_ci_green_diverged_22_main_commits_human_pending",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "eaad5dd41c8742261592454ed4838713b6ea7a37",
-    "latest_verified_main_sha": "05d345f8e8db2acb19771ff1d2eb953f89a5964c",
+    "implementation_head_sha": "9e45487e9b21ccd046c478ec00314548818e8554",
+    "latest_verified_main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
     "last_completed_work_item": "R1.3",
     "blockers": [
       {
@@ -51,18 +51,18 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       },
       {
-        "type": "r3_postpublish_validation_pending",
-        "message": "Post-publication readback and rollback-marker quarantine added; focused pytest, real-Tk smoke, architecture and four-platform CI are not yet executed. A double I/O fault can leave mixed disk bytes under a retained recovery marker; no strict cross-file atomicity claim.",
-        "url": "https://github.com/chigre/Picture_Capture/issues/503"
+        "type": "r3_main_divergence",
+        "message": "PR #542 head 9e45487e and live main db746ec4 diverged; main is 22 commits ahead, branch 5 commits ahead; prior green CI is not merged-head evidence.",
+        "url": "https://github.com/chigre/Picture_Capture/pull/542"
       },
       {
-        "type": "r3_human_windows_and_transaction_review_pending",
-        "message": "PR #542 head eaad5dd automated 4-platform CI 38970243351 and PR check 38970237522 SUCCESS, clean; mandatory real Windows GUI operations and final write-chain review remain pending. No proven OS-level cross-file atomicity; draft PR must stay open. #483 W1-W11 R2/B2 separately pending.",
+        "type": "r3_ui_disk_save_failure",
+        "message": "Source-confirmed unhandled failure paths: ReviewWindow._close_review finally destroys window after save error; ReviewWindow.save/autosave_commit mutate shared Entry/editor before PDIC persistence; PictureCaptureApp.save_pdic clears deferred snapshot before write; repair and regression required.",
         "url": "https://github.com/chigre/Picture_Capture/pull/542"
       }
     ],
-    "required_next_action": "Review PR #542 exact commit, audit remaining FocusOut/autosave/delete/compound/batch/cross-page/close/redo and every postwrite exception for UI-disk consistency; conduct required human Windows R3/#503 GUI acceptance. Keep #483 W1–W11 R2/B2 in_progress. Do not mark verified or merge before these gates; after any code/docs amendment ensure fixed-head 4-platform CI GREEN, then merge, main CI and checkpoint sync.",
-    "last_test_evidence": "PR #542 fixed head eaad5dd41c8742261592454ed4838713b6ea7a37: Windows/macOS/Ubuntu/Python3.10 CI https://github.com/chigre/Picture_Capture/actions/runs/38970243351 COMPLETED SUCCESS (all 4 jobs), PR check https://github.com/chigre/Picture_Capture/actions/runs/38970237522 SUCCESS, mergeable_state clean. Main@05d345f8 CI 38966764059 attempt 2 SUCCESS. Synthetic regression and CI are automated only; R3 human Windows GUI acceptance #503 and R2/B2 W1-W11 #483 NOT DONE; no cross-file OS atomicity claim; R3.1/R3.2 and R2.1–R2.3 remain in_progress. Draft PR deliberately not merged.",
+    "required_next_action": "On sole Draft PR #542, add fail-before failure-injection regressions for ReviewWindow.save/autosave/_close_review and app.save_pdic deferred snapshot, then repair UI/PDIC rollback and close refusal. Reconcile main@db746ec4 without mixing independent refinement feature, run fixed merged-head four-platform CI; require real Windows R3/#503 before merge. Keep R2/#483 W1-W11 pending and in_progress.",
+    "last_test_evidence": "Live main@db746ec4: 39007936775 four-platform SUCCESS; 39007936618 CodeQL actions/python SUCCESS. #546 whitefill-only and #547 parallel refinement are MERGED independently, refine feature branch no longer exists. #542@9e45487e CI 38970650901 four-platform SUCCESS, but GitHub compare against main reports diverged (22 commits behind, 5 ahead); no combined-head CI. R3 human Windows #503 and R2 W1-W11 #483 pending. Source audit: ReviewWindow._close_review() uses finally close even on save failure; save/autosave commit shared Entry and canvas before PDIC write; app.save_pdic() clears deferred snapshot before write; no proven cross-file OS atomicity.",
     "active_batch": "B3",
     "next_batch": "B3",
     "r3_patch_chain": {
@@ -659,6 +659,30 @@
       "main_ci": "https://github.com/chigre/Picture_Capture/actions/runs/38876986096",
       "human_windows": "pending",
       "notes": "No OS-level cross-file atomicity claim; R2/B2 and R3/B3 in_progress; #483/#503 open."
+    },
+    {
+      "type": "b3_r3_hourly_live_audit",
+      "observed_at_utc": "2026-10-17T06:06:21Z",
+      "status": "source_audit_blocked_no_new_code",
+      "pr_url": "https://github.com/chigre/Picture_Capture/pull/542",
+      "pr_head_sha": "9e45487e9b21ccd046c478ec00314548818e8554",
+      "pr_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/38970650901",
+      "pr_ci_conclusion": "success",
+      "main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
+      "main_ci_url": "https://github.com/chigre/Picture_Capture/actions/runs/39007936775",
+      "main_ci_conclusion": "success",
+      "main_codeql_url": "https://github.com/chigre/Picture_Capture/actions/runs/39007936618",
+      "main_codeql_conclusion": "success",
+      "main_divergence": "22 commits behind main / 5 ahead",
+      "refinement": "Independent PR #546 (whitefill-only bf1342b) and #547 (parallel refinement) merged to main; no additional refinement work in #542.",
+      "r2_b2": "in_progress; #483 open, W1-W11 pending",
+      "r3_b3": "in_progress; #503 open, human Windows acceptance pending",
+      "audit_findings": [
+        "ReviewWindow._close_review uses finally to destroy on save exception",
+        "ReviewWindow.save/autosave_commit commit Entry/editor before PDIC write",
+        "PictureCaptureApp.save_pdic clears deferred snapshot before write; existing tests assert no evidence but not snapshot retention"
+      ],
+      "next_action": "Add failure-injection regressions and fix save failure UI/disk consistency on #542; then reconcile main and run combined-head CI; do not merge before real Windows acceptance."
     }
   ],
   "rules_for_updates": {
