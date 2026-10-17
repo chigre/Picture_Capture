@@ -22,9 +22,9 @@ build_core_services()
 
 from picture_capture.formats import pdic_path, read_pdic
 from picture_capture.models import Entry, ProjectState
-from picture_capture.detection_quality_metrics import marker_metrics
+from picture_capture.quality.detection_quality_metrics import marker_metrics
 from picture_capture.page_sections import read_page_sections
-from picture_capture.performance_metrics import timing_summary_ms
+from picture_capture.quality.performance_metrics import timing_summary_ms
 from picture_capture.processing import Geometry, column_index_for_click, detect_entries
 from picture_capture.project_storage import headword_filter_rules_path
 from picture_capture.paddle_headwords import HEADWORD_FILTER_RULES_FILENAME

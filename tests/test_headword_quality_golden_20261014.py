@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.detection_quality_metrics import (
+from picture_capture.quality.detection_quality_metrics import (
     MATCHING_ALGORITHM,
     marker_metrics,
     pooled_counts,

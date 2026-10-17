@@ -1,7 +1,7 @@
 """Regression for false positive/false negative scoring and production pairing."""
 import pytest
 
-from picture_capture.ordered_marker_matching import match_ordered_markers
+from picture_capture.quality.ordered_marker_matching import match_ordered_markers
 
 
 def edges(left, right, tolerance):
@@ -65,7 +65,7 @@ def test_real_benchmark_uses_identical_production_matching_primitive():
     # The benchmark now delegates to a pure metric helper, which must use
     # the same primitive as production processing. Check the complete chain,
     # not only a function-name occurrence in one particular source file.
-    import picture_capture.detection_quality_metrics as quality
+    import picture_capture.quality.detection_quality_metrics as quality
 
     metric_source = Path(quality.__file__).read_text(encoding="utf-8")
     assert "marker_metrics(" in benchmark

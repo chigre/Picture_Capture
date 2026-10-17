@@ -29,7 +29,7 @@ import zipfile
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from picture_capture.ordered_marker_matching import match_ordered_markers
+from picture_capture.quality.ordered_marker_matching import match_ordered_markers
 
 
 def _score(predicted: list[tuple], reference: list[tuple], tolerance: int) -> dict:
