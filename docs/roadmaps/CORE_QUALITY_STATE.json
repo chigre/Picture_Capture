@@ -4,7 +4,7 @@
   "plan_version": "1.2.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-17T06:17:18.480Z",
+  "updated_at_utc": "2026-10-17T07:22:31.941Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -30,13 +30,13 @@
       "number": 542,
       "url": "https://github.com/chigre/Picture_Capture/pull/542",
       "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "draft_main_synced_pending_fresh_ci_and_human_acceptance",
+      "status": "draft_engineering_review_final_fixed_head_ci_pending_human_waived_by_user",
       "units": [
         "R3.1",
         "R3.2"
       ]
     },
-    "implementation_head_sha": "0511b30a20be57ba79d378eded03d4a1f0f7c9bf",
+    "implementation_head_sha": "94a464b34a0569f3fc136fc1c263cd148883abc7",
     "latest_verified_main_sha": "db746ec4a15b5cae33f04526ef2995e86a91fd19",
     "last_completed_work_item": "R1.3",
     "blockers": [
@@ -46,23 +46,18 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/483"
       },
       {
-        "type": "r3_real_windows_acceptance_pending",
-        "message": "Human Windows R3 ReviewWindow acceptance not performed; synthetic CI alone insufficient.",
-        "url": "https://github.com/chigre/Picture_Capture/issues/503"
-      },
-      {
-        "type": "r3_ui_disk_save_failure",
-        "message": "Source-confirmed unhandled failure paths: ReviewWindow._close_review finally destroys window after save error; ReviewWindow.save/autosave_commit mutate shared Entry/editor before PDIC persistence; PictureCaptureApp.save_pdic clears deferred snapshot before write; repair and regression required.",
-        "url": "https://github.com/chigre/Picture_Capture/pull/542"
-      },
-      {
-        "type": "r3_merged_head_ci_pending",
-        "message": "PR #542 is synced with main@db746ec4 via safe two-parent merge 0511b30a; main 0 ahead of PR branch and PR 24 ahead before documentation checkpoint. Fresh merged-head Windows/macOS/Ubuntu/Python3.10 CI is not confirmed; previous green CI belongs to earlier SHA.",
+        "type": "r3_engineering_final_ci_pending",
+        "message": "ReviewWindow PDIC+simplified paired transaction and failed-save rollback committed through 94a464b34a0569f3fc136fc1c263cd148883abc7; final post-doc HEAD Windows/macOS/Ubuntu/Python3.10 CI and source-review still required before merge. Never enlarge architecture ratchet.",
         "url": "https://github.com/chigre/Picture_Capture/pull/542/checks"
+      },
+      {
+        "type": "r3_human_acceptance_waived_for_current_merge",
+        "message": "User explicit 2026-10-17 authorization: defer actual R3 Windows operator acceptance and assume it will pass for merge decision. This is a documented waiver NOT evidence of human validation, and is not R3 operator verified. #503 remain as follow-up for true operator evidence.",
+        "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "On sole Draft PR #542, add failure-injection regressions for ReviewWindow.save/autosave/_close_review and app.save_pdic deferred snapshot and repair UI/disk rollback; run fixed latest-head Windows/macOS/Ubuntu/Python3.10 CI, then genuine Windows R3/#503 acceptance before any production merge. R2/#483 W1-W11 pending, B2 in_progress.",
-    "last_test_evidence": "2026-10-17: PR #542 prior HEAD 41f14fe55b0bd4f465e86f6e7314f30910e85281, CI https://github.com/chigre/Picture_Capture/actions/runs/39008787964 SUCCESS; safe main sync created 0511b30a20be57ba79d378eded03d4a1f0f7c9bf with first parent PR head and second main db746ec4; GitHub compare main...branch => behind=0, ahead=24, no main mismatch. No new merged-head CI result at checkpoint; document-only commit will supersede HEAD and require new fixed-SHA CI. No real Windows R3 acceptance.",
+    "required_next_action": "Review last #542 code and obtain fixed final HEAD all-green CI/architecture/CodeQL. If green, merge #542 under recorded R3 human-test waiver; verify postmerge main CI and synchronize STATE/RESUME/B3_RUNBOOK on main. R2/B2 #483 W1-W11 remains pending/in_progress. Do not mark actual human validation as passed.",
+    "last_test_evidence": "PR #542 latest engineering head 94a464b34a0569f3fc136fc1c263cd148883abc7; Windows/macOS/Ubuntu/Python3.10 CI https://github.com/chigre/Picture_Capture/actions/runs/39013316496 was in_progress at documentation checkpoint. Review save now stages PDIC+simplified bundle with exact byte readback, rollback/quarantine on failure, source fingerprints, preserves deferred snapshots, stale deferred replay refusal and close refusal; synthetic failure tests committed. Earlier main db746ec4 CI 39007936775 success, not PR evidence. User 2026-10-17 explicitly defers all human acceptance for this merge; no human test is claimed to have passed.",
     "active_batch": "B3",
     "next_batch": "B3",
     "r3_patch_chain": {
@@ -102,6 +97,13 @@
       "fresh_ci": "pending",
       "human_r3": "pending",
       "timestamp_utc": "2026-10-17T06:17:18.480Z"
+    },
+    "r3_human_acceptance_policy": {
+      "authorized_date": "2026-10-17",
+      "human_test_status": "deferred_not_performed",
+      "merge_gate": "explicit_user_waiver",
+      "claim_of_passed_tests": false,
+      "issue": "https://github.com/chigre/Picture_Capture/issues/503"
     }
   },
   "units": {
@@ -858,9 +860,9 @@
       "status": "in_progress",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/542",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "Main divergence resolved at 0511b30a; integrated four-platform CI, UI/disk failure injections, #503 Windows R3 human acceptance pending. #483/B2 remains deferred and open.",
+      "blocker": "Engineering paired-save regression and failure injection committed, final CI+postmerge main CI still pending. Real Windows R3 acceptance explicitly deferred by user, not verified. R2 W1-W11 deferred and issue #483 open.",
       "active_implementation_branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "active_head_sha": "0511b30a20be57ba79d378eded03d4a1f0f7c9bf",
+      "active_head_sha": "94a464b34a0569f3fc136fc1c263cd148883abc7",
       "unit_evidence": {
         "R3.1": {
           "status": "in_progress",
