@@ -62,9 +62,12 @@ def _fake_app():
 @pytest.mark.parametrize("workers", [2, 4])
 def test_multiple_parallel_waves_complete_and_parent_commits_each_page(monkeypatch, workers):
     from picture_capture import app as app_module
+    # macOS CI may expose fewer than four logical cores. The synthetic
+    # dispatcher test intentionally models a machine with ample CPUs.
+    monkeypatch.setattr(app_module.os, "cpu_count", lambda: 16)
 
     # Maintain the true executor scheduling API while avoiding external
-    # process spawning in the unit test. The first two workers must overlap.
+    # process spawning in the unit test. The first worker wave must overlap.
     monkeypatch.setattr(
         app_module, "ProcessPoolExecutor",
         lambda *, max_workers, mp_context: ThreadPoolExecutor(max_workers=max_workers),
