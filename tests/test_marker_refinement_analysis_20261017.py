@@ -1,6 +1,7 @@
-"""Explicit marker refinement must prepare pixels/geometry without full Layout."""
-from dataclasses import replace
+"""Button preparation is Profile geometry + optional illustration whitening only."""
+from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -9,115 +10,145 @@ from picture_capture import marker_refinement_analysis as prep
 from picture_capture.models import AppSettings
 
 
-def _make_image():
-    return Image.new("RGB", (110, 150), "white")
+def _page():
+    image = Image.new("RGB", (110, 150), "white")
+    image.putpixel((22, 22), (0, 0, 0))
+    return image
 
 
-def test_refine_page_preparation_uses_denoise_mask_auto_policy_and_profile(monkeypatch, tmp_path):
-    """The three switches must be resolved separately, not treated as OCR."""
+def _forbidden(*_args, **_kwargs):
+    raise AssertionError("Refine existing lines must not run heavy layout/OCR/denoise")
+
+
+def test_explicit_refine_does_not_rerun_layout_or_denoise(monkeypatch, tmp_path):
+    """Even when ordinary auto-layout/denoise are ON, button only adds masking."""
+    from picture_capture import dictionary_page_layout_policy, image_utils
     settings = AppSettings()
     settings.analysis_denoise_enabled = True
+    settings.ordinary_auto_layout = True
+    settings.ordinary_auto_start_y = True
+    settings.ordinary_auto_manual_x = True
+    settings.layout_mask_illustrations = False
+    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", _forbidden)
+    monkeypatch.setattr(image_utils, "build_analysis_image", _forbidden)
+    stages = []
+    monkeypatch.setattr(
+        prep, "effective_page_settings",
+        lambda current, size, index: (stages.append(("profile", size, index)) or current),
+    )
+    monkeypatch.setattr(
+        prep, "page_template_analysis_image",
+        lambda image, current, index: (stages.append(("template", index)) or image.copy()),
+    )
+    original = _page()
+    source, effective, prepared = prep.prepare_refinement_analysis(
+        original, settings, 7, source_image_path=tmp_path / "page.png",
+    )
+    try:
+        assert stages == [("profile", original.size, 7), ("template", 7)]
+        assert effective is settings
+        assert source.tobytes() == prepared.tobytes() == original.tobytes()
+    finally:
+        source.close()
+        prepared.close()
+        original.close()
+
+
+def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_path):
+    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
+    settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = False
     settings.ordinary_auto_layout = True
-    seen = []
-    monkeypatch.setattr(
-        prep, "effective_page_settings",
-        lambda current, size, index: (
-            seen.append(("profile", index, size)) or current
-        ),
-    )
-    monkeypatch.setattr(
-        prep, "build_analysis_image",
-        lambda image, effective: (seen.append("denoise") or image.copy()),
-    )
-    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
-    def mask(image, effective, *, profile_page_index, **kwargs):
-        seen.append(("mask", profile_page_index, kwargs))
-        return image.copy(), object()
-    monkeypatch.setattr(layout_illustration_mask, "mask_large_illustrations_for_layout", mask)
-    def policy(image, effective, *, page_index):
-        seen.append(("auto", page_index))
-        return replace(effective, character_height=43), object(), {"character_height": 43}
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", policy)
-    monkeypatch.setattr(
-        prep, "page_template_analysis_image",
-        lambda image, effective, index: (seen.append(("template", index)) or image.copy()),
-    )
-    image = _make_image()
-    page = tmp_path / "scan.png"
-    source, effective, analysis = prep.prepare_refinement_analysis(
-        image, settings, 7, source_image_path=page,
-    )
-    try:
-        assert seen == [
-            ("profile", 7, image.size), "denoise",
-            ("mask", 7, {}), ("auto", 7), ("template", 7),
-        ]
-        assert effective.character_height == 43
-        assert source.size == analysis.size == image.size
-        assert image.getpixel((0, 0)) == (255, 255, 255)
-    finally:
-        source.close()
-        analysis.close()
-        image.close()
-
-
-def test_refine_page_preparation_disabled_stages_do_not_call_models(monkeypatch):
-    settings = AppSettings()
-    settings.analysis_denoise_enabled = False
-    settings.layout_mask_illustrations = False
-    settings.ordinary_auto_layout = False
+    stages = []
+    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", _forbidden)
     monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
-    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("disabled Layout stage must not be executed")
-    monkeypatch.setattr(layout_illustration_mask, "mask_large_illustrations_for_layout", forbidden)
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", forbidden)
     monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
-    image = _make_image()
-    source, effective, analysis = prep.prepare_refinement_analysis(image, settings, 2)
+
+    def mask(image, effective, *, profile_page_index, **kwargs):
+        stages.append(("mask", profile_page_index, kwargs))
+        filled = image.copy()
+        filled.putpixel((22, 22), (255, 255, 255))
+        return filled, object()
+
+    monkeypatch.setattr(layout_illustration_mask, "mask_large_illustrations_for_layout", mask)
+    original = _page()
+    page = tmp_path / "scan.png"
+    source, effective, prepared = prep.prepare_refinement_analysis(
+        original, settings, 4, source_image_path=page,
+    )
     try:
-        assert effective is settings
-        assert source.size == analysis.size == image.size
+        assert stages == [("mask", 4, {})]
+        assert prepared.getpixel((22, 22)) == (255, 255, 255)
+        assert source.getpixel((22, 22)) == original.getpixel((22, 22)) == (0, 0, 0)
+        assert not list(tmp_path.glob("*.ppp"))
     finally:
-        image.close()
+        prepared.close()
         source.close()
-        analysis.close()
+        original.close()
 
 
-def test_refine_existing_ppp_mode_passes_path_without_redetection(monkeypatch, tmp_path):
+def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch, tmp_path):
+    from picture_capture import layout_illustration_mask
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True
-    settings.ordinary_auto_layout = False
     monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
-    monkeypatch.setattr(prep, "build_analysis_image", lambda image, _: image.copy())
     monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
-    from picture_capture import layout_illustration_mask
-    page = tmp_path / "scan.png"
+    path = tmp_path / "scan.png"
     seen = []
+
     def mask(image, effective, *, profile_page_index, **kwargs):
-        seen.append(kwargs)
+        seen.append((profile_page_index, kwargs))
         return image.copy(), object()
+
     monkeypatch.setattr(layout_illustration_mask, "mask_large_illustrations_for_layout", mask)
-    image = _make_image()
+    image = _page()
     with pytest.raises(ValueError, match="PPP"):
-        prep.prepare_refinement_analysis(image, settings, 0)
-    source, _, analysis = prep.prepare_refinement_analysis(
-        image, settings, 0, source_image_path=page,
+        prep.prepare_refinement_analysis(image, settings, 3)
+    source, _, prepared = prep.prepare_refinement_analysis(
+        image, settings, 3, source_image_path=path,
     )
     try:
-        assert seen == [{"source_image_path": Path(page)}]
+        assert seen == [(3, {"source_image_path": Path(path)})]
+    finally:
+        source.close()
+        prepared.close()
+        image.close()
+
+
+def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path):
+    settings = AppSettings()
+    settings.layout_mask_illustrations = True
+    settings.layout_mask_illustrations_use_existing = True
+    image = _page()
+    try:
+        with pytest.raises(FileNotFoundError, match="PPP"):
+            prep.prepare_refinement_analysis(
+                image, settings, 0, source_image_path=tmp_path / "no_page.png",
+            )
     finally:
         image.close()
+
+
+def test_disabled_whitefill_does_not_call_detector(monkeypatch):
+    from picture_capture import layout_illustration_mask
+    settings = AppSettings()
+    settings.layout_mask_illustrations = False
+    monkeypatch.setattr(
+        layout_illustration_mask, "mask_large_illustrations_for_layout", _forbidden,
+    )
+    image = _page()
+    source, _, prepared = prep.prepare_refinement_analysis(image, settings, 1)
+    try:
+        assert source.tobytes() == prepared.tobytes() == image.tobytes()
+    finally:
+        prepared.close()
         source.close()
-        analysis.close()
+        image.close()
 
 
 def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp_path):
-    from dataclasses import dataclass
-    from types import SimpleNamespace
     from picture_capture import processing_core, marker_refinement_top_edge
 
     @dataclass
@@ -139,138 +170,32 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
         def x_at(self, col, y):
             return 5
 
-    settings = AppSettings()
-    geometry = Geometry()
     prepared = []
-    def fake_prep(image, effective, index, *, source_image_path):
-        prepared.append((index, str(source_image_path)))
-        return image.copy(), effective, image.copy()
-    monkeypatch.setattr(prep, "prepare_refinement_analysis", fake_prep)
-    monkeypatch.setattr(processing_core, "derive_geometry", lambda *_: geometry)
+    monkeypatch.setattr(
+        prep, "prepare_refinement_analysis",
+        lambda image, effective, index, *, source_image_path:
+            (prepared.append((index, str(source_image_path))) or
+             (image.copy(), effective, image.copy())),
+    )
+    monkeypatch.setattr(processing_core, "derive_geometry", lambda *_: Geometry())
     monkeypatch.setattr(processing_core, "column_index", lambda *_: 0)
-    def move(gray, coarse_y, line_height, effective, **_kwargs):
-        return coarse_y + 2, {"reason": "test"}
-    monkeypatch.setattr(marker_refinement_top_edge, "refine_existing_marker_to_ink_top", move)
-    image = _make_image()
+    monkeypatch.setattr(
+        marker_refinement_top_edge, "refine_existing_marker_to_ink_top",
+        lambda gray, coarse_y, line_height, effective, **kwargs:
+            (coarse_y + 2, {"reason": "verified_whole_column_blank"}),
+    )
+    image = _page()
     page = tmp_path / "scan.png"
     old = [Row("manual", 9, 20, True), Row("auto", 9, 55, False)]
     updated, stats = processing_core.refine_existing_entries(
-        image, old, settings, profile_page_index=4, source_image_path=page,
+        image, old, AppSettings(), profile_page_index=4, source_image_path=page,
     )
-    assert prepared == [(4, str(page))]
-    assert [(row.word, row.y, row.manually_selected) for row in updated] == [
-        ("manual", 22, True), ("auto", 57, False),
-    ]
-    assert [row.y for row in old] == [20, 55]
-    assert stats["total"] == stats["moved"] == 2
-    image.close()
-
-
-def test_auto_policy_cache_reuses_only_same_image_and_settings(monkeypatch, tmp_path):
-    settings = AppSettings()
-    settings.analysis_denoise_enabled = False
-    settings.layout_mask_illustrations = False
-    settings.ordinary_auto_layout = True
-    prep.clear_refinement_auto_policy_cache()
-    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
-    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
-    from picture_capture import dictionary_page_layout_policy
-    calls = []
-    def policy(image, effective, *, page_index):
-        calls.append(page_index)
-        return replace(effective, character_height=41), object(), {"character_height": 41}
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", policy)
-    image = _make_image()
-    page = tmp_path / "scan.png"
     try:
-        for _ in range(2):
-            source, effective, analysis = prep.prepare_refinement_analysis(
-                image, settings, 6, source_image_path=page,
-            )
-            assert effective.character_height == 41
-            source.close()
-            analysis.close()
-        assert calls == [6]  # Second press reuses physical parameters.
-        image.putpixel((20, 20), (0, 0, 0))
-        source, effective, analysis = prep.prepare_refinement_analysis(
-            image, settings, 6, source_image_path=page,
-        )
-        source.close()
-        analysis.close()
-        assert calls == [6, 6]  # Changed original pixels invalidate the cache.
-        settings.character_height += 3
-        source, _, analysis = prep.prepare_refinement_analysis(
-            image, settings, 6, source_image_path=page,
-        )
-        source.close()
-        analysis.close()
-        assert calls == [6, 6, 6]  # Changed Profile/settings invalidate it.
+        assert prepared == [(4, str(page))]
+        assert [(row.word, row.y, row.manually_selected) for row in updated] == [
+            ("manual", 22, True), ("auto", 57, False),
+        ]
+        assert [row.y for row in old] == [20, 55]
+        assert stats["total"] == stats["moved"] == 2
     finally:
         image.close()
-        prep.clear_refinement_auto_policy_cache()
-
-
-def test_auto_policy_cache_invalidates_on_existing_ppp_bytes(monkeypatch, tmp_path):
-    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
-    from picture_capture import project_storage
-
-    settings = AppSettings()
-    settings.analysis_denoise_enabled = False
-    settings.layout_mask_illustrations = True
-    settings.layout_mask_illustrations_use_existing = True
-    settings.ordinary_auto_layout = True
-    prep.clear_refinement_auto_policy_cache()
-    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
-    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
-    monkeypatch.setattr(
-        layout_illustration_mask, "mask_large_illustrations_for_layout",
-        lambda image, *_args, **_kwargs: (image.copy(), object()),
-    )
-    ppp = tmp_path / "page.ppp"
-    ppp.write_bytes(b"old")
-    monkeypatch.setattr(project_storage, "ppp_read_path_for_image", lambda _: ppp)
-    calls = []
-    def policy(image, effective, *, page_index):
-        calls.append(page_index)
-        return replace(effective), object(), {}
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", policy)
-    image = _make_image()
-    page = tmp_path / "page.png"
-    try:
-        for value in (b"old", b"old", b"new"):
-            ppp.write_bytes(value)
-            source, _, analysis = prep.prepare_refinement_analysis(
-                image, settings, 2, source_image_path=page,
-            )
-            source.close()
-            analysis.close()
-        assert calls == [2, 2]
-    finally:
-        image.close()
-        prep.clear_refinement_auto_policy_cache()
-
-
-def test_auto_master_on_but_every_field_off_skips_detector(monkeypatch):
-    from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
-    from picture_capture import dictionary_page_layout_policy
-
-    settings = AppSettings()
-    settings.analysis_denoise_enabled = False
-    settings.layout_mask_illustrations = False
-    settings.ordinary_auto_layout = True
-    for _field, switch in AUTO_LAYOUT_FIELDS:
-        setattr(settings, switch, False)
-
-    monkeypatch.setattr(prep, "effective_page_settings", lambda current, *_: current)
-    monkeypatch.setattr(prep, "page_template_analysis_image", lambda image, *_: image.copy())
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("No selected automatic fields: no detector allowed")
-    monkeypatch.setattr(dictionary_page_layout_policy, "resolve_page_layout_policy", forbidden)
-    image = _make_image()
-    source, effective, analysis = prep.prepare_refinement_analysis(
-        image, settings, 0, source_image_path=Path("dummy.png"),
-    )
-    assert not effective.manual_columns
-    source.close()
-    analysis.close()
-    image.close()
