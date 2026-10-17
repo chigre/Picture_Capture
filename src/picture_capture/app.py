@@ -15381,7 +15381,7 @@ class PictureCaptureApp(tk.Tk):
         last = self.project.images[indices[-1]].name
         if not messagebox.askyesno(
             "精修画线",
-            f"将重新调用现有 Y 精修逻辑处理所选 {len(indices)} 页：\n"
+            f"精修所选 {len(indices)} 页：\n"
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
             "\n\n请先去设置中心的精修Y调整参数。\n"
             "全部已有画线（含人工线）参与精修，不会新增或删除画线；"
