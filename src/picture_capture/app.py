@@ -15336,7 +15336,7 @@ class PictureCaptureApp(tk.Tk):
         self._detection_controller_for_call().paddle_detect_current(force_refresh)
 
 
-    def refine_lines_selected_scope(self) -> None:
+    def refine_lines_selected_scope(self, *, fixed_half_gutter: bool = False) -> None:
         """Align all saved PDIC markers near proven first-row ink without OCR."""
         if not self.guard() or not self.apply_quick_settings(show_status=False):
             return
@@ -15354,10 +15354,11 @@ class PictureCaptureApp(tk.Tk):
         first = self.project.images[indices[0]].name
         last = self.project.images[indices[-1]].name
         if not messagebox.askyesno(
-            "精修画线",
+            "精修Y（固定半栏距）" if fixed_half_gutter else "精修画线",
             f"精修所选 {len(indices)} 页：\n"
             f"{first}" + (f" → {last}" if len(indices) > 1 else "") +
-            "\n\n请先去设置中心的精修Y调整参数。\n"
+            ("\n\n快速模式：临时填白插图，使用固定栏宽及两侧半栏距；不做逐页版式识别。\n"
+             if fixed_half_gutter else "\n\n请先去设置中心的精修Y调整参数。\n")
             "全部已有画线（含人工线）参与精修，不会新增或删除画线；"
             "在首行上缘附近寻找整栏空白Y；无安全位置则保留旧线。继续？",
             parent=self,
@@ -15383,7 +15384,7 @@ class PictureCaptureApp(tk.Tk):
         workers = configured_refine_workers(len(indices), settings=settings)
 
         def job_builder(index: int, _position: int, _total: int):
-            return str(pages[index]), settings, index
+            return str(pages[index]), settings, index, fixed_half_gutter
 
         def page_owned(index: int) -> bool:
             with self._batch_state_lock:
