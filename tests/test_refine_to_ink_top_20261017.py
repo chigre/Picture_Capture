@@ -125,7 +125,7 @@ def test_settings_center_explains_automatic_and_manual_scope_accurately():
     assert "字顶" in schema.SETTING_HELP["paddle_separator_safety_px"]
     assert "最大" in schema.SETTING_HELP["separator_y_max_shift_ratio"]
     assert "已有 PDIC 横线" in schema.CHECK_HELP["paddle_refine_separator_y"]
-    assert "不依赖此实验开关" in schema.CHECK_HELP["separator_y_ink_safe_gap"]
+    assert "仍独立处理已有 PDIC 横线" in schema.CHECK_HELP["paddle_refine_separator_y"]
     assert any("手动按钮独立" in label for label, _ in schema.SEPARATOR_Y_CHECKS)
 
 
