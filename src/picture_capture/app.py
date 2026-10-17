@@ -4291,9 +4291,13 @@ class ReviewWindow(tk.Toplevel):
             self._finish_close_review()
             return
         try:
-            self.save()
-        finally:
-            self._finish_close_review()
+            if self.save() is False:
+                return
+        except Exception as exc:
+            self.parent.status_var.set(f"校对保存失败，窗口保持打开：{exc}")
+            messagebox.showerror("校对未保存", f"保存失败，校对窗口不会关闭。\\n{exc}", parent=self)
+            return
+        self._finish_close_review()
 
     def autosave_commit(self) -> bool:
         """Commit review edits for the shared main-window autosave timer."""
@@ -4320,11 +4324,13 @@ class ReviewWindow(tk.Toplevel):
         from .ui.review_transaction_actions import capture_review_before, record_review_after
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
-        self._commit_edits()
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self.parent.save_pdic(silent=True, sync_editors=False)
-        self._review_evidence_after_save(evidence_before)
+        from .proofreading_save_safety import protect_review_pdic_commit
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+            self.parent.save_pdic(silent=True, sync_editors=False)
         self._persist_simplified_page(current_stem)
+        self._review_evidence_after_save(evidence_before)
         record_review_after(self, transaction_before)
         return True
 
@@ -6763,14 +6769,14 @@ class ReviewWindow(tk.Toplevel):
         self.save()
         self.parent.check_headword_order(all_pages)
 
-    def save(self, *, redraw_main: bool = True) -> None:
+    def save(self, *, redraw_main: bool = True) -> bool:
         if getattr(self, "_filter_rows_active", False):
             self._flush_focused_changes_now()
-            return
+            return not (self._filter_save_running or self._filter_pending_changes)
         state = self.parent._foreground_batch_state(self.parent.current_index)
         if state == "processing":
             self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
-            return
+            return False
         if state == "pending":
             row_entries = self._bound_row_entries()
             word_dirty = any(
@@ -6782,18 +6788,20 @@ class ReviewWindow(tk.Toplevel):
             if not dirty:
                 # Browsing a pending page must not accidentally reserve it.
                 self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-                return
+                return True
             if not self.parent._claim_page_for_manual_edit():
-                return
+                return False
         from .ui.review_transaction_actions import capture_review_before, record_review_after
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
-        self._commit_edits()
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self.parent.save_pdic(sync_editors=False)
-        self._review_evidence_after_save(evidence_before)
+        from .proofreading_save_safety import protect_review_pdic_commit
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+            self.parent.save_pdic(sync_editors=False)
         if self.parent.current_page:
             self._persist_simplified_page(self.parent.current_page.stem)
+        self._review_evidence_after_save(evidence_before)
         record_review_after(self, transaction_before)
         if self.parent.project:
             try:
@@ -6802,6 +6810,7 @@ class ReviewWindow(tk.Toplevel):
                 pass
         if redraw_main:
             self.parent.redraw()
+        return True
 
     def _reset_rows_scroll_top(self) -> None:
         """Return the proofreading crop/text viewport to its first row."""
@@ -16066,13 +16075,17 @@ class PictureCaptureApp(tk.Tk):
             except tk.TclError:
                 pass
         self.__dict__["_deferred_save_job"] = None
+        # Keep the queued snapshot until the actual PDIC publication succeeds.
+        from .proofreading_save_safety import protect_app_pdic_commit
+        with protect_app_pdic_commit(self):
+            # Review edits bypass stale main-canvas editor values.
+            if sync_editors:
+                self._sync_entry_editor_texts()
+            self._sort_entries_reading_order()
+            changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
         self.__dict__["_deferred_save_snapshot"] = None
         self.__dict__["_deferred_save_page"] = None
-        # Review edits bypass stale main-canvas editor values.
-        if sync_editors:
-            self._sync_entry_editor_texts()
-        self._sort_entries_reading_order()
-        changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
+        self.__dict__["_deferred_save_uncertain"] = False
         self._last_pdic_write_changed = changed
         self._flush_pending_manual_override()
         self._flush_proofreading_candidate_evidence()
