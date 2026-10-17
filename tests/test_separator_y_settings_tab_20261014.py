@@ -32,6 +32,8 @@ def test_y_settings_have_only_one_owner():
     assert not five.intersection(schema.OCR_COMMON_FIELDS)
     assert not five.intersection(schema.OCR_ADVANCED_FIELDS)
     fields = {name for _label, name in schema.SEPARATOR_Y_CHECKS}
-    assert fields == {"paddle_refine_separator_y", "separator_y_ink_safe_gap"}
+    assert fields == {"paddle_refine_separator_y"}
+    assert "含墨迹安全检查" in schema.SEPARATOR_Y_CHECKS[0][0]
+    assert "separator_y_ink_safe_gap" not in schema.CHECK_HELP
     assert "paddle_refine_separator_y" not in {name for _, name in schema.OCR_COMMON_CHECKS}
     assert "paddle_refine_separator_y" not in {name for _, name in schema.NORMAL_CHECKS}
