@@ -61,19 +61,18 @@ def test_auto_layout_refinement_serializes_gpu_model_even_with_six_cpu_workers()
     ) == 4
 
 
-def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
+def test_refinement_restores_pre547_sequential_dispatcher():
     source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
     scope = source.split("    def refine_lines_selected_scope(", 1)[1].split(
         "    def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
-    assert "fixed_half_gutter=fixed_half_gutter" in scope
-    assert "configured_refine_workers(" in scope
-    assert "isolate_worker=True" in scope
-    assert "max_workers=workers, respect_cpu_workers=True," in scope
-    assert "single_process_model" not in scope
-    assert "_start_parallel_batch_task(" in scope
+    assert "refine_page_job(" in scope
+    assert "fixed_half_gutter," in scope
+    assert "workers = 1" in scope
+    assert "_start_batch_task(" in scope
+    assert "_start_parallel_batch_task(" not in scope
 
     dispatcher = source.split("    def _start_parallel_batch_task(", 1)[1].split(
         "    def _poll_batch_queue(", 1
@@ -230,9 +229,9 @@ def test_parallel_parent_coordinator_gui_contract():
     snippet = code.split("    def refine_lines_selected_scope(", 1)[1].split(
         "    def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
-    assert "_start_parallel_batch_task(" in snippet
+    assert "_start_batch_task(" in snippet
     assert "foreground_page_edit=True, allow_pdic_edits=True" in snippet
-    assert "result_consumer" not in snippet or "save_result" in snippet
+    assert "return commit_refined_page_result(index, computed, page_owned)" in snippet
     assert "commit_refined_page_result" in snippet
     assert "write_pdic(" not in snippet
     assert "refine_page_job" in snippet
