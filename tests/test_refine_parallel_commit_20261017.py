@@ -54,6 +54,10 @@ def test_auto_layout_refinement_serializes_gpu_model_even_with_six_cpu_workers()
     assert not parallel.refinement_uses_page_layout(settings)
     assert parallel.configured_refine_workers(
         20, settings=settings, configured="4", cpus=16,
+    ) == 2  # illustration masking alone is still memory intensive
+    settings.layout_mask_illustrations = False
+    assert parallel.configured_refine_workers(
+        20, settings=settings, configured="4", cpus=16,
     ) == 4
 
 
