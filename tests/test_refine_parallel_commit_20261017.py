@@ -168,3 +168,34 @@ def test_parallel_parent_coordinator_gui_contract():
     assert "commit_refined_page_result" in snippet
     assert "write_pdic(" not in snippet
     assert "refine_page_job" in snippet
+
+
+
+def test_replace_failure_does_not_modify_pdic_or_leave_temp(prepared_page, monkeypatch):
+    from picture_capture import marker_refinement_parallel as module
+    page, pdic, original = prepared_page
+    computed = module.refine_page_job(str(page), AppSettings(), 7)
+
+    def injected_failure(*_args, **_kwargs):
+        raise PermissionError("injected atomic replace failure")
+
+    monkeypatch.setattr(module.os, "replace", injected_failure)
+    result = module.commit_refined_page_result(7, computed)
+    assert result["skipped"] == 1
+    assert pdic.read_bytes() == original
+    assert not list(pdic.parent.glob(f".{pdic.name}.*.tmp"))
+
+
+def test_unparseable_original_bytes_do_not_normalize_pdic():
+    raw = b"word#10#30#1#3#scan#@#@\r\n"
+    with pytest.raises(ValueError, match="不匹配"):
+        parallel._edit_original_pdic(
+            raw, (("other", 10, 30),), ((10, 35),), 120,
+        )
+
+
+def test_wrong_page_identity_refuses_commit(prepared_page):
+    page, pdic, original = prepared_page
+    computed = parallel.refine_page_job(str(page), AppSettings(), 7)
+    assert parallel.commit_refined_page_result(8, computed)["skipped"] == 1
+    assert pdic.read_bytes() == original
