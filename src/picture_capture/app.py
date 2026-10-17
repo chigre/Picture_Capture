@@ -15422,6 +15422,11 @@ class PictureCaptureApp(tk.Tk):
                 parts.insert(0, f"提前停止 {completed}/{total} 页")
             self.status_var.set("精修画线完成：" + "；".join(parts))
 
+        if needs_layout:
+            from .refinement_serial_coordinator import start_layout_refinement_batch
+            start_layout_refinement_batch(self, indices, pages, settings, done)
+            return
+
         self._start_parallel_batch_task(
             "精修画线", indices, refine_page_job, job_builder, save_result, done,
             item_label=lambda i: pages[i].name,
