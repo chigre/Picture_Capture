@@ -61,6 +61,31 @@ def test_safety_distance_controls_gap_and_zero_still_never_cuts_ink():
     assert _refine(image, 36, _settings(paddle_separator_safety_px=0))[0] == 38
 
 
+def test_larger_configured_clearance_tracks_real_ink_top_instead_of_sticking():
+    page = _page(40, prior=(6, 25))
+    # Re-running on an already-refined marker must obey newly saved settings.
+    for safety_px, expected in ((2, 38), (3, 37), (6, 34), (8, 32)):
+        refined, details = _refine(
+            page, 38, _settings(paddle_separator_safety_px=safety_px),
+        )
+        assert refined == expected
+        assert details["gap"] == safety_px
+        assert details["ink_top"] == 40
+
+
+def test_nearest_configured_safe_gap_beats_an_unnecessarily_farther_clean_row():
+    page = _page(40, prior=(6, 25))
+    # One isolated pixel is within the full-column admission tolerance. The
+    # former score-first ranking picked a farther perfectly white Y instead.
+    page[32, 96] = 0
+    refined, details = _refine(
+        page, 36, _settings(paddle_separator_safety_px=8),
+    )
+    assert refined == 32
+    assert details["gap"] == 8
+    assert details["whole_column_ink_score"] == 1
+
+
 def test_no_ink_or_isolated_scratch_does_not_move():
     white = np.full((170, 130), 255, dtype=np.uint8)
     assert _refine(white, 35)[0] == 35
