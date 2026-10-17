@@ -1880,7 +1880,7 @@ class SettingsDialog(tk.Toplevel):
                 for name, value in derived.items():
                     if not hasattr(self.parent.settings, name):
                         continue
-                    # Keep overrides, replacing only old language defaults.
+                    # Preserve language overrides.
                     if name not in previous_backend or getattr(self.parent.settings, name) == previous_backend[name]:
                         setattr(self.parent.settings, name, value)
             self.parent.settings.paddle_lens_language = str(
