@@ -58,7 +58,8 @@ def test_optional_ocr_switches_remain_documented_in_settings():
         "ocr_lazy_tesseract_diagnostics",
     } <= named
     assert all("默认关闭" in schema.CHECK_HELP[key] for key in named if key in EXPERIMENTS)
-    assert "separator_y_ink_safe_gap" in schema.CHECK_HELP
+    assert "separator_y_ink_safe_gap" not in schema.CHECK_HELP
+    assert "白缝墨迹安全检查" in schema.CHECK_HELP["paddle_refine_separator_y"]
 
 
 def test_prewrite_pdic_snapshot_preserves_manual_bytes_and_deduplicates(tmp_path):
