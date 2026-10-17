@@ -27,12 +27,14 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
 
 def configured_refine_workers(page_count: int, *, cpus: int | None = None,
                               configured: str | None = None,
-                              settings: AppSettings | None = None) -> int:
-    """Use the CPU page-worker setting, regardless of Auto Layout switches.
+                              settings: AppSettings | None = None,
+                              fixed_half_gutter: bool = False) -> int:
+    """Bound GPU model ownership and full-page illustration masking.
 
-    Auto keeps the existing conservative default of two. An explicit positive
-    setting is bounded only by logical CPUs and selected page count. The
-    parent coordinator remains the sole writer of validated PDIC changes.
+    A Paddle-backed per-page Auto Layout estimate can allocate a full GPU
+    detector in *each* spawned worker. Keep one persistent worker for that
+    path; fixed half-gutter bypasses Layout and may still use two CPU workers
+    for disposable illustration masks. No subprocess ever writes PDIC.
     """
     if configured is None:
         from .runtime_environment import runtime_setting
@@ -42,7 +44,14 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     except (TypeError, ValueError):
         requested = 2
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
-    return max(1, min(int(page_count) or 1, available, max(1, requested)))
+    workers = max(1, min(int(page_count) or 1, available, max(1, requested)))
+    if settings is not None and not fixed_half_gutter and refinement_uses_page_layout(settings):
+        # Windows spawn otherwise constructs N Paddle GPU models concurrently.
+        return 1
+    if fixed_half_gutter or bool(getattr(settings, "layout_mask_illustrations", False)):
+        # Full-resolution illustration masking can hold several image copies.
+        return min(workers, 2)
+    return workers
 
 
 def _inputs_for_page(page: Path) -> tuple[Path, ...]:

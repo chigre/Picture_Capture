@@ -11562,7 +11562,7 @@ class PictureCaptureApp(tk.Tk):
         *, allow_page_navigation: bool = True, allow_pdic_edits: bool = False,
         foreground_page_edit: bool = False, page_indexer=None,
         gpu_preflight_func=None, gpu_job_builder=None,
-        respect_cpu_workers: bool = False,
+        respect_cpu_workers: bool = False, isolate_worker: bool = False,
     ) -> bool:
         """Run bounded page jobs; optional one-process GPU preflight before CPU."""
         if self._batch_active:
@@ -11594,7 +11594,7 @@ class PictureCaptureApp(tk.Tk):
             else resolve_crop_worker_count(max_workers)
         )
         # Light single-worker jobs use the sequential runner.
-        if workers <= 1 and gpu_preflight_func is None:
+        if workers <= 1 and gpu_preflight_func is None and not isolate_worker:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
                 raw = worker_func(*args)
@@ -15381,7 +15381,9 @@ class PictureCaptureApp(tk.Tk):
         from .marker_refinement_parallel import (
             configured_refine_workers, refine_page_job, commit_refined_page_result,
         )
-        workers = configured_refine_workers(len(indices), settings=settings)
+        workers = configured_refine_workers(
+            len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
+        )
 
         def job_builder(index: int, _position: int, _total: int):
             return str(pages[index]), settings, index, fixed_half_gutter
@@ -15423,6 +15425,7 @@ class PictureCaptureApp(tk.Tk):
             item_label=lambda i: pages[i].name,
             max_workers=workers, respect_cpu_workers=True,
             foreground_page_edit=True, allow_pdic_edits=True,
+            isolate_worker=True,
         )
 
     def ocr_ordinary_lines_text_selected_scope(self) -> None:
