@@ -11589,8 +11589,7 @@ class PictureCaptureApp(tk.Tk):
             return False
 
         workers = resolve_crop_worker_count(max_workers)
-        # A one-worker request is intentionally routed through the existing
-        # sequential runner, useful for low-memory machines and diagnostics.
+        # Light single-worker jobs use the sequential runner.
         if workers <= 1 and gpu_preflight_func is None and not single_process_model:
             def serial_worker(item, position, total):
                 args = job_builder(item, position, total)
@@ -11670,8 +11669,7 @@ class PictureCaptureApp(tk.Tk):
             )
             try:
                 while True:
-                    # Fill only the currently free worker slots. This is what
-                    # makes pause/stop meaningful instead of pre-queuing all pages.
+                    # Bound submissions so pause/stop halts new dispatches.
                     while (
                         self._batch_pause_event.is_set()
                         and not self._batch_stop_event.is_set()
@@ -11684,9 +11682,7 @@ class PictureCaptureApp(tk.Tk):
                         item_index = page_id(item) if foreground_page_edit else None
                         next_index += 1
                         if foreground_page_edit:
-                            # The same lock protects the foreground editor's
-                            # pending -> manual_locked claim. No submit, and
-                            # therefore no PDIC overwrite, after that claim.
+                            # Lock protects pending/manual ownership.
                             with self._batch_state_lock:
                                 state = self._batch_page_states.get(item_index, "pending")
                                 if state == "manual_locked":
@@ -11704,11 +11700,7 @@ class PictureCaptureApp(tk.Tk):
                         if gpu_executor is not None:
                             if gpu_job_builder is None:
                                 raise RuntimeError("Missing GPU preflight job builder")
-                            # Exactly ONE long-lived model-owning spawn process
-                            # does each full Layout detector preflight. Never
-                            # initialize CUDA/Paddle inside the CPU workers.
-                            # This synchronous handoff intentionally bounds
-                            # in-flight pages to 1 GPU + <= workers CPU.
+                            # Model preflight uses one persistent GPU process.
                             gpu_args = gpu_job_builder(item, position, total)
                             self._batch_queue.put((
                                 "pipeline_stage", position, total, label, "GPU版面预检",
