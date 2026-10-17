@@ -28,13 +28,12 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
 def configured_refine_workers(page_count: int, *, cpus: int | None = None,
                               configured: str | None = None,
                               settings: AppSettings | None = None) -> int:
-    """CPU-only refinement uses up to four; per-page model detection uses one.
+    """Keep PR #547 concurrent dispatch; limit heavy layout to two workers.
 
-    Layout detector may initialize PaddleOCR; serializing that work in a
-    long-lived spawned process prevents competing Windows model initializers.
+    Selected Auto Layout fields do not disable multi-page refinement. Capping
+    model-owning processes to two keeps the previous parallel wave behavior
+    without allowing four simultaneous heavyweight Paddle detectors.
     """
-    if settings is not None and refinement_uses_page_layout(settings):
-        return 1
     if configured is None:
         from .runtime_environment import runtime_setting
         configured = str(runtime_setting("paddle_cpu_workers", "auto") or "auto")
@@ -43,7 +42,8 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     except (TypeError, ValueError):
         requested = 2
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
-    return max(1, min(int(page_count) or 1, available, max(1, requested), 4))
+    ceiling = 2 if settings is not None and refinement_uses_page_layout(settings) else 4
+    return max(1, min(int(page_count) or 1, available, max(1, requested), ceiling))
 
 
 def _inputs_for_page(page: Path) -> tuple[Path, ...]:
