@@ -2144,11 +2144,10 @@ def refine_existing_entries(
     *,
     profile_page_index: int = 0,
     source_image_path: Path | None = None,
+    fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine all saved PDIC lines, including manual ones; preserve row identities."""
+    """Refine saved Y while preserving entry identity and text."""
     if source_image_path is None:
-        # Compatibility for injected/synthetic geometry callers. The GUI always
-        # passes the page path to enable the settings-aware production pipeline.
         source, effective, analysis_source, geometry = _page_geometry_context(
             image, settings, profile_page_index,
         )
@@ -2158,14 +2157,16 @@ def refine_existing_entries(
 
     from .marker_refinement_analysis import prepare_refinement_analysis
 
+    prep_kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
     source, effective, analysis_source = prepare_refinement_analysis(
         image, settings, profile_page_index, source_image_path=source_image_path,
+        **prep_kwargs,
     )
     try:
         geometry = derive_geometry(analysis_source, effective)
         return _refine_existing_entries_with_geometry(
             entries, effective, analysis_source, geometry,
-            align_to_ink_top=True,
+            align_to_ink_top=True, fixed_half_gutter=fixed_half_gutter,
         )
     finally:
         analysis_source.close()
@@ -2179,13 +2180,12 @@ def _refine_existing_entries_with_geometry(
     geometry: Geometry,
     *,
     align_to_ink_top: bool = False,
+    fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Apply local Y-refinement without repeating Layout role classification."""
+    """Refine Y without reclassifying Layout rows."""
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
-    # Only the explicit button uses the verified text-top anchor. Legacy callers
-    # retain the shared valley engine until their own parity gates are passed.
     if align_to_ink_top:
         from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
     else:
@@ -2215,6 +2215,12 @@ def _refine_existing_entries_with_geometry(
             gray.shape[1],
             column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
         )
+        if fixed_half_gutter:
+            from .marker_refinement_fixed_band import fixed_half_gutter_band
+            column_x, column_right = fixed_half_gutter_band(
+                geometry, col, int(canonical_v), gray.shape[1],
+                int(effective.column_width), int(effective.gutter),
+            )
         new_v = int(canonical_v)
         if column_right > column_x:
             if align_to_ink_top:

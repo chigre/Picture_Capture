@@ -6,6 +6,7 @@ existing PDIC markers are refined. Whitefill uses only an in-memory copy.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
@@ -75,6 +76,7 @@ def prepare_refinement_analysis(
     page_index: int,
     *,
     source_image_path: Path | None = None,
+    fixed_half_gutter: bool = False,
 ):
     """Return source, Profile settings, and a disposable whitening/template copy.
 
@@ -87,6 +89,12 @@ def prepare_refinement_analysis(
     analysis = source
     try:
         effective = effective_page_settings(settings, source.size, int(page_index))
+        if fixed_half_gutter:
+            # Explicit quick path: fixed Profile geometry, no model-based layout
+            # or page-dependent column following. Whitefill stays in memory.
+            effective = replace(effective, layout_mask_illustrations=True,
+                                follow_column_deformation=False,
+                                paddle_separator_column_margin=0)
         analysis = whiten_illustrations_for_refinement(
             analysis, effective, int(page_index),
             source_image_path=source_image_path,
@@ -94,7 +102,7 @@ def prepare_refinement_analysis(
 
         # Respect only the per-page geometry switches explicitly selected in
         # Auto Layout. Do not build semantic Layout rows or alter saved PDIC.
-        if bool(getattr(effective, "ordinary_auto_layout", False)):
+        if not fixed_half_gutter and bool(getattr(effective, "ordinary_auto_layout", False)):
             from .dictionary_page_layout_policy import (
                 AUTO_LAYOUT_FIELDS, resolve_page_layout_policy,
             )

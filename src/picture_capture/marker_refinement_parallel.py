@@ -76,7 +76,8 @@ def _fingerprints(paths: tuple[Path, ...]) -> tuple[tuple[str, str | None], ...]
     return tuple(result)
 
 
-def refine_page_job(image_path: str, settings: AppSettings, page_index: int) -> dict[str, Any]:
+def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
+                    fixed_half_gutter: bool = False) -> dict[str, Any]:
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
     from .formats import read_pdic, pdic_path
@@ -94,9 +95,10 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int) -> 
         with Image.open(page) as opened:
             image = normalize_page_rgb(opened)
         try:
+            kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
             refined, stats = refine_existing_entries(
                 image, entries, settings, profile_page_index=int(page_index),
-                source_image_path=page,
+                source_image_path=page, **kwargs,
             )
             size = image.size
         finally:
