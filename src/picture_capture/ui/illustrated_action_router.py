@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..illustrated_profile import effective_page_kind
+from ..illustration.profile import effective_page_kind
 
 
 def run_page_quick_action(app: Any, action: str,

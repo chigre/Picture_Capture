@@ -286,7 +286,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
              "图解页只使用本地 OCR，不发送 Lens。",
         wraplength=280, justify="left",
     ).pack(fill="x")
-    from ..illustrated_profile import effective_page_kind
+    from ..illustration.profile import effective_page_kind
     def refresh():
         illustrated_row.pack_forget()
         for row in traditional_only:
@@ -333,7 +333,7 @@ def build_drawing_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     panel = _panel(parent)
     ordinary = ttk.Frame(panel)
     illustrated = ttk.Frame(panel)
-    from ..illustrated_profile import effective_page_kind
+    from ..illustration.profile import effective_page_kind
     from .illustrated_dictionary_window import open_illustrated_dictionary_editor
     for group in ACTION_GROUPS:
         if group is None:
