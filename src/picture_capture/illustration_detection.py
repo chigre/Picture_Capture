@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 from .models import AppSettings, PolygonRegion
-from .illustration_candidate_size import illustration_candidate_min_dimensions
+from .illustration.candidate_size import illustration_candidate_min_dimensions
 from .illustration_cross_column import spanning_figure_boxes
 
 
