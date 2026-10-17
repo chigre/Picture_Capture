@@ -126,7 +126,8 @@ def test_settings_center_explains_automatic_and_manual_scope_accurately():
     assert "最大" in schema.SETTING_HELP["separator_y_max_shift_ratio"]
     assert "已有 PDIC 横线" in schema.CHECK_HELP["paddle_refine_separator_y"]
     assert "仍独立处理已有 PDIC 横线" in schema.CHECK_HELP["paddle_refine_separator_y"]
-    assert any("手动按钮独立" in label for label, _ in schema.SEPARATOR_Y_CHECKS)
+    assert len(schema.SEPARATOR_Y_CHECKS) == 1
+    assert "含墨迹安全检查" in schema.SEPARATOR_Y_CHECKS[0][0]
 
 
 def test_far_right_tall_character_requires_a_whiter_full_column_y():
