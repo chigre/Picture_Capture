@@ -114,3 +114,58 @@ def test_missing_requested_row_padding_requires_detector(tmp_path, monkeypatch):
         source.close()
         analysis.close()
     assert seen == [0]
+
+
+def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path, monkeypatch):
+    """GUI forces the refinement-only switch, but cached page geometry is unchanged."""
+    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture import marker_refinement_layoutrows as reuse
+    original = _settings()
+    original.paddle_refine_separator_y = False
+    page = tmp_path / "scan.png"
+    Image.new("RGB", (180, 150), "white").save(page)
+    assert write_layout_rows_cache(
+        tmp_path, page, 0, original, _cached_layout(75, 10),
+    ) is not None
+    enabled = _settings()
+    enabled.paddle_refine_separator_y = True
+    monkeypatch.setattr(
+        policy, "resolve_page_layout_policy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unexpected full GPU layout detection")
+        ),
+    )
+    with Image.open(page) as image:
+        source, effective, analysis = prep.prepare_refinement_analysis(
+            image, enabled, 0, source_image_path=page,
+        )
+        try:
+            assert effective.column_width == 75
+            assert effective.manual_x == 14
+            assert prep.read_refinement_layout_source() == "layoutrows_cache"
+            assert reuse.cached_refinement_settings(
+                page, (180, 150), enabled, 0,
+            ) is not None
+        finally:
+            source.close()
+            analysis.close()
+
+
+def test_unrelated_setting_difference_still_invalidates_cache(tmp_path):
+    from picture_capture import marker_refinement_layoutrows as reuse
+    settings = _settings()
+    settings.paddle_refine_separator_y = False
+    page = tmp_path / "scan.png"
+    Image.new("RGB", (180, 150), "white").save(page)
+    assert write_layout_rows_cache(
+        tmp_path, page, 0, settings, _cached_layout(75, 10),
+    ) is not None
+    changed = _settings()
+    changed.paddle_refine_separator_y = True
+    changed.manual_x += 1
+    assert reuse.cached_refinement_settings(
+        page, (180, 150), changed, 0,
+    ) is None
+    assert reuse.refinement_cache_miss_reason(
+        page, (180, 150), changed, 0,
+    ) == "layoutrows_settings_changed"
