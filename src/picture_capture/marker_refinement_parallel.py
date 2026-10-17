@@ -25,10 +25,27 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
                for _field, switch in AUTO_LAYOUT_FIELDS)
 
 
+def _page_has_usable_refinement_json(page: Path, page_index: int,
+                                    settings: AppSettings) -> bool:
+    """Cheap parent-side preflight; no decoding scan pixels or launching Paddle."""
+    from PIL import Image
+    from .marker_refinement_layoutrows import cached_refinement_settings
+
+    try:
+        with Image.open(page) as opened:
+            size = opened.size
+        return cached_refinement_settings(
+            page, size, settings, int(page_index),
+        ) is not None
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def configured_refine_workers(page_count: int, *, cpus: int | None = None,
                               configured: str | None = None,
                               settings: AppSettings | None = None,
-                              fixed_half_gutter: bool = False) -> int:
+                              fixed_half_gutter: bool = False,
+                              cache_pages: tuple[tuple[Path, int], ...] | None = None) -> int:
     """Bound GPU model ownership and full-page illustration masking.
 
     A Paddle-backed per-page Auto Layout estimate can allocate a full GPU
@@ -46,10 +63,24 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
     workers = max(1, min(int(page_count) or 1, available, max(1, requested)))
     if settings is not None and not fixed_half_gutter and refinement_uses_page_layout(settings):
-        # Windows spawn otherwise constructs N Paddle GPU models concurrently.
-        return 1
+        # The optional illustration auto-detection can own GPU resources too.
+        mask_enabled = bool(getattr(settings, "layout_mask_illustrations", False))
+        mask_reuse = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
+        if mask_enabled and not mask_reuse:
+            return 1
+        # Check EVERY selected page; mixed cache misses still use one persistent
+        # GPU worker. Fully cached batches never enter the heavy detector.
+        if not cache_pages or not all(
+            _page_has_usable_refinement_json(page, index, settings)
+            for page, index in cache_pages
+        ):
+            return 1
+        # Existing JSON + optional existing PPP: safe to dispatch 4 by default
+        # or honor the explicit Environment Center 8-worker configuration.
+        if str(configured).lower() in ("auto", "", "none"):
+            workers = min(max(1, int(page_count)), available, 4)
+        return workers
     if fixed_half_gutter or bool(getattr(settings, "layout_mask_illustrations", False)):
-        # Full-resolution illustration masking can hold several image copies.
         return min(workers, 2)
     return workers
 
@@ -86,7 +117,8 @@ def _fingerprints(paths: tuple[Path, ...]) -> tuple[tuple[str, str | None], ...]
 
 
 def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
-                    fixed_half_gutter: bool = False) -> dict[str, Any]:
+                    fixed_half_gutter: bool = False,
+                    require_cached_layout: bool = False) -> dict[str, Any]:
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
     from .formats import read_pdic, pdic_path
@@ -116,6 +148,12 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
         with Image.open(page) as opened:
             image = normalize_page_rgb(opened)
         try:
+            if require_cached_layout and not _page_has_usable_refinement_json(
+                page, page_index, settings,
+            ):
+                raise RuntimeError(
+                    "并行模式所需 LayoutRows 缓存已失效；拒绝在 CPU 并行进程中启动 GPU 重评估"
+                )
             kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
             token = reset_refinement_layout_audit()
             source_token = reset_refinement_layout_source()

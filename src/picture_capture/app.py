@@ -15378,25 +15378,26 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages = list(project.images)
         settings = replace(self.settings)
-        # Explicit refinement includes manual lines.
         settings.paddle_refine_separator_y = True
         from .marker_refinement_parallel import (
-            configured_refine_workers, refine_page_job, commit_refined_page_result,
+            configured_refine_workers, refinement_uses_page_layout,
+            refine_page_job, commit_refined_page_result,
         )
         workers = configured_refine_workers(
             len(indices), settings=settings, fixed_half_gutter=fixed_half_gutter,
+            cache_pages=tuple((pages[i], i) for i in indices),
         )
 
         def job_builder(index: int, _position: int, _total: int):
-            return str(pages[index]), settings, index, fixed_half_gutter
+            return (str(pages[index]), settings, index, fixed_half_gutter,
+                    workers > 1 and refinement_uses_page_layout(settings)
+                    and not fixed_half_gutter)
 
         def page_owned(index: int) -> bool:
             with self._batch_state_lock:
                 return self._batch_page_states.get(int(index)) == "processing"
 
         def save_result(index: int, computed):
-            # This consumer executes in ONE parent runner thread, never in a
-            # child process. Worker results never write files or access Tk.
             return commit_refined_page_result(index, computed, page_owned)
 
         def done(completed, total, stopped, results, error) -> None:

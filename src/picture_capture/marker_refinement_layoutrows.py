@@ -14,12 +14,17 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
                                settings: Any, page_index: int):
     """Return selected physical fields and evidence, or None for full detection.
 
-    Cache validation checks scan identity, settings fingerprint, page index and
-    reliable row content. If any requested field cannot be reconstructed, fall
-    back to the existing authoritative estimator for ALL fields.
+    Read available physical measurements straight from this page's JSON.
+    Settings fingerprints include unrelated UI switches and are not a valid
+    reason to rerun the heavyweight detector for explicit Y refinement.
+    Missing physical fields still fall back safely.
     """
     from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
-    from .layout_rows_cache import load_layout_rows_cache
+    import json
+    from .layout_rows_cache import (
+        layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
+        _same_image_fingerprint, _layout_from_payload,
+    )
 
     requested = {
         field for field, switch in AUTO_LAYOUT_FIELDS
@@ -31,18 +36,20 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
     }:
         return None
     page = Path(page)
-    layout = load_layout_rows_cache(
-        page.parent, page, int(page_index), settings, source_size=source_size,
-    )
-    if layout is None and bool(getattr(settings, "paddle_refine_separator_y", False)):
-        # The explicit refine button forces this processing-only flag ON.
-        # LayoutRows was commonly saved before that transient override, and
-        # the flag has no bearing on cached physical column/row geometry.
-        cache_settings = replace(settings, paddle_refine_separator_y=False)
-        layout = load_layout_rows_cache(
-            page.parent, page, int(page_index), cache_settings,
-            source_size=source_size,
-        )
+    try:
+        payload = json.loads(layout_rows_cache_path(page.parent, page).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if (payload.get("format") != CACHE_FORMAT
+            or payload.get("algorithm_version") != CACHE_ALGORITHM_VERSION
+            or payload.get("page_index") != int(page_index)
+            or not _same_image_fingerprint(payload, page, source_size)):
+        return None
+    # Reuse the exact saved physical rows; the global settings fingerprint is
+    # deliberately irrelevant to this read-only geometry lookup.
+    layout = _layout_from_payload(payload)
     if layout is None:
         return None
     columns = sorted(layout.columns, key=lambda column: int(column.index))
@@ -89,7 +96,7 @@ def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
     import json
     from .layout_rows_cache import (
         layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
-        _settings_fingerprint, _same_image_fingerprint,
+        _same_image_fingerprint,
     )
     path = layout_rows_cache_path(Path(page).parent, Path(page))
     if not path.is_file():
@@ -107,13 +114,6 @@ def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
         return "layoutrows_page_index_mismatch"
     if not _same_image_fingerprint(payload, Path(page), source_size):
         return "layoutrows_image_changed"
-    if payload.get("settings_fingerprint") != _settings_fingerprint(settings):
-        if (bool(getattr(settings, "paddle_refine_separator_y", False))
-                and payload.get("settings_fingerprint") == _settings_fingerprint(
-                    replace(settings, paddle_refine_separator_y=False)
-                )):
-            return "layoutrows_geometry_insufficient"
-        return "layoutrows_settings_changed"
     from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
     requested = {
         field for field, switch in AUTO_LAYOUT_FIELDS

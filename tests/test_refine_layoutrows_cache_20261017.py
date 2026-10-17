@@ -67,7 +67,7 @@ def test_two_pages_reuse_their_own_layoutrows_without_full_detection(tmp_path, m
                 analysis.close()
 
 
-def test_stale_cache_falls_back_to_physical_detector(tmp_path, monkeypatch):
+def test_unrelated_setting_change_still_reuses_physical_json(tmp_path, monkeypatch):
     from picture_capture import dictionary_page_layout_policy as policy
     settings = _settings()
     page = tmp_path / "page.png"
@@ -76,7 +76,7 @@ def test_stale_cache_falls_back_to_physical_detector(tmp_path, monkeypatch):
         tmp_path, page, 0, settings, _cached_layout(75, 10),
     ) is not None
     changed = _settings()
-    changed.manual_x += 1  # invalidate the saved settings fingerprint
+    changed.manual_x += 1  # project setting differs but JSON geometry remains authoritative
     seen = []
 
     def fake_policy(image, current, *, page_index):
@@ -90,7 +90,7 @@ def test_stale_cache_falls_back_to_physical_detector(tmp_path, monkeypatch):
         )
         source.close()
         analysis.close()
-    assert seen == [0]
+    assert seen == []
 
 
 def test_missing_requested_row_padding_requires_detector(tmp_path, monkeypatch):
@@ -151,7 +151,7 @@ def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path
             analysis.close()
 
 
-def test_unrelated_setting_difference_still_invalidates_cache(tmp_path):
+def test_unrelated_setting_difference_does_not_invalidate_refinement_json(tmp_path):
     from picture_capture import marker_refinement_layoutrows as reuse
     settings = _settings()
     settings.paddle_refine_separator_y = False
@@ -163,9 +163,6 @@ def test_unrelated_setting_difference_still_invalidates_cache(tmp_path):
     changed = _settings()
     changed.paddle_refine_separator_y = True
     changed.manual_x += 1
-    assert reuse.cached_refinement_settings(
-        page, (180, 150), changed, 0,
-    ) is None
-    assert reuse.refinement_cache_miss_reason(
-        page, (180, 150), changed, 0,
-    ) == "layoutrows_settings_changed"
+    cached = reuse.cached_refinement_settings(page, (180, 150), changed, 0)
+    assert cached is not None
+    assert cached[1]["manual_x"] == 14

@@ -141,5 +141,5 @@ def test_fast_button_and_spawn_worker_have_isolated_mode():
     assert inspect.signature(refine_page_job).parameters["fixed_half_gutter"].default is False
     app = (Path(__file__).resolve().parents[1]
            / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    assert "return str(pages[index]), settings, index, fixed_half_gutter" in app
+    assert "settings, index, fixed_half_gutter" in app
     assert "foreground_page_edit=True, allow_pdic_edits=True" in app
