@@ -6,12 +6,42 @@ entry/body rows, run OCR, mutate the original image or publish PPP data.
 from __future__ import annotations
 
 from pathlib import Path
+from collections import OrderedDict
+from dataclasses import replace
+import hashlib
 
 from PIL import Image
 
 from .image_utils import build_analysis_image, normalize_page_rgb
 from .adaptive_denoise import resolve_denoise_strength
 from .profile_semantics import effective_page_settings, page_template_analysis_image
+
+
+# Cache only settings-derived physical scalars, never role/word conclusions or
+# mutable geometry objects.  The analysis pixel hash includes denoise and mask
+# results.  A saved PPP source is also fingerprinted to guard against stale
+# reuse when its bytes change but its visible white mask happens to match.
+_AUTO_POLICY_CACHE = OrderedDict()
+_AUTO_POLICY_CACHE_LIMIT = 128
+
+
+def clear_refinement_auto_policy_cache() -> None:
+    _AUTO_POLICY_CACHE.clear()
+
+
+def _policy_cache_key(image: Image.Image, effective, index: int, page: Path | None):
+    digest = hashlib.blake2b(image.tobytes(), digest_size=16).hexdigest()
+    companion = None
+    if page is not None and bool(getattr(effective, "layout_mask_illustrations", False)) and bool(
+        getattr(effective, "layout_mask_illustrations_use_existing", False)
+    ):
+        from .project_storage import ppp_read_path_for_image
+
+        companion = hashlib.blake2b(
+            ppp_read_path_for_image(Path(page)).read_bytes(), digest_size=16,
+        ).hexdigest()
+    return (1, int(index), str(Path(page).resolve()) if page is not None else "",
+            image.size, digest, repr(effective), companion)
 
 
 def prepare_refinement_analysis(
@@ -60,9 +90,22 @@ def prepare_refinement_analysis(
 
             # Per-field ordinary_auto_* switches are applied in this existing
             # physical policy.  It is not a full Layout/entry-role rebuild.
-            effective, _estimate, _applied = resolve_page_layout_policy(
-                analysis, effective, page_index=int(page_index),
-            )
+            key = _policy_cache_key(analysis, effective, int(page_index), source_image_path)
+            applied = _AUTO_POLICY_CACHE.get(key)
+            if applied is not None:
+                _AUTO_POLICY_CACHE.move_to_end(key)
+                effective = replace(effective)
+                for field_name, value in applied.items():
+                    setattr(effective, field_name, int(value))
+                effective.manual_columns = False
+            else:
+                effective, _estimate, applied = resolve_page_layout_policy(
+                    analysis, effective, page_index=int(page_index),
+                )
+                _AUTO_POLICY_CACHE[key] = dict(applied)
+                _AUTO_POLICY_CACHE.move_to_end(key)
+                if len(_AUTO_POLICY_CACHE) > _AUTO_POLICY_CACHE_LIMIT:
+                    _AUTO_POLICY_CACHE.popitem(last=False)
 
         template = page_template_analysis_image(analysis, effective, int(page_index))
         if template is not analysis:
