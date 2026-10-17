@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from ..illustrated_profile import (
+from ..illustration.profile import (
     GROUPING, KINDS, PAGE_KINDS, effective_page_kind, set_page_kind,
     validate_illustrated_preferences,
 )

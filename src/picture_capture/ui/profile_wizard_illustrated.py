@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .illustrated_profile_menu import KIND_LABELS
-from ..illustrated_profile import KINDS
+from ..illustration.profile import KINDS
 
 
 def add_wizard_layout_selector(wizard, tab: ttk.Frame, *, row: int) -> None:
