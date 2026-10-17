@@ -15407,7 +15407,7 @@ class PictureCaptureApp(tk.Tk):
                 [int((row or {}).get("max_delta", 0)) for row in results] or [0]
             )
             parts = [f"移动 {moved} 条", f"最大允许位移 {max_delta}px",
-                     f"计算进程 {workers}"]
+                     ("逐页串行后台" if needs_layout else f"计算进程 {workers}")]
             if uncertain:
                 parts.append(f"{uncertain} 条未确认全栏空白")
             if skipped:
