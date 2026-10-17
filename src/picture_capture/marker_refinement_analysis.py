@@ -144,11 +144,13 @@ def prepare_refinement_analysis(
         # Respect only the per-page geometry switches explicitly selected in
         # Auto Layout. Do not build semantic Layout rows or alter saved PDIC.
         if not fixed_half_gutter and bool(getattr(effective, "ordinary_auto_layout", False)):
-            from .dictionary_page_layout_policy import (
-                AUTO_LAYOUT_FIELDS, resolve_page_layout_policy,
-            )
-            if any(bool(getattr(effective, flag, False))
-                   for _field, flag in AUTO_LAYOUT_FIELDS):
+            from .dictionary_page_layout_policy import resolve_page_layout_policy
+            from .marker_refinement_layoutrows import requested_refinement_fields
+
+            # The line refiner consumes only columns, X/width/gutter, body top,
+            # and character height. In particular row_padding never needs a
+            # heavyweight detection merely because its UI switch is checked.
+            if requested_refinement_fields(effective):
                 cached = None
                 if source_image_path is not None:
                     from .marker_refinement_layoutrows import cached_refinement_settings
@@ -173,8 +175,11 @@ def prepare_refinement_analysis(
                             Path(source_image_path), source.size, settings, int(page_index)
                         )
                     _PAGE_LAYOUT_SOURCE.set("full_detector:" + reason)
+                    # Keep cache-hit and cache-miss field semantics identical:
+                    # ignore unrelated Auto Layout fields during this action.
+                    layout_only = replace(effective, ordinary_auto_row_padding=False)
                     effective, _estimate, _applied = resolve_page_layout_policy(
-                        analysis, effective, page_index=int(page_index),
+                        analysis, layout_only, page_index=int(page_index),
                     )
                 _PAGE_LAYOUT_MEASURES.set(_PAGE_LAYOUT_MEASURES.get() + 1)
 
