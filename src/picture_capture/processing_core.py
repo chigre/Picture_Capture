@@ -2148,7 +2148,6 @@ def refine_existing_entries(
 ) -> tuple[list[Entry], dict[str, int]]:
     """Refine saved Y while preserving entry identity and text."""
     if source_image_path is None:
-        # Path-less legacy calls use their original geometry path.
         source, effective, analysis_source, geometry = _page_geometry_context(
             image, settings, profile_page_index,
         )
@@ -2158,9 +2157,10 @@ def refine_existing_entries(
 
     from .marker_refinement_analysis import prepare_refinement_analysis
 
+    prep_kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
     source, effective, analysis_source = prepare_refinement_analysis(
         image, settings, profile_page_index, source_image_path=source_image_path,
-        fixed_half_gutter=fixed_half_gutter,
+        **prep_kwargs,
     )
     try:
         geometry = derive_geometry(analysis_source, effective)
@@ -2186,7 +2186,6 @@ def _refine_existing_entries_with_geometry(
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
-    # Keep button and legacy Y engines separate.
     if align_to_ink_top:
         from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
     else:
