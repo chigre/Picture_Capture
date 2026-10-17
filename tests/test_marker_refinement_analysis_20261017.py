@@ -118,7 +118,7 @@ def test_refine_existing_ppp_mode_passes_path_without_redetection(monkeypatch, t
 def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp_path):
     from dataclasses import dataclass
     from types import SimpleNamespace
-    from picture_capture import processing_core, paddle_headwords
+    from picture_capture import processing_core, marker_refinement_top_edge
 
     @dataclass
     class Row:
@@ -129,6 +129,7 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
 
     class Geometry:
         top = 0
+        bottom = 150
         column_widths = [80]
         transform = SimpleNamespace(canonical_image_for_analysis=lambda image: image)
         def source_to_canonical(self, x, y):
@@ -149,7 +150,7 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
     monkeypatch.setattr(processing_core, "column_index", lambda *_: 0)
     def move(gray, coarse_y, line_height, effective, **_kwargs):
         return coarse_y + 2, {"reason": "test"}
-    monkeypatch.setitem(paddle_headwords.__dict__, "refine_separator_y", move)
+    monkeypatch.setattr(marker_refinement_top_edge, "refine_existing_marker_to_ink_top", move)
     image = _make_image()
     page = tmp_path / "scan.png"
     old = [Row("manual", 9, 20, True), Row("auto", 9, 55, False)]
