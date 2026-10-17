@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
-from .illustration_delete_geometry import interior_polygon_center
+from .delete_geometry import interior_polygon_center
 from .ui.overlay_delete_button import fixed_overlay_control_font
 
 

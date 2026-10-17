@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from PIL import Image, ImageColor, ImageDraw, ImageTk
 
-from .overlay_opacity import flatten_coordinates, normalize_opacity
+from ..overlay_opacity import flatten_coordinates, normalize_opacity
 
 DEFAULT_DISPLAY_OPACITY = 40.0
 
