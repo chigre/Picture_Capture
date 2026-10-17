@@ -9,7 +9,7 @@ from PIL import Image
 
 from picture_capture.models import AppSettings
 from picture_capture.ref_boxes import RefBox, read_ref_boxes
-from picture_capture.ref_box_geometry import ref_action_buttons, REF_ACTION_POSITIONS
+from picture_capture.ref.box_geometry import ref_action_buttons, REF_ACTION_POSITIONS
 from picture_capture.ui.settings.color_picker import (
     contrast_foreground, normalized_hex, make_color_widget,
     validate_color_controls,
