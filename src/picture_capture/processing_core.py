@@ -2143,8 +2143,9 @@ def refine_existing_entries(
     settings: AppSettings,
     *,
     profile_page_index: int = 0,
+    source_image_path: Path | None = None,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine only existing marker positions without adding or removing rows.
+    """Refine all existing markers, including manually drawn or moved entries.
 
     The current PDIC markers are treated as the coarse localization.  The same
     local ink-valley refiner used by automatic drawing is called again in
@@ -2152,9 +2153,38 @@ def refine_existing_entries(
     local search radius, which acts as a hard safety bound on canonical Y
     movement.  Entry text/order/count and every non-coordinate field are kept.
     """
-    source, effective, analysis_source, geometry = _page_geometry_context(
-        image, settings, profile_page_index,
+    if source_image_path is None:
+        # Compatibility for injected/synthetic geometry callers. The GUI always
+        # passes the page path to enable the settings-aware production pipeline.
+        source, effective, analysis_source, geometry = _page_geometry_context(
+            image, settings, profile_page_index,
+        )
+        return _refine_existing_entries_with_geometry(
+            entries, effective, analysis_source, geometry,
+        )
+
+    from .marker_refinement_analysis import prepare_refinement_analysis
+
+    source, effective, analysis_source = prepare_refinement_analysis(
+        image, settings, profile_page_index, source_image_path=source_image_path,
     )
+    try:
+        geometry = derive_geometry(analysis_source, effective)
+        return _refine_existing_entries_with_geometry(
+            entries, effective, analysis_source, geometry,
+        )
+    finally:
+        analysis_source.close()
+        source.close()
+
+
+def _refine_existing_entries_with_geometry(
+    entries: list[Entry],
+    effective: AppSettings,
+    analysis_source: Image.Image,
+    geometry: Geometry,
+) -> tuple[list[Entry], dict[str, int]]:
+    """Apply local Y-refinement without repeating Layout role classification."""
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
