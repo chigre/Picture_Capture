@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .refinement_settings_help import REFINEMENT_SETTING_HELP, REFINEMENT_CHECK_HELP
+
 """Static Settings Center metadata.
 
 The dialog keeps compatibility class attributes that reference these exact
@@ -99,12 +101,12 @@ FIELDS = [
         ("AI 页眉横线墨迹比例", "paddle_header_rule_ink_ratio", float),
         ("AI 页眉横线后余量", "paddle_header_rule_margin", int),
         ("AI 词性搜索字符数", "paddle_pos_search_chars", int),
-        ("横线Y精修搜索范围（行高比）", "paddle_separator_search_ratio", float),
-        ("横线Y精修安全带半径（px）", "paddle_separator_band_radius", int),
-        ("横线Y精修安全空间（px）", "paddle_separator_safety_px", int),
-        ("横线Y精修横向分析范围（%）", "paddle_separator_roi_width_ratio", float),
+        ("横线搜索半径（行高比）", "paddle_separator_search_ratio", float),
+        ("墨迹平滑／笔画小断点（px）", "paddle_separator_band_radius", int),
+        ("精修上缘最小留白（px）", "paddle_separator_safety_px", int),
+        ("横线横向取样比例（% 单栏）", "paddle_separator_roi_width_ratio", float),
         ("横线Y精修栏边余量（px）", "paddle_separator_column_margin", int),
-        ("Y 精修最大位移（行高比）", "separator_y_max_shift_ratio", float),
+        ("精修硬性最大位移（行高比）", "separator_y_max_shift_ratio", float),
         ("原图白缝核验最大偏移（行高比）", "separator_y_ink_safe_max_fraction", float),
         ("原图白缝核验墨迹灰度阈值", "separator_y_ink_safe_ink_threshold", int),
         ("原横线允许墨迹比例", "separator_y_ink_safe_existing_ink_ratio", float),
@@ -273,17 +275,17 @@ SETTING_LABELS = {
         "paddle_left_tolerance": "词头左缘容差",
         "paddle_rec_score_threshold": "OCR 片段最低置信度",
         "paddle_min_candidate_score": "词头候选最低分",
-        "paddle_separator_safety_px": "横线与文字安全距离",
+        "paddle_separator_safety_px": "手动精修距首行文字上缘的间距",
         "paddle_line_merge_y_ratio": "同行碎片合并容差",
         "paddle_height_ratio": "字高提示阈值",
         "paddle_boldness_ratio": "粗体提示阈值",
         "paddle_gap_ratio": "行前空白提示阈值",
         "paddle_pos_search_chars": "词性提示搜索范围",
-        "paddle_separator_search_ratio": "横线 Y 精修搜索范围",
-        "paddle_separator_band_radius": "横线空白带平滑半径",
-        "paddle_separator_roi_width_ratio": "横线精修横向范围",
-        "paddle_separator_column_margin": "横线精修栏边余量",
-        "separator_y_max_shift_ratio": "精修最大位移（行高比）",
+        "paddle_separator_search_ratio": "横线附近候选搜索半径",
+        "paddle_separator_band_radius": "自动空白谷平滑／手动断点桥接",
+        "paddle_separator_roi_width_ratio": "栏左墨迹取样比例",
+        "paddle_separator_column_margin": "栏左排除区域",
+        "separator_y_max_shift_ratio": "最大允许移动行高倍数",
         "separator_y_ink_safe_max_fraction": "原图白缝核验最大偏移（行高比）",
         "separator_y_ink_safe_ink_threshold": "原图白缝核验墨迹灰度阈值",
         "separator_y_ink_safe_existing_ink_ratio": "原横线允许墨迹比例",
@@ -331,13 +333,13 @@ SETTING_HELP = {
         "layout_mask_illustrations_use_existing": (
             "依赖【Layout 分析前白化插图】。勾选后只读取当前页 PPP 中已经保存的插图多边形，"
             "直接对白化分析副本进行处理，不运行插图自动识别，也不改写 PPP。"
-            "未勾选时由自动检测产生候选，并按原有安全阈值筛选。"
+            "未勾选时由自动检测产生候选，并按原有安全阈值筛选；仅【精修画线】不会把新候选写入 PPP。"
             "PPP 缺失时不应默默改为重新检测或认为本页没有插图。"
         ),
         "layout_mask_illustrations": (
             "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
             "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-            "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
+            "原始扫描图、OCR、PDIC 与切图文件都不会被修改；普通 Layout 在非复用模式可能持久化 PPP 候选；仅【精修画线】只填白分析副本，不持久化新 PPP，也不重跑逐页版面或词头识别。\n\n"
             "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
             "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
         ),
@@ -394,12 +396,7 @@ SETTING_HELP = {
         "paddle_header_rule_ink_ratio": "作用：在页眉搜索区逐行计算黑色墨迹占比，达到该比例的行才有资格被视为贯穿式页眉横线。当前实现会把输入限制在合理范围后使用。\n\n调整：提高更严格，需要更长/更实的横线；降低可识别断裂或浅色横线，但也更容易把文字行误判为横线。只有【自动忽略页眉横线以上】开启时才有意义。",
         "paddle_header_rule_margin": "作用：识别到页眉横线后，再向正文方向额外留出的安全距离，单位为原图像素。该值不再按页面宽度缩放。\n\n调整：增大可避免页眉残留，但可能吃掉第一条正文词头；减小则更贴近横线。",
         "paddle_pos_search_chars": "作用：lemma 提取后，语法解析在其后的多长文本范围内寻找 POS/变形等结构提示。这样可利用近邻语法标签，同时避免把很后面的释义正文缩写误当词头证据。\n\n调整：长词头、长性别变体或 POS 距离较远时可适当增大；过大可能在定义正文里误命中缩写。存在活动 Dictionary Profile 时，POS 标签集合通常由 Profile 的 pos_labels 决定。",
-        "paddle_separator_search_ratio": "作用：OCR 粗定位词头 Y 后，以典型行高为尺度，在其附近上下搜索更合理的空白带/分隔位置，从而把横线从文字框位置精修到视觉上的行间空白。\n\n调整：增大搜索更宽，能修正较大的 OCR Y 偏差，但更可能跳到相邻行；减小更保守。只有【自动精修横线 Y】开启时才直接影响结果。",
-        "paddle_separator_band_radius": "作用：横线 Y 精修时，对局部墨迹/空白曲线做平滑的半径，单位为原图像素。该值不再使用 1400px 参考宽度。\n\n调整：增大更平滑但可能抹掉窄空白带；减小更敏感但更受噪声影响。",
-        "paddle_separator_safety_px": "作用：OCR 图像边界候选搜索中的安全距离，单位为原图像素。该字段并不是普通 Layout 逐条墨迹谷精修的统一安全距离，也不能保证最终横线绝不穿字；普通画线后续还可能进行独立的 CJK 坐标修正。\n\n调整：文字被线贴住/穿过时增大；横线与词头间距明显过大时减小。",
-        "paddle_separator_roi_width_ratio": "作用：横线 Y 精修时，只分析当前栏左侧一定百分比的横向区域，而不是整栏释义。这样可减少右侧长定义、插图或其他墨迹干扰。\n\n调整：减小更聚焦词头附近；太小可能只看到少量字符而不稳定。增大提供更多墨迹统计，但正文干扰也增加。",
-        "separator_y_max_shift_ratio": "限制普通画线 Layout 逐条横线精修后相对粗定位的最大移动幅度，单位是典型行高的倍数，默认 0.45。设小可减少跳到相邻行，设大允许修正更明显的初始定位误差。仅影响 Layout 逐条精修的位移上限，不控制其他后处理的 Y 调整。\n\n建议保持默认并使用逐条诊断核对精修前后坐标，修改前请保留 PDIC 基准文件。",
-        "paddle_separator_column_margin": "作用：横线精修分析时，从栏最左边缘跳过一小段区域，避免栏边线、装订阴影、竖直装饰线被误当作文字墨迹。单位为原图像素，不按页面宽度缩放。\n\n调整：存在明显栏线/黑边时可增大；过大会跳过真正贴边的词头。",
+        **REFINEMENT_SETTING_HELP,
         "paddle_tesseract_psm": "作用：Tesseract 对照 OCR 的 Page Segmentation Mode。当前词头候选带常见 PSM 6（单一均匀文本块）与 PSM 4（单栏但行/字号更灵活）；若开启【自动比较 PSM 4/6】，程序会自行比较，不必手动固定。\n\n调整：只有 Tesseract 对照结果明显分行错误且自动比较关闭时才改。它不影响 PaddleOCR。",
         "paddle_lens_language": "Google Lens OCR 语言自动跟随【词头 OCR 语言】，不再单独配置。Profile 或 OCR 语言变化时会同步更新。",
         "paddle_lens_timeout": "作用：一次 Google Lens 网络 OCR 最长等待时间。超时后该次 Lens 结果会失败/缺失，但本地 Paddle/Tesseract 流程仍可继续。\n\n调整：网络慢而频繁超时时可增大；过大则在服务不可达时等待更久。Lens 是可选网络依赖，不建议用超长超时掩盖网络配置问题。",
@@ -662,7 +659,7 @@ CHECK_HELP = {
     "ref_box_auto_attach": "手动新建 REF 时将框中心所在的当前页 PDIC 正文切片识别为挂靠词条；落在上页续接区或不在词条范围时保留未关联，可后续手动编辑。",
     "draw_performance_profile": "为每页及关键检测阶段记录墙钟耗时，批次结束后自动导出 Markdown、CSV 和本次设置快照。默认关闭；性能记录会产生少量磁盘写入，但不会改变 PDIC 检测结果。",
     "reuse_prepared_analysis": "实验功能：复用相同去噪强度下已经生成的分析图，避免再次进行全页去噪。默认关闭；开启后应以同批扫描页进行完整 PDIC 文件对照，不保证重复去噪与只做一次的结果完全一致。",
-    "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪；如需比较，建议同一批页面复测并核对 PDIC。",
+    "analysis_denoise_enabled": "控制进入 Page Understanding、Layout 和普通画线的共享分析图是否进行自适应去噪。关闭时保留原始墨迹，不影响 Layout 专用去噪。【精修画线】仅增加按设置的插图填白，继续使用已有精修算法，不额外执行共享去噪或完整版面检测。需比较时建议用同一批页面复测核对 PDIC。",
     "layout_denoise_enabled": "单独控制可靠性融合版面检测之前的墨迹去噪。关闭后仅省去这一层清理，仍保留共享分析图的去噪设置；在污点多、细线多的词典中应比较检测准确度。",
     "layout_scale_enabled": "实验选项，根据原图最长边选择 100%、75% 或 50% 的临时版面检测图。只有下方允许的参数接受缩图估计，其余使用项目原分辨率先验；未完成 PDIC 对照前请保持关闭。",
     "layout_scale_columns": "允许 50% 或 75% 缩图版面检测更新分栏数。分栏数反映整体宏观布局，通常对缩图较稳定，因此默认勾选；复杂跨栏页面仍需检查原图的分栏结果。",
@@ -672,7 +669,7 @@ CHECK_HELP = {
     "layout_scale_manual_x": "控制是否允许缩图结果更新首栏 X。此前真实页面出现过明显的横向坐标偏移，因此默认不勾选；允许时建议逐页检查左缘及完整 PDIC 坐标。",
     "layout_scale_character_height": "控制是否允许缩图结果更新普通文字字符高度。字高会影响物理行归并、缩进和大字头判断，因此默认不勾选；优先沿用原图项目先验并核对视觉分析。",
     "layout_scale_row_padding": "控制是否允许缩图结果更新普通文字行间空白。该值直接影响词条行高和分隔位置，低分辨率更容易产生舍入偏差，默认不勾选并沿用原图项目参数。",
-    "layout_mask_illustrations_use_existing": "只有同时开启【Layout 分析前白化插图】才生效。勾选：仅读取当前页已保存的 PPP 多边形直接填白，不重新识别、不改写 PPP；PPP 缺失明确报错。不勾选：自动识别插图，把识别结果写入 PPP（保留手绘区域），并按安全规则白化。",
+    "layout_mask_illustrations_use_existing": "只有同时开启【Layout 分析前白化插图】才生效。勾选：仅读取当前页已保存的 PPP 多边形直接填白，不重新识别、不改写 PPP；PPP 缺失明确报错。不勾选：普通 Layout 可以自动识别插图并按原规则保存 PPP；【精修画线】只在内存中检测并填白，绝不额外写 PPP（因此未勾选可能更慢）。",
     "proofreading_event_capture": "默认关闭。启用后仅将支持的人工校对操作，在 PDIC 成功保存后记录到本地项目的独立事件日志；不自动上传、不进行模型训练，普通保存和 OCR 自动画线不等于人工确认。关闭后停止记录，不删除已有日志；含词条文本的记录由用户自行保管、决定是否导出。",
     "show_illustration_labels": "开启后在主画布展示插图区域编号或标签，方便核对自动识别及手工标注的 PPP 区域。关闭仅隐藏标签，不隐藏多边形本身，也不删除 PPP 数据。",
     "illustration_label_font_bold": "插图标签使用粗体显示，适合扫描背景较复杂、细体不易看清的页面。只改变显示效果。",
@@ -681,7 +678,7 @@ CHECK_HELP = {
     "layout_mask_illustrations": (
         "作用：开启后，【普通画线】和【显示 Layout】在 Page Understanding 之前先复用自动插图检测，"
         "把足够大的插图区域仅在分析副本上填成白色，再恢复文字行、缩进和 entry/body 角色。"
-        "原始扫描图、OCR、PDIC 与切图文件都不会被修改；若不勾选复用，自动识别的插图候选会写入 PPP（保留手工区域）。\n\n"
+        "原始扫描图、OCR、PDIC 与切图文件都不会被修改；普通 Layout 在非复用模式可能持久化 PPP 候选；仅【精修画线】只填白分析副本，不持久化新 PPP，也不重跑逐页版面或词头识别。\n\n"
         "保护：Layout 白化比 PPP 自动插图更保守。小尺寸候选直接忽略；接近大字头尺寸且近方形的候选也不会白化，"
         "避免把大号单字/大字头误当成插图。关闭时完全保持原有 Layout 流程。"
     ),
@@ -689,7 +686,7 @@ CHECK_HELP = {
             "开启：每页【普通画线】先由当前 Layout Core 解析页面几何和最终行角色，再把所选的逐页版面字段"
             "作为本页临时值使用；结果不会写回下一页。\n\n"
             "当前普通画线的主路径直接消费 Layout Core 的最终 entry 行；只有 Layout 无法形成可用栏结构时，"
-            "才进入历史几何 fallback。"
+            "才进入历史几何 fallback。【精修画线】不触发逐页自动版面检测，只使用已有 Profile 几何和可选的插图填白。"
         ),
         "ordinary_auto_columns": "自动版面检测后，用当前页检测出的【分栏数】临时替换项目基准值；只影响本页普通画线，不写回下一页。",
         "ordinary_auto_start_y": "自动版面检测后，用当前页检测出的【正文起始Y】临时替换项目基准值；适合页眉位置存在逐页漂移的扫描。",
@@ -716,8 +713,7 @@ CHECK_HELP = {
         ),
         "paddle_require_visual_cue": "名称是历史遗留。当前实现并不是“必须有纯视觉证据”，而是要求候选至少有一个结构或视觉 fallback cue：POS/变形/描述符/特殊符号，或字高/粗体/行前空白之一。\n\n开启可抑制只有合法字母形态、却没有任何词条特征的正文行；关闭会放宽候选门槛，除非 diagnostics 明确显示真实词头因此被拒，否则不建议关闭。",
         "paddle_require_pos_or_symbol": "开启：普通词头候选必须具有至少一个强结构提示：POS、变形、结构描述符或可作为新词条证据的特殊符号。能显著抑制栏左正文误检。\n\n关闭：允许仅靠位置/视觉分数通过，召回更高但假阳性更多。对结构化拉丁词典通常建议开启；CJK/特殊 Profile 还会有自己的专用接受逻辑。",
-        "paddle_refine_separator_y": "开启：OCR画线仍按原流程精修；普通画线则先完整执行 VB.NET 的向上白带定位，已经得到一个 VB 分隔 Y 后，才把现有局部墨迹谷算法作为最后的小范围二次修正，并限制最大移动量。它不再负责替代 VB 的初始 Y 定位。\n\n关闭：普通画线直接使用 VB 分隔 Y；OCR画线保留其未精修的粗定位。",
-        "separator_y_ink_safe_gap": "实验性横线 Y 安全检查，默认关闭。先执行现有横线精修，再在原图灰度 ROI 中核验该位置是否穿过明显墨迹；只有附近存在连续至少三行的可信白缝且位移不超过字高约四分之一时才改到更安全的 Y。不会新增或删除词头。\n\n对跨栏插图、极窄行距或无白缝的页面不强制修正。尚未做多词典真实图像对照，打开后如定位异常可随时关闭，恢复原定位行为。",
+        **REFINEMENT_CHECK_HELP,
         "paddle_compare_tesseract": (
             "开启：把 Tesseract 加入共享 OCR 通道，与 PaddleOCR 在同一图像/候选带上运行。"
             "【仅OCR】可据此比较或选择文字；【OCR画线】则把相同 OCR 证据交给成熟 parser/边界判定。\n\n"
@@ -849,7 +845,7 @@ SEPARATOR_Y_FIELDS = (
 )
 
 SEPARATOR_Y_CHECKS = (
-    ("自动精修横线 Y（普通画线与 OCR 共用）", "paddle_refine_separator_y"),
+    ("自动画线 Y 精修（手动按钮独立）", "paddle_refine_separator_y"),
     ("实验：原图白缝核验横线 Y", "separator_y_ink_safe_gap"),
 )
 

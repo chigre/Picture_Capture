@@ -67,9 +67,11 @@ def test_public_adaptive_refiner_injects_shared_fallback(monkeypatch) -> None:
 
 
 def test_existing_pdic_refinement_reaches_shared_api() -> None:
-    source = inspect.getsource(processing_core.refine_existing_entries)
+    source = inspect.getsource(processing_core._refine_existing_entries_with_geometry)
     assert "from .paddle_headwords import refine_separator_y" in source
     assert "refine_separator_y(" in source
+    assert "from .marker_refinement_top_edge import refine_existing_marker_to_ink_top" in source
+    assert "refine_existing_marker_to_ink_top(" in source
     assert paddle_headwords.refine_separator_y is shared_y.refine_separator_y
 
 

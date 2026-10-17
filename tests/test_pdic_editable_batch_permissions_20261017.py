@@ -61,12 +61,15 @@ def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
     batch_ocr = body_between(
         detector, "    def batch_ocr(", "    def run_ocr_draw(",
     )
-    for segment in (refiner, only_ocr, batch_ocr):
+    assert "foreground_page_edit=True, allow_pdic_edits=True," in refiner
+    assert "_start_parallel_batch_task(" in refiner
+    assert "commit_refined_page_result" in refiner
+    for segment in (only_ocr, batch_ocr):
         assert "foreground_page_edit=True, allow_pdic_edits=True," in segment
         assert "_start_batch_task(" in segment
     # A final blanket reload would discard proofreading performed after a
     # worker finishes, so only the page-completion event may reload the page.
-    assert "and not self._batch_foreground_pages" in refiner
+    assert "save_result" in refiner
     assert "and not self._batch_foreground_pages" in only_ocr
     assert 'not getattr(app, "_batch_foreground_pages", False)' in batch_ocr
 
