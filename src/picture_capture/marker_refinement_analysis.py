@@ -55,6 +55,16 @@ def whiten_illustrations_for_refinement(
     reuse = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
     if reuse and source_image_path is None:
         raise ValueError("复用已有插图白化需要当前页原图路径，不能忽略 PPP 配置")
+    if reuse:
+        from .project_storage import ppp_read_path_for_image
+
+        # A page without a PPP is a normal non-illustrated page. Nothing is
+        # available to reuse or whiten; continue the SAME page-local layout
+        # measurement and Y refiner rather than skipping the entire page.
+        # Existing PPP files are still parsed by the shared masker, so a
+        # malformed PPP never silently falls back to unmasked processing.
+        if not ppp_read_path_for_image(Path(source_image_path)).is_file():
+            return image
     path_kwargs = {"source_image_path": Path(source_image_path)} if reuse else {}
     masked, _stats = mask_large_illustrations_for_layout(
         image, settings,
