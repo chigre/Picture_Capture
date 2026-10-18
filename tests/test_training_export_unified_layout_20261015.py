@@ -17,10 +17,10 @@ from picture_capture.training_export_composed import write_training_manifest
 from picture_capture.training.export_page_understanding import (
     build_export_training_page_with_understanding,
 )
-from picture_capture.training_export_unified_layout import (
+from picture_capture.training.export_unified_layout import (
     write_training_unified_layout_diagnostic,
 )
-import picture_capture.training_export_unified_layout as unified
+import picture_capture.training.export_unified_layout as unified
 import picture_capture.training.export_page_understanding as understanding
 
 
