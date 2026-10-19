@@ -96,7 +96,7 @@ from .page_list_helpers import (
     _sorted_page_list_rows,
 )
 
-from .overlay_layout_helpers import (
+from .ui.overlay_layout_helpers import (
     binary_preview_image,
     effective_main_overlay_font_size,
     entry_index_label_layout,
@@ -222,7 +222,7 @@ from .text_encoding import read_text_detected
 from .unicode_nonbmp_input import (
     attach_nonbmp_unicode_input, close_nonbmp_unicode_input,
 )
-from .overlay_opacity import (
+from .ui.overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
 )
@@ -13298,10 +13298,10 @@ class PictureCaptureApp(tk.Tk):
             return
         if plan is None:
             return
-        from .crop_preview_labels import draw_crop_preview_label, format_crop_preview_entry_label
+        from .crop.preview_labels import draw_crop_preview_label, format_crop_preview_entry_label
         scale = self.view_scale
         illustrated_entries = {p.entry_ref_index for p in plan.entry_pieces if p.source_mode == "linked_original" and p.entry_ref_index is not None}
-        from .crop_preview_display_settings import crop_preview_font_spec
+        from .crop.preview_display_settings import crop_preview_font_spec
         preview_font = crop_preview_font_spec(
             self, scale, resolve_content_font_family, _entry_font_spec,
         )

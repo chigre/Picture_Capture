@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-import picture_capture.overlay_opacity as opacity
+import picture_capture.ui.overlay_opacity as opacity
 from picture_capture.models import AppSettings
-from picture_capture.overlay_line_anchor import one_sided_line_coordinates
-from picture_capture.overlay_opacity import (
+from picture_capture.ui.overlay_line_anchor import one_sided_line_coordinates
+from picture_capture.ui.overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line,
     normalize_opacity,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageOps
 
-from .models import AppSettings
+from ..models import AppSettings
 
 
 def effective_main_overlay_font_size(

@@ -12,7 +12,7 @@ import pytest
 
 from picture_capture.auxiliary_line_controller import AuxiliaryLineController
 from picture_capture.auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits
-from picture_capture.overlay_layout_helpers import (
+from picture_capture.ui.overlay_layout_helpers import (
     effective_overlay_column_width,
 )
 from picture_capture.ui import overlay_delete_button
@@ -162,7 +162,7 @@ def test_auxiliary_length_matches_entry_marker_ratio_and_hit_bound(
     monkeypatch, ratio, end,
 ):
     from picture_capture import auxiliary_line_controller as mod
-    from picture_capture.overlay_layout_helpers import canonical_headword_marker_span
+    from picture_capture.ui.overlay_layout_helpers import canonical_headword_marker_span
     monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
     monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
     monkeypatch.setattr(mod, "column_index_for_click", lambda *_args: 1)

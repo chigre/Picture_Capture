@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import picture_capture.processing as processing
-from picture_capture import crop_plan_formatting as formatting
+from picture_capture.crop import plan_formatting as formatting
 
 
 def test_phase7j_core_reexports_crop_plan_formatting_helpers() -> None:

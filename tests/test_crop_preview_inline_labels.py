@@ -1,7 +1,7 @@
-from picture_capture.crop_preview_labels import format_crop_preview_entry_label
+from picture_capture.crop.preview_labels import format_crop_preview_entry_label
 from picture_capture.models import AppSettings
-from picture_capture.crop_preview_display_settings import effective_crop_preview_font_size
-from picture_capture.overlay_layout_helpers import effective_main_overlay_font_size
+from picture_capture.crop.preview_display_settings import effective_crop_preview_font_size
+from picture_capture.ui.overlay_layout_helpers import effective_main_overlay_font_size
 
 
 def test_inline_entry_crop_label():

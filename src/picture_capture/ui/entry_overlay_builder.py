@@ -11,7 +11,7 @@ import tkinter as tk
 
 from ..models import Entry as WordEntry
 from ..processing import column_index, line_box
-from ..overlay_layout_helpers import (
+from .overlay_layout_helpers import (
     canonical_headword_marker_span, effective_overlay_column_width,
     horizontal_entry_editor_slot,
     effective_main_overlay_font_size, entry_index_label_layout,
@@ -20,7 +20,7 @@ from ..overlay_layout_helpers import (
     vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
-from ..overlay_opacity import create_alpha_canvas_line
+from .overlay_opacity import create_alpha_canvas_line
 from ..review_text_helpers import _entry_font_spec
 from ..ui_compat import resolve_content_font_family
 from .overlay_delete_button import create_overlay_delete_button, fixed_overlay_control_font

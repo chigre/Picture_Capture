@@ -13,7 +13,7 @@ from PIL import Image
 
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
-from picture_capture.overlay_layout_helpers import (
+from picture_capture.ui.overlay_layout_helpers import (
     canonical_headword_marker_span, effective_overlay_column_width,
     horizontal_entry_editor_slot,
 )

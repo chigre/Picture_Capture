@@ -524,6 +524,23 @@ def collect_violations() -> list[str]:
     for name in sorted(installers_now - INIT_INSTALLER_BASELINE):
         violations.append(f"new import-time package installer: {name}")
 
+
+    # Issue #562: physical crop/overlay ownership, never reintroduce root shims.
+    migrated_crop_overlay = {
+        "crop_logging": "crop/logging.py",
+        "crop_plan_formatting": "crop/plan_formatting.py",
+        "crop_preview_display_settings": "crop/preview_display_settings.py",
+        "crop_preview_labels": "crop/preview_labels.py",
+        "overlay_layout_helpers": "ui/overlay_layout_helpers.py",
+        "overlay_line_anchor": "ui/overlay_line_anchor.py",
+        "overlay_opacity": "ui/overlay_opacity.py",
+    }
+    for old_name, owner_path in migrated_crop_overlay.items():
+        if (PACKAGE_ROOT / (old_name + ".py")).exists():
+            violations.append(f"retired root owner returned: {old_name}.py")
+        if not (PACKAGE_ROOT / owner_path).is_file():
+            violations.append(f"canonical owner missing: {owner_path}")
+
     return violations
 
 

@@ -6,11 +6,11 @@ import re
 from typing import TYPE_CHECKING
 import unicodedata
 
-from .coordinate_space import SOURCE_COORDINATE_SPACE
-from .models import PolygonRegion
+from ..coordinate_space import SOURCE_COORDINATE_SPACE
+from ..models import PolygonRegion
 
 if TYPE_CHECKING:
-    from .processing_core import EntryCropPiecePlan, PageCropPlan
+    from ..processing_core import EntryCropPiecePlan, PageCropPlan
 
 
 def entry_crop_piece_filename(page_stem: str, piece: EntryCropPiecePlan) -> str:

@@ -1,7 +1,7 @@
 """Crop preview labels must have a readable backing with an outline."""
 from pathlib import Path
 
-from picture_capture.crop_preview_labels import draw_crop_preview_label
+from picture_capture.crop.preview_labels import draw_crop_preview_label
 
 
 class CanvasStub:
