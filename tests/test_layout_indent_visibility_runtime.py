@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from pathlib import Path
 
-from picture_capture.layout_indent_visibility import (
+from picture_capture.layout.indent_visibility import (
     _draw_indent_blocks_visible,
     add_prepared_indent_summary,
     prepared_indent_counts,
@@ -121,7 +121,8 @@ def test_phase5k_static_visibility_ownership():
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "layout_indent_visibility_runtime.py").exists()
-    assert (package / "layout_indent_visibility.py").exists()
+    assert not (package / "layout_indent_visibility.py").exists()
+    assert (package / "layout" / "indent_visibility.py").exists()
     assert "_draw_indent_blocks_visible as _draw_indent_blocks" in summary
     assert "add_prepared_indent_summary(text, app)" in summary
     assert "install_layout_indent_visibility" not in gui
@@ -132,7 +133,7 @@ def test_visible_renderer_does_not_lower_indent_below_base_layout():
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "layout_indent_visibility.py"
+        / "layout" / "indent_visibility.py"
     ).read_text(encoding="utf-8")
     assert "canvas.tag_raise(indent_tag)" in source
     assert "tag_lower" not in source
