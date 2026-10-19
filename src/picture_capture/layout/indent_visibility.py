@@ -30,7 +30,7 @@ def prepared_indent_counts(blocks: list[dict[str, Any]]) -> dict[int, int]:
 
 def _draw_indent_blocks_visible(app: Any, snapshot: Any) -> None:
     """Draw each measured blank span above the page with a first-ink edge."""
-    from . import layout_visualization_summary as summary
+    from .. import layout_visualization_summary as summary
 
     canvas = getattr(app, "canvas", None)
     if canvas is None:

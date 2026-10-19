@@ -244,6 +244,12 @@ def _normalized_source_size(path: Path) -> int:
 def collect_violations() -> list[str]:
     violations: list[str] = []
 
+    # Issue #562: physically migrated Layout indent owner must not regress to root.
+    if (PACKAGE_ROOT / "layout_indent_visibility.py").exists():
+        violations.append("migrated Layout indent module returned at package root")
+    if not (PACKAGE_ROOT / "layout" / "indent_visibility.py").is_file():
+        violations.append("canonical Layout indent visibility owner is missing")
+
     for path in _python_files():
         size = _normalized_source_size(path)
         if size > MAX_NORMAL_MODULE_BYTES:
