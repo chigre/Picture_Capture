@@ -1,7 +1,7 @@
 """Compute minimum connected-component dimensions for illustration detection."""
 from __future__ import annotations
 
-from .models import AppSettings
+from ..models import AppSettings
 
 
 def illustration_candidate_min_dimensions(

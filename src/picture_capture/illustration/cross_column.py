@@ -37,7 +37,7 @@ def spanning_figure_boxes(image, column_spans, boxes, *, gray_threshold=170, wid
         small.close()
 
     # Late import avoids a cyclic dependency with illustration_detection.
-    from .illustration_detection import _rle_components
+    from ..illustration_detection import _rle_components
     comps = _rle_components(joined)
     output = list(boxes)
     consumed = set()
