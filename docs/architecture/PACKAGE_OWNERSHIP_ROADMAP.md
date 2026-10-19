@@ -75,3 +75,9 @@ This organization change is *not* a source-code compression project. An expanded
 - Physically relocate `layout_indent_visibility.py` to `layout/indent_visibility.py` without a root shim. Update the summary compositor and runtime tests to the canonical path.
 - Preserve the deferred import of `layout_visualization_summary` via the parent package to avoid the existing circular dependency, including `_INDENT_TAG` identity and Canvas draw order.
 - Add an architecture guard that rejects the former root path and requires the canonical module. This bounded migration reduces the merged-main root count from **225 to 224** when integrated, subject to independent recount; no claim of full Layout migration or CI acceptance before the PR checks.
+
+## Layout provenance and physical-lane summary leaves (Issue #562)
+
+- Physically move `layout_role_provenance.py` to `layout/role_provenance.py` and `layout_lane_summary_extension.py` to `layout/lane_summary_extension.py`, removing former root paths without shims.
+- Update the Layout visualization summary/shared compositor and focused tests. Preserve `get_layout_line_classification` and `drift_corrected_indent_blocks` as module globals in the new provenance owner so existing monkeypatch tests retain their behavior. Summary ordering and read-only diagnostic output remain unchanged.
+- Architecture guard ratchets both owners. This bounded 2-module follow-up targets root **224 → 222** after integration, subject to independent count and CI/CodeQL acceptance; larger Layout UI/algorithm/persistence owners remain unmoved until separately audited.

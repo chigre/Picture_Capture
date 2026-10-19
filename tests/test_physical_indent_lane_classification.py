@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_lane_summary_extension import append_physical_lane_summary
+from picture_capture.layout.lane_summary_extension import append_physical_lane_summary
 from picture_capture.layout_physical_indent import (
     assign_binary_roles,
     estimate_column_slant,

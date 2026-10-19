@@ -250,6 +250,15 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "layout" / "indent_visibility.py").is_file():
         violations.append("canonical Layout indent visibility owner is missing")
 
+    for former, canonical in (
+        ("layout_role_provenance.py", "layout/role_provenance.py"),
+        ("layout_lane_summary_extension.py", "layout/lane_summary_extension.py"),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"migrated Layout module returned at root: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical Layout module is missing: {canonical}")
+
     for path in _python_files():
         size = _normalized_source_size(path)
         if size > MAX_NORMAL_MODULE_BYTES:

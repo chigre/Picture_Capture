@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import picture_capture.layout_role_provenance as provenance
+import picture_capture.layout.role_provenance as provenance
 
 
 def test_indent_blocks_are_annotated_from_matching_layout_lines(monkeypatch):
@@ -72,7 +72,8 @@ def test_phase5j_static_provenance_and_later_wrapper_order():
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "layout_role_provenance_runtime.py").exists()
-    assert (package / "layout_role_provenance.py").exists()
+    assert not (package / "layout_role_provenance.py").exists()
+    assert (package / "layout" / "role_provenance.py").exists()
     assert "_indent_blocks_from_understanding = indent_blocks_with_entry_sources" in shared
     assert "add_entry_source_summary" in summary
     assert "install_layout_role_provenance" not in gui
