@@ -12,7 +12,7 @@ a compact colour strip beside the physical column edge.
 
 from typing import Any, Callable
 
-from .layout_indent_visibility import (
+from .layout.indent_visibility import (
     _draw_indent_blocks_visible as _draw_indent_blocks,
     add_prepared_indent_summary,
 )
