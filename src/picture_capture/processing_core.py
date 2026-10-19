@@ -31,7 +31,7 @@ from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_w
 from .processing_publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
 from .illustration_labels import previous_entry_ref_for_image
-from .crop_plan_formatting import (
+from .crop.plan_formatting import (
     _normalized_crop_name,
     canonical_polygon_link,
     entry_crop_piece_filename,
@@ -39,7 +39,7 @@ from .crop_plan_formatting import (
     polygon_display_name,
 )
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
-from .crop_logging import append_crop_log, append_illustration_crop_log
+from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .project_storage import crop_log_path, qt_root
+from ..project_storage import crop_log_path, qt_root
 
 if TYPE_CHECKING:
-    from .processing_core import CropRecord, IllustrationCropEvent
+    from ..processing_core import CropRecord, IllustrationCropEvent
 
 
 def append_crop_log(root: Path, records: list[CropRecord]) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 from .auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits, read_auxiliary_lines, write_auxiliary_lines
 from .processing import column_index_for_click
 from .page_sections import v_is_inside_sections
-from .overlay_layout_helpers import (
+from .ui.overlay_layout_helpers import (
     canonical_headword_marker_span, effective_overlay_column_width,
 )
 from .ui.overlay_delete_button import create_overlay_delete_button
