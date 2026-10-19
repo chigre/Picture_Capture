@@ -4,8 +4,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_cjk_large_heads import recover_cjk_oversized_heads
-from picture_capture.ordinary_postprocess import (
+from picture_capture.ordinary.cjk_large_heads import recover_cjk_oversized_heads
+from picture_capture.ordinary.postprocess import (
     _separator_near_next_line,
     stabilize_ordinary_visual_entries,
 )

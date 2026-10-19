@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_final_visual_consistency import (
+from picture_capture.ordinary.final_visual_consistency import (
     correct_anomalous_final_ordinary_entries,
     suppress_blank_layout_rows_before_proven_head,
     suppress_proven_bracket_body_continuations,

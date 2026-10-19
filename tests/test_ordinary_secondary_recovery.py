@@ -3,7 +3,7 @@ from __future__ import annotations
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_secondary_recovery import recover_proven_secondary_lane_variants
+from picture_capture.ordinary.secondary_recovery import recover_proven_secondary_lane_variants
 from picture_capture.processing import derive_nominal_geometry
 
 

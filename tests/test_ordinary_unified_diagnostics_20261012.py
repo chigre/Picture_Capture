@@ -8,10 +8,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from picture_capture.ordinary_unified_diagnostics import (
+from picture_capture.ordinary.unified_diagnostics import (
     SCHEMA, compose_ordinary_evidence_report,
 )
-from picture_capture.ordinary_unified_visualization import (
+from picture_capture.ordinary.unified_visualization import (
     draw_unified_candidate_overlay, format_candidate_detail,
 )
 import picture_capture.large_head_visualization_ui as large_ui
@@ -161,7 +161,7 @@ def test_layout_ui_counts_are_exactly_the_exported_unified_json(monkeypatch):
         large_ui, "get_large_head_debug_snapshot", lambda app: snapshot,
     )
     # Imported lazily, patch its own function object once too.
-    from picture_capture import ordinary_unified_visualization as vis
+    from picture_capture.ordinary import unified_visualization as vis
     canvas = _Canvas()
     app = SimpleNamespace(image=object(), canvas=canvas, view_scale=1)
     vis.draw_unified_candidate_overlay(app, layout_enabled=True)
