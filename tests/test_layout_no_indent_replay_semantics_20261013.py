@@ -138,8 +138,9 @@ def test_indented_profiles_still_retain_true_semantic_stages():
 
 
 def test_no_indent_skips_actual_no_op_consumers(monkeypatch):
-    from picture_capture import (
-        layout_column_indent_recovery, layout_role_visual_consistency,
+    from picture_capture.layout import (
+        column_indent_recovery as layout_column_indent_recovery,
+        role_visual_consistency as layout_role_visual_consistency,
     )
     def forbidden(*args, **kwargs):
         raise AssertionError("no-indent must not call body-indent-only consumers")
