@@ -117,7 +117,7 @@ def test_phase5k_static_visibility_ownership():
     package = root / "src" / "picture_capture"
     gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
     summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
-    lane = (package / "layout_lane_summary_extension.py").read_text(encoding="utf-8")
+    lane = (package / "layout" / "lane_summary_extension.py").read_text(encoding="utf-8")
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "layout_indent_visibility_runtime.py").exists()
