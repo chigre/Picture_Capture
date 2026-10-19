@@ -40,7 +40,7 @@ from .crop.plan_formatting import (
 )
 from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop.logging import append_crop_log, append_illustration_crop_log
-from .ordinary_vb_brightness import legacy_row_brightness_scores_1000
+from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 
 
@@ -2514,7 +2514,7 @@ def ocr_existing_entry_words_from_markers(
     from .entry_ocr_crop import resolve_entry_ocr_row_metrics
     from .ocr_channel import OcrChannelSession, OcrTextChoice, choose_ocr_text
     from .paddle_headwords import parse_headword_text
-    from .ordinary_marker_ocr_text import bracketed_ocr_lemma
+    from .ordinary.marker_ocr_text import bracketed_ocr_lemma
 
     row_metrics = resolve_entry_ocr_row_metrics(
         image,
@@ -2736,7 +2736,7 @@ def ocr_entries(
     # boundary as ordinary drawn-marker OCR. A concrete CJK Profile and the
     # user's bracket-structure toggle are both required.
     from .dictionary_profile import effective_project_profile_id, load_dictionary_profile
-    from .ordinary_marker_ocr_text import bracketed_ocr_lemma
+    from .ordinary.marker_ocr_text import bracketed_ocr_lemma
     profile = load_dictionary_profile(
         None,
         preset=effective_project_profile_id(effective, None),

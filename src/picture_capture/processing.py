@@ -24,9 +24,9 @@ from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
-from .ordinary_cjk_large_heads import recover_cjk_oversized_heads
+from .ordinary.cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary_indent_topology import finalize_indented_topology
-from .ordinary_postprocess import stabilize_ordinary_visual_entries
+from .ordinary.postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
 from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .page_understanding_fusion import apply_page_understanding
@@ -532,7 +532,7 @@ def _record_ordinary_debug_stage(
     })
     replay_trace = trace.get("_layout_replay_trace")
     if replay_trace is not None:
-        from .ordinary_unified_diagnostics import STAGE_DESCRIPTIONS
+        from .ordinary.unified_diagnostics import STAGE_DESCRIPTIONS
         replay_trace.add_entries(
             stages[-1], description=STAGE_DESCRIPTIONS.get(stage, stage),
         )
@@ -650,7 +650,7 @@ def detect_entries(
             # Large ideographs may generate several spurious Layout entry
             # rows inside one glyph; veto only image-confirmed duplicates.
             if uses_cjk_role_model(effective) and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity":
-                from .ordinary_oversized_head_guard import suppress_oversized_head_fragment_entries
+                from .ordinary.oversized_head_guard import suppress_oversized_head_fragment_entries
                 columns = understanding.layout.columns
                 entries = suppress_oversized_head_fragment_entries(
                     entries, analysis_image,
@@ -671,7 +671,7 @@ def detect_entries(
                 uses_cjk_role_model(effective)
                 and str(getattr(understanding.layout.transform, "kind", "identity")) == "identity"
             ):
-                from .ordinary_crossing_separator import adjust_page_coherent_crossing_separators
+                from .ordinary.crossing_separator import adjust_page_coherent_crossing_separators
                 entries, _visual_y_shift = adjust_page_coherent_crossing_separators(
                     entries, analysis_image,
                     float(understanding.layout.ordinary_line_height),
@@ -729,7 +729,7 @@ def detect_entries(
             # Keep proven lemma-indentation evidence from a second physical
             # analyzer when the primary normalization lost an entire column.
             if not uses_cjk_role_model(effective):
-                from .ordinary_independent_indent_rescue import recover_depleted_indent_columns
+                from .ordinary.independent_indent_rescue import recover_depleted_indent_columns
                 entries = recover_depleted_indent_columns(
                     analysis_image, effective, understanding, entries,
                     page_index=profile_page_index,
@@ -749,7 +749,7 @@ def detect_entries(
             # The final separator Y differs from the raw physical LayoutLine.y0.
             # Check an anomalous CJK page at its *actual* emitted coordinates;
             # the earlier indent-mode detector cannot independently veto itself.
-            from .ordinary_final_visual_consistency import correct_anomalous_final_ordinary_entries
+            from .ordinary.final_visual_consistency import correct_anomalous_final_ordinary_entries
             entries, last_mile = correct_anomalous_final_ordinary_entries(
                 analysis_image, effective, understanding.layout, entries,
             )
@@ -757,7 +757,7 @@ def detect_entries(
                 debug_trace, "anomalous_final_visual_consistency", entries,
                 stats=dict(last_mile),
             )
-            from .ordinary_final_visual_consistency import suppress_proven_bracket_body_continuations
+            from .ordinary.final_visual_consistency import suppress_proven_bracket_body_continuations
             entries, bracket_body_removed = suppress_proven_bracket_body_continuations(
                 analysis_image, effective, understanding.layout, entries,
             )
@@ -769,7 +769,7 @@ def detect_entries(
                 understanding.layout.reason += (
                     f"; bracket_body_continuations_removed={len(bracket_body_removed)}"
                 )
-            from .ordinary_final_visual_consistency import suppress_blank_layout_rows_before_proven_head
+            from .ordinary.final_visual_consistency import suppress_blank_layout_rows_before_proven_head
             entries, removed_blank = suppress_blank_layout_rows_before_proven_head(
                 analysis_image, effective, understanding.layout, entries,
             )

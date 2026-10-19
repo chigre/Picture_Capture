@@ -235,7 +235,7 @@ def build_large_head_diagnostics(
                 "source": str(getattr(entry, "ocr_source", "") or ""),
                 "oversized": bool(getattr(entry, "ocr_oversized_cjk", False)),
             } for entry in final_entries]
-            from .ordinary_unified_diagnostics import (
+            from .ordinary.unified_diagnostics import (
                 SCHEMA, compose_ordinary_evidence_report,
             )
             unified = compose_ordinary_evidence_report(

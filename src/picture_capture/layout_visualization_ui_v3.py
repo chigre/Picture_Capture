@@ -223,7 +223,7 @@ def add_layout_visualization_controls(app: Any, section: Any) -> None:
     app._layout_display_density_widget = density
     from .layout.details_window import add_layout_details_button
     add_layout_details_button(app, section)
-    from .ordinary_layout_inspector import add_unified_layout_inspector_controls
+    from .ordinary.layout_inspector import add_unified_layout_inspector_controls
     add_unified_layout_inspector_controls(app, section)
     from .large_head_visualization_ui import add_large_head_debug_controls
     add_large_head_debug_controls(app, section)
@@ -262,7 +262,7 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
             from .large_head_visualization_ui import draw_large_head_debug_overlay
             draw_large_head_debug_overlay(app)
         if layout_enabled:
-            from .ordinary_unified_visualization import draw_unified_candidate_overlay
+            from .ordinary.unified_visualization import draw_unified_candidate_overlay
             draw_unified_candidate_overlay(app, layout_enabled=True)
     finally:
         if hide is not None and previous is not None:
