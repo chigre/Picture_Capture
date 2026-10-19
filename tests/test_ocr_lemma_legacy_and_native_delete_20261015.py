@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_marker_ocr_text import bracketed_ocr_lemma
+from picture_capture.ordinary.marker_ocr_text import bracketed_ocr_lemma
 
 
 @pytest.mark.parametrize(("raw", "expected"), [

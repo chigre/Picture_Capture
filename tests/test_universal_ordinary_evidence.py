@@ -9,7 +9,7 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
 from picture_capture.ordinary_large_head_evidence import detect_ordinary_large_head_entries
-from picture_capture.ordinary_symbol_evidence import detect_ordinary_symbol_entries
+from picture_capture.ordinary.symbol_evidence import detect_ordinary_symbol_entries
 from picture_capture.visual_marker_templates import (
     build_visual_marker_sample,
     match_visual_marker_template,

@@ -11,10 +11,10 @@ from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
-from picture_capture.ordinary_crossing_separator import (
+from picture_capture.ordinary.crossing_separator import (
     adjust_page_coherent_crossing_separators,
 )
-from picture_capture.ordinary_independent_indent_rescue import (
+from picture_capture.ordinary.independent_indent_rescue import (
     recover_depleted_indent_columns,
 )
 
