@@ -501,7 +501,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
         ROOT / "src/picture_capture/ocr_action_guard.py"
     ).read_text(encoding="utf-8")
     ordinary_runtime = (
-        ROOT / "src/picture_capture/ordinary_quick_settings.py"
+        ROOT / "src/picture_capture/ordinary/quick_settings.py"
     ).read_text(encoding="utf-8")
 
     imports = app[: app.index("class PictureCaptureApp")]

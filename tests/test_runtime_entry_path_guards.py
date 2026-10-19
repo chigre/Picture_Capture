@@ -14,7 +14,7 @@ from picture_capture.ocr_action_guard import (
     _ineffective_lens_only_selection,
     guard_ocr_action_selection,
 )
-from picture_capture.ordinary_quick_settings import _apply_quick_settings_for_ordinary
+from picture_capture.ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from picture_capture.ui.settings import schema as settings_schema
 from picture_capture.ui_terminology import normalize_ui_text
 
@@ -188,7 +188,7 @@ def test_gui_composition_no_longer_installs_ordinary_action_runtime():
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
-        / "ordinary_quick_settings.py"
+        / "ordinary" / "quick_settings.py"
     ).read_text(encoding="utf-8")
     assert "def install_ordinary_action_runtime" not in ordinary_helper_source
     assert "def _apply_quick_settings_for_ordinary" in ordinary_helper_source

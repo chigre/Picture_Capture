@@ -306,7 +306,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     row = line()
 
     def open_layout_inspector() -> None:
-        from picture_capture.ordinary_layout_inspector import show_unified_layout_inspector
+        from picture_capture.ordinary.layout_inspector import show_unified_layout_inspector
         show_unified_layout_inspector(app)
 
     ttk.Button(
