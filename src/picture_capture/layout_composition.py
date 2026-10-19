@@ -18,7 +18,7 @@ from .layout_physical_indent import (
 )
 from .layout_profile_anchor import anchor_resolved_layout_to_profile
 from .profile_indent_ui import indent_type_label
-from .layout_step_trace import LayoutStepTrace
+from .layout.step_trace import LayoutStepTrace
 
 
 def infer_composed_physical_page_layout(

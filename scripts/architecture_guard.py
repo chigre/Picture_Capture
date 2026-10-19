@@ -253,6 +253,23 @@ def collect_violations() -> list[str]:
     for former, canonical in (
         ("layout_role_provenance.py", "layout/role_provenance.py"),
         ("layout_lane_summary_extension.py", "layout/lane_summary_extension.py"),
+        ("layout_character_height.py", "layout/character_height.py"),
+        ("layout_parameter_evidence.py", "layout/parameter_evidence.py"),
+        ("layout_scale_experiment.py", "layout/scale_experiment.py"),
+        ("layout_step_trace.py", "layout/step_trace.py"),
+        ("layout_textbox_leading.py", "layout/textbox_leading.py"),
+        ("layout_column_drift.py", "layout/column_drift.py"),
+        ("layout_column_indent_recovery.py", "layout/column_indent_recovery.py"),
+        ("layout_line_start_refinement.py", "layout/line_start_refinement.py"),
+        ("layout_local_indent_visualization.py", "layout/local_indent_visualization.py"),
+        ("layout_oversized_ink_continuation.py", "layout/oversized_ink_continuation.py"),
+        ("layout_illustration_mask.py", "layout/illustration_mask.py"),
+        ("layout_mask_source_guard.py", "layout/mask_source_guard.py"),
+        ("layout_reliability.py", "layout/reliability.py"),
+        ("layout_role_visual_consistency.py", "layout/role_visual_consistency.py"),
+        ("layout_verified_oversized_heads.py", "layout/verified_oversized_heads.py"),
+        ("layout_visualization_readability.py", "layout/visualization_readability.py"),
+        ("layout_details_window.py", "layout/details_window.py"),
     ):
         if (PACKAGE_ROOT / former).exists():
             violations.append(f"migrated Layout module returned at root: {former}")

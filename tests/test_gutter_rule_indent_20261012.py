@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from picture_capture import dictionary_page_design as base
-from picture_capture.layout_column_drift import (
+from picture_capture.layout.column_drift import (
     _gutter_divider_right_edge, remeasure_layout_indents_from_ink,
 )
 from picture_capture.layout_physical_indent import (

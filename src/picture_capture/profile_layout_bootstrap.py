@@ -68,7 +68,7 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
             )
             # The 0.8%-of-page-height seed is NOT a text measurement. Measure
             # physical ink at source resolution while canonical is still open.
-            from .layout_character_height import observed_character_height
+            from .layout.character_height import observed_character_height
             observed, stats = observed_character_height(
                 canonical, current, estimate, layout_detection,
             )

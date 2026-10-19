@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_character_height import apply_character_height_fallback
+from picture_capture.layout.character_height import apply_character_height_fallback
 from picture_capture.layout_detection_legacy import (
     LayoutEstimate,
     VerticalRuleEstimate,

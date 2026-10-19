@@ -45,7 +45,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         (field, bool(getattr(settings, switch, True)))
         for field, switch in ORDINARY_AUTO_LAYOUT_FIELDS
     )
-    from .layout_mask_source_guard import saved_illustration_stamp
+    from .layout.mask_source_guard import saved_illustration_stamp
     return (
         id(getattr(app, "image", None)),
         int(getattr(app, "current_index", -1)),

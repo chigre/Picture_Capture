@@ -295,7 +295,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     # Long Layout parameters are in a copyable dialog, never on the scan.
     row = line()
-    from picture_capture.layout_details_window import show_layout_details_window
+    from picture_capture.layout.details_window import show_layout_details_window
     ttk.Button(
         row, text="Layout详细诊断（复制）",
         command=lambda: show_layout_details_window(app),

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture.layout_parameter_evidence import (
+from picture_capture.layout.parameter_evidence import (
     row_padding_is_measured,
     verified_multi_page_row_padding,
 )

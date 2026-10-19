@@ -13,7 +13,7 @@ from picture_capture.dictionary_page_design import _leading_width
 from picture_capture.layout_core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )
-from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import _format_stage
 from picture_capture.models import AppSettings
 from picture_capture.ui.settings import schema

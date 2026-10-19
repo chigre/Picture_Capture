@@ -317,7 +317,7 @@ def physical_line_feature(
 def explicit_physical_layout_ops():
     """Construct ordered robust -> physical primitives without global rebinding."""
     from . import dictionary_page_design as page_design
-    from .layout_line_start_refinement import compose_robust_line_feature
+    from .layout.line_start_refinement import compose_robust_line_feature
 
     return page_design.LayoutPrimitiveOps(
         line_runs=projection_line_runs,

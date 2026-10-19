@@ -14,10 +14,10 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from . import dictionary_page_design as base
-from .entry_classification import register_layout_line_classification
-from .models import Entry
-from .page_understanding import uses_cjk_role_model
+from .. import dictionary_page_design as base
+from ..entry_classification import register_layout_line_classification
+from ..models import Entry
+from ..page_understanding import uses_cjk_role_model
 
 
 def _weak_columns(layout: Any, *, cjk: bool = False) -> list[int]:
@@ -87,7 +87,7 @@ def _independently_proven_columns(
     weak: list[int], page_index: int,
 ) -> dict[int, tuple[list[int], float, float]]:
     """Demand two genuine row families with adequate independent support."""
-    from . import dictionary_page_design_refined as refined
+    from .. import dictionary_page_design_refined as refined
 
     try:
         independent = refined.detect_entries_from_page_design(
@@ -151,7 +151,7 @@ def restore_proven_column_indents(
     )
     bracket_by_column: dict[int, list[int]] = {}
     if cjk and bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
-        from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
+        from ..ordinary_bracket_pair import recover_bracketed_ordinary_entries
         transform = layout.transform
         rotated = str(getattr(transform, "kind", "identity")) != "identity"
         canonical = transform.canonical_image_for_analysis(image) if rotated else image

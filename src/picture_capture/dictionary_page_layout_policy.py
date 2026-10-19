@@ -29,9 +29,9 @@ from PIL import Image, ImageOps
 from . import dictionary_page_design as base
 from . import dictionary_page_design_refined as refined
 from .layout_detection import analysis_ink_mask, LayoutEstimate
-from .layout_column_drift import finalize_layout_column_drift
+from .layout.column_drift import finalize_layout_column_drift
 from .models import AppSettings
-from .layout_parameter_evidence import row_padding_is_measured
+from .layout.parameter_evidence import row_padding_is_measured
 from .page_x_registration import register_page_manual_x
 
 

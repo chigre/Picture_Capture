@@ -29,7 +29,7 @@ def test_explicit_physical_ops_match_installed_feature(monkeypatch):
     # The installed product chain supplies the robust wrapper as its inner op.
     # A temporary local binding enables direct legacy comparison without
     # changing installer order or production module state after this test.
-    from picture_capture.layout_line_start_refinement import compose_robust_line_feature
+    from picture_capture.layout.line_start_refinement import compose_robust_line_feature
     robust = compose_robust_line_feature(base.RAW_LAYOUT_OPS.line_feature)
     monkeypatch.setattr(physical, "_BASE_LINE_FEATURE", robust)
     assert _snapshot(ops.line_feature(0, ink, 8, 20, 14., 0)) == _snapshot(

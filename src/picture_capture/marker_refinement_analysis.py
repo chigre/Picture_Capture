@@ -63,7 +63,7 @@ def whiten_illustrations_for_refinement(
     if not bool(getattr(settings, "layout_mask_illustrations", False)):
         return image
 
-    from .layout_illustration_mask import mask_large_illustrations_for_layout
+    from .layout.illustration_mask import mask_large_illustrations_for_layout
 
     reuse = bool(getattr(settings, "layout_mask_illustrations_use_existing", False))
     if reuse and source_image_path is None:

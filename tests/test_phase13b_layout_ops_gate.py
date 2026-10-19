@@ -16,7 +16,7 @@ MIGRATED = (
     "dictionary_page_layout_policy.py",
     "dictionary_page_design_refined.py",
     "page_x_registration.py",
-    "layout_column_drift.py",
+    "layout/column_drift.py",
 )
 MUTABLE_HOOKS = frozenset((
     "_line_runs", "_line_feature", "_indent_modes", "_assign_indent_semantics",
@@ -29,7 +29,7 @@ FUNCTIONS_WITH_OPS = {
     ),
     "dictionary_page_design_refined.py": ("_guard_band_entries",),
     "page_x_registration.py": ("_line_family_candidate", "register_page_manual_x"),
-    "layout_column_drift.py": (
+    "layout/column_drift.py": (
         "remeasure_layout_indents_from_ink", "finalize_layout_column_drift",
     ),
 }

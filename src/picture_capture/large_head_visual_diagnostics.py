@@ -187,7 +187,7 @@ def build_large_head_diagnostics(
             # the normal shared Layout cache.
             candidate_image = analysis
             if bool(getattr(effective, "layout_mask_illustrations", False)):
-                from .layout_illustration_mask import mask_large_illustrations_for_layout
+                from .layout.illustration_mask import mask_large_illustrations_for_layout
                 candidate_image, _stats = mask_large_illustrations_for_layout(
                     analysis, effective, profile_page_index=int(page_index),
                     **({"source_image_path": saved_ppp_source}

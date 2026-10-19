@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 from picture_capture.layout_core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )
-from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import _format_stage
 from picture_capture.models import AppSettings
 from picture_capture.profile_indent_ui import apply_indent_type_label, indent_type_label

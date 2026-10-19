@@ -116,7 +116,7 @@ def export_batch_report(records: list[dict], *, label: str,
         totals = summarize(records)
         configuration = {}
         if settings is not None:
-            from ..layout_scale_experiment import FLAG
+            from ..layout.scale_experiment import FLAG
             from ..adaptive_denoise import resolve_denoise_strength
             properties = (
                 "draw_performance_profile", "reuse_prepared_analysis",

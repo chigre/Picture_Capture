@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_verified_oversized_heads import (
+from picture_capture.layout.verified_oversized_heads import (
     recover_verified_oversized_heads,
 )
 

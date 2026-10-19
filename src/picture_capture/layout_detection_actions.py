@@ -53,7 +53,7 @@ def detect_layout_current(self) -> None:
             columns_policy=self.settings.layout_columns_policy,
             fixed_columns=self.settings.columns,
         )
-        from .layout_parameter_evidence import verified_multi_page_row_padding
+        from .layout.parameter_evidence import verified_multi_page_row_padding
         measured_padding, padding_pages = verified_multi_page_row_padding(list(results))
         if measured_padding is None:
             values.pop("row_padding", None)

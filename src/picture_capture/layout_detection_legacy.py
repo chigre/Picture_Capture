@@ -555,7 +555,7 @@ def infer_layout_from_boxes(
     start_y_source = body_top
     bottom_y_source = body_bottom
     character_height_source = max(1, round(float(np.median([box[3] - box[1] for box in filtered]))))
-    from .layout_textbox_leading import estimate_row_padding_from_boxes
+    from .layout.textbox_leading import estimate_row_padding_from_boxes
     measured_padding, pitch_pairs = estimate_row_padding_from_boxes(
         groups, character_height_source,
     )

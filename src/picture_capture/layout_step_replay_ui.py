@@ -16,7 +16,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageTk
 
-from .layout_step_trace import LayoutStepTrace
+from .layout.step_trace import LayoutStepTrace
 
 
 _ROLE_COLORS = {
@@ -28,7 +28,7 @@ _ROLE_COLORS = {
 _STEP_TAG = "layout-replay-overlay"
 
 
-from .layout_mask_source_guard import saved_illustration_stamp as _saved_illustration_stamp
+from .layout.mask_source_guard import saved_illustration_stamp as _saved_illustration_stamp
 
 
 def _app_key(app: Any) -> tuple[Any, ...]:
@@ -479,7 +479,7 @@ class LayoutStepReplayWindow:
         modules = [
             ("回放窗口", __file__),
             ("阶段采集器", __import__(
-                "picture_capture.layout_step_trace",
+                "picture_capture.layout.step_trace",
                 fromlist=["__file__"],
             ).__file__),
             ("Layout 组装", layout_composition.__file__),

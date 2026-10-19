@@ -83,7 +83,7 @@ def ordinary_page_layout_settings(
         detector_settings.layout_columns_policy = "detect"
     estimate = detect_layout_parameters(image, detector_settings)
 
-    from .layout_parameter_evidence import row_padding_is_measured
+    from .layout.parameter_evidence import row_padding_is_measured
 
     applied: dict[str, int] = {}
     for field_name, switch_name in ORDINARY_AUTO_LAYOUT_FIELDS:

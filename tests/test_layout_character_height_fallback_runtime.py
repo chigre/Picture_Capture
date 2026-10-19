@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_character_height import (
+from picture_capture.layout.character_height import (
     apply_character_height_fallback,
     observed_character_height,
 )
@@ -134,7 +134,9 @@ def test_static_fallback_leaves_non_fallback_estimate_by_identity() -> None:
 
 
 def test_layout_detection_caches_raw_estimate_and_reapplies_fallback(monkeypatch) -> None:
-    from picture_capture import layout_character_height, layout_detection, layout_reliability
+    from picture_capture import layout_detection
+    from picture_capture.layout import character_height as layout_character_height
+    from picture_capture.layout import reliability as layout_reliability
     from picture_capture.models import AppSettings
 
     image = Image.new("RGB", (80, 120), "white")
