@@ -17,7 +17,7 @@ import threading
 from ... import unlined_line_export as unlined_export
 from ...crop.export_output import normalize_project_crop_widths
 from ...formats import pdic_path, read_pdic, read_ppp, write_ppp
-from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
+from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...processing import (
     append_crop_log,
     split_single_lines,

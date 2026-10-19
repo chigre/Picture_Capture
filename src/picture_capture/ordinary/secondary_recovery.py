@@ -19,9 +19,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .models import AppSettings, Entry
-from .ordinary_visual import (
+from ..image_utils import normalize_page_rgb
+from ..models import AppSettings, Entry
+from ..ordinary_visual import (
     _body_lane,
     _column_band_gray,
     _duplicate,
@@ -31,7 +31,7 @@ from .ordinary_visual import (
     _otsu,
     _source_edge,
 )
-from .ordinary_postprocess import _separator_near_next_line
+from .postprocess import _separator_near_next_line
 
 
 def _character_height(settings: AppSettings) -> int:

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import picture_capture.layout_visualization_ui as base
 import picture_capture.layout_visualization_summary as summary
 import picture_capture.layout_visualization_ui_v3 as controls
-from picture_capture.ordinary_unified_visualization import (
+from picture_capture.ordinary.unified_visualization import (
     draw_unified_candidate_overlay,
 )
 
@@ -142,7 +142,7 @@ def test_normal_layout_toggle_uses_compact_and_candidate_view(monkeypatch):
         controls, "draw_layout_visualization_detailed",
         lambda app: actions.append("old_full"),
     )
-    import picture_capture.ordinary_unified_visualization as vis
+    import picture_capture.ordinary.unified_visualization as vis
     monkeypatch.setattr(
         vis, "draw_unified_candidate_overlay",
         lambda app, *, layout_enabled: actions.append("candidate_overlay"),

@@ -541,6 +541,32 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner_path).is_file():
             violations.append(f"canonical owner missing: {owner_path}")
 
+
+    # Issue #562: ordinary drawing internals have canonical physical owners.
+    # GPU process ownership, public processing facades and PDIC publishers stay put.
+    migrated_ordinary = {
+            "ordinary_cjk_large_heads": "ordinary/cjk_large_heads.py",
+            "ordinary_crossing_separator": "ordinary/crossing_separator.py",
+            "ordinary_final_visual_consistency": "ordinary/final_visual_consistency.py",
+            "ordinary_independent_indent_rescue": "ordinary/independent_indent_rescue.py",
+            "ordinary_lane_polarity": "ordinary/lane_polarity.py",
+            "ordinary_layout_inspector": "ordinary/layout_inspector.py",
+            "ordinary_marker_ocr_text": "ordinary/marker_ocr_text.py",
+            "ordinary_oversized_head_guard": "ordinary/oversized_head_guard.py",
+            "ordinary_postprocess": "ordinary/postprocess.py",
+            "ordinary_secondary_recovery": "ordinary/secondary_recovery.py",
+            "ordinary_symbol_evidence": "ordinary/symbol_evidence.py",
+            "ordinary_unified_diagnostics": "ordinary/unified_diagnostics.py",
+            "ordinary_unified_visualization": "ordinary/unified_visualization.py",
+            "ordinary_vb_brightness": "ordinary/vb_brightness.py",
+            "ordinary_quick_settings": "ordinary/quick_settings.py"
+    }
+    for old_name, owner_path in migrated_ordinary.items():
+        if (PACKAGE_ROOT / (old_name + ".py")).exists():
+            violations.append(f"retired ordinary root owner returned: {old_name}.py")
+        if not (PACKAGE_ROOT / owner_path).is_file():
+            violations.append(f"canonical ordinary owner missing: {owner_path}")
+
     return violations
 
 

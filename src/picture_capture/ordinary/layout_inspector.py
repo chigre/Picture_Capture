@@ -37,7 +37,7 @@ def _row_values(row: dict[str, Any]) -> tuple[str, ...]:
     physical = row.get("physical_row") or {}
     issues = row.get("issues") or []
     evidence = row.get("evidence") or []
-    from .ordinary_unified_visualization import _ISSUES
+    from .unified_visualization import _ISSUES
     return (
         str(row.get("id", "")),
         str(int(row.get("column", -1)) + 1),
@@ -100,10 +100,10 @@ def show_unified_layout_inspector(
     import tkinter as tk
     from tkinter import ttk, messagebox
 
-    from .large_head_visualization_ui import (
+    from ..large_head_visualization_ui import (
         export_large_head_debug_json, get_large_head_debug_snapshot,
     )
-    from .ordinary_unified_visualization import format_candidate_detail
+    from .unified_visualization import format_candidate_detail
 
     try:
         snapshot = get_large_head_debug_snapshot(app)
@@ -256,7 +256,7 @@ def show_unified_layout_inspector(
 def add_unified_layout_inspector_controls(app: Any, section: Any) -> None:
     """Add an explicit inspector button to the legacy non-compact panel."""
     from tkinter import ttk
-    from .layout_visualization_ui_v3 import _next_grid_row
+    from ..layout_visualization_ui_v3 import _next_grid_row
 
     if getattr(app, "_ordinary_layout_inspector_button", None) is not None:
         return

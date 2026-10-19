@@ -20,9 +20,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .models import AppSettings, Entry
-from .ordinary_visual import (
+from ..image_utils import normalize_page_rgb
+from ..models import AppSettings, Entry
+from ..ordinary_visual import (
     _body_lane,
     _cluster_lines,
     _column_band_gray,

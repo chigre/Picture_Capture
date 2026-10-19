@@ -18,7 +18,7 @@ from picture_capture import large_head_visualization_ui as ui
 
 
 def _stub_heavy_layout(monkeypatch, probe):
-    import picture_capture.ordinary_unified_diagnostics as unified
+    import picture_capture.ordinary.unified_diagnostics as unified
 
     def fake_layout(candidate, _settings, **kwargs):
         probe.append(candidate.getpixel((120, 110)))

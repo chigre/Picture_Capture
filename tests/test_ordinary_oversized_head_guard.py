@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.ordinary_oversized_head_guard import suppress_oversized_head_fragment_entries
+from picture_capture.ordinary.oversized_head_guard import suppress_oversized_head_fragment_entries
 
 
 SAMPLE_CANDIDATES = (

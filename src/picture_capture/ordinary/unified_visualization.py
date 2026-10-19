@@ -110,7 +110,7 @@ def draw_unified_candidate_overlay(
         return
     if not layout_enabled or getattr(app, "image", None) is None:
         return
-    from .large_head_visualization_ui import get_large_head_debug_snapshot
+    from ..large_head_visualization_ui import get_large_head_debug_snapshot
 
     try:
         snapshot = get_large_head_debug_snapshot(app)
@@ -174,7 +174,7 @@ def draw_unified_candidate_overlay(
             )
 
         def show(_event: Any, record: dict[str, Any] = row) -> str:
-            from .ordinary_layout_inspector import show_unified_layout_inspector
+            from .layout_inspector import show_unified_layout_inspector
             show_unified_layout_inspector(
                 app, candidate_id=str(record["id"]),
             )

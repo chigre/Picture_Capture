@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 import picture_capture.processing as processing
 import picture_capture.processing_core as processing_core
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_lane_polarity import suppress_inverted_legacy_body_lane
+from picture_capture.ordinary.lane_polarity import suppress_inverted_legacy_body_lane
 from picture_capture.processing import derive_nominal_geometry
 
 

@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.ordinary_layout_inspector import (
+from picture_capture.ordinary.layout_inspector import (
     _FILTERS, _filtered_registry, _row_values, focus_layout_candidate,
 )
-from picture_capture.ordinary_unified_visualization import (
+from picture_capture.ordinary.unified_visualization import (
     draw_unified_candidate_overlay,
 )
 
@@ -136,7 +136,7 @@ def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch
 
 def test_markers_open_same_candidate_id_in_inspector(monkeypatch):
     import picture_capture.large_head_visualization_ui as ui
-    import picture_capture.ordinary_layout_inspector as inspector
+    import picture_capture.ordinary.layout_inspector as inspector
 
     row = _row("C01-R020", 840, conflict=True)
     monkeypatch.setattr(
@@ -212,7 +212,7 @@ def test_real_inspector_window_renders_table_when_tk_is_available(monkeypatch):
     root.withdraw()
     try:
         import picture_capture.large_head_visualization_ui as ui
-        from picture_capture.ordinary_layout_inspector import (
+        from picture_capture.ordinary.layout_inspector import (
             show_unified_layout_inspector,
         )
 
