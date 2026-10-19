@@ -20,9 +20,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .models import AppSettings, Entry
-from .ordinary_visual import _components, _otsu
-from .visual_marker_templates import (
+from ..models import AppSettings, Entry
+from ..ordinary_visual import _components, _otsu
+from ..visual_marker_templates import (
     match_visual_marker_template,
     visual_marker_samples_from_settings,
 )

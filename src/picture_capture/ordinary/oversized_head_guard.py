@@ -12,7 +12,7 @@ import numpy as np
 
 
 def _tall_head_components(image: Image.Image, left: int, right: int, pitch: float):
-    from .illustration_detection import _rle_components
+    from ..illustration_detection import _rle_components
 
     x0 = max(0, int(left + max(8, round(pitch))))
     x1 = min(image.width, int(min(right, left + max(130, round(7.7 * pitch)))))
