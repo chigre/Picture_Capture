@@ -35,8 +35,16 @@ def test_no_stale_production_imports_of_removed_crop_overlay_modules():
                         violations.append((str(path), node.lineno, alias.name))
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                parts = module.split(".")
-                if parts[-1] in forbidden:
+                if node.level:
+                    # Resolve relative imports from the current package. A
+                    # canonical sibling such as ui.overlay_line_anchor is valid.
+                    parent_parts = path.parent.relative_to(ROOT).parts
+                    keep = len(parent_parts) + 1 - node.level
+                    resolved = (*parent_parts[:max(0, keep)], *module.split("."))
+                else:
+                    parts = module.split(".")
+                    resolved = tuple(parts[1:] if parts[0] == "picture_capture" else parts)
+                if resolved and resolved[0] in forbidden:
                     violations.append((str(path), node.lineno, module))
                 if not module or module == "picture_capture":
                     for alias in node.names:
