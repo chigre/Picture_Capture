@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import picture_capture.processing as processing
-from picture_capture import crop_logging
+from picture_capture.crop import logging as crop_logging
 from picture_capture.project_storage import crop_log_path, qt_root
 
 

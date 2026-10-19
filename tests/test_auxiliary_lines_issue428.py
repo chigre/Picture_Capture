@@ -351,7 +351,7 @@ def test_auxiliary_stop_excludes_same_headword_continuation_in_next_column():
 
 
 def test_auxiliary_preview_gaps_have_no_output_filenames_or_pdic_entries():
-    from picture_capture.crop_plan_formatting import page_crop_plan_dict
+    from picture_capture.crop.plan_formatting import page_crop_plan_dict
     from picture_capture.processing_core import PageCropPlan
 
     pieces = [

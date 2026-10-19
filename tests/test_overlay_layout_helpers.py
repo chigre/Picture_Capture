@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture import app, overlay_layout_helpers as overlay
+from picture_capture import app
+from picture_capture.ui import overlay_layout_helpers as overlay
 
 
 def test_phase7f_app_reexports_overlay_layout_helpers() -> None:

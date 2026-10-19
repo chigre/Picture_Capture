@@ -277,7 +277,7 @@ def test_ref_body_font_uses_same_main_entry_zoom_contract(
     tmp_path, monkeypatch, follow_zoom, zoom, expected,
 ):
     import picture_capture.ui_compat as fonts
-    from picture_capture.overlay_layout_helpers import effective_main_overlay_font_size
+    from picture_capture.ui.overlay_layout_helpers import effective_main_overlay_font_size
 
     app, ctl = editor_with_box(tmp_path)
     app.image = Image.new("RGB", (1400, 1800), "white")
