@@ -181,7 +181,7 @@ def test_character_height_fallback_has_static_ownership_without_installer() -> N
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
-    unlined = (root / "src/picture_capture/unlined_physical_rows_resolver.py").read_text(encoding="utf-8")
+    unlined = (root / "src/picture_capture/unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
 
     assert "install_character_height_fallback_runtime" not in package_init
     assert "install_character_height_fallback_runtime" not in core

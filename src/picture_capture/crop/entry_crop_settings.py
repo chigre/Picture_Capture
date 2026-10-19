@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Canonical entry-crop names backed statically by AppSettings legacy slots."""
 
-from .app_settings_migrations import (
+from ..app_settings_migrations import (
     ENTRY_CROP_LEGACY_TO_CANONICAL,
     TRANSIENT_ENTRY_OCR_RIGHT_RATIO,
 )

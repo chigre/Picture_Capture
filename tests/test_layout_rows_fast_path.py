@@ -168,7 +168,7 @@ def test_fast_recovery_source_cannot_call_full_layout_or_semantic_evidence():
 
 def test_unlined_export_worker_is_static_physical_fast_path_and_pickleable():
     from picture_capture import unlined_line_export as exporter
-    from picture_capture.unlined_physical_rows_resolver import (
+    from picture_capture.unlined.physical_rows_resolver import (
         resolve_unlined_physical_rows,
     )
 

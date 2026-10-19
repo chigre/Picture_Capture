@@ -4,7 +4,7 @@ import inspect
 
 from PIL import Image, ImageDraw
 
-from picture_capture.generic_block_roles import (
+from picture_capture.layout.generic_block_roles import (
     block_after_separator,
     generic_entry_candidates,
 )

@@ -8,7 +8,7 @@ import json
 
 from PIL import Image
 
-from ..generic_block_roles import generic_entry_candidates
+from ..layout.generic_block_roles import generic_entry_candidates
 from ..image_utils import normalize_page_rgb
 from ..layout.illustration_mask import mask_large_illustrations_for_layout
 from ..page_sections import read_page_sections

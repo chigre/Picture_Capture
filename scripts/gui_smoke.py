@@ -106,7 +106,7 @@ def main() -> int:
         from tempfile import TemporaryDirectory
         from types import SimpleNamespace
         from PIL import Image
-        from picture_capture.page_thumbnail_cache import (
+        from picture_capture.thumbnail.cache import (
             thumbnail_cache_path, thumbnail_cache_dir,
             FINGERPRINT_KEY, SOURCE_FILENAME_KEY, source_fingerprint,
         )

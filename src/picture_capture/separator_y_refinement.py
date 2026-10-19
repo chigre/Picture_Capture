@@ -58,7 +58,7 @@ def refine_separator_y(
     # The same automatic-Y checkbox owns both the local valley refinement
     # and its ink-safety verification. The old independent gap flag is retained
     # only for loading historical project settings, never consulted here.
-    from .ink_safe_separator import refine_to_verified_white_gap
+    from .refinement.ink_safe_separator import refine_to_verified_white_gap
     refined_y, gap_details = refine_to_verified_white_gap(
         gray, int(refined_y), int(coarse_y),
         max(2, int(round(float(line_height or 0)))),

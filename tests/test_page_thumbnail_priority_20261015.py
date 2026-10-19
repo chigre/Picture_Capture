@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from PIL import Image
 
-from picture_capture.page_thumbnail_tasks import ThumbnailResult
+from picture_capture.thumbnail.tasks import ThumbnailResult
 from picture_capture.ui import page_thumbnails as ui
 
 
@@ -184,7 +184,7 @@ def test_failed_scan_is_quarantined_until_identity_changes(tmp_path):
 def test_worker_completion_exposes_no_tk_callback():
     import threading
     import time
-    from picture_capture import page_thumbnail_tasks as jobs
+    from picture_capture.thumbnail import tasks as jobs
 
     # Stub only file generation; prove worker code runs on another thread and
     # the result is delivered by polling, not a Tk call from worker thread.

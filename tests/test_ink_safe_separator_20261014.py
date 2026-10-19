@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.ink_safe_separator import refine_to_verified_white_gap
+from picture_capture.refinement.ink_safe_separator import refine_to_verified_white_gap
 from picture_capture.models import AppSettings
 from picture_capture.ui.settings import schema
 

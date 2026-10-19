@@ -80,7 +80,7 @@ def test_composed_policy_matches_legacy_wrapped_policy(monkeypatch):
 
 def test_unlined_composed_boundary_retains_physical_only_scope():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    source = (root / "unlined_physical_rows_resolver.py").read_text(encoding="utf-8")
+    source = (root / "unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
     assert "infer_composed_physical_page_layout" in source
     assert "install_physical_indent_inference()" not in source
     assert "install_robust_line_starts()" not in source

@@ -42,7 +42,7 @@ def test_normal_processing_does_not_invoke_compatibility_shim():
 def test_gui_unlined_and_remaining_full_consumers_use_explicit_composition():
     files = {
         "bootstrap/gui.py": ("core_services = build_core_services()",),
-        "unlined_physical_rows_resolver.py": ("infer_composed_physical_page_layout(",),
+        "unlined/physical_rows_resolver.py": ("infer_composed_physical_page_layout(",),
         "layout_core_understanding.py": ("infer_composed_physical_page_layout as infer_dictionary_page_layout",),
         "processing.py": ("understanding = understand_composed_page(",),
         "training/export_page_understanding.py": ("understanding = understand_composed_page(",),

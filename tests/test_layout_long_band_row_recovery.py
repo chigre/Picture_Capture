@@ -37,7 +37,7 @@ def test_entry_paths_no_longer_install_row_recovery_runtime():
     paths = (
         "src/picture_capture/bootstrap/gui.py",
         "src/picture_capture/bootstrap/worker.py",
-        "src/picture_capture/unlined_physical_rows_resolver.py",
+        "src/picture_capture/unlined/physical_rows_resolver.py",
         "src/picture_capture/layout_rows_cache.py",
     )
     for relative in paths:

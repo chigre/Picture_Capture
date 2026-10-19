@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture import layout_composition
-from picture_capture import unlined_physical_rows_resolver as resolver
+from picture_capture.unlined import physical_rows_resolver as resolver
 from picture_capture.models import AppSettings
 
 

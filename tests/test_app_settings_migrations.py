@@ -8,8 +8,8 @@ import sys
 import picture_capture.app_settings_migrations as migrations
 import picture_capture.models as models
 from picture_capture.models import AppSettings
-from picture_capture.entry_crop_settings import install_entry_crop_settings
-from picture_capture.separator_y_settings import install_separator_y_settings
+from picture_capture.crop.entry_crop_settings import install_entry_crop_settings
+from picture_capture.refinement.separator_y_settings import install_separator_y_settings
 
 
 ROOT = Path(__file__).resolve().parents[1]

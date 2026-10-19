@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .app_settings_migrations import SEPARATOR_Y_LEGACY_TO_CANONICAL
-from .models import AppSettings
+from ..app_settings_migrations import SEPARATOR_Y_LEGACY_TO_CANONICAL
+from ..models import AppSettings
 
 
 LEGACY_TO_CANONICAL: dict[str, str] = dict(SEPARATOR_Y_LEGACY_TO_CANONICAL)

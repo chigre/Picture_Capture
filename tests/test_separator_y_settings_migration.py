@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from picture_capture.models import AppSettings
-from picture_capture.separator_y_settings import (
+from picture_capture.refinement.separator_y_settings import (
     CANONICAL_TO_LEGACY,
     canonical_separator_y_values,
 )
