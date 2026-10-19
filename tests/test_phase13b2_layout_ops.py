@@ -7,7 +7,7 @@ from PIL import Image
 
 from picture_capture import dictionary_page_design as base
 from picture_capture import page_x_registration as registration
-from picture_capture import layout_column_drift as drift
+from picture_capture.layout import column_drift as drift
 
 
 def test_page_x_line_family_honors_explicit_ops(monkeypatch):

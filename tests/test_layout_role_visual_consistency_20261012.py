@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_role_visual_consistency import (
+from picture_capture.layout.role_visual_consistency import (
     suppress_contradictory_cjk_body_lane_entries,
 )
 from picture_capture.models import AppSettings

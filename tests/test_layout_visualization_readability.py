@@ -1,4 +1,4 @@
-from picture_capture.layout_visualization_readability import _background_for_text
+from picture_capture.layout.visualization_readability import _background_for_text
 
 
 def test_layout_label_backgrounds_follow_text_category() -> None:

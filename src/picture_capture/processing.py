@@ -53,7 +53,7 @@ def _ensure_layout_runtime() -> None:
     Page Design detector now forwards to the refined implementation statically;
     only the two lower-level idempotent installers remain here.
     """
-    from .layout_line_start_refinement import install_robust_line_starts
+    from .layout.line_start_refinement import install_robust_line_starts
     from .layout_physical_indent import install_physical_indent_inference
 
     install_robust_line_starts()
@@ -81,7 +81,7 @@ def _understand_page_current(
     masking_enabled = bool(getattr(settings, "layout_mask_illustrations", False))
     mask_error = None
     if masking_enabled:
-        from .layout_illustration_mask import (
+        from .layout.illustration_mask import (
             IllustrationMaskStats,
             append_mask_reason,
             mask_large_illustrations_for_layout,

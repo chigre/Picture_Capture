@@ -11,7 +11,9 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from picture_capture import layout_illustration_mask, processing_core, unlined_line_export
+from picture_capture import processing_core, unlined_line_export
+
+from picture_capture.layout import illustration_mask as layout_illustration_mask
 from picture_capture.models import AppSettings
 
 

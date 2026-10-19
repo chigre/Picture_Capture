@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture import layout_line_start_refinement as robust
+from picture_capture.layout import line_start_refinement as robust
 
 
 def test_explicit_robust_composition_uses_supplied_inner_callable(monkeypatch):

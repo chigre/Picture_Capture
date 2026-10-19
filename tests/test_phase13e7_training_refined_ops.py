@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture import dictionary_page_design as base
 from picture_capture import dictionary_page_design_refined as refined
-from picture_capture import layout_line_start_refinement as robust
+from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical
 from picture_capture.models import AppSettings
 

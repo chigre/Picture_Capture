@@ -9,7 +9,7 @@ from PIL import Image
 
 from picture_capture import dictionary_page_design as base
 from picture_capture.models import AppSettings, Entry
-from picture_capture.layout_column_indent_recovery import (
+from picture_capture.layout.column_indent_recovery import (
     _weak_columns, restore_proven_column_indents,
 )
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_local_indent_visualization import (
+from picture_capture.layout.local_indent_visualization import (
     drift_corrected_indent_blocks,
 )
 
@@ -25,7 +25,7 @@ def test_visualization_uses_local_baseline_not_fixed_column_origin(monkeypatch):
     understanding = SimpleNamespace(layout=layout)
 
     monkeypatch.setattr(
-        "picture_capture.layout_local_indent_visualization.normalized_physical_indents",
+        "picture_capture.layout.local_indent_visualization.normalized_physical_indents",
         lambda lines: {id(line): 18.0},
     )
 
@@ -54,7 +54,7 @@ def test_phase5i_static_owner_and_provenance_order():
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "layout_local_indent_visualization_runtime.py").exists()
-    assert (package / "layout_local_indent_visualization.py").exists()
+    assert (package / "layout/local_indent_visualization.py").exists()
     assert "_indent_blocks_from_understanding = indent_blocks_with_entry_sources" in shared
     assert "install_local_indent_visualization" not in gui
     assert "layout_local_indent_visualization_runtime.py" not in guard

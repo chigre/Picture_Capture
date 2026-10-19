@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable
 
-from .project_storage import ppp_read_path_for_image
+from ..project_storage import ppp_read_path_for_image
 
 
 def detection_mask_source_path(page: Path, settings: Any, *, ordinary: bool) -> Path | None:

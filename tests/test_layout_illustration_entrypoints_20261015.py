@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 from PIL import Image
 
-from picture_capture.layout_mask_source_guard import (
+from picture_capture.layout.mask_source_guard import (
     missing_saved_illustrations, saved_illustration_stamp, detection_mask_source_path,
 )
 from picture_capture import layout_step_replay_ui as replay
@@ -38,7 +38,7 @@ def test_replay_forwards_original_path_without_writing_pdic(monkeypatch, tmp_pat
 
 
 def test_missing_ppp_preflight_and_cache_invalidation(monkeypatch, tmp_path):
-    import picture_capture.layout_mask_source_guard as guard
+    import picture_capture.layout.mask_source_guard as guard
     monkeypatch.setattr(guard, "ppp_read_path_for_image",
                         lambda page: tmp_path / (page.stem + ".PPP"))
     page = tmp_path / "scan.png"

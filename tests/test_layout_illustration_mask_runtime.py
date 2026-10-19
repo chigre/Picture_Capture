@@ -6,7 +6,7 @@ import pickle
 from PIL import Image
 
 from picture_capture.models import AppSettings, PolygonRegion
-from picture_capture.layout_illustration_mask import (
+from picture_capture.layout.illustration_mask import (
     IllustrationMaskStats,
     SETTING_NAME,
     layout_mask_region_is_large_enough,
@@ -268,7 +268,7 @@ def _understanding(reason="base"):
 def test_static_page_mask_disabled_preserves_original_image_identity(monkeypatch):
     from picture_capture import processing
     from picture_capture import layout_core_understanding
-    from picture_capture import layout_illustration_mask as masking
+    from picture_capture.layout import illustration_mask as masking
 
     original = object()
     seen = []
@@ -298,7 +298,7 @@ def test_static_page_mask_disabled_preserves_original_image_identity(monkeypatch
 def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypatch):
     from picture_capture import processing
     from picture_capture import layout_core_understanding
-    from picture_capture import layout_illustration_mask as masking
+    from picture_capture.layout import illustration_mask as masking
 
     original = object()
     masked = _ClosableAnalysisImage()
@@ -333,7 +333,7 @@ def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypa
 
 def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
     from picture_capture import processing, layout_composition
-    from picture_capture import layout_illustration_mask as masking
+    from picture_capture.layout import illustration_mask as masking
 
     original = object()
     seen = []
@@ -366,7 +366,7 @@ def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
 
 def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
     from picture_capture import processing, layout_composition
-    from picture_capture import layout_illustration_mask as masking
+    from picture_capture.layout import illustration_mask as masking
 
     masked = _ClosableAnalysisImage()
     monkeypatch.setattr(processing, "_ensure_layout_runtime", lambda: None)

@@ -120,7 +120,7 @@ def test_detector_emits_printed_row_start_not_glyph_ink_top(monkeypatch):
         lambda ink, line_height, diagnostics=None: [(68, 145, 203, 263)],
     )
     monkeypatch.setattr(
-        "picture_capture.layout_column_drift._analysis_left_for_column",
+        "picture_capture.layout.column_drift._analysis_left_for_column",
         lambda columns, position, reference: 100,
     )
     settings = AppSettings(

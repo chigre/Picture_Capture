@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .entry_classification import get_layout_line_classification
+from ..entry_classification import get_layout_line_classification
 
 
 def _joined_head_ink(

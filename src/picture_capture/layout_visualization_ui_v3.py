@@ -81,7 +81,7 @@ def on_layout_density_change(app: Any) -> None:
     app.redraw()
     mode = getattr(app, "_layout_display_density_var", None)
     if mode is not None and str(mode.get()) == "详细":
-        from .layout_details_window import show_layout_details_window
+        from .layout.details_window import show_layout_details_window
         show_layout_details_window(app)
 
 
@@ -221,7 +221,7 @@ def add_layout_visualization_controls(app: Any, section: Any) -> None:
     density.grid(row=row, column=1, columnspan=2, sticky="w")
     density.bind("<<ComboboxSelected>>", lambda _event: on_layout_density_change(app))
     app._layout_display_density_widget = density
-    from .layout_details_window import add_layout_details_button
+    from .layout.details_window import add_layout_details_button
     add_layout_details_button(app, section)
     from .ordinary_layout_inspector import add_unified_layout_inspector_controls
     add_unified_layout_inspector_controls(app, section)
@@ -256,7 +256,7 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
             else:
                 from .layout_visualization_summary import draw_layout_visualization_clean
                 draw_layout_visualization_clean(app)
-            from .layout_details_window import refresh_layout_details_if_open
+            from .layout.details_window import refresh_layout_details_if_open
             refresh_layout_details_if_open(app)
         if large_enabled:
             from .large_head_visualization_ui import draw_large_head_debug_overlay

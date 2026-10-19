@@ -15595,7 +15595,7 @@ class PictureCaptureApp(tk.Tk):
             parent=self,
         ):
             return
-        from .layout_mask_source_guard import missing_saved_illustrations, detection_mask_source_path
+        from .layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
         missing_ppp = missing_saved_illustrations(
             (self.project.images[i] for i in indices), self.settings,
         )

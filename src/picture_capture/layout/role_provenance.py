@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Any
 
 from ..entry_classification import get_layout_line_classification
-from ..layout_local_indent_visualization import drift_corrected_indent_blocks
+from .local_indent_visualization import drift_corrected_indent_blocks
 
 
 def indent_blocks_with_entry_sources(understanding: Any) -> list[dict[str, Any]]:

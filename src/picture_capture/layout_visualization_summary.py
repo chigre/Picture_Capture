@@ -18,7 +18,7 @@ from .layout.indent_visibility import (
 )
 from .layout.lane_summary_extension import append_physical_lane_summary
 from .layout.role_provenance import add_entry_source_summary
-from .layout_visualization_readability import draw_layout_visualization_readable
+from .layout.visualization_readability import draw_layout_visualization_readable
 from .layout_visualization_ui import _snapshot_for_app, draw_layout_visualization
 from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
 

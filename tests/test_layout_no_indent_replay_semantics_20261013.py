@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 from picture_capture.layout_core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )
-from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import _format_stage
 from picture_capture.models import AppSettings
 from picture_capture.profile_indent_ui import apply_indent_type_label, indent_type_label
@@ -138,8 +138,9 @@ def test_indented_profiles_still_retain_true_semantic_stages():
 
 
 def test_no_indent_skips_actual_no_op_consumers(monkeypatch):
-    from picture_capture import (
-        layout_column_indent_recovery, layout_role_visual_consistency,
+    from picture_capture.layout import (
+        column_indent_recovery as layout_column_indent_recovery,
+        role_visual_consistency as layout_role_visual_consistency,
     )
     def forbidden(*args, **kwargs):
         raise AssertionError("no-indent must not call body-indent-only consumers")

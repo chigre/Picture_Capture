@@ -1,5 +1,5 @@
 """Paddle row-leading must be computed within each physical print column."""
-from picture_capture.layout_textbox_leading import estimate_row_padding_from_boxes
+from picture_capture.layout.textbox_leading import estimate_row_padding_from_boxes
 
 
 def _boxes(x, first_y, rows=24, step=43, height=29):

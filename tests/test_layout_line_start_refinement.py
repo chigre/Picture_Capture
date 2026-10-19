@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.layout_line_start_refinement import (
+from picture_capture.layout.line_start_refinement import (
     credible_first_text_x,
     leading_whitespace_end,
 )

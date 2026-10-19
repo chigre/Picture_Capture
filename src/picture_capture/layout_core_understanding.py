@@ -16,7 +16,7 @@ import math
 from typing import Any, Iterable
 
 from PIL import Image
-from .layout_step_trace import LayoutStepTrace
+from .layout.step_trace import LayoutStepTrace
 
 # Keep the old local name for downstream monkeypatch and cache tests, but
 # obtain physical policy/layout through the explicit composition boundary.
@@ -593,7 +593,7 @@ def understand_layout_core(
             "rescued_columns": 0, "rescued_rows": 0, "cjk_bracket_rows": 0,
         }
     else:
-        from .layout_role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
+        from .layout.role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
         visual_role_check = suppress_contradictory_cjk_body_lane_entries(
             image, page_settings, layout,
         )
@@ -609,7 +609,7 @@ def understand_layout_core(
             )
         # Keep visible Layout and downstream ordinary drawings consistent:
         # restore only when a separate observation proves actual entry starts.
-        from .layout_column_indent_recovery import restore_proven_column_indents
+        from .layout.column_indent_recovery import restore_proven_column_indents
         restored_indents = restore_proven_column_indents(
             image, page_settings, layout, page_index=int(page_index),
         )
@@ -654,7 +654,7 @@ def understand_layout_core(
         trace=trace,
     )
     _mark("layout_core_symbol_large_head_evidence")
-    from .layout_verified_oversized_heads import recover_verified_oversized_heads
+    from .layout.verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
         recover_verified_oversized_heads(
             image, layout, visual_role_check["repaired_indices"],
@@ -670,7 +670,7 @@ def understand_layout_core(
     # Final conservative check for a split large glyph. An indent-derived
     # second start is removed only if the leading ink physically continues
     # across that boundary; independent symbol/head evidence is preserved.
-    from .layout_oversized_ink_continuation import suppress_oversized_ink_continuation
+    from .layout.oversized_ink_continuation import suppress_oversized_ink_continuation
     ink_continuation = (
         suppress_oversized_ink_continuation(image, layout)
         if cjk else {"candidate_pairs": 0, "demoted_fragments": 0}

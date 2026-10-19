@@ -26,8 +26,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from . import dictionary_page_design as base
-from .geometry.layout_gutter_rule import gutter_divider_right_edge as _gutter_divider_right_edge
+from .. import dictionary_page_design as base
+from ..geometry.layout_gutter_rule import gutter_divider_right_edge as _gutter_divider_right_edge
 
 
 def _left_safety(reference: float, column_width: int) -> int:
@@ -83,7 +83,7 @@ def _foreign_column_tail_replacement(
     Genuine negative first-X drift/overhang is preserved when print continues
     across the semantic left edge or the gap is ambiguous.
     """
-    from .layout_physical_indent import _credible_first_ink_x
+    from ..layout_physical_indent import _credible_first_ink_x
 
     if (
         row.ndim != 2 or row.size == 0
@@ -144,7 +144,7 @@ def remeasure_layout_indents_from_ink(
 
     Return updated row counts by column, in the original local-X convention.
     """
-    from .layout_physical_indent import _credible_first_ink_x
+    from ..layout_physical_indent import _credible_first_ink_x
 
     ops = base.current_layout_ops() if ops is None else ops
 
@@ -302,7 +302,7 @@ def finalize_layout_column_drift(
     foreign_tails: dict[int, int] = {}
     measured_overhangs: dict[int, tuple[int, int]] = {}
     if page_ink is None:
-        from .layout_detection import analysis_ink_mask
+        from ..layout_detection import analysis_ink_mask
 
         source, canonical, _transform, effective = base._analysis_page(
             image,

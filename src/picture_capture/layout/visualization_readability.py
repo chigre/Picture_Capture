@@ -9,7 +9,7 @@ readability concerns separate from detector/layout logic.
 
 from typing import Any, Callable
 
-from .layout_visualization_ui import draw_layout_visualization
+from ..layout_visualization_ui import draw_layout_visualization
 
 
 _RED_TEXT = {"#d32f2f", "#b00020"}

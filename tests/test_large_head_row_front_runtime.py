@@ -78,7 +78,7 @@ def test_core_no_longer_installs_large_head_detector_or_role_guard():
 
 def test_static_column_drift_helper_never_replaces_large_head_detector():
     root = Path(__file__).resolve().parents[1]
-    drift = (root / "src/picture_capture/layout_column_drift.py").read_text(
+    drift = (root / "src/picture_capture/layout/column_drift.py").read_text(
         encoding="utf-8"
     )
 

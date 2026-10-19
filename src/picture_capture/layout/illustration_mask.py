@@ -93,7 +93,7 @@ def mask_large_illustrations_for_layout(
     if not bool(getattr(settings, SETTING_NAME, DEFAULT_ENABLED)):
         return image, IllustrationMaskStats()
 
-    from .profile_semantics import effective_page_settings
+    from ..profile_semantics import effective_page_settings
 
     effective = effective_page_settings(
         settings,
@@ -115,8 +115,8 @@ def mask_large_illustrations_for_layout(
                 "已启用使用已有的插图数据，但当前 Layout 入口没有对应图片路径，"
                 "无法确定 PPP 文件。"
             )
-        from .project_storage import ppp_read_path_for_image
-        from .formats import read_ppp
+        from ..project_storage import ppp_read_path_for_image
+        from ..formats import read_ppp
         ppp_file = ppp_read_path_for_image(Path(source_image_path))
         if not ppp_file.is_file():
             raise FileNotFoundError(
@@ -151,7 +151,7 @@ def mask_large_illustrations_for_layout(
             detected=len(regions), masked=count,
         )
     if detector is None:
-        from .processing_core import detect_illustration_regions_from_image
+        from ..processing_core import detect_illustration_regions_from_image
 
         detect = detect_illustration_regions_from_image
     else:
@@ -168,7 +168,7 @@ def mask_large_illustrations_for_layout(
     # candidates using the existing AUTO/manual merge semantics, not a second
     # costly image analysis. No PPP writes are performed in reuse mode.
     if source_image_path is not None and detector is None:
-        from .processing_core import detect_illustrations_to_ppp
+        from ..processing_core import detect_illustrations_to_ppp
         detect_illustrations_to_ppp(
             Path(source_image_path), settings,
             profile_page_index=int(profile_page_index),

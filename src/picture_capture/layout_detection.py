@@ -40,7 +40,7 @@ _LAYOUT_ESTIMATE_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 
 def _layout_estimate_cache_key(image, settings) -> tuple[Any, ...]:
     digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
-    from .layout_scale_experiment import FLAG
+    from .layout.scale_experiment import FLAG
     return (str(image.mode), tuple(image.size), digest, repr(settings), os.environ.get(FLAG, "off"))
 
 
@@ -101,8 +101,8 @@ def detect_layout_parameters(image, settings):
             now = perf_counter()
             stages[stage] = now - tick
             tick = now
-    from .layout_character_height import apply_character_height_fallback
-    from .layout_reliability import detect_layout_parameters_reliable
+    from .layout.character_height import apply_character_height_fallback
+    from .layout.reliability import detect_layout_parameters_reliable
 
     analysis_image = build_analysis_image(image, settings)
     mark("facade_analysis_image")
@@ -113,7 +113,7 @@ def detect_layout_parameters(image, settings):
     if raw is not None:
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
     else:
-        from .layout_scale_experiment import detect_at_scale
+        from .layout.scale_experiment import detect_at_scale
         raw, scale_used = detect_at_scale(
             analysis_image, settings, sys.modules[__name__],
             detect_layout_parameters_reliable,

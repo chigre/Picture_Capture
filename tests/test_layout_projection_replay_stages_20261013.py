@@ -12,7 +12,7 @@ import numpy as np
 from picture_capture.layout_physical_indent import (
     _raw_projection_runs, projection_line_runs,
 )
-from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import (
     _projection_candidates_for_display, _format_stage, _candidate_at_source,
 )

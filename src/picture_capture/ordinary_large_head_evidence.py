@@ -433,7 +433,7 @@ def detect_ordinary_large_head_entries(
     records geometry/row-front/strong-evidence decisions before any Layout
     role mutation; it is only populated when explicitly requested by the UI.
     """
-    from .layout_column_drift import _analysis_left_for_column
+    from .layout.column_drift import _analysis_left_for_column
 
     if not _uses_cjk_large_heads(settings):
         return []

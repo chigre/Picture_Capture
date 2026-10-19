@@ -17,7 +17,7 @@ from PIL import Image
 
 from ...formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
-from ...layout_mask_source_guard import missing_saved_illustrations, detection_mask_source_path
+from ...layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary_quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr_action_guard import guard_ocr_action_selection
 from ...page_sections import read_page_sections

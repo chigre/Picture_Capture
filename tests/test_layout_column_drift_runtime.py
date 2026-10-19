@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from picture_capture import dictionary_page_design as base
 from picture_capture import layout_detection
 from picture_capture.dictionary_page_design import LayoutLine
-from picture_capture.layout_column_drift import (
+from picture_capture.layout.column_drift import (
     _analysis_left_for_column,
     _left_safety,
     finalize_layout_column_drift,
@@ -236,7 +236,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
 
     assert "install_ordinary_large_head_runtime" not in core
     assert "install_ordinary_large_head_role_guard" not in core
-    assert "from .layout_column_drift import finalize_layout_column_drift" in policy
+    assert "from .layout.column_drift import finalize_layout_column_drift" in policy
     layout_at = policy.index("layout = base.DictionaryPageLayout(")
     finalize_at = policy.index("layout = finalize_layout_column_drift(")
     return_at = policy.index("return layout, page_settings, applied", finalize_at)
@@ -247,7 +247,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
         assert "install_layout_column_drift_runtime" not in source
     assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
     assert not (root / "src/picture_capture/ordinary_large_head_runtime.py").exists()
-    assert "from .layout_column_drift import _analysis_left_for_column" in large_head
+    assert "from .layout.column_drift import _analysis_left_for_column" in large_head
     assert "strict_candidate_starts_at_row_front" in large_head
     assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical

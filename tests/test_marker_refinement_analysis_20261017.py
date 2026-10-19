@@ -179,7 +179,8 @@ def test_auto_policy_only_updates_checked_fields_and_is_page_local(monkeypatch):
 
 
 def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_path):
-    from picture_capture import layout_illustration_mask, dictionary_page_layout_policy
+    from picture_capture import dictionary_page_layout_policy
+    from picture_capture.layout import illustration_mask as layout_illustration_mask
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = False
@@ -214,7 +215,7 @@ def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_
 
 
 def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch, tmp_path):
-    from picture_capture import layout_illustration_mask
+    from picture_capture.layout import illustration_mask as layout_illustration_mask
     settings = AppSettings()
     settings.ordinary_auto_layout = False
     settings.layout_mask_illustrations = True
@@ -272,7 +273,7 @@ def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path, monkey
 
 
 def test_disabled_whitefill_does_not_call_detector(monkeypatch):
-    from picture_capture import layout_illustration_mask
+    from picture_capture.layout import illustration_mask as layout_illustration_mask
     settings = AppSettings()
     settings.ordinary_auto_layout = False
     settings.layout_mask_illustrations = False

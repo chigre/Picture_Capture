@@ -59,7 +59,7 @@ def test_refine_missing_ppp_still_measures_each_page(tmp_path, monkeypatch):
 def test_refine_existing_ppp_still_uses_existing_mask_and_does_not_redetect(
     tmp_path, monkeypatch,
 ):
-    from picture_capture import layout_illustration_mask
+    from picture_capture.layout import illustration_mask as layout_illustration_mask
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True
@@ -89,7 +89,7 @@ def test_refine_existing_ppp_still_uses_existing_mask_and_does_not_redetect(
 
 
 def test_missing_ppp_in_generic_layout_still_fails_closed(tmp_path):
-    from picture_capture.layout_illustration_mask import mask_large_illustrations_for_layout
+    from picture_capture.layout.illustration_mask import mask_large_illustrations_for_layout
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True

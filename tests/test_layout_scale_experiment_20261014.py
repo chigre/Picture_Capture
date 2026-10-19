@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from PIL import Image
 
-from picture_capture.layout_scale_experiment import (
+from picture_capture.layout.scale_experiment import (
     choose_layout_scale, detect_at_scale, restore_source_estimate,
 )
 from picture_capture.layout_detection import LayoutEstimate

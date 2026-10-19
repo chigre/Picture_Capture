@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 
 from picture_capture.layout_detection import LayoutEstimate
-from picture_capture.layout_reliability import _fuse_fixed_geometry, clean_layout_speckles
+from picture_capture.layout.reliability import _fuse_fixed_geometry, clean_layout_speckles
 from picture_capture.models import AppSettings
 
 
@@ -131,7 +131,7 @@ def test_separator_track_can_anchor_second_column_on_noisy_page():
 
 def test_integral_reuse_matches_four_independent_box_sums():
     """Optimized 5/11/directional neighbourhoods must be pixel-identical."""
-    from picture_capture.layout_reliability import _box_sum
+    from picture_capture.layout.reliability import _box_sum
     for shape in [(1, 1), (3, 5), (50, 73), (120, 120)]:
         ink = np.random.default_rng(20261014).integers(0, 2, shape, dtype=np.uint8).astype(bool)
         h, w = ink.shape

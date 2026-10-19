@@ -8,11 +8,11 @@ from PIL import Image, ImageDraw
 import pytest
 
 from picture_capture import processing, processing_core
-from picture_capture.layout_illustration_mask import mask_large_illustrations_for_layout
+from picture_capture.layout.illustration_mask import mask_large_illustrations_for_layout
 from picture_capture.layout_step_replay_ui import (
     _run_replay, _preview_at_stage, _stage_entries_for_display, _format_stage,
 )
-from picture_capture.layout_step_trace import LayoutStepTrace
+from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.models import AppSettings, Entry
 
 
@@ -102,7 +102,7 @@ def test_cjk_replay_keeps_early_layout_only_shift_before_bracket_and_final_y_loc
 
 
 def test_mask_candidates_and_unmodified_source_precede_layout(monkeypatch):
-    from picture_capture import layout_illustration_mask as masks
+    from picture_capture.layout import illustration_mask as masks
 
     image = _page()
     ImageDraw.Draw(image).rectangle((145, 90, 220, 145), fill="black")
