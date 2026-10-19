@@ -8,13 +8,13 @@ import json
 
 from PIL import Image
 
-from .generic_block_roles import generic_entry_candidates
-from .image_utils import normalize_page_rgb
-from .layout_illustration_mask import mask_large_illustrations_for_layout
-from .page_sections import read_page_sections
-from .page_understanding import page_understanding_diagnostics
-from .layout_composition import understand_composed_page
-from .training_export_unified_layout import write_training_unified_layout_diagnostic
+from ..generic_block_roles import generic_entry_candidates
+from ..image_utils import normalize_page_rgb
+from ..layout_illustration_mask import mask_large_illustrations_for_layout
+from ..page_sections import read_page_sections
+from ..page_understanding import page_understanding_diagnostics
+from ..layout_composition import understand_composed_page
+from .export_unified_layout import write_training_unified_layout_diagnostic
 
 
 def build_export_training_page_with_understanding(

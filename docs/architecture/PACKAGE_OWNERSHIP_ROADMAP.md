@@ -63,3 +63,9 @@ Ten illustrated dictionary and overlay modules now reside in `illustration/`. Re
 ## Non-goals
 
 This organization change is *not* a source-code compression project. An expanded tree can improve discoverability without shrinking compressed releases or installed OCR/ML dependencies. Do not delete tests, alter pixel coordinates, bypass manual acceptance or claim performance improvements on the basis of moves.
+
+## Training package cohort (Issue #562)
+
+- Physically move three training services to `training/`: `export_page_understanding.py`, `export_unified_layout.py`, `export_v3.py`. No root shims for these three.
+- Retain `training_baseline.py` (PDIC baseline interface), `training_export.py` (stable v2 export), `training_export_composed.py` (GUI composition entry), `training_export_complete_dialog.py` (GUI completion hook), and `training_export_ui.py` (legacy GUI delegation) at their existing root paths. These are distinct compatibility boundaries, not duplicate shims. Preserve v2/v3 training manifest identifiers, PDIC automatic baseline, export ZIP, and selected-page GUI semantics.
+- Expected root Python count after integration with merged PR #572: **228 → 225** (count includes root `__init__.py` and entry points); verify against the merged Git tree and postmerge main CI. This training branch was cut before PR #572 and must preserve its illustration/candidate-size and cross-column roadmap entry on merge. This count is not a claim of complete migration or human validation.

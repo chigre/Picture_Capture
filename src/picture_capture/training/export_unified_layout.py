@@ -13,8 +13,8 @@ from typing import Any
 
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .page_sections import read_page_sections
+from ..image_utils import normalize_page_rgb
+from ..page_sections import read_page_sections
 
 
 def write_training_unified_layout_diagnostic(
@@ -30,7 +30,7 @@ def write_training_unified_layout_diagnostic(
     it never substitutes page-design summaries or silently omits the file.
     The whole ZIP still uses the existing staged/atomic publication path.
     """
-    from .large_head_visual_diagnostics import build_large_head_diagnostics
+    from ..large_head_visual_diagnostics import build_large_head_diagnostics
 
     staging_root = Path(staging_root)
     page = Path(page)

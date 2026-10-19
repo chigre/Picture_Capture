@@ -15,10 +15,10 @@ from .training_export import (
     make_training_zip,
     write_training_manifest as _write_training_manifest_v2,
 )
-from .training_export_page_understanding import (
+from .training.export_page_understanding import (
     build_export_training_page_with_understanding,
 )
-from .training_export_v3 import (
+from .training.export_v3 import (
     TRAINING_EXPORT_FORMAT_V3,
     build_export_training_page,
     build_write_training_manifest,

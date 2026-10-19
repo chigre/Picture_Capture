@@ -54,6 +54,6 @@ def test_refined_explicit_physical_matches_historical_installed_hooks(monkeypatc
 def test_training_diagnostic_explicit_ops_are_present_without_public_policy_rebinding():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-              / "training_export_v3.py").read_text(encoding="utf-8")
+              / "training/export_v3.py").read_text(encoding="utf-8")
     assert "ops=explicit_physical_layout_ops()" in source
-    assert "from .dictionary_page_design_refined import" in source
+    assert "from ..dictionary_page_design_refined import" in source

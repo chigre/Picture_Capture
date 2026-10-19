@@ -20,7 +20,7 @@ from picture_capture.training_baseline import (
     baseline_path_for_pdic,
     build_write_pdic_capture,
 )
-from picture_capture.training_export_v3 import (
+from picture_capture.training.export_v3 import (
     compare_automatic_and_final,
     select_page_range,
 )

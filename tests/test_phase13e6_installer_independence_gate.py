@@ -61,7 +61,7 @@ def test_composed_full_and_layout_only_run_without_installer_calls(monkeypatch):
 
 def test_migrated_consumers_do_not_import_legacy_full_understanding():
     for filename in (
-        "training_export_page_understanding.py",
+        "training/export_page_understanding.py",
         "profile_validation_modes.py",
     ):
         tree = ast.parse((PACKAGE / filename).read_text(encoding="utf-8"))
