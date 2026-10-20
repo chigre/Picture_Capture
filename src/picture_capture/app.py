@@ -37,7 +37,7 @@ from .appearance import (
     usage_guide_palette,
 )
 from .gui_io import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
-from .ocr_action_guard import LENS_MODE_LABELS, LENS_MODE_VALUES, guard_ocr_action_selection
+from .ocr.action_guard import LENS_MODE_LABELS, LENS_MODE_VALUES, guard_ocr_action_selection
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
     read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
@@ -15752,7 +15752,7 @@ class PictureCaptureApp(tk.Tk):
             saved_pdic = pdic_path(page)
             if method in {"paddleocr", "combined"}:
                 # Preserve manual PDIC before automated OCR overwrites it.
-                from .ocr_pdic_preservation import preserve_prior_pdic
+                from .ocr.pdic_preservation import preserve_prior_pdic
                 preserve_prior_pdic(project.root, page, saved_pdic)
             write_pdic(saved_pdic, entries, image.width, pages_info[index])
             if tracing:
@@ -15764,7 +15764,7 @@ class PictureCaptureApp(tk.Tk):
                 # and record final moves/removals/rescues separately. This
                 # audit never modifies PDIC and failure must not lose a page.
                 try:
-                    from .ocr_final_decisions import record_final_decisions
+                    from .ocr.final_decisions import record_final_decisions
                     result["final_audit"] = record_final_decisions(
                         cache_path, saved_pdic, entries,
                         tolerance=max(5, round(settings.character_height * 0.45)),
