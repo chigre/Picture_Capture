@@ -23,7 +23,8 @@ def _forbidden(*_args, **_kwargs):
 def test_explicit_refine_uses_selected_per_page_layout_without_ocr_or_denoise(
     monkeypatch, tmp_path,
 ):
-    from picture_capture import dictionary_page_layout_policy, image_utils
+    from picture_capture.design import layout_policy as dictionary_page_layout_policy
+    from picture_capture import image_utils
     settings = AppSettings()
     settings.analysis_denoise_enabled = True
     settings.ordinary_auto_layout = True
@@ -87,7 +88,7 @@ def test_explicit_refine_uses_selected_per_page_layout_without_ocr_or_denoise(
 def test_refine_skips_physical_detector_without_enabled_auto_fields(
     monkeypatch, master,
 ):
-    from picture_capture import dictionary_page_layout_policy
+    from picture_capture.design import layout_policy as dictionary_page_layout_policy
     settings = AppSettings()
     settings.ordinary_auto_layout = master
     for _field, switch in dictionary_page_layout_policy.AUTO_LAYOUT_FIELDS:
@@ -109,7 +110,7 @@ def test_refine_skips_physical_detector_without_enabled_auto_fields(
 
 
 def test_auto_policy_only_updates_checked_fields_and_is_page_local(monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     settings = AppSettings()
     settings.ordinary_auto_layout = True
     for _field, switch in policy.AUTO_LAYOUT_FIELDS:
@@ -179,7 +180,7 @@ def test_auto_policy_only_updates_checked_fields_and_is_page_local(monkeypatch):
 
 
 def test_auto_whitefill_changes_analysis_only_never_writes_ppp(monkeypatch, tmp_path):
-    from picture_capture import dictionary_page_layout_policy
+    from picture_capture.design import layout_policy as dictionary_page_layout_policy
     from picture_capture.layout import illustration_mask as layout_illustration_mask
     settings = AppSettings()
     settings.layout_mask_illustrations = True
@@ -251,7 +252,7 @@ def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch,
 
 
 def test_missing_ppp_is_not_silently_replaced_by_auto_detection(tmp_path, monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     settings = AppSettings()
     settings.layout_mask_illustrations = True
     settings.layout_mask_illustrations_use_existing = True

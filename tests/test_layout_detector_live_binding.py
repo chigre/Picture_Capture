@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 
 def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
-    import picture_capture.dictionary_page_layout_policy as policy
+    import picture_capture.design.layout_policy as policy
     import picture_capture.layout_detection as layout_detection
 
     first = SimpleNamespace(character_height=39)
@@ -28,7 +28,7 @@ def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
 
 
 def test_retired_installer_is_a_compatibility_noop():
-    import picture_capture.dictionary_page_layout_policy as policy
+    import picture_capture.design.layout_policy as policy
     from picture_capture.layout_detector_live_binding import (
         install_live_layout_detector_binding,
     )

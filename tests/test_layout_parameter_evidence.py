@@ -7,7 +7,7 @@ from picture_capture.layout.parameter_evidence import (
     row_padding_is_measured,
     verified_multi_page_row_padding,
 )
-from picture_capture.dictionary_page_layout_policy import (
+from picture_capture.design.layout_policy import (
     _RAW_RESOLVE_PAGE_LAYOUT_POLICY,
 )
 from picture_capture.models import AppSettings
@@ -79,7 +79,7 @@ def test_per_page_unmeasured_gap_keeps_existing_profile(monkeypatch):
 
 
 def test_profile_bootstrap_suggestion_never_claims_measured_row_padding():
-    from picture_capture.profile_layout_bootstrap import apply_profile_ink_height_suggestion
+    from picture_capture.profile.layout_bootstrap import apply_profile_ink_height_suggestion
 
     proposed = {"character_height": 17, "row_padding": 1}
     notice = apply_profile_ink_height_suggestion(proposed, [

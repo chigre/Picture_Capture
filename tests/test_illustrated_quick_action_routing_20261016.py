@@ -53,7 +53,7 @@ def test_quick_action_routes_mixed_page_by_filename(monkeypatch):
 
 def test_profile_wizard_has_mode_selector_and_guards_ordinary_layout_scan():
     path = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" /
-            "profile_setup.py")
+            "profile/setup.py")
     text = path.read_text(encoding="utf-8")
     assert "add_wizard_layout_selector(self, tab, row=6)" in text
     assert 'self.working.dictionary_layout_kind != "illustrated"' in text

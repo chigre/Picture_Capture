@@ -13,7 +13,7 @@ from picture_capture.layout_core_understanding import (
 from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.layout_step_replay_ui import _format_stage
 from picture_capture.models import AppSettings
-from picture_capture.profile_indent_ui import apply_indent_type_label, indent_type_label
+from picture_capture.profile.indent_ui import apply_indent_type_label, indent_type_label
 
 
 def _page():

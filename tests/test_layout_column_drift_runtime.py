@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture import layout_detection
-from picture_capture.dictionary_page_design import LayoutLine
+from picture_capture.design.page_design import LayoutLine
 from picture_capture.layout.column_drift import (
     _analysis_left_for_column,
     _left_safety,

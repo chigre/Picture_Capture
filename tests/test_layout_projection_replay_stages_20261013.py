@@ -20,7 +20,7 @@ from picture_capture.layout_core_understanding import (
     understand_layout_core, clear_layout_understanding_cache,
 )
 from picture_capture.models import AppSettings
-from picture_capture.profile_indent_ui import apply_indent_type_label
+from picture_capture.profile.indent_ui import apply_indent_type_label
 
 
 def _ink_with_gap():

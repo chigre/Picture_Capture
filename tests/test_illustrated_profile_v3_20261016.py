@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.dictionary_profile import (
+from picture_capture.profile.dictionary import (
     apply_project_profile_components, write_project_profile,
 )
 from picture_capture.illustration.profile import (
