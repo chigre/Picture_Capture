@@ -10,10 +10,10 @@ from pathlib import Path
 
 from PIL import Image
 
-from .layout_transform import LayoutTransform
-from .page_sections import read_page_sections
-from .project_storage import page_sections_read_path_for_image
-from .proofreading_events import sha256_file
+from ..layout_transform import LayoutTransform
+from ..page_sections import read_page_sections
+from ..project_storage import page_sections_read_path_for_image
+from ..proofreading_events import sha256_file
 
 
 def section_snapshot_for_source_point(

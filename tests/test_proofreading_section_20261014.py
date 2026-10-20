@@ -8,7 +8,7 @@ from picture_capture.proofreading_events import (
     append_event, make_event, sha256_file,
 )
 from picture_capture.proofreading_quality_export import summarize_local_events
-from picture_capture.proofreading_section import (
+from picture_capture.proofreading.section import (
     section_fields_for_event, section_snapshot_for_source_point,
 )
 

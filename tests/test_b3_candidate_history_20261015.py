@@ -11,7 +11,7 @@ from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
 from picture_capture.project_storage import simplified_review_path_for_image
 from picture_capture.proofreading_candidate_delete import commit_candidate_delete
-from picture_capture.proofreading_candidate_history import CandidateReviewHistory
+from picture_capture.proofreading.candidate_history import CandidateReviewHistory
 from picture_capture.proofreading_transactions import snapshot_review
 from picture_capture import proofreading_transactions as tx
 

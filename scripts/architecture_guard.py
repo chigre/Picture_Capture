@@ -627,6 +627,18 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical illustration module missing: {current}")
 
+    # Issue #562: bounded proofreading domain owners, no former-root shims.
+    moved_proofreading = {
+        "proofreading_candidate_history": "proofreading/candidate_history.py",
+        "proofreading_identity": "proofreading/identity.py",
+        "proofreading_section": "proofreading/section.py",
+    }
+    for former, current in moved_proofreading.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired proofreading root module returned: {former}.py")
+        if not (PACKAGE_ROOT / current).is_file():
+            violations.append(f"canonical proofreading module missing: {current}")
+
     return violations
 
 
