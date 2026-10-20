@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture import app, review_text_helpers as review
+from picture_capture import app
+
+from picture_capture.proofreading import text_helpers as review
 
 
 def test_phase7e_app_reexports_review_text_helpers() -> None:
