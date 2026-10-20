@@ -10,7 +10,7 @@ from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
 from picture_capture.ordinary_large_head_evidence import detect_ordinary_large_head_entries
 from picture_capture.ordinary.symbol_evidence import detect_ordinary_symbol_entries
-from picture_capture.visual_marker_templates import (
+from picture_capture.visual.marker_templates import (
     build_visual_marker_sample,
     match_visual_marker_template,
     serialize_visual_marker_samples,
@@ -160,7 +160,7 @@ def test_large_head_detector_is_cjk_gated_and_independent_from_legacy_module():
 
 
 def test_profile_ui_explains_visual_samples_are_ordinary_evidence():
-    from picture_capture import profile_ordinary_evidence_ui as ui
+    from picture_capture.profile import ordinary_evidence_ui as ui
 
     source = open(ui.__file__, "r", encoding="utf-8").read()
     assert "普通画线：视觉词头证据（OCR-independent）" in source
@@ -177,22 +177,22 @@ def test_profile_ui_explains_visual_samples_are_ordinary_evidence():
 def test_project_profile_ui_uses_static_composition():
     import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
-    from picture_capture.profile_setup import ProjectProfileWizard as BaseWizard
-    from picture_capture.profile_wizard import ProjectProfileWizard
+    from picture_capture.profile.setup import ProjectProfileWizard as BaseWizard
+    from picture_capture.profile.wizard import ProjectProfileWizard
 
     assert issubclass(ProjectProfileWizard, BaseWizard)
     modules = [cls.__module__ for cls in ProjectProfileWizard.__mro__]
-    assert modules.index("picture_capture.parameter_help_ui") < modules.index(
-        "picture_capture.profile_ordinary_evidence_ui"
+    assert modules.index("picture_capture.profile.parameter_help_ui") < modules.index(
+        "picture_capture.profile.ordinary_evidence_ui"
     )
-    assert modules.index("picture_capture.profile_ordinary_evidence_ui") < modules.index(
-        "picture_capture.profile_validation_modes"
+    assert modules.index("picture_capture.profile.ordinary_evidence_ui") < modules.index(
+        "picture_capture.profile.validation_modes"
     )
-    assert modules.index("picture_capture.profile_validation_modes") < modules.index(
-        "picture_capture.profile_indent_ui"
+    assert modules.index("picture_capture.profile.validation_modes") < modules.index(
+        "picture_capture.profile.indent_ui"
     )
-    assert modules.index("picture_capture.profile_indent_ui") < modules.index(
-        "picture_capture.profile_setup"
+    assert modules.index("picture_capture.profile.indent_ui") < modules.index(
+        "picture_capture.profile.setup"
     )
     assert app_module.ProjectProfileWizard is ProjectProfileWizard
 

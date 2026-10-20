@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import dictionary_page_layout_policy as policy
+from picture_capture.design import layout_policy as policy
 from picture_capture import layout_detection
 from picture_capture.models import AppSettings
 from picture_capture.processing import _ordinary_settings_for_shared_geometry

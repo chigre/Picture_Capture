@@ -6,8 +6,8 @@ from picture_capture.models import AppSettings
 
 
 def test_base_page_design_detector_forwards_to_refined_without_runtime(monkeypatch):
-    from picture_capture import dictionary_page_design as base
-    from picture_capture import dictionary_page_design_refined as refined
+    from picture_capture.design import page_design as base
+    from picture_capture.design import page_design_refined as refined
 
     marker = object()
     calls = []
