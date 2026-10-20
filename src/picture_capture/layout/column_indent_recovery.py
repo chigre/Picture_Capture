@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .. import dictionary_page_design as base
+from ..design import page_design as base
 from ..entry_classification import register_layout_line_classification
 from ..models import Entry
 from ..page_understanding import uses_cjk_role_model
@@ -87,7 +87,7 @@ def _independently_proven_columns(
     weak: list[int], page_index: int,
 ) -> dict[int, tuple[list[int], float, float]]:
     """Demand two genuine row families with adequate independent support."""
-    from .. import dictionary_page_design_refined as refined
+    from ..design import page_design_refined as refined
 
     try:
         independent = refined.detect_entries_from_page_design(

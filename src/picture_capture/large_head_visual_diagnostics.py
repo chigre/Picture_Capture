@@ -17,7 +17,7 @@ from PIL import Image
 from .image_utils import build_analysis_image
 from .models import AppSettings
 from .layout_core_understanding import understand_layout_core
-from .profile_semantics import effective_page_settings
+from .profile.semantics import effective_page_settings
 
 
 def _nearest_layout_row(

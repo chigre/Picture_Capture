@@ -22,7 +22,7 @@ OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
     "image_preprocessing.py": 150_818,
-    "profile_setup.py": 174_009,
+    "profile/setup.py": 174_009,
     "processing_core.py": 158_561,
 }
 
@@ -474,7 +474,7 @@ def collect_violations() -> list[str]:
             )
 
     parameter_help_source = (
-        PACKAGE_ROOT / "parameter_help_ui.py"
+        PACKAGE_ROOT / "profile/parameter_help_ui.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_SETTINGS_PARAMETER_HELP_MUTATIONS:
         if marker in parameter_help_source:

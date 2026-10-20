@@ -166,15 +166,15 @@ from .collation import (
     LATIN_ORDER, available_profile_labels, collation_key, display_key,
     parse_custom_order, profile_label,
 )
-from .dictionary_profile import (
+from .profile.dictionary import (
     DEFAULT_PROFILE_ID, PROFILE_FILENAME, available_dictionary_profiles,
     dictionary_profile_preset,
     effective_project_profile_id,
     language_effective_settings, managed_profile_setting_names, profile_effective_settings,
     profile_layout_summary, write_project_profile,
 )
-from .profile_wizard import ProjectProfileWizard, _screen_work_area
-from .profile_semantics import (
+from .profile.wizard import ProjectProfileWizard, _screen_work_area
+from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
 from .image_utils import normalize_page_rgb

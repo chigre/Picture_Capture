@@ -18,11 +18,11 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from .dictionary_page_design import DictionaryPageLayout, _leading_width
+from .design.page_design import DictionaryPageLayout, _leading_width
 from .image_utils import normalize_page_rgb
 from .layout_detection import analysis_ink_mask
 from .models import AppSettings, Entry
-from .profile_semantics import effective_page_settings
+from .profile.semantics import effective_page_settings
 
 
 def _runs(active: np.ndarray) -> list[tuple[int, int]]:
