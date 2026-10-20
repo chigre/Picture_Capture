@@ -78,7 +78,7 @@ def test_multiple_verified_geometry_text_changes_are_one_atomic_journal(tmp_path
 
 
 def test_batch_failure_never_publishes_half_of_the_same_save(tmp_path, monkeypatch):
-    from picture_capture import proofreading_events
+    from picture_capture.proofreading import events as proofreading_events
 
     page, original = _case(tmp_path)
     write_pdic(
@@ -116,7 +116,7 @@ def test_batch_failure_never_publishes_half_of_the_same_save(tmp_path, monkeypat
 
 
 def test_failed_batch_preserves_existing_journal_bytes(tmp_path, monkeypatch):
-    from picture_capture import proofreading_events
+    from picture_capture.proofreading import events as proofreading_events
 
     page, original = _case(tmp_path)
     # First save and journal record remain readable after a later failed batch.

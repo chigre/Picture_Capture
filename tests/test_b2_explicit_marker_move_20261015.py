@@ -250,7 +250,7 @@ def test_move_dialog_logs_opted_in_unverified_move(tmp_path, monkeypatch):
 
 
 def test_move_dialog_report_journal_error_without_falsely_reporting_success(tmp_path, monkeypatch):
-    from picture_capture import proofreading_capture
+    from picture_capture.proofreading import capture as proofreading_capture
     import picture_capture.ui.entry_move_controller as module
     app, page, messages = _app(tmp_path)
     monkeypatch.setattr(module.simpledialog, "askstring", lambda *a, **k: "70,100")
