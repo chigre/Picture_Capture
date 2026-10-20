@@ -1,5 +1,5 @@
 """Regression tests for illustration-caption inclusion."""
-from picture_capture.illustration_detection import _extend_box_to_caption
+from picture_capture.illustration.detection import _extend_box_to_caption
 
 
 def test_centered_caption_below_illustration_is_included():

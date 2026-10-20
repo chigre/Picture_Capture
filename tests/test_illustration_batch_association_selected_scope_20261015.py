@@ -11,11 +11,11 @@ from picture_capture.formats import read_pdic, read_ppp, write_pdic, write_ppp
 from picture_capture.models import AppSettings, Entry, PolygonRegion
 from picture_capture.processing_core import Geometry
 from picture_capture.project_storage import ppp_read_path_for_image, ppp_write_path_for_image
-from picture_capture.illustration_batch_association import (
+from picture_capture.illustration.batch_association import (
     associate_existing_ppp_page, associate_existing_ppp_job,
 )
 from picture_capture.ui.controllers import illustration as ui
-import picture_capture.illustration_batch_association as service
+import picture_capture.illustration.batch_association as service
 
 
 def geometry():

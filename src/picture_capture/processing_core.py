@@ -30,7 +30,7 @@ from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
-from .illustration_labels import previous_entry_ref_for_image
+from .illustration.labels import previous_entry_ref_for_image
 from .crop.plan_formatting import (
     _normalized_crop_name,
     canonical_polygon_link,
@@ -3473,7 +3473,7 @@ def split_whole_entries(
 
 
 # Historical public entry points remain here for callers and existing patches.
-from .illustration_detection import (
+from .illustration.detection import (
     AUTO_ILLUSTRATION_LABEL_TOKEN,
     _rle_components,
     _box_gap,
@@ -3552,7 +3552,7 @@ def detect_illustrations_to_ppp(
         if any(_overlap_fraction(box, mb) >= 0.25 for mb in manual_boxes):
             continue
         accepted.append(region)
-    from .illustration_labels import write_ordered_auto_ppp
+    from .illustration.labels import write_ordered_auto_ppp
     write_ordered_auto_ppp(write_path, manual, accepted, image_path, settings, profile_page_index)
     return {"manual": len(manual), "auto": len(accepted), "total": len(manual) + len(accepted)}
 

@@ -227,7 +227,7 @@ from .ui.overlay_opacity import (
     create_alpha_canvas_line, release_alpha_line_photos,
 )
 from .illustration.polygon_edit import nearest_polygon_segment
-from .illustration_labels import label_text, user_edited_link
+from .illustration.labels import label_text, user_edited_link
 from .illustration.delete_overlay import create_illustration_delete_control, polygon_delete_center
 from .illustration.fill_opacity import (
     clear_alpha_polygon_records,

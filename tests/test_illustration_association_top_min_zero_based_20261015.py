@@ -6,7 +6,7 @@ These cases model the four specific wrong associations seen by the user:
 """
 from __future__ import annotations
 
-from picture_capture.illustration_labels import illustration_labels
+from picture_capture.illustration.labels import illustration_labels
 from picture_capture.models import Entry, PolygonRegion
 from picture_capture.page_sections import PageSection
 from picture_capture.processing_core import Geometry

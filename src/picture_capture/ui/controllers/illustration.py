@@ -17,10 +17,10 @@ from typing import Any
 from .crop import complete_crop_widths
 from ...formats import pdic_path, read_ppp, write_ppp
 from ...models import PolygonRegion
-from ...illustration_labels import (
+from ...illustration.labels import (
     illustration_labels, label_text, user_edited_link, previous_entry_ref_for_image,
 )
-from ...illustration_batch_association import associate_existing_ppp_job
+from ...illustration.batch_association import associate_existing_ppp_job
 from ..illustration_association_dialog import confirm_illustration_association
 from ...processing import (
     append_crop_log, append_illustration_crop_log, detect_illustrations_job,

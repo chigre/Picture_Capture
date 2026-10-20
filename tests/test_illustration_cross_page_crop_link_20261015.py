@@ -9,7 +9,7 @@ from PIL import Image
 from picture_capture import processing_core as core
 from picture_capture.crop.plan_formatting import canonical_polygon_link
 from picture_capture.formats import write_pdic, write_ppp, read_ppp
-from picture_capture.illustration_labels import (
+from picture_capture.illustration.labels import (
     illustration_labels, previous_entry_ref_for_image,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion

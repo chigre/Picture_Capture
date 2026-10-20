@@ -1,7 +1,7 @@
 """Reading-order illustration IDs and associated PDIC ordinal: synthetic pages."""
 from __future__ import annotations
 
-from picture_capture.illustration_labels import (
+from picture_capture.illustration.labels import (
     illustration_labels, label_text, user_edited_link,
 )
 from picture_capture.models import Entry, PolygonRegion
@@ -122,7 +122,7 @@ def test_editing_only_changes_link_not_number_page_or_source():
 def test_background_automatic_detection_persists_reading_order_and_auto_origin(tmp_path):
     from PIL import Image
     from picture_capture.formats import read_ppp, write_ppp
-    from picture_capture.illustration_detection import is_auto_illustration_region
+    from picture_capture.illustration.detection import is_auto_illustration_region
     from picture_capture.models import AppSettings
     from picture_capture.processing_core import detect_illustrations_to_ppp
     page = tmp_path / "scan.png"
@@ -158,7 +158,7 @@ def test_background_automatic_detection_persists_reading_order_and_auto_origin(t
 
 
 def test_empty_or_malformed_ppp_polygon_does_not_make_redraw_crash():
-    from picture_capture.illustration_labels import illustration_labels
+    from picture_capture.illustration.labels import illustration_labels
     regions = [PolygonRegion("old", []), fig(5, 100, 70, 120)]
     labels = illustration_labels(regions, "page", geo())
     assert labels[1].startswith("P_01|page|")

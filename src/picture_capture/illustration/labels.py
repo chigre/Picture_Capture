@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 from typing import Sequence
 
-from .models import Entry, PolygonRegion
-from .page_sections import PageSection, normalize_page_sections, section_index_for_v
+from ..models import Entry, PolygonRegion
+from ..page_sections import PageSection, normalize_page_sections, section_index_for_v
 
 LABEL_PATTERN = re.compile(r"^P_(\d+)\|([^|]+)\|(xxx|\d{3})(?:\|.*)?$", re.I)
 AUTO_PATTERN = re.compile(r"(?:^|\|)(AUTO_\d+)(?=\||$)", re.I)
@@ -45,7 +45,7 @@ def _region_top_coordinates(region: PolygonRegion, geometry) -> list[tuple[int, 
 
 
 def _region_key(region: PolygonRegion, geometry, sections) -> tuple[int, int, int, int]:
-    from .processing_core import column_index_for_click
+    from ..processing_core import column_index_for_click
 
     points = _region_top_coordinates(region, geometry)
     if not points:
@@ -63,7 +63,7 @@ def _region_key(region: PolygonRegion, geometry, sections) -> tuple[int, int, in
 def _nearest_above_entry(
     region: PolygonRegion, entries: Sequence[Entry], geometry, sections,
 ) -> int | None:
-    from .processing_core import column_index_for_click, sort_entries_reading_order
+    from ..processing_core import column_index_for_click, sort_entries_reading_order
 
     if not entries:
         return None
@@ -149,7 +149,7 @@ def previous_entry_ref_for_image(previous_image_path) -> tuple[str, int] | None:
     if previous_image_path is None:
         return None
     from pathlib import Path
-    from .formats import pdic_path, read_pdic
+    from ..formats import pdic_path, read_pdic
 
     previous = Path(previous_image_path)
     entries = read_pdic(pdic_path(previous))
@@ -185,10 +185,10 @@ def write_ordered_auto_ppp(
     """
     from pathlib import Path
     from PIL import Image, ImageOps
-    from .formats import write_ppp
-    from .processing_core import derive_nominal_geometry
-    from .profile_semantics import effective_page_settings
-    from .page_sections import read_page_sections
+    from ..formats import write_ppp
+    from ..processing_core import derive_nominal_geometry
+    from ..profile_semantics import effective_page_settings
+    from ..page_sections import read_page_sections
 
     source = Path(image_path)
     with Image.open(source) as opened:

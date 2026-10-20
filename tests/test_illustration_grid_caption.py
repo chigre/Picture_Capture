@@ -1,5 +1,5 @@
 """Regression: a two-row dictionary illustration is one PPP region."""
-from picture_capture.illustration_detection import _merge_illustration_grid, _extend_box_to_caption
+from picture_capture.illustration.detection import _merge_illustration_grid, _extend_box_to_caption
 
 
 def test_eight_panel_figure_merges_into_one_box_before_caption():
