@@ -11,10 +11,10 @@ from pathlib import Path
 from tkinter import messagebox
 from typing import Any
 
-from .formats import write_text_atomic
-from .models import AppSettings
-from .project_storage import crop_settings_path, settings_path
-from .runtime_environment import user_config_root
+from ..formats import write_text_atomic
+from ..models import AppSettings
+from ..project_storage import crop_settings_path, settings_path
+from ..runtime_environment import user_config_root
 
 
 TEMPLATE_FILENAME = "new_project_parameters.json"

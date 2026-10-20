@@ -68,7 +68,7 @@ from picture_capture.visual_marker_templates import (
 from picture_capture.project_storage import profile_path, qt_root, settings_path
 from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
 from picture_capture.training_export import TrainingExportCancelled, make_training_zip
-from picture_capture.recent_projects import (
+from picture_capture.project.recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
 )
 
@@ -3886,8 +3886,8 @@ def test_round1_blocking_ui_paths_use_background_workers():
     assert "details_with_cache(rows)" in recent_block[refresh_start:]
     assert "load_project_center_previews(details)" in recent_block[refresh_start:]
     package = source.parent
-    metadata_source = (package / "project_center_metadata_cache.py").read_text(encoding="utf-8")
-    preview_source = (package / "project_center_preview_cache.py").read_text(encoding="utf-8")
+    metadata_source = (package / "project" / "metadata_cache.py").read_text(encoding="utf-8")
+    preview_source = (package / "project" / "preview_cache.py").read_text(encoding="utf-8")
     assert "recent_project_details(row)" in metadata_source
     assert "load_project_center_preview(root, Path(preview_text))" in preview_source
 

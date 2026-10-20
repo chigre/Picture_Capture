@@ -8,10 +8,10 @@ from pathlib import Path
 import tempfile
 import time
 
-from .models import project_cover_path, project_page_images
-from .project_storage import settings_path
-from .runtime_environment import legacy_user_config_files, user_config_root
-from .recent_project_locking import recent_registry_lock
+from ..models import project_cover_path, project_page_images
+from ..project_storage import settings_path
+from ..runtime_environment import legacy_user_config_files, user_config_root
+from .recent_locking import recent_registry_lock
 
 
 def default_recent_projects_path() -> Path:
@@ -29,7 +29,7 @@ def load_recent_projects(path: Path | None = None) -> list[dict[str, object]]:
             if isinstance(value, list):
                 rows = [dict(row) for row in value if isinstance(row, dict) and row.get("path")]
                 # One tiny index read; no scan-directory inventory before first paint.
-                from .project_center_metadata_cache import cached_details, read_index
+                from .metadata_cache import cached_details, read_index
                 index = read_index()
                 for row in rows:
                     cached = cached_details(Path(str(row["path"])).expanduser(), index)
@@ -212,7 +212,7 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         last_page_index = int(row.get("last_page_index")) if row.get("last_page_index") is not None else -1
     except (TypeError, ValueError):
         last_page_index = -1
-    from .project_center_metadata_cache import cached_details
+    from .metadata_cache import cached_details
     cached = cached_details(root)
     if cached is not None:
         count = int(cached.get("image_count") or 0)
@@ -289,7 +289,7 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         return details
     try:
         candidates = [root.stat().st_mtime]
-        from .project_storage import project_activity_path
+        from ..project_storage import project_activity_path
         activity = project_activity_path(root)
         if activity.is_file():
             candidates.append(activity.stat().st_mtime)

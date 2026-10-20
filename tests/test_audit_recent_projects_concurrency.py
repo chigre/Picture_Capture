@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import threading
 
-from picture_capture import recent_projects
+from picture_capture.project import recent_projects
 
 
 def test_simultaneous_recent_project_writes_have_private_temps(monkeypatch, tmp_path):
