@@ -11,8 +11,8 @@ import pytest
 
 from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_capture import capture_saved_review_rename
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.capture import capture_saved_review_rename
+from picture_capture.proofreading.events import (
     append_rename_batch, load_events, make_event, sha256_file,
 )
 

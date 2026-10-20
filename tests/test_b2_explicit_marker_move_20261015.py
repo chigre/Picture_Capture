@@ -8,8 +8,8 @@ import pytest
 
 from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.proofreading_capture import capture_saved_explicit_marker_move
-from picture_capture.proofreading_events import load_events, sha256_file
+from picture_capture.proofreading.capture import capture_saved_explicit_marker_move
+from picture_capture.proofreading.events import load_events, sha256_file
 from picture_capture.project_storage import data_root
 from picture_capture.ui.entry_move_controller import move_entry_via_dialog
 
@@ -49,7 +49,7 @@ def test_explicit_move_proves_exact_row_and_survives_reopen(tmp_path):
     assert e["prior_pdic_sha256"] == old
     assert e["verification_status"] == "explicit_action_unverified_page"
 
-    from picture_capture.proofreading_capture import capture_saved_review_rename
+    from picture_capture.proofreading.capture import capture_saved_review_rename
     previous = read_pdic(pdic_path(page))
     digest = sha256_file(pdic_path(page))
     write_pdic(pdic_path(page),

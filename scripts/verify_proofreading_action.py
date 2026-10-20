@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from picture_capture.proofreading_verification import verify_saved_action, JUDGMENTS
+from picture_capture.proofreading.verification import verify_saved_action, JUDGMENTS
 
 
 def main() -> int:

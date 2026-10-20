@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from typing import Any
-from ..proofreading_transactions import snapshot_review
+from ..proofreading.transactions import snapshot_review
 from ..proofreading.candidate_history import CandidateReviewHistory
-from ..review_main_editor_sync import reconcile_main_editors_after_review
+from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
 
 
 def _history(review: Any) -> CandidateReviewHistory:

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..proofreading_candidate_delete import commit_candidate_delete
-from ..proofreading_transactions import snapshot_review
+from ..proofreading.candidate_delete import commit_candidate_delete
+from ..proofreading.transactions import snapshot_review
 from .review_transaction_actions import record_owned_candidate_after
 
 
