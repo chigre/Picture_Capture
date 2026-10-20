@@ -3,7 +3,7 @@ from dataclasses import replace
 
 from PIL import Image
 
-from picture_capture import dictionary_page_layout_policy as policy
+from picture_capture.design import layout_policy as policy
 from picture_capture import layout_composition
 from picture_capture.models import AppSettings
 

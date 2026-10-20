@@ -46,7 +46,7 @@ def test_gui_unlined_and_remaining_full_consumers_use_explicit_composition():
         "layout_core_understanding.py": ("infer_composed_physical_page_layout as infer_dictionary_page_layout",),
         "processing.py": ("understanding = understand_composed_page(",),
         "training/export_page_understanding.py": ("understanding = understand_composed_page(",),
-        "profile_validation_modes.py": ("understanding = understand_composed_page(",),
+        "profile/validation_modes.py": ("understanding = understand_composed_page(",),
         "training/export_v3.py": ("ops=explicit_physical_layout_ops()",),
     }
     for filename, needles in files.items():

@@ -1,7 +1,7 @@
 """Phase 13E3: the Layout Core consumer is explicitly composed and cache-stable."""
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_layout_policy as policy
+from picture_capture.design import layout_policy as policy
 from picture_capture import layout_core_understanding as core
 from picture_capture.models import AppSettings
 

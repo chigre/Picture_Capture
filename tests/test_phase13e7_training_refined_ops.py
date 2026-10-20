@@ -1,8 +1,8 @@
 """Phase 13E: training Page Design diagnostics keep raw geometry with explicit physical ops."""
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
-from picture_capture import dictionary_page_design_refined as refined
+from picture_capture.design import page_design as base
+from picture_capture.design import page_design_refined as refined
 from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical
 from picture_capture.models import AppSettings
@@ -56,4 +56,4 @@ def test_training_diagnostic_explicit_ops_are_present_without_public_policy_rebi
     source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture"
               / "training/export_v3.py").read_text(encoding="utf-8")
     assert "ops=explicit_physical_layout_ops()" in source
-    assert "from ..dictionary_page_design_refined import" in source
+    assert "from ..design.page_design_refined import" in source
