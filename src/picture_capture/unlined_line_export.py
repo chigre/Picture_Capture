@@ -29,7 +29,7 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
-from . import dictionary_page_design as page_design
+from .design import page_design as page_design
 from . import formats
 from .image_utils import build_analysis_image, normalize_page_rgb
 from .marker_refinement_analysis import whiten_illustrations_for_export

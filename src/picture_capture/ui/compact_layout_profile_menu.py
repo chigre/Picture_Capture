@@ -11,13 +11,13 @@ from typing import Any
 
 from .compact_ordinary_evidence_menu import build_ordinary_visual_evidence
 
-from picture_capture.profile_indent_ui import (
+from picture_capture.profile.indent_ui import (
     INDENT_TYPE_CHOICES, apply_indent_type_label, indent_type_label,
 )
-from picture_capture.profile_semantics import (
+from picture_capture.profile.semantics import (
     READING_LABELS, apply_reading_choice, reading_choice_from_settings,
 )
-from picture_capture.profile_setup import (
+from picture_capture.profile.setup import (
     HEADER_LABEL_TO_VALUE, FOOTER_LABEL_TO_VALUE, SIDE_LABEL_TO_VALUE,
 )
 

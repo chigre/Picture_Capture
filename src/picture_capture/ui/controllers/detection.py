@@ -33,7 +33,7 @@ from ...processing import (
     ocr_existing_entry_words_from_markers,
     sort_entries_reading_order,
 )
-from ...profile_semantics import effective_page_settings, page_template_analysis_image
+from ...profile.semantics import effective_page_settings, page_template_analysis_image
 from ...project_storage import (
     headword_filter_rules_path,
     ocr_cache_root,

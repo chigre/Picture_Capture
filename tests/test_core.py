@@ -35,7 +35,7 @@ from picture_capture.layout_detection import (
 from picture_capture.layout_detection import LayoutEstimate, aggregate_layout_estimates
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.collation import available_profile_labels, collation_key, parse_custom_order
-from picture_capture.dictionary_profile import (
+from picture_capture.profile.dictionary import (
     PROFILE_FORMAT_V2, PROFILE_FORMAT_V3, available_dictionary_profiles, dictionary_profile_labels,
     dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary,
     write_project_profile, language_effective_settings,
@@ -62,7 +62,7 @@ from picture_capture.paddle_headwords import (
     _pair_with_lens_candidates,
     _apply_pair_engine_position,
 )
-from picture_capture.visual_marker_templates import trim_visual_marker_crop
+from picture_capture.visual.marker_templates import trim_visual_marker_crop
 from picture_capture.processing import (
     clamp_box,
     derive_geometry, derive_nominal_geometry,
@@ -1384,7 +1384,7 @@ class DictionaryProfileV2Tests(unittest.TestCase):
 
     def test_v210_profile_preview_examples_exist(self) -> None:
         import json
-        from picture_capture.dictionary_profile import profile_library_path
+        from picture_capture.profile.dictionary import profile_library_path
         raw = json.loads(profile_library_path().read_text(encoding="utf-8"))
         self.assertEqual(set(raw["validated_examples"]), {
             "NewApproach", "LDER", "HZYLDZD", "XDHYCD", "TimesCED", "RUIGO",
@@ -1634,7 +1634,7 @@ class DictionaryProfileV2Tests(unittest.TestCase):
         self.assertIsNone(rejected)
 
     def test_profile_v3_direction_and_language_are_derived_components(self) -> None:
-        from picture_capture.dictionary_profile import language_effective_settings
+        from picture_capture.profile.dictionary import language_effective_settings
         vertical = language_effective_settings("jpn", "vertical-rl")
         horizontal = language_effective_settings("jpn", "horizontal-tb")
         self.assertEqual(vertical["tesseract_language"], "jpn_vert")
@@ -1868,7 +1868,7 @@ def test_v280_chinese_bracketed_headwords_are_structural_candidates():
 
 
 def test_wizard_parser_controls_gate_human_selected_structures():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text
 
@@ -1898,7 +1898,7 @@ def test_wizard_parser_controls_gate_human_selected_structures():
 
 
 def test_wizard_parser_controls_gate_cjk_bracket_and_marker_structures():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text
 
@@ -1983,7 +1983,7 @@ def test_v214_configured_visual_symbol_families_are_role_aware():
 
 
 def test_v214_dictionary_symbol_inventory_is_exact_per_project():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text
 
@@ -2007,7 +2007,7 @@ def test_v214_dictionary_symbol_inventory_is_exact_per_project():
 
 
 def test_v214_dictionary_bracket_inventory_limits_openers():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text
 
@@ -2027,7 +2027,7 @@ def test_v214_dictionary_bracket_inventory_limits_openers():
 
 
 def test_v214_cnit_validated_profile_has_narrow_symbol_inventory():
-    from picture_capture.dictionary_profile import (
+    from picture_capture.profile.dictionary import (
         dictionary_profile_preset, profile_symbol_inventory_defaults,
     )
 
@@ -2042,7 +2042,7 @@ def test_v214_cnit_validated_profile_has_narrow_symbol_inventory():
 
 
 def test_v214_validated_examples_resolve_as_executable_profiles():
-    from picture_capture.dictionary_profile import dictionary_profile_preset
+    from picture_capture.profile.dictionary import dictionary_profile_preset
 
     shueisha = dictionary_profile_preset("shueisha")
     assert shueisha.family == "cjk_visual"
@@ -2059,7 +2059,7 @@ def test_v214_validated_examples_resolve_as_executable_profiles():
 
 
 def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import parse_headword_text
 
@@ -2098,7 +2098,7 @@ def test_v214_shueisha_japanese_bracketed_headwords_accept_kana_reading_prefix()
 
 def test_v214_shueisha_bracketed_headword_is_accepted_by_filter():
     from PIL import Image
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
 
@@ -2129,7 +2129,7 @@ def test_v214_shueisha_bracketed_headword_is_accepted_by_filter():
 
 def test_v280_cjk_bracket_body_option_requires_extra_visual_evidence():
     from PIL import Image
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
 
@@ -2279,7 +2279,7 @@ def test_v281_cjk_right_context_rejects_dense_body_like_layout():
 
 
 def test_v281_sparse_right_context_safely_recovers_more_clipped_large_cjk():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
 
@@ -2307,7 +2307,7 @@ def test_v281_sparse_right_context_safely_recovers_more_clipped_large_cjk():
 
 def test_v281_ocr_single_han_can_use_sparse_right_context_without_projection_run():
     from PIL import Image, ImageDraw
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, filter_headword_records
 
@@ -2490,7 +2490,7 @@ def test_v214_visual_single_cjk_rescue_uses_profile_for_clipped_pinyin_head():
 
 
 def test_v214_visual_rescue_accepts_clipped_single_han_box_when_large_single_enabled():
-    from picture_capture.dictionary_profile import load_dictionary_profile
+    from picture_capture.profile.dictionary import load_dictionary_profile
     from picture_capture.models import AppSettings
     from picture_capture.paddle_headwords import OCRRecord, _cjk_word_for_visual_run
 
@@ -7655,7 +7655,7 @@ def test_internal_layout_transform_round_trips_source_points():
 
 def test_profile_percent_resolves_directly_to_source_y_pixels():
     from picture_capture.models import AppSettings
-    from picture_capture.profile_semantics import effective_page_settings
+    from picture_capture.profile.semantics import effective_page_settings
     from picture_capture.processing import derive_nominal_geometry
 
     settings = AppSettings(

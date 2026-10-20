@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..dictionary_profile import write_project_profile
+from ..profile.dictionary import write_project_profile
 from ..project_storage import profile_path
 
 

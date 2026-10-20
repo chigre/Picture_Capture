@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from ...collation import available_profile_labels
-from ...dictionary_profile import (
+from ...profile.dictionary import (
     DEFAULT_PROFILE_ID,
     available_dictionary_profiles,
     dictionary_profile_preset,

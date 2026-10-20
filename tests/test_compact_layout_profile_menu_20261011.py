@@ -2,10 +2,10 @@
 from pathlib import Path
 
 from picture_capture.models import AppSettings
-from picture_capture.profile_indent_ui import (
+from picture_capture.profile.indent_ui import (
     INDENT_TYPE_CHOICES, apply_indent_type_label, indent_type_label,
 )
-from picture_capture.profile_semantics import (
+from picture_capture.profile.semantics import (
     READING_LABELS, apply_reading_choice, reading_choice_from_settings,
 )
 from picture_capture.ui import compact_layout_profile_menu
