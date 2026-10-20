@@ -2,7 +2,7 @@
 import numpy as np
 from PIL import Image
 
-from picture_capture import dictionary_page_design as design
+from picture_capture.design import page_design as design
 from picture_capture.models import AppSettings
 
 
@@ -51,7 +51,7 @@ def test_physical_projection_keeps_real_30px_rows_with_18px_nominal_height(monke
 
 def test_per_page_policy_does_not_drop_30px_physical_rows(monkeypatch):
     """The policy consumer must match the lower-level PageDesign contract."""
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
 
     monkeypatch.setattr(design, "_normal_height", lambda _runs, _seed: 18.0)
 

@@ -19,7 +19,7 @@ def test_reuse_environment_worker_setting_with_refine_memory_cap():
 
 
 def test_auto_layout_refinement_serializes_gpu_model_even_with_six_cpu_workers():
-    from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    from picture_capture.design.layout_policy import AUTO_LAYOUT_FIELDS
 
     settings = AppSettings()
     settings.ordinary_auto_layout = True

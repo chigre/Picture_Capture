@@ -29,7 +29,7 @@ def _cached_layout(width, top):
 def _settings():
     settings = AppSettings()
     settings.ordinary_auto_layout = True
-    from picture_capture.dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    from picture_capture.design.layout_policy import AUTO_LAYOUT_FIELDS
     for _field, flag in AUTO_LAYOUT_FIELDS:
         setattr(settings, flag, False)
     settings.ordinary_auto_columns = True
@@ -41,7 +41,7 @@ def _settings():
 
 
 def test_two_pages_reuse_their_own_layoutrows_without_full_detection(tmp_path, monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     monkeypatch.setattr(policy, "resolve_page_layout_policy",
                         lambda *_args, **_kwargs: (_ for _ in ()).throw(
                             AssertionError("must use LayoutRows")
@@ -68,7 +68,7 @@ def test_two_pages_reuse_their_own_layoutrows_without_full_detection(tmp_path, m
 
 
 def test_unrelated_setting_change_still_reuses_physical_json(tmp_path, monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     settings = _settings()
     page = tmp_path / "page.png"
     Image.new("RGB", (180, 150), "white").save(page)
@@ -94,7 +94,7 @@ def test_unrelated_setting_change_still_reuses_physical_json(tmp_path, monkeypat
 
 
 def test_unrelated_row_padding_switch_reuses_needed_json_fields(tmp_path, monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     from picture_capture import marker_refinement_parallel as batch
     settings = _settings()
     settings.ordinary_auto_row_padding = True
@@ -122,7 +122,7 @@ def test_unrelated_row_padding_switch_reuses_needed_json_fields(tmp_path, monkey
 
 
 def test_row_padding_only_requires_no_layout_detector(tmp_path, monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     from picture_capture import marker_refinement_parallel as batch
     settings = _settings()
     for _field, flag in policy.AUTO_LAYOUT_FIELDS:
@@ -149,7 +149,7 @@ def test_row_padding_only_requires_no_layout_detector(tmp_path, monkeypatch):
 
 def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path, monkeypatch):
     """GUI forces the refinement-only switch, but cached page geometry is unchanged."""
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     from picture_capture import marker_refinement_layoutrows as reuse
     original = _settings()
     original.paddle_refine_separator_y = False

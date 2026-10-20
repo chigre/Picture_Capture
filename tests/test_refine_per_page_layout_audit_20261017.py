@@ -12,7 +12,7 @@ from picture_capture import marker_refinement_parallel as batch
 
 def test_two_pages_both_get_separate_physical_layout_measurements(tmp_path, monkeypatch):
     from picture_capture import processing_core
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     from picture_capture import marker_refinement_analysis as prep
 
     pages = []
@@ -72,7 +72,7 @@ def test_missing_per_page_layout_is_reported_instead_of_silent_success(
     tmp_path, monkeypatch,
 ):
     from picture_capture import processing_core
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
 
     page = tmp_path / "scan.png"
     Image.new("RGB", (100, 120), "white").save(page)

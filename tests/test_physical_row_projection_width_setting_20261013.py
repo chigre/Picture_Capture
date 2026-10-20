@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.dictionary_page_design import _leading_width
+from picture_capture.design.page_design import _leading_width
 from picture_capture.layout_core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )

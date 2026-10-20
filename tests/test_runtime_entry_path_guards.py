@@ -303,7 +303,7 @@ def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     assert "install_layout_row_recovery_runtime" not in worker
     assert "install_layout_column_drift_runtime()" not in worker
     policy = (
-        root / "src" / "picture_capture" / "dictionary_page_layout_policy.py"
+        root / "src" / "picture_capture" / "design/layout_policy.py"
     ).read_text(encoding="utf-8")
     assert "finalize_layout_column_drift(" in policy
     assert "install_layout_rows_persistence_runtime()" not in worker
