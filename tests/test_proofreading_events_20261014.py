@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.events import (
     EVENT_FORMAT, append_event, audit_events, load_events, make_event,
     sha256_file,
 )
@@ -137,7 +137,7 @@ def test_journal_rejects_false_predecessor_even_when_postsave_pdic_matches(tmp_p
 
 
 def test_atomic_multi_rename_rejects_mixed_or_stale_predecessors(tmp_path):
-    from picture_capture.proofreading_events import append_rename_batch
+    from picture_capture.proofreading.events import append_rename_batch
     pdic, journal = _case(tmp_path)
     first = _event(pdic)
     append_event(journal, first, pdic_file=pdic)

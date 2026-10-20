@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.review_text_helpers import (
+from picture_capture.proofreading.text_helpers import (
     _candidate_choice_rows, _has_distinct_ocr_alternatives,
 )
 

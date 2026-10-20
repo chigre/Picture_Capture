@@ -9,7 +9,7 @@ import pytest
 from picture_capture.app import PictureCaptureApp
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
 )
 
@@ -155,7 +155,7 @@ def test_page_navigation_discards_queued_candidate_audit_without_writing(tmp_pat
 
 
 def test_atomic_journal_failure_does_not_corrupt_previous_evidence(tmp_path, monkeypatch):
-    from picture_capture import proofreading_events as journal_module
+    from picture_capture.proofreading import events as journal_module
 
     page, pdic = _page(tmp_path)
     journal = tmp_path / "events.json"

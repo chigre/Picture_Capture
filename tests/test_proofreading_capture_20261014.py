@@ -6,10 +6,10 @@ from pathlib import Path
 
 from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.proofreading_capture import (
+from picture_capture.proofreading.capture import (
     capture_saved_review_deletion, _project_identity,
 )
-from picture_capture.proofreading_events import load_events
+from picture_capture.proofreading.events import load_events
 from picture_capture.ui.settings import schema
 
 
@@ -114,7 +114,7 @@ def test_review_delete_only_attempts_capture_after_successful_save():
 
 
 def test_single_saved_rename_is_recorded_after_pdic_commit_without_touching_bytes(tmp_path):
-    from picture_capture.proofreading_capture import capture_saved_review_rename
+    from picture_capture.proofreading.capture import capture_saved_review_rename
 
     page, old = _page(tmp_path)
     updated = [Entry(word="FIRST EDITED", x=10, y=20), old[1]]
@@ -145,7 +145,7 @@ def test_single_saved_rename_is_recorded_after_pdic_commit_without_touching_byte
 
 
 def test_rename_identity_is_stable_across_session_reopen_and_row_reorder(tmp_path):
-    from picture_capture.proofreading_capture import capture_saved_review_rename
+    from picture_capture.proofreading.capture import capture_saved_review_rename
 
     page, previous = _page(tmp_path)
     first = Entry(word="first edit", x=10, y=20)
@@ -172,7 +172,7 @@ def test_rename_identity_is_stable_across_session_reopen_and_row_reorder(tmp_pat
 
 
 def test_two_proven_word_edits_are_recorded_but_mixed_coordinate_changes_refused(tmp_path):
-    from picture_capture.proofreading_capture import capture_saved_review_rename
+    from picture_capture.proofreading.capture import capture_saved_review_rename
 
     page, previous = _page(tmp_path)
     write_pdic(
@@ -223,7 +223,7 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
         )
     bundle = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-        / "proofreading_review_bundle.py"
+        / "proofreading/review_bundle.py"
     ).read_text(encoding="utf-8")
     assert "_stage_recovery(page, changes, rollback_required=True)" in bundle
     assert "_rollback_failed_publish(page)" in bundle
@@ -233,7 +233,7 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
 
 def test_candidate_toggle_only_records_one_confirmed_pdic_and_manual_override_save(tmp_path):
     import json
-    from picture_capture.proofreading_capture import capture_saved_candidate_selection
+    from picture_capture.proofreading.capture import capture_saved_candidate_selection
 
     page, original = _page(tmp_path)
     candidate = ("added", 10, 100)
@@ -280,7 +280,7 @@ def test_candidate_toggle_only_records_one_confirmed_pdic_and_manual_override_sa
 
 def test_candidate_toggle_rejects_partial_or_ambiguous_commits(tmp_path):
     import json
-    from picture_capture.proofreading_capture import capture_saved_candidate_selection
+    from picture_capture.proofreading.capture import capture_saved_candidate_selection
 
     page, original = _page(tmp_path)
     expected = ("added", 10, 100)
@@ -320,7 +320,7 @@ def _pdic_save_regions():
     """Audit effective save bodies, including the extracted deferred helper."""
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
-    helper = (root / "proofreading_deferred_save.py").read_text(encoding="utf-8")
+    helper = (root / "proofreading/deferred_save.py").read_text(encoding="utf-8")
     wrapper = app[app.index("    def _flush_deferred_page_save("):]
     wrapper = wrapper[:wrapper.index("\n    def ")]
     # The GUI remains a thin call-time adapter to the same persistence API.
@@ -347,7 +347,7 @@ def test_ocr_checkbox_flushes_after_both_pdic_and_override_writes():
 
 
 def test_proven_single_canvas_addition_creates_unverified_local_event(tmp_path):
-    from picture_capture.proofreading_capture import capture_saved_manual_addition
+    from picture_capture.proofreading.capture import capture_saved_manual_addition
 
     page, old = _page(tmp_path)
     fresh = Entry(word="new hand entry", x=30, y=110)
@@ -371,7 +371,7 @@ def test_proven_single_canvas_addition_creates_unverified_local_event(tmp_path):
 
 
 def test_add_evidence_rejects_multiedit_duplicate_and_wrong_clicked_location(tmp_path):
-    from picture_capture.proofreading_capture import capture_saved_manual_addition
+    from picture_capture.proofreading.capture import capture_saved_manual_addition
 
     page, old = _page(tmp_path)
     a = Entry(word="manual", x=30, y=110)
@@ -413,7 +413,7 @@ def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
 
 def test_named_ocr_same_word_y_position_switch_is_audited_after_both_saves(tmp_path):
     import json
-    from picture_capture.proofreading_capture import capture_saved_position_switch
+    from picture_capture.proofreading.capture import capture_saved_position_switch
 
     page, old = _page(tmp_path)
     moved_before = ("first", 10, 20)
@@ -452,7 +452,7 @@ def test_named_ocr_same_word_y_position_switch_is_audited_after_both_saves(tmp_p
 
 def test_position_switch_rejects_partial_manual_override_or_multiple_edits(tmp_path):
     import json
-    from picture_capture.proofreading_capture import capture_saved_position_switch
+    from picture_capture.proofreading.capture import capture_saved_position_switch
 
     page, old = _page(tmp_path)
     before = ("first", 10, 20)
@@ -485,13 +485,13 @@ def test_position_switch_rejects_partial_manual_override_or_multiple_edits(tmp_p
 
 def test_only_verified_pre_edit_final_ocr_audit_can_annotate_candidate_lineage(tmp_path):
     import json
-    from picture_capture.proofreading_capture import (
+    from picture_capture.proofreading.capture import (
         verified_ocr_preedit_fingerprints, capture_saved_candidate_selection,
     )
     from picture_capture.ocr_final_decisions import (
         final_decisions_path, pdic_snapshot, _snapshot_digest,
     )
-    from picture_capture.proofreading_evidence import link_event_to_final
+    from picture_capture.proofreading.evidence import link_event_to_final
 
     page, old = _page(tmp_path)
     cache = tmp_path / "ocr_cache.json"

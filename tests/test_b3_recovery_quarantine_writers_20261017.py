@@ -8,8 +8,8 @@ import pytest
 from picture_capture.app import PictureCaptureApp
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_transactions import _recovery_path
-from picture_capture.review_main_editor_sync import commit_proofread_entries
+from picture_capture.proofreading.transactions import _recovery_path
+from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
 
 
 @pytest.mark.parametrize("marker_payload", [b"partial", b'{"rollback_required":true}'])

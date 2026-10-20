@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from picture_capture.proofreading_events import append_event, make_event, sha256_file
-from picture_capture.proofreading_evidence import link_event_to_final
-from picture_capture.proofreading_quality_export import (
+from picture_capture.proofreading.events import append_event, make_event, sha256_file
+from picture_capture.proofreading.evidence import link_event_to_final
+from picture_capture.proofreading.quality_export import (
     EXPORT_FORMAT, summarize_local_events,
 )
 

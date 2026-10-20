@@ -195,7 +195,7 @@ class _ReviewVar:
 
 
 def test_static_review_classification_helpers_sync_and_persist_change(monkeypatch):
-    import picture_capture.review_entry_classification_ui as review
+    import picture_capture.proofreading.entry_classification_ui as review
 
     entry = Entry(
         word="",
@@ -235,7 +235,7 @@ def test_static_review_classification_helpers_sync_and_persist_change(monkeypatc
 def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     import picture_capture.app as app_module
     import picture_capture.processing_core as processing_core
-    import picture_capture.review_entry_classification_ui as review
+    import picture_capture.proofreading.entry_classification_ui as review
 
     marker_ocr_source = Path(processing_core.__file__).read_text(encoding="utf-8")
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")

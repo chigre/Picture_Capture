@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
 )
-from picture_capture.proofreading_verification import (
+from picture_capture.proofreading.verification import (
     explicit_verification_counts, verify_saved_action,
 )
-from picture_capture.proofreading_quality_export import summarize_local_events
+from picture_capture.proofreading.quality_export import summarize_local_events
 
 
 def _source(tmp_path, *, ocr_signature=None):
@@ -180,7 +180,7 @@ def test_verification_journal_rejects_wrong_source_identity(tmp_path):
 
 def test_verification_does_not_commit_when_image_changes_before_append(tmp_path, monkeypatch):
     """Post-consent source drift must not become a verified judgment."""
-    from picture_capture import proofreading_verification as mod
+    from picture_capture.proofreading import verification as mod
 
     pdic, image, journal, event = _source(tmp_path)
     original = mod.append_event
@@ -198,7 +198,7 @@ def test_verification_does_not_commit_when_image_changes_before_append(tmp_path,
 
 def test_verification_does_not_commit_when_ocr_cache_changes_before_append(tmp_path, monkeypatch):
     """An OCR signature checked before acquiring the lock can become stale."""
-    from picture_capture import proofreading_verification as mod
+    from picture_capture.proofreading import verification as mod
 
     pdic, image, journal, event = _source(tmp_path, ocr_signature="ocr-v1")
     cache = tmp_path / "source_ocr.json"
@@ -217,7 +217,7 @@ def test_verification_does_not_commit_when_ocr_cache_changes_before_append(tmp_p
 
 def test_verified_journal_rechecks_source_bytes_inside_write_lock(tmp_path, monkeypatch):
     """A source changed during atomic publication fails without erasing history."""
-    from picture_capture import proofreading_events as mod
+    from picture_capture.proofreading import events as mod
 
     pdic, image, journal, source = _source(tmp_path)
     review = make_event(

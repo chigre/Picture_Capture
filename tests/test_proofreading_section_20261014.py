@@ -4,10 +4,10 @@ from __future__ import annotations
 from PIL import Image
 
 from picture_capture.page_sections import PageSection, write_page_sections
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.events import (
     append_event, make_event, sha256_file,
 )
-from picture_capture.proofreading_quality_export import summarize_local_events
+from picture_capture.proofreading.quality_export import summarize_local_events
 from picture_capture.proofreading.section import (
     section_fields_for_event, section_snapshot_for_source_point,
 )

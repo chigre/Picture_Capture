@@ -1,7 +1,7 @@
 """Conservative linking of proofreading events to final OCR stage."""
 from __future__ import annotations
 
-from picture_capture.proofreading_evidence import (
+from picture_capture.proofreading.evidence import (
     link_event_to_final, summarize_proofreading_evidence,
 )
 

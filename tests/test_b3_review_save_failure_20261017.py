@@ -8,7 +8,7 @@ import pytest
 from picture_capture.app import PictureCaptureApp, ReviewWindow
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_save_safety import (
+from picture_capture.proofreading.save_safety import (
     protect_app_pdic_commit, protect_review_pdic_commit,
 )
 
@@ -126,7 +126,7 @@ def test_app_save_pdic_does_not_drop_deferred_snapshot_on_failure(tmp_path, monk
 
 
 def test_uncertain_deferred_snapshot_cannot_overwrite_committed_pdic(tmp_path):
-    from picture_capture.proofreading_deferred_save import flush_deferred_page_save
+    from picture_capture.proofreading.deferred_save import flush_deferred_page_save
 
     app, entry, page = _app(tmp_path)
     app._deferred_save_job = None
