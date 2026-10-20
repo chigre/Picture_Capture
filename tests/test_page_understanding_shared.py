@@ -11,7 +11,7 @@ from picture_capture.layout.generic_block_roles import (
 from picture_capture.models import AppSettings, Entry
 from picture_capture.page_understanding import understand_page
 from picture_capture.page_understanding_fusion import apply_page_understanding
-from picture_capture.profile_indent_ui import apply_indent_type_label
+from picture_capture.profile.indent_ui import apply_indent_type_label
 import picture_capture.processing as processing
 
 
