@@ -30,7 +30,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from .models import AppSettings
+from ..models import AppSettings
 
 
 INDENT_TYPE_CHOICES = ("词头缩进", "正文缩进", "无明显缩进")
@@ -241,6 +241,6 @@ def build_project_profile_wizard(base_class: type[Any]) -> type[Any]:
     # Step 4 is a separate concern from indentation/layout editing.  Compose the
     # multi-mode validation bench last so it can consume the fully extended
     # wizard while remaining independently testable.
-    from .profile_validation_modes import build_validation_mode_wizard
+    from .validation_modes import build_validation_mode_wizard
 
     return build_validation_mode_wizard(ProjectProfileWizard)

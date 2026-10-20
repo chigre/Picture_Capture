@@ -14,9 +14,9 @@ bootstrap import order without changing the individual extension builders.
 """
 
 from .parameter_help_ui import build_profile_parameter_help_wizard
-from .profile_indent_ui import build_project_profile_wizard
-from .profile_ordinary_evidence_ui import build_ordinary_evidence_profile_wizard
-from .profile_setup import (
+from .indent_ui import build_project_profile_wizard
+from .ordinary_evidence_ui import build_ordinary_evidence_profile_wizard
+from .setup import (
     ProjectProfileWizard as _BaseProjectProfileWizard,
     _screen_work_area,
 )

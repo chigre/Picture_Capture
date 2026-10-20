@@ -27,11 +27,11 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from . import dictionary_page_design as base
-from .layout_detection import analysis_ink_mask
-from .models import AppSettings, Entry
-from .ordinary_visual import _patch_similarity
-from .profile_semantics import page_template_analysis_image
+from . import page_design as base
+from ..layout_detection import analysis_ink_mask
+from ..models import AppSettings, Entry
+from ..ordinary_visual import _patch_similarity
+from ..profile.semantics import page_template_analysis_image
 
 
 @dataclass(slots=True)

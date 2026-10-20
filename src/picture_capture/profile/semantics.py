@@ -7,8 +7,8 @@ from typing import Iterable
 
 from PIL import Image, ImageDraw
 
-from .dictionary_profile import available_dictionary_profiles, dictionary_profile_preset, language_effective_settings, profile_effective_settings
-from .models import AppSettings
+from .dictionary import available_dictionary_profiles, dictionary_profile_preset, language_effective_settings, profile_effective_settings
+from ..models import AppSettings
 
 PROFILE_SETUP_VERSION = 1
 
