@@ -501,7 +501,7 @@ def collect_violations() -> list[str]:
             )
 
     review_classification_source = (
-        PACKAGE_ROOT / "review_entry_classification_ui.py"
+        PACKAGE_ROOT / "proofreading/entry_classification_ui.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_REVIEW_CLASSIFICATION_MUTATIONS:
         if marker in review_classification_source:
@@ -647,6 +647,21 @@ def collect_violations() -> list[str]:
         "proofreading_candidate_history": "proofreading/candidate_history.py",
         "proofreading_identity": "proofreading/identity.py",
         "proofreading_section": "proofreading/section.py",
+        "proofreading_candidate_delete": "proofreading/candidate_delete.py",
+        "proofreading_capture": "proofreading/capture.py",
+        "proofreading_deferred_save": "proofreading/deferred_save.py",
+        "proofreading_events": "proofreading/events.py",
+        "proofreading_evidence": "proofreading/evidence.py",
+        "proofreading_quality_export": "proofreading/quality_export.py",
+        "proofreading_review_bundle": "proofreading/review_bundle.py",
+        "proofreading_save_safety": "proofreading/save_safety.py",
+        "proofreading_transactions": "proofreading/transactions.py",
+        "proofreading_verification": "proofreading/verification.py",
+        "proofreading_verify_ui": "proofreading/verify_ui.py",
+        "review_crop_extension": "proofreading/crop_extension.py",
+        "review_entry_classification_ui": "proofreading/entry_classification_ui.py",
+        "review_main_editor_sync": "proofreading/main_editor_sync.py",
+        "review_text_helpers": "proofreading/text_helpers.py",
     }
     for former, current in moved_proofreading.items():
         if (PACKAGE_ROOT / (former + ".py")).exists():
