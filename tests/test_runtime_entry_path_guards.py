@@ -10,7 +10,7 @@ from PIL import Image
 
 from picture_capture import processing as processing_module
 from picture_capture.models import AppSettings
-from picture_capture.ocr_action_guard import (
+from picture_capture.ocr.action_guard import (
     _ineffective_lens_only_selection,
     guard_ocr_action_selection,
 )

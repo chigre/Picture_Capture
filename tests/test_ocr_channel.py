@@ -185,7 +185,7 @@ def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
 
 
 def test_ocr_boundary_detection_is_channel_neutral_consumer():
-    import picture_capture.ocr_boundary_detection as boundary
+    import picture_capture.ocr.boundary_detection as boundary
 
     source = Path(boundary.__file__).read_text(encoding="utf-8")
     assert "apply_channel_plan_to_legacy_boundary_settings" in source

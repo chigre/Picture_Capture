@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import picture_capture.processing as processing
-from picture_capture import ocr_text_io
+from picture_capture.ocr import text_io as ocr_text_io
 
 
 def test_phase7k_processing_reexports_ocr_text_io_helpers() -> None:

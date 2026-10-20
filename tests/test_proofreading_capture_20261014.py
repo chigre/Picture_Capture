@@ -488,7 +488,7 @@ def test_only_verified_pre_edit_final_ocr_audit_can_annotate_candidate_lineage(t
     from picture_capture.proofreading.capture import (
         verified_ocr_preedit_fingerprints, capture_saved_candidate_selection,
     )
-    from picture_capture.ocr_final_decisions import (
+    from picture_capture.ocr.final_decisions import (
         final_decisions_path, pdic_snapshot, _snapshot_digest,
     )
     from picture_capture.proofreading.evidence import link_event_to_final
