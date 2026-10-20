@@ -1134,7 +1134,7 @@ class SettingsDialog(tk.Toplevel):
             add="+",
         )
 
-        # Reuse the project profile without duplicating the wizard.
+        # Reuse the project profile.
         self._active_profile_key = effective_project_profile_id(
             parent.settings,
             project_profile_path(parent.project.root) if parent.project else None,
