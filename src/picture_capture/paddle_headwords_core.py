@@ -48,7 +48,7 @@ from .quality.paddle_diagnostic_formatting import (
 from .runtime_environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
-from .dictionary_profile import (
+from .profile.dictionary import (
     PROFILE_FILENAME,
     DictionaryProfile,
     effective_project_profile_id,
@@ -57,7 +57,7 @@ from .dictionary_profile import (
     starts_with_internal_article_symbol,
 )
 from .ocr_engines import find_tesseract, run_google_lens, tesseract_status
-from .visual_marker_templates import (
+from .visual.marker_templates import (
     match_visual_marker_template,
     split_configured_symbols,
     visual_marker_samples_from_settings,
