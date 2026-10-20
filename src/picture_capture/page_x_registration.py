@@ -13,10 +13,10 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageOps
 
-from . import dictionary_page_design as base
+from .design import page_design as base
 from .layout_detection import LayoutEstimate, analysis_ink_mask
 from .models import AppSettings
-from .profile_indent_ui import indent_type_label
+from .profile.indent_ui import indent_type_label
 
 
 # Preserve the legacy installed/uninstalled runtime when no explicit ops are passed.

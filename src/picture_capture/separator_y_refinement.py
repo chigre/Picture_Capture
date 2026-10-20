@@ -102,7 +102,7 @@ def refined_layout_entry_y_by_line(
     supplies the common Y refiner with each entry row's coarse Y and column ROI.
     """
     try:
-        from . import dictionary_page_design as page_design
+        from .design import page_design as page_design
 
         layout = understanding.layout
         settings = understanding.page_settings

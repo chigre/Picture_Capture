@@ -22,7 +22,7 @@ from .page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
     reading_lane_index, section_index_for_v, v_is_inside_sections,
 )
-from .profile_semantics import (
+from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
 from .ocr_engines import find_tesseract
@@ -2510,7 +2510,7 @@ def ocr_existing_entry_words_from_markers(
     canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
     ordered = sort_entries_reading_order(entries, geometry, page_sections)
 
-    from .dictionary_profile import effective_project_profile_id, load_dictionary_profile
+    from .profile.dictionary import effective_project_profile_id, load_dictionary_profile
     from .entry_ocr_crop import resolve_entry_ocr_row_metrics
     from .ocr_channel import OcrChannelSession, OcrTextChoice, choose_ocr_text
     from .paddle_headwords import parse_headword_text
@@ -2735,7 +2735,7 @@ def ocr_entries(
     # The legacy text-only OCR consumer must use the same bracketed-lemma
     # boundary as ordinary drawn-marker OCR. A concrete CJK Profile and the
     # user's bracket-structure toggle are both required.
-    from .dictionary_profile import effective_project_profile_id, load_dictionary_profile
+    from .profile.dictionary import effective_project_profile_id, load_dictionary_profile
     from .ordinary.marker_ocr_text import bracketed_ocr_lemma
     profile = load_dictionary_profile(
         None,

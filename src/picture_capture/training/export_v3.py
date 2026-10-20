@@ -26,7 +26,7 @@ import shutil
 from PIL import Image
 
 from .. import formats
-from ..dictionary_page_design_refined import (
+from ..design.page_design_refined import (
     detect_entries_from_page_design,
     layout_diagnostics,
 )
@@ -35,7 +35,7 @@ from ..image_utils import normalize_page_rgb
 from ..models import AppSettings, Entry
 from ..page_sections import read_page_sections
 from ..processing import column_index, derive_geometry, detect_entries
-from ..profile_semantics import effective_page_settings, page_template_analysis_image
+from ..profile.semantics import effective_page_settings, page_template_analysis_image
 from ..training_baseline import load_automatic_baseline, baseline_path_for_pdic
 
 
