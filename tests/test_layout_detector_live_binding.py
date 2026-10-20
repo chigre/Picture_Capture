@@ -43,7 +43,7 @@ def test_live_binding_is_static_and_needs_no_bootstrap_installer():
 
     root = Path(__file__).resolve().parents[1]
     policy = (
-        root / "src/picture_capture/dictionary_page_layout_policy.py"
+        root / "src/picture_capture/design/layout_policy.py"
     ).read_text(encoding="utf-8")
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")

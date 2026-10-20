@@ -227,7 +227,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
-    policy = (root / "src/picture_capture/dictionary_page_layout_policy.py").read_text(encoding="utf-8")
+    policy = (root / "src/picture_capture/design/layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
     large_head = (
         root / "src/picture_capture/ordinary_large_head_evidence.py"

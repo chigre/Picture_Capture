@@ -91,7 +91,7 @@ def test_gui_bootstrap_no_longer_installs_profile_detector() -> None:
 
     root = Path(__file__).resolve().parents[1]
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
-    profile = (root / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
+    profile = (root / "src/picture_capture/profile/setup.py").read_text(encoding="utf-8")
 
     assert "install_profile_layout_bootstrap" not in gui
     assert "detect_profile_layout_parameters as detect_layout_parameters" in profile

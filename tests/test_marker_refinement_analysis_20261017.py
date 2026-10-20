@@ -347,8 +347,8 @@ def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp
 def test_full_refine_pipeline_uses_per_page_column_width_and_line_height(
     monkeypatch, tmp_path,
 ):
+    from picture_capture.design import layout_policy as policy
     from picture_capture import (
-        dictionary_page_layout_policy as policy,
         marker_refinement_top_edge, processing_core,
     )
 

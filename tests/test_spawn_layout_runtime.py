@@ -71,7 +71,7 @@ def test_spawn_layout_wrapper_file_is_retired_and_processing_owns_preparation():
         root / "src/picture_capture/bootstrap/gui.py"
     ).read_text(encoding="utf-8")
     base_source = (
-        root / "src/picture_capture/dictionary_page_design.py"
+        root / "src/picture_capture/design/page_design.py"
     ).read_text(encoding="utf-8")
     core_source = (
         root / "src/picture_capture/bootstrap/core.py"

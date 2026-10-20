@@ -152,7 +152,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     guide_source = (
         ROOT / "src/picture_capture/ui/dialogs/usage_guide.py"
     ).read_text(encoding="utf-8")
-    profile_source = (ROOT / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
+    profile_source = (ROOT / "src/picture_capture/profile/setup.py").read_text(encoding="utf-8")
 
     assert '"appearance_mode": app.appearance_preference' in session_source
     assert '"system": "跟随系统"' in app_source
