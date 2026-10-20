@@ -33,7 +33,7 @@ def commit_proofread_entries(review: Any) -> None:
     """Persist editor words by rendered Entry identity, then reconcile canvas."""
     # This entry point runs before app.save_pdic; a marker must block edits
     # BEFORE any Entry.word or canvas binding is mutated.
-    from .proofreading_transactions import _recovery_path
+    from .transactions import _recovery_path
     page = getattr(review.parent, "current_page", None)
     if page is not None and _recovery_path(page).exists():
         raise RuntimeError("Unresolved R3 transaction; refusing editor commit")

@@ -19,7 +19,7 @@ def flush_deferred_page_save(app, *, write_pdic, pdic_path) -> None:
         raise RuntimeError("R3 PDIC write outcome uncertain; refusing stale deferred save")
     snapshot = getattr(app, "_deferred_save_snapshot", None)
     if snapshot is not None:
-        from .proofreading_transactions import _recovery_path
+        from .transactions import _recovery_path
         if _recovery_path(snapshot[0]).exists():
             raise RuntimeError("Unresolved R3 transaction; refusing deferred save")
         page, entries, image_width, pages, page_index = snapshot
