@@ -93,17 +93,43 @@ jobs:
 
 
   python310-compat:
-    runs-on: ubuntu-latest
+    name: "Python 3.10 / ${{ matrix.os }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up uv and Python 3.10
         uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.10"
           enable-cache: true
-      - name: Install locked dependencies
-        run: uv sync --locked --group dev
+      - name: Install locked dependencies using Python 3.10
+        run: uv sync --locked --python 3.10 --group dev
+      - name: Verify actual test interpreter is Python 3.10
+        run: uv run --locked --python 3.10 python -c "import sys; print(sys.version); assert sys.version_info[:2] == (3, 10)"
+      - name: Check platform and OCR profile resolution
+        run: uv run --locked --python 3.10 python scripts/ci_platform_check.py
+      - name: Enforce architecture guard
+        run: uv run --locked --python 3.10 python scripts/architecture_guard.py
       - name: Run Python 3.10 regression suite
-        run: uv run --locked pytest -q
+        run: uv run --locked --python 3.10 pytest
+      - name: GUI construction smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked --python 3.10 python scripts/gui_smoke.py
+      - name: GUI construction smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked --python 3.10 python scripts/gui_smoke.py
+      - name: Run compatibility test runner
+        run: uv run --locked --python 3.10 python run_tests.py
       - name: Compile Python sources on 3.10
-        run: uv run --locked python -m compileall -q src scripts run.py run_tests.py
+        run: uv run --locked --python 3.10 python -m compileall -q src scripts run.py run_tests.py
+      - name: Check undefined names
+        run: uv run --locked --python 3.10 ruff check --select F821 src tests scripts run.py run_tests.py
+      - name: Build wheel
+        run: uv build --wheel
