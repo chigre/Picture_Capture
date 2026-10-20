@@ -669,6 +669,32 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical proofreading module missing: {current}")
 
+
+    # Issue #562: Profile, dictionary-page design and visual marker canonical ownership.
+    # The original size baseline for moved profile/setup.py remains unchanged.
+    migrated_profile_design = {
+        "profile_indent_ui": "profile/indent_ui.py",
+        "profile_layout_bootstrap": "profile/layout_bootstrap.py",
+        "profile_ordinary_evidence_ui": "profile/ordinary_evidence_ui.py",
+        "profile_semantics": "profile/semantics.py",
+        "profile_setup": "profile/setup.py",
+        "profile_validation_modes": "profile/validation_modes.py",
+        "profile_wizard": "profile/wizard.py",
+        "dictionary_profile": "profile/dictionary.py",
+        "parameter_help_ui": "profile/parameter_help_ui.py",
+        "dictionary_page_design": "design/page_design.py",
+        "dictionary_page_design_refined": "design/page_design_refined.py",
+        "dictionary_page_layout_policy": "design/layout_policy.py",
+        "visual_marker_templates": "visual/marker_templates.py",
+        "visual_marker_ui": "visual/marker_ui.py",
+        "app_settings_migrations": "profile/settings_migrations.py",
+    }
+    for former, canonical in migrated_profile_design.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired Profile/design root module returned: {former}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical Profile/design owner missing: {canonical}")
+
     return violations
 
 
