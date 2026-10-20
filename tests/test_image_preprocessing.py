@@ -2036,9 +2036,7 @@ def test_phase7a_reporting_helpers_are_reexported_from_stable_module() -> None:
         image_preprocessing.result_summary
         is image_preprocessing_reporting.result_summary
     )
-    assert image_preprocessing.export_summary_csv.__module__.endswith(
-        "image_preprocessing_reporting"
-    )
+    assert image_preprocessing.export_summary_csv.__module__ == "picture_capture.preprocess.reporting"
 
 
 def test_phase7b_storage_helpers_are_reexported_from_stable_module() -> None:
@@ -2050,9 +2048,7 @@ def test_phase7b_storage_helpers_are_reexported_from_stable_module() -> None:
         assert getattr(image_preprocessing, name) is getattr(
             image_preprocessing_storage, name
         )
-        assert getattr(image_preprocessing, name).__module__.endswith(
-            "image_preprocessing_storage"
-        )
+        assert getattr(image_preprocessing, name).__module__ == "picture_capture.preprocess.storage"
 
 
 def test_phase7c_persistence_helpers_are_reexported_from_stable_module() -> None:
@@ -2068,9 +2064,7 @@ def test_phase7c_persistence_helpers_are_reexported_from_stable_module() -> None
         assert getattr(image_preprocessing, name) is getattr(
             image_preprocessing_persistence, name
         )
-        assert getattr(image_preprocessing, name).__module__.endswith(
-            "image_preprocessing_persistence"
-        )
+        assert getattr(image_preprocessing, name).__module__ == "picture_capture.preprocess.persistence"
     assert (
         image_preprocessing.MANUAL_GEOMETRY_FORMAT
         == image_preprocessing_persistence.MANUAL_GEOMETRY_FORMAT
