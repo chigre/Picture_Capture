@@ -68,7 +68,7 @@ def test_profile_settings_roundtrip_and_profile_sidecar(tmp_path):
 
 
 def test_parameter_template_excludes_page_specific_mixed_overrides():
-    from picture_capture.project_parameter_templates import capture_parameters
+    from picture_capture.project.parameter_templates import capture_parameters
     settings = AppSettings(
         dictionary_layout_kind="mixed",
         illustrated_page_overrides={"volume1_001.png": "illustrated"},

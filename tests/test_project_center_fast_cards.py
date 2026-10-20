@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 from picture_capture import models
-from picture_capture import recent_projects
+from picture_capture.project import recent_projects
 
 
 def test_project_card_reuses_one_scan_directory_inventory(monkeypatch, tmp_path):
@@ -58,5 +58,5 @@ def test_project_center_displays_cards_before_decoding_previews():
     assert preview_dispatch < metadata_done  # declared in details callback
     assert "load_project_center_previews(details)" in section
     preview_source = (Path(__file__).resolve().parents[1] / "src" /
-                      "picture_capture" / "project_center_preview_cache.py").read_text(encoding="utf-8")
+                      "picture_capture" / "project" / "preview_cache.py").read_text(encoding="utf-8")
     assert "load_project_center_preview(root, Path(preview_text))" in preview_source

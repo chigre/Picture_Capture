@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture import project_folder_launcher as launcher
+from picture_capture.project import folder_launcher as launcher
 
 
 def test_open_folder_windows(monkeypatch, tmp_path):
@@ -36,7 +36,7 @@ def test_project_center_card_has_folder_action_distinct_from_project_load():
     section = source[start:source.index("\n    @staticmethod", start)]
     assert "add_open_folder_button(actions, root, dialog, exists)" in section
     adapter = (Path(__file__).resolve().parents[1] / "src" /
-               "picture_capture" / "project_folder_launcher.py").read_text(encoding="utf-8")
+               "picture_capture" / "project" / "folder_launcher.py").read_text(encoding="utf-8")
     assert 'text="打开文件夹"' in adapter
     assert "open_project_folder_with_error(root, dialog)" in adapter
     assert 'state="normal" if exists else "disabled"' in adapter

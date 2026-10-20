@@ -138,6 +138,15 @@ This organization change is *not* a source-code compression project. An expanded
 - Add canonical ownership assertion and architecture guard. Root count baseline **162**, expected migration result **159** after independent complete Git tree audit.
 - PR acceptance is separate: Windows/macOS/Ubuntu × Python 3.10 & 3.13 full CI, Tk GUI smoke, wheel, CodeQL, review, postmerge main CI and documented manual scanned-page verification limitations. No result is claimed before observed.
 
+
+## Issue #562 — Project Center / recent registry ownership cohort (pending PR acceptance)
+
+- **Six physical moves, no root shims:** `project_center_metadata_cache.py` → `project/metadata_cache.py`; `project_center_preview_cache.py` → `project/preview_cache.py`; `project_folder_launcher.py` → `project/folder_launcher.py`; `project_parameter_templates.py` → `project/parameter_templates.py`; `recent_project_locking.py` → `project/recent_locking.py`; `recent_projects.py` → `project/recent_projects.py`.
+- Project Center GUI composition stays in `app.py` as a historical entrypoint. The registry modules continue to use the existing user-config files, atomic temp/replace operations and interprocess lock, while the separate metadata/thumbnail caches preserve existing invalidation, project identities, lazy loading and first-paint behavior. Parameter templates preserve their serialized settings values and Profile/PDIC/PPP/SECTION handling. Folder opening stays an OS-specific, call-time UI side effect.
+- Update the actual app's static and deferred imports, training export dialog, test imports and source-inspection fixtures; no alias installer, global monkeypatch or old-root shim. Keep `project_storage.py` at the root pending **separate high-risk** persistence/write-contract audit. Existing `profile_* .py` files also remain pending GUI/Profile/reading-order parity audit; neither category is counted as moved here.
+- New owner test and additive architecture guard reject root module resurrection and require six canonical owners. Expected complete Git tree root `.py` count **159 → 153** after physical moves; independently check before claiming.
+- No change to PDIC/PPP/SECTION bytes, project lock, manual edits, GPU one-owner/spawn, or source-image coordinates is intended. Acceptance requires complete Python 3.10 and 3.13 Windows/macOS/Ubuntu CI, GUI smoke, wheel, CodeQL, reviews and postmerge main CI. True Windows GUI and scanned-image manual parity cannot be inferred from synthetic automation.
+
 ## Proofreading bounded ownership: three verified physical paths (Issue #562)
 
 - Relocate `proofreading_candidate_history.py` to `proofreading/candidate_history.py`, `proofreading_identity.py` to `proofreading/identity.py`, and `proofreading_section.py` to `proofreading/section.py`. No root-level shim is retained. Keep the R3 transaction implementation, durable PDIC/PPP/SECTION writers, app review editor, and evidence journal at their existing paths pending separate audited migration.

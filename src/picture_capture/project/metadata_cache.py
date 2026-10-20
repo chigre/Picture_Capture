@@ -12,8 +12,8 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from .project_storage import project_activity_path, settings_path
-from .runtime_environment import user_config_root
+from ..project_storage import project_activity_path, settings_path
+from ..runtime_environment import user_config_root
 
 VERSION = 1
 FIELDS = ("full_name", "abbreviation", "image_count", "last_edited",

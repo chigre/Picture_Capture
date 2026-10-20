@@ -627,6 +627,21 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical illustration module missing: {current}")
 
+    # Issue #562: Project Center and recent registry are owned by project/.
+    migrated_project = {
+        "project_center_metadata_cache": "project/metadata_cache.py",
+        "project_center_preview_cache": "project/preview_cache.py",
+        "project_folder_launcher": "project/folder_launcher.py",
+        "project_parameter_templates": "project/parameter_templates.py",
+        "recent_project_locking": "project/recent_locking.py",
+        "recent_projects": "project/recent_projects.py",
+    }
+    for former, canonical in migrated_project.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired project root owner returned: {former}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical project owner missing: {canonical}")
+
     # Issue #562: bounded proofreading domain owners, no former-root shims.
     moved_proofreading = {
         "proofreading_candidate_history": "proofreading/candidate_history.py",
