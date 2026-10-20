@@ -94,8 +94,8 @@ FORBIDDEN_APP_SETTINGS_INSTALL_CALLS = (
     "install_entry_crop_settings()",
 )
 APP_SETTINGS_COMPAT_SHIMS = {
-    "separator_y_settings.py",
-    "entry_crop_settings.py",
+    "refinement/separator_y_settings.py",
+    "crop/entry_crop_settings.py",
 }
 
 # Phase 12J makes the public Page Design detector a static call-time forwarder.
@@ -566,6 +566,23 @@ def collect_violations() -> list[str]:
             violations.append(f"retired ordinary root owner returned: {old_name}.py")
         if not (PACKAGE_ROOT / owner_path).is_file():
             violations.append(f"canonical ordinary owner missing: {owner_path}")
+
+    # Issue #562: physical leaf owners, no old root shim modules.
+    migrated_leaf_owners = {
+        "unlined_blank_detection": "unlined/blank_detection.py",
+        "unlined_physical_rows_resolver": "unlined/physical_rows_resolver.py",
+        "page_thumbnail_cache": "thumbnail/cache.py",
+        "page_thumbnail_tasks": "thumbnail/tasks.py",
+        "generic_block_roles": "layout/generic_block_roles.py",
+        "ink_safe_separator": "refinement/ink_safe_separator.py",
+        "entry_crop_settings": "crop/entry_crop_settings.py",
+        "separator_y_settings": "refinement/separator_y_settings.py",
+    }
+    for old_name, canonical in migrated_leaf_owners.items():
+        if (PACKAGE_ROOT / (old_name + ".py")).exists():
+            violations.append(f"retired root owner returned: {old_name}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical leaf owner missing: {canonical}")
 
     return violations
 

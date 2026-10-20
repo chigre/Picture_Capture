@@ -42,7 +42,7 @@ from .unlined_export_filter_settings import (
     DEFAULT_BLANK_INK_PERCENT,  # Legacy utility default only.
     load_unlined_filter_settings,
 )
-from .unlined_physical_rows_resolver import resolve_unlined_physical_rows
+from .unlined.physical_rows_resolver import resolve_unlined_physical_rows
 
 
 OUTPUT_DIRNAME = "PSW_UNLINED"
@@ -259,7 +259,7 @@ def left_contiguous_white_percent(image: Image.Image) -> float:
     exported image. See unlined_blank_detection for the conservative definition
     of a meaningful ink component.
     """
-    from .unlined_blank_detection import noise_tolerant_left_white_percent
+    from .unlined.blank_detection import noise_tolerant_left_white_percent
     return noise_tolerant_left_white_percent(image)
 
 def _atomic_text(path: Path, text: str) -> None:

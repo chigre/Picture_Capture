@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-import picture_capture.page_thumbnail_cache as disk
+import picture_capture.thumbnail.cache as disk
 from picture_capture.ui.page_thumbnails import PageThumbnailController
 
 
@@ -90,7 +90,7 @@ def test_read_only_cache_falls_back_to_real_preview(tmp_path, monkeypatch):
 
 
 def test_progressively_caches_all_pages_not_only_visible_ones(tmp_path):
-    from picture_capture.page_thumbnail_tasks import ThumbnailTasks
+    from picture_capture.thumbnail.tasks import ThumbnailTasks
     import time
 
     scans = [

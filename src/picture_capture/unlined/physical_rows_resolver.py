@@ -14,7 +14,7 @@ from typing import Any
 
 from PIL import Image
 
-from .layout_rows_cache import (
+from ..layout_rows_cache import (
     load_layout_rows_cache,
     recover_physical_rows_fast,
     write_layout_rows_cache,
@@ -61,7 +61,7 @@ def resolve_unlined_physical_rows(
     # Escalate geometry only through the explicit physical-only policy
     # composition. This independent spawn worker no longer needs to install
     # process-global Layout hooks before the detector can run.
-    from .layout_composition import infer_composed_physical_page_layout
+    from ..layout_composition import infer_composed_physical_page_layout
 
     try:
         layout, _page_settings, _applied = infer_composed_physical_page_layout(

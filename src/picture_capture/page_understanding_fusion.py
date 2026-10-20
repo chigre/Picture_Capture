@@ -16,7 +16,7 @@ than letting one family silently erase another.
 
 from dataclasses import replace
 
-from .generic_block_roles import block_after_separator, generic_entry_candidates
+from .layout.generic_block_roles import block_after_separator, generic_entry_candidates
 from .models import Entry
 from .page_understanding import (
     PageUnderstanding,

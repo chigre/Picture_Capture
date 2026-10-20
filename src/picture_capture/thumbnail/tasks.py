@@ -12,7 +12,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Mapping
 
-from picture_capture.page_thumbnail_cache import get_page_thumbnail
+from picture_capture.thumbnail.cache import get_page_thumbnail
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ def _source(name):
 def test_migrated_physical_and_full_consumers_use_explicit_composition():
     core = _source("layout_core_understanding.py")
     processing = _source("processing.py")
-    unlined = _source("unlined_physical_rows_resolver.py")
+    unlined = _source("unlined/physical_rows_resolver.py")
     assert "infer_composed_physical_page_layout as infer_dictionary_page_layout" in core
     assert "understanding = understand_composed_page(" in processing
     assert "understanding = page_understanding_module.understand_page(" not in processing

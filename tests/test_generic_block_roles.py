@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from picture_capture.generic_block_roles import generic_entry_candidates
+from picture_capture.layout.generic_block_roles import generic_entry_candidates
 from picture_capture.models import AppSettings
 from picture_capture.page_understanding import understand_page
 from picture_capture.profile_indent_ui import apply_indent_type_label
