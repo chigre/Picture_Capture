@@ -163,7 +163,7 @@ def test_bad_crop_settings_version_is_safe_and_corrupt_json_is_reported(tmp_path
 
 
 def test_page_artifact_edit_invalidates_metadata_clock(tmp_path, monkeypatch):
-    from picture_capture import project_center_metadata_cache as cache
+    from picture_capture.project import metadata_cache as cache
     from picture_capture.formats import write_pdic
     from picture_capture.models import Entry
 
@@ -171,7 +171,7 @@ def test_page_artifact_edit_invalidates_metadata_clock(tmp_path, monkeypatch):
     project = tmp_path / "legacy_project"
     project.mkdir()
     (project / "1.png").write_bytes(b"scan")
-    from picture_capture.recent_projects import recent_project_details
+    from picture_capture.project.recent_projects import recent_project_details
     row = {"path": str(project)}
     cache.store_details([recent_project_details(row)])
     assert cache.cached_details(project) is not None

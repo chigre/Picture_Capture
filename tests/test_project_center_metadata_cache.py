@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 
 from picture_capture.models import AppSettings
-from picture_capture import project_center_metadata_cache as cache
-from picture_capture.recent_projects import (
+from picture_capture.project import metadata_cache as cache
+from picture_capture.project.recent_projects import (
     load_recent_projects, recent_project_details, recent_project_stub_details,
 )
 

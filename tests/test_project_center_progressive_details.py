@@ -1,7 +1,7 @@
 """Project Center first paint must not wait for scanning project directories."""
 from pathlib import Path
 
-from picture_capture.recent_projects import recent_project_stub_details
+from picture_capture.project.recent_projects import recent_project_stub_details
 
 
 def test_stub_details_are_registry_only(monkeypatch, tmp_path):

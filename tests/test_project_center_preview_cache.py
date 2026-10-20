@@ -2,7 +2,7 @@
 import json
 import os
 from PIL import Image
-from picture_capture import project_center_preview_cache as preview
+from picture_capture.project import preview_cache as preview
 
 def test_cache_hit_avoids_original_decode(monkeypatch, tmp_path):
     source = tmp_path / "_cover.png"

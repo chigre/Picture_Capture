@@ -25,7 +25,7 @@ from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, tt
 from PIL import Image, ImageTk
 
 from . import __version__
-from . import project_parameter_templates as _project_templates
+from .project import parameter_templates as _project_templates
 from .appearance import (
     appearance_palette,
     apply_classic_widget_appearance,
@@ -249,7 +249,7 @@ from .project_storage import (
     profile_path as project_profile_path, qt_root, replace_rules_path, settings_path,
     training_exports_root, word_fill_status_path, words_of_pages_default_path,
 )
-from .recent_projects import (
+from .project.recent_projects import (
     load_recent_projects, recent_project_details, recent_project_stub_details, remove_recent_project, set_recent_project_pinned, touch_recent_project,
 )
 from .processing import (
@@ -12191,7 +12191,7 @@ class PictureCaptureApp(tk.Tk):
                 return
             dialog.destroy()
 
-        from .project_folder_launcher import add_open_folder_button
+        from .project.folder_launcher import add_open_folder_button
 
         def copy_path(root: Path) -> None:
             dialog.clipboard_clear()
@@ -12252,7 +12252,7 @@ class PictureCaptureApp(tk.Tk):
                 command=lambda: (set_recent_project_pinned(root, not pinned), refresh_recent_data()),
             )
             menu.add_separator()
-            from .project_center_metadata_cache import clear_cached_details
+            from .project.metadata_cache import clear_cached_details
             menu.add_command(
                 label="重新扫描项目元数据",
                 command=lambda p=root: (clear_cached_details(p), refresh_recent_data()),
@@ -12406,7 +12406,7 @@ class PictureCaptureApp(tk.Tk):
             def worker():
                 return load_recent_projects()
 
-            from .project_center_preview_cache import load_project_center_previews
+            from .project.preview_cache import load_project_center_previews
 
             def alive() -> bool:
                 try:
@@ -12420,7 +12420,7 @@ class PictureCaptureApp(tk.Tk):
                 state["cover_images"] = covers
                 rebuild()
 
-            from .project_center_metadata_cache import details_with_cache
+            from .project.metadata_cache import details_with_cache
 
             def details_done(details) -> None:
                 if not alive():
