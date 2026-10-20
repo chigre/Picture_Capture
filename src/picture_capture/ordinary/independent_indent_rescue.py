@@ -53,8 +53,8 @@ def recover_depleted_indent_columns(
     if not depleted:
         return list(entries)
 
-    from .. import dictionary_page_design as native
-    from .. import dictionary_page_design_refined as refined
+    from ..design import page_design as native
+    from ..design import page_design_refined as refined
 
     # The raw physical primitives are deliberately independent of the newer
     # composed physical-role pipeline. A second invocation of the same failed

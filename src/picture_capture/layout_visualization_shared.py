@@ -11,7 +11,7 @@ two role assignments for one page.
 from pathlib import Path
 from typing import Any
 
-from .dictionary_page_layout_policy import resolve_page_layout_policy
+from .design.layout_policy import resolve_page_layout_policy
 from .layout_rows_cache import capture_layout_rows
 from .image_utils import build_analysis_image
 from .layout.role_provenance import indent_blocks_with_entry_sources

@@ -22,7 +22,7 @@ def requested_refinement_fields(settings: Any) -> set[str]:
     """Resolve the *small* set of per-page fields useful to Y refinement."""
     if not bool(getattr(settings, "ordinary_auto_layout", False)):
         return set()
-    from .dictionary_page_layout_policy import AUTO_LAYOUT_FIELDS
+    from .design.layout_policy import AUTO_LAYOUT_FIELDS
 
     return {
         field for field, switch in AUTO_LAYOUT_FIELDS

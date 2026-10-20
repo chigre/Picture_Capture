@@ -264,7 +264,7 @@ def compose_physical_line_feature(inner: Callable[..., Any]):
         reference: float,
         previous_end: int,
     ) -> Any | None:
-        from . import dictionary_page_design as page_design
+        from .design import page_design as page_design
 
         line_ink = ink[y0:y1]
         first_x = _credible_first_ink_x(line_ink, reference)
@@ -316,7 +316,7 @@ def physical_line_feature(
 
 def explicit_physical_layout_ops():
     """Construct ordered robust -> physical primitives without global rebinding."""
-    from . import dictionary_page_design as page_design
+    from .design import page_design as page_design
     from .layout.line_start_refinement import compose_robust_line_feature
 
     return page_design.LayoutPrimitiveOps(
@@ -426,7 +426,7 @@ def normalized_physical_indents(lines: list[Any]) -> dict[int, float]:
 
 def physical_indent_modes(lines: list[Any], _reference: float | None = None) -> list[Any]:
     """Cluster one column by slant-normalized physical leading whitespace."""
-    from . import dictionary_page_design as page_design
+    from .design import page_design as page_design
 
     if not lines:
         return []
@@ -664,7 +664,7 @@ def normalize_layout_roles(layout: Any) -> Any:
 
 
 def _install_policy_finalization() -> None:
-    from . import dictionary_page_layout_policy as policy
+    from .design import layout_policy as policy
 
     if getattr(policy, "_physical_indent_finalizer_installed", False):
         return
@@ -699,7 +699,7 @@ def _install_page_understanding_finalization() -> None:
 
 def install_physical_indent_inference() -> None:
     """Install the single physical-indent implementation used by all consumers."""
-    from . import dictionary_page_design as page_design
+    from .design import page_design as page_design
     from .layout_profile_anchor import install_profile_layout_anchor
 
     global _BASE_LINE_FEATURE

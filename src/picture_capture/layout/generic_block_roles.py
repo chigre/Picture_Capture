@@ -24,7 +24,7 @@ entry-role inference is made for ``无明显缩进`` pages.
 
 from dataclasses import dataclass
 
-from .. import dictionary_page_design as base
+from ..design import page_design as base
 from ..models import Entry
 from ..page_understanding import PageUnderstanding, _column_for_source_point
 

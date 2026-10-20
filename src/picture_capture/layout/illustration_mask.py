@@ -93,7 +93,7 @@ def mask_large_illustrations_for_layout(
     if not bool(getattr(settings, SETTING_NAME, DEFAULT_ENABLED)):
         return image, IllustrationMaskStats()
 
-    from ..profile_semantics import effective_page_settings
+    from ..profile.semantics import effective_page_settings
 
     effective = effective_page_settings(
         settings,

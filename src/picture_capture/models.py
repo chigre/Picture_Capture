@@ -10,7 +10,7 @@ from PIL import Image
 
 from .layout_transform import LayoutTransform
 from .runtime_environment import portable_project_file
-from .app_settings_migrations import (
+from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
     migrate_app_settings_payload,
     normalize_app_settings_compat_keys,
@@ -883,7 +883,7 @@ class ProjectState:
             # settings.json.  Never apply this over an existing modern/legacy
             # settings file: those remain authoritative.
             try:
-                from .dictionary_profile import apply_project_profile_components
+                from .profile.dictionary import apply_project_profile_components
                 apply_project_profile_components(active_profile_path(root), settings)
             except Exception:
                 pass
@@ -902,7 +902,7 @@ class ProjectState:
                 settings_has_profile = False
         if not settings_has_profile:
             try:
-                from .dictionary_profile import project_profile_preset_id
+                from .profile.dictionary import project_profile_preset_id
                 settings.dictionary_profile_id = project_profile_preset_id(
                     active_profile_path(root), getattr(settings, "dictionary_profile_id", "latin_structured_symbols")
                 )
