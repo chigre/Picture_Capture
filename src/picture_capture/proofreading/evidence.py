@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .proofreading_events import audit_events
+from .events import audit_events
 
 
 def link_event_to_final(

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import json
 from typing import Any
 
-from . import proofreading_transactions as tx
+from . import transactions as tx
 
 
 @dataclass(frozen=True)

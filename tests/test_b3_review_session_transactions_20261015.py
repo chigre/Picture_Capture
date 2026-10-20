@@ -8,10 +8,10 @@ import pytest
 
 from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_transactions import (
+from picture_capture.proofreading.transactions import (
     ReviewSessionHistory, snapshot_review,
 )
-from picture_capture import proofreading_transactions as module
+from picture_capture.proofreading import transactions as module
 
 
 class Var:

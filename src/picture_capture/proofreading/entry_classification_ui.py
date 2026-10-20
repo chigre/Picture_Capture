@@ -3,7 +3,7 @@ from __future__ import annotations
 """Static proofreading UI helpers for entry regular/oversized classification."""
 
 from typing import Any
-from .entry_classification import (
+from ..entry_classification import (
     get_entry_classification,
     set_entry_scale_manual,
 )
@@ -43,7 +43,7 @@ def _persist(window: Any) -> None:
     ):
         return
     try:
-        from .formats import pdic_path, write_pdic
+        from ..formats import pdic_path, write_pdic
 
         write_pdic(
             pdic_path(parent.current_page),

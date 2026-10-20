@@ -8180,7 +8180,7 @@ def test_visual_marker_crop_trims_white_margin_to_dominant_ink():
 def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     source = root / "app.py"
-    helper_source = root / "review_text_helpers.py"
+    helper_source = root / "proofreading" / "text_helpers.py"
     text = source.read_text(encoding="utf-8")
     helper_text = helper_source.read_text(encoding="utf-8")
     overlay = (root / "ui" / "entry_overlay_builder.py").read_text(encoding="utf-8")

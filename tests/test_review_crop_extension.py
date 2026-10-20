@@ -1,7 +1,7 @@
 """Regression tests for active proofreading preview extension geometry."""
 from PIL import Image
 
-from picture_capture.review_crop_extension import (
+from picture_capture.proofreading.crop_extension import (
     extended_review_crop_box,
     parse_review_crop_multiplier,
 )

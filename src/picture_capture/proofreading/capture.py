@@ -10,10 +10,10 @@ import json
 from pathlib import Path
 from uuid import uuid4, uuid5, NAMESPACE_URL
 
-from .formats import pdic_path, read_pdic
-from .project_storage import data_root
-from .proofreading_events import append_event, append_rename_batch, load_events, make_event, sha256_file
-from .proofreading_section import section_fields_for_event
+from ..formats import pdic_path, read_pdic
+from ..project_storage import data_root
+from .events import append_event, append_rename_batch, load_events, make_event, sha256_file
+from .section import section_fields_for_event
 
 def verified_ocr_preedit_fingerprints(
     cache_path: Path | None, pdic_file: Path,
@@ -21,7 +21,7 @@ def verified_ocr_preedit_fingerprints(
     """Only attach OCR lineage from a validated pre-human final-PDIC snapshot."""
     if cache_path is None:
         return None
-    from .ocr_final_decisions import load_current_final_decisions
+    from ..ocr_final_decisions import load_current_final_decisions
     report = load_current_final_decisions(Path(cache_path), Path(pdic_file))
     if not isinstance(report, dict):
         return None
@@ -81,7 +81,7 @@ def _owned_ids_at_saved_snapshot(
     """Read explicitly owned IDs from a contiguous verified snapshot chain."""
     if not journal.is_file():
         return True, {}
-    from .proofreading_identity import owned_entries_at_snapshot
+    from .identity import owned_entries_at_snapshot
     return owned_entries_at_snapshot(
         load_events(journal), page_id=page_id,
         pdic_sha256=prior_pdic_sha256, image_sha256=image_sha256,

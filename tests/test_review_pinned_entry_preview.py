@@ -13,7 +13,7 @@ from picture_capture.models import AppSettings, Entry
 
 def test_review_has_exactly_one_pinned_preview_owner():
     import picture_capture.app as app
-    import picture_capture.review_entry_classification_ui as classification_ui
+    import picture_capture.proofreading.entry_classification_ui as classification_ui
 
     app_source = Path(app.__file__).read_text(encoding="utf-8")
     classification_source = Path(classification_ui.__file__).read_text(encoding="utf-8")
@@ -156,7 +156,7 @@ def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_on
 
 
 def test_pinned_crop_uses_exact_ordinary_top_and_bottom_only_extension():
-    from picture_capture.review_crop_extension import (
+    from picture_capture.proofreading.crop_extension import (
         extended_review_crop_box, parse_review_crop_multiplier,
     )
     import pytest

@@ -17,7 +17,7 @@ from ..page_sections import v_is_inside_sections
 from ..profile_semantics import entry_allowed_by_page_template
 from ..project_storage import simplified_review_path_for_image
 from ..simplified_review import entry_key, read_records
-from ..proofreading_events import sha256_file
+from ..proofreading.events import sha256_file
 
 
 def _triples(rows):
@@ -150,7 +150,7 @@ def move_entry_via_dialog(app, entry):
         if bool(getattr(app.settings, "proofreading_event_capture", False)):
             # Before touching PDIC, ensure any existing journal is current,
             # unambiguous, and tied to the very image being moved.
-            from ..proofreading_capture import _owned_ids_at_saved_snapshot, _project_identity
+            from ..proofreading.capture import _owned_ids_at_saved_snapshot, _project_identity
             from ..project_storage import data_root
             from uuid import NAMESPACE_URL, uuid5
             relative = page.resolve().relative_to(Path(project.root).resolve()).as_posix()
@@ -181,7 +181,7 @@ def move_entry_via_dialog(app, entry):
         evidence_warning = None
         if bool(getattr(app.settings, "proofreading_event_capture", False)):
             try:
-                from ..proofreading_capture import capture_saved_explicit_marker_move
+                from ..proofreading.capture import capture_saved_explicit_marker_move
                 captured = capture_saved_explicit_marker_move(
                     project_root=Path(project.root), page=page,
                     prior_pdic_entries=old_rows, prior_pdic_sha256=prior_sha,

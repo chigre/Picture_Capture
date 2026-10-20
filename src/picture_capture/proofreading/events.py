@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from uuid import uuid4
 
-from .formats import write_text_atomic
+from ..formats import write_text_atomic
 
 EVENT_FORMAT = "picture-capture-proofreading-events-v1"
 ACTIONS = frozenset({

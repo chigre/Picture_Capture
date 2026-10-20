@@ -57,7 +57,7 @@ from .page_word_mapping import (
     _parse_words_of_pages_text,
 )
 
-from .review_text_helpers import (
+from .proofreading.text_helpers import (
     _has_distinct_ocr_alternatives,
     _candidate_choice_rows,
     _candidate_for_entry_from_list,
@@ -72,7 +72,7 @@ from .review_text_helpers import (
     _review_text_similarity,
 )
 
-from .review_crop_extension import (
+from .proofreading.crop_extension import (
     extended_review_crop_box, parse_review_crop_multiplier,
 )
 
@@ -241,7 +241,7 @@ from .layout_visualization_ui_v3 import (
 )
 from .auxiliary_line_controller import AuxiliaryLineController
 from .auxiliary_lines import AuxiliaryLineEdits
-from .review_entry_classification_ui import sync_review_entry_classification
+from .proofreading.entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
@@ -1134,7 +1134,7 @@ class SettingsDialog(tk.Toplevel):
             add="+",
         )
 
-        # Reuse the project profile without duplicating the wizard.
+        # Reuse the project profile.
         self._active_profile_key = effective_project_profile_id(
             parent.settings,
             project_profile_path(parent.project.root) if parent.project else None,
@@ -4311,8 +4311,8 @@ class ReviewWindow(tk.Toplevel):
         from .ui.review_transaction_actions import capture_review_before, record_review_after
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
-        from .proofreading_save_safety import protect_review_pdic_commit
-        from .proofreading_review_bundle import commit_review_bundle
+        from .proofreading.save_safety import protect_review_pdic_commit
+        from .proofreading.review_bundle import commit_review_bundle
         with protect_review_pdic_commit(self):
             self._commit_edits()
             commit_review_bundle(self, transaction_before)
@@ -4865,12 +4865,12 @@ class ReviewWindow(tk.Toplevel):
     from .ui.review_transaction_actions import undo_saved_review, redo_saved_review
 
     def _commit_edits(self) -> None:
-        from .review_main_editor_sync import commit_proofread_entries
+        from .proofreading.main_editor_sync import commit_proofread_entries
         commit_proofread_entries(self)
 
     def _open_proofreading_visual_verification(self) -> None:
         """User-initiated scan preview and independent judgment, never OCR."""
-        from .proofreading_verify_ui import open_visual_verification
+        from .proofreading.verify_ui import open_visual_verification
         open_visual_verification(self)
 
     def _review_evidence_before_save(self) -> list[WordEntry] | None:
@@ -4886,14 +4886,14 @@ class ReviewWindow(tk.Toplevel):
         self.__dict__["_review_evidence_prior_pdic_sha256"] = None
         self.__dict__["_review_evidence_source_page"] = page
         try:
-            from .proofreading_events import sha256_file
+            from .proofreading.events import sha256_file
             saved = pdic_path(page)
             prior_sha = sha256_file(saved)
             previous = read_pdic(saved)
             if prior_sha is None or sha256_file(saved) != prior_sha:
                 return None
             self.__dict__["_review_evidence_prior_pdic_sha256"] = prior_sha
-            from .proofreading_capture import verified_ocr_preedit_fingerprints
+            from .proofreading.capture import verified_ocr_preedit_fingerprints
             cache_fn = getattr(self.parent, "_paddle_cache_path", None)
             cache = cache_fn() if callable(cache_fn) else None
             self.__dict__["_review_evidence_source_fingerprints"] = (
@@ -4913,7 +4913,7 @@ class ReviewWindow(tk.Toplevel):
         if page is None or project is None or page != owned_page:
             return
         try:
-            from .proofreading_capture import capture_saved_review_rename
+            from .proofreading.capture import capture_saved_review_rename
             source = self.__dict__.pop("_review_evidence_source_fingerprints", None)
             prior_sha = self.__dict__.pop("_review_evidence_prior_pdic_sha256", None)
             capture_saved_review_rename(
@@ -6373,7 +6373,7 @@ class ReviewWindow(tk.Toplevel):
                 )
                 self._active_crop_fixed_zoom = current_zoom
             else:
-                from .review_crop_extension import resize_fixed_review_preview
+                from .proofreading.crop_extension import resize_fixed_review_preview
                 self._active_crop_fixed_size = resize_fixed_review_preview(
                     self._active_crop_fixed_size,
                     getattr(self, "_active_crop_fixed_zoom", None),
@@ -6603,7 +6603,7 @@ class ReviewWindow(tk.Toplevel):
         if capture_requested and self.parent.current_page is not None:
             try:
                 prior_pdic_rows = read_pdic(pdic_path(self.parent.current_page))
-                from .proofreading_capture import verified_ocr_preedit_fingerprints
+                from .proofreading.capture import verified_ocr_preedit_fingerprints
                 cache_fn = getattr(self.parent, "_paddle_cache_path", None)
                 cache = cache_fn() if callable(cache_fn) else None
                 prior_ocr_fingerprints = verified_ocr_preedit_fingerprints(
@@ -6645,7 +6645,7 @@ class ReviewWindow(tk.Toplevel):
         capture_failed = False
         if prior_pdic_rows is not None:
             try:
-                from .proofreading_capture import capture_saved_review_deletion
+                from .proofreading.capture import capture_saved_review_deletion
                 capture_saved_review_deletion(
                     project_root=self.parent.project.root,
                     page=self.parent.current_page,
@@ -6781,8 +6781,8 @@ class ReviewWindow(tk.Toplevel):
         from .ui.review_transaction_actions import capture_review_before, record_review_after
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
-        from .proofreading_save_safety import protect_review_pdic_commit
-        from .proofreading_review_bundle import commit_review_bundle
+        from .proofreading.save_safety import protect_review_pdic_commit
+        from .proofreading.review_bundle import commit_review_bundle
         with protect_review_pdic_commit(self):
             self._commit_edits()
             commit_review_bundle(self, transaction_before)
@@ -12928,7 +12928,7 @@ class PictureCaptureApp(tk.Tk):
         ):
             if self._can_save_current_during_batch_navigation():
                 self._save_current_page_by_mode(sync_editors=not review_saved)
-        from .proofreading_transactions import recover_pending_for_page
+        from .proofreading.transactions import recover_pending_for_page
         try:
             target_page = self.project.images[index]
             trusted_manual_path = (
@@ -14645,7 +14645,7 @@ class PictureCaptureApp(tk.Tk):
             old = read_pdic(pdic_path(page))
         except (OSError, ValueError):
             return
-        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        from .proofreading.capture import verified_ocr_preedit_fingerprints
         cache_fn = getattr(self, "_paddle_cache_path", None)
         cache = cache_fn() if callable(cache_fn) else None
         source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
@@ -14665,7 +14665,7 @@ class PictureCaptureApp(tk.Tk):
         if project is None or getattr(self, "current_page", None) != page:
             return
         try:
-            from .proofreading_capture import capture_saved_manual_addition
+            from .proofreading.capture import capture_saved_manual_addition
             capture_saved_manual_addition(
                 project_root=project.root, page=page,
                 prior_pdic_entries=old, expected_xy=xy,
@@ -14731,7 +14731,7 @@ class PictureCaptureApp(tk.Tk):
                     if isinstance(row, dict)
                 ) == 1:
                     position_switch = (removed_id, removed_row, group_id)
-        from .proofreading_capture import verified_ocr_preedit_fingerprints
+        from .proofreading.capture import verified_ocr_preedit_fingerprints
         cache_fn = getattr(self, "_paddle_cache_path", None)
         cache = cache_fn() if callable(cache_fn) else None
         source = verified_ocr_preedit_fingerprints(cache, pdic_path(page))
@@ -14756,7 +14756,7 @@ class PictureCaptureApp(tk.Tk):
         if project is None or getattr(self, "current_page", None) != page:
             return
         try:
-            from .proofreading_capture import (
+            from .proofreading.capture import (
                 capture_saved_candidate_selection,
                 capture_saved_position_switch,
             )
@@ -14817,7 +14817,7 @@ class PictureCaptureApp(tk.Tk):
 
     def _flush_deferred_page_save(self) -> None:
         """Flush pending PDIC edits without discarding a failed snapshot."""
-        from .proofreading_deferred_save import flush_deferred_page_save
+        from .proofreading.deferred_save import flush_deferred_page_save
         flush_deferred_page_save(self, write_pdic=write_pdic, pdic_path=pdic_path)
 
     def _entry_for_candidate(self, cand: dict) -> WordEntry | None:
@@ -16054,7 +16054,7 @@ class PictureCaptureApp(tk.Tk):
         if not self.project or not self.current_page or self.image is None: return
         if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
             return
-        from .proofreading_transactions import _recovery_path
+        from .proofreading.transactions import _recovery_path
         if _recovery_path(self.current_page).exists():
             raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
         if self.__dict__.get("_deferred_save_uncertain", False):
@@ -16068,7 +16068,7 @@ class PictureCaptureApp(tk.Tk):
                 pass
         self.__dict__["_deferred_save_job"] = None
         # Keep the queued snapshot until the actual PDIC publication succeeds.
-        from .proofreading_save_safety import protect_app_pdic_commit
+        from .proofreading.save_safety import protect_app_pdic_commit
         with protect_app_pdic_commit(self):
             # Review edits bypass stale main-canvas editor values.
             if sync_editors:

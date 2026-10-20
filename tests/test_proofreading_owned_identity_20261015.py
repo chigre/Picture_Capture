@@ -5,10 +5,10 @@ from uuid import NAMESPACE_URL, uuid5
 
 from picture_capture.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_capture import (
+from picture_capture.proofreading.capture import (
     _project_identity, capture_saved_review_rename,
 )
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
 )
 from picture_capture.project_storage import data_root

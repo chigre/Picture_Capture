@@ -6,7 +6,7 @@ from PIL import Image
 import pytest
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.review_crop_extension import resize_fixed_review_preview
+from picture_capture.proofreading.crop_extension import resize_fixed_review_preview
 from picture_capture.ui import workspace_tools
 
 

@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .proofreading_events import (
+from .events import (
     append_event, load_events, make_event, sha256_file,
 )
 

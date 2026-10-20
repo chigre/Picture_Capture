@@ -8,12 +8,12 @@ import pytest
 
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
-from picture_capture.proofreading_capture import _project_identity
-from picture_capture.proofreading_events import (
+from picture_capture.proofreading.capture import _project_identity
+from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
 )
-from picture_capture.proofreading_verification import verify_saved_action
-from picture_capture.proofreading_verify_ui import (
+from picture_capture.proofreading.verification import verify_saved_action
+from picture_capture.proofreading.verify_ui import (
     actionable_saved_events, journal_for_existing_page,
 )
 
@@ -121,7 +121,7 @@ def test_existing_interprocess_lock_refuses_any_writer_without_corruption(tmp_pa
 
 
 def test_journal_lock_is_released_after_failing_publication(tmp_path, monkeypatch):
-    from picture_capture import proofreading_events as mod
+    from picture_capture.proofreading import events as mod
     page, pdic, journal, prior = _project(tmp_path)
     original = journal.read_bytes()
     event = make_event(
@@ -146,7 +146,7 @@ def test_journal_lock_is_released_after_failing_publication(tmp_path, monkeypatc
 
 def test_explicit_confirmation_ui_controls_have_no_automatic_approval():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    source = (root / "proofreading_verify_ui.py").read_text(encoding="utf-8")
+    source = (root / "proofreading/verify_ui.py").read_text(encoding="utf-8")
     app = (root / "app.py").read_text(encoding="utf-8")
     assert "self.confirmed = tk.BooleanVar(value=False)" in source
     assert "self._preview_valid = False" in source
@@ -162,7 +162,7 @@ def test_explicit_confirmation_ui_controls_have_no_automatic_approval():
 def test_visual_verification_does_not_open_after_noop_review_save(tmp_path, monkeypatch):
     """The user cannot confirm an old record over still-unsaved editor text."""
     from types import SimpleNamespace
-    from picture_capture import proofreading_verify_ui as ui
+    from picture_capture.proofreading import verify_ui as ui
 
     page, pdic, journal, event = _project(tmp_path)
     opened = []
@@ -192,7 +192,7 @@ def test_visual_verification_does_not_open_after_noop_review_save(tmp_path, monk
 
 def test_visual_verification_opens_after_provably_committed_review(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from picture_capture import proofreading_verify_ui as ui
+    from picture_capture.proofreading import verify_ui as ui
 
     page, pdic, journal, event = _project(tmp_path)
     opened = []
@@ -220,7 +220,7 @@ def test_visual_verification_opens_after_provably_committed_review(tmp_path, mon
 
 def test_visual_verification_fails_closed_on_unstable_row_bindings(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from picture_capture import proofreading_verify_ui as ui
+    from picture_capture.proofreading import verify_ui as ui
 
     page, pdic, journal, event = _project(tmp_path)
     opened = []

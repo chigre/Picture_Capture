@@ -6,7 +6,7 @@ import difflib
 import re
 import unicodedata
 
-from .models import AppSettings, Entry as WordEntry
+from ..models import AppSettings, Entry as WordEntry
 
 
 def _review_editor_font_size(settings: AppSettings) -> int:

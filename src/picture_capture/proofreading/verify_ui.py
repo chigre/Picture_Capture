@@ -13,10 +13,10 @@ from uuid import NAMESPACE_URL, uuid5
 
 from PIL import Image, ImageDraw, ImageOps, ImageTk
 
-from .formats import pdic_path
-from .project_storage import data_root
-from .proofreading_events import load_events, sha256_file
-from .proofreading_verification import verify_saved_action
+from ..formats import pdic_path
+from ..project_storage import data_root
+from .events import load_events, sha256_file
+from .verification import verify_saved_action
 
 
 def journal_for_existing_page(project_root: Path, page: Path) -> Path | None:
@@ -26,7 +26,7 @@ def journal_for_existing_page(project_root: Path, page: Path) -> Path | None:
     if not identity_path.is_file():
         return None
     try:
-        from .proofreading_capture import IDENTITY_FORMAT
+        from .capture import IDENTITY_FORMAT
         record = json.loads(identity_path.read_text(encoding="utf-8"))
         if not isinstance(record, dict) or record.get("format") != IDENTITY_FORMAT:
             return None

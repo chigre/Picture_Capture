@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 import json
 
-from .proofreading_transactions import SavedSnapshot, publish_owned_review_bundle
+from .transactions import SavedSnapshot, publish_owned_review_bundle
 
 
 @dataclass(frozen=True)

@@ -11,9 +11,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .proofreading_events import audit_events, load_events, sha256_file
-from .proofreading_verification import explicit_verification_counts
-from .project_storage import page_sections_read_path_for_image
+from .events import audit_events, load_events, sha256_file
+from .verification import explicit_verification_counts
+from ..project_storage import page_sections_read_path_for_image
 
 EXPORT_FORMAT = "picture-capture-proofreading-quality-export-v1"
 

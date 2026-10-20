@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from picture_capture.formats import write_text_atomic
-from picture_capture.proofreading_quality_export import summarize_local_events
+from picture_capture.proofreading.quality_export import summarize_local_events
 
 
 def main() -> int:

@@ -10,14 +10,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from .formats import pdic_path, write_pdic
-from .project_storage import page_sections_read_path_for_image, simplified_review_path_for_image
-from .proofreading_events import sha256_file
-from .proofreading_transactions import (
+from ..formats import pdic_path, write_pdic
+from ..project_storage import page_sections_read_path_for_image, simplified_review_path_for_image
+from .events import sha256_file
+from .transactions import (
     _bytes_or_absent, _publish, _recovery_path, _rollback_failed_publish,
     _stage_recovery,
 )
-from .simplified_review import write_records
+from ..simplified_review import write_records
 
 
 def commit_review_bundle(review: Any, source) -> None:

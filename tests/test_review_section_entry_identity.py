@@ -11,7 +11,7 @@ from picture_capture.processing_core import derive_geometry, sort_entries_readin
 from picture_capture.project_storage import (
     migrate_legacy_project, page_sections_path_for_image, page_sections_read_path_for_image,
 )
-from picture_capture.review_main_editor_sync import reconcile_main_editors_after_review
+from picture_capture.proofreading.main_editor_sync import reconcile_main_editors_after_review
 
 
 class FakeEditor:

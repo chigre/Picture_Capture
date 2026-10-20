@@ -20,7 +20,7 @@ from ..ref.box_geometry import (
 )
 from .overlay_layout_helpers import effective_main_overlay_font_size
 from ..ref.text_label_layout import ref_text_label_rect
-from ..review_text_helpers import _entry_font_spec
+from ..proofreading.text_helpers import _entry_font_spec
 from ..ref.ocr import ocr_ref_boxes_job, local_ref_ocr_plan
 from ..ref.detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
