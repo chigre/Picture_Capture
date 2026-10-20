@@ -16,7 +16,7 @@ import re
 from PIL import Image
 
 from . import paddle_headwords_core as _core
-from .dictionary_profile import DictionaryProfile
+from .profile.dictionary import DictionaryProfile
 from .models import AppSettings, Entry
 from .latin_glued_pos_headwords import glued_lemma_and_pos
 from .page_sections import PageSection

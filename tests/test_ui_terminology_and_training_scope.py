@@ -4,7 +4,9 @@ import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
-from picture_capture import profile_indent_ui, training_export_ui
+from picture_capture.profile import indent_ui as profile_indent_ui
+
+from picture_capture import training_export_ui
 from picture_capture.ui.controllers.export import ExportController
 from picture_capture.ui_terminology import (
     install_app_tooltip_terminology,

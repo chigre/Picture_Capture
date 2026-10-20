@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture.models import AppSettings, Entry
 from picture_capture.layout.column_indent_recovery import (
     _weak_columns, restore_proven_column_indents,
@@ -86,7 +86,7 @@ def test_cjk_brackets_rebuild_visible_indent_lanes_not_just_append_pdic(monkeypa
 
 
 def test_latin_spanish_genuine_independent_entry_body_family_repairs_c2(monkeypatch):
-    from picture_capture import dictionary_page_design_refined
+    from picture_capture.design import page_design_refined as dictionary_page_design_refined
 
     body_page = layout([column(0, 25, 50, entries=4),
                         column(1, 1310, 55, entries=1)], height=3800, line_h=43)
@@ -124,7 +124,7 @@ def test_latin_spanish_genuine_independent_entry_body_family_repairs_c2(monkeypa
 
 
 def test_no_independent_evidence_must_not_invent_entries(monkeypatch):
-    from picture_capture import dictionary_page_design_refined
+    from picture_capture.design import page_design_refined as dictionary_page_design_refined
     page = layout([column(0, 25, 25), column(1, 690, 40)])
     monkeypatch.setattr(dictionary_page_design_refined,
                         "detect_entries_from_page_design",
@@ -143,7 +143,7 @@ def test_no_independent_evidence_must_not_invent_entries(monkeypatch):
 
 
 def test_existing_correctly_parsed_page_skips_second_expensive_detector(monkeypatch):
-    from picture_capture import dictionary_page_design_refined
+    from picture_capture.design import page_design_refined as dictionary_page_design_refined
     page = layout([column(0, 25, 25, entries=10),
                    column(1, 690, 28, entries=11)])
     monkeypatch.setattr(dictionary_page_design_refined,

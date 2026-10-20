@@ -9,16 +9,16 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any
 
-from ..dictionary_profile import (
+from ..profile.dictionary import (
     dictionary_profile_preset, profile_symbol_inventory_defaults,
     profile_tail_structure_defaults,
 )
-from ..profile_semantics import (
+from ..profile.semantics import (
     apply_headword_profile, ordered_headword_profiles,
     recommended_headword_structures,
 )
-from ..profile_setup import _normalize_cjk_visual_symbol_roles
-from ..visual_marker_templates import (
+from ..profile.setup import _normalize_cjk_visual_symbol_roles
+from ..visual.marker_templates import (
     parse_visual_marker_samples, serialize_visual_marker_samples,
     split_configured_symbols,
 )

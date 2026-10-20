@@ -49,7 +49,7 @@ def test_staged_pipeline_opt_in_and_unsupported_settings_default_to_serial(monke
 
 
 def test_single_use_preflight_is_transferred_by_value_without_gpu(monkeypatch):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
     from picture_capture import layout_detection
 
     image = Image.new("RGB", (320, 470), "white")
@@ -130,7 +130,7 @@ def test_gui_pipeline_displays_per_page_gpu_and_cpu_stage_markers():
 def test_gpu_preflight_matches_page_policy_and_refuses_changed_image(tmp_path, monkeypatch):
     from picture_capture.models import AppSettings
     from picture_capture import layout_detection
-    from picture_capture.profile_semantics import effective_page_settings
+    from picture_capture.profile.semantics import effective_page_settings
     from picture_capture.image_utils import build_analysis_image
 
     page = tmp_path / "001.png"

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from picture_capture.dictionary_page_design import (
+from picture_capture.design.page_design import (
     ColumnDesign,
     DictionaryPageLayout,
     IndentMode,
@@ -13,7 +13,7 @@ from picture_capture.dictionary_page_design import (
     PageRegion,
     PageRegions,
 )
-from picture_capture.dictionary_page_design_refined import refine_indent_semantics
+from picture_capture.design.page_design_refined import refine_indent_semantics
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import Entry
 from picture_capture.training_baseline import (

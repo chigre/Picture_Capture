@@ -187,7 +187,7 @@ def write_ordered_auto_ppp(
     from PIL import Image, ImageOps
     from ..formats import write_ppp
     from ..processing_core import derive_nominal_geometry
-    from ..profile_semantics import effective_page_settings
+    from ..profile.semantics import effective_page_settings
     from ..page_sections import read_page_sections
 
     source = Path(image_path)

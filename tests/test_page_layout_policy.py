@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture.layout_detection import LayoutEstimate
 from picture_capture.models import AppSettings
-import picture_capture.dictionary_page_layout_policy as policy
+import picture_capture.design.layout_policy as policy
 
 
 def _settings() -> AppSettings:

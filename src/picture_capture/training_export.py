@@ -15,7 +15,7 @@ from .image_utils import normalize_page_rgb
 from .models import AppSettings
 from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .processing import column_index, derive_geometry
-from .profile_semantics import (
+from .profile.semantics import (
     effective_page_settings,
     excluded_source_side,
     excluded_source_side_percent,

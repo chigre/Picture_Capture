@@ -18,7 +18,7 @@ def test_training_diagnostics_binds_explicit_composed_service():
 
 
 def test_profile_validation_uses_composed_service_inside_worker():
-    tree = ast.parse((ROOT / "profile_validation_modes.py").read_text(encoding="utf-8"))
+    tree = ast.parse((ROOT / "profile/validation_modes.py").read_text(encoding="utf-8"))
     imports = [alias.name for node in ast.walk(tree)
                if isinstance(node, ast.ImportFrom) and node.module == "layout_composition"
                for alias in node.names]

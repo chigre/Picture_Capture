@@ -10,14 +10,14 @@ from typing import Any
 
 from PIL import Image
 
-from . import dictionary_page_design as base
-from . import dictionary_page_layout_policy as policy
+from .design import page_design as base
+from .design import layout_policy as policy
 from .layout_physical_indent import (
     explicit_physical_layout_ops,
     normalize_layout_roles,
 )
 from .layout_profile_anchor import anchor_resolved_layout_to_profile
-from .profile_indent_ui import indent_type_label
+from .profile.indent_ui import indent_type_label
 from .layout.step_trace import LayoutStepTrace
 
 

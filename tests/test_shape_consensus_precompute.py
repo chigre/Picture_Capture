@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.dictionary_page_design import LayoutLine, _shape_consensus
+from picture_capture.design.page_design import LayoutLine, _shape_consensus
 from picture_capture.ordinary_visual import _patch_similarity
 
 

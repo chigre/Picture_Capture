@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from picture_capture.profile_validation_modes import (
+from picture_capture.profile.validation_modes import (
     VALIDATION_MODE_LABELS,
     VALIDATION_MODES,
     mode_uses_ocr,

@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture import layout_detection
-from picture_capture.dictionary_page_design import LayoutLine
+from picture_capture.design.page_design import LayoutLine
 from picture_capture.layout.column_drift import (
     _analysis_left_for_column,
     _left_safety,
@@ -227,7 +227,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")
-    policy = (root / "src/picture_capture/dictionary_page_layout_policy.py").read_text(encoding="utf-8")
+    policy = (root / "src/picture_capture/design/layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
     large_head = (
         root / "src/picture_capture/ordinary_large_head_evidence.py"
@@ -236,7 +236,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
 
     assert "install_ordinary_large_head_runtime" not in core
     assert "install_ordinary_large_head_role_guard" not in core
-    assert "from .layout.column_drift import finalize_layout_column_drift" in policy
+    assert "from ..layout.column_drift import finalize_layout_column_drift" in policy
     layout_at = policy.index("layout = base.DictionaryPageLayout(")
     finalize_at = policy.index("layout = finalize_layout_column_drift(")
     return_at = policy.index("return layout, page_settings, applied", finalize_at)

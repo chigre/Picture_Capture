@@ -26,7 +26,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from .. import dictionary_page_design as base
+from ..design import page_design as base
 from ..geometry.layout_gutter_rule import gutter_divider_right_edge as _gutter_divider_right_edge
 
 

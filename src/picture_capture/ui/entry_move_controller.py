@@ -14,7 +14,7 @@ from tkinter import simpledialog
 
 from ..formats import pdic_path, read_pdic
 from ..page_sections import v_is_inside_sections
-from ..profile_semantics import entry_allowed_by_page_template
+from ..profile.semantics import entry_allowed_by_page_template
 from ..project_storage import simplified_review_path_for_image
 from ..simplified_review import entry_key, read_records
 from ..proofreading.events import sha256_file

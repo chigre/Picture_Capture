@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 from .image_utils import normalize_page_rgb
-from .profile_semantics import effective_page_settings, page_template_analysis_image
+from .profile.semantics import effective_page_settings, page_template_analysis_image
 
 # Per-task evidence, not a shared page-layout cache or persisted setting.
 # Windows workers may be reused: each page resets this counter explicitly.
@@ -144,7 +144,7 @@ def prepare_refinement_analysis(
         # Respect only the per-page geometry switches explicitly selected in
         # Auto Layout. Do not build semantic Layout rows or alter saved PDIC.
         if not fixed_half_gutter and bool(getattr(effective, "ordinary_auto_layout", False)):
-            from .dictionary_page_layout_policy import resolve_page_layout_policy
+            from .design.layout_policy import resolve_page_layout_policy
             from .marker_refinement_layoutrows import requested_refinement_fields
 
             # The line refiner consumes only columns, X/width/gutter, body top,

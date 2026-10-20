@@ -396,7 +396,7 @@ def recover_physical_rows_fast(
     page_index: int = 0,
 ) -> Any | None:
     """Recover physical rows from Profile geometry without Paddle/semantic work."""
-    from . import dictionary_page_design as base
+    from .design import page_design as base
     from .layout_detection import analysis_ink_mask
     from .layout_physical_indent import _credible_first_ink_x, projection_line_runs
 

@@ -15,7 +15,7 @@ from picture_capture.app import (
     transformed_entry_anchor, vertical_marker_contact_gap, vertical_ocr_menu_layout,
     vertical_overlay_layout,
 )
-from picture_capture.dictionary_profile import (
+from picture_capture.profile.dictionary import (
     apply_project_profile_components, effective_project_profile_id,
     load_dictionary_profile, profile_symbol_inventory_defaults,
     profile_tail_structure_defaults, write_project_profile,
@@ -35,7 +35,7 @@ from picture_capture.processing import (
     ordinary_page_layout_settings, ocr_existing_entry_words_from_markers,
     refine_existing_entries,
 )
-from picture_capture.profile_semantics import (
+from picture_capture.profile.semantics import (
     apply_headword_profile, apply_headword_tuning, apply_reading_choice, configured_body_page_indices,
     effective_page_settings,
     entry_allowed_by_page_template, excluded_source_side, excluded_source_side_percent,
@@ -56,11 +56,11 @@ from picture_capture.paddle_headwords import (
     run_paddle_band, unwrap_column_band, _separator_analysis_x_bounds,
     _recover_oversized_cjk_ocr_records,
 )
-from picture_capture.profile_setup import (
+from picture_capture.profile.setup import (
     _normalize_cjk_visual_symbol_roles,
     _visual_marker_capture_defaults,
 )
-from picture_capture.visual_marker_templates import (
+from picture_capture.visual.marker_templates import (
     build_visual_marker_sample, match_visual_marker_template,
     parse_visual_marker_samples, serialize_visual_marker_samples,
     split_configured_symbols,
@@ -2427,7 +2427,7 @@ def test_project_profile_headword_examples_are_packaged():
     assert "data/headword_examples/extended/" not in pyproject
 
     dictionary_source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "dictionary_profile.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/dictionary.py"
     ).read_text(encoding="utf-8")
     app_source = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
@@ -2439,7 +2439,7 @@ def test_project_profile_headword_examples_are_packaged():
 
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     text = source.read_text(encoding="utf-8")
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
@@ -2831,7 +2831,7 @@ def test_complete_headword_structure_round_trips_in_v3_sidecar(tmp_path):
 def test_profile_setup_exposes_complete_headword_structure_controls():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "profile_setup.py"
+        / "src" / "picture_capture" / "profile/setup.py"
     )
     text = source.read_text(encoding="utf-8")
     assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
@@ -3112,7 +3112,7 @@ def test_visual_marker_detector_can_use_dictionary_template_without_generic_fami
 def test_visual_marker_capture_uses_source_pixel_zoom_controls():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "visual_marker_ui.py"
+        / "src" / "picture_capture" / "visual/marker_ui.py"
     )
     text = source.read_text(encoding="utf-8")
     assert "self.zoom_percent = 100" in text
@@ -3171,7 +3171,7 @@ def test_source_pixel_settings_never_scale_against_page_width():
     assert geometry_1400.top == geometry_4200.top
 
 def test_project_profile_exposes_clickable_column_left_line_nudging():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     text = source.read_text(encoding="utf-8")
     assert 'text="栏左线微调"' in text
     assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
@@ -3199,7 +3199,7 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
 
 def test_project_profile_validation_masks_remain_translucent():
     from picture_capture.processing import ColumnPath, Geometry
-    from picture_capture.profile_setup import ProjectProfileWizard
+    from picture_capture.profile.setup import ProjectProfileWizard
 
     image = Image.new("RGB", (100, 100), "white")
     geometry = Geometry(
@@ -3231,7 +3231,7 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     assert "launch_profile_setup=not existing_project" in project_controller_source
 
     profile_source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile_setup.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     ).read_text(encoding="utf-8")
     wizard_start = profile_source.index("class ProjectProfileWizard(tk.Toplevel):")
     wizard_end = profile_source.index("    def _build_vars(self) -> None:", wizard_start)
@@ -3280,7 +3280,7 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
 
     root = Path(__file__).resolve().parents[1]
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    profile_text = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
     layout_actions = (root / "src" / "picture_capture" /
                       "layout_detection_actions.py").read_text(encoding="utf-8")
     assert "body_indent_was_auto" in layout_actions
@@ -3932,7 +3932,7 @@ def test_round1_picdic_cancel_is_atomic(tmp_path):
 def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     root = Path(__file__).resolve().parents[1]
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    profile_text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    profile_text = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
     export_controller_text = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
     ).read_text(encoding="utf-8")
@@ -4249,7 +4249,7 @@ def test_focused_filter_streams_complete_batches_and_prefetches_next_batch():
 def test_concurrency_review_tracks_critical_workers_and_stale_results():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
 
     worker_start = app.index("    def _ui_worker_key_active(")
     worker_end = app.index("\n    def _configure_main_workspace_styles", worker_start)
@@ -4318,7 +4318,7 @@ def test_concurrency_review_atomic_ocr_cache_and_timeouts_are_enforced():
 def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
 
     check_start = app.index("    def check_ocr_engines(self) -> None:", app.index("class PictureCaptureApp"))
     check_end = app.index("\n    def detect_layout_current", check_start)
@@ -4378,7 +4378,7 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
 def test_concurrency_audit_p0_p1_guards_are_present():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    profile = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
     training = (root / "src" / "picture_capture" / "training_export.py").read_text(encoding="utf-8")
     export_controller = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
@@ -4419,7 +4419,7 @@ def test_concurrency_audit_p0_p1_guards_are_present():
 
 def test_project_profile_legacy_workers_drop_results_while_closing():
     root = Path(__file__).resolve().parents[1]
-    text = (root / "src" / "picture_capture" / "profile_setup.py").read_text(encoding="utf-8")
+    text = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
     assert "self._closing = False" in text
     for name in (
         "_start_sample_thumbnail_load",
@@ -5492,7 +5492,7 @@ def test_old_cjk_visual_settings_migrate_bracket_role_once(tmp_path):
 def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "profile_setup.py"
+        / "src" / "picture_capture" / "profile/setup.py"
     ).read_text(encoding="utf-8")
     assert "不包括【括号】" in source
     assert "【不要填这里】" in source

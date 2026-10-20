@@ -118,7 +118,7 @@ def anchor_resolved_layout_to_profile(
 
 def install_profile_layout_anchor() -> None:
     """Install Profile anchoring once at the page-layout policy boundary."""
-    from . import dictionary_page_layout_policy as policy
+    from .design import layout_policy as policy
 
     if getattr(policy, "_profile_layout_anchor_installed", False):
         return

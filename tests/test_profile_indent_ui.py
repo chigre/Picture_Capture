@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from picture_capture.models import AppSettings
-from picture_capture.profile_indent_ui import (
+from picture_capture.profile.indent_ui import (
     INDENT_SEMANTICS_VERSION,
     INDENT_TYPE_CHOICES,
     apply_indent_type_label,

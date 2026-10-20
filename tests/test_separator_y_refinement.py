@@ -92,7 +92,7 @@ def test_layout_adapter_refines_only_entry_rows(monkeypatch) -> None:
 
     monkeypatch.setattr(shared_y, "refine_separator_y", fake_refiner)
     monkeypatch.setattr(
-        __import__("picture_capture.dictionary_page_design", fromlist=["_analysis_page"]),
+        __import__("picture_capture.design.page_design", fromlist=["_analysis_page"]),
         "_analysis_page",
         lambda image, settings, page_index: (
             image,

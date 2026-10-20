@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.dictionary_page_design import (
+from picture_capture.design.page_design import (
     ColumnDesign,
     DictionaryPageLayout,
     IndentMode,
@@ -17,18 +17,18 @@ from picture_capture.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
 from picture_capture.page_understanding import _apply_explicit_indent_semantics
 from picture_capture.processing import _uses_cjk_indent_topology
-from picture_capture.profile_indent_ui import (
+from picture_capture.profile.indent_ui import (
     INDENT_SEMANTICS_VERSION,
     apply_indent_type_label,
     indent_type_label,
 )
-from picture_capture.profile_validation_modes import _understanding_summary
+from picture_capture.profile.validation_modes import _understanding_summary
 from picture_capture.symbol_evidence import (
     SymbolEvidenceResult,
     detect_symbol_evidence,
     fuse_symbol_evidence,
 )
-from picture_capture.visual_marker_templates import (
+from picture_capture.visual.marker_templates import (
     build_visual_marker_sample,
     serialize_visual_marker_samples,
 )

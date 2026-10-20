@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..app_settings_migrations import SEPARATOR_Y_LEGACY_TO_CANONICAL
+from ..profile.settings_migrations import SEPARATOR_Y_LEGACY_TO_CANONICAL
 from ..models import AppSettings
 
 

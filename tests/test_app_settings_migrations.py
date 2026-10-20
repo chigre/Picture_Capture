@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-import picture_capture.app_settings_migrations as migrations
+import picture_capture.profile.settings_migrations as migrations
 import picture_capture.models as models
 from picture_capture.models import AppSettings
 from picture_capture.crop.entry_crop_settings import install_entry_crop_settings

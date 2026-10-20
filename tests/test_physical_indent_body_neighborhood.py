@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from picture_capture.dictionary_page_design import ColumnDesign, IndentMode, LayoutLine
+from picture_capture.design.page_design import ColumnDesign, IndentMode, LayoutLine
 from picture_capture.layout_physical_indent import assign_binary_roles
 
 

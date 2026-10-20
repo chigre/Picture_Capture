@@ -17,9 +17,9 @@ from typing import Any
 
 from PIL import Image
 
-from . import layout_detection
-from .image_utils import build_analysis_image
-from .layout_transform import LayoutTransform
+from .. import layout_detection
+from ..image_utils import build_analysis_image
+from ..layout_transform import LayoutTransform
 
 
 _CACHE_LIMIT = 24
@@ -68,7 +68,7 @@ def detect_profile_layout_parameters(image: Image.Image, settings: Any) -> Any:
             )
             # The 0.8%-of-page-height seed is NOT a text measurement. Measure
             # physical ink at source resolution while canonical is still open.
-            from .layout.character_height import observed_character_height
+            from ..layout.character_height import observed_character_height
             observed, stats = observed_character_height(
                 canonical, current, estimate, layout_detection,
             )

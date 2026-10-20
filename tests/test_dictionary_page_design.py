@@ -5,13 +5,13 @@ from dataclasses import FrozenInstanceError
 import pytest
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
-from picture_capture.dictionary_page_design import (
+from picture_capture.design import page_design as base
+from picture_capture.design.page_design import (
     detect_entries_from_page_design,
     infer_dictionary_page_layout,
 )
 from picture_capture.models import AppSettings
-from picture_capture.profile_indent_ui import apply_indent_type_label
+from picture_capture.profile.indent_ui import apply_indent_type_label
 
 
 def _settings(*, columns: int = 1) -> AppSettings:

@@ -26,12 +26,12 @@ from typing import Any
 
 from PIL import Image
 
-from . import dictionary_page_design as base
-from . import dictionary_page_design_refined as refined
+from .design import page_design as base
+from .design import page_design_refined as refined
 from .boundary_placement import refine_boundaries_toward_head_top
-from .dictionary_page_layout_policy import infer_dictionary_page_layout
+from .design.layout_policy import infer_dictionary_page_layout
 from .models import AppSettings, Entry
-from .profile_indent_ui import indent_type_label
+from .profile.indent_ui import indent_type_label
 from .symbol_evidence import SymbolEvidenceResult, detect_symbol_evidence
 
 
@@ -428,7 +428,7 @@ def page_understanding_diagnostics(
     understanding: PageUnderstanding,
 ) -> dict[str, Any]:
     """Serialize the shared layer for training-package/debug analysis."""
-    from .dictionary_page_design import layout_diagnostics
+    from .design.page_design import layout_diagnostics
 
     symbols = understanding.symbol_evidence
     return {

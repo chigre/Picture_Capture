@@ -127,7 +127,7 @@ def test_profile_preset_uses_existing_backend_and_symbol_roles():
 
 
 def test_legacy_profile_alias_uses_same_selection_as_wizard():
-    from picture_capture.profile_semantics import ordered_headword_profiles
+    from picture_capture.profile.semantics import ordered_headword_profiles
     choices = ordered_headword_profiles()
     for label, key in choices:
         assert ocr.profile_label_for_current(key, choices) == label

@@ -7,7 +7,7 @@ import pytest
 from picture_capture.models import AppSettings
 from picture_capture import marker_refinement_analysis as prep
 from picture_capture import marker_refinement_parallel as parallel
-from picture_capture import dictionary_page_layout_policy as policy
+from picture_capture.design import layout_policy as policy
 
 
 def test_refine_missing_ppp_still_measures_each_page(tmp_path, monkeypatch):

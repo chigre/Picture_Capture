@@ -196,7 +196,7 @@ def migrate_app_settings_payload(
     if int(raw.get("profile_symbol_role_semantics_version", 0) or 0) < 1:
         if str(raw.get("dictionary_profile_id") or "") == "cjk_visual":
             try:
-                from .visual_marker_templates import (
+                from ..visual.marker_templates import (
                     parse_visual_marker_samples,
                     serialize_visual_marker_samples,
                     split_configured_symbols,

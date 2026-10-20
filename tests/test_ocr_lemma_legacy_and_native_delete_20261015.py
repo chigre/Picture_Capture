@@ -26,7 +26,7 @@ def test_exact_malformed_cjk_result_only_trims_when_delimited(raw, expected):
 @pytest.mark.parametrize(("enabled", "expected"), [(True, "禾王"), (False, "4【禾王】太平天国")])
 def test_legacy_ocr_entries_uses_profile_gate_and_bracket_cleanup(monkeypatch, enabled, expected):
     from picture_capture import processing_core as core
-    from picture_capture import dictionary_profile
+    from picture_capture.profile import dictionary as dictionary_profile
 
     settings = AppSettings(
         dictionary_profile_id="cjk_visual",

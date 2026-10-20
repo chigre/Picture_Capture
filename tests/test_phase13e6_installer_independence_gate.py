@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture import layout_composition as composed
 from picture_capture import layout_core_understanding as core
 from picture_capture.layout import line_start_refinement as robust
@@ -62,7 +62,7 @@ def test_composed_full_and_layout_only_run_without_installer_calls(monkeypatch):
 def test_migrated_consumers_do_not_import_legacy_full_understanding():
     for filename in (
         "training/export_page_understanding.py",
-        "profile_validation_modes.py",
+        "profile/validation_modes.py",
     ):
         tree = ast.parse((PACKAGE / filename).read_text(encoding="utf-8"))
         imported = [

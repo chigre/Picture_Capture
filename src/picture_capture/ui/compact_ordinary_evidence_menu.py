@@ -5,11 +5,11 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Any
 
-from ..profile_setup import _visual_marker_capture_defaults
-from ..visual_marker_templates import (
+from ..profile.setup import _visual_marker_capture_defaults
+from ..visual.marker_templates import (
     parse_visual_marker_samples, serialize_visual_marker_samples,
 )
-from ..visual_marker_ui import VisualMarkerCaptureDialog, VisualMarkerSamplesDialog
+from ..visual.marker_ui import VisualMarkerCaptureDialog, VisualMarkerSamplesDialog
 from .compact_profile_persistence import (
     persist_profile_changes, profile_changes_allowed,
 )

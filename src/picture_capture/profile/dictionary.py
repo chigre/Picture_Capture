@@ -164,11 +164,11 @@ def _profile_from_legacy_dict(raw: dict[str, Any]) -> DictionaryProfile:
 
 def bundled_profile_path() -> Path:
     """Compatibility path for the original v1 bundled grammar profile."""
-    return Path(__file__).resolve().parent / "data" / "default_dictionary_profile.json"
+    return Path(__file__).resolve().parent.parent / "data" / "default_dictionary_profile.json"
 
 
 def profile_library_path() -> Path:
-    return Path(__file__).resolve().parent / "data" / "dictionary_profiles_v3.json"
+    return Path(__file__).resolve().parent.parent / "data" / "dictionary_profiles_v3.json"
 
 
 def _load_profile_library_raw() -> dict[str, Any]:
@@ -618,7 +618,7 @@ def apply_project_profile_components(path: Path | None, settings: Any) -> None:
     ocr = raw.get("ocr") or {}
     # Illustrated/mixed settings are an explicit v3 component, independent
     # of legacy ordinary-column and headword parser grammar.
-    from .illustration.profile import apply_profile_payload
+    from ..illustration.profile import apply_profile_payload
     apply_profile_payload(settings, raw.get("illustrated"))
     visual_templates = raw.get("visual_marker_templates") or {}
     structure = raw.get("headword_structure") or {}
@@ -719,7 +719,7 @@ def write_project_profile(
     if not isinstance(template_payload, dict):
         template_payload = {"version": 1, "samples": []}
 
-    from .illustration.profile import profile_payload
+    from ..illustration.profile import profile_payload
     payload = {
         "format": PROFILE_FORMAT_V3,
         "schema_version": 3,

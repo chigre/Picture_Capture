@@ -30,7 +30,7 @@ from .ordinary.postprocess import stabilize_ordinary_visual_entries
 from .ordinary_visual import recover_ordinary_visual_entries
 from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .page_understanding_fusion import apply_page_understanding
-from .profile_indent_ui import indent_type_label
+from .profile.indent_ui import indent_type_label
 from .separator_y_refinement import refined_layout_entry_y_by_line
 from .training_baseline import save_automatic_baseline
 

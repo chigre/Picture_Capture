@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture.layout.column_drift import (
     _gutter_divider_right_edge, remeasure_layout_indents_from_ink,
 )
@@ -107,7 +107,7 @@ def test_short_text_marks_do_not_masquerade_as_slanted_rule():
 
 
 def test_column_geometry_ignores_slanted_gutter_divider_as_first_text():
-    from picture_capture.dictionary_page_design import _refine_column_geometry
+    from picture_capture.design.page_design import _refine_column_geometry
 
     mask, _layout, _ops = _ruled_page()
     starts, rights, gutters = _refine_column_geometry(

@@ -10,25 +10,25 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
-from .ui_compat import screen_work_area
-from .appearance import themed_display_image
-from .dictionary_profile import (
+from ..ui_compat import screen_work_area
+from ..appearance import themed_display_image
+from .dictionary import (
     dictionary_profile_preset,
     language_effective_settings,
     profile_symbol_inventory_defaults,
     profile_tail_structure_defaults,
     write_project_profile,
 )
-from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
-from .image_utils import normalize_page_rgb
-from .layout_detection import aggregate_layout_estimates
-from .profile_layout_bootstrap import (
+from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
+from ..image_utils import normalize_page_rgb
+from ..layout_detection import aggregate_layout_estimates
+from .layout_bootstrap import (
     detect_profile_layout_parameters as detect_layout_parameters,
     apply_profile_ink_height_suggestion,
 )
-from .models import AppSettings
-from .processing import derive_geometry, detect_entries
-from .profile_semantics import (
+from ..models import AppSettings
+from ..processing import derive_geometry, detect_entries
+from .semantics import (
     PROFILE_SETUP_VERSION,
     READING_LABELS,
     apply_headword_profile,
@@ -49,18 +49,18 @@ from .profile_semantics import (
     page_template_analysis_image,
     page_variant,
 )
-from .project_storage import (
+from ..project_storage import (
     headword_filter_rules_path,
     ocr_cache_root,
     profile_path as project_profile_path,
     settings_path,
 )
-from .visual_marker_templates import (
+from ..visual.marker_templates import (
     parse_visual_marker_samples,
     serialize_visual_marker_samples,
     split_configured_symbols,
 )
-from .visual_marker_ui import (
+from ..visual.marker_ui import (
     VisualMarkerCaptureDialog,
     VisualMarkerSamplesDialog,
 )
@@ -997,7 +997,7 @@ class ProjectProfileWizard(tk.Toplevel):
             ).grid(row=0, column=column, sticky="w", padx=(0, 10), pady=3)
 
         self._build_language_section(tab, row=4)
-        from .ui.profile_wizard_illustrated import add_wizard_layout_selector
+        from ..ui.profile_wizard_illustrated import add_wizard_layout_selector
         add_wizard_layout_selector(self, tab, row=6)
 
         ttk.Label(
@@ -2486,7 +2486,7 @@ class ProjectProfileWizard(tk.Toplevel):
         if not filename:
             return None
         candidate = (
-            Path(__file__).resolve().parent
+            Path(__file__).resolve().parent.parent
             / "data" / "headword_examples" / filename
         )
         return candidate if candidate.exists() else None

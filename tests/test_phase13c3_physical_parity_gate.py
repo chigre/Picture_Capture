@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical
 

@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 
-from picture_capture import dictionary_page_design as base
-from picture_capture import dictionary_page_design_refined as refined
+from picture_capture.design import page_design as base
+from picture_capture.design import page_design_refined as refined
 
 
 def test_guard_band_uses_explicit_runs_and_features(monkeypatch):

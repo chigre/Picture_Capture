@@ -246,7 +246,7 @@ def compose_robust_line_feature(original):
 
 def install_robust_line_starts() -> None:
     """Patch Page Design's line-feature builder exactly once."""
-    from .. import dictionary_page_design as page_design
+    from ..design import page_design as page_design
 
     if getattr(page_design, "_robust_line_starts_installed", False):
         return

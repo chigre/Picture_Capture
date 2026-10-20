@@ -8,13 +8,13 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 MIGRATED = (
-    "dictionary_page_layout_policy.py",
-    "dictionary_page_design_refined.py",
+    "design/layout_policy.py",
+    "design/page_design_refined.py",
     "page_x_registration.py",
     "layout/column_drift.py",
 )
@@ -22,12 +22,12 @@ MUTABLE_HOOKS = frozenset((
     "_line_runs", "_line_feature", "_indent_modes", "_assign_indent_semantics",
 ))
 FUNCTIONS_WITH_OPS = {
-    "dictionary_page_layout_policy.py": (
+    "design/layout_policy.py": (
         "resolve_page_layout_policy",
         "infer_dictionary_page_layout",
         "detect_entries_from_page_design",
     ),
-    "dictionary_page_design_refined.py": ("_guard_band_entries",),
+    "design/page_design_refined.py": ("_guard_band_entries",),
     "page_x_registration.py": ("_line_family_candidate", "register_page_manual_x"),
     "layout/column_drift.py": (
         "remeasure_layout_indents_from_ink", "finalize_layout_column_drift",

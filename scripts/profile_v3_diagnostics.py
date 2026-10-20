@@ -21,7 +21,7 @@ from picture_capture.bootstrap.core import build_core_services  # noqa: E402
 
 build_core_services()
 
-from picture_capture.dictionary_profile import language_effective_settings, profile_library_path  # noqa: E402
+from picture_capture.profile.dictionary import language_effective_settings, profile_library_path  # noqa: E402
 from picture_capture.coordinate_space import CANONICAL_COORDINATE_SPACE  # noqa: E402
 from picture_capture.image_utils import normalize_page_rgb  # noqa: E402
 from picture_capture.layout_detection import detect_layout_parameters  # noqa: E402

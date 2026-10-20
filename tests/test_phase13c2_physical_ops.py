@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from picture_capture import dictionary_page_design as base
+from picture_capture.design import page_design as base
 from picture_capture import layout_physical_indent as physical
 
 

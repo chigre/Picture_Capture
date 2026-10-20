@@ -4,9 +4,11 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import layout_detection, profile_setup
+from picture_capture import layout_detection
+
+from picture_capture.profile import setup as profile_setup
 from picture_capture.models import AppSettings
-from picture_capture.profile_layout_bootstrap import (
+from picture_capture.profile.layout_bootstrap import (
     clear_profile_layout_bootstrap_cache,
     detect_profile_layout_parameters,
     install_profile_layout_bootstrap,
@@ -89,7 +91,7 @@ def test_gui_bootstrap_no_longer_installs_profile_detector() -> None:
 
     root = Path(__file__).resolve().parents[1]
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
-    profile = (root / "src/picture_capture/profile_setup.py").read_text(encoding="utf-8")
+    profile = (root / "src/picture_capture/profile/setup.py").read_text(encoding="utf-8")
 
     assert "install_profile_layout_bootstrap" not in gui
     assert "detect_profile_layout_parameters as detect_layout_parameters" in profile
@@ -148,7 +150,7 @@ def test_unverifiable_profile_height_is_explicitly_marked_not_measured(monkeypat
 
 
 def test_multi_page_profile_height_does_not_average_real_ink_and_page_ratio_guesses() -> None:
-    from picture_capture.profile_layout_bootstrap import robust_profile_ink_height
+    from picture_capture.profile.layout_bootstrap import robust_profile_ink_height
 
     real = [
         SimpleNamespace(character_height=29, method="profile_bootstrap+projection_fallback+observed_character_height=29(n=60)")
@@ -166,8 +168,8 @@ def test_multi_page_profile_height_does_not_average_real_ink_and_page_ratio_gues
 
 def test_profile_setup_does_not_auto_apply_unverified_height() -> None:
     from pathlib import Path
-    import picture_capture.profile_setup as wizard
-    from picture_capture.profile_layout_bootstrap import apply_profile_ink_height_suggestion
+    import picture_capture.profile.setup as wizard
+    from picture_capture.profile.layout_bootstrap import apply_profile_ink_height_suggestion
 
     source = Path(wizard.__file__).read_text(encoding="utf-8")
     assert "height_note = apply_profile_ink_height_suggestion(aggregate, estimates)" in source

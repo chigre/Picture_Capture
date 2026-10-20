@@ -26,13 +26,13 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from . import dictionary_page_design as base
-from . import dictionary_page_design_refined as refined
-from .layout_detection import analysis_ink_mask, LayoutEstimate
-from .layout.column_drift import finalize_layout_column_drift
-from .models import AppSettings
-from .layout.parameter_evidence import row_padding_is_measured
-from .page_x_registration import register_page_manual_x
+from . import page_design as base
+from . import page_design_refined as refined
+from ..layout_detection import analysis_ink_mask, LayoutEstimate
+from ..layout.column_drift import finalize_layout_column_drift
+from ..models import AppSettings
+from ..layout.parameter_evidence import row_padding_is_measured
+from ..page_x_registration import register_page_manual_x
 
 
 def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> LayoutEstimate:
@@ -41,12 +41,12 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     This keeps Page Layout synchronized with any deliberate test/debug replacement
     on `layout_detection.detect_layout_parameters` without bootstrap mutation.
     """
-    from .ordinary_gpu_pipeline import take_prepared_layout
+    from ..ordinary_gpu_pipeline import take_prepared_layout
 
     prepared = take_prepared_layout(image, settings)
     if prepared is not None:
         return prepared
-    from . import layout_detection
+    from .. import layout_detection
 
     return layout_detection.detect_layout_parameters(image, settings)
 
@@ -89,7 +89,7 @@ def resolve_page_layout_policy(
     the column origin.
     """
     from time import perf_counter as _perf
-    from .quality.draw_performance_profile import enabled as _enabled, record_page
+    from ..quality.draw_performance_profile import enabled as _enabled, record_page
     _timed = _enabled()
     _tick = _perf() if _timed else 0.0
     _segments = {}
@@ -220,7 +220,7 @@ def infer_dictionary_page_layout(
 ) -> tuple[base.DictionaryPageLayout, AppSettings, dict[str, int]]:
     """Infer one page instance while respecting project fixed/auto field policy."""
     from time import perf_counter as _pc
-    from .quality.draw_performance_profile import enabled as _enabled, record_page
+    from ..quality.draw_performance_profile import enabled as _enabled, record_page
     _profile = _enabled()
     _tick = _pc() if _profile else 0.0
     _stages = {}

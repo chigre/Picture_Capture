@@ -7,7 +7,7 @@ from dataclasses import fields
 from PIL import Image, ImageDraw
 import pytest
 
-from picture_capture.dictionary_page_design import _leading_width
+from picture_capture.design.page_design import _leading_width
 from picture_capture.layout_composition import infer_composed_physical_page_layout
 from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.models import AppSettings

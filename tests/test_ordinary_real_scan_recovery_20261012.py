@@ -117,7 +117,7 @@ def _fallback_columns():
 
 
 def test_independent_latin_column_requires_repeated_entry_and_body_family(monkeypatch):
-    from picture_capture import dictionary_page_design_refined as refined
+    from picture_capture.design import page_design_refined as refined
 
     understanding, previous = _fallback_columns()
     settings = AppSettings(

@@ -43,7 +43,7 @@ def test_invalid_page_geometry_fails_closed():
 def test_fast_preparation_forces_temporary_whitefill_and_skips_auto_layout(
     monkeypatch, tmp_path,
 ):
-    from picture_capture import dictionary_page_layout_policy as policy
+    from picture_capture.design import layout_policy as policy
 
     def forbidden(*_args, **_kwargs):
         raise AssertionError("fast Y must not call page layout detection")

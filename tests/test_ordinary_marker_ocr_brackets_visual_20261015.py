@@ -162,7 +162,9 @@ def test_existing_marker_ocr_fallback_applies_profile_bracket_extraction(
     monkeypatch, ocr_text, expected,
 ):
     """Exercise the real ordinary-marker OCR writer with OCR engines mocked."""
-    from picture_capture import processing_core, ocr_channel, dictionary_profile
+    from picture_capture import processing_core
+    from picture_capture import ocr_channel
+    from picture_capture.profile import dictionary as dictionary_profile
     from picture_capture import entry_ocr_crop, paddle_headwords
 
     image = Image.new("RGB", (850, 580), "white")
@@ -234,7 +236,9 @@ def test_latin_or_profile_disabled_marker_ocr_does_not_cut_bracket_words(monkeyp
 
 def test_explicit_only_ocr_overwrites_previous_result_clears_failed_and_keeps_manual(monkeypatch):
     """User-triggered pure OCR must replace auto text, not act as blank-fill."""
-    from picture_capture import processing_core, ocr_channel, dictionary_profile
+    from picture_capture import processing_core
+    from picture_capture import ocr_channel
+    from picture_capture.profile import dictionary as dictionary_profile
     from picture_capture import entry_ocr_crop
 
     image = Image.new("RGB", (850, 580), "white")

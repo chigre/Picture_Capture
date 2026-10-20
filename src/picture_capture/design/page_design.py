@@ -20,13 +20,13 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image, ImageOps
 
-from .image_utils import normalize_page_rgb
-from .layout_detection import _projection_layout_estimate, analysis_ink_mask
-from .layout_transform import LayoutTransform
-from .models import AppSettings, Entry
-from .ordinary_visual import _components, _fill_short_gaps, _runs
-from .profile_indent_ui import indent_type_label
-from .profile_semantics import (
+from ..image_utils import normalize_page_rgb
+from ..layout_detection import _projection_layout_estimate, analysis_ink_mask
+from ..layout_transform import LayoutTransform
+from ..models import AppSettings, Entry
+from ..ordinary_visual import _components, _fill_short_gaps, _runs
+from ..profile.indent_ui import indent_type_label
+from ..profile.semantics import (
     effective_page_settings,
     excluded_source_side,
     excluded_source_side_percent,
@@ -246,7 +246,7 @@ def _refine_column_geometry(
     # persistent *moving* stroke inside the inter-column gutter as well, so
     # it cannot redefine the next column's text start.
     if len(starts) >= 2:
-        from .geometry.layout_gutter_rule import gutter_divider_right_edge
+        from ..geometry.layout_gutter_rule import gutter_divider_right_edge
         for index in range(1, len(starts)):
             corridor_left = max(0, int(rights[index - 1]) + 1)
             semantic_left = int(starts[index])
@@ -1054,7 +1054,7 @@ def detect_entries_from_page_design(
     # Local import avoids the base <-> refined module cycle. The refined
     # implementation consumes base geometry helpers but never calls this public
     # forwarding function, so call-time delegation cannot recurse.
-    from .dictionary_page_design_refined import (
+    from .page_design_refined import (
         detect_entries_from_page_design as refined_detect_entries,
     )
 
