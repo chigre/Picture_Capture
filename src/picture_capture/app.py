@@ -200,7 +200,7 @@ from .image_preprocessing import (
     export_diagnostic_json,
     export_summary_csv,
 )
-from .preprocess_geometry import perspective_from_quad
+from .preprocess.geometry import perspective_from_quad
 from .page_sections import (
     PageSection, read_page_sections, write_page_sections, v_is_inside_sections,
 )
@@ -12954,7 +12954,7 @@ class PictureCaptureApp(tk.Tk):
             and preloaded.get("project_root") == str(self.project.root)
             and isinstance(preloaded.get("image"), Image.Image)
         )
-        from .image_metadata_status import image_dpi, image_status
+        from .preprocess.image_metadata_status import image_dpi, image_status
         if use_preloaded:
             source_dpi = preloaded.get("source_dpi")
             self.image = preloaded["image"]
