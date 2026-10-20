@@ -2155,7 +2155,7 @@ def refine_existing_entries(
             entries, effective, analysis_source, geometry,
         )
 
-    from .marker_refinement_analysis import prepare_refinement_analysis
+    from .refinement.analysis import prepare_refinement_analysis
 
     prep_kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
     source, effective, analysis_source = prepare_refinement_analysis(
@@ -2187,7 +2187,7 @@ def _refine_existing_entries_with_geometry(
     gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
 
     if align_to_ink_top:
-        from .marker_refinement_top_edge import refine_existing_marker_to_ink_top
+        from .refinement.top_edge import refine_existing_marker_to_ink_top
     else:
         from .paddle_headwords import refine_separator_y
 
@@ -2216,7 +2216,7 @@ def _refine_existing_entries_with_geometry(
             column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
         )
         if align_to_ink_top:
-            from .marker_refinement_fixed_band import fixed_half_gutter_band
+            from .refinement.fixed_band import fixed_half_gutter_band
             column_x, column_right = fixed_half_gutter_band(
                 geometry, col, int(canonical_v), gray.shape[1],
                 int(effective.column_width), int(effective.gutter),
@@ -2829,7 +2829,7 @@ def split_single_lines(
     source, effective, _analysis_source, geometry = _page_geometry_context(
         image, settings, profile_page_index,
     )
-    from .marker_refinement_analysis import whiten_illustrations_for_export as whiten
+    from .refinement.analysis import whiten_illustrations_for_export as whiten
     source = whiten(source, effective, profile_page_index, source_image_path=image_path)
     if page_sections is None:
         page_sections = read_page_sections(image_path)

@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from picture_capture.marker_refinement_top_edge import refine_existing_marker_to_ink_top
+from picture_capture.refinement.top_edge import refine_existing_marker_to_ink_top
 from picture_capture.models import AppSettings
 from picture_capture.ui.settings import schema
 

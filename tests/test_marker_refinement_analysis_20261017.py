@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from picture_capture import marker_refinement_analysis as prep
+from picture_capture.refinement import analysis as prep
 from picture_capture.models import AppSettings
 
 
@@ -292,7 +292,8 @@ def test_disabled_whitefill_does_not_call_detector(monkeypatch):
 
 
 def test_refine_processes_all_existing_entries_including_manual(monkeypatch, tmp_path):
-    from picture_capture import processing_core, marker_refinement_top_edge
+    from picture_capture import processing_core
+    from picture_capture.refinement import top_edge as marker_refinement_top_edge
 
     @dataclass
     class Row:
@@ -348,9 +349,8 @@ def test_full_refine_pipeline_uses_per_page_column_width_and_line_height(
     monkeypatch, tmp_path,
 ):
     from picture_capture.design import layout_policy as policy
-    from picture_capture import (
-        marker_refinement_top_edge, processing_core,
-    )
+    from picture_capture import processing_core
+    from picture_capture.refinement import top_edge as marker_refinement_top_edge
 
     @dataclass
     class Row:

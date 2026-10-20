@@ -124,7 +124,7 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
     from .formats import read_pdic, pdic_path
     from .image_utils import normalize_page_rgb
     from .processing_core import refine_existing_entries
-    from .marker_refinement_analysis import (
+    from .refinement.analysis import (
         reset_refinement_layout_audit, read_refinement_layout_audit,
         finish_refinement_layout_audit,
         reset_refinement_layout_source, read_refinement_layout_source,
@@ -286,7 +286,7 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
                 "skipped": 1, "reason": "页面身份不符"}
 
     from .formats import pdic_path, read_pdic
-    from .marker_refinement_guard import validate_refined_markers
+    from .refinement.guard import validate_refined_markers
     from .models import Entry
     try:
         if ownership_check is not None and not ownership_check(int(page_index)):
