@@ -121,3 +121,11 @@ This organization change is *not* a source-code compression project. An expanded
 - Prepared branch `refactor/issue562-preprocess-internals-20261020` with 10 real Git rename moves; independently verified complete untruncated tree root `.py` count **175 → 165**. No old-location shim. Static relative import audit resolved **42/42** imports in the modified production modules. These checks do not establish runtime correctness.
 - PR creation and Issue #562 checkpoint comments were blocked by GitHub write safety checks. No PR CI, cross-platform Python 3.10, GUI smoke, wheel, CodeQL, human review or postmerge main checks have been run for this new cohort. No merge permitted yet. The branch is a recovery checkpoint, not acceptance.
 - Next: open Draft PR from existing branch, complete all required tests and repair failures, verify review gates, merge safely, verify main push CI, then continue the next business cohort. Keep Issue #562 open; manual scanned-image verification remains pending.
+
+
+## Issue #562 — REF ownership completion cohort (not yet accepted)
+
+- Physically relocate three REF implementation modules: `ref_boxes.py` → `ref/boxes.py`, `ref_box_detection.py` → `ref/detection.py`, `ref_box_ocr.py` → `ref/ocr.py`, with no old-root shims. Maintain the historical application and CLI entrypoints, but replace direct imports in actual callers and tests.
+- Preserve REF JSON persistence, atomic ticketed writes, source-image pixel coordinates, direction-sensitive detection, OCR engine resource management and original-image immutability. Cross-package callers use canonical REF owners; no behavior/threshold changes are intended.
+- Add architecture guard ratchet and module ownership assertions. Baseline root `.py` count **165**; expected after merge **162**, requiring independent Git tree enumeration.
+- This is a bounded three-module REF business package completion (rather than an unrelated 15–30 module batch). Require full Python 3.10/3.13 Windows/macOS/Ubuntu CI, GUI smoke, wheel, CodeQL, reviews, postmerge main CI and real-image manual verification where available before declaring full acceptance. No claim of CI success before it actually runs.

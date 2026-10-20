@@ -13,12 +13,12 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .ocr_channel import (
+from ..image_utils import normalize_page_rgb
+from ..ocr_channel import (
     OcrChannelPlan, OcrChannelSession, OcrTextChoice,
     choose_ocr_text, resolve_ocr_channel_plan,
 )
-from .ref_boxes import (
+from .boxes import (
     RefBox, read_ref_boxes, ref_box_path, ref_box_ticket, write_ref_boxes,
 )
 

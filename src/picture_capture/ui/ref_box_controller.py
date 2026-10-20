@@ -12,7 +12,7 @@ from tkinter import messagebox, simpledialog, ttk
 
 from PIL import Image, ImageColor, ImageTk
 
-from ..ref_boxes import (
+from ..ref.boxes import (
     RefBox, next_ref_id, read_ref_boxes, ref_box_ticket, write_ref_boxes,
 )
 from ..ref.box_geometry import (
@@ -21,8 +21,8 @@ from ..ref.box_geometry import (
 from .overlay_layout_helpers import effective_main_overlay_font_size
 from ..ref.text_label_layout import ref_text_label_rect
 from ..review_text_helpers import _entry_font_spec
-from ..ref_box_ocr import ocr_ref_boxes_job, local_ref_ocr_plan
-from ..ref_box_detection import (
+from ..ref.ocr import ocr_ref_boxes_job, local_ref_ocr_plan
+from ..ref.detection import (
     add_ref_sample, associate_ref_to_entry, detect_ref_boxes_job,
     list_ref_samples, default_ref_box_dimensions,
     default_ref_sample_direction, REF_SAMPLE_DIRECTIONS,
@@ -794,7 +794,7 @@ class RefBoxController:
         if not indices:
             app.status_var.set("未选择 REF OCR 页面")
             return
-        from ..ref_boxes import ref_box_path
+        from ..ref.boxes import ref_box_path
         project = app.project
         pages = tuple(project.images)
         eligible = [i for i in indices if ref_box_path(pages[i]).is_file()]

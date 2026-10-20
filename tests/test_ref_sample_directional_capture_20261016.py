@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.ref_box_detection import (
+from picture_capture.ref.detection import (
     add_ref_sample,
     default_ref_sample_direction,
     delete_ref_sample,
@@ -16,7 +16,7 @@ from picture_capture.ref_box_detection import (
     ref_box_after_guide,
     write_ref_sample_metadata,
 )
-from picture_capture.ref_boxes import read_ref_boxes
+from picture_capture.ref.boxes import read_ref_boxes
 from picture_capture.ui.ref_box_controller import RefBoxController
 from picture_capture.ui.settings import schema
 
@@ -107,7 +107,7 @@ def test_capture_release_stays_active_until_explicit_exit(tmp_path, monkeypatch)
 def test_detect_page_uses_template_metadata_direction(
     tmp_path, monkeypatch, direction, expected_x, expected_w,
 ):
-    import picture_capture.ref_box_detection as detection
+    import picture_capture.ref.detection as detection
 
     page = tmp_path / "00011.png"
     Image.new("RGB", (300, 200), "white").save(page)
