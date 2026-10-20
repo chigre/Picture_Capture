@@ -8,7 +8,7 @@ import pytest
 
 from picture_capture.models import AppSettings
 from picture_capture.ocr.lazy_secondary import can_skip_tesseract_diagnostic_column
-from picture_capture.ocr.ocr.tesseract_raw_cache import TesseractRawCache, tesseract_variant_path
+from picture_capture.ocr.tesseract_raw_cache import TesseractRawCache, tesseract_variant_path
 from picture_capture.ui.settings import schema
 
 
