@@ -4,7 +4,7 @@ import pickle
 from types import SimpleNamespace
 
 from picture_capture import image_preprocessing
-from picture_capture import image_preprocessing_canvas as canvas_helpers
+from picture_capture.preprocess import canvas as canvas_helpers
 
 
 def test_phase7o_stable_module_reexports_canvas_helpers() -> None:

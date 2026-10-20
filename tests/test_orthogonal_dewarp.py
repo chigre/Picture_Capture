@@ -5,15 +5,15 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import orthogonal_dewarp
+from picture_capture.preprocess import orthogonal_dewarp
 from picture_capture.models import AppSettings
-from picture_capture.orthogonal_dewarp import (
+from picture_capture.preprocess.orthogonal_dewarp import (
     apply_orthogonal_warp_image,
     estimate_orthogonal_warp,
     transform_points_orthogonal,
     transform_polygons_orthogonal,
 )
-from picture_capture.preprocess_geometry import audit_horizontal_alignment
+from picture_capture.preprocess.geometry import audit_horizontal_alignment
 
 
 def _rotated_box(

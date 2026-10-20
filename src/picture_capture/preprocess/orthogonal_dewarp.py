@@ -7,10 +7,10 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from .image_utils import normalize_page_rgb
-from .layout_detection import analysis_ink_mask
-from .models import AppSettings
-from .preprocess_geometry import horizontal_column_rows
+from ..image_utils import normalize_page_rgb
+from ..layout_detection import analysis_ink_mask
+from ..models import AppSettings
+from .geometry import horizontal_column_rows
 from .text_line_geometry import (
     horizontal_rule_track_points,
     separator_track_points,

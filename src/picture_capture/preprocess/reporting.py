@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable
 
-from .image_preprocessing_constants import (
+from .constants import (
     AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
     AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
     AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
@@ -35,7 +35,7 @@ from .orthogonal_dewarp import (
     PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX,
     PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
 )
-from .preprocess_geometry import (
+from .geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
@@ -62,8 +62,8 @@ from .text_line_geometry import (
 )
 
 if TYPE_CHECKING:
-    from .image_preprocessing_models import OutputCanvasInfo, PreprocessAnalysis
-    from .models import AppSettings
+    from .models import OutputCanvasInfo, PreprocessAnalysis
+    from ..models import AppSettings
 
 
 def export_summary_csv(

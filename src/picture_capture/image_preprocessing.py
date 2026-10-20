@@ -16,7 +16,7 @@ from .layout_detection import (
     infer_layout_from_boxes,
 )
 from .models import AppSettings
-from .orthogonal_dewarp import (
+from .preprocess.orthogonal_dewarp import (
     HORIZONTAL_RULE_MAX_ANGLE_DEG,
     HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
     HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
@@ -32,7 +32,7 @@ from .orthogonal_dewarp import (
     horizontal_rule_metrics,
     transform_polygons_orthogonal,
 )
-from .preprocess_geometry import (
+from .preprocess.geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
@@ -60,7 +60,7 @@ from .preprocess_geometry import (
     perspective_from_quad,
     transform_polygons_homography,
 )
-from .text_line_geometry import (
+from .preprocess.text_line_geometry import (
     SEPARATOR_CURVATURE_SCORE_MIN,
     SEPARATOR_CURVE_SPAN_MIN,
     SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD,
@@ -72,14 +72,14 @@ from .text_line_geometry import (
     separator_track_points,
 )
 from .project_storage import image_preprocess_output_root
-from .image_preprocessing_models import (
+from .preprocess.models import (
     DEFAULT_SAFETY_MARGIN_PX,
     PREPROCESS_FORMAT,
     PREPROCESS_FORMAT_VERSION,
     OutputCanvasInfo,
     PreprocessAnalysis,
 )
-from .image_preprocessing_constants import (
+from .preprocess.constants import (
     AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
     AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
     AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
@@ -98,11 +98,11 @@ from .image_preprocessing_constants import (
     ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
     POST_PERSPECTIVE_REDETECT_MIN_BOXES,
 )
-from .image_preprocessing_canvas import (
+from .preprocess.canvas import (
     _normalize_canvas_alignment,
     output_canvas_info,
 )
-from .image_preprocessing_persistence import (
+from .preprocess.persistence import (
     MANUAL_GEOMETRY_FORMAT,
     MANUAL_GEOMETRY_VERSION,
     clear_manual_perspective_quad,
@@ -113,12 +113,12 @@ from .image_preprocessing_persistence import (
     save_analysis,
     save_manual_perspective_quad,
 )
-from .image_preprocessing_storage import (
+from .preprocess.storage import (
     preview_output_root,
     processed_output_root,
     promote_processed_pages,
 )
-from .image_preprocessing_reporting import (
+from .preprocess.reporting import (
     _export_diagnostic_json_impl,
     export_summary_csv,
     result_summary,
