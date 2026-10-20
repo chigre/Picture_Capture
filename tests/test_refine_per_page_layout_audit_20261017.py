@@ -13,7 +13,7 @@ from picture_capture import marker_refinement_parallel as batch
 def test_two_pages_both_get_separate_physical_layout_measurements(tmp_path, monkeypatch):
     from picture_capture import processing_core
     from picture_capture.design import layout_policy as policy
-    from picture_capture import marker_refinement_analysis as prep
+    from picture_capture.refinement import analysis as prep
 
     pages = []
     for index in (0, 1):

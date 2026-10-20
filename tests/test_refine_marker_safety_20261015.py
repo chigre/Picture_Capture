@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import pytest
-from picture_capture import marker_refinement_guard as guard
+from picture_capture.refinement import guard
 from picture_capture.simplified_review import entry_key
 
 

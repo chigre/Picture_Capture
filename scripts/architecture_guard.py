@@ -695,6 +695,23 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical Profile/design owner missing: {canonical}")
 
+
+    # Issue #562: bounded explicit-Y refinement leaves have physical owners.
+    # Keep the spawn/parent PDIC coordinator and LayoutRows cache at root
+    # until their process/persistence contracts receive separate acceptance.
+    moved_refinement = {
+        "marker_refinement_analysis": "refinement/analysis.py",
+        "marker_refinement_fixed_band": "refinement/fixed_band.py",
+        "marker_refinement_guard": "refinement/guard.py",
+        "marker_refinement_progress": "refinement/progress.py",
+        "marker_refinement_top_edge": "refinement/top_edge.py",
+    }
+    for former, current in moved_refinement.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired refinement root module returned: {former}.py")
+        if not (PACKAGE_ROOT / current).is_file():
+            violations.append(f"canonical refinement owner missing: {current}")
+
     return violations
 
 

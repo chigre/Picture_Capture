@@ -5,7 +5,7 @@ from PIL import Image
 from picture_capture.layout_transform import LayoutTransform
 from picture_capture.layout_rows_cache import write_layout_rows_cache
 from picture_capture.models import AppSettings
-from picture_capture import marker_refinement_analysis as prep
+from picture_capture.refinement import analysis as prep
 
 
 def _cached_layout(width, top):

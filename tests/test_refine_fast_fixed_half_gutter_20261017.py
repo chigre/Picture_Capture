@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from picture_capture.marker_refinement_fixed_band import fixed_half_gutter_band
+from picture_capture.refinement.fixed_band import fixed_half_gutter_band
 from picture_capture.models import AppSettings, Entry
-from picture_capture import marker_refinement_analysis as prep
+from picture_capture.refinement import analysis as prep
 
 
 def _geometry(starts=(10, 100), widths=(70, 70)):
@@ -95,10 +95,10 @@ def test_fast_preparation_forces_temporary_whitefill_and_skips_auto_layout(
 
 def test_y_engine_checks_the_actual_fast_band_without_entering_next_column(monkeypatch):
     from picture_capture import processing_core
-    from picture_capture.marker_refinement_top_edge import (
+    from picture_capture.refinement.top_edge import (
         refine_existing_marker_to_ink_top,
     )
-    from picture_capture import marker_refinement_top_edge
+    from picture_capture.refinement import top_edge as marker_refinement_top_edge
 
     calls = []
 

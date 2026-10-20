@@ -146,7 +146,7 @@ def test_unlined_layout_and_png_see_same_temporary_mask(
 
 
 def test_exports_and_refinement_tolerate_missing_ppp_in_reuse_mode(tmp_path):
-    from picture_capture.marker_refinement_analysis import (
+    from picture_capture.refinement.analysis import (
         whiten_illustrations_for_export, whiten_illustrations_for_refinement,
     )
 
