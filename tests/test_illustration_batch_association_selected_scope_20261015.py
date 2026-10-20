@@ -11,11 +11,11 @@ from picture_capture.formats import read_pdic, read_ppp, write_pdic, write_ppp
 from picture_capture.models import AppSettings, Entry, PolygonRegion
 from picture_capture.processing_core import Geometry
 from picture_capture.project_storage import ppp_read_path_for_image, ppp_write_path_for_image
-from picture_capture.illustration_batch_association import (
+from picture_capture.illustration.batch_association import (
     associate_existing_ppp_page, associate_existing_ppp_job,
 )
 from picture_capture.ui.controllers import illustration as ui
-import picture_capture.illustration_batch_association as service
+import picture_capture.illustration.batch_association as service
 
 
 def geometry():
@@ -105,7 +105,7 @@ def test_concurrent_ppp_edit_is_detected_before_commit(tmp_path, monkeypatch):
     page = setup_page(tmp_path, "080014")
     initial = read_ppp(ppp_read_path_for_image(page))
     source = ppp_read_path_for_image(page)
-    real_illustration_labels = service.illustration_labels
+    real_illustration_labels = service.illustration.labels
 
     def race(*args, **kwargs):
         source.write_text("external-change\n", encoding="utf-8")
@@ -348,7 +348,7 @@ def test_previous_pdic_change_during_association_refuses_overwrite(tmp_path, mon
     current = setup_page(tmp_path, "080202")
     source = ppp_read_path_for_image(current)
     before = source.read_bytes()
-    original = service.illustration_labels
+    original = service.illustration.labels
 
     def race(*args, **kwargs):
         previous.with_suffix(".pdic").write_text("changed from outside\\n", encoding="utf-8")

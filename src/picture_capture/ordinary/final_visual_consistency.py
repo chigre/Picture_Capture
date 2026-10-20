@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter
 
-from ..illustration_detection import _rle_components
+from ..illustration.detection import _rle_components
 from ..models import AppSettings, Entry
 from ..page_understanding import uses_cjk_role_model
 

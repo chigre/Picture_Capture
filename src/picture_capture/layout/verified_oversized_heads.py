@@ -14,7 +14,7 @@ from PIL import Image, ImageFilter
 
 from .. import dictionary_page_design as base
 from ..entry_classification import register_layout_line_classification
-from ..illustration_detection import _rle_components
+from ..illustration.detection import _rle_components
 from ..models import Entry
 
 

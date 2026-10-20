@@ -129,3 +129,11 @@ This organization change is *not* a source-code compression project. An expanded
 - Preserve REF JSON persistence, atomic ticketed writes, source-image pixel coordinates, direction-sensitive detection, OCR engine resource management and original-image immutability. Cross-package callers use canonical REF owners; no behavior/threshold changes are intended.
 - Add architecture guard ratchet and module ownership assertions. Baseline root `.py` count **165**; expected after merge **162**, requiring independent Git tree enumeration.
 - This is a bounded three-module REF business package completion (rather than an unrelated 15–30 module batch). Require full Python 3.10/3.13 Windows/macOS/Ubuntu CI, GUI smoke, wheel, CodeQL, reviews, postmerge main CI and real-image manual verification where available before declaring full acceptance. No claim of CI success before it actually runs.
+
+
+## Issue #562 — Illustration implementation canonical owners (not yet accepted)
+
+- Physically relocate three remaining Illustration root implementation modules: `illustration_detection.py` → `illustration/detection.py`, `illustration_labels.py` → `illustration/labels.py`, `illustration_batch_association.py` → `illustration/batch_association.py`. No obsolete root shim; keep app/export/CLI entry points as before.
+- Update illustration UI, processing_core, Layout/ordinary illustration evidence, real-scan ROI validator, lazy cross-column detector dependency and focused PPP/reading-order/cross-page/concurrent-edit tests. Preserve original PPP payload/line and manual edits, source-image coordinates, reading direction, association ordering, read-only detection semantics, atomic PPP write safety and no extra OCR/Paddle process owners.
+- Add canonical ownership assertion and architecture guard. Root count baseline **162**, expected migration result **159** after independent complete Git tree audit.
+- PR acceptance is separate: Windows/macOS/Ubuntu × Python 3.10 & 3.13 full CI, Tk GUI smoke, wheel, CodeQL, review, postmerge main CI and documented manual scanned-page verification limitations. No result is claimed before observed.

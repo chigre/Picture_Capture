@@ -615,6 +615,18 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical REF module missing: {current}")
 
+    # Issue #562: enforce physical illustration detection, labels and association ownership.
+    moved_illustration = {
+        "illustration_detection": "illustration/detection.py",
+        "illustration_labels": "illustration/labels.py",
+        "illustration_batch_association": "illustration/batch_association.py",
+    }
+    for former, current in moved_illustration.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired illustration root module returned: {former}.py")
+        if not (PACKAGE_ROOT / current).is_file():
+            violations.append(f"canonical illustration module missing: {current}")
+
     return violations
 
 

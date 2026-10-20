@@ -4,9 +4,9 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageFilter
 
-from .models import AppSettings, PolygonRegion
-from .illustration.candidate_size import illustration_candidate_min_dimensions
-from .illustration.cross_column import spanning_figure_boxes
+from ..models import AppSettings, PolygonRegion
+from .candidate_size import illustration_candidate_min_dimensions
+from .cross_column import spanning_figure_boxes
 
 
 AUTO_ILLUSTRATION_LABEL_TOKEN = "|AUTO_"
