@@ -10,11 +10,11 @@ from PIL import Image, ImageDraw
 
 from picture_capture import (
     image_preprocessing,
-    image_preprocessing_models,
-    image_preprocessing_persistence,
-    image_preprocessing_reporting,
-    image_preprocessing_storage,
 )
+from picture_capture.preprocess import models as image_preprocessing_models
+from picture_capture.preprocess import persistence as image_preprocessing_persistence
+from picture_capture.preprocess import reporting as image_preprocessing_reporting
+from picture_capture.preprocess import storage as image_preprocessing_storage
 from picture_capture.image_preprocessing import (
     PreprocessAnalysis,
     analysis_is_current,

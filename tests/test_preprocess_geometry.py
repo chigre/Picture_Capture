@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 from picture_capture.models import AppSettings
-from picture_capture.preprocess_geometry import (
+from picture_capture.preprocess.geometry import (
     audit_horizontal_alignment,
     audit_homography_distortion,
     PerspectiveEstimate,

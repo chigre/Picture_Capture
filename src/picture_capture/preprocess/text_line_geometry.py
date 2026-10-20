@@ -7,10 +7,10 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .layout_detection import infer_layout_from_boxes
-from .models import AppSettings
-from .preprocess_geometry import horizontal_column_rows, polygon_boxes
+from ..image_utils import normalize_page_rgb
+from ..layout_detection import infer_layout_from_boxes
+from ..models import AppSettings
+from .geometry import horizontal_column_rows, polygon_boxes
 
 
 SEPARATOR_CURVE_SPAN_MIN = 0.72

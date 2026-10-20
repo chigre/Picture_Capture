@@ -1,7 +1,7 @@
 """Main-window image dimensions and DPI status regressions."""
 from pathlib import Path
 
-from picture_capture.image_metadata_status import image_dpi, image_status
+from picture_capture.preprocess.image_metadata_status import image_dpi, image_status
 
 
 def test_embedded_dpi_and_missing_resolution():

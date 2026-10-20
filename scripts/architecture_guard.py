@@ -584,6 +584,25 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical leaf owner missing: {canonical}")
 
+    # Issue #562: preprocessing owners have canonical physical paths.
+    migrated_preprocess = {
+        "image_preprocessing_canvas": "preprocess/canvas.py",
+        "image_preprocessing_constants": "preprocess/constants.py",
+        "image_preprocessing_models": "preprocess/models.py",
+        "image_preprocessing_persistence": "preprocess/persistence.py",
+        "image_preprocessing_reporting": "preprocess/reporting.py",
+        "image_preprocessing_storage": "preprocess/storage.py",
+        "preprocess_geometry": "preprocess/geometry.py",
+        "orthogonal_dewarp": "preprocess/orthogonal_dewarp.py",
+        "text_line_geometry": "preprocess/text_line_geometry.py",
+        "image_metadata_status": "preprocess/image_metadata_status.py",
+    }
+    for old_name, canonical in migrated_preprocess.items():
+        if (PACKAGE_ROOT / (old_name + ".py")).exists():
+            violations.append(f"retired preprocessing root owner returned: {old_name}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical preprocessing owner missing: {canonical}")
+
     return violations
 
 

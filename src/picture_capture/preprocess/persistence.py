@@ -7,8 +7,8 @@ import math
 from pathlib import Path
 from typing import Iterable
 
-from .project_storage import image_preprocess_data_root
-from .image_preprocessing_models import PreprocessAnalysis
+from ..project_storage import image_preprocess_data_root
+from .models import PreprocessAnalysis
 
 
 def result_path(project_root: Path, page: Path) -> Path:

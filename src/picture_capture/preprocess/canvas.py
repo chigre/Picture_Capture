@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Final preprocessing canvas geometry helpers."""
 
-from .image_preprocessing_models import OutputCanvasInfo, PreprocessAnalysis
+from .models import OutputCanvasInfo, PreprocessAnalysis
 
 
 def _normalize_canvas_alignment(value: str, *, axis: str) -> str:

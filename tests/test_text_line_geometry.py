@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings
-from picture_capture.text_line_geometry import (
+from picture_capture.preprocess.text_line_geometry import (
     analyze_text_line_geometry,
     horizontal_rule_track_points,
 )

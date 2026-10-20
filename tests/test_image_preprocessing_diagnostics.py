@@ -4,11 +4,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from picture_capture import (
-    image_preprocessing,
-    image_preprocessing_constants,
-    image_preprocessing_reporting,
-)
+from picture_capture import image_preprocessing
+from picture_capture.preprocess import constants as image_preprocessing_constants
+from picture_capture.preprocess import reporting as image_preprocessing_reporting
 
 
 def test_phase7r_preprocessing_constants_keep_stable_old_module_aliases() -> None:
