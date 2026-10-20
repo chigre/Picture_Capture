@@ -10,11 +10,11 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ref_boxes import (
+from picture_capture.ref.boxes import (
     RefBox, box_intersection_fraction, next_ref_id,
     read_ref_boxes, ref_box_path, ref_box_ticket, write_ref_boxes,
 )
-from picture_capture.ref_box_detection import (
+from picture_capture.ref.detection import (
     add_ref_sample, detect_ref_boxes_page, list_ref_samples, match_ref_templates,
 )
 from picture_capture.ui.ref_box_controller import RefBoxController
@@ -187,7 +187,7 @@ def test_template_capture_detects_any_color_not_blue_only(tmp_path):
 
 def test_numpy_fallback_returns_same_source_coordinates_without_opencv(tmp_path, monkeypatch):
     import sys
-    import picture_capture.ref_box_detection as detection
+    import picture_capture.ref.detection as detection
     monkeypatch.setitem(sys.modules, "cv2", None)
     path = tmp_path / "page.png"
     rng = np.random.default_rng(987)

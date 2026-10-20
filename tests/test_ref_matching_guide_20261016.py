@@ -9,11 +9,11 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.ref_box_detection import (
+from picture_capture.ref.detection import (
     add_ref_sample, match_ref_templates, ref_box_after_guide,
     default_ref_box_dimensions, detect_ref_boxes_page,
 )
-from picture_capture.ref_boxes import RefBox, read_ref_boxes, write_ref_boxes
+from picture_capture.ref.boxes import RefBox, read_ref_boxes, write_ref_boxes
 from picture_capture.ui.settings.lifecycle import validate_ref_box_controls
 
 

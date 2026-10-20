@@ -12,11 +12,11 @@ from picture_capture.models import AppSettings
 from picture_capture.ocr_channel import (
     OcrChannelCandidate, OcrChannelPlan, OcrChannelResult,
 )
-from picture_capture.ref_box_ocr import (
+from picture_capture.ref.ocr import (
     local_ref_ocr_plan, normalize_ref_ocr_text,
     ocr_ref_boxes_job, ocr_ref_boxes_page,
 )
-from picture_capture.ref_boxes import (
+from picture_capture.ref.boxes import (
     RefBox, read_ref_boxes, ref_box_path, ref_box_ticket, write_ref_boxes,
 )
 from picture_capture.ui.ref_box_controller import RefBoxController

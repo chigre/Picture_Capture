@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from ...ref_box_detection import (
+from ...ref.detection import (
     REF_SAMPLE_CATEGORIES, delete_ref_sample, default_ref_sample_direction,
     list_ref_samples, read_ref_sample_metadata, write_ref_sample_metadata,
 )

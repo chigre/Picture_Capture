@@ -13,11 +13,11 @@ import uuid
 import numpy as np
 from PIL import Image, ImageOps
 
-from .image_utils import normalize_page_rgb
+from ..image_utils import normalize_page_rgb
 
-from .formats import pdic_path, read_pdic
-from .page_sections import read_page_sections
-from .ref_boxes import (
+from ..formats import pdic_path, read_pdic
+from ..page_sections import read_page_sections
+from .boxes import (
     RefBox, box_intersection_fraction, next_ref_id, read_ref_boxes,
     ref_box_ticket, ref_sample_root, write_ref_boxes,
 )
@@ -339,7 +339,7 @@ def associate_ref_to_entry(
     """
     if not entries:
         return None
-    from .processing_core import _base_entry_crop_pieces
+    from ..processing_core import _base_entry_crop_pieces
     _ordered, pieces = _base_entry_crop_pieces(
         image, entries, settings, profile_page_index=page_index,
         page_sections=sections,

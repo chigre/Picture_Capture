@@ -14,8 +14,8 @@ import re
 
 from PIL import Image
 
-from .formats import write_text_atomic
-from .project_storage import is_managed_project, storage_root
+from ..formats import write_text_atomic
+from ..project_storage import is_managed_project, storage_root
 
 
 # Seven-field files remain readable without mutation; every successful edit

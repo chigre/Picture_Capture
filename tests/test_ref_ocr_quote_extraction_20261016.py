@@ -2,7 +2,7 @@ import pytest
 from types import SimpleNamespace
 
 from picture_capture.models import AppSettings
-from picture_capture.ref_box_ocr import extract_ref_text
+from picture_capture.ref.ocr import extract_ref_text
 from picture_capture.ui.settings import schema
 from picture_capture.ui.settings.lifecycle import validate_ref_box_controls
 

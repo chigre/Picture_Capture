@@ -603,6 +603,18 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical preprocessing owner missing: {canonical}")
 
+    # Issue #562: canonical REF package owns box storage/detection/OCR.
+    migrated_ref = {
+        "ref_boxes": "ref/boxes.py",
+        "ref_box_detection": "ref/detection.py",
+        "ref_box_ocr": "ref/ocr.py",
+    }
+    for former, current in migrated_ref.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired REF root module returned: {former}.py")
+        if not (PACKAGE_ROOT / current).is_file():
+            violations.append(f"canonical REF module missing: {current}")
+
     return violations
 
 

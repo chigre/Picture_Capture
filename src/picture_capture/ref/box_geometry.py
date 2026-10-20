@@ -8,7 +8,7 @@ from dataclasses import replace
 from math import ceil
 from typing import Iterable
 
-from ..ref_boxes import RefBox
+from ..ref.boxes import RefBox
 
 
 MIN_SIZE = 2
