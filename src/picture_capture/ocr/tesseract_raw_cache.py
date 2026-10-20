@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .formats import write_text_atomic
+from ..formats import write_text_atomic
 
 
 CACHE_FORMAT = "picture-capture-tesseract-raw-v1"

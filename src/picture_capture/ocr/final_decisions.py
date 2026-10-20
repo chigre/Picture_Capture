@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from .formats import read_pdic, write_text_atomic
+from ..formats import read_pdic, write_text_atomic
 
 
 def final_decisions_path(cache_path: Path) -> Path:

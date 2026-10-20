@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from .project_storage import data_root
+from ..project_storage import data_root
 
 
 def preserve_prior_pdic(project_root: Path, page: Path, pdic: Path) -> Path | None:
