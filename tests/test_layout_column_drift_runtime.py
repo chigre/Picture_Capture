@@ -236,7 +236,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
 
     assert "install_ordinary_large_head_runtime" not in core
     assert "install_ordinary_large_head_role_guard" not in core
-    assert "from .layout.column_drift import finalize_layout_column_drift" in policy
+    assert "from ..layout.column_drift import finalize_layout_column_drift" in policy
     layout_at = policy.index("layout = base.DictionaryPageLayout(")
     finalize_at = policy.index("layout = finalize_layout_column_drift(")
     return_at = policy.index("return layout, page_settings, applied", finalize_at)

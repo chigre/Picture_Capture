@@ -48,7 +48,7 @@ def test_live_binding_is_static_and_needs_no_bootstrap_installer():
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
 
-    assert "from . import layout_detection" in policy
+    assert "from .. import layout_detection" in policy
     assert "return layout_detection.detect_layout_parameters(image, settings)" in policy
     assert "install_live_layout_detector_binding" not in core
     assert "install_live_layout_detector_binding" not in package
