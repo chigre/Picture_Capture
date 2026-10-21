@@ -43,3 +43,29 @@ def test_lexical_public_helpers_resolve_without_legacy_root_imports() -> None:
     assert callable(reference.contains_cjk)
     assert callable(collation.collation_key)
     assert callable(text.decode_text_bytes)
+
+
+def test_production_imports_use_canonical_lexicon_text_paths() -> None:
+    """Statically include delayed imports; a GUI import must never use retired paths."""
+    import ast
+
+    forbidden = set(OWNERS)
+    for path in PACKAGE.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                name = node.module or ""
+                assert name not in forbidden, (path, node.lineno, name)
+                assert not any(
+                    name == "picture_capture." + old for old in forbidden
+                ), (path, node.lineno, name)
+                if name in {"picture_capture", ""}:
+                    for imported in node.names:
+                        assert imported.name not in forbidden, (
+                            path, node.lineno, imported.name,
+                        )
+            elif isinstance(node, ast.Import):
+                for imported in node.names:
+                    assert imported.name not in {
+                        "picture_capture." + old for old in forbidden
+                    }, (path, node.lineno, imported.name)
