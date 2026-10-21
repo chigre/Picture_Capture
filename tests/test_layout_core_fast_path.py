@@ -11,7 +11,7 @@ def test_processing_routes_ordinary_to_layout_only_fast_path() -> None:
 
 
 def test_layout_visualization_uses_layout_only_fast_path() -> None:
-    source = Path("src/picture_capture/layout_visualization_shared.py").read_text(
+    source = Path("src/picture_capture/layout/visualization_shared.py").read_text(
         encoding="utf-8"
     )
     assert "layout_only=True" in source

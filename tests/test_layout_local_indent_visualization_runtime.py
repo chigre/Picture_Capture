@@ -48,8 +48,8 @@ def test_phase5i_static_owner_and_provenance_order():
 
     root = Path(__file__).resolve().parents[1]
     package = root / "src" / "picture_capture"
-    shared = (package / "layout_visualization_shared.py").read_text(encoding="utf-8")
-    summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
+    shared = (package / "layout/visualization_shared.py").read_text(encoding="utf-8")
+    summary = (package / "layout/visualization_summary.py").read_text(encoding="utf-8")
     gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 

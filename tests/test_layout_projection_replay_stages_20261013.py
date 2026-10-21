@@ -198,7 +198,7 @@ def test_runtime_diagnostics_exposes_loaded_paths_and_complete_stage_list():
     displayed = shown[0]
     assert "实际加载的模块路径" in displayed
     assert "layout_step_replay_ui.py" in displayed
-    assert "layout_composition.py" in displayed
+    assert "layout/composition.py" in displayed
     assert "projection_gap_bridge=已记录" in displayed
     assert "projection_tall_split=已记录" in displayed
     assert "04  物理行检测" in displayed

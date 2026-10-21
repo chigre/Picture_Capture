@@ -67,8 +67,8 @@ def test_phase5j_static_provenance_and_later_wrapper_order():
     root = Path(__file__).resolve().parents[1]
     package = root / "src" / "picture_capture"
     gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
-    shared = (package / "layout_visualization_shared.py").read_text(encoding="utf-8")
-    summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
+    shared = (package / "layout/visualization_shared.py").read_text(encoding="utf-8")
+    summary = (package / "layout/visualization_summary.py").read_text(encoding="utf-8")
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "layout_role_provenance_runtime.py").exists()

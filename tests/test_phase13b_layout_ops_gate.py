@@ -15,7 +15,7 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 MIGRATED = (
     "design/layout_policy.py",
     "design/page_design_refined.py",
-    "page_x_registration.py",
+    "layout/page_x_registration.py",
     "layout/column_drift.py",
 )
 MUTABLE_HOOKS = frozenset((
@@ -28,7 +28,7 @@ FUNCTIONS_WITH_OPS = {
         "detect_entries_from_page_design",
     ),
     "design/page_design_refined.py": ("_guard_band_entries",),
-    "page_x_registration.py": ("_line_family_candidate", "register_page_manual_x"),
+    "layout/page_x_registration.py": ("_line_family_candidate", "register_page_manual_x"),
     "layout/column_drift.py": (
         "remeasure_layout_indents_from_ink", "finalize_layout_column_drift",
     ),
