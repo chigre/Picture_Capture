@@ -52,7 +52,7 @@ def test_marker_boundary_remains_source_xy_after_layout_transform(kind):
     transform = LayoutTransform(kind)
     source_size = (140, 200)
     canonical_width, canonical_height = transform.canonical_size(source_size)
-    line = SimpleNamespace(y0=18)
+    line = SimpleNamespace(y0=18, y1=36)
     column = SimpleNamespace(left=17, lines=[line])
     layout = SimpleNamespace(transform=transform, source_size=source_size, body_top=23)
     # Source coordinates must follow the same LayoutTransform as other Layout outputs.
