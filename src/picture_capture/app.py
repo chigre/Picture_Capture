@@ -134,8 +134,7 @@ from .ui.controllers import (
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.page_list_grid import PageListGrid
 from .ui.text_wrap import (
-    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
-    _wrap_mixed_ui_text,
+    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs, _wrap_mixed_ui_text,
 )
 from .ui.dialogs.usage_guide import UsageGuideWindow
 from .ui.dialogs.common import _build_modern_dialog_heading
