@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture import ui_compat
+from picture_capture.ui import compat as ui_compat
 
 
 @pytest.mark.parametrize("saved,expected", [

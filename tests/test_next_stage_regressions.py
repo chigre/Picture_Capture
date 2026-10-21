@@ -2530,7 +2530,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "def _render_validation_result" in text
     assert "width = min(work_w, max(720, int(screen_w * 0.80)))" in text
     assert "return screen_work_area(widget)" in text
-    ui_compat = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui_compat.py").read_text(encoding="utf-8")
+    ui_compat = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "compat.py").read_text(encoding="utf-8")
     assert "SystemParametersInfoW" in ui_compat
     assert "height = max(1, int(work_h * 0.90))" in text
     assert "x = work_x + max(0, (work_w - width) // 2)" in text
