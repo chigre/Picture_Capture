@@ -245,6 +245,12 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: Layout step replay has an explicit UI owner, not a root shim.
+    if (PACKAGE_ROOT / "layout_step_replay_ui.py").exists():
+        violations.append("retired root owner returned: layout_step_replay_ui.py")
+    if not (PACKAGE_ROOT / "ui/layout_step_replay.py").is_file():
+        violations.append("canonical owner missing: ui/layout_step_replay.py")
+
     # Issue #562: OCR crop preview keeps its read-only Tk implementation owned by UI.
     if (PACKAGE_ROOT / "ocr_crop_preview_ui.py").exists():
         violations.append("retired root owner returned: ocr_crop_preview_ui.py")

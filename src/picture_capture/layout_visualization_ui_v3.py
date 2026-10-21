@@ -95,7 +95,7 @@ def toggle_layout_step_replay(app: Any) -> None:
     if replay_var is None:
         return
     if bool(replay_var.get()):
-        from .layout_step_replay_ui import show_layout_step_replay
+        from .ui.layout_step_replay import show_layout_step_replay
         try:
             show_layout_step_replay(app)
         except Exception:

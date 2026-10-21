@@ -14,7 +14,7 @@ from picture_capture.layout_core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )
 from picture_capture.layout.step_trace import LayoutStepTrace
-from picture_capture.layout_step_replay_ui import _format_stage
+from picture_capture.ui.layout_step_replay import _format_stage
 from picture_capture.models import AppSettings
 from picture_capture.ui.settings import schema
 

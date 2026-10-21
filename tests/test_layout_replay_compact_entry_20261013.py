@@ -41,7 +41,7 @@ def test_actual_compact_display_palette_has_session_only_replay_toggle():
 
 
 def test_compact_and_legacy_share_window_lifecycle(monkeypatch):
-    from picture_capture import layout_step_replay_ui as replay
+    from picture_capture.ui import layout_step_replay as replay
 
     calls = []
     flag = Flag(True)
@@ -60,7 +60,7 @@ def test_compact_and_legacy_share_window_lifecycle(monkeypatch):
 
 
 def test_replay_open_failure_resets_shared_checkbox(monkeypatch):
-    from picture_capture import layout_step_replay_ui as replay
+    from picture_capture.ui import layout_step_replay as replay
 
     def broken(_app):
         raise RuntimeError("dialog unavailable")
@@ -74,7 +74,7 @@ def test_replay_open_failure_resets_shared_checkbox(monkeypatch):
 
 
 def test_disabled_replay_is_noop_without_window(monkeypatch):
-    from picture_capture import layout_step_replay_ui as replay
+    from picture_capture.ui import layout_step_replay as replay
 
     monkeypatch.setattr(
         replay, "show_layout_step_replay",
