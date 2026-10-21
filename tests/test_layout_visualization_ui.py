@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_visualization_ui import (
+from picture_capture.ui.layout_visualization_ui import (
     LayoutVisualizationSnapshot,
     _source_polyline,
     _summary_lines,

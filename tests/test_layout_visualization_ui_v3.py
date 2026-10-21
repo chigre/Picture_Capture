@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import picture_capture.layout_visualization_ui_v3 as layout_ui
+import picture_capture.ui.layout_visualization_ui_v3 as layout_ui
 
 
 class _Var:
@@ -17,7 +17,7 @@ class _Var:
 
 
 def test_layout_toggle_is_ui_local_and_not_persisted() -> None:
-    text = Path("src/picture_capture/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
+    text = Path("src/picture_capture/ui/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
 
     assert 'text="显示Layout"' in text
     assert 'quick_bool_vars["show_layout_visualization"]' not in text
@@ -55,7 +55,7 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
     helper = (
-        root / "src" / "picture_capture" / "layout_visualization_ui_v3.py"
+        root / "src" / "picture_capture" / "ui/layout_visualization_ui_v3.py"
     ).read_text(encoding="utf-8")
 
     state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")

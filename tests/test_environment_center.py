@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture.environment_center import (
+from picture_capture.ui.environment_center import (
     _apt_language_package,
     ocr_installer_path,
     source_checkout_root,

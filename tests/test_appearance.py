@@ -4,7 +4,7 @@ import tkinter as tk
 
 from PIL import Image
 
-from picture_capture.appearance import (
+from picture_capture.ui.appearance import (
     _dark_option_value,
     _gsettings_color_scheme,
     _kde_color_scheme_from_text,
@@ -45,7 +45,7 @@ def test_cross_platform_system_theme_parsers(monkeypatch) -> None:
     assert _kde_color_scheme_from_text("[Colors:Window]\nBackground=32,36,42\n") == "dark"
     assert _kde_color_scheme_from_text("[Colors:Window]\nBackground=242,242,242\n") == "light"
 
-    import picture_capture.appearance as appearance
+    import picture_capture.ui.appearance as appearance
     monkeypatch.setattr(
         appearance, "_run_theme_command",
         lambda args: "Dark" if args and args[0] == "defaults" else "",
@@ -131,7 +131,7 @@ def test_classic_spinbox_state_surfaces_use_dark_input_and_button_colors() -> No
 
 
 def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
-    import picture_capture.appearance as appearance
+    import picture_capture.ui.appearance as appearance
 
     class UnexpectedWindowAccess:
         def __getattr__(self, name: str):
