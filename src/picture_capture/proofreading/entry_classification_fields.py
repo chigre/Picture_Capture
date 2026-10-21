@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import Entry
+from ..models import Entry
 
 
 def _current_classification(entry: Entry):
@@ -19,7 +19,7 @@ def _current_classification(entry: Entry):
     differences in those fields alone must never overwrite an explicit
     assignment.
     """
-    from .entry_classification import (
+    from ..entry_classification import (
         get_entry_classification,
         infer_entry_classification,
         register_entry_classification,
@@ -52,7 +52,7 @@ def entry_source_get(entry: Entry) -> str:
 
 
 def entry_source_set(entry: Entry, value: Any) -> None:
-    from .entry_classification import register_entry_classification
+    from ..entry_classification import register_entry_classification
 
     source = str(value or "unknown")
     register_entry_classification(
@@ -67,7 +67,7 @@ def entry_scale_get(entry: Entry) -> str:
 
 
 def entry_scale_set(entry: Entry, value: Any) -> None:
-    from .entry_classification import register_entry_classification
+    from ..entry_classification import register_entry_classification
 
     scale = str(value or "regular")
     register_entry_classification(
@@ -82,7 +82,7 @@ def detected_head_height_get(entry: Entry) -> float:
 
 
 def detected_head_height_set(entry: Entry, value: Any) -> None:
-    from .entry_classification import register_entry_classification
+    from ..entry_classification import register_entry_classification
 
     try:
         height = max(0.0, float(value or 0.0))
@@ -96,7 +96,7 @@ def entry_scale_manual_get(entry: Entry) -> bool:
 
 
 def entry_scale_manual_set(entry: Entry, value: Any) -> None:
-    from .entry_classification import set_entry_scale_manual
+    from ..entry_classification import set_entry_scale_manual
 
     current = _current_classification(entry)
     if bool(value):
