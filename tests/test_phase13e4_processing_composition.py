@@ -1,7 +1,7 @@
 """Phase 13E4: processing delegates full understanding to composed service."""
 from PIL import Image
 
-from picture_capture import layout_composition
+from picture_capture.layout import composition as layout_composition
 from picture_capture import processing
 from picture_capture.models import AppSettings
 

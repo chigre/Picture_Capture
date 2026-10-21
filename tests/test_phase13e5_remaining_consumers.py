@@ -2,7 +2,7 @@
 from pathlib import Path
 import ast
 
-from picture_capture import layout_composition
+from picture_capture.layout import composition as layout_composition
 from picture_capture.training import export_page_understanding as training
 
 

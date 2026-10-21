@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from picture_capture.layout_profile_anchor import anchor_resolved_layout_to_profile
+from picture_capture.layout.profile_anchor import anchor_resolved_layout_to_profile
 from picture_capture.models import AppSettings
 
 
