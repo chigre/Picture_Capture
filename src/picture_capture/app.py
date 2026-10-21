@@ -50,11 +50,8 @@ from .pdic_restore import (
 )
 
 from .proofreading.page_word_mapping import (
-    _compare_page_word_mappings,
-    _compare_page_word_sequences,
-    _fill_page_entries,
-    _page_word_mapping_text,
-    _parse_words_of_pages_text,
+    _compare_page_word_mappings, _compare_page_word_sequences,
+    _fill_page_entries, _page_word_mapping_text, _parse_words_of_pages_text,
 )
 
 from .proofreading.text_helpers import (
@@ -90,10 +87,8 @@ from .geometry.layout_percent_helpers import (
 )
 
 from .project.page_list_helpers import (
-    bookmarked_page_indices,
-    _fill_status_cell_style,
-    _natural_text_key,
-    _sorted_page_list_rows,
+    bookmarked_page_indices, _fill_status_cell_style,
+    _natural_text_key, _sorted_page_list_rows,
 )
 
 from .ui.overlay_layout_helpers import (
@@ -110,10 +105,8 @@ from .ui.overlay_layout_helpers import (
     vertical_overlay_layout,
 )
 from .paddle_headwords import (
-    DEFAULT_HEADWORD_FILTER_RULES,
-    HEADWORD_FILTER_RULES_FILENAME,
-    compact_ocr_cache_file,
-    parse_headword_filter_rules,
+    DEFAULT_HEADWORD_FILTER_RULES, HEADWORD_FILTER_RULES_FILENAME,
+    compact_ocr_cache_file, parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
