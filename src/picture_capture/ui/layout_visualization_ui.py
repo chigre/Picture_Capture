@@ -18,7 +18,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
+from ..processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
 _LAYOUT_TAG = "layout-visualization"
@@ -45,7 +45,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
         (field, bool(getattr(settings, switch, True)))
         for field, switch in ORDINARY_AUTO_LAYOUT_FIELDS
     )
-    from .layout.mask_source_guard import saved_illustration_stamp
+    from ..layout.mask_source_guard import saved_illustration_stamp
     return (
         id(getattr(app, "image", None)),
         int(getattr(app, "current_index", -1)),
@@ -64,7 +64,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
 
 def _snapshot_for_app(app: Any) -> LayoutVisualizationSnapshot:
     """Return the shared ordinary-layout snapshot without bootstrap rebinding."""
-    from .layout.visualization_shared import shared_snapshot_for_app
+    from ..layout.visualization_shared import shared_snapshot_for_app
 
     return shared_snapshot_for_app(app)
 
