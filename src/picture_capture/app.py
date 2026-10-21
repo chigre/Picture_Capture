@@ -15621,12 +15621,12 @@ class PictureCaptureApp(tk.Tk):
         project = self.project
         pages_info = {i: self.pages_tuple(i) for i in indices}
         filter_path = headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
-        from .ordinary_parallel import ordinary_draw_workers
+        from .ordinary.parallel import ordinary_draw_workers
         ordinary_workers = (
             ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
         )
-        from .ordinary_gpu_pipeline import staged_pipeline_enabled
-        from .ordinary_cpu_pool import cpu_pool_enabled, cpu_pool_config
+        from .ordinary.gpu_pipeline import staged_pipeline_enabled
+        from .ordinary.cpu_pool import cpu_pool_enabled, cpu_pool_config
         cpu_pool = bool(
             method == "left_edge"
             and cpu_pool_enabled(settings, len(indices))
@@ -15679,7 +15679,7 @@ class PictureCaptureApp(tk.Tk):
                     return {"index": int(index), "count": previous_count, "resumed": True}
             if normal_executor is not None:
                 if cpu_pool:
-                    from .ordinary_cpu_pool import cpu_ordinary_page_job
+                    from .ordinary.cpu_pool import cpu_ordinary_page_job
                     count = normal_executor.submit(
                         cpu_ordinary_page_job, str(page), settings,
                         pages_info[index], index, cpu_inference_threads,
@@ -15934,7 +15934,7 @@ class PictureCaptureApp(tk.Tk):
                 )
 
         if gpu_staged:
-            from .ordinary_gpu_pipeline import (
+            from .ordinary.gpu_pipeline import (
                 prepare_gpu_layout_job, detect_entries_staged_job,
             )
             started = self._start_parallel_batch_task(
@@ -15956,7 +15956,7 @@ class PictureCaptureApp(tk.Tk):
                 ),
             )
         elif cpu_pool and cpu_pool_workers > 1:
-            from .ordinary_cpu_pool import cpu_ordinary_page_job
+            from .ordinary.cpu_pool import cpu_ordinary_page_job
             started = self._start_parallel_batch_task(
                 label, indices, cpu_ordinary_page_job,
                 lambda index, _position, _total: (

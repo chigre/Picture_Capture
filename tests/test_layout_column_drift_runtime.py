@@ -230,7 +230,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     policy = (root / "src/picture_capture/design/layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
     large_head = (
-        root / "src/picture_capture/ordinary_large_head_evidence.py"
+        root / "src/picture_capture/ordinary/large_head_evidence.py"
     ).read_text(encoding="utf-8")
     physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 

@@ -165,7 +165,8 @@ def test_existing_marker_ocr_fallback_applies_profile_bracket_extraction(
     from picture_capture import processing_core
     from picture_capture import ocr_channel
     from picture_capture.profile import dictionary as dictionary_profile
-    from picture_capture import entry_ocr_crop, paddle_headwords
+    from picture_capture.ocr import entry_crop as entry_ocr_crop
+    from picture_capture import paddle_headwords
 
     image = Image.new("RGB", (850, 580), "white")
     geometry = _Geometry(image)

@@ -63,10 +63,10 @@ def test_core_no_longer_installs_large_head_detector_or_role_guard():
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
     evidence = (
-        root / "src/picture_capture/ordinary_large_head_evidence.py"
+        root / "src/picture_capture/ordinary/large_head_evidence.py"
     ).read_text(encoding="utf-8")
     fusion = (
-        root / "src/picture_capture/ordinary_evidence_fusion.py"
+        root / "src/picture_capture/ordinary/evidence_fusion.py"
     ).read_text(encoding="utf-8")
 
     for source in (core, package):
@@ -91,7 +91,7 @@ def test_static_column_drift_helper_never_replaces_large_head_detector():
 def test_static_large_head_detector_reuses_left_safety_without_losing_semantics():
     root = Path(__file__).resolve().parents[1]
     evidence = (
-        root / "src/picture_capture/ordinary_large_head_evidence.py"
+        root / "src/picture_capture/ordinary/large_head_evidence.py"
     ).read_text(encoding="utf-8")
 
     assert "_analysis_left_for_column" in evidence

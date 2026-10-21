@@ -254,7 +254,7 @@ def test_layout_role_strips_are_directly_based_on_exported_physical_rows(monkeyp
 def test_real_diagnostic_builder_and_layout_row_export_share_schema(monkeypatch):
     """Integration boundary: detector trace, Layout snapshot and final PDIC."""
     from PIL import Image
-    from picture_capture import large_head_visual_diagnostics as diag
+    from picture_capture.ordinary import large_head_visual_diagnostics as diag
     from picture_capture.geometry.layout_transform import LayoutTransform
     from picture_capture.models import AppSettings, Entry
     from picture_capture import processing
