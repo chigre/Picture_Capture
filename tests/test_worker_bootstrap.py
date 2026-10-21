@@ -3,7 +3,7 @@ from __future__ import annotations
 from picture_capture import formats, processing
 from picture_capture.bootstrap.worker import WorkerServices, build_worker_services
 from picture_capture.layout_rows_cache import capture_layout_rows
-from picture_capture.training_baseline import save_automatic_baseline
+from picture_capture.training.baseline import save_automatic_baseline
 
 
 def test_worker_bootstrap_returns_explicit_process_local_dependencies() -> None:

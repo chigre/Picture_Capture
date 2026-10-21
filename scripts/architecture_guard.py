@@ -244,6 +244,18 @@ def _normalized_source_size(path: Path) -> int:
 def collect_violations() -> list[str]:
     violations: list[str] = []
 
+    # Issue #562: canonical Training ownership, no obsolete root shims.
+    for former, canonical in (
+        ("training_baseline.py", "training/baseline.py"),
+        ("training_export_composed.py", "training/export_composed.py"),
+        ("training_export_complete_dialog.py", "training/export_complete_dialog.py"),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired Training root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical Training owner is missing: {canonical}")
+
+
     # Issue #562: physically migrated Layout indent owner must not regress to root.
     if (PACKAGE_ROOT / "layout_indent_visibility.py").exists():
         violations.append("migrated Layout indent module returned at package root")

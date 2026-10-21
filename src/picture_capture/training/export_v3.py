@@ -36,7 +36,7 @@ from ..models import AppSettings, Entry
 from ..page_sections import read_page_sections
 from ..processing import column_index, derive_geometry, detect_entries
 from ..profile.semantics import effective_page_settings, page_template_analysis_image
-from ..training_baseline import load_automatic_baseline, baseline_path_for_pdic
+from .baseline import load_automatic_baseline, baseline_path_for_pdic
 
 
 TRAINING_EXPORT_FORMAT_V3 = "picture-capture-training-v3"

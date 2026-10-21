@@ -18,7 +18,7 @@ from picture_capture.entry_classification import (
 )
 from picture_capture.entry_classification_fields import install_entry_classification_fields
 from picture_capture.models import AppSettings, Entry
-from picture_capture.training_baseline import (
+from picture_capture.training.baseline import (
     baseline_path_for_pdic,
     build_write_pdic_capture,
 )

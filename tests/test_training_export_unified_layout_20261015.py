@@ -13,7 +13,7 @@ from PIL import Image
 
 from picture_capture.models import AppSettings
 from picture_capture.training_export import make_training_zip
-from picture_capture.training_export_composed import write_training_manifest
+from picture_capture.training.export_composed import write_training_manifest
 from picture_capture.training.export_page_understanding import (
     build_export_training_page_with_understanding,
 )

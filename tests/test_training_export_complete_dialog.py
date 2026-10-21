@@ -2,7 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import picture_capture.training_export_complete_dialog as dialog_module
+import picture_capture.training.export_complete_dialog as dialog_module
 
 
 def test_training_export_completion_opens_zip_parent(monkeypatch, tmp_path):

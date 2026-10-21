@@ -5,7 +5,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
-from .project.folder_launcher import open_project_folder_with_error
+from ..project.folder_launcher import open_project_folder_with_error
 
 
 def show_training_export_complete(parent: object, page_count: int, zip_path: Path) -> None:
