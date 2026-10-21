@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .models import AppSettings, Entry, resolved_tesseract_language
-from .paddle_headword_models import (
+from .ocr.headword_models import (
     GrammarTailParse,
     HeadwordFilterRule,
     HeadwordParse,
@@ -56,7 +56,7 @@ from .profile.dictionary import (
     load_dictionary_profile,
     starts_with_internal_article_symbol,
 )
-from .ocr_engines import find_tesseract, run_google_lens, tesseract_status
+from .ocr.engines import find_tesseract, run_google_lens, tesseract_status
 from .visual.marker_templates import (
     match_visual_marker_template,
     split_configured_symbols,

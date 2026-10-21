@@ -4,7 +4,7 @@ from importlib import metadata, util
 from pathlib import Path
 from typing import Any
 
-from .runtime_environment import effective_tesseract_configured
+from ..runtime_environment import effective_tesseract_configured
 import asyncio
 import os
 import shutil
@@ -13,7 +13,7 @@ import tempfile
 
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
+from ..image_utils import normalize_page_rgb
 
 
 def find_tesseract(executable: str = "tesseract") -> str | None:

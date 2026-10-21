@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import picture_capture.runtime_environment as runtime
-from picture_capture.ocr_engines import find_tesseract
+from picture_capture.ocr.engines import find_tesseract
 from picture_capture.picdic import build_picdic_package
 from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image, qt_root
 
@@ -66,14 +66,14 @@ def test_paddle_device_environment_override_is_authoritative(monkeypatch):
 
 def test_tesseract_stale_foreign_path_falls_back_to_path(monkeypatch):
     monkeypatch.setattr(
-        "picture_capture.ocr_engines.effective_tesseract_configured",
+        "picture_capture.ocr.engines.effective_tesseract_configured",
         lambda _value: r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     )
 
     def fake_which(value: str):
         return "/opt/homebrew/bin/tesseract" if value == "tesseract" else None
 
-    monkeypatch.setattr("picture_capture.ocr_engines.shutil.which", fake_which)
+    monkeypatch.setattr("picture_capture.ocr.engines.shutil.which", fake_which)
     assert find_tesseract("ignored") == "/opt/homebrew/bin/tesseract"
 
 
