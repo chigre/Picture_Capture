@@ -498,7 +498,7 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
         ROOT / "src/picture_capture/ui/controllers/detection.py"
     ).read_text(encoding="utf-8")
     ocr_guard = (
-        ROOT / "src/picture_capture/ocr_action_guard.py"
+        ROOT / "src/picture_capture/ocr/action_guard.py"
     ).read_text(encoding="utf-8")
     ordinary_runtime = (
         ROOT / "src/picture_capture/ordinary/quick_settings.py"

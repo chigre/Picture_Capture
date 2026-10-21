@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import picture_capture.paddle_headwords as ph
-from picture_capture import paddle_cache_storage
+from picture_capture.ocr import paddle_cache_storage
 
 
 def test_phase7p_cache_public_wrappers_keep_historical_core_path() -> None:

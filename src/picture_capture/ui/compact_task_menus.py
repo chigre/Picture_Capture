@@ -224,7 +224,7 @@ def build_ocr_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     traditional_only.append(row)
     _check(row, "Google Lens", app.quick_bool_vars["paddle_enable_lens"],
            app._quick_parameter_changed)
-    from picture_capture.ocr_action_guard import LENS_MODE_VALUES
+    from picture_capture.ocr.action_guard import LENS_MODE_VALUES
     _select(row, app.lens_mode_var, tuple(LENS_MODE_VALUES), width=13,
             command=app._quick_parameter_changed)
 

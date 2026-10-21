@@ -4,7 +4,7 @@ from __future__ import annotations
 
 The reusable OCR engine selection/execution channel lives in
 :mod:`picture_capture.ocr_channel`.  OCR-assisted separator generation is a
-separate consumer in :mod:`picture_capture.ocr_boundary_detection`.
+separate consumer in :mod:`picture_capture.ocr.boundary_detection`.
 
 The stable parser/evidence implementation remains in
 :mod:`picture_capture.paddle_headwords_core`; training-export-driven decision
@@ -25,7 +25,7 @@ publish_core_namespace(globals(), _core)
 
 from . import evidence_fusion as _fusion
 from .evidence_fusion import *  # noqa: F401,F403
-from .ocr_boundary_detection import detect_ocr_headword_boundaries
+from .ocr.boundary_detection import detect_ocr_headword_boundaries
 from .separator_y_refinement import refine_separator_y as _shared_refine_separator_y
 
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.

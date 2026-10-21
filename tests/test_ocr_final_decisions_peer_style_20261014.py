@@ -10,14 +10,14 @@ import pytest
 from picture_capture.evidence_fusion import _rescue_local_peer_style_continuations
 from picture_capture.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ocr_final_decisions import (
+from picture_capture.ocr.final_decisions import (
     apply_final_review_annotations,
     build_final_decisions,
     final_decisions_path,
     load_current_final_decisions,
     record_final_decisions,
 )
-from picture_capture.ocr_peer_style import peer_style_continuation_evidence
+from picture_capture.ocr.peer_style import peer_style_continuation_evidence
 
 
 def _entry(word, x, y, *, cid="", source="paddle"):
@@ -300,7 +300,7 @@ def test_default_disabled_state_does_not_mutate_preexisting_ocr_diagnostics(monk
 
 
 def test_ocr_prewrite_backups_are_lossless_deduplicated_and_preserve_edits(tmp_path):
-    from picture_capture.ocr_pdic_preservation import preserve_prior_pdic
+    from picture_capture.ocr.pdic_preservation import preserve_prior_pdic
     project = tmp_path / "Dictionary"
     project.mkdir()
     page = project / "p001.tif"
@@ -325,7 +325,7 @@ def test_ocr_prewrite_backups_are_lossless_deduplicated_and_preserve_edits(tmp_p
 
 
 def test_ocr_prewrite_snapshot_failure_must_not_overwrite_existing_pdic(tmp_path, monkeypatch):
-    import picture_capture.ocr_pdic_preservation as backup
+    import picture_capture.ocr.pdic_preservation as backup
     page = tmp_path / "p001.tif"
     pdic = tmp_path / "p001.pdic"
     pdic.write_bytes(b"confirmed original annotations")

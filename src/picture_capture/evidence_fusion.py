@@ -464,7 +464,7 @@ def _rescue_local_peer_style_continuations(
     """
     if _core._is_chinese_ocr(settings) or _core._is_japanese_ocr(settings):
         return 0
-    from .ocr_peer_style import peer_style_continuation_evidence
+    from .ocr.peer_style import peer_style_continuation_evidence
 
     rescued = 0
     # Only original core-accepted anchors count: earlier rescue decisions

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from .models import read_noncomment_lines
+from ..models import read_noncomment_lines
 
 
 def load_replace_rules(path: Path) -> list[tuple[str, str, str]]:

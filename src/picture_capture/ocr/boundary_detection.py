@@ -20,8 +20,8 @@ from typing import Any
 
 from PIL import Image
 
-from .models import AppSettings
-from .ocr_channel_legacy import (
+from ..models import AppSettings
+from ..ocr_channel_legacy import (
     apply_channel_plan_to_legacy_boundary_settings,
     route_legacy_boundary_ocr_through_channel,
 )
@@ -53,7 +53,7 @@ def detect_ocr_headword_boundaries(
     leave it ``None`` and use the canonical shared OCR channel.
     """
 
-    from .evidence_fusion import detect_paddle_headwords as legacy_detect
+    from ..evidence_fusion import detect_paddle_headwords as legacy_detect
 
     if engine is not None:
         return legacy_detect(

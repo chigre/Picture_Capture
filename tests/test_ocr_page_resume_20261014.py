@@ -127,8 +127,8 @@ def test_force_refresh_bypasses_resume_but_can_write_a_new_checkpoint():
 @pytest.mark.parametrize("module_name", [
     "separator_y_refinement.py",
     "refinement/ink_safe_separator.py",
-    "ocr_tesseract_runner.py",
-    "ocr_lazy_secondary.py",
+    "ocr/tesseract_runner.py",
+    "ocr/lazy_secondary.py",
     "models.py",
     "new_detection_stage.py",
     "future_subpackage/new_detector.py",

@@ -38,7 +38,7 @@ from .crop.plan_formatting import (
     page_crop_plan_dict,
     polygon_display_name,
 )
-from .ocr_text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
+from .ocr.text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
 from .illustration.candidate_size import illustration_candidate_min_dimensions

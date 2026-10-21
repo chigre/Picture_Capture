@@ -4,9 +4,9 @@ from io import BytesIO
 import subprocess
 from typing import Any
 from PIL import Image
-from .image_utils import normalize_page_rgb
-from .models import AppSettings, resolved_tesseract_language
-from .paddle_headword_models import OCRRecord
+from ..image_utils import normalize_page_rgb
+from ..models import AppSettings, resolved_tesseract_language
+from ..paddle_headword_models import OCRRecord
 
 
 def run_tesseract_band_records_impl(

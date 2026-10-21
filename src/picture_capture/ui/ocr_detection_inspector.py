@@ -11,7 +11,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 from ..formats import pdic_path
-from ..ocr_final_decisions import load_current_final_decisions
+from ..ocr.final_decisions import load_current_final_decisions
 from ..project_storage import ocr_cache_root
 
 

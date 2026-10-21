@@ -26,7 +26,7 @@ from .paddle_headword_models import (
     OCRRecord,
 )
 
-from .paddle_cache_storage import (
+from .ocr.paddle_cache_storage import (
     atomic_write_json_impl as _cache_atomic_write_json_impl,
     atomic_write_text_impl as _cache_atomic_write_text_impl,
     compact_cached_candidate_impl as _cache_compact_cached_candidate_impl,
@@ -1119,7 +1119,7 @@ def run_tesseract_band_records(
     psm_override: int | None = None,
 ) -> tuple[list[OCRRecord], str]:
     """Legacy public adapter; execution lives in an independent OCR module."""
-    from .ocr_tesseract_runner import run_tesseract_band_records_impl
+    from .ocr.tesseract_runner import run_tesseract_band_records_impl
     return run_tesseract_band_records_impl(
         band, settings, psm_override,
         resolve_fn=_tesseract_executable, group_fn=group_ocr_records,
@@ -6213,7 +6213,7 @@ def _image_cache_fingerprint(image: Image.Image) -> str:
 
 
 def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSettings) -> str:
-    from .paddle_raw_cache_signature import cache_signature
+    from .ocr.paddle_raw_cache_signature import cache_signature
     return cache_signature(
         image, geometry, settings,
         image_fingerprint=_image_cache_fingerprint,
@@ -8000,7 +8000,7 @@ def detect_paddle_headwords(
         use_tesseract and cache_path is not None
         and bool(getattr(settings, "ocr_cache_tesseract_raw", False))
     ):
-        from .tesseract_raw_cache import TesseractRawCache
+        from .ocr.tesseract_raw_cache import TesseractRawCache
         raw_tesseract_cache = TesseractRawCache(
             cache_path, signature, language=tess_language,
             executable=str(settings.ocr_executable),
@@ -8127,7 +8127,7 @@ def detect_paddle_headwords(
         tess_diagnostics: list[dict[str, Any]] = []
         skip_secondary_diagnostic = False
         if bool(getattr(settings, "ocr_lazy_tesseract_diagnostics", False)):
-            from .ocr_lazy_secondary import can_skip_tesseract_diagnostic_column
+            from .ocr.lazy_secondary import can_skip_tesseract_diagnostic_column
             skip_secondary_diagnostic = can_skip_tesseract_diagnostic_column(
                 diagnostics, enabled=True, paddle_enabled=use_paddle,
                 tesseract_enabled=use_tesseract,

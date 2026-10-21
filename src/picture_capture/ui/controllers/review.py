@@ -35,7 +35,7 @@ class ReviewController:
                 candidates = list(payload.get("review_candidates") or [])
             else:
                 candidates = list(preloaded_candidates)
-            from ...ocr_final_decisions import (
+            from ...ocr.final_decisions import (
                 apply_final_review_annotations, load_current_final_decisions,
             )
             page = getattr(app, "current_page", None)

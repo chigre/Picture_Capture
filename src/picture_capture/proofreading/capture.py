@@ -21,7 +21,7 @@ def verified_ocr_preedit_fingerprints(
     """Only attach OCR lineage from a validated pre-human final-PDIC snapshot."""
     if cache_path is None:
         return None
-    from ..ocr_final_decisions import load_current_final_decisions
+    from ..ocr.final_decisions import load_current_final_decisions
     report = load_current_final_decisions(Path(cache_path), Path(pdic_file))
     if not isinstance(report, dict):
         return None

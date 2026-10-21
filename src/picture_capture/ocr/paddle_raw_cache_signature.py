@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any
 from PIL import Image
-from .models import AppSettings
+from ..models import AppSettings
 
 
 def cache_signature(image: Image.Image, geometry: Any, settings: AppSettings, *, image_fingerprint: Any, paddle_language: Any, raw_threshold: float) -> str:

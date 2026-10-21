@@ -712,6 +712,27 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical refinement owner missing: {current}")
 
+    # Issue #562: internal OCR decision/cache owners must not return to root.
+    # Core channel, Paddle/GPU process owners and OCR resume remain separate risk gates.
+    migrated_ocr_leaves = {
+        "ocr_action_guard": "ocr/action_guard.py",
+        "ocr_boundary_detection": "ocr/boundary_detection.py",
+        "ocr_final_decisions": "ocr/final_decisions.py",
+        "ocr_lazy_secondary": "ocr/lazy_secondary.py",
+        "ocr_pdic_preservation": "ocr/pdic_preservation.py",
+        "ocr_peer_style": "ocr/peer_style.py",
+        "ocr_tesseract_runner": "ocr/tesseract_runner.py",
+        "ocr_text_io": "ocr/text_io.py",
+        "paddle_cache_storage": "ocr/paddle_cache_storage.py",
+        "paddle_raw_cache_signature": "ocr/paddle_raw_cache_signature.py",
+        "tesseract_raw_cache": "ocr/tesseract_raw_cache.py",
+    }
+    for former, owner in migrated_ocr_leaves.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired OCR root module returned: {former}.py")
+        if not (PACKAGE_ROOT / owner).is_file():
+            violations.append(f"canonical OCR module missing: {owner}")
+
     return violations
 
 
