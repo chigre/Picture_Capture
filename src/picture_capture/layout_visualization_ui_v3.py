@@ -7,7 +7,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from .adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
+from .preprocess.adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
 from .layout.visualization_summary import draw_layout_visualization_detailed
 
 

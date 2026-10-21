@@ -33,7 +33,7 @@ _REASONS = {
 
 
 def _cache_key(app: Any) -> tuple[Any, ...]:
-    from .adaptive_denoise import DENOISE_ENV
+    from .preprocess.adaptive_denoise import DENOISE_ENV
 
     return (
         _layout_cache_key(app),

@@ -6,7 +6,7 @@ import os
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from .adaptive_denoise import adaptive_speck_remove_mask, resolve_denoise_strength
+from .preprocess.adaptive_denoise import adaptive_speck_remove_mask, resolve_denoise_strength
 
 
 def normalize_page_rgb(image: Image.Image) -> Image.Image:

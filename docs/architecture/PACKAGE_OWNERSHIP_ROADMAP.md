@@ -254,3 +254,9 @@ This organization change is *not* a source-code compression project. An expanded
 - Physical no-shim moves: `marker_refinement_layoutrows.py` → `refinement/layoutrows.py`; `inference_performance.py` → `quality/inference_performance.py`. Move only the rule/cache reuse helpers and Paddle-agnostic inference settings policy, *not* the LayoutRows cache, refinement worker, GPU model constructors or Windows spawn runtime itself.
 - Update both static and deferred imports, tests including policy monkeypatch target, and a stricter physical-owner guard. Preserve source-coordinate cache guards, Settings/CUDA policy, algorithm defaults and Model/PDIC/PPP/SECTION serialization by keeping function implementations unchanged apart from relative import resolution.
 - Require exact-head Python 3.10/3.13 × Windows/macOS/Ubuntu, guard, GUI smoke, wheel, CodeQL, reviews and postmerge main CI; real Y/pixel/Windows GPU manual parity still pending.
+
+
+## Issue #562 — Shared adaptive analysis denoising owner (2026-10-21; Draft #594)
+
+- Physically relocate `adaptive_denoise.py` → `preprocess/adaptive_denoise.py` with zero algorithm changes and no root shim; the direct analysis-image builder, Layout replay, visualization controls and performance profile now import its canonical package path.
+- Preserve environment-driven denoise strength, integral-mask semantics and punctuation/diacritic protection. Update existing source-ownership test to require the new owner, retaining its checks for other root facades. Add architecture guard against old path restoration; cross-platform GUI and real scans remain separate gates.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-from picture_capture.adaptive_denoise import adaptive_speck_remove_mask
+from picture_capture.preprocess.adaptive_denoise import adaptive_speck_remove_mask
 from picture_capture.image_utils import build_analysis_image
 
 

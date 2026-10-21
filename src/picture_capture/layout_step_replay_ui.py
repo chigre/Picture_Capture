@@ -32,7 +32,7 @@ from .layout.mask_source_guard import saved_illustration_stamp as _saved_illustr
 
 
 def _app_key(app: Any) -> tuple[Any, ...]:
-    from .adaptive_denoise import DENOISE_ENV
+    from .preprocess.adaptive_denoise import DENOISE_ENV
     return (
         id(getattr(app, "image", None)),
         int(getattr(app, "current_index", -1)),
