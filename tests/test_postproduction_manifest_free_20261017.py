@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from picture_capture import processing_core
-from picture_capture.single_line_merge_settings import merge_page_line_images
+from picture_capture.crop.single_line_merge_settings import merge_page_line_images
 
 
 @pytest.mark.parametrize("has_entry", [True, False])

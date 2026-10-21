@@ -233,3 +233,10 @@ This organization change is *not* a source-code compression project. An expanded
 
 - From `main@fe6b03f0e292755a90734ce945de2d99e5073f9b` (68 root Python files, zero open PR), physically move `batch_progress_budget.py` to `ui/batch_progress_budget.py` and `line_diff_bookmarks.py` to `refinement/line_diff_bookmarks.py`, without root shims. Update the Tk batch-poll deferred import, compact task menu import, tests and ownership guard.
 - Expected count: 68 → 66, pending candidate tree verification. Preserve Tk pause/stop budgets, PDIC automatic-baseline comparison, user confirmation before bookmark replacement and Settings persistence. CI/CodeQL/reviews/wheel/GUI and postmerge main are not yet accepted; real scanned-page/Windows/GPU/PDIC parity remains manual.
+
+
+## Issue #562 — Crop export Settings physical owners (2026-10-21; Draft PR #594 expansion)
+
+- Physically move `single_line_merge_settings.py` → `crop/single_line_merge_settings.py` and `unlined_export_filter_settings.py` → `crop/unlined_export_filter_settings.py`, without root shims. This expands the existing UI progress/bookmarks candidate PR, not a new overlapping PR.
+- Update export runners, Settings UI/controllers and regression imports, relocate source-path mutation guards instead of deleting or relaxing them. Retain per-page output manifests, project-local settings JSON paths, single-line crop merge semantics, unlined-row filtering and all persisted Profile/PDIC/PPP/SECTION data.
+- Until exact-head full 3-OS × Python 3.10/3.13, GUI, wheel, CodeQL, review and postmerge main CI are verified, this is a candidate, NOT an accepted migration. Real scanned-page/Windows GUI/GPU parity requires human validation.

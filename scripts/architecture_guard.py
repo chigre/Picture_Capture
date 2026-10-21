@@ -242,7 +242,15 @@ def _normalized_source_size(path: Path) -> int:
 
 
 def collect_violations() -> list[str]:
+
     violations: list[str] = []
+
+    # Issue #562: physical Crop Settings owner paths, no root compatibility shims.
+    for former, canonical in (("single_line_merge_settings.py", "crop/single_line_merge_settings.py"), ("unlined_export_filter_settings.py", "crop/unlined_export_filter_settings.py")):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
 
     # Issue #562: physical UI progress and line-difference bookmark owners.
     for former, canonical in (
@@ -478,7 +486,7 @@ def collect_violations() -> list[str]:
                 )
 
     single_line_merge_source = (
-        PACKAGE_ROOT / "single_line_merge_settings.py"
+        PACKAGE_ROOT / "crop/single_line_merge_settings.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_SINGLE_LINE_MERGE_MUTATIONS:
         if marker in single_line_merge_source:
@@ -487,7 +495,7 @@ def collect_violations() -> list[str]:
             )
 
     unlined_filter_source = (
-        PACKAGE_ROOT / "unlined_export_filter_settings.py"
+        PACKAGE_ROOT / "crop/unlined_export_filter_settings.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_UNLINED_FILTER_MUTATIONS:
         if marker in unlined_filter_source:

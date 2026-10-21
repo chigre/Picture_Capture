@@ -25,9 +25,9 @@ from ...processing import (
     split_whole_entries_job,
 )
 from ...project_storage import ppp_read_path_for_image, qt_root
-from ...single_line_merge_settings import load_merge_by_page
+from ...crop.single_line_merge_settings import load_merge_by_page
 from ...single_line_parallel import configured_single_line_workers, single_line_page_job
-from ...unlined_export_filter_settings import load_unlined_filter_settings
+from ...crop.unlined_export_filter_settings import load_unlined_filter_settings
 
 
 def _width_report(app: Any, root: Path, config: dict) -> str:
