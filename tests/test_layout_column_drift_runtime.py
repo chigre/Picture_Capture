@@ -247,7 +247,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
         assert "install_layout_column_drift_runtime" not in source
     assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
     assert not (root / "src/picture_capture/ordinary_large_head_runtime.py").exists()
-    assert "from .layout.column_drift import _analysis_left_for_column" in large_head
+    assert "from ..layout.column_drift import _analysis_left_for_column" in large_head
     assert "strict_candidate_starts_at_row_front" in large_head
     assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical
