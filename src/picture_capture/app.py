@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from pathlib import Path
 from dataclasses import replace
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -21,9 +20,7 @@ import unicodedata
 import webbrowser
 import tkinter as tk
 from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, ttk
-
 from PIL import Image, ImageTk
-
 from . import __version__
 from .project import parameter_templates as _project_templates
 from .appearance import (
@@ -46,12 +43,10 @@ from .pdic_restore import (
     build_page_lookup as _build_words_page_lookup, parse_merged_pdic_text as _parse_merged_pdic_text,
     resolve_page_token as _resolve_words_page_token, write_pdic_atomic as _write_pdic_atomic,
 )
-
 from .proofreading.page_word_mapping import (
     _compare_page_word_mappings, _compare_page_word_sequences,
     _fill_page_entries, _page_word_mapping_text, _parse_words_of_pages_text,
 )
-
 from .proofreading.text_helpers import (
     _has_distinct_ocr_alternatives,
     _candidate_choice_rows,
@@ -66,11 +61,9 @@ from .proofreading.text_helpers import (
     _review_similarity_key,
     _review_text_similarity,
 )
-
 from .proofreading.crop_extension import (
     extended_review_crop_box, parse_review_crop_multiplier,
 )
-
 from .geometry.layout_percent_helpers import (
     LAYOUT_PERCENT_AXES,
     _column_percent_to_pixels,
@@ -83,7 +76,6 @@ from .geometry.layout_percent_helpers import (
     _review_height_percent_to_pixels,
     _review_height_pixels_to_percent,
 )
-
 from .project.page_list_helpers import (
     bookmarked_page_indices, _fill_status_cell_style,
     _natural_text_key, _sorted_page_list_rows,
