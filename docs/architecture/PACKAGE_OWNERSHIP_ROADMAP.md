@@ -278,3 +278,10 @@ This organization change is *not* a source-code compression project. An expanded
 
 - Physically move `layout_step_replay_ui.py` → `ui/layout_step_replay.py`, no root shim. Deferred call from `layout_visualization_ui_v3` now points to UI owner; simulation traces, physical-row diagnostics, overlay/PPP read-only evidence and callback semantics retained. Runtime diagnostic test now expects actual module path, with no weakening of stage annotations.
 - Retain Layout detector/physical-indent/cache/visualization installer root facades. Mandatory CI, GUI smoke, wheel, CodeQL and real Windows scanned-page manual review remain pending.
+
+
+## Issue #562 — Deferred document unwarping preprocessing owner (2026-10-21; Draft #594)
+
+- Move `document_unwarping.py` → `preprocess/document_unwarping.py`, with no model lifetime, GPU initialization or image algorithm change; only resolve parent-relative imports to the same existing Windows GPU initialization guard and environment resolver.
+- Tighten source-path ownership and the existing run-time regression so it still verifies the Windows DLL helper executes BEFORE the deferred `paddleocr.DocPreprocessor` import at the moved canonical path; do not weaken or skip timing assertions.
+- Requires exact-head cross-platform/CodeQL and real GPU model-owner/manual validation before acceptance.

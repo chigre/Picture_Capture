@@ -245,6 +245,12 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: deferred Paddle document unwarping belongs to preprocess.
+    if (PACKAGE_ROOT / "document_unwarping.py").exists():
+        violations.append("retired root owner returned: document_unwarping.py")
+    if not (PACKAGE_ROOT / "preprocess/document_unwarping.py").is_file():
+        violations.append("canonical owner missing: preprocess/document_unwarping.py")
+
     # Issue #562: Layout step replay has an explicit UI owner, not a root shim.
     if (PACKAGE_ROOT / "layout_step_replay_ui.py").exists():
         violations.append("retired root owner returned: layout_step_replay_ui.py")

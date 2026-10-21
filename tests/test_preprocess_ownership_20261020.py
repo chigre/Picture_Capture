@@ -10,5 +10,7 @@ def test_preprocessing_owners_are_physical_and_root_facade_is_retained() -> None
         assert (root / "preprocess" / (new + ".py")).is_file(), new
     assert not (root / "adaptive_denoise.py").exists()
     assert (root / "preprocess" / "adaptive_denoise.py").is_file()
-    for preserved in ("image_preprocessing.py", "image_utils.py", "document_unwarping.py"):
+    assert not (root / "document_unwarping.py").exists()
+    assert (root / "preprocess" / "document_unwarping.py").is_file()
+    for preserved in ("image_preprocessing.py", "image_utils.py"):
         assert (root / preserved).is_file(), preserved

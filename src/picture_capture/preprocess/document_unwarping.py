@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .image_utils import normalize_page_rgb
-from .runtime_environment import resolve_paddle_device
+from ..image_utils import normalize_page_rgb
+from ..runtime_environment import resolve_paddle_device
 
 
 _DOC_PREPROCESSOR_CACHE: dict[str, Any] = {}
@@ -37,7 +37,7 @@ def _get_doc_preprocessor() -> Any:
     # Some Paddle 3.3 CPU environments can otherwise enter a PIR/oneDNN path
     # that is unstable for inference pipelines.
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from .windows_gpu import configure_windows_nvidia_dlls
+    from ..windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
 
     try:
