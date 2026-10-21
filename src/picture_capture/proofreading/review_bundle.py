@@ -17,7 +17,7 @@ from .transactions import (
     _bytes_or_absent, _publish, _recovery_path, _rollback_failed_publish,
     _stage_recovery,
 )
-from ..simplified_review import write_records
+from .simplified_review import write_records
 
 
 def commit_review_bundle(review: Any, source) -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import pytest
 from picture_capture.refinement import guard
-from picture_capture.simplified_review import entry_key
+from picture_capture.proofreading.simplified_review import entry_key
 
 
 @dataclass

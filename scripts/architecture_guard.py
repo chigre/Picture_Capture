@@ -738,6 +738,8 @@ def collect_violations() -> list[str]:
 
     # Issue #562: bounded proofreading domain owners, no former-root shims.
     moved_proofreading = {
+        "simplified_review": "proofreading/simplified_review.py",
+        "pdic_text_cleanup": "proofreading/pdic_text_cleanup.py",
         "proofreading_candidate_history": "proofreading/candidate_history.py",
         "proofreading_identity": "proofreading/identity.py",
         "proofreading_section": "proofreading/section.py",

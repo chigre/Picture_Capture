@@ -195,7 +195,7 @@ from .lexicon.cc_cedict import (
     status as cc_cedict_status,
 )
 from .lexicon.chinese_simplify import simplify_text
-from .simplified_review import entry_key as simplified_entry_key, read_records as read_simplified_records, write_records as write_simplified_records
+from .proofreading.simplified_review import entry_key as simplified_entry_key, read_records as read_simplified_records, write_records as write_simplified_records
 from .training_export import (
     TrainingExportCancelled, copy_project_context, export_training_page,
     make_training_zip, write_training_manifest,
@@ -15996,12 +15996,12 @@ class PictureCaptureApp(tk.Tk):
             self.entries.clear(); self.redraw()
 
     def clear_text(self) -> None:
-        from .pdic_text_cleanup import clear_selected_scope
+        from .proofreading.pdic_text_cleanup import clear_selected_scope
         clear_selected_scope(self)
 
 
     def _ordered_entries_reading_order(self) -> list[WordEntry]:
-        """Return current entries in canonical visual reading order without mutating them."""
+        """Return entries in reading order without mutation."""
         image = self.__dict__.get("image")
         entries = list(self.__dict__.get("entries") or [])
         settings = self.__dict__.get("settings")
