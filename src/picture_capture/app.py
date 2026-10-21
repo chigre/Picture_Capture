@@ -219,9 +219,7 @@ from .training_export import (
     make_training_zip, write_training_manifest,
 )
 from .text.encoding import read_text_detected
-from .unicode_nonbmp_input import (
-    attach_nonbmp_unicode_input, close_nonbmp_unicode_input,
-)
+from .unicode_nonbmp_input import attach_nonbmp_unicode_input, close_nonbmp_unicode_input
 from .ui.overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
@@ -233,12 +231,8 @@ from .illustration.fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
-from .ocr_crop_preview_ui import (
-    draw_ocr_crop_preview,
-)
-from .layout_visualization_ui_v3 import (
-    draw_layout_visualization_if_enabled,
-)
+from .ocr_crop_preview_ui import draw_ocr_crop_preview
+from .layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
 from .auxiliary_line_controller import AuxiliaryLineController
 from .auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification
