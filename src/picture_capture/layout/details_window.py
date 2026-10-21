@@ -12,7 +12,7 @@ from typing import Any
 def layout_detail_text(app: Any) -> str:
     """Return the full existing diagnostic, with no GUI-specific truncation."""
     from .visualization_summary import _format_summary
-    from ..layout_visualization_ui import _snapshot_for_app
+    from ..ui.layout_visualization_ui import _snapshot_for_app
 
     return _format_summary(app, _snapshot_for_app(app))
 
@@ -141,7 +141,7 @@ def show_layout_details_window(app: Any) -> None:
 def add_layout_details_button(app: Any, section: Any) -> None:
     """Legacy full-width settings also expose the same copyable report."""
     from tkinter import ttk
-    from ..layout_visualization_ui_v3 import _next_grid_row
+    from ..ui.layout_visualization_ui_v3 import _next_grid_row
 
     if getattr(app, "_layout_details_button", None) is not None:
         return

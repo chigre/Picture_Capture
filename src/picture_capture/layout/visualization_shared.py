@@ -79,7 +79,7 @@ def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]
 
 def _shared_snapshot_for_app_impl(app: Any) -> Any:
     """Build the ordinary shared Layout snapshot without cache-capture routing."""
-    from .. import layout_visualization_ui as ui
+    from ..ui import layout_visualization_ui as ui
 
     if getattr(app, "image", None) is None:
         raise RuntimeError("没有可显示的页面图像")

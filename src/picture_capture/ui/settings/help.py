@@ -7,7 +7,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageTk
 
-from ...appearance import themed_display_image
+from ..appearance import themed_display_image
 from ..text_wrap import _label_measure, _normalize_ui_paragraphs, _wrap_mixed_ui_text
 
 

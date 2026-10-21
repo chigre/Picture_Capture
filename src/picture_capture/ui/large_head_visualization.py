@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..layout_visualization_ui import _layout_cache_key
+from .layout_visualization_ui import _layout_cache_key
 
 
 _TAG = "large-head-diagnostics-overlay"
@@ -280,7 +280,7 @@ def add_large_head_debug_controls(app: Any, section: Any) -> None:
         return
     from tkinter import ttk
     import tkinter as tk
-    from ..layout_visualization_ui_v3 import _next_grid_row
+    from .layout_visualization_ui_v3 import _next_grid_row
 
     var = tk.BooleanVar(value=False)
     app._large_head_visualization_var = var

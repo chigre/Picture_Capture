@@ -23,7 +23,7 @@ from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, tt
 from PIL import Image, ImageTk
 from . import __version__
 from .project import parameter_templates as _project_templates
-from .appearance import (
+from .ui.appearance import (
     appearance_palette,
     apply_classic_widget_appearance,
     apply_native_titlebar_appearance,
@@ -98,7 +98,7 @@ from .paddle_headwords import (
     DEFAULT_HEADWORD_FILTER_RULES, HEADWORD_FILTER_RULES_FILENAME,
     compact_ocr_cache_file, parse_headword_filter_rules,
 )
-from .environment_center import EnvironmentCenterWindow
+from .ui.environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
 from .ui.compat import (
     AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
@@ -201,7 +201,7 @@ from .training_export import (
     make_training_zip, write_training_manifest,
 )
 from .text.encoding import read_text_detected
-from .unicode_nonbmp_input import attach_nonbmp_unicode_input, close_nonbmp_unicode_input
+from .ui.unicode_nonbmp_input import attach_nonbmp_unicode_input, close_nonbmp_unicode_input
 from .ui.overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
@@ -214,7 +214,7 @@ from .illustration.fill_opacity import (
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
 from .ui.ocr_crop_preview import draw_ocr_crop_preview
-from .layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
+from .ui.layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
 from .ui.auxiliary_line_controller import AuxiliaryLineController
 from .crop.auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification

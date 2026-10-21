@@ -4,7 +4,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from ...appearance import appearance_palette
+from ..appearance import appearance_palette
 
 
 def configure_settings_appearance_styles(dialog: Any) -> None:
