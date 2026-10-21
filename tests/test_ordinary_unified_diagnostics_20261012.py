@@ -255,7 +255,7 @@ def test_real_diagnostic_builder_and_layout_row_export_share_schema(monkeypatch)
     """Integration boundary: detector trace, Layout snapshot and final PDIC."""
     from PIL import Image
     from picture_capture import large_head_visual_diagnostics as diag
-    from picture_capture.layout_transform import LayoutTransform
+    from picture_capture.geometry.layout_transform import LayoutTransform
     from picture_capture.models import AppSettings, Entry
     from picture_capture import processing
 
