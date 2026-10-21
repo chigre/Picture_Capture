@@ -17,7 +17,7 @@ from typing import Any
 from PIL import Image
 
 from ..models import AppSettings, Entry
-from ..page_understanding import uses_cjk_role_model
+from ..layout.page_understanding import uses_cjk_role_model
 
 
 def recover_depleted_indent_columns(
