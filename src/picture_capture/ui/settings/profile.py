@@ -4,7 +4,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from ...collation import available_profile_labels
+from ...lexicon.collation import available_profile_labels
 from ...profile.dictionary import (
     DEFAULT_PROFILE_ID,
     available_dictionary_profiles,

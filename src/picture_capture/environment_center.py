@@ -12,12 +12,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from .appearance import appearance_palette, apply_classic_widget_appearance, apply_native_titlebar_appearance
-from .cc_cedict import (
+from .lexicon.cc_cedict import (
     DOWNLOAD_PAGE_URL as CC_CEDICT_DOWNLOAD_PAGE_URL,
     install_from_file as install_cc_cedict_from_file,
     status as cc_cedict_status,
 )
-from .chinese_simplify import opencc_runtime_status
+from .lexicon.chinese_simplify import opencc_runtime_status
 from .ocr_engines import lens_status, tesseract_status
 from .models import resolved_tesseract_language
 from .runtime_environment import (

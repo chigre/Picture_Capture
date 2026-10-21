@@ -32,7 +32,7 @@ from ...training_export_composed import (
     TrainingExportCancelled, copy_project_context, export_training_page,
     make_training_zip, write_training_manifest,
 )
-from ...text_encoding import read_text_detected
+from ...text.encoding import read_text_detected
 from ...training_export_complete_dialog import show_training_export_complete
 
 

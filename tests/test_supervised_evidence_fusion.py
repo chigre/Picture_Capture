@@ -301,7 +301,7 @@ def test_real_portuguese_ocr_glued_pos_recovers_weak_ink_word():
 
 
 def test_real_spanish_continuation_remains_rejected_without_adjacent_pos():
-    from picture_capture.latin_glued_pos_headwords import glued_lemma_and_pos
+    from picture_capture.lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
 
     for example in ("momento de~. 他在吐露内心真情时",
                     "una ~ en el coche.", "su bufete a su primer ayudante.",
@@ -310,7 +310,7 @@ def test_real_spanish_continuation_remains_rejected_without_adjacent_pos():
 
 
 def test_glued_tag_parser_handles_real_user_archive_cases():
-    from picture_capture.latin_glued_pos_headwords import glued_lemma_and_pos
+    from picture_capture.lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
 
     examples = {
         "abaluartarv.t. ①筑堡垒防卫": ("abaluartar", "v.t."),

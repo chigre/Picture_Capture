@@ -201,7 +201,7 @@ def _edit_original_pdic(raw: bytes, before: tuple, after: tuple,
     No BOM, encoding, newline, extra PDIC columns, word or page-link
     normalization is permitted. Unsupported encodings fail closed.
     """
-    from .text_encoding import decode_text_bytes
+    from .text.encoding import decode_text_bytes
 
     decoded, encoding = decode_text_bytes(raw)
     if decoded.encode(encoding) != raw:

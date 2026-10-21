@@ -936,7 +936,7 @@ def read_noncomment_lines(path: Path) -> list[str]:
     is detected from a bounded prefix and the file is then consumed line by line,
     avoiding a second full-file text buffer alongside the returned list.
     """
-    from .text_encoding import iter_text_lines_detected
+    from .text.encoding import iter_text_lines_detected
     rows: list[str] = []
     for raw in iter_text_lines_detected(path):
         line = raw.strip()

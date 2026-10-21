@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import messagebox
 from typing import Any
 
-from ...collation import LATIN_ORDER, collation_key, display_key, profile_label
+from ...lexicon.collation import LATIN_ORDER, collation_key, display_key, profile_label
 from ...formats import pdic_path, read_pdic
 
 

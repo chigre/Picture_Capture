@@ -5,7 +5,7 @@ import os
 import tempfile
 
 from .models import Entry, PolygonRegion
-from .text_encoding import read_text_detected
+from .text.encoding import read_text_detected
 from .project_storage import pdic_path_for_image, note_page_artifact_edit
 
 
