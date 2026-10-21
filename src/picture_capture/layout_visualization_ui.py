@@ -64,7 +64,7 @@ def _layout_cache_key(app: Any) -> tuple[Any, ...]:
 
 def _snapshot_for_app(app: Any) -> LayoutVisualizationSnapshot:
     """Return the shared ordinary-layout snapshot without bootstrap rebinding."""
-    from .layout_visualization_shared import shared_snapshot_for_app
+    from .layout.visualization_shared import shared_snapshot_for_app
 
     return shared_snapshot_for_app(app)
 

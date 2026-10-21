@@ -371,7 +371,7 @@ def build_validation_mode_wizard(base_class: type[Any]) -> type[Any]:
 
             from ..image_utils import normalize_page_rgb
             from ..page_sections import read_page_sections
-            from ..layout_composition import understand_composed_page
+            from ..layout.composition import understand_composed_page
             from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
             from ..processing import detect_entries
             from ..project_storage import (

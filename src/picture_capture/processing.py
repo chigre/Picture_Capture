@@ -141,7 +141,7 @@ def _understand_page_current(
                 **({"trace": layout_trace} if layout_trace is not None else {}),
             )
         else:
-            from .layout_composition import understand_composed_page
+            from .layout.composition import understand_composed_page
 
             understanding = understand_composed_page(
                 analysis_image,

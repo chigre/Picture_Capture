@@ -32,7 +32,7 @@ from ..layout_detection import analysis_ink_mask, LayoutEstimate
 from ..layout.column_drift import finalize_layout_column_drift
 from ..models import AppSettings
 from ..layout.parameter_evidence import row_padding_is_measured
-from ..page_x_registration import register_page_manual_x
+from ..layout.page_x_registration import register_page_manual_x
 
 
 def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> LayoutEstimate:
