@@ -12,15 +12,15 @@ a compact colour strip beside the physical column edge.
 
 from typing import Any, Callable
 
-from .layout.indent_visibility import (
+from .indent_visibility import (
     _draw_indent_blocks_visible as _draw_indent_blocks,
     add_prepared_indent_summary,
 )
-from .layout.lane_summary_extension import append_physical_lane_summary
-from .layout.role_provenance import add_entry_source_summary
-from .layout.visualization_readability import draw_layout_visualization_readable
-from .layout_visualization_ui import _snapshot_for_app, draw_layout_visualization
-from .processing import ORDINARY_AUTO_LAYOUT_FIELDS
+from .lane_summary_extension import append_physical_lane_summary
+from .role_provenance import add_entry_source_summary
+from .visualization_readability import draw_layout_visualization_readable
+from ..layout_visualization_ui import _snapshot_for_app, draw_layout_visualization
+from ..processing import ORDINARY_AUTO_LAYOUT_FIELDS
 
 
 _SUMMARY_TAG = "layout-visualization-summary"
@@ -150,7 +150,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     # This is the same read-only candidate registry used by the clickable
     # Layout markers, large-head overlay and explicit JSON export.
     try:
-        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        from ..large_head_visualization_ui import get_large_head_debug_snapshot
         unified = get_large_head_debug_snapshot(app).get("unified_report", {})
         review = unified.get("review_queue", [])
         counts = unified.get("summary", {})
@@ -234,7 +234,7 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
     # records. Historically this function painted a second cached Layout
     # result, so red/blue roles could disagree with the exported diagnostics.
     try:
-        from .large_head_visualization_ui import get_large_head_debug_snapshot
+        from ..large_head_visualization_ui import get_large_head_debug_snapshot
         actual_rows = get_large_head_debug_snapshot(app).get(
             "layout_snapshot", {}
         ).get("physical_rows", [])
