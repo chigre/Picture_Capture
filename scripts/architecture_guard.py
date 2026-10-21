@@ -765,6 +765,20 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical Layout owner missing: {canonical}")
 
+    # Issue #562: page coordinate, list, word-map and crop utility owners.
+    relocated_page_helpers = {
+        "coordinate_space": "geometry/coordinate_space.py",
+        "layout_transform": "geometry/layout_transform.py",
+        "page_list_helpers": "project/page_list_helpers.py",
+        "page_word_mapping": "proofreading/page_word_mapping.py",
+        "auxiliary_crop_partition": "crop/auxiliary_partition.py",
+    }
+    for former, canonical in relocated_page_helpers.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired page helper root module returned: {former}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical page helper owner missing: {canonical}")
+
     return violations
 
 
