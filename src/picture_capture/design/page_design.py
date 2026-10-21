@@ -22,7 +22,7 @@ from PIL import Image, ImageOps
 
 from ..image_utils import normalize_page_rgb
 from ..layout_detection import _projection_layout_estimate, analysis_ink_mask
-from ..layout_transform import LayoutTransform
+from ..geometry.layout_transform import LayoutTransform
 from ..models import AppSettings, Entry
 from ..ordinary_visual import _components, _fill_short_gaps, _runs
 from ..profile.indent_ui import indent_type_label

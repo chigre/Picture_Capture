@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..image_utils import normalize_page_rgb
-from ..layout_transform import LayoutTransform
+from ..geometry.layout_transform import LayoutTransform
 from ..models import AppSettings
 
 
