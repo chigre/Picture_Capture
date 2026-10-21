@@ -301,3 +301,18 @@ Base main `81c245f6544ceca3bb0ef7d2be6970e04424231c`: 54 root Python files. Cand
 
 - Candidate branch head `7dac0d11903c58f76413182d94321d3c98502b3f` was independently counted at **49** root `.py` (five actual physical moves from main 54). Diff has five renames, no deleted tests; app 784730 bytes is below unchanged 784737 ratchet. **No PR or candidate CI yet.**
 - GitHub PR creation and Issue #562 comment/body-update calls were rejected by connector safety checks; Issue cannot be checkpointed through that channel in this run. Next run: verify main/open PR, retry the single Draft PR from this branch and post the checkpoint to Issue, then run exact-head six-platform CI, GUI smoke, wheel, CodeQL and reviews. Do not merge without full acceptance or claim human scanned-page parity. Issue remains open and hourly task continues.
+
+### Provisional 49 root owners after this five-module candidate
+
+Public/entry (11): __init__, __main__, app, cli, picdic, launcher, gui_io, processing, processing_core, facade_compat, models.
+Persistence/Review (9): formats, project_storage, page_sections, pdic_restore, pdic_text_cleanup, processing_publish, entry_classification, entry_classification_fields, simplified_review.
+UI compatibility (3): layout_visualization_ui_v3, settings_help_restore, ui_terminology.
+Layout (7): layout_core_understanding, layout_detection, layout_detection_actions, layout_detection_legacy, layout_detector_live_binding, layout_physical_indent, layout_rows_cache.
+OCR/GPU/runtime (9): ocr_channel, ocr_channel_legacy, ocr_engines, ocr_page_resume, paddle_headword_models, paddle_headwords, paddle_headwords_core, windows_gpu, runtime_environment.
+Refinement (2): separator_y_refinement, marker_refinement_parallel.
+Image (2): image_preprocessing, image_utils.
+Evidence (2): evidence_fusion, symbol_evidence.
+Crop export (2): single_line_parallel, unlined_line_export.
+Training compatibility (2): training_export, training_export_ui.
+
+All 49 are provisionally assigned, not final migration/retention decisions. Verify each with static/deferred imports, Windows spawn, GPU owner, Profile, PDIC/PPP/SECTION, real scans and original-pixel/Y/parent-writer invariants. Do not infer eligibility completion from root count.
