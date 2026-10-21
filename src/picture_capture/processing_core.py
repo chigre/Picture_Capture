@@ -13,7 +13,7 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
-from .auxiliary_lines import read_auxiliary_lines
+from .crop.auxiliary_lines import read_auxiliary_lines
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb

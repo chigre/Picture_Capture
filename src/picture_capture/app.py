@@ -223,8 +223,8 @@ from .illustration.fill_opacity import (
 )
 from .ocr_crop_preview_ui import draw_ocr_crop_preview
 from .layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
-from .auxiliary_line_controller import AuxiliaryLineController
-from .auxiliary_lines import AuxiliaryLineEdits
+from .ui.auxiliary_line_controller import AuxiliaryLineController
+from .crop.auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,

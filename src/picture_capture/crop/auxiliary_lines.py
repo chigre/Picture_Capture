@@ -11,7 +11,7 @@ import json
 import os
 import tempfile
 
-from .project_storage import is_managed_project, storage_root
+from ..project_storage import is_managed_project, storage_root
 
 FORMAT = "picture-capture-auxiliary-lines-v1"
 

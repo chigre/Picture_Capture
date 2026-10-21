@@ -240,3 +240,10 @@ This organization change is *not* a source-code compression project. An expanded
 - Physically move `single_line_merge_settings.py` → `crop/single_line_merge_settings.py` and `unlined_export_filter_settings.py` → `crop/unlined_export_filter_settings.py`, without root shims. This expands the existing UI progress/bookmarks candidate PR, not a new overlapping PR.
 - Update export runners, Settings UI/controllers and regression imports, relocate source-path mutation guards instead of deleting or relaxing them. Retain per-page output manifests, project-local settings JSON paths, single-line crop merge semantics, unlined-row filtering and all persisted Profile/PDIC/PPP/SECTION data.
 - Until exact-head full 3-OS × Python 3.10/3.13, GUI, wheel, CodeQL, review and postmerge main CI are verified, this is a candidate, NOT an accepted migration. Real scanned-page/Windows GUI/GPU parity requires human validation.
+
+
+## Issue #562 — Auxiliary crop boundaries and UI controller (2026-10-21; Draft PR #594)
+
+- True owner moves: `auxiliary_lines.py` → `crop/auxiliary_lines.py` for independent JSON sidecar and atomic storage; `auxiliary_line_controller.py` → `ui/auxiliary_line_controller.py` for Tk geometry and user edits. No root shims.
+- Preserve source-image coordinates, auxiliary gap boundaries, undo/redo, per-page switching and direct PDIC independence. Update App, processing core, monkeypatch tests, architecture guard and source-tree ownership checks.
+- Not yet accepted: complete exact-head CI + CodeQL + GUI + wheel + reviews + postmerge main; real image/UI/Windows parity awaits human acceptance.

@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.auxiliary_line_controller import AuxiliaryLineController
-from picture_capture.auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits
+from picture_capture.ui.auxiliary_line_controller import AuxiliaryLineController
+from picture_capture.crop.auxiliary_lines import AuxiliaryLine, AuxiliaryLineEdits
 from picture_capture.ui.overlay_layout_helpers import (
     effective_overlay_column_width,
 )
@@ -101,7 +101,7 @@ def test_auxiliary_delete_control_uses_headword_button_style_hover_and_tooltip(m
         current_page=Path("page.png"),
         redraw=lambda: None,
     )
-    from picture_capture import auxiliary_line_controller as mod
+    from picture_capture.ui import auxiliary_line_controller as mod
     monkeypatch.setattr(mod, "column_index_for_click", lambda _x, _g, _y: 1)
     monkeypatch.setattr(mod, "write_auxiliary_lines", lambda _p, lines: saves.append(list(lines)))
     ctrl = AuxiliaryLineController(app)
@@ -142,7 +142,7 @@ def test_display_menu_moves_groups_and_removes_denoise_selector():
 
 def test_auxiliary_hit_target_matches_visible_last_column_not_page_remainder(monkeypatch):
     """Ink beyond the actual column cannot select a line invisible there."""
-    from picture_capture import auxiliary_line_controller as mod
+    from picture_capture.ui import auxiliary_line_controller as mod
     monkeypatch.setattr(mod, "column_index_for_click", lambda *_args: 1)
     app = SimpleNamespace(
         settings=SimpleNamespace(column_width=400, right_ratio=100, ocr_language="chi_sim"),
@@ -161,7 +161,7 @@ def test_auxiliary_hit_target_matches_visible_last_column_not_page_remainder(mon
 def test_auxiliary_length_matches_entry_marker_ratio_and_hit_bound(
     monkeypatch, ratio, end,
 ):
-    from picture_capture import auxiliary_line_controller as mod
+    from picture_capture.ui import auxiliary_line_controller as mod
     from picture_capture.ui.overlay_layout_helpers import canonical_headword_marker_span
     monkeypatch.setattr(overlay_delete_button.tk, "Button", _FakeButton)
     monkeypatch.setattr(overlay_delete_button, "resolve_content_font_family", lambda *_: "Arial")
