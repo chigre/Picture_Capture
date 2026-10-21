@@ -100,7 +100,7 @@ from .paddle_headwords import (
 )
 from .environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
-from .ui_compat import (
+from .ui.compat import (
     AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
     normalize_content_font_setting, preferred_font_family, resolve_content_font_family,
 )
