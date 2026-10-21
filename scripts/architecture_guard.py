@@ -733,6 +733,23 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # Issue #562: dictionary reference, lexical evidence and text decoding
+    # own implementation leaves, without old-root compatibility shims.
+    migrated_lexicon_text = {
+        "cc_cedict": "lexicon/cc_cedict.py",
+        "chinese_simplify": "lexicon/chinese_simplify.py",
+        "collation": "lexicon/collation.py",
+        "network_lookup": "lexicon/network_lookup.py",
+        "latin_glued_pos_headwords": "lexicon/latin_glued_pos_headwords.py",
+        "reference_index": "lexicon/reference_index.py",
+        "text_encoding": "text/encoding.py",
+    }
+    for former, current in migrated_lexicon_text.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired lexicon/text root returned: {former}.py")
+        if not (PACKAGE_ROOT / current).is_file():
+            violations.append(f"canonical lexicon/text owner missing: {current}")
+
     return violations
 
 
