@@ -247,3 +247,10 @@ This organization change is *not* a source-code compression project. An expanded
 - True owner moves: `auxiliary_lines.py` → `crop/auxiliary_lines.py` for independent JSON sidecar and atomic storage; `auxiliary_line_controller.py` → `ui/auxiliary_line_controller.py` for Tk geometry and user edits. No root shims.
 - Preserve source-image coordinates, auxiliary gap boundaries, undo/redo, per-page switching and direct PDIC independence. Update App, processing core, monkeypatch tests, architecture guard and source-tree ownership checks.
 - Not yet accepted: complete exact-head CI + CodeQL + GUI + wheel + reviews + postmerge main; real image/UI/Windows parity awaits human acceptance.
+
+
+## Issue #562 — Refinement LayoutRows reuse and inference policy leaves (2026-10-21; Draft #594)
+
+- Physical no-shim moves: `marker_refinement_layoutrows.py` → `refinement/layoutrows.py`; `inference_performance.py` → `quality/inference_performance.py`. Move only the rule/cache reuse helpers and Paddle-agnostic inference settings policy, *not* the LayoutRows cache, refinement worker, GPU model constructors or Windows spawn runtime itself.
+- Update both static and deferred imports, tests including policy monkeypatch target, and a stricter physical-owner guard. Preserve source-coordinate cache guards, Settings/CUDA policy, algorithm defaults and Model/PDIC/PPP/SECTION serialization by keeping function implementations unchanged apart from relative import resolution.
+- Require exact-head Python 3.10/3.13 × Windows/macOS/Ubuntu, guard, GUI smoke, wheel, CodeQL, reviews and postmerge main CI; real Y/pixel/Windows GPU manual parity still pending.

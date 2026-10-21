@@ -122,7 +122,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
     Preserve PR494's strict CPU worker and staged GPU inference guards.
     """
     from .ordinary.gpu_pipeline import reject_cpu_worker_detector
-    from .inference_performance import (
+    from .quality.inference_performance import (
         InferencePolicy, resolve_inference_policy, paddle_constructor_variants,
     )
 

@@ -89,7 +89,7 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
 
     paddle_module.PaddleOCR = FakePaddleOCR
     monkeypatch.setitem(sys.modules, "paddleocr", paddle_module)
-    from picture_capture.inference_performance import InferencePolicy
+    from picture_capture.quality.inference_performance import InferencePolicy
     monkeypatch.setattr(
         channel, "resolve_inference_policy",
         lambda: InferencePolicy("cpu", "auto", 1, 2),

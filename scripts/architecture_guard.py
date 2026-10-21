@@ -245,6 +245,13 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: Y-refinement LayoutRows reuse and inference policy ownership.
+    for former, canonical in (("marker_refinement_layoutrows.py", "refinement/layoutrows.py"), ("inference_performance.py", "quality/inference_performance.py")):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
+
     # Issue #562: independent Crop auxiliary sidecar and UI interaction owner.
     for former, canonical in (("auxiliary_lines.py", "crop/auxiliary_lines.py"), ("auxiliary_line_controller.py", "ui/auxiliary_line_controller.py")):
         if (PACKAGE_ROOT / former).exists():

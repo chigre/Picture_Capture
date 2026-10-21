@@ -6,7 +6,7 @@ from PIL import Image
 
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.layout_rows_cache import write_layout_rows_cache
-from picture_capture.marker_refinement_layoutrows import (
+from picture_capture.refinement.layoutrows import (
     cached_refinement_settings, refinement_cache_miss_reason,
 )
 from picture_capture.models import AppSettings

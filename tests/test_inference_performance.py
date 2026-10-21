@@ -3,17 +3,17 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from picture_capture.inference_performance import (
+from picture_capture.quality.inference_performance import (
     InferencePolicy, paddle_constructor_variants, resolve_inference_policy,
 )
 
 
 def test_cpu_auto_uses_one_dnn_and_bounds_worker_threads():
     settings = {"paddle_mkldnn": "auto", "paddle_cpu_workers": "6"}
-    with patch("picture_capture.inference_performance.runtime_setting",
+    with patch("picture_capture.quality.inference_performance.runtime_setting",
                side_effect=lambda key, fallback: settings.get(key, fallback)), \
-         patch("picture_capture.inference_performance.resolve_paddle_device", return_value="cpu"), \
-         patch("picture_capture.inference_performance.os.cpu_count", return_value=24), \
+         patch("picture_capture.quality.inference_performance.resolve_paddle_device", return_value="cpu"), \
+         patch("picture_capture.quality.inference_performance.os.cpu_count", return_value=24), \
          patch.dict("os.environ", {}, clear=True):
         policy = resolve_inference_policy(page_count=12)
     assert policy.cpu_workers == 6
@@ -37,10 +37,10 @@ def test_gpu_does_not_receive_cpu_specific_flags():
 
 
 def test_small_batch_limits_auto_workers():
-    with patch("picture_capture.inference_performance.runtime_setting",
+    with patch("picture_capture.quality.inference_performance.runtime_setting",
                side_effect=lambda _key, fallback: fallback), \
-         patch("picture_capture.inference_performance.resolve_paddle_device", return_value="cpu"), \
-         patch("picture_capture.inference_performance.os.cpu_count", return_value=8), \
+         patch("picture_capture.quality.inference_performance.resolve_paddle_device", return_value="cpu"), \
+         patch("picture_capture.quality.inference_performance.os.cpu_count", return_value=8), \
          patch.dict("os.environ", {}, clear=True):
         policy = resolve_inference_policy(page_count=2)
     assert policy.cpu_workers == 2
@@ -49,10 +49,10 @@ def test_small_batch_limits_auto_workers():
 
 def test_workers_can_exceed_six():
     settings = {"paddle_mkldnn": "auto", "paddle_cpu_workers": "12"}
-    with patch("picture_capture.inference_performance.runtime_setting",
+    with patch("picture_capture.quality.inference_performance.runtime_setting",
                side_effect=lambda key, fallback: settings.get(key, fallback)), \
-         patch("picture_capture.inference_performance.resolve_paddle_device", return_value="cpu"), \
-         patch("picture_capture.inference_performance.os.cpu_count", return_value=24), \
+         patch("picture_capture.quality.inference_performance.resolve_paddle_device", return_value="cpu"), \
+         patch("picture_capture.quality.inference_performance.os.cpu_count", return_value=24), \
          patch.dict("os.environ", {}, clear=True):
         policy = resolve_inference_policy(page_count=20)
     assert policy.cpu_workers == 12
