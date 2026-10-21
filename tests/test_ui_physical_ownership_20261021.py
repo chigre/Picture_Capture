@@ -27,3 +27,20 @@ def test_ui_owner_is_physical_without_old_root_alias(name: str) -> None:
 def test_high_risk_layout_v3_and_historical_compatibility_remain_at_root() -> None:
     for name in ("layout_visualization_ui_v3", "ui_terminology", "settings_help_restore"):
         assert (PACKAGE / (name + ".py")).is_file()
+
+
+def test_refinement_batch_progress_callback_uses_existing_canonical_owner() -> None:
+    from types import SimpleNamespace
+    from picture_capture.refinement.progress import report_refinement_page
+
+    app_source = (PACKAGE / "app.py").read_text(encoding="utf-8")
+    assert "from .refinement.progress import report_refinement_page" in app_source
+    assert "from .marker_refinement_progress import report_refinement_page" not in app_source
+
+    status = []
+    ui = SimpleNamespace(
+        batch_text_var=SimpleNamespace(set=lambda value: status.append(("batch", value))),
+        status_var=SimpleNamespace(set=lambda value: status.append(("status", value))),
+    )
+    report_refinement_page(ui, 1, 3, "001", {"skipped": True, "reason": "manual-only"})
+    assert any("manual-only" in value for kind, value in status if kind == "status")
