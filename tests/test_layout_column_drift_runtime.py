@@ -16,7 +16,7 @@ from picture_capture.layout.column_drift import (
     remeasure_layout_indents_from_ink,
 )
 from picture_capture.geometry.layout_transform import LayoutTransform
-from picture_capture.ordinary_large_head_evidence import (
+from picture_capture.ordinary.large_head_evidence import (
     detect_ordinary_large_head_entries,
 )
 

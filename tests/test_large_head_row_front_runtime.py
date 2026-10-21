@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from picture_capture.ordinary_large_head_evidence import observed_body_line_reference
-from picture_capture.ordinary_large_head_role_guard import (
+from picture_capture.ordinary.large_head_evidence import observed_body_line_reference
+from picture_capture.ordinary.large_head_role_guard import (
     strict_candidate_starts_at_row_front,
 )
 

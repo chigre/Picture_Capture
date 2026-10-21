@@ -6,7 +6,7 @@ saved annotations are used by the production detector.
 """
 import numpy as np
 
-from picture_capture.ordinary_large_head_evidence import (
+from picture_capture.ordinary.large_head_evidence import (
     _candidate_boxes,
     _recover_oversized_front_lane,
 )

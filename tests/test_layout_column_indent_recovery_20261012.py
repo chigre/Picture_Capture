@@ -60,7 +60,7 @@ def test_real_xdhycd_sparse_c2_is_classed_as_undersegmented_even_with_some_entri
 
 
 def test_cjk_brackets_rebuild_visible_indent_lanes_not_just_append_pdic(monkeypatch):
-    from picture_capture import ordinary_bracket_pair
+from picture_capture.ordinary import bracket_pair as ordinary_bracket_pair
 
     page = layout([column(0, 5, 30, entries=8), column(1, 711, 17)])
     # Trusted independent visual bracket pair coordinates; these correspond to
