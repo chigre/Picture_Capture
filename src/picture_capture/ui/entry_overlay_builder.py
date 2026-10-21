@@ -22,7 +22,7 @@ from .overlay_layout_helpers import (
 )
 from .overlay_opacity import create_alpha_canvas_line
 from ..proofreading.text_helpers import _entry_font_spec
-from ..ui_compat import resolve_content_font_family
+from .compat import resolve_content_font_family
 from .overlay_delete_button import create_overlay_delete_button, fixed_overlay_control_font
 from .widgets.vertical_word import VerticalWordText
 

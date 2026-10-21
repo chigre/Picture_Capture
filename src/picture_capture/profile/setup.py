@@ -10,7 +10,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
-from ..ui_compat import screen_work_area
+from ..ui.compat import screen_work_area
 from ..appearance import themed_display_image
 from .dictionary import (
     dictionary_profile_preset,

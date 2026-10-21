@@ -8,7 +8,7 @@ from __future__ import annotations
 import tkinter as tk
 from typing import Callable
 
-from ..ui_compat import AUTO_FONT_FAMILY, resolve_content_font_family
+from .compat import AUTO_FONT_FAMILY, resolve_content_font_family
 
 
 # Overlay controls use the OS/language recommended typeface, at a fixed

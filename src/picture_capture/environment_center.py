@@ -23,7 +23,7 @@ from .models import resolved_tesseract_language
 from .runtime_environment import (
     effective_tesseract_configured, save_runtime_setting,
 )
-from .ui_compat import fit_window_to_work_area
+from .ui.compat import fit_window_to_work_area
 
 
 TESSERACT_DOC_URL = "https://tesseract-ocr.github.io/tessdoc/Installation.html"

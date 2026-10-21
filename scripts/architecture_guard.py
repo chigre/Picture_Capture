@@ -245,6 +245,12 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: platform-aware Tk UI display helpers are physically UI-owned.
+    if (PACKAGE_ROOT / "ui_compat.py").exists():
+        violations.append("retired root owner returned: ui_compat.py")
+    if not (PACKAGE_ROOT / "ui/compat.py").is_file():
+        violations.append("canonical owner missing: ui/compat.py")
+
     # Issue #562: deferred Paddle document unwarping belongs to preprocess.
     if (PACKAGE_ROOT / "document_unwarping.py").exists():
         violations.append("retired root owner returned: document_unwarping.py")

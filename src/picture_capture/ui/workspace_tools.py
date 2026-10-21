@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import font as tkfont, ttk
 from typing import Any
 
-from ..ui_compat import screen_work_area
+from .compat import screen_work_area
 
 from .compact_display_menu import build_compact_display_menu
 from .compact_headword_profile_menu import build_headword_profile_menu

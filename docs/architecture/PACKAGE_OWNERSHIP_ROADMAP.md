@@ -285,3 +285,9 @@ This organization change is *not* a source-code compression project. An expanded
 - Move `document_unwarping.py` → `preprocess/document_unwarping.py`, with no model lifetime, GPU initialization or image algorithm change; only resolve parent-relative imports to the same existing Windows GPU initialization guard and environment resolver.
 - Tighten source-path ownership and the existing run-time regression so it still verifies the Windows DLL helper executes BEFORE the deferred `paddleocr.DocPreprocessor` import at the moved canonical path; do not weaken or skip timing assertions.
 - Requires exact-head cross-platform/CodeQL and real GPU model-owner/manual validation before acceptance.
+
+
+## Issue #562 — Platform-aware Tk UI compatibility functions (2026-10-21; Draft #594)
+
+- Physically move internal `ui_compat.py` to `ui/compat.py` without introducing a legacy root shim; callers in dialogs, controllers, canvas overlays, Project Profile setup and Environment Center reference the same font/work-area helpers through the canonical owner.
+- Preserve Tk font selection, native Windows caption semantics, geometry and user settings; function code is unchanged. Do not move public launcher/GUI entrypoints or alter startup side effects. CI and human Windows/macOS Tk parity remain acceptance gates.
