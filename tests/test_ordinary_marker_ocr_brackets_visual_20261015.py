@@ -12,10 +12,10 @@ from PIL import Image, ImageDraw
 from picture_capture.entry_classification import (
     get_entry_classification, register_entry_classification,
 )
-from picture_capture.entry_ocr_crop import (
+from picture_capture.ocr.entry_crop import (
     EntryOcrRowMetrics, entry_ocr_crop_box,
 )
-from picture_capture.entry_ocr_visual_scale import visual_oversized_head_height
+from picture_capture.ocr.entry_visual_scale import visual_oversized_head_height
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary.marker_ocr_text import bracketed_ocr_lemma
@@ -239,7 +239,7 @@ def test_explicit_only_ocr_overwrites_previous_result_clears_failed_and_keeps_ma
     from picture_capture import processing_core
     from picture_capture import ocr_channel
     from picture_capture.profile import dictionary as dictionary_profile
-    from picture_capture import entry_ocr_crop
+from picture_capture.ocr import entry_crop as entry_ocr_crop
 
     image = Image.new("RGB", (850, 580), "white")
     settings = _settings(ocr_replace=False)

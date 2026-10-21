@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
+from picture_capture.ordinary.bracket_pair import recover_bracketed_ordinary_entries
 from picture_capture.ordinary.crossing_separator import (
     adjust_page_coherent_crossing_separators,
 )
