@@ -28,7 +28,7 @@ from PIL import Image, ImageOps
 from .image_utils import normalize_page_rgb
 from .layout_detection import analysis_ink_mask
 from .models import AppSettings, Entry
-from .ordinary_visual import _components
+from .ordinary.visual import _components
 from .visual.marker_templates import (
     match_visual_marker_template,
     visual_marker_samples_from_settings,

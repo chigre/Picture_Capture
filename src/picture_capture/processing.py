@@ -25,11 +25,11 @@ from .models import AppSettings, Entry
 from .page_sections import PageSection
 from . import processing_core as _core
 from .ordinary.cjk_large_heads import recover_cjk_oversized_heads
-from .ordinary_indent_topology import finalize_indented_topology
+from .ordinary.indent_topology import finalize_indented_topology
 from .ordinary.postprocess import stabilize_ordinary_visual_entries
-from .ordinary_visual import recover_ordinary_visual_entries
-from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
-from .page_understanding_fusion import apply_page_understanding
+from .ordinary.visual import recover_ordinary_visual_entries
+from .layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
+from .layout.page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
 from .separator_y_refinement import refined_layout_entry_y_by_line
 from .training.baseline import save_automatic_baseline
@@ -686,7 +686,7 @@ def detect_entries(
                 uses_cjk_script(effective)
                 and bool(getattr(effective, "profile_cjk_allow_bracketed_headword", True))
             ):
-                from .ordinary_bracket_pair import recover_bracketed_ordinary_entries
+                from .ordinary.bracket_pair import recover_bracketed_ordinary_entries
                 layout = understanding.layout
                 rotated = str(getattr(layout.transform, "kind", "identity")) != "identity"
                 bracket_image = (
@@ -895,7 +895,7 @@ def detect_entries_job(
     tick = total_start
     from .bootstrap.worker import build_worker_services
     if prepared_layout is not None:
-        from .ordinary_gpu_pipeline import (
+        from .ordinary.gpu_pipeline import (
             use_prepared_layout, validate_prepared_layout,
             verify_prepared_source,
         )
