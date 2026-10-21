@@ -332,7 +332,8 @@ def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypa
 
 
 def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
-    from picture_capture import processing, layout_composition
+    from picture_capture import processing
+    from picture_capture.layout import composition as layout_composition
     from picture_capture.layout import illustration_mask as masking
 
     original = object()
@@ -365,7 +366,8 @@ def test_static_page_mask_failure_fails_open_in_full_understanding(monkeypatch):
 
 
 def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
-    from picture_capture import processing, layout_composition
+    from picture_capture import processing
+    from picture_capture.layout import composition as layout_composition
     from picture_capture.layout import illustration_mask as masking
 
     masked = _ClosableAnalysisImage()

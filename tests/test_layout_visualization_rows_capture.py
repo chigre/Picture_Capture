@@ -101,6 +101,6 @@ def test_phase5h_source_shape_keeps_later_visualization_decorators_and_removes_r
     assert "install_shared_layout_visualization_source" not in gui
     ui_source = (package / "layout_visualization_ui.py").read_text(encoding="utf-8")
     shared_source = (package / "layout/visualization_shared.py").read_text(encoding="utf-8")
-    assert "from .layout_visualization_shared import shared_snapshot_for_app" in ui_source
+    assert "from .layout.visualization_shared import shared_snapshot_for_app" in ui_source
     assert "return shared_snapshot_for_app(app)" in ui_source
     assert "Compatibility no-op; the shared snapshot binding is now static." in shared_source
