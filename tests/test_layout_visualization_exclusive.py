@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.ui.layout_visualization_ui_v3 import _set_layout_exclusive_visibility
+from picture_capture.layout_visualization_ui_v3 import _set_layout_exclusive_visibility
 
 
 class _Var:

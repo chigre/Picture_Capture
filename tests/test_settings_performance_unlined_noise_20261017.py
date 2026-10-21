@@ -26,7 +26,7 @@ def test_draw_inference_options_validate_without_changing_project_settings():
 def test_performance_controls_are_inline_in_settings_center_not_environment_center():
     source = Path(__file__).resolve().parents[1] / "src/picture_capture"
     app = (source / "app.py").read_text(encoding="utf-8")
-    env = (source / "environment_center.py").read_text(encoding="utf-8")
+    env = (source / "ui/environment_center.py").read_text(encoding="utf-8")
     ui = (source / "ui/settings/inference_performance.py").read_text(encoding="utf-8")
     assert '(performance_tab, "性能测试与诊断")' in app
     assert "build_inference_performance_group(self, performance_page)" in app

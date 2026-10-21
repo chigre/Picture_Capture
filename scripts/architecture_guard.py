@@ -245,6 +245,20 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: Tk appearance, environment and read-only Layout UI have
+    # canonical physical owners; do not restore root aliases or shims.
+    for former in (
+        "appearance",
+        "environment_center",
+        "unicode_nonbmp_input",
+        "layout_visualization_ui",
+        "layout_visualization_ui_v2",
+    ):
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired UI root owner returned: {former}.py")
+        if not (PACKAGE_ROOT / "ui" / (former + ".py")).is_file():
+            violations.append(f"canonical UI owner missing: ui/{former}.py")
+
     # Issue #562: platform-aware Tk UI display helpers are physically UI-owned.
     if (PACKAGE_ROOT / "ui_compat.py").exists():
         violations.append("retired root owner returned: ui_compat.py")

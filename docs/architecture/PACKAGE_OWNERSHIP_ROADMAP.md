@@ -291,3 +291,8 @@ This organization change is *not* a source-code compression project. An expanded
 
 - Physically move internal `ui_compat.py` to `ui/compat.py` without introducing a legacy root shim; callers in dialogs, controllers, canvas overlays, Project Profile setup and Environment Center reference the same font/work-area helpers through the canonical owner.
 - Preserve Tk font selection, native Windows caption semantics, geometry and user settings; function code is unchanged. Do not move public launcher/GUI entrypoints or alter startup side effects. CI and human Windows/macOS Tk parity remain acceptance gates.
+
+
+## Issue #562 — UI owner cohort (2026-10-21, pending CI)
+
+Base main `81c245f6544ceca3bb0ef7d2be6970e04424231c`: 54 root Python files. Candidate moves five modules without shims: `appearance.py`, `environment_center.py`, `unicode_nonbmp_input.py`, `layout_visualization_ui.py`, `layout_visualization_ui_v2.py` into `ui/` under their existing basenames; expected root 49 pending tree recount. Static and delayed imports, Tk GUI smoke, tests and physical-owner guard are updated. Root `layout_visualization_ui_v3.py` is retained for separate legacy-UI acceptance; `ui_terminology.py` and `settings_help_restore.py` remain historical compatibility. No data schema, Y algorithm, GPU owner, Windows spawn, source coordinates, PDIC/PPP/SECTION, manual review or parent-only writes are intentionally changed. Exact-head six-platform CI, CodeQL, GUI smoke, wheel, review, postmerge main and real scanned-page manual acceptance remain mandatory; no unverified green claims.

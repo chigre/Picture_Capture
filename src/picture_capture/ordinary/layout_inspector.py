@@ -256,7 +256,7 @@ def show_unified_layout_inspector(
 def add_unified_layout_inspector_controls(app: Any, section: Any) -> None:
     """Add an explicit inspector button to the legacy non-compact panel."""
     from tkinter import ttk
-    from ..ui.layout_visualization_ui_v3 import _next_grid_row
+    from ..layout_visualization_ui_v3 import _next_grid_row
 
     if getattr(app, "_ordinary_layout_inspector_button", None) is not None:
         return
