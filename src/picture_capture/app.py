@@ -11839,7 +11839,7 @@ class PictureCaptureApp(tk.Tk):
                         f"{self._batch_title}：已完成 {completed}/{total}（并行 {active}/{workers} 页）"
                     )
                 if self._batch_title == "精修画线" and isinstance(_result, dict):
-                    from .marker_refinement_progress import report_refinement_page
+                    from .refinement.progress import report_refinement_page
                     report_refinement_page(self, completed, total, label, _result)
             elif kind == "done":
                 _kind, completed, total, stopped, results = event
