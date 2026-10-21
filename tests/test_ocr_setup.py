@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -121,8 +122,29 @@ def test_legacy_windows_wrapper_exports_cross_platform_api():
 def test_cross_platform_ci_and_release_packaging():
     root = Path(__file__).resolve().parents[1]
     ci = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    for runner in ("ubuntu-latest", "windows-latest", "macos-latest"):
-        assert runner in ci
+    # Full coverage is now generated from the risk classifier, not an
+    # unconditional YAML literal OS list. Verify both matrix outputs and their
+    # use by CI; never weaken the full release/platform coverage guarantee.
+    spec = importlib.util.spec_from_file_location(
+        "_picture_capture_ci_risk", root / "scripts" / "ci_risk_tier.py"
+    )
+    assert spec is not None and spec.loader is not None
+    risk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(risk)
+    expected = {"ubuntu-latest", "windows-latest", "macos-latest"}
+    for key in ("os313", "os310"):
+        full = json.loads(risk.build_output("full")[key])
+        assert {item["os"] for item in full["include"]} == expected
+        assert f"fromJSON(needs.classify.outputs.{key})" in ci
+    fast_313 = json.loads(risk.build_output("fast")["os313"])
+    fast_310 = json.loads(risk.build_output("fast")["os310"])
+    assert {item["os"] for item in fast_313["include"]} == {"ubuntu-latest"}
+    assert {item["os"] for item in fast_310["include"]} == {
+        "ubuntu-latest", "windows-latest"
+    }
+    assert "Risk-tier CI gate" in ci
+    assert "schedule:" in ci and "workflow_dispatch:" in ci
+    assert 'tags: ["v*"]' in ci
     assert "scripts/ci_platform_check.py" in ci
 
     release = (root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
