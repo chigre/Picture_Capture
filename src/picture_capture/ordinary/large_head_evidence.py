@@ -23,12 +23,12 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .models import AppSettings, Entry
-from .ordinary_large_head_role_guard import (
+from ..models import AppSettings, Entry
+from ..ordinary.large_head_role_guard import (
     _nearest_row,
     strict_candidate_starts_at_row_front,
 )
-from .ordinary_visual import _components, _otsu
+from ..ordinary.visual import _components, _otsu
 
 
 def _uses_cjk_large_heads(settings: AppSettings) -> bool:
@@ -433,7 +433,7 @@ def detect_ordinary_large_head_entries(
     records geometry/row-front/strong-evidence decisions before any Layout
     role mutation; it is only populated when explicitly requested by the UI.
     """
-    from .layout.column_drift import _analysis_left_for_column
+    from ..layout.column_drift import _analysis_left_for_column
 
     if not _uses_cjk_large_heads(settings):
         return []
