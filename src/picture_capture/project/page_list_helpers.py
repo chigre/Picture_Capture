@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Pure sorting and semantic-status helpers for the page list."""
 
-from .models import natural_text_key
+from ..models import natural_text_key
 
 
 def bookmarked_page_indices(images: list, bookmark_stems: set[str]) -> list[int]:

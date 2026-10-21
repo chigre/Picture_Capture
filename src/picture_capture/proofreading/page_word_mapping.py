@@ -5,8 +5,8 @@ from __future__ import annotations
 import difflib
 import re
 
-from .models import Entry as WordEntry
-from .pdic_restore import (
+from ..models import Entry as WordEntry
+from ..pdic_restore import (
     build_page_lookup as _build_words_page_lookup,
     resolve_page_token as _resolve_words_page_token,
 )
