@@ -162,7 +162,7 @@ from .crop.settings import (
     CROP_SETTINGS_VERSION,
     normalize_crop_settings_payload as _normalize_crop_settings_payload,
 )
-from .collation import (
+from .lexicon.collation import (
     LATIN_ORDER, available_profile_labels, collation_key, display_key,
     parse_custom_order, profile_label,
 )
@@ -204,21 +204,21 @@ from .preprocess.geometry import perspective_from_quad
 from .page_sections import (
     PageSection, read_page_sections, write_page_sections, v_is_inside_sections,
 )
-from .reference_index import contains_cjk, reference_sort_key
-from .network_lookup import LexicalLookupResult, lookup_word_free, web_search_url
-from .cc_cedict import (
+from .lexicon.reference_index import contains_cjk, reference_sort_key
+from .lexicon.network_lookup import LexicalLookupResult, lookup_word_free, web_search_url
+from .lexicon.cc_cedict import (
     DOWNLOAD_PAGE_URL as CC_CEDICT_DOWNLOAD_PAGE_URL,
     install_from_file as install_cc_cedict_from_file,
     simplified_candidates as cc_cedict_simplified_candidates,
     status as cc_cedict_status,
 )
-from .chinese_simplify import simplify_text
+from .lexicon.chinese_simplify import simplify_text
 from .simplified_review import entry_key as simplified_entry_key, read_records as read_simplified_records, write_records as write_simplified_records
 from .training_export import (
     TrainingExportCancelled, copy_project_context, export_training_page,
     make_training_zip, write_training_manifest,
 )
-from .text_encoding import read_text_detected
+from .text.encoding import read_text_detected
 from .unicode_nonbmp_input import (
     attach_nonbmp_unicode_input, close_nonbmp_unicode_input,
 )
