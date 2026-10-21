@@ -23,7 +23,7 @@ from ..layout.page_understanding import (
     _column_for_source_point,
     block_evidence_for_entry,
 )
-from ..symbol_evidence import fuse_symbol_evidence, is_symbol_positive_entry
+from .symbol_evidence import fuse_symbol_evidence, is_symbol_positive_entry
 
 
 def _append_issue(entry: Entry, issue: str) -> Entry:

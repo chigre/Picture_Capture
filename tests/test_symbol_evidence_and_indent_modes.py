@@ -23,7 +23,7 @@ from picture_capture.profile.indent_ui import (
     indent_type_label,
 )
 from picture_capture.profile.validation_modes import _understanding_summary
-from picture_capture.symbol_evidence import (
+from picture_capture.layout.symbol_evidence import (
     SymbolEvidenceResult,
     detect_symbol_evidence,
     fuse_symbol_evidence,

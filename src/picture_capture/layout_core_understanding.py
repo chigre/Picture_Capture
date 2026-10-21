@@ -36,7 +36,7 @@ from .layout.page_understanding import (
     _physical_reliable,
     uses_cjk_role_model,
 )
-from .symbol_evidence import SymbolEvidenceResult
+from .layout.symbol_evidence import SymbolEvidenceResult
 
 
 _CACHE_LIMIT = 6
