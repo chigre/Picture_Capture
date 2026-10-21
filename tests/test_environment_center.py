@@ -112,14 +112,14 @@ def test_deferred_inference_status_imports_quality_owner(monkeypatch):
     """Exercise the Tk callback without creating a GUI window or GPU model."""
     from types import SimpleNamespace
     from picture_capture.quality import inference_monitor
-    from picture_capture.ui.environment_center import EnvironmentCenter
+    from picture_capture.ui.environment_center import EnvironmentCenterWindow
 
     displayed = []
     label = SimpleNamespace(configure=lambda **kwargs: displayed.append(kwargs["text"]))
     monkeypatch.setattr(inference_monitor, "recent_model_events", lambda _: [])
     fake = SimpleNamespace(_status_labels={"inference": label})
 
-    EnvironmentCenter._refresh_inference_status(fake)
+    EnvironmentCenterWindow._refresh_inference_status(fake)
 
     assert displayed and "模型初始化" in displayed[0]
 
@@ -136,7 +136,7 @@ def test_deferred_performance_reports_imports_quality_owner(tmp_path, monkeypatc
         monkeypatch.setattr(env.os, "startfile", lambda path: launched.append(path))
     else:
         monkeypatch.setattr(env.subprocess, "Popen", lambda argv: launched.append(argv))
-    env.EnvironmentCenter._open_draw_performance_reports(SimpleNamespace())
+    env.EnvironmentCenterWindow._open_draw_performance_reports(SimpleNamespace())
 
     assert (tmp_path / "reports").is_dir()
     assert launched
