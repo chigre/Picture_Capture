@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from ...project_storage import exports_root
-from ...ui_compat import fit_window_to_work_area
+from ..compat import fit_window_to_work_area
 from .common import _build_modern_dialog_heading
 
 

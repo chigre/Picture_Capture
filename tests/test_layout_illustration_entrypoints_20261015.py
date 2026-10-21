@@ -5,7 +5,7 @@ from PIL import Image
 from picture_capture.layout.mask_source_guard import (
     missing_saved_illustrations, saved_illustration_stamp, detection_mask_source_path,
 )
-from picture_capture import layout_step_replay_ui as replay
+from picture_capture.ui import layout_step_replay as replay
 from picture_capture import processing
 
 
@@ -60,7 +60,7 @@ def test_replay_ocr_and_fusion_paths_receive_original_image_path():
     src = Path(__file__).parents[1] / "src" / "picture_capture"
     app = (src / "app.py").read_text(encoding="utf-8")
     controller = (src / "ui/controllers/detection.py").read_text(encoding="utf-8")
-    replay_src = (src / "layout_step_replay_ui.py").read_text(encoding="utf-8")
+    replay_src = (src / "ui" / "layout_step_replay.py").read_text(encoding="utf-8")
     assert "source_image_path=detection_mask_source_path(" in app
     assert "source_image_path=detection_mask_source_path(" in controller
     assert "_run_replay, source, settings, page_index, page_sections, source_path," in replay_src

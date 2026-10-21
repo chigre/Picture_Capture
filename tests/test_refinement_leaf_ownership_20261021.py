@@ -22,5 +22,5 @@ def test_refinement_leaves_have_canonical_owners_without_root_shims() -> None:
 def test_spawn_and_parent_commit_boundaries_remain_root_owned() -> None:
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     assert (root / "marker_refinement_parallel.py").is_file()
-    assert (root / "marker_refinement_layoutrows.py").is_file()
+    assert (root / "refinement/layoutrows.py").is_file()
     assert (root / "separator_y_refinement.py").is_file()

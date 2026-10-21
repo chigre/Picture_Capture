@@ -12,10 +12,10 @@ from typing import Any
 
 from ..geometry.layout_percent_helpers import LAYOUT_PERCENT_AXES
 from ..ocr.action_guard import LENS_MODE_LABELS
-from ..ui_compat import normalize_content_font_setting
+from .compat import normalize_content_font_setting
 from .overlay_opacity import normalize_opacity as line_opacity
 from ..illustration.fill_opacity import normalize_opacity as fill_opacity
-from ..adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
+from ..preprocess.adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
 from ..layout_visualization_ui_v3 import _DENOISE_VALUE_TO_LABEL
 
 

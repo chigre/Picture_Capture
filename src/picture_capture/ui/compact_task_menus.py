@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from .compact_layout_profile_menu import LAYOUT_ROWS, build_layout_profile_menu
 from .crop_width_equivalence import CropWidthEquivalence
-from ..line_diff_bookmarks import bookmark_modified_line_pages
+from ..refinement.line_diff_bookmarks import bookmark_modified_line_pages
 
 def _row(panel: ttk.Frame) -> ttk.Frame:
     frame = ttk.Frame(panel)

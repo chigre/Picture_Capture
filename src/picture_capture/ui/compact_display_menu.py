@@ -317,7 +317,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     # Keep the action available even when the large-head overlay is off.
     row = line()
     def export_unified_layout() -> None:
-        from picture_capture.large_head_visualization_ui import export_large_head_debug_json
+        from picture_capture.ui.large_head_visualization import export_large_head_debug_json
         export_large_head_debug_json(app)
 
     ttk.Button(
@@ -326,7 +326,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
 
     row = line()
     def compare_unified_layout() -> None:
-        from picture_capture.large_head_visualization_ui import compare_large_head_debug_json
+        from picture_capture.ui.large_head_visualization import compare_large_head_debug_json
         compare_large_head_debug_json(app)
 
     ttk.Button(

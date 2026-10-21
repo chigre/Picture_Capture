@@ -18,13 +18,13 @@ from ...crop.settings import (
 )
 from ...project_storage import qt_root
 from ...formats import write_text_atomic
-from ...single_line_merge_settings import (
+from ...crop.single_line_merge_settings import (
     MERGE_HELP,
     MERGE_LABEL,
     load_merge_by_page,
     save_merge_by_page,
 )
-from ...unlined_export_filter_settings import (
+from ...crop.unlined_export_filter_settings import (
     BLANK_HELP,
     BLANK_LABEL,
     FILTER_HELP,

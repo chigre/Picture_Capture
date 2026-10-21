@@ -242,7 +242,75 @@ def _normalized_source_size(path: Path) -> int:
 
 
 def collect_violations() -> list[str]:
+
     violations: list[str] = []
+
+    # Issue #562: platform-aware Tk UI display helpers are physically UI-owned.
+    if (PACKAGE_ROOT / "ui_compat.py").exists():
+        violations.append("retired root owner returned: ui_compat.py")
+    if not (PACKAGE_ROOT / "ui/compat.py").is_file():
+        violations.append("canonical owner missing: ui/compat.py")
+
+    # Issue #562: deferred Paddle document unwarping belongs to preprocess.
+    if (PACKAGE_ROOT / "document_unwarping.py").exists():
+        violations.append("retired root owner returned: document_unwarping.py")
+    if not (PACKAGE_ROOT / "preprocess/document_unwarping.py").is_file():
+        violations.append("canonical owner missing: preprocess/document_unwarping.py")
+
+    # Issue #562: Layout step replay has an explicit UI owner, not a root shim.
+    if (PACKAGE_ROOT / "layout_step_replay_ui.py").exists():
+        violations.append("retired root owner returned: layout_step_replay_ui.py")
+    if not (PACKAGE_ROOT / "ui/layout_step_replay.py").is_file():
+        violations.append("canonical owner missing: ui/layout_step_replay.py")
+
+    # Issue #562: OCR crop preview keeps its read-only Tk implementation owned by UI.
+    if (PACKAGE_ROOT / "ocr_crop_preview_ui.py").exists():
+        violations.append("retired root owner returned: ocr_crop_preview_ui.py")
+    if not (PACKAGE_ROOT / "ui/ocr_crop_preview.py").is_file():
+        violations.append("canonical owner missing: ui/ocr_crop_preview.py")
+
+    # Issue #562: Large-head GUI diagnostics have a physical UI owner.
+    if (PACKAGE_ROOT / "large_head_visualization_ui.py").exists():
+        violations.append("retired root owner returned: large_head_visualization_ui.py")
+    if not (PACKAGE_ROOT / "ui/large_head_visualization.py").is_file():
+        violations.append("canonical owner missing: ui/large_head_visualization.py")
+
+    # Issue #562: shared adaptive denoise belongs to preprocessing owner.
+    if (PACKAGE_ROOT / "adaptive_denoise.py").exists():
+        violations.append("retired root owner returned: adaptive_denoise.py")
+    if not (PACKAGE_ROOT / "preprocess/adaptive_denoise.py").is_file():
+        violations.append("canonical owner missing: preprocess/adaptive_denoise.py")
+
+    # Issue #562: Y-refinement LayoutRows reuse and inference policy ownership.
+    for former, canonical in (("marker_refinement_layoutrows.py", "refinement/layoutrows.py"), ("inference_performance.py", "quality/inference_performance.py")):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
+
+    # Issue #562: independent Crop auxiliary sidecar and UI interaction owner.
+    for former, canonical in (("auxiliary_lines.py", "crop/auxiliary_lines.py"), ("auxiliary_line_controller.py", "ui/auxiliary_line_controller.py")):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
+
+    # Issue #562: physical Crop Settings owner paths, no root compatibility shims.
+    for former, canonical in (("single_line_merge_settings.py", "crop/single_line_merge_settings.py"), ("unlined_export_filter_settings.py", "crop/unlined_export_filter_settings.py")):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
+
+    # Issue #562: physical UI progress and line-difference bookmark owners.
+    for former, canonical in (
+        ("batch_progress_budget.py", "ui/batch_progress_budget.py"),
+        ("line_diff_bookmarks.py", "refinement/line_diff_bookmarks.py"),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
 
     # Issue #562: canonical Training ownership, no obsolete root shims.
     for former, canonical in (
@@ -468,7 +536,7 @@ def collect_violations() -> list[str]:
                 )
 
     single_line_merge_source = (
-        PACKAGE_ROOT / "single_line_merge_settings.py"
+        PACKAGE_ROOT / "crop/single_line_merge_settings.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_SINGLE_LINE_MERGE_MUTATIONS:
         if marker in single_line_merge_source:
@@ -477,7 +545,7 @@ def collect_violations() -> list[str]:
             )
 
     unlined_filter_source = (
-        PACKAGE_ROOT / "unlined_export_filter_settings.py"
+        PACKAGE_ROOT / "crop/unlined_export_filter_settings.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_UNLINED_FILTER_MUTATIONS:
         if marker in unlined_filter_source:
@@ -495,7 +563,7 @@ def collect_violations() -> list[str]:
             )
 
     ocr_crop_preview_source = (
-        PACKAGE_ROOT / "ocr_crop_preview_ui.py"
+        PACKAGE_ROOT / "ui/ocr_crop_preview.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_OCR_CROP_PREVIEW_MUTATIONS:
         if marker in ocr_crop_preview_source:

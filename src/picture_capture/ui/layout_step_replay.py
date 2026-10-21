@@ -16,7 +16,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageTk
 
-from .layout.step_trace import LayoutStepTrace
+from ..layout.step_trace import LayoutStepTrace
 
 
 _ROLE_COLORS = {
@@ -28,11 +28,11 @@ _ROLE_COLORS = {
 _STEP_TAG = "layout-replay-overlay"
 
 
-from .layout.mask_source_guard import saved_illustration_stamp as _saved_illustration_stamp
+from ..layout.mask_source_guard import saved_illustration_stamp as _saved_illustration_stamp
 
 
 def _app_key(app: Any) -> tuple[Any, ...]:
-    from .adaptive_denoise import DENOISE_ENV
+    from ..preprocess.adaptive_denoise import DENOISE_ENV
     return (
         id(getattr(app, "image", None)),
         int(getattr(app, "current_index", -1)),
@@ -53,7 +53,7 @@ def _run_replay(
     The same call records shared preprocessing, optional mask, Layout Core,
     【】 recovery and final candidate filtering. It never publishes a PDIC.
     """
-    from .processing import detect_entries
+    from ..processing import detect_entries
 
     # The normal 普通画线 button overrides the method for its worker. Replay
     # must do the same on a *copy*, regardless of the GUI's OCR selection.
@@ -474,9 +474,9 @@ class LayoutStepReplayWindow:
         a different installed source tree. Report resolved imports instead of
         assuming the downloaded files are the ones currently running.
         """
-        from .layout import composition as layout_composition
-        from .design import layout_policy as dictionary_page_layout_policy
-        from . import layout_physical_indent
+        from ..layout import composition as layout_composition
+        from ..design import layout_policy as dictionary_page_layout_policy
+        from .. import layout_physical_indent
         modules = [
             ("回放窗口", __file__),
             ("阶段采集器", __import__(

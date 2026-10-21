@@ -2,7 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from picture_capture.auxiliary_lines import (
+from picture_capture.crop.auxiliary_lines import (
     AuxiliaryLine, AuxiliaryLineEdits, auxiliary_line_path,
     read_auxiliary_lines, write_auxiliary_lines,
 )
@@ -104,7 +104,7 @@ def test_preview_and_real_export_use_same_crop_planner():
     assert "pieces = partition_entry_pieces(" in core
     assert "auxiliary_gaps=auxiliary_gaps" in core
     assert core.count('read_auxiliary_lines(image_path)') >= 2
-    assert '"auxiliary-overlay"' in (root / "auxiliary_line_controller.py").read_text(encoding="utf-8")
+    assert '"auxiliary-overlay"' in (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
 
 
 def test_actual_whole_entry_export_matches_same_preview_plan(tmp_path):
@@ -165,7 +165,7 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
 
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     source = (root / "app.py").read_text(encoding="utf-8")
-    controller = (root / "auxiliary_line_controller.py").read_text(encoding="utf-8")
+    controller = (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
     assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in source
     assert 'self._auxiliary_controller.delete_at_chip(x, y)' in source
     assert 'self._auxiliary_controller.add(x, y)' in source
@@ -179,8 +179,8 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
 
 
 def test_auxiliary_line_add_delete_chip_does_not_create_pdic_entries(monkeypatch):
-    from picture_capture.auxiliary_line_controller import AuxiliaryLineController
-    from picture_capture import auxiliary_line_controller as mod
+    from picture_capture.ui.auxiliary_line_controller import AuxiliaryLineController
+    from picture_capture.ui import auxiliary_line_controller as mod
 
     from picture_capture.ui import overlay_delete_button
 

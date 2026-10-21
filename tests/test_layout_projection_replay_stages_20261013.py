@@ -13,7 +13,7 @@ from picture_capture.layout_physical_indent import (
     _raw_projection_runs, projection_line_runs,
 )
 from picture_capture.layout.step_trace import LayoutStepTrace
-from picture_capture.layout_step_replay_ui import (
+from picture_capture.ui.layout_step_replay import (
     _projection_candidates_for_display, _format_stage, _candidate_at_source,
 )
 from picture_capture.layout_core_understanding import (
@@ -178,7 +178,7 @@ def test_narrow_real_bridge_marker_wins_click_over_its_parent_band():
 
 def test_runtime_diagnostics_exposes_loaded_paths_and_complete_stage_list():
     from types import SimpleNamespace
-    from picture_capture.layout_step_replay_ui import LayoutStepReplayWindow
+    from picture_capture.ui.layout_step_replay import LayoutStepReplayWindow
 
     shown = []
     trace = LayoutStepTrace()
@@ -197,7 +197,7 @@ def test_runtime_diagnostics_exposes_loaded_paths_and_complete_stage_list():
     assert len(shown) == 1
     displayed = shown[0]
     assert "实际加载的模块路径" in displayed
-    assert "layout_step_replay_ui.py" in displayed
+    assert "layout_step_replay.py" in displayed
     assert "layout/composition.py" in displayed.replace(chr(92), "/")
     assert "projection_gap_bridge=已记录" in displayed
     assert "projection_tall_split=已记录" in displayed
@@ -206,7 +206,7 @@ def test_runtime_diagnostics_exposes_loaded_paths_and_complete_stage_list():
 
 def test_runtime_diagnostics_reports_anomalous_missing_projection_stages():
     from types import SimpleNamespace
-    from picture_capture.layout_step_replay_ui import LayoutStepReplayWindow
+    from picture_capture.ui.layout_step_replay import LayoutStepReplayWindow
 
     shown = []
     trace = LayoutStepTrace()

@@ -145,7 +145,7 @@ def prepare_refinement_analysis(
         # Auto Layout. Do not build semantic Layout rows or alter saved PDIC.
         if not fixed_half_gutter and bool(getattr(effective, "ordinary_auto_layout", False)):
             from ..design.layout_policy import resolve_page_layout_policy
-            from ..marker_refinement_layoutrows import requested_refinement_fields
+            from .layoutrows import requested_refinement_fields
 
             # The line refiner consumes only columns, X/width/gutter, body top,
             # and character height. In particular row_padding never needs a
@@ -153,7 +153,7 @@ def prepare_refinement_analysis(
             if requested_refinement_fields(effective):
                 cached = None
                 if source_image_path is not None:
-                    from ..marker_refinement_layoutrows import cached_refinement_settings
+                    from .layoutrows import cached_refinement_settings
                     # Cache fingerprint uses the original persisted Project
                     # settings, not the per-page/header-adjusted copy.
                     cached = cached_refinement_settings(
@@ -170,7 +170,7 @@ def prepare_refinement_analysis(
                 else:
                     reason = "layoutrows_no_source_path"
                     if source_image_path is not None:
-                        from ..marker_refinement_layoutrows import refinement_cache_miss_reason
+                        from .layoutrows import refinement_cache_miss_reason
                         reason = refinement_cache_miss_reason(
                             Path(source_image_path), source.size, settings, int(page_index)
                         )

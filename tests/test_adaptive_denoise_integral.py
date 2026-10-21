@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.adaptive_denoise import _box_sum, _box_sums
+from picture_capture.preprocess.adaptive_denoise import _box_sum, _box_sums
 
 
 def test_shared_box_sums_match_individual_zero_padded_sums() -> None:

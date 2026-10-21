@@ -20,7 +20,7 @@ def refinement_uses_page_layout(settings: AppSettings) -> bool:
     """Whether explicit Y refinement needs per-page physical fields (JSON or GPU)."""
     if not bool(getattr(settings, "ordinary_auto_layout", False)):
         return False
-    from .marker_refinement_layoutrows import requested_refinement_fields
+    from .refinement.layoutrows import requested_refinement_fields
 
     return bool(requested_refinement_fields(settings))
 
@@ -29,7 +29,7 @@ def _page_has_usable_refinement_json(page: Path, page_index: int,
                                     settings: AppSettings) -> bool:
     """Cheap parent-side preflight; no decoding scan pixels or launching Paddle."""
     from PIL import Image
-    from .marker_refinement_layoutrows import cached_refinement_settings
+    from .refinement.layoutrows import cached_refinement_settings
 
     try:
         with Image.open(page) as opened:

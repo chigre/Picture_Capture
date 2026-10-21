@@ -95,7 +95,7 @@ def test_safe_default_scaled_fields(monkeypatch):
 
 
 def test_shared_and_layout_denoise_are_independent(tmp_path):
-    from picture_capture.adaptive_denoise import resolve_denoise_strength
+    from picture_capture.preprocess.adaptive_denoise import resolve_denoise_strength
     from picture_capture.ui.settings import schema
     off = AppSettings(analysis_denoise_enabled=False, layout_denoise_enabled=True)
     assert resolve_denoise_strength(off) == "off"

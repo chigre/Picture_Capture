@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-from picture_capture.document_unwarping import _result_output_image
+from picture_capture.preprocess.document_unwarping import _result_output_image
 
 
 class _VisualResult:

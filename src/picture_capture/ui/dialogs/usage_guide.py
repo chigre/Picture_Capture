@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import font, ttk
 
 from ...appearance import usage_guide_palette
-from ...ui_compat import screen_work_area
+from ..compat import screen_work_area
 from ..text_wrap import _label_measure, _normalize_ui_paragraphs, _wrap_mixed_ui_text
 
 

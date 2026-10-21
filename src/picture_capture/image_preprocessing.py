@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
-from .document_unwarping import unwarp_document_image
+from .preprocess.document_unwarping import unwarp_document_image
 from .image_utils import normalize_page_rgb
 from .layout_detection import (
     LayoutEstimate,

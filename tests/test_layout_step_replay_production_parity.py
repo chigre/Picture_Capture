@@ -9,7 +9,7 @@ import pytest
 
 from picture_capture import processing, processing_core
 from picture_capture.layout.illustration_mask import mask_large_illustrations_for_layout
-from picture_capture.layout_step_replay_ui import (
+from picture_capture.ui.layout_step_replay import (
     _run_replay, _preview_at_stage, _stage_entries_for_display, _format_stage,
 )
 from picture_capture.layout.step_trace import LayoutStepTrace

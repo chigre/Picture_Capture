@@ -14,7 +14,7 @@ import os
 import tempfile
 from typing import Any
 
-from .crop.settings import (
+from .settings import (
     DEFAULT_UNLINED_BLANK_INK_PERCENT,
     MAX_UNLINED_BLANK_INK_PERCENT,
     MIN_UNLINED_BLANK_INK_PERCENT,
@@ -26,7 +26,7 @@ from .crop.settings import (
     UNLINED_FILTER_BLANK_KEY,
     UNLINED_FILTER_ENABLED_KEY,
 )
-from .project_storage import crop_settings_path
+from ..project_storage import crop_settings_path
 
 CROP_SETTINGS_FILENAME = "_CropSettings.json"
 FILTER_ENABLED_KEY = UNLINED_FILTER_ENABLED_KEY

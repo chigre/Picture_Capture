@@ -17,7 +17,7 @@ from picture_capture.app import (
     _focused_review_is_single_character, _apply_focused_review_page_updates,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion, ProjectState
-from picture_capture.ui_compat import (
+from picture_capture.ui.compat import (
     AUTO_FONT_FAMILY, normalize_content_font_setting,
     recommended_content_font_candidates,
 )

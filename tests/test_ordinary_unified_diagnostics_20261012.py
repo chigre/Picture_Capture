@@ -14,7 +14,7 @@ from picture_capture.ordinary.unified_diagnostics import (
 from picture_capture.ordinary.unified_visualization import (
     draw_unified_candidate_overlay, format_candidate_detail,
 )
-import picture_capture.large_head_visualization_ui as large_ui
+import picture_capture.ui.large_head_visualization as large_ui
 
 
 def _row(number, y, role, *, column=0):
@@ -219,7 +219,7 @@ def test_shadow_flags_body_indent_after_verified_bracket_without_deleting_line()
 def test_layout_role_strips_are_directly_based_on_exported_physical_rows(monkeypatch):
     from picture_capture.layout.visualization_summary import _draw_role_strips
 
-    import picture_capture.large_head_visualization_ui as ui
+    import picture_capture.ui.large_head_visualization as ui
     report = _report()
     rows = _layout()["physical_rows"]
     for row in rows:

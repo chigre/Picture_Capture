@@ -650,7 +650,7 @@ class RefBoxController:
         app = self.app
         s = app.view_scale
         config = app.settings
-        from ..ui_compat import resolve_content_font_family
+        from .compat import resolve_content_font_family
         family = resolve_content_font_family(
             app, getattr(config, "ref_box_font_family", "自动（系统推荐）"),
             str(getattr(config, "ocr_language", "eng")),

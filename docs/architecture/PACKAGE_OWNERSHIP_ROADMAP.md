@@ -227,3 +227,67 @@ This organization change is *not* a source-code compression project. An expanded
 - Move **15 source modules physically**, without retaining any prior-root shims: `ordinary_bracket_pair.py` → `ordinary/bracket_pair.py`; `ordinary_cpu_pool.py` → `ordinary/cpu_pool.py`; `ordinary_evidence_fusion.py` → `ordinary/evidence_fusion.py`; `ordinary_gpu_pipeline.py` → `ordinary/gpu_pipeline.py`; `ordinary_indent_topology.py` → `ordinary/indent_topology.py`; `ordinary_large_head_evidence.py` → `ordinary/large_head_evidence.py`; `ordinary_large_head_role_guard.py` → `ordinary/large_head_role_guard.py`; `ordinary_parallel.py` → `ordinary/parallel.py`; `ordinary_visual.py` → `ordinary/visual.py`; `entry_ocr_crop.py` → `ocr/entry_crop.py`; `entry_ocr_visual_scale.py` → `ocr/entry_visual_scale.py`; `page_understanding.py` → `layout/page_understanding.py`; `page_understanding_fusion.py` → `layout/page_understanding_fusion.py`; `large_head_visual_diagnostics.py` → `ordinary/large_head_visual_diagnostics.py`; `layout_visualization_role_theme.py` → `layout/visualization_role_theme.py`.
 - This is a domain-oriented package-only change. Implement callers, deferred imports, tests and additive architecture guard. Preserve core algorithm parameters, PDIC/PPP/SECTION/Profile, original-source coordinates, review manual edits, Y refinement, parent-only publication, single GPU model and Windows spawn. Until verified do **not** claim parity, readiness or completion.
 - Expected root count after this cohort: **68**, pending independent complete-tree recount and exact-head full Python3.10/3.13 tri-OS, GUI smoke, wheel, CodeQL, review, fixed-head merge, and postmerge main checks. Do not close Issue #562 for this step.
+
+
+## 2026-10-21 bounded UI and refinement cohort — proposed
+
+- From `main@fe6b03f0e292755a90734ce945de2d99e5073f9b` (68 root Python files, zero open PR), physically move `batch_progress_budget.py` to `ui/batch_progress_budget.py` and `line_diff_bookmarks.py` to `refinement/line_diff_bookmarks.py`, without root shims. Update the Tk batch-poll deferred import, compact task menu import, tests and ownership guard.
+- Expected count: 68 → 66, pending candidate tree verification. Preserve Tk pause/stop budgets, PDIC automatic-baseline comparison, user confirmation before bookmark replacement and Settings persistence. CI/CodeQL/reviews/wheel/GUI and postmerge main are not yet accepted; real scanned-page/Windows/GPU/PDIC parity remains manual.
+
+
+## Issue #562 — Crop export Settings physical owners (2026-10-21; Draft PR #594 expansion)
+
+- Physically move `single_line_merge_settings.py` → `crop/single_line_merge_settings.py` and `unlined_export_filter_settings.py` → `crop/unlined_export_filter_settings.py`, without root shims. This expands the existing UI progress/bookmarks candidate PR, not a new overlapping PR.
+- Update export runners, Settings UI/controllers and regression imports, relocate source-path mutation guards instead of deleting or relaxing them. Retain per-page output manifests, project-local settings JSON paths, single-line crop merge semantics, unlined-row filtering and all persisted Profile/PDIC/PPP/SECTION data.
+- Until exact-head full 3-OS × Python 3.10/3.13, GUI, wheel, CodeQL, review and postmerge main CI are verified, this is a candidate, NOT an accepted migration. Real scanned-page/Windows GUI/GPU parity requires human validation.
+
+
+## Issue #562 — Auxiliary crop boundaries and UI controller (2026-10-21; Draft PR #594)
+
+- True owner moves: `auxiliary_lines.py` → `crop/auxiliary_lines.py` for independent JSON sidecar and atomic storage; `auxiliary_line_controller.py` → `ui/auxiliary_line_controller.py` for Tk geometry and user edits. No root shims.
+- Preserve source-image coordinates, auxiliary gap boundaries, undo/redo, per-page switching and direct PDIC independence. Update App, processing core, monkeypatch tests, architecture guard and source-tree ownership checks.
+- Not yet accepted: complete exact-head CI + CodeQL + GUI + wheel + reviews + postmerge main; real image/UI/Windows parity awaits human acceptance.
+
+
+## Issue #562 — Refinement LayoutRows reuse and inference policy leaves (2026-10-21; Draft #594)
+
+- Physical no-shim moves: `marker_refinement_layoutrows.py` → `refinement/layoutrows.py`; `inference_performance.py` → `quality/inference_performance.py`. Move only the rule/cache reuse helpers and Paddle-agnostic inference settings policy, *not* the LayoutRows cache, refinement worker, GPU model constructors or Windows spawn runtime itself.
+- Update both static and deferred imports, tests including policy monkeypatch target, and a stricter physical-owner guard. Preserve source-coordinate cache guards, Settings/CUDA policy, algorithm defaults and Model/PDIC/PPP/SECTION serialization by keeping function implementations unchanged apart from relative import resolution.
+- Require exact-head Python 3.10/3.13 × Windows/macOS/Ubuntu, guard, GUI smoke, wheel, CodeQL, reviews and postmerge main CI; real Y/pixel/Windows GPU manual parity still pending.
+
+
+## Issue #562 — Shared adaptive analysis denoising owner (2026-10-21; Draft #594)
+
+- Physically relocate `adaptive_denoise.py` → `preprocess/adaptive_denoise.py` with zero algorithm changes and no root shim; the direct analysis-image builder, Layout replay, visualization controls and performance profile now import its canonical package path.
+- Preserve environment-driven denoise strength, integral-mask semantics and punctuation/diacritic protection. Update existing source-ownership test to require the new owner, retaining its checks for other root facades. Add architecture guard against old path restoration; cross-platform GUI and real scans remain separate gates.
+
+
+## Issue #562 — Large-head inspection UI diagnostic leaf (2026-10-21; Draft #594)
+
+- Physical owner `large_head_visualization_ui.py` → `ui/large_head_visualization.py`, without root shim. Update opt-in overlays, compact display menu, Layout summary, ordinary inspector and relevant monkeypatch tests to canonical owner. Preserve only observational diagnostics and JSON export; no detection thresholds, PDIC/PPP writes, GPU lifetime, layout policy, or Settings persistence changes.
+- Ratchet architecture ownership path; full CI/CodeQL/GUI/wheel, review and postmerge main still required. Human scanned-page diagnostic parity unverified.
+
+
+## Issue #562 — OCR crop preview UI read-only owner (2026-10-21; Draft #594)
+
+- Move `ocr_crop_preview_ui.py` physically to `ui/ocr_crop_preview.py`, no root shim. App keeps the same two redraw-time invocations; the preview uses the canonical OCR crop box, source canvas coordinates, regular/oversized preview colouring and active manual-review entry highlight.
+- Existing architecture mutation guard now reads the new canonical path, with additional root-owner denial, and focused tests use the new module. OCR backend, model initialization, manual review state and PDIC fields are not altered; acceptance still requires full PR and main gates.
+
+
+## Issue #562 — Layout stage-replay UI ownership (2026-10-21; Draft #594)
+
+- Physically move `layout_step_replay_ui.py` → `ui/layout_step_replay.py`, no root shim. Deferred call from `layout_visualization_ui_v3` now points to UI owner; simulation traces, physical-row diagnostics, overlay/PPP read-only evidence and callback semantics retained. Runtime diagnostic test now expects actual module path, with no weakening of stage annotations.
+- Retain Layout detector/physical-indent/cache/visualization installer root facades. Mandatory CI, GUI smoke, wheel, CodeQL and real Windows scanned-page manual review remain pending.
+
+
+## Issue #562 — Deferred document unwarping preprocessing owner (2026-10-21; Draft #594)
+
+- Move `document_unwarping.py` → `preprocess/document_unwarping.py`, with no model lifetime, GPU initialization or image algorithm change; only resolve parent-relative imports to the same existing Windows GPU initialization guard and environment resolver.
+- Tighten source-path ownership and the existing run-time regression so it still verifies the Windows DLL helper executes BEFORE the deferred `paddleocr.DocPreprocessor` import at the moved canonical path; do not weaken or skip timing assertions.
+- Requires exact-head cross-platform/CodeQL and real GPU model-owner/manual validation before acceptance.
+
+
+## Issue #562 — Platform-aware Tk UI compatibility functions (2026-10-21; Draft #594)
+
+- Physically move internal `ui_compat.py` to `ui/compat.py` without introducing a legacy root shim; callers in dialogs, controllers, canvas overlays, Project Profile setup and Environment Center reference the same font/work-area helpers through the canonical owner.
+- Preserve Tk font selection, native Windows caption semantics, geometry and user settings; function code is unchanged. Do not move public launcher/GUI entrypoints or alter startup side effects. CI and human Windows/macOS Tk parity remain acceptance gates.

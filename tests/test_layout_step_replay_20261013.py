@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture import layout_core_understanding as core
 from picture_capture.layout.step_trace import LayoutStepTrace, diff_rows
-from picture_capture.layout_step_replay_ui import (
+from picture_capture.ui.layout_step_replay import (
     _format_stage, _row_at_position, _run_replay, _stage_rows_for_display,
     _preview_at_stage, _stage_entries_for_display,
 )

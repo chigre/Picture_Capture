@@ -276,7 +276,7 @@ def test_ref_delete_only_via_cross_not_keyboard_or_context_menu():
 def test_ref_body_font_uses_same_main_entry_zoom_contract(
     tmp_path, monkeypatch, follow_zoom, zoom, expected,
 ):
-    import picture_capture.ui_compat as fonts
+    import picture_capture.ui.compat as fonts
     from picture_capture.ui.overlay_layout_helpers import effective_main_overlay_font_size
 
     app, ctl = editor_with_box(tmp_path)
@@ -325,7 +325,7 @@ def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content
     tmp_path, monkeypatch,
 ):
     import picture_capture.ui.ref_box_controller as ref_ui
-    import picture_capture.ui_compat as fonts
+    import picture_capture.ui.compat as fonts
 
     app, editor = editor_with_box(tmp_path)
     editor._commit([
@@ -372,7 +372,7 @@ def test_canvas_render_hides_only_ref_text_not_green_background_or_saved_content
 
 def test_ref_show_text_false_keeps_edit_mode_overlay_usable(tmp_path, monkeypatch):
     import picture_capture.ui.ref_box_controller as ref_ui
-    import picture_capture.ui_compat as fonts
+    import picture_capture.ui.compat as fonts
 
     app, editor = editor_with_box(tmp_path)
     app.settings.ref_box_show_text = False
@@ -441,7 +441,7 @@ def test_ref_text_label_can_show_without_original_frame_and_select_for_edit(
     tmp_path, monkeypatch,
 ):
     import picture_capture.ui.ref_box_controller as ref_ui
-    import picture_capture.ui_compat as fonts
+    import picture_capture.ui.compat as fonts
 
     app, editor = editor_with_box(tmp_path)
     app.settings.ref_box_show = False

@@ -8,5 +8,9 @@ def test_preprocessing_owners_are_physical_and_root_facade_is_retained() -> None
     for old, new in canonical.items():
         assert not (root / (old + ".py")).exists(), old
         assert (root / "preprocess" / (new + ".py")).is_file(), new
-    for preserved in ("image_preprocessing.py", "image_utils.py", "adaptive_denoise.py", "document_unwarping.py"):
+    assert not (root / "adaptive_denoise.py").exists()
+    assert (root / "preprocess" / "adaptive_denoise.py").is_file()
+    assert not (root / "document_unwarping.py").exists()
+    assert (root / "preprocess" / "document_unwarping.py").is_file()
+    for preserved in ("image_preprocessing.py", "image_utils.py"):
         assert (root / preserved).is_file(), preserved

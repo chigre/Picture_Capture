@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from pathlib import Path
 from dataclasses import replace
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -21,9 +20,7 @@ import unicodedata
 import webbrowser
 import tkinter as tk
 from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, ttk
-
 from PIL import Image, ImageTk
-
 from . import __version__
 from .project import parameter_templates as _project_templates
 from .appearance import (
@@ -46,12 +43,10 @@ from .pdic_restore import (
     build_page_lookup as _build_words_page_lookup, parse_merged_pdic_text as _parse_merged_pdic_text,
     resolve_page_token as _resolve_words_page_token, write_pdic_atomic as _write_pdic_atomic,
 )
-
 from .proofreading.page_word_mapping import (
     _compare_page_word_mappings, _compare_page_word_sequences,
     _fill_page_entries, _page_word_mapping_text, _parse_words_of_pages_text,
 )
-
 from .proofreading.text_helpers import (
     _has_distinct_ocr_alternatives,
     _candidate_choice_rows,
@@ -66,11 +61,9 @@ from .proofreading.text_helpers import (
     _review_similarity_key,
     _review_text_similarity,
 )
-
 from .proofreading.crop_extension import (
     extended_review_crop_box, parse_review_crop_multiplier,
 )
-
 from .geometry.layout_percent_helpers import (
     LAYOUT_PERCENT_AXES,
     _column_percent_to_pixels,
@@ -83,7 +76,6 @@ from .geometry.layout_percent_helpers import (
     _review_height_percent_to_pixels,
     _review_height_pixels_to_percent,
 )
-
 from .project.page_list_helpers import (
     bookmarked_page_indices, _fill_status_cell_style,
     _natural_text_key, _sorted_page_list_rows,
@@ -108,7 +100,7 @@ from .paddle_headwords import (
 )
 from .environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
-from .ui_compat import (
+from .ui.compat import (
     AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
     normalize_content_font_setting, preferred_font_family, resolve_content_font_family,
 )
@@ -221,10 +213,10 @@ from .illustration.fill_opacity import (
     clear_alpha_polygon_records,
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
-from .ocr_crop_preview_ui import draw_ocr_crop_preview
+from .ui.ocr_crop_preview import draw_ocr_crop_preview
 from .layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
-from .auxiliary_line_controller import AuxiliaryLineController
-from .auxiliary_lines import AuxiliaryLineEdits
+from .ui.auxiliary_line_controller import AuxiliaryLineController
+from .crop.auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification
 from .project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
@@ -11750,7 +11742,7 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        from .batch_progress_budget import (
+        from .ui.batch_progress_budget import (
             SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
             start_batch_poll_budget,
         )

@@ -6,7 +6,7 @@ import json
 
 from PIL import Image
 
-from picture_capture.single_line_merge_settings import (
+from picture_capture.crop.single_line_merge_settings import (
     MERGE_KEY,
     MERGE_LABEL,
     WHITE_TRIM_THRESHOLD,
@@ -169,7 +169,7 @@ def test_merge_all_blank_page_creates_no_useless_page_image(tmp_path):
 def test_single_line_merge_is_output_only_and_page_worker_reads_crop_option():
     root = Path(__file__).resolve().parents[1]
     merge_source = (
-        root / "src" / "picture_capture" / "single_line_merge_settings.py"
+        root / "src" / "picture_capture" / "crop" / "single_line_merge_settings.py"
     ).read_text(encoding="utf-8")
     worker_source = (
         root / "src" / "picture_capture" / "single_line_parallel.py"

@@ -150,7 +150,7 @@ def test_row_padding_only_requires_no_layout_detector(tmp_path, monkeypatch):
 def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path, monkeypatch):
     """GUI forces the refinement-only switch, but cached page geometry is unchanged."""
     from picture_capture.design import layout_policy as policy
-    from picture_capture import marker_refinement_layoutrows as reuse
+    from picture_capture.refinement import layoutrows as reuse
     original = _settings()
     original.paddle_refine_separator_y = False
     page = tmp_path / "scan.png"
@@ -183,7 +183,7 @@ def test_explicit_refine_switch_does_not_invalidate_physical_layoutrows(tmp_path
 
 
 def test_unrelated_setting_difference_does_not_invalidate_refinement_json(tmp_path):
-    from picture_capture import marker_refinement_layoutrows as reuse
+    from picture_capture.refinement import layoutrows as reuse
     settings = _settings()
     settings.paddle_refine_separator_y = False
     page = tmp_path / "scan.png"
