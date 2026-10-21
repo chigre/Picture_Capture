@@ -12,7 +12,7 @@ from PIL import Image, ImageFilter, ImageOps
 from .models import AppSettings
 from .runtime_environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
-from .layout_transform import LayoutTransform
+from .geometry.layout_transform import LayoutTransform
 
 
 @dataclass(slots=True)

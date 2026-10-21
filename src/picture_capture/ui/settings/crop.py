@@ -5,7 +5,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
-from ...coordinate_space import SOURCE_COORDINATE_SPACE
+from ...geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from ...crop.settings import (
     CROP_SETTINGS_VERSION,
     DEFAULT_UNLINED_LEFT_WHITE_PERCENT,

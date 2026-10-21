@@ -49,7 +49,7 @@ from .pdic_restore import (
     write_pdic_atomic as _write_pdic_atomic,
 )
 
-from .page_word_mapping import (
+from .proofreading.page_word_mapping import (
     _compare_page_word_mappings,
     _compare_page_word_sequences,
     _fill_page_entries,
@@ -89,7 +89,7 @@ from .geometry.layout_percent_helpers import (
     _review_height_pixels_to_percent,
 )
 
-from .page_list_helpers import (
+from .project.page_list_helpers import (
     bookmarked_page_indices,
     _fill_status_cell_style,
     _natural_text_key,
@@ -156,8 +156,8 @@ from .layout_detection_actions import (
     detect_layout_current as _run_detect_layout_current,
     detect_layout_consistency_selected as _run_detect_layout_consistency_selected,
 )
-from .layout_transform import LayoutTransform
-from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
+from .geometry.layout_transform import LayoutTransform
+from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .crop.settings import (
     CROP_SETTINGS_VERSION,
     normalize_crop_settings_payload as _normalize_crop_settings_payload,

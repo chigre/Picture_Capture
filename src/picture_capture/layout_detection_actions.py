@@ -14,9 +14,9 @@ from tkinter import messagebox
 
 from PIL import Image
 
-from .coordinate_space import SOURCE_COORDINATE_SPACE
+from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
-from .layout_transform import LayoutTransform
+from .geometry.layout_transform import LayoutTransform
 from .project_storage import exports_root
 
 

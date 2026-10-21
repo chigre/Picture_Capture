@@ -6,7 +6,7 @@ This module is deliberately UI-free. Both the main application and crop dialogs
 use the same version/normalization contract without depending on one another.
 """
 
-from ..coordinate_space import SOURCE_COORDINATE_SPACE
+from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from ..project_storage import qt_root
 import json
 from pathlib import Path
