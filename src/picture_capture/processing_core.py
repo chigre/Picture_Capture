@@ -2455,8 +2455,8 @@ def _ordinary_marker_local_crop(
     text, change a marker, or silently reverse CJK strings.
     """
     from .entry_classification import get_entry_classification
-    from .entry_ocr_crop import entry_ocr_crop_box
-    from .entry_ocr_visual_scale import visual_oversized_head_height
+    from .ocr.entry_crop import entry_ocr_crop_box
+    from .ocr.entry_visual_scale import visual_oversized_head_height
 
     metrics_height = (
         float(row_metrics.line_height) if row_metrics is not None
@@ -2511,7 +2511,7 @@ def ocr_existing_entry_words_from_markers(
     ordered = sort_entries_reading_order(entries, geometry, page_sections)
 
     from .profile.dictionary import effective_project_profile_id, load_dictionary_profile
-    from .entry_ocr_crop import resolve_entry_ocr_row_metrics
+    from .ocr.entry_crop import resolve_entry_ocr_row_metrics
     from .ocr_channel import OcrChannelSession, OcrTextChoice, choose_ocr_text
     from .paddle_headwords import parse_headword_text
     from .ordinary.marker_ocr_text import bracketed_ocr_lemma

@@ -12,11 +12,11 @@ import tkinter as tk
 from tkinter import ttk
 
 from .entry_classification import get_entry_classification
-from .entry_ocr_crop import (
+from .ocr.entry_crop import (
     entry_ocr_crop_box,
     resolve_entry_ocr_row_metrics,
 )
-from .entry_ocr_visual_scale import visual_oversized_head_height
+from .ocr.entry_visual_scale import visual_oversized_head_height
 
 
 REGULAR_COLOR = "#2B7FFF"

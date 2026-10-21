@@ -34,8 +34,9 @@ def test_layout_cohort_is_physical_and_root_modules_are_absent():
         canonical = ROOT / "layout" / (former.removeprefix("layout_") + ".py")
         assert canonical.is_file(), str(canonical)
         assert not (ROOT / (former + ".py")).exists(), former
-    # Historical no-op compatibility entry is deliberately retained.
-    assert (ROOT / "layout_visualization_role_theme.py").is_file()
+    # Migrated historical role color owner is physical, not a root shim.
+    assert not (ROOT / "layout_visualization_role_theme.py").exists()
+    assert (ROOT / "layout/visualization_role_theme.py").is_file()
 
 
 def test_no_static_or_dotted_dynamic_import_of_removed_layout_owners():

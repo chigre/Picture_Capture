@@ -44,7 +44,7 @@ def cpu_pool_config(
     """
     available = max(1, int(cpus if cpus is not None else os.cpu_count() or 1))
     if requested_workers is None:
-        from .runtime_environment import runtime_setting
+        from ..runtime_environment import runtime_setting
         requested_workers = (os.environ.get(_WORKERS)
                              or os.environ.get("PICTURE_CAPTURE_PADDLE_CPU_WORKERS")
                              or str(runtime_setting("paddle_cpu_workers", "auto")))
@@ -80,12 +80,12 @@ def cpu_ordinary_page_job(
     # Advisory only: NumPy/Paddle imported during Windows spawn bootstrap may
     # have already initialized BLAS. cpu_threads is the authoritative control.
     os.environ["OMP_NUM_THREADS"] = str(per)
-    from .runtime_environment import resolve_paddle_device
+    from ..runtime_environment import resolve_paddle_device
 
     resolve_paddle_device.cache_clear()
     if resolve_paddle_device() != "cpu":
         raise RuntimeError("CPU pool worker unexpectedly resolved a GPU device")
-    from .processing import detect_entries_job
+    from ..processing import detect_entries_job
     return detect_entries_job(image_path, settings, pages, page_index)
 
 

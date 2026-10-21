@@ -12,9 +12,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from .models import AppSettings, Entry
-from .ordinary_large_head_evidence import _candidate_boxes, _uses_cjk_large_heads
-from .ordinary_visual import _otsu
+from ..models import AppSettings, Entry
+from ..ordinary.large_head_evidence import _candidate_boxes, _uses_cjk_large_heads
+from ..ordinary.visual import _otsu
 
 
 def visual_oversized_head_height(

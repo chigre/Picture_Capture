@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
-from picture_capture.ordinary_large_head_evidence import (
+from picture_capture.ordinary.large_head_evidence import (
     detect_ordinary_large_head_entries,
 )
 from picture_capture import large_head_visualization_ui as ui

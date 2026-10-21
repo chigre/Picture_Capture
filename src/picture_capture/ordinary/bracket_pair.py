@@ -11,8 +11,8 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-from .models import Entry
-from .geometry.visual_boundary_locator import safe_gap_above
+from ..models import Entry
+from ..geometry.visual_boundary_locator import safe_gap_above
 
 
 

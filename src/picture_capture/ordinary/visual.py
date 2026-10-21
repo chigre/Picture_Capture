@@ -14,8 +14,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from .image_utils import normalize_page_rgb
-from .models import AppSettings, Entry
+from ..image_utils import normalize_page_rgb
+from ..models import AppSettings, Entry
 
 
 @dataclass(slots=True)

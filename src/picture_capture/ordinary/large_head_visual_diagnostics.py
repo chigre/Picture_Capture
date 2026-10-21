@@ -14,16 +14,16 @@ from typing import Any
 
 from PIL import Image
 
-from .image_utils import build_analysis_image
-from .models import AppSettings
-from .layout_core_understanding import understand_layout_core
-from .profile.semantics import effective_page_settings
+from ..image_utils import build_analysis_image
+from ..models import AppSettings
+from ..layout_core_understanding import understand_layout_core
+from ..profile.semantics import effective_page_settings
 
 
 def _nearest_layout_row(
     layout: Any, item: dict[str, Any],
 ) -> tuple[str, str]:
-    from .entry_classification import get_layout_line_classification
+    from ..entry_classification import get_layout_line_classification
 
     index = int(item["column"])
     columns = list(getattr(layout, "columns", ()) or ())
@@ -74,8 +74,8 @@ def _diagnostic_settings(effective: AppSettings) -> dict[str, Any]:
 
 def _diagnostic_layout(layout: Any) -> dict[str, Any]:
     """Serialize physical row evidence from the SAME traced Layout run."""
-    from .entry_classification import get_layout_line_classification
-    from .layout_physical_indent import normalized_physical_indents
+    from ..entry_classification import get_layout_line_classification
+    from ..layout_physical_indent import normalized_physical_indents
 
     rows: list[dict[str, Any]] = []
     for col_index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
@@ -145,8 +145,8 @@ def build_large_head_diagnostics(
     source_image_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return diagnostic data from the *real*, unmodified CJK detection code."""
-    from . import processing
-    from .ordinary_large_head_evidence import _uses_cjk_large_heads
+    from .. import processing
+    from ..ordinary.large_head_evidence import _uses_cjk_large_heads
 
     result: dict[str, Any] = {
         "enabled": False, "candidates": [], "final_lines": [],
@@ -187,7 +187,7 @@ def build_large_head_diagnostics(
             # the normal shared Layout cache.
             candidate_image = analysis
             if bool(getattr(effective, "layout_mask_illustrations", False)):
-                from .layout.illustration_mask import mask_large_illustrations_for_layout
+                from ..layout.illustration_mask import mask_large_illustrations_for_layout
                 candidate_image, _stats = mask_large_illustrations_for_layout(
                     analysis, effective, profile_page_index=int(page_index),
                     **({"source_image_path": saved_ppp_source}
@@ -235,7 +235,7 @@ def build_large_head_diagnostics(
                 "source": str(getattr(entry, "ocr_source", "") or ""),
                 "oversized": bool(getattr(entry, "ocr_oversized_cjk", False)),
             } for entry in final_entries]
-            from .ordinary.unified_diagnostics import (
+            from ..ordinary.unified_diagnostics import (
                 SCHEMA, compose_ordinary_evidence_report,
             )
             unified = compose_ordinary_evidence_report(

@@ -26,10 +26,10 @@ from .layout_physical_indent import (
     normalize_layout_roles,
 )
 from .models import AppSettings, Entry
-from .ordinary_evidence_fusion import promote_evidence_to_layout_roles
-from .ordinary_large_head_evidence import detect_ordinary_large_head_entries
+from .ordinary.evidence_fusion import promote_evidence_to_layout_roles
+from .ordinary.large_head_evidence import detect_ordinary_large_head_entries
 from .ordinary.symbol_evidence import detect_ordinary_symbol_entries
-from .page_understanding import (
+from .layout.page_understanding import (
     PageUnderstanding,
     _apply_explicit_indent_semantics,
     _generic_body_indent_is_proven,

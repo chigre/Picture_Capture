@@ -52,7 +52,7 @@ def get_large_head_debug_snapshot(app: Any) -> dict[str, Any]:
         and key == getattr(app, "_large_head_debug_snapshot_key", None)
     ):
         return existing
-    from .large_head_visual_diagnostics import build_large_head_diagnostics
+    from .ordinary.large_head_visual_diagnostics import build_large_head_diagnostics
 
     result = build_large_head_diagnostics(
         app.image, app.settings,

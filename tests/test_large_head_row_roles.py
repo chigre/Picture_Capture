@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from picture_capture.entry_classification import get_layout_line_classification
 from picture_capture.models import Entry
-from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
+from picture_capture.ordinary.evidence_fusion import promote_evidence_to_layout_roles
 
 
 class _IdentityTransform:

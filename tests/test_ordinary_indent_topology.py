@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary.cjk_large_heads import recover_cjk_oversized_heads
-from picture_capture.ordinary_indent_topology import (
+from picture_capture.ordinary.indent_topology import (
     _observe_column,
     _observe_column_raw,
     finalize_indented_topology,

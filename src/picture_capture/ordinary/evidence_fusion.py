@@ -21,9 +21,9 @@ and proofreading; it never changes separator-Y refinement.
 
 from typing import Any, Iterable
 
-from .entry_classification import register_layout_line_classification
-from .models import Entry
-from .ordinary_large_head_role_guard import strong_ordinary_large_head
+from ..entry_classification import register_layout_line_classification
+from ..models import Entry
+from ..ordinary.large_head_role_guard import strong_ordinary_large_head
 
 
 def _is_oversized_head_evidence(evidence: Entry) -> bool:

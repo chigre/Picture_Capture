@@ -16,14 +16,14 @@ than letting one family silently erase another.
 
 from dataclasses import replace
 
-from .layout.generic_block_roles import block_after_separator, generic_entry_candidates
-from .models import Entry
-from .page_understanding import (
+from ..layout.generic_block_roles import block_after_separator, generic_entry_candidates
+from ..models import Entry
+from ..layout.page_understanding import (
     PageUnderstanding,
     _column_for_source_point,
     block_evidence_for_entry,
 )
-from .symbol_evidence import fuse_symbol_evidence, is_symbol_positive_entry
+from ..symbol_evidence import fuse_symbol_evidence, is_symbol_positive_entry
 
 
 def _append_issue(entry: Entry, issue: str) -> Entry:

@@ -30,7 +30,7 @@ from PIL import Image, ImageOps
 from . import page_design as base
 from ..layout_detection import analysis_ink_mask
 from ..models import AppSettings, Entry
-from ..ordinary_visual import _patch_similarity
+from ..ordinary.visual import _patch_similarity
 from ..profile.semantics import page_template_analysis_image
 
 

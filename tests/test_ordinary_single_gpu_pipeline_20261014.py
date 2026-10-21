@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from picture_capture.ordinary_gpu_pipeline import (
+from picture_capture.ordinary.gpu_pipeline import (
     PreparedLayoutEstimate,
     detect_entries_staged_job,
     prepare_gpu_layout_job,

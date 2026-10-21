@@ -7,8 +7,8 @@ from PIL import Image, ImageDraw
 
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
-from picture_capture.ordinary_large_head_evidence import detect_ordinary_large_head_entries
+from picture_capture.ordinary.evidence_fusion import promote_evidence_to_layout_roles
+from picture_capture.ordinary.large_head_evidence import detect_ordinary_large_head_entries
 from picture_capture.ordinary.symbol_evidence import detect_ordinary_symbol_entries
 from picture_capture.visual.marker_templates import (
     build_visual_marker_sample,
@@ -149,7 +149,7 @@ def test_large_head_detector_is_cjk_gated_and_independent_from_legacy_module():
     )
     assert detect_ordinary_large_head_entries(image, understanding, latin) == []
 
-    import picture_capture.ordinary_large_head_evidence as module
+    import picture_capture.ordinary.large_head_evidence as module
 
     source = open(module.__file__, "r", encoding="utf-8").read()
     # A docstring may name the historical module while explaining independence;

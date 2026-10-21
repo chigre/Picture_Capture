@@ -10,7 +10,7 @@ import threading
 
 import pytest
 
-from picture_capture.ordinary_parallel import ordinary_draw_workers
+from picture_capture.ordinary.parallel import ordinary_draw_workers
 
 
 def test_ordinary_worker_policy_serializes_even_on_24_core_gpu_machine(monkeypatch):

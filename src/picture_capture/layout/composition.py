@@ -125,7 +125,7 @@ def understand_composed_page(
     This is an opt-in service in Phase 13E1. GUI and worker routing stays
     unchanged until the full parity and cache/persistence gates are green.
     """
-    from .. import page_understanding
+    from ..layout import page_understanding as page_understanding
 
     ops = explicit_physical_layout_ops()
 

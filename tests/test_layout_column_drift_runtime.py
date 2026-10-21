@@ -16,7 +16,7 @@ from picture_capture.layout.column_drift import (
     remeasure_layout_indents_from_ink,
 )
 from picture_capture.geometry.layout_transform import LayoutTransform
-from picture_capture.ordinary_large_head_evidence import (
+from picture_capture.ordinary.large_head_evidence import (
     detect_ordinary_large_head_entries,
 )
 
@@ -230,7 +230,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     policy = (root / "src/picture_capture/design/layout_policy.py").read_text(encoding="utf-8")
     unlined = (root / "src/picture_capture/unlined/physical_rows_resolver.py").read_text(encoding="utf-8")
     large_head = (
-        root / "src/picture_capture/ordinary_large_head_evidence.py"
+        root / "src/picture_capture/ordinary/large_head_evidence.py"
     ).read_text(encoding="utf-8")
     physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
 
@@ -247,7 +247,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
         assert "install_layout_column_drift_runtime" not in source
     assert not (root / "src/picture_capture/spawn_layout_runtime.py").exists()
     assert not (root / "src/picture_capture/ordinary_large_head_runtime.py").exists()
-    assert "from .layout.column_drift import _analysis_left_for_column" in large_head
+    assert "from ..layout.column_drift import _analysis_left_for_column" in large_head
     assert "strict_candidate_starts_at_row_front" in large_head
     assert "layout_column_drift_runtime" not in large_head
     assert "count = min(256, count)" in physical

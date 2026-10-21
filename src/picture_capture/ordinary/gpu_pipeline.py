@@ -128,12 +128,12 @@ def prepare_gpu_layout_job(
     image_path: str, settings: Any, page_index: int,
 ) -> PreparedLayoutEstimate:
     """One GPU model-owning process; no PDIC, baseline or settings writes."""
-    from .image_utils import build_analysis_image, normalize_page_rgb
-    from .profile.semantics import effective_page_settings
-    from .layout_detection import detect_layout_parameters
+    from ..image_utils import build_analysis_image, normalize_page_rgb
+    from ..profile.semantics import effective_page_settings
+    from ..layout_detection import detect_layout_parameters
 
     from time import perf_counter
-    from .quality.draw_performance_profile import enabled as profile_enabled, record_page
+    from ..quality.draw_performance_profile import enabled as profile_enabled, record_page
     profiling = profile_enabled()
     tick = perf_counter()
     stages = {}
@@ -206,7 +206,7 @@ def detect_entries_staged_job(
     profile_page_index: int, prepared: PreparedLayoutEstimate,
 ) -> int:
     """CPU stage: the original per-page worker with a strict injected estimate."""
-    from . import processing
+    from .. import processing
 
     verify_prepared_source(image_path, profile_page_index, prepared)
     # The actual worker continues to own reading, LayoutRows capture, automatic

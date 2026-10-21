@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.geometry.layout_transform import LayoutTransform
-from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
+from picture_capture.ordinary.bracket_pair import recover_bracketed_ordinary_entries
 from picture_capture.geometry.visual_boundary_locator import safe_gap_above
 
 
@@ -75,7 +75,7 @@ def test_bracket_boundary_is_stable_when_existing_entry_is_source_space():
 
 def test_cjk_bracket_scan_keeps_script_identity_in_vertical_writing():
     from picture_capture.models import AppSettings
-    from picture_capture.page_understanding import (
+    from picture_capture.layout.page_understanding import (
         uses_cjk_role_model, uses_cjk_script,
     )
 

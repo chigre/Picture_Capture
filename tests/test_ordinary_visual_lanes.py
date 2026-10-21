@@ -3,7 +3,7 @@ from __future__ import annotations
 from PIL import Image, ImageDraw
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ordinary_visual import recover_ordinary_visual_entries
+from picture_capture.ordinary.visual import recover_ordinary_visual_entries
 from picture_capture.processing import derive_nominal_geometry
 
 

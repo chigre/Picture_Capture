@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from picture_capture.entry_classification import register_entry_classification
-from picture_capture.entry_ocr_crop import (
+from picture_capture.ocr.entry_crop import (
     EntryOcrRowMetrics,
     entry_ocr_content_height,
     entry_ocr_crop_box,

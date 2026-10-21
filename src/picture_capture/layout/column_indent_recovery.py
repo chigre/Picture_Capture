@@ -17,7 +17,7 @@ from PIL import Image
 from ..design import page_design as base
 from ..entry_classification import register_layout_line_classification
 from ..models import Entry
-from ..page_understanding import uses_cjk_role_model
+from ..layout.page_understanding import uses_cjk_role_model
 
 
 def _weak_columns(layout: Any, *, cjk: bool = False) -> list[int]:
@@ -151,7 +151,7 @@ def restore_proven_column_indents(
     )
     bracket_by_column: dict[int, list[int]] = {}
     if cjk and bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True)):
-        from ..ordinary_bracket_pair import recover_bracketed_ordinary_entries
+        from ..ordinary.bracket_pair import recover_bracketed_ordinary_entries
         transform = layout.transform
         rotated = str(getattr(transform, "kind", "identity")) != "identity"
         canonical = transform.canonical_image_for_analysis(image) if rotated else image

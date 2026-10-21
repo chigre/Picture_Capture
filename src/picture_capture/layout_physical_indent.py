@@ -25,7 +25,7 @@ def _raw_projection_runs(
     *,
     debug: dict[str, Any] | None = None,
 ) -> tuple[list[tuple[int, int]], np.ndarray, float]:
-    from .ordinary_visual import _runs
+    from .ordinary.visual import _runs
 
     if ink.ndim != 2 or ink.size == 0:
         return [], np.zeros(0, dtype=float), 0.0
@@ -224,7 +224,7 @@ def projection_line_runs(
 
 def _credible_first_ink_x(line: np.ndarray, reference: float) -> int | None:
     """Return the first real leading mark, including thin horizontal glyphs."""
-    from .ordinary_visual import _fill_short_gaps, _runs
+    from .ordinary.visual import _fill_short_gaps, _runs
 
     if line.ndim != 2 or line.size == 0:
         return None
@@ -681,7 +681,7 @@ def _install_policy_finalization() -> None:
 
 
 def _install_page_understanding_finalization() -> None:
-    from . import page_understanding
+    from .layout import page_understanding as page_understanding
 
     if getattr(page_understanding, "_physical_indent_finalizer_installed", False):
         return

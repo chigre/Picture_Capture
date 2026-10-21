@@ -19,7 +19,7 @@ from PIL import Image, ImageFilter
 
 from ..illustration.detection import _rle_components
 from ..models import AppSettings, Entry
-from ..page_understanding import uses_cjk_role_model
+from ..layout.page_understanding import uses_cjk_role_model
 
 
 def _first_ink_after_separator(

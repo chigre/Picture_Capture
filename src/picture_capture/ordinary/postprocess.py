@@ -22,7 +22,7 @@ from PIL import Image
 
 from ..image_utils import normalize_page_rgb
 from ..models import AppSettings, Entry
-from ..ordinary_visual import (
+from ..ordinary.visual import (
     _body_lane,
     _column_band_gray,
     _duplicate,

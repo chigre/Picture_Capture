@@ -6,7 +6,7 @@ from picture_capture.design import layout_policy as policy
 from picture_capture.layout import composition as layout_composition
 from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical
-from picture_capture import page_understanding as page
+from picture_capture.layout import page_understanding as page
 from picture_capture.layout.profile_anchor import anchor_resolved_layout_to_profile
 from picture_capture.models import AppSettings
 

@@ -791,6 +791,30 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical page helper owner missing: {canonical}")
 
+    # Issue #562 expanded evidence package ownership gate: never restore root shims.
+    evidence_batch15 = {
+        "ordinary_bracket_pair": "ordinary/bracket_pair.py",
+        "ordinary_cpu_pool": "ordinary/cpu_pool.py",
+        "ordinary_evidence_fusion": "ordinary/evidence_fusion.py",
+        "ordinary_gpu_pipeline": "ordinary/gpu_pipeline.py",
+        "ordinary_indent_topology": "ordinary/indent_topology.py",
+        "ordinary_large_head_evidence": "ordinary/large_head_evidence.py",
+        "ordinary_large_head_role_guard": "ordinary/large_head_role_guard.py",
+        "ordinary_parallel": "ordinary/parallel.py",
+        "ordinary_visual": "ordinary/visual.py",
+        "entry_ocr_crop": "ocr/entry_crop.py",
+        "entry_ocr_visual_scale": "ocr/entry_visual_scale.py",
+        "page_understanding": "layout/page_understanding.py",
+        "page_understanding_fusion": "layout/page_understanding_fusion.py",
+        "large_head_visual_diagnostics": "ordinary/large_head_visual_diagnostics.py",
+        "layout_visualization_role_theme": "layout/visualization_role_theme.py",
+    }
+    for former, owner in evidence_batch15.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired evidence root returned: {former}.py")
+        if not (PACKAGE_ROOT / owner).is_file():
+            violations.append(f"missing evidence physical owner: {owner}")
+
     return violations
 
 

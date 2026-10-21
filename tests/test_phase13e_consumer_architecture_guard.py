@@ -21,7 +21,7 @@ def test_migrated_physical_and_full_consumers_use_explicit_composition():
 
 
 def test_explicit_full_service_has_isolated_raw_understanding_owner():
-    full = _source("page_understanding.py")
+    full = _source("layout/page_understanding.py")
     composed = _source("layout/composition.py")
     assert "_RAW_UNDERSTAND_PAGE = understand_page" in full
     assert "page_understanding._RAW_UNDERSTAND_PAGE(" in composed
