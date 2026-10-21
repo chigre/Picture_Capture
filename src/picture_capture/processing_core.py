@@ -15,9 +15,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from .auxiliary_lines import read_auxiliary_lines
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
-from .coordinate_space import SOURCE_COORDINATE_SPACE
+from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb
-from .layout_transform import LayoutTransform
+from .geometry.layout_transform import LayoutTransform
 from .page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
     reading_lane_index, section_index_for_v, v_is_inside_sections,
@@ -3194,7 +3194,7 @@ def build_page_crop_plan(
     )
     auxiliary_gaps: list[tuple[int, int, int, int]] = []
     if auxiliary_lines:
-        from .auxiliary_crop_partition import partition_entry_pieces
+        from .crop.auxiliary_partition import partition_entry_pieces
         _source, _effective, _analysis, geometry = _page_geometry_context(
             image, settings, profile_page_index,
         )

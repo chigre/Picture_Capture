@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
 from picture_capture.geometry.visual_boundary_locator import safe_gap_above
 

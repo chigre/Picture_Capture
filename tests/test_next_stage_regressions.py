@@ -23,7 +23,7 @@ from picture_capture.profile.dictionary import (
 from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.layout_detection import _analysis_ink_mask
 from picture_capture.processing import (
     _collapse_ordinary_oversized_cjk_split_markers, _column_tracking_dimensions,

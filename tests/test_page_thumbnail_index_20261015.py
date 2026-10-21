@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture.page_list_helpers import _sorted_page_list_rows
+from picture_capture.project.page_list_helpers import _sorted_page_list_rows
 from picture_capture.thumbnail.tasks import ThumbnailResult
 from picture_capture.project_storage import settings_path
 from picture_capture.ui.page_thumbnails import (

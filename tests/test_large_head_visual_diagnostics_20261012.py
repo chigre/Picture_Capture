@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
 from picture_capture.ordinary_large_head_evidence import (
     detect_ordinary_large_head_entries,

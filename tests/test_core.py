@@ -33,7 +33,7 @@ from picture_capture.layout_detection import (
     infer_layout_from_boxes,
 )
 from picture_capture.layout_detection import LayoutEstimate, aggregate_layout_estimates
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.lexicon.collation import available_profile_labels, collation_key, parse_custom_order
 from picture_capture.profile.dictionary import (
     PROFILE_FORMAT_V2, PROFILE_FORMAT_V3, available_dictionary_profiles, dictionary_profile_labels,
@@ -3916,6 +3916,7 @@ def test_v296_large_words_page_resolution_uses_one_prebuilt_lookup():
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
+        / "proofreading"
         / "page_word_mapping.py"
     )
     text = source.read_text(encoding="utf-8")
@@ -7641,7 +7642,7 @@ def test_transformed_ocr_band_uses_original_source_orientation_and_box_adapter()
 
 
 def test_internal_layout_transform_round_trips_source_points():
-    from picture_capture.layout_transform import LayoutTransform
+    from picture_capture.geometry.layout_transform import LayoutTransform
 
     source_size = (1234, 1642)
     points = [(0, 0), (1, 1), (617, 821), (1233, 1641), (77, 1500)]
@@ -7713,7 +7714,7 @@ def test_training_export_uses_source_coordinates_only(tmp_path):
     from picture_capture.formats import write_pdic, write_ppp
     from picture_capture.models import AppSettings, Entry, PolygonRegion
     from picture_capture.training_export import export_training_page
-    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+    from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 
     root = tmp_path / "dict"
     root.mkdir()
@@ -7803,7 +7804,7 @@ def test_crop_log_declares_source_image_coordinate_space(tmp_path):
 
 def test_old_crop_coordinate_formats_are_ignored():
     from picture_capture.app import _normalize_crop_settings_payload
-    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+    from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
     from picture_capture.models import AppSettings
 
     settings = AppSettings(start_y=100, bottom_y=1800, crop_to_bottom_y=True)
@@ -7875,7 +7876,7 @@ def test_page_sections_override_general_crop_bounds():
 
 
 def test_page_crop_plan_declares_source_coordinate_space():
-    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+    from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
     from picture_capture.processing import PageCropPlan, page_crop_plan_dict
 
     payload = page_crop_plan_dict(PageCropPlan([], [], True))
@@ -7887,7 +7888,7 @@ def test_page_crop_plan_declares_source_coordinate_space():
 
 def test_page_sections_sidecar_roundtrip_uses_managed_storage(tmp_path):
     import json
-    from picture_capture.coordinate_space import SOURCE_COORDINATE_SPACE
+    from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 
     root = tmp_path / "dictionary"
     root.mkdir()

@@ -6,7 +6,7 @@ from picture_capture.auxiliary_lines import (
     AuxiliaryLine, AuxiliaryLineEdits, auxiliary_line_path,
     read_auxiliary_lines, write_auxiliary_lines,
 )
-from picture_capture.auxiliary_crop_partition import partition_entry_pieces
+from picture_capture.crop.auxiliary_partition import partition_entry_pieces
 from picture_capture.processing_core import EntryCropPiecePlan
 
 

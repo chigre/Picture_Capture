@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture import app, page_word_mapping as mapping
+from picture_capture import app
+from picture_capture.proofreading import page_word_mapping as mapping
 
 
 def test_phase7d_app_reexports_page_word_mapping_helpers() -> None:

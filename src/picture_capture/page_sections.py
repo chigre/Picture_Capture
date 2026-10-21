@@ -6,8 +6,8 @@ import json
 
 from PIL import Image, ImageOps
 
-from .coordinate_space import SOURCE_COORDINATE_SPACE
-from .layout_transform import LayoutTransform
+from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
+from .geometry.layout_transform import LayoutTransform
 from .project_storage import (
     page_sections_path_for_image, page_sections_read_path_for_image,
     migrated_page_sections_path_for_image,

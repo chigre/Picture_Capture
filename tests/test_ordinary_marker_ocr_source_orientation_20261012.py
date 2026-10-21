@@ -8,7 +8,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from PIL import Image, ImageDraw, ImageOps
 from picture_capture.entry_ocr_crop import EntryOcrRowMetrics, entry_ocr_crop_box
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.processing_core import _ordinary_marker_local_crop
 

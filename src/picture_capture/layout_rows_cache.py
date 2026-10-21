@@ -27,7 +27,7 @@ import tempfile
 import numpy as np
 from PIL import Image, ImageOps
 
-from .layout_transform import LayoutTransform
+from .geometry.layout_transform import LayoutTransform
 from .project_storage import data_root, is_managed_project, qt_root
 
 

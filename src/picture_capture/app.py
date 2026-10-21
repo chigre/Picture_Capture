@@ -43,18 +43,13 @@ from .models import (
     read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
 )
 from .pdic_restore import (
-    build_page_lookup as _build_words_page_lookup,
-    parse_merged_pdic_text as _parse_merged_pdic_text,
-    resolve_page_token as _resolve_words_page_token,
-    write_pdic_atomic as _write_pdic_atomic,
+    build_page_lookup as _build_words_page_lookup, parse_merged_pdic_text as _parse_merged_pdic_text,
+    resolve_page_token as _resolve_words_page_token, write_pdic_atomic as _write_pdic_atomic,
 )
 
-from .page_word_mapping import (
-    _compare_page_word_mappings,
-    _compare_page_word_sequences,
-    _fill_page_entries,
-    _page_word_mapping_text,
-    _parse_words_of_pages_text,
+from .proofreading.page_word_mapping import (
+    _compare_page_word_mappings, _compare_page_word_sequences,
+    _fill_page_entries, _page_word_mapping_text, _parse_words_of_pages_text,
 )
 
 from .proofreading.text_helpers import (
@@ -89,11 +84,9 @@ from .geometry.layout_percent_helpers import (
     _review_height_pixels_to_percent,
 )
 
-from .page_list_helpers import (
-    bookmarked_page_indices,
-    _fill_status_cell_style,
-    _natural_text_key,
-    _sorted_page_list_rows,
+from .project.page_list_helpers import (
+    bookmarked_page_indices, _fill_status_cell_style,
+    _natural_text_key, _sorted_page_list_rows,
 )
 
 from .ui.overlay_layout_helpers import (
@@ -110,10 +103,8 @@ from .ui.overlay_layout_helpers import (
     vertical_overlay_layout,
 )
 from .paddle_headwords import (
-    DEFAULT_HEADWORD_FILTER_RULES,
-    HEADWORD_FILTER_RULES_FILENAME,
-    compact_ocr_cache_file,
-    parse_headword_filter_rules,
+    DEFAULT_HEADWORD_FILTER_RULES, HEADWORD_FILTER_RULES_FILENAME,
+    compact_ocr_cache_file, parse_headword_filter_rules,
 )
 from .environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
@@ -143,8 +134,7 @@ from .ui.controllers import (
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.page_list_grid import PageListGrid
 from .ui.text_wrap import (
-    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs,
-    _wrap_mixed_ui_text,
+    _label_measure, _mixed_ui_wrap_tokens, _normalize_ui_paragraphs, _wrap_mixed_ui_text,
 )
 from .ui.dialogs.usage_guide import UsageGuideWindow
 from .ui.dialogs.common import _build_modern_dialog_heading
@@ -156,8 +146,8 @@ from .layout_detection_actions import (
     detect_layout_current as _run_detect_layout_current,
     detect_layout_consistency_selected as _run_detect_layout_consistency_selected,
 )
-from .layout_transform import LayoutTransform
-from .coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
+from .geometry.layout_transform import LayoutTransform
+from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
 from .crop.settings import (
     CROP_SETTINGS_VERSION,
     normalize_crop_settings_payload as _normalize_crop_settings_payload,

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
 from picture_capture.ordinary_large_head_evidence import detect_ordinary_large_head_entries

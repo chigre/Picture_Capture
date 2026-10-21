@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture.page_list_helpers import bookmarked_page_indices, _sorted_page_list_rows
+from picture_capture.project.page_list_helpers import bookmarked_page_indices, _sorted_page_list_rows
 
 
 def test_bookmark_scope_uses_original_project_order_not_sorted_treeview():

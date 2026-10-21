@@ -16,7 +16,7 @@ from picture_capture.entry_ocr_crop import (
     EntryOcrRowMetrics, entry_ocr_crop_box,
 )
 from picture_capture.entry_ocr_visual_scale import visual_oversized_head_height
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary.marker_ocr_text import bracketed_ocr_lemma
 from picture_capture.processing_core import _ordinary_marker_local_crop

@@ -5,7 +5,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ...coordinate_space import SOURCE_COORDINATE_SPACE
+from ...geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from ...crop.settings import CROP_SETTINGS_VERSION
 from ...project_storage import qt_root
 from ...formats import write_text_atomic

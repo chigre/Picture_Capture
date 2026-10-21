@@ -19,7 +19,7 @@ from PIL import Image
 
 from .. import layout_detection
 from ..image_utils import build_analysis_image
-from ..layout_transform import LayoutTransform
+from ..geometry.layout_transform import LayoutTransform
 
 
 _CACHE_LIMIT = 24
