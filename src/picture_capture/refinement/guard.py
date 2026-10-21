@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from ..project_storage import simplified_review_path_for_image
-from ..simplified_review import entry_key, read_records
+from ..proofreading.simplified_review import entry_key, read_records
 
 
 def validate_refined_markers(
