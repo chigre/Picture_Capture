@@ -244,6 +244,16 @@ def _normalized_source_size(path: Path) -> int:
 def collect_violations() -> list[str]:
     violations: list[str] = []
 
+    # Issue #562: physical UI progress and line-difference bookmark owners.
+    for former, canonical in (
+        ("batch_progress_budget.py", "ui/batch_progress_budget.py"),
+        ("line_diff_bookmarks.py", "refinement/line_diff_bookmarks.py"),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root owner returned: {former}")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical owner missing: {canonical}")
+
     # Issue #562: canonical Training ownership, no obsolete root shims.
     for former, canonical in (
         ("training_baseline.py", "training/baseline.py"),

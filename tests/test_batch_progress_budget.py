@@ -1,7 +1,7 @@
 """Keep pause/stop responsive during heavy batch progress updates."""
 from pathlib import Path
 
-from picture_capture.batch_progress_budget import (
+from picture_capture.ui.batch_progress_budget import (
     MAX_BATCH_EVENTS_PER_POLL,
     MAX_BATCH_POLL_SECONDS,
     SATURATED_BATCH_POLL_DELAY_MS,

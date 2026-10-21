@@ -7,7 +7,7 @@ from PIL import Image
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.training.baseline import baseline_path_for_pdic, save_automatic_baseline
-from picture_capture.line_diff_bookmarks import (
+from picture_capture.refinement.line_diff_bookmarks import (
     marker_positions,
     page_has_manual_line_difference, modified_line_page_stems,
     bookmark_modified_line_pages,
@@ -52,7 +52,7 @@ def test_only_known_difference_pages_are_marked(tmp_path):
 
 
 def test_mark_action_preserves_bookmarks_if_no_line_baselines(tmp_path, monkeypatch):
-    from picture_capture import line_diff_bookmarks as mod
+    from picture_capture.refinement import line_diff_bookmarks as mod
 
     page = tmp_path / "one.png"
     Image.new("RGB", (300, 100), "white").save(page)

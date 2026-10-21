@@ -11750,7 +11750,7 @@ class PictureCaptureApp(tk.Tk):
     def _poll_batch_queue(self) -> None:
         self._batch_poll_job = None
         finished = False
-        from .batch_progress_budget import (
+        from .ui.batch_progress_budget import (
             SATURATED_BATCH_POLL_DELAY_MS, batch_poll_should_yield,
             start_batch_poll_budget,
         )
