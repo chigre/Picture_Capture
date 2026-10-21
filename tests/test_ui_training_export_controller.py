@@ -146,7 +146,7 @@ def test_training_export_stopped_path_keeps_async_cleanup(monkeypatch, tmp_path)
 
 def test_current_training_export_composition_is_static_before_gui_bootstrap():
     import picture_capture.training_export as base
-    import picture_capture.training_export_composed as composed
+    import picture_capture.training.export_composed as composed
 
     assert base.TRAINING_EXPORT_FORMAT == "picture-capture-training-v2"
     assert composed.TRAINING_EXPORT_FORMAT == "picture-capture-training-v3"
@@ -176,7 +176,7 @@ def test_phase5f_training_export_ownership_is_explicit():
     assert "training_export.export_training_page =" not in bootstrap
     assert "training_export.write_training_manifest =" not in bootstrap
     assert "training_export.TRAINING_EXPORT_FORMAT =" not in bootstrap
-    assert "from ...training_export_composed import" in controller
+    assert "from ...training.export_composed import" in controller
     assert "from .training_export import (" not in compat
     assert "    def export_training_package(self) -> None:" in controller
     assert "app._start_batch_task(" in controller

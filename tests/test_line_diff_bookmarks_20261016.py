@@ -6,7 +6,7 @@ from PIL import Image
 
 from picture_capture.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.training_baseline import baseline_path_for_pdic, save_automatic_baseline
+from picture_capture.training.baseline import baseline_path_for_pdic, save_automatic_baseline
 from picture_capture.line_diff_bookmarks import (
     marker_positions,
     page_has_manual_line_difference, modified_line_page_stems,

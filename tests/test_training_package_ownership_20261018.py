@@ -19,7 +19,18 @@ def test_training_imports_are_canonical():
         assert module is not None
 
 
-def test_legacy_training_export_ui_compatibility_entry_is_preserved():
-    for name in ("training_baseline.py", "training_export.py", "training_export_composed.py",
-                 "training_export_complete_dialog.py", "training_export_ui.py"):
+def test_new_training_owners_are_physical_and_importable():
+    for former, owner in (
+        ("training_baseline.py", "training/baseline.py"),
+        ("training_export_composed.py", "training/export_composed.py"),
+        ("training_export_complete_dialog.py", "training/export_complete_dialog.py"),
+    ):
+        assert not (ROOT / former).exists(), former
+        assert (ROOT / owner).is_file(), owner
+        module = importlib.import_module("picture_capture." + owner.removesuffix(".py").replace("/", "."))
+        assert module is not None
+
+
+def test_legacy_training_export_entrypoints_are_preserved():
+    for name in ("training_export.py", "training_export_ui.py"):
         assert (ROOT / name).is_file()

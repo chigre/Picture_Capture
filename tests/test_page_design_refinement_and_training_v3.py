@@ -16,7 +16,7 @@ from picture_capture.design.page_design import (
 from picture_capture.design.page_design_refined import refine_indent_semantics
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import Entry
-from picture_capture.training_baseline import (
+from picture_capture.training.baseline import (
     baseline_path_for_pdic,
     build_write_pdic_capture,
 )

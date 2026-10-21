@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .formats import pdic_path, read_pdic
 from .project_storage import settings_path
-from .training_baseline import baseline_path_for_pdic, load_automatic_baseline
+from .training.baseline import baseline_path_for_pdic, load_automatic_baseline
 
 
 def marker_positions(entries) -> list[tuple[int, int]]:

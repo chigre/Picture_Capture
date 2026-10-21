@@ -32,7 +32,7 @@ from .page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk
 from .page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
 from .separator_y_refinement import refined_layout_entry_y_by_line
-from .training_baseline import save_automatic_baseline
+from .training.baseline import save_automatic_baseline
 
 
 publish_core_namespace(globals(), _core)

@@ -28,12 +28,12 @@ from ...processing import (
     sort_entries_column_y, sort_entries_reading_order,
 )
 from ...project_storage import exports_root, qt_root, training_exports_root
-from ...training_export_composed import (
+from ...training.export_composed import (
     TrainingExportCancelled, copy_project_context, export_training_page,
     make_training_zip, write_training_manifest,
 )
 from ...text.encoding import read_text_detected
-from ...training_export_complete_dialog import show_training_export_complete
+from ...training.export_complete_dialog import show_training_export_complete
 
 
 def _training_scope_label(app: Any, indices: list[int]) -> str:
