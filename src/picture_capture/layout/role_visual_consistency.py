@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 
 from ..models import AppSettings
-from ..page_understanding import uses_cjk_role_model
+from ..layout.page_understanding import uses_cjk_role_model
 
 
 def _visible_first_x(
