@@ -143,7 +143,7 @@ def test_marker_ocr_and_preview_use_identical_role_independent_visual_extent():
     from pathlib import Path
     base = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     source = (base / "processing_core.py").read_text("utf-8")
-    preview = (base / "ocr_crop_preview_ui.py").read_text("utf-8")
+    preview = (base / "ui" / "ocr_crop_preview.py").read_text("utf-8")
     for content in (source, preview):
         assert "visual_oversized_head_height(" in content
         assert "visual_head_height=visual_height," in content

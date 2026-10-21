@@ -266,3 +266,9 @@ This organization change is *not* a source-code compression project. An expanded
 
 - Physical owner `large_head_visualization_ui.py` → `ui/large_head_visualization.py`, without root shim. Update opt-in overlays, compact display menu, Layout summary, ordinary inspector and relevant monkeypatch tests to canonical owner. Preserve only observational diagnostics and JSON export; no detection thresholds, PDIC/PPP writes, GPU lifetime, layout policy, or Settings persistence changes.
 - Ratchet architecture ownership path; full CI/CodeQL/GUI/wheel, review and postmerge main still required. Human scanned-page diagnostic parity unverified.
+
+
+## Issue #562 — OCR crop preview UI read-only owner (2026-10-21; Draft #594)
+
+- Move `ocr_crop_preview_ui.py` physically to `ui/ocr_crop_preview.py`, no root shim. App keeps the same two redraw-time invocations; the preview uses the canonical OCR crop box, source canvas coordinates, regular/oversized preview colouring and active manual-review entry highlight.
+- Existing architecture mutation guard now reads the new canonical path, with additional root-owner denial, and focused tests use the new module. OCR backend, model initialization, manual review state and PDIC fields are not altered; acceptance still requires full PR and main gates.

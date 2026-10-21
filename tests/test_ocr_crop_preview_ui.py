@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_ocr_crop_preview_uses_exact_canonical_crop_helper():
-    import picture_capture.ocr_crop_preview_ui as preview
+    import picture_capture.ui.ocr_crop_preview as preview
 
     source = Path(preview.__file__).read_text(encoding="utf-8")
     assert "entry_ocr_crop_box(" in source
@@ -14,7 +14,7 @@ def test_ocr_crop_preview_uses_exact_canonical_crop_helper():
 
 
 def test_ocr_crop_preview_distinguishes_regular_and_oversized_entries():
-    import picture_capture.ocr_crop_preview_ui as preview
+    import picture_capture.ui.ocr_crop_preview as preview
 
     source = Path(preview.__file__).read_text(encoding="utf-8")
     assert 'meta.entry_scale) == "oversized"' in source
@@ -24,7 +24,7 @@ def test_ocr_crop_preview_distinguishes_regular_and_oversized_entries():
 
 
 def test_ocr_crop_preview_highlights_proofreading_active_entry():
-    import picture_capture.ocr_crop_preview_ui as preview
+    import picture_capture.ui.ocr_crop_preview as preview
 
     source = Path(preview.__file__).read_text(encoding="utf-8")
     assert "_review_entry_highlight_target" in source
@@ -35,7 +35,7 @@ def test_ocr_crop_preview_highlights_proofreading_active_entry():
 
 def test_ocr_crop_preview_is_wired_statically():
     import picture_capture.bootstrap.gui as gui_bootstrap
-    import picture_capture.ocr_crop_preview_ui as preview
+    import picture_capture.ui.ocr_crop_preview as preview
 
     root = Path(gui_bootstrap.__file__).resolve().parents[2]
     composition = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")

@@ -245,6 +245,12 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: OCR crop preview keeps its read-only Tk implementation owned by UI.
+    if (PACKAGE_ROOT / "ocr_crop_preview_ui.py").exists():
+        violations.append("retired root owner returned: ocr_crop_preview_ui.py")
+    if not (PACKAGE_ROOT / "ui/ocr_crop_preview.py").is_file():
+        violations.append("canonical owner missing: ui/ocr_crop_preview.py")
+
     # Issue #562: Large-head GUI diagnostics have a physical UI owner.
     if (PACKAGE_ROOT / "large_head_visualization_ui.py").exists():
         violations.append("retired root owner returned: large_head_visualization_ui.py")
@@ -539,7 +545,7 @@ def collect_violations() -> list[str]:
             )
 
     ocr_crop_preview_source = (
-        PACKAGE_ROOT / "ocr_crop_preview_ui.py"
+        PACKAGE_ROOT / "ui/ocr_crop_preview.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_OCR_CROP_PREVIEW_MUTATIONS:
         if marker in ocr_crop_preview_source:
