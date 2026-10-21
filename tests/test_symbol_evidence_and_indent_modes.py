@@ -15,7 +15,7 @@ from picture_capture.design.page_design import (
 )
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
-from picture_capture.page_understanding import _apply_explicit_indent_semantics
+from picture_capture.layout.page_understanding import _apply_explicit_indent_semantics
 from picture_capture.processing import _uses_cjk_indent_topology
 from picture_capture.profile.indent_ui import (
     INDENT_SEMANTICS_VERSION,

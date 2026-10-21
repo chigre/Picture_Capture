@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from picture_capture.design.page_design import LayoutLine, _shape_consensus
-from picture_capture.ordinary_visual import _patch_similarity
+from picture_capture.ordinary.visual import _patch_similarity
 
 
 def _line(patch: np.ndarray, index: int) -> LayoutLine:
