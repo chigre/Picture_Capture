@@ -918,6 +918,13 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical OCR leaf owner missing: {canonical}")
 
+
+    # Issue #562: Layout detection GUI actions are owned by UI, not the root.
+    if (PACKAGE_ROOT / "layout_detection_actions.py").is_file():
+        violations.append("retired Layout UI actions root owner returned")
+    if not (PACKAGE_ROOT / "ui/layout_detection_actions.py").is_file():
+        violations.append("canonical Layout UI actions owner missing")
+
     return violations
 
 

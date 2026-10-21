@@ -134,7 +134,7 @@ from .ui.dialogs.old_new_comparison import OldNewComparisonWindow
 from .ui.dialogs.ocr_conflict import OCRConflictReviewDialog
 from .ui.dialogs.crop_settings import CropSettingsDialog
 from .layout_detection import detect_layout_consistency, detect_layout_parameters
-from .layout_detection_actions import (
+from .ui.layout_detection_actions import (
     detect_layout_current as _run_detect_layout_current,
     detect_layout_consistency_selected as _run_detect_layout_consistency_selected,
 )
