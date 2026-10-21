@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import ordinary_large_head_evidence as detector
+from picture_capture.ordinary import large_head_evidence as detector
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ordinary.evidence_fusion import promote_evidence_to_layout_roles
 from picture_capture.ordinary.large_head_role_guard import (

@@ -61,7 +61,7 @@ def test_unified_json_reads_copied_training_image_not_mismatched_live_page(tmp_p
             page_sections=page_sections, source_image_path=source_image_path,
         )
 
-from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
+    from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
     monkeypatch.setattr(large_head_visual_diagnostics, "build_large_head_diagnostics", evidence)
     monkeypatch.setattr(unified, "read_page_sections", lambda page: ["real-SECTION"])
     record = write_training_unified_layout_diagnostic(
@@ -87,7 +87,7 @@ def test_unavailable_layout_still_has_per_page_json_and_manifest_failure_flag(tm
     stage = tmp_path / "stage"
     _scan(stage / "images" / source.name, (100, 100, 100))
 
-from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
+    from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
     def fail(*_args, **_kwargs):
         raise ValueError("diagnostic unavailable: saved PPP input missing")
     monkeypatch.setattr(large_head_visual_diagnostics, "build_large_head_diagnostics", fail)
@@ -110,7 +110,7 @@ def test_two_same_named_scans_produce_separate_page_indexed_json_files(tmp_path,
     stage = tmp_path / "stage"
     _scan(stage / "images" / "a" / "001.png", (200, 50, 50))
     _scan(stage / "images" / "b" / "001.png", (50, 50, 200))
-from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
+    from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
     monkeypatch.setattr(large_head_visual_diagnostics, "build_large_head_diagnostics", _fake_evidence)
 
     first = write_training_unified_layout_diagnostic(a, AppSettings(), stage, 3, "images/a/001.png")
@@ -127,7 +127,7 @@ def test_training_composed_page_and_zip_include_unified_json_for_every_page(tmp_
     ]
     stage = tmp_path / "staging"
     settings = AppSettings()
-from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
+    from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
     monkeypatch.setattr(large_head_visual_diagnostics, "build_large_head_diagnostics", _fake_evidence)
 
     # Existing Page Understanding can be unavailable without silently
@@ -191,7 +191,7 @@ def test_unserializable_detector_output_does_not_claim_full_diagnostic(tmp_path,
     source = _scan(tmp_path / "007.png", (40, 50, 60))
     stage = tmp_path / "staging"
     _scan(stage / "images" / "007.png", (40, 50, 60))
-from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
+    from picture_capture.ordinary import large_head_visual_diagnostics as large_head_visual_diagnostics
     bad = _fake_evidence(
         Image.new("RGB", (64, 84)), AppSettings(),
         page_index=7, page_sections=[], source_image_path=source,

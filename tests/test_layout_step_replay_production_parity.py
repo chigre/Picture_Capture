@@ -164,7 +164,7 @@ def test_mask_enabled_no_regions_still_appears(monkeypatch):
 
 
 def test_bracket_stage_is_not_omitted_and_source_upgrades_are_visible(monkeypatch):
-from picture_capture.ordinary import bracket_pair as ordinary_bracket_pair
+    from picture_capture.ordinary import bracket_pair as ordinary_bracket_pair
     trace = LayoutStepTrace()
     a = Entry("", 20, 55, ocr_source="page_understanding:ordinary_layout_role")
     processing._record_ordinary_debug_stage(

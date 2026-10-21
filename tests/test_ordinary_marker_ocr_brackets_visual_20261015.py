@@ -239,7 +239,7 @@ def test_explicit_only_ocr_overwrites_previous_result_clears_failed_and_keeps_ma
     from picture_capture import processing_core
     from picture_capture import ocr_channel
     from picture_capture.profile import dictionary as dictionary_profile
-from picture_capture.ocr import entry_crop as entry_ocr_crop
+    from picture_capture.ocr import entry_crop as entry_ocr_crop
 
     image = Image.new("RGB", (850, 580), "white")
     settings = _settings(ocr_replace=False)
