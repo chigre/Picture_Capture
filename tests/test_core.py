@@ -6752,7 +6752,7 @@ def test_v2123_simplified_display_uses_check_mark_when_unchanged(monkeypatch):
 
 
 def test_v2124_simplified_sidecar_roundtrip(tmp_path):
-    from picture_capture.simplified_review import read_records, write_records
+    from picture_capture.proofreading.simplified_review import read_records, write_records
 
     path = tmp_path / "0001.json"
     records = {
@@ -6849,7 +6849,7 @@ def test_v2125_delete_aligned_simplified_entry_functionally_removes_sidecar(tmp_
     from types import SimpleNamespace
     from picture_capture.app import PictureCaptureApp
     from picture_capture.project_storage import simplified_review_path_for_image
-    from picture_capture.simplified_review import read_records, write_records
+    from picture_capture.proofreading.simplified_review import read_records, write_records
 
     page = tmp_path / "0001.png"
     page.write_bytes(b"x")
