@@ -2286,7 +2286,7 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert "_build_quick_settings(" not in text
     detect = (
         Path(__file__).resolve().parents[1] / "src" /
-        "picture_capture" / "layout_detection_actions.py"
+        "picture_capture" / "ui/layout_detection_actions.py"
     ).read_text(encoding="utf-8")
     detect = detect.split("def detect_layout_current(self) -> None:", 1)[1].split(
         "def detect_layout_consistency_selected", 1
@@ -3282,7 +3282,7 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     app_text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile_text = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
     layout_actions = (root / "src" / "picture_capture" /
-                      "layout_detection_actions.py").read_text(encoding="utf-8")
+                      "ui/layout_detection_actions.py").read_text(encoding="utf-8")
     assert "body_indent_was_auto" in layout_actions
     assert "horizontal_tolerance_was_auto" in layout_actions
     assert 'if "character_height" in values:' in layout_actions
@@ -3957,7 +3957,7 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert 'app._start_ui_worker(' in done
 
     layout_text = (
-        root / "src" / "picture_capture" / "layout_detection_actions.py"
+        root / "src" / "picture_capture" / "ui/layout_detection_actions.py"
     ).read_text(encoding="utf-8")
     layout = layout_text.split("def detect_layout_consistency_selected(", 1)[1]
     done_start = layout.index("    def done(")

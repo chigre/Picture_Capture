@@ -14,10 +14,10 @@ from tkinter import messagebox
 
 from PIL import Image
 
-from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from .layout_detection import detect_layout_consistency, detect_layout_parameters
-from .geometry.layout_transform import LayoutTransform
-from .project_storage import exports_root
+from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE
+from ..layout_detection import detect_layout_consistency, detect_layout_parameters
+from ..geometry.layout_transform import LayoutTransform
+from ..project_storage import exports_root
 
 
 def detect_layout_current(self) -> None:
@@ -47,13 +47,13 @@ def detect_layout_current(self) -> None:
     def done(_completed, _total, stopped, results, error) -> None:
         if error or not results:
             return
-        from .layout_detection import aggregate_layout_estimates
+        from ..layout_detection import aggregate_layout_estimates
         values, consistency = aggregate_layout_estimates(
             results,
             columns_policy=self.settings.layout_columns_policy,
             fixed_columns=self.settings.columns,
         )
-        from .layout.parameter_evidence import verified_multi_page_row_padding
+        from ..layout.parameter_evidence import verified_multi_page_row_padding
         measured_padding, padding_pages = verified_multi_page_row_padding(list(results))
         if measured_padding is None:
             values.pop("row_padding", None)
