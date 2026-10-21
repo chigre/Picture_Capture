@@ -55,7 +55,14 @@ def test_production_imports_use_canonical_lexicon_text_paths() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 name = node.module or ""
-                assert name not in forbidden, (path, node.lineno, name)
+                if name in forbidden:
+                    # Same-package relative imports are canonical, not retired.
+                    permitted_internal = (
+                        path.parent == PACKAGE / "lexicon"
+                        and node.level == 1
+                        and name in {"reference_index", "cc_cedict"}
+                    )
+                    assert permitted_internal, (path, node.lineno, name)
                 assert not any(
                     name == "picture_capture." + old for old in forbidden
                 ), (path, node.lineno, name)
