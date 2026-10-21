@@ -906,6 +906,18 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "proofreading/entry_classification_fields.py").is_file():
         violations.append("canonical Entry descriptor owner missing")
 
+
+    # Issue #562: physical OCR engines and headword-model owners; no old shims.
+    moved_ocr_leaf = {
+        "ocr_engines": "ocr/engines.py",
+        "paddle_headword_models": "ocr/headword_models.py",
+    }
+    for former, canonical in moved_ocr_leaf.items():
+        if (PACKAGE_ROOT / (former + ".py")).is_file():
+            violations.append(f"retired OCR leaf root owner returned: {former}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical OCR leaf owner missing: {canonical}")
+
     return violations
 
 

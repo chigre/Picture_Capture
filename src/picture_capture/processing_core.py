@@ -25,7 +25,7 @@ from .page_sections import (
 from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
-from .ocr_engines import find_tesseract
+from .ocr.engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .processing_publish import _publish_file_transaction, _publish_temp_path

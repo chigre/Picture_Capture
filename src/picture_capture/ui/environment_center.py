@@ -18,7 +18,7 @@ from ..lexicon.cc_cedict import (
     status as cc_cedict_status,
 )
 from ..lexicon.chinese_simplify import opencc_runtime_status
-from ..ocr_engines import lens_status, tesseract_status
+from ..ocr.engines import lens_status, tesseract_status
 from ..models import resolved_tesseract_language
 from ..runtime_environment import (
     effective_tesseract_configured, save_runtime_setting,

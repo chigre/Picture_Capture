@@ -40,7 +40,7 @@ from picture_capture.profile.dictionary import (
     dictionary_profile_preset, load_dictionary_profile, profile_effective_settings, profile_layout_summary,
     write_project_profile, language_effective_settings,
 )
-from picture_capture.ocr_engines import _lens_payload_records, find_tesseract
+from picture_capture.ocr.engines import _lens_payload_records, find_tesseract
 from picture_capture.paddle_headwords import (
     OCRRecord,
     detect_paddle_headwords,
