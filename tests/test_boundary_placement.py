@@ -9,7 +9,7 @@ from picture_capture.design.page_design import (
     PageRegion,
     PageRegions,
 )
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings, Entry
 
 

@@ -15,7 +15,7 @@ from picture_capture.layout_rows_cache import (
     recover_physical_rows_fast,
     write_layout_rows_cache,
 )
-from picture_capture.layout_transform import LayoutTransform
+from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
 from picture_capture.project_storage import ensure_project_storage
 
