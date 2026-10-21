@@ -5313,7 +5313,7 @@ def test_project_details_language_follows_ocr_language():
 
 
 def test_imported_text_encoding_detection_supports_unicode_and_legacy_chinese(tmp_path):
-    from picture_capture.text_encoding import read_text_detected
+    from picture_capture.text.encoding import read_text_detected
 
     samples = {
         "utf8.txt": ("词条 café", "utf-8"),
@@ -6659,7 +6659,7 @@ def test_v2122_external_sorted_wordslist_does_not_assume_one_to_one_offsets(monk
 
 
 def test_v2122_free_network_lookup_sources_parse_exact_hits(monkeypatch):
-    import picture_capture.network_lookup as lookup
+    import picture_capture.lexicon.network_lookup as lookup
 
     def fake_read_json(url, timeout):
         if "moedict.tw" in url:
@@ -6738,7 +6738,7 @@ def test_v2123_review_simplified_rows_use_equal_columns_and_expand_original_when
 
 
 def test_v2123_simplified_display_uses_check_mark_when_unchanged(monkeypatch):
-    import picture_capture.chinese_simplify as mod
+    import picture_capture.lexicon.chinese_simplify as mod
 
     class FakeConverter:
         def convert(self, text):
@@ -6883,7 +6883,7 @@ def test_v2130_uses_official_opencc_dependency_only_under_uv():
 def test_v2126_opencc_converter_uses_official_t2s_json(monkeypatch):
     import sys
     from types import SimpleNamespace
-    import picture_capture.chinese_simplify as mod
+    import picture_capture.lexicon.chinese_simplify as mod
 
     seen = []
 
@@ -6957,7 +6957,7 @@ def test_environment_center_reports_opencc_and_actionable_components():
 
 def test_v2128_cc_cedict_local_install_and_lookup(tmp_path, monkeypatch):
     import zipfile
-    import picture_capture.cc_cedict as cedict
+    import picture_capture.lexicon.cc_cedict as cedict
 
     monkeypatch.setattr(cedict, "user_data_root", lambda: tmp_path / "local" / "PictureCapture")
     monkeypatch.setattr(cedict, "legacy_user_data_roots", lambda: ())
@@ -7124,7 +7124,7 @@ def test_v2129_ocr_results_are_compact_single_row():
 
 
 def test_v21210_cc_cedict_exposes_traditional_to_simplified_candidates(tmp_path, monkeypatch):
-    import picture_capture.cc_cedict as cedict
+    import picture_capture.lexicon.cc_cedict as cedict
 
     monkeypatch.setattr(cedict, "user_data_root", lambda: tmp_path / "local" / "PictureCapture")
     monkeypatch.setattr(cedict, "legacy_user_data_roots", lambda: ())
