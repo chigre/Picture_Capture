@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from picture_capture import app, page_list_helpers as page_list
+from picture_capture import app
+from picture_capture.project import page_list_helpers as page_list
 
 
 def test_phase7h_app_reexports_page_list_helpers() -> None:
