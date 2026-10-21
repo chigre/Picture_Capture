@@ -27,9 +27,16 @@ ALWAYS_FULL = {
     "src/picture_capture/layout_rows_cache.py", "src/picture_capture/separator_y_refinement.py",
 }
 ALWAYS_FULL_PREFIXES = (
+    # Domain paths whose imports may alter coordinate frames, model ownership,
+    # GUI callbacks, spawn pickling, or persistent project/editor contracts.
+    # Even AST-equivalent moves here require the complete six-platform matrix.
     "src/picture_capture/bootstrap/", "src/picture_capture/geometry/",
-    "src/picture_capture/crop/", "src/picture_capture/ocr/gpu",
-    "src/picture_capture/ordinary/gpu",
+    "src/picture_capture/crop/", "src/picture_capture/layout/",
+    "src/picture_capture/ocr/", "src/picture_capture/ordinary/",
+    "src/picture_capture/refinement/", "src/picture_capture/illustration/",
+    "src/picture_capture/proofreading/", "src/picture_capture/persistence/",
+    "src/picture_capture/project/", "src/picture_capture/ui/",
+    "src/picture_capture/training/", "src/picture_capture/image/",
 )
 DOC_FILES = {"README.md", "CHANGELOG.md", "CONTRIBUTING.md"}
 DOC_FULL = {"docs/architecture/CHANGE_POLICY.md", "docs/architecture/CI_RISK_POLICY.md"}
