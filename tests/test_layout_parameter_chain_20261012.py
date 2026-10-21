@@ -67,7 +67,7 @@ def test_projection_column_discovery_can_report_a_real_separator(monkeypatch):
 
 
 def test_composed_policy_preserves_ink_height_evidence(monkeypatch):
-    from picture_capture.layout import composition as layout_composition as composition
+    from picture_capture.layout import composition as composition
     from picture_capture.design import layout_policy as policy
 
     image = Image.new("RGB", (320, 500), "white")
