@@ -212,7 +212,7 @@ def test_static_settings_schema_owns_mask_checkbox_before_gui_composition():
 
 def test_static_layout_cache_key_tracks_mask_setting_without_runtime_wrapper():
     from types import SimpleNamespace
-    from picture_capture.layout_visualization_ui import _layout_cache_key
+    from picture_capture.ui.layout_visualization_ui import _layout_cache_key
 
     class FakeApp:
         image = object()

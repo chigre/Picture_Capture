@@ -291,3 +291,37 @@ This organization change is *not* a source-code compression project. An expanded
 
 - Physically move internal `ui_compat.py` to `ui/compat.py` without introducing a legacy root shim; callers in dialogs, controllers, canvas overlays, Project Profile setup and Environment Center reference the same font/work-area helpers through the canonical owner.
 - Preserve Tk font selection, native Windows caption semantics, geometry and user settings; function code is unchanged. Do not move public launcher/GUI entrypoints or alter startup side effects. CI and human Windows/macOS Tk parity remain acceptance gates.
+
+
+## Issue #562 — UI owner cohort (2026-10-21, pending CI)
+
+Base main `81c245f6544ceca3bb0ef7d2be6970e04424231c`: 54 root Python files. Candidate moves five modules without shims: `appearance.py`, `environment_center.py`, `unicode_nonbmp_input.py`, `layout_visualization_ui.py`, `layout_visualization_ui_v2.py` into `ui/` under their existing basenames; expected root 49 pending tree recount. Static and delayed imports, Tk GUI smoke, tests and physical-owner guard are updated. Root `layout_visualization_ui_v3.py` is retained for separate legacy-UI acceptance; `ui_terminology.py` and `settings_help_restore.py` remain historical compatibility. No data schema, Y algorithm, GPU owner, Windows spawn, source coordinates, PDIC/PPP/SECTION, manual review or parent-only writes are intentionally changed. Exact-head six-platform CI, CodeQL, GUI smoke, wheel, review, postmerge main and real scanned-page manual acceptance remain mandatory; no unverified green claims.
+
+### Recovery checkpoint — 2026-10-21
+
+- Candidate branch head `7dac0d11903c58f76413182d94321d3c98502b3f` was independently counted at **49** root `.py` (five actual physical moves from main 54). Diff has five renames, no deleted tests; app 784730 bytes is below unchanged 784737 ratchet. **No PR or candidate CI yet.**
+- GitHub PR creation and Issue #562 comment/body-update calls were rejected by connector safety checks; Issue cannot be checkpointed through that channel in this run. Next run: verify main/open PR, retry the single Draft PR from this branch and post the checkpoint to Issue, then run exact-head six-platform CI, GUI smoke, wheel, CodeQL and reviews. Do not merge without full acceptance or claim human scanned-page parity. Issue remains open and hourly task continues.
+
+### Provisional 49 root owners after this five-module candidate
+
+Public/entry (11): __init__, __main__, app, cli, picdic, launcher, gui_io, processing, processing_core, facade_compat, models.
+Persistence/Review (9): formats, project_storage, page_sections, pdic_restore, pdic_text_cleanup, processing_publish, entry_classification, entry_classification_fields, simplified_review.
+UI compatibility (3): layout_visualization_ui_v3, settings_help_restore, ui_terminology.
+Layout (7): layout_core_understanding, layout_detection, layout_detection_actions, layout_detection_legacy, layout_detector_live_binding, layout_physical_indent, layout_rows_cache.
+OCR/GPU/runtime (9): ocr_channel, ocr_channel_legacy, ocr_engines, ocr_page_resume, paddle_headword_models, paddle_headwords, paddle_headwords_core, windows_gpu, runtime_environment.
+Refinement (2): separator_y_refinement, marker_refinement_parallel.
+Image (2): image_preprocessing, image_utils.
+Evidence (2): evidence_fusion, symbol_evidence.
+Crop export (2): single_line_parallel, unlined_line_export.
+Training compatibility (2): training_export, training_export_ui.
+
+All 49 are provisionally assigned, not final migration/retention decisions. Verify each with static/deferred imports, Windows spawn, GPU owner, Profile, PDIC/PPP/SECTION, real scans and original-pixel/Y/parent-writer invariants. Do not infer eligibility completion from root count.
+
+
+### 2026-10-21 continuation: UI candidate repair and review gates (#562)
+
+- Re-audited unchanged main `81c245f6544ceca3bb0ef7d2be6970e04424231c` (54 root Python files), no open PR; postmerge CI run 39603526591 and push/CodeQL run 39603527108 succeeded. The separate Dependabot resolution run 39603700868 failed and remains unrelated to package movement.
+- Existing five-file no-shim UI candidate `refactor/issue562-ui-layout-diagnostics-20261021` was independently counted at **49** root Python files (untruncated Git tree, 886 entries). Repair deferred Environment Center imports with `..quality.draw_performance_profile` and `..quality.inference_monitor`; correct relocated source-path tests; exercise both callbacks without requiring Tk display or model initialization.
+- Repair a preexisting lazy import in `app.py` for refinement per-page progress: `from .refinement.progress import report_refinement_page`. Add regression for the canonical owner and skip reporting. Do not change the refinement Y algorithm, workers, parent publication, image coordinates, manual review or PDIC/PPP/SECTION/Profile formats.
+- This is **candidate code**, not accepted: exact branch-head six-platform Python3.10/3.13 CI, GUI smoke, wheel, CodeQL, reviews, secure merge and postmerge main CI/CodeQL must all be checked and recorded in Issue. No root shim or test/guard relaxation.
+- The 49 remaining roots are provisionally assigned in the owner table above; the count is **not** a completed fraction of eligible migrations. Retained entry/facade/API paths and high-risk GPU/spawn, Layout, Y-refinement, PDIC/PPP/SECTION, Review and Profile boundaries need independent ownership decisions and human scanned-page/native Windows/macOS acceptance. Continue hourly; do not close Issue.

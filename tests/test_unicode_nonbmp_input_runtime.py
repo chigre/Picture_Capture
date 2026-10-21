@@ -2,8 +2,8 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
-import picture_capture.unicode_nonbmp_input as nonbmp
-from picture_capture.unicode_nonbmp_input import (
+import picture_capture.ui.unicode_nonbmp_input as nonbmp
+from picture_capture.ui.unicode_nonbmp_input import (
     attach_nonbmp_unicode_input,
     close_nonbmp_unicode_input,
     TextSnapshot,
@@ -126,7 +126,8 @@ def test_app_owns_nonbmp_bridge_lifecycle_without_gui_installer():
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 
     assert not (package / "unicode_nonbmp_input_runtime.py").exists()
-    assert (package / "unicode_nonbmp_input.py").exists()
+    assert (package / "ui/unicode_nonbmp_input.py").exists()
+    assert not (package / "unicode_nonbmp_input.py").exists()
     assert "install_nonbmp_unicode_input" not in gui_source
     assert '"unicode_nonbmp_input_runtime.py"' not in guard
 

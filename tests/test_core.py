@@ -6942,7 +6942,7 @@ def test_environment_center_reports_opencc_and_actionable_components():
     from pathlib import Path
     import inspect
     import picture_capture.app as app_module
-    import picture_capture.environment_center as center_module
+    import picture_capture.ui.environment_center as center_module
 
     app_text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     center_text = Path(inspect.getsourcefile(center_module)).read_text(encoding="utf-8")

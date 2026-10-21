@@ -12,7 +12,7 @@ from typing import Any
 def layout_detail_text(app: Any) -> str:
     """Return the full existing diagnostic, with no GUI-specific truncation."""
     from .visualization_summary import _format_summary
-    from ..layout_visualization_ui import _snapshot_for_app
+    from ..ui.layout_visualization_ui import _snapshot_for_app
 
     return _format_summary(app, _snapshot_for_app(app))
 

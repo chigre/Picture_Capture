@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import picture_capture.layout_visualization_ui as base
+import picture_capture.ui.layout_visualization_ui as base
 import picture_capture.layout.visualization_summary as summary
 import picture_capture.layout_visualization_ui_v3 as controls
 from picture_capture.ordinary.unified_visualization import (

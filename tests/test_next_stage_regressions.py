@@ -3843,7 +3843,7 @@ def test_round1_blocking_ui_paths_use_background_workers():
     assert "self.show_environment_center()" in text[main_check:main_check_end]
 
     environment_center = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "environment_center.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui/environment_center.py"
     ).read_text(encoding="utf-8")
     refresh_start = environment_center.index("    def refresh(self) -> None:")
     refresh_end = environment_center.index("\n    def _open_ocr_settings", refresh_start)
@@ -4325,7 +4325,7 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     check = app[check_start:check_end]
     assert "self.show_environment_center()" in check
 
-    environment_center = (root / "src" / "picture_capture" / "environment_center.py").read_text(encoding="utf-8")
+    environment_center = (root / "src" / "picture_capture" / "ui/environment_center.py").read_text(encoding="utf-8")
     refresh_start = environment_center.index("    def refresh(self) -> None:")
     refresh_end = environment_center.index("\n    def _open_ocr_settings", refresh_start)
     refresh = environment_center[refresh_start:refresh_end]

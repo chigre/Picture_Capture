@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..layout_visualization_ui import _layout_cache_key
+from .layout_visualization_ui import _layout_cache_key
 
 
 _TAG = "large-head-diagnostics-overlay"

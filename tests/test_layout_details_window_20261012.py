@@ -11,7 +11,7 @@ import picture_capture.layout_visualization_ui_v3 as ui
 def test_detailed_layout_text_preserves_untruncated_source_report(monkeypatch):
     snapshot = object()
     monkeypatch.setattr(
-        "picture_capture.layout_visualization_ui._snapshot_for_app",
+        "picture_capture.ui.layout_visualization_ui._snapshot_for_app",
         lambda app: snapshot,
     )
     monkeypatch.setattr(

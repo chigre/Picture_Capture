@@ -23,7 +23,7 @@ from tkinter import colorchooser, filedialog, font, messagebox, simpledialog, tt
 from PIL import Image, ImageTk
 from . import __version__
 from .project import parameter_templates as _project_templates
-from .appearance import (
+from .ui.appearance import (
     appearance_palette,
     apply_classic_widget_appearance,
     apply_native_titlebar_appearance,
@@ -98,7 +98,7 @@ from .paddle_headwords import (
     DEFAULT_HEADWORD_FILTER_RULES, HEADWORD_FILTER_RULES_FILENAME,
     compact_ocr_cache_file, parse_headword_filter_rules,
 )
-from .environment_center import EnvironmentCenterWindow
+from .ui.environment_center import EnvironmentCenterWindow
 from .runtime_environment import legacy_user_config_files, resolve_paddle_device, user_config_root
 from .ui.compat import (
     AUTO_FONT_FAMILY, bind_context_menu, fit_window_to_work_area,
@@ -201,7 +201,7 @@ from .training_export import (
     make_training_zip, write_training_manifest,
 )
 from .text.encoding import read_text_detected
-from .unicode_nonbmp_input import attach_nonbmp_unicode_input, close_nonbmp_unicode_input
+from .ui.unicode_nonbmp_input import attach_nonbmp_unicode_input, close_nonbmp_unicode_input
 from .ui.overlay_opacity import (
     clear_alpha_line_photos,
     create_alpha_canvas_line, release_alpha_line_photos,
@@ -266,7 +266,7 @@ OCR_ENGINE_VALUES = {label: value for value, label in OCR_ENGINE_LABELS.items()}
 APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
 APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
 
-# ISO 639-1 codes for project metadata. Common dictionary languages are kept at
+# ISO 639-1 project language codes; common languages are kept at
 # the front of the readonly selectors; the rest remain alphabetized.
 PROJECT_LANGUAGE_CODES = (
     "en", "zh", "es", "fr", "de", "it", "pt", "ja", "ko", "ru",
@@ -11839,7 +11839,7 @@ class PictureCaptureApp(tk.Tk):
                         f"{self._batch_title}：已完成 {completed}/{total}（并行 {active}/{workers} 页）"
                     )
                 if self._batch_title == "精修画线" and isinstance(_result, dict):
-                    from .marker_refinement_progress import report_refinement_page
+                    from .refinement.progress import report_refinement_page
                     report_refinement_page(self, completed, total, label, _result)
             elif kind == "done":
                 _kind, completed, total, stopped, results = event

@@ -14,7 +14,7 @@ from typing import Any
 
 from PIL import Image
 
-from ...appearance import themed_display_image
+from ..appearance import themed_display_image
 from ...formats import pdic_path, read_pdic, read_ppp
 from ...image_utils import normalize_page_rgb
 from ...preprocess.image_metadata_status import image_dpi

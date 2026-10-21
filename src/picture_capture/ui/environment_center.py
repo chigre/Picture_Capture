@@ -12,18 +12,18 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from .appearance import appearance_palette, apply_classic_widget_appearance, apply_native_titlebar_appearance
-from .lexicon.cc_cedict import (
+from ..lexicon.cc_cedict import (
     DOWNLOAD_PAGE_URL as CC_CEDICT_DOWNLOAD_PAGE_URL,
     install_from_file as install_cc_cedict_from_file,
     status as cc_cedict_status,
 )
-from .lexicon.chinese_simplify import opencc_runtime_status
-from .ocr_engines import lens_status, tesseract_status
-from .models import resolved_tesseract_language
-from .runtime_environment import (
+from ..lexicon.chinese_simplify import opencc_runtime_status
+from ..ocr_engines import lens_status, tesseract_status
+from ..models import resolved_tesseract_language
+from ..runtime_environment import (
     effective_tesseract_configured, save_runtime_setting,
 )
-from .ui.compat import fit_window_to_work_area
+from .compat import fit_window_to_work_area
 
 
 TESSERACT_DOC_URL = "https://tesseract-ocr.github.io/tessdoc/Installation.html"
@@ -371,7 +371,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
         self.app._start_ui_worker(f"environment-center-{id(self)}", worker, done, failed)
 
     def _open_draw_performance_reports(self) -> None:
-        from .quality.draw_performance_profile import _directory
+        from ..quality.draw_performance_profile import _directory
         directory = _directory() / "reports"
         directory.mkdir(parents=True, exist_ok=True)
         try:
@@ -389,7 +389,7 @@ class EnvironmentCenterWindow(tk.Toplevel):
     def _refresh_inference_status(self) -> None:
         """Report observed model initialization, not estimated GPU utilization."""
         import time
-        from .quality.inference_monitor import recent_model_events
+        from ..quality.inference_monitor import recent_model_events
         events = recent_model_events(time.time() - 3600)
         label = self._status_labels.get("inference")
         if label is None:

@@ -21,7 +21,7 @@ def main() -> int:
     PictureCaptureApp = app_module.PictureCaptureApp
     SettingsDialog = app_module.SettingsDialog
     UsageGuideWindow = app_module.UsageGuideWindow
-    from picture_capture.environment_center import EnvironmentCenterWindow
+    from picture_capture.ui.environment_center import EnvironmentCenterWindow
 
     finished = threading.Event()
 
