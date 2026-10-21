@@ -49,7 +49,7 @@ def test_no_entry_proposals_on_a_dense_continuation_only_column():
 
 
 def test_source_provenance_is_available_from_page_understanding_diagnostics():
-    import picture_capture.page_understanding as page_module
+    import picture_capture.layout.page_understanding as page_module
     from pathlib import Path
 
     source = Path(page_module.__file__).read_text(encoding="utf-8")

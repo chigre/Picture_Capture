@@ -17,8 +17,8 @@ from types import SimpleNamespace
 import pytest
 
 from picture_capture.models import Entry
-from picture_capture.ordinary_evidence_fusion import promote_evidence_to_layout_roles
-from picture_capture.ordinary_large_head_role_guard import (
+from picture_capture.ordinary.evidence_fusion import promote_evidence_to_layout_roles
+from picture_capture.ordinary.large_head_role_guard import (
     strict_candidate_starts_at_row_front,
 )
 
