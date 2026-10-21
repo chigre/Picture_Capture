@@ -925,6 +925,13 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "ui/layout_detection_actions.py").is_file():
         violations.append("canonical Layout UI actions owner missing")
 
+
+    # Issue #562: sampled Symbol Evidence has one canonical Layout package owner.
+    if (PACKAGE_ROOT / "symbol_evidence.py").is_file():
+        violations.append("retired root symbol evidence owner returned")
+    if not (PACKAGE_ROOT / "layout/symbol_evidence.py").is_file():
+        violations.append("canonical Layout sampled symbol evidence owner missing")
+
     return violations
 
 

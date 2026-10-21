@@ -25,11 +25,11 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from .image_utils import normalize_page_rgb
-from .layout_detection import analysis_ink_mask
-from .models import AppSettings, Entry
-from .ordinary.visual import _components
-from .visual.marker_templates import (
+from ..image_utils import normalize_page_rgb
+from ..layout_detection import analysis_ink_mask
+from ..models import AppSettings, Entry
+from ..ordinary.visual import _components
+from ..visual.marker_templates import (
     match_visual_marker_template,
     visual_marker_samples_from_settings,
 )
@@ -107,7 +107,7 @@ def _marker_boundary_source(
 ) -> tuple[int, int]:
     # LayoutLine Y is local to body_top.  Keep the same boundary geometry as the
     # Page Design layer so Symbol Evidence does not invent a competing Y system.
-    from .design.page_design import _boundary_before
+    from ..design.page_design import _boundary_before
 
     local = int(_boundary_before(
         list(getattr(column, "lines", []) or []),

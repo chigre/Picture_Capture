@@ -32,7 +32,7 @@ from ..layout.boundary_placement import refine_boundaries_toward_head_top
 from ..design.layout_policy import infer_dictionary_page_layout
 from ..models import AppSettings, Entry
 from ..profile.indent_ui import indent_type_label
-from ..symbol_evidence import SymbolEvidenceResult, detect_symbol_evidence
+from .symbol_evidence import SymbolEvidenceResult, detect_symbol_evidence
 
 
 @dataclass(slots=True)
