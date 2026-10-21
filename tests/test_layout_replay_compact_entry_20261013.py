@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.layout_visualization_ui_v3 import toggle_layout_step_replay
+from picture_capture.ui.layout_visualization_ui_v3 import toggle_layout_step_replay
 
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
@@ -27,7 +27,7 @@ class Flag:
 
 def test_actual_compact_display_palette_has_session_only_replay_toggle():
     compact = (ROOT / "ui" / "compact_display_menu.py").read_text(encoding="utf-8")
-    legacy = (ROOT / "layout_visualization_ui_v3.py").read_text(encoding="utf-8")
+    legacy = (ROOT / "ui/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
     workspace = (ROOT / "ui" / "workspace_tools.py").read_text(encoding="utf-8")
     assert 'sections["二、显示设置"] = build_compact_display_menu(app, content)' in workspace
     assert 'replay_var = app._layout_step_replay_var' in compact

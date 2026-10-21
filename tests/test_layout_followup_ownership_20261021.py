@@ -25,11 +25,15 @@ def test_no_legacy_root_layout_shim(old: str, new: str) -> None:
 
 def test_retained_layout_entrypoints_are_untouched() -> None:
     for name in ("layout_detector_live_binding", "layout_core_understanding",
-                 "layout_physical_indent", "layout_rows_cache",
-                 "layout_visualization_ui"):
+                 "layout_physical_indent", "layout_rows_cache"):
         assert (PACKAGE / (name + ".py")).is_file()
 
 
 def test_step_replay_ui_physical_owner():
     assert not (PACKAGE / "layout_step_replay_ui.py").exists()
     assert (PACKAGE / "ui/layout_step_replay.py").is_file()
+
+
+def test_layout_visualization_ui_has_physical_ui_owner() -> None:
+    assert not (PACKAGE / "layout_visualization_ui.py").exists()
+    assert (PACKAGE / "ui/layout_visualization_ui.py").is_file()
