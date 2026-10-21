@@ -50,7 +50,14 @@ def test_production_imports_use_canonical_lexicon_text_paths() -> None:
     import ast
 
     forbidden = set(OWNERS)
-    for path in PACKAGE.rglob("*.py"):
+    from itertools import chain
+
+    all_python = chain(
+        PACKAGE.rglob("*.py"),
+        (PACKAGE.parents[1] / "tests").rglob("*.py"),
+        (PACKAGE.parents[1] / "scripts").rglob("*.py"),
+    )
+    for path in all_python:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
