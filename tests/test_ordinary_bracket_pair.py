@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from PIL import Image, ImageDraw
 
 from picture_capture.models import Entry
-from picture_capture.ordinary_bracket_pair import (
+from picture_capture.ordinary.bracket_pair import (
     _bracket_side, recover_bracketed_ordinary_entries,
 )
 

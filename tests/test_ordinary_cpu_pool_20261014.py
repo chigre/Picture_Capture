@@ -12,7 +12,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from picture_capture.ordinary_cpu_pool import (
+from picture_capture.ordinary.cpu_pool import (
     cpu_pool_enabled, cpu_pool_config, cpu_ordinary_page_job,
 )
 
