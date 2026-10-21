@@ -899,6 +899,13 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"missing evidence physical owner: {owner}")
 
+
+    # Issue #562: Entry descriptor helpers are physically owned by proofreading.
+    if (PACKAGE_ROOT / "entry_classification_fields.py").exists():
+        violations.append("retired Entry descriptor root owner returned")
+    if not (PACKAGE_ROOT / "proofreading/entry_classification_fields.py").is_file():
+        violations.append("canonical Entry descriptor owner missing")
+
     return violations
 
 
