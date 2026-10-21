@@ -8,7 +8,7 @@ import re
 
 from PIL import Image
 
-from .layout_transform import LayoutTransform
+from .geometry.layout_transform import LayoutTransform
 from .runtime_environment import portable_project_file
 from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
