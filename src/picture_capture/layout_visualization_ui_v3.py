@@ -225,7 +225,7 @@ def add_layout_visualization_controls(app: Any, section: Any) -> None:
     add_layout_details_button(app, section)
     from .ordinary.layout_inspector import add_unified_layout_inspector_controls
     add_unified_layout_inspector_controls(app, section)
-    from .large_head_visualization_ui import add_large_head_debug_controls
+    from .ui.large_head_visualization import add_large_head_debug_controls
     add_large_head_debug_controls(app, section)
     # Shared denoise settings now belong to Layout configuration, not display.
 
@@ -259,7 +259,7 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
             from .layout.details_window import refresh_layout_details_if_open
             refresh_layout_details_if_open(app)
         if large_enabled:
-            from .large_head_visualization_ui import draw_large_head_debug_overlay
+            from .ui.large_head_visualization import draw_large_head_debug_overlay
             draw_large_head_debug_overlay(app)
         if layout_enabled:
             from .ordinary.unified_visualization import draw_unified_candidate_overlay

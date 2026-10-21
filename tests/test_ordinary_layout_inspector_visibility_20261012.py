@@ -93,7 +93,7 @@ def test_layout_inspector_filters_and_summary_share_identical_registry():
 
 
 def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch):
-    import picture_capture.large_head_visualization_ui as ui
+    import picture_capture.ui.large_head_visualization as ui
 
     rows = [
         _row("C01-R001", 100),
@@ -135,7 +135,7 @@ def test_annotated_markers_are_visible_and_clickable_at_reduced_zoom(monkeypatch
 
 
 def test_markers_open_same_candidate_id_in_inspector(monkeypatch):
-    import picture_capture.large_head_visualization_ui as ui
+    import picture_capture.ui.large_head_visualization as ui
     import picture_capture.ordinary.layout_inspector as inspector
 
     row = _row("C01-R020", 840, conflict=True)
@@ -211,7 +211,7 @@ def test_real_inspector_window_renders_table_when_tk_is_available(monkeypatch):
         pytest.skip("no graphical Tk display in this pytest runner")
     root.withdraw()
     try:
-        import picture_capture.large_head_visualization_ui as ui
+        import picture_capture.ui.large_head_visualization as ui
         from picture_capture.ordinary.layout_inspector import (
             show_unified_layout_inspector,
         )

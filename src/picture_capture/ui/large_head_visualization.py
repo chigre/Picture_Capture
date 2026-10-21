@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .layout_visualization_ui import _layout_cache_key
+from ..layout_visualization_ui import _layout_cache_key
 
 
 _TAG = "large-head-diagnostics-overlay"
@@ -33,7 +33,7 @@ _REASONS = {
 
 
 def _cache_key(app: Any) -> tuple[Any, ...]:
-    from .preprocess.adaptive_denoise import DENOISE_ENV
+    from ..preprocess.adaptive_denoise import DENOISE_ENV
 
     return (
         _layout_cache_key(app),
@@ -52,7 +52,7 @@ def get_large_head_debug_snapshot(app: Any) -> dict[str, Any]:
         and key == getattr(app, "_large_head_debug_snapshot_key", None)
     ):
         return existing
-    from .ordinary.large_head_visual_diagnostics import build_large_head_diagnostics
+    from ..ordinary.large_head_visual_diagnostics import build_large_head_diagnostics
 
     result = build_large_head_diagnostics(
         app.image, app.settings,
@@ -221,7 +221,7 @@ def export_large_head_debug_json(app: Any) -> None:
 def compare_large_head_debug_json(app: Any) -> None:
     """Compare a selected older export to current unified Layout evidence."""
     from tkinter import filedialog, messagebox
-    from .quality.ordinary_unified_diff import compare_ordinary_diagnostics
+    from ..quality.ordinary_unified_diff import compare_ordinary_diagnostics
 
     if getattr(app, "image", None) is None:
         return
@@ -280,7 +280,7 @@ def add_large_head_debug_controls(app: Any, section: Any) -> None:
         return
     from tkinter import ttk
     import tkinter as tk
-    from .layout_visualization_ui_v3 import _next_grid_row
+    from ..layout_visualization_ui_v3 import _next_grid_row
 
     var = tk.BooleanVar(value=False)
     app._large_head_visualization_var = var

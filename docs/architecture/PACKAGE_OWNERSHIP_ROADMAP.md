@@ -260,3 +260,9 @@ This organization change is *not* a source-code compression project. An expanded
 
 - Physically relocate `adaptive_denoise.py` → `preprocess/adaptive_denoise.py` with zero algorithm changes and no root shim; the direct analysis-image builder, Layout replay, visualization controls and performance profile now import its canonical package path.
 - Preserve environment-driven denoise strength, integral-mask semantics and punctuation/diacritic protection. Update existing source-ownership test to require the new owner, retaining its checks for other root facades. Add architecture guard against old path restoration; cross-platform GUI and real scans remain separate gates.
+
+
+## Issue #562 — Large-head inspection UI diagnostic leaf (2026-10-21; Draft #594)
+
+- Physical owner `large_head_visualization_ui.py` → `ui/large_head_visualization.py`, without root shim. Update opt-in overlays, compact display menu, Layout summary, ordinary inspector and relevant monkeypatch tests to canonical owner. Preserve only observational diagnostics and JSON export; no detection thresholds, PDIC/PPP writes, GPU lifetime, layout policy, or Settings persistence changes.
+- Ratchet architecture ownership path; full CI/CodeQL/GUI/wheel, review and postmerge main still required. Human scanned-page diagnostic parity unverified.

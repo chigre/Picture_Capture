@@ -168,7 +168,7 @@ def test_normal_layout_toggle_uses_compact_and_candidate_view(monkeypatch):
 
 
 def test_compact_only_conflicts_are_painted_and_candidate_mode_is_clickable(monkeypatch):
-    import picture_capture.large_head_visualization_ui as ui
+    import picture_capture.ui.large_head_visualization as ui
 
     rows = []
     for idx in range(100):

@@ -10,7 +10,7 @@ from picture_capture.models import AppSettings
 from picture_capture.ordinary.large_head_evidence import (
     detect_ordinary_large_head_entries,
 )
-from picture_capture import large_head_visualization_ui as ui
+from picture_capture.ui import large_head_visualization as ui
 from picture_capture import layout_visualization_ui_v3 as v3
 
 
@@ -220,7 +220,7 @@ def test_real_compact_display_panel_contains_same_session_toggle():
     ).read_text(encoding="utf-8")
     helper = (
         root / "src" / "picture_capture"
-        / "large_head_visualization_ui.py"
+        / "ui" / "large_head_visualization.py"
     ).read_text(encoding="utf-8")
     assert 'check(row, "显示大字头检测", large_var, toggle_large_heads)' in source
     assert 'row, text="导出统一Layout诊断 JSON", command=export_unified_layout' in source

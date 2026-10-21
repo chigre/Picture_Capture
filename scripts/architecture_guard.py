@@ -245,6 +245,12 @@ def collect_violations() -> list[str]:
 
     violations: list[str] = []
 
+    # Issue #562: Large-head GUI diagnostics have a physical UI owner.
+    if (PACKAGE_ROOT / "large_head_visualization_ui.py").exists():
+        violations.append("retired root owner returned: large_head_visualization_ui.py")
+    if not (PACKAGE_ROOT / "ui/large_head_visualization.py").is_file():
+        violations.append("canonical owner missing: ui/large_head_visualization.py")
+
     # Issue #562: shared adaptive denoise belongs to preprocessing owner.
     if (PACKAGE_ROOT / "adaptive_denoise.py").exists():
         violations.append("retired root owner returned: adaptive_denoise.py")

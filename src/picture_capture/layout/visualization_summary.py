@@ -150,7 +150,7 @@ def _format_summary(app: Any, snapshot: Any) -> str:
     # This is the same read-only candidate registry used by the clickable
     # Layout markers, large-head overlay and explicit JSON export.
     try:
-        from ..large_head_visualization_ui import get_large_head_debug_snapshot
+        from ..ui.large_head_visualization import get_large_head_debug_snapshot
         unified = get_large_head_debug_snapshot(app).get("unified_report", {})
         review = unified.get("review_queue", [])
         counts = unified.get("summary", {})
@@ -234,7 +234,7 @@ def _draw_role_strips(app: Any, snapshot: Any) -> None:
     # records. Historically this function painted a second cached Layout
     # result, so red/blue roles could disagree with the exported diagnostics.
     try:
-        from ..large_head_visualization_ui import get_large_head_debug_snapshot
+        from ..ui.large_head_visualization import get_large_head_debug_snapshot
         actual_rows = get_large_head_debug_snapshot(app).get(
             "layout_snapshot", {}
         ).get("physical_rows", [])

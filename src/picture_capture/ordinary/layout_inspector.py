@@ -100,7 +100,7 @@ def show_unified_layout_inspector(
     import tkinter as tk
     from tkinter import ttk, messagebox
 
-    from ..large_head_visualization_ui import (
+    from ..ui.large_head_visualization import (
         export_large_head_debug_json, get_large_head_debug_snapshot,
     )
     from .unified_visualization import format_candidate_detail
