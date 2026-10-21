@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from picture_capture.design import page_design as base
-from picture_capture.layout import page_x_registration as page_x_registration as registration
+from picture_capture.layout import page_x_registration as registration
 from picture_capture.layout import column_drift as drift
 
 
