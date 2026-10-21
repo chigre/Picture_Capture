@@ -10,7 +10,7 @@ from ...paddle_headwords import (
     parse_headword_filter_rules,
 )
 from ...project_storage import headword_filter_rules_path
-from ...text_encoding import read_text_detected
+from ...text.encoding import read_text_detected
 
 
 def rules_path(dialog: Any) -> Path | None:

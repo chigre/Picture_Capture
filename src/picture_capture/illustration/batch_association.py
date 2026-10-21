@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 from ..formats import pdic_path, read_pdic, read_ppp, write_ppp
-from ..text_encoding import read_text_detected
+from ..text.encoding import read_text_detected
 from .labels import illustration_labels
 from ..models import AppSettings, PolygonRegion
 from ..page_sections import read_page_sections
