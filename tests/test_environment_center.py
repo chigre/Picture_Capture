@@ -85,11 +85,12 @@ def test_source_checkout_root_does_not_assume_site_packages_depth(tmp_path: Path
     scripts = root / "scripts"
     scripts.mkdir()
     (scripts / "ocr_setup.py").write_text("", encoding="utf-8")
-    module = package / "environment_center.py"
+    module = package / "ui" / "environment_center.py"
+    module.parent.mkdir(parents=True)
     module.write_text("", encoding="utf-8")
     assert source_checkout_root(module) == root
 
-    installed = tmp_path / "site-packages" / "picture_capture" / "environment_center.py"
+    installed = tmp_path / "site-packages" / "picture_capture" / "ui" / "environment_center.py"
     installed.parent.mkdir(parents=True)
     installed.write_text("", encoding="utf-8")
     assert source_checkout_root(installed) is None
@@ -100,7 +101,42 @@ def test_linux_installer_command_uses_shell_quoting():
         Path(__file__).resolve().parents[1]
         / "src"
         / "picture_capture"
+        / "ui"
         / "environment_center.py"
     ).read_text(encoding="utf-8")
     assert "shlex.quote(str(root))" in source
     assert "shlex.quote(script.name)" in source
+
+
+def test_deferred_inference_status_imports_quality_owner(monkeypatch):
+    """Exercise the Tk callback without creating a GUI window or GPU model."""
+    from types import SimpleNamespace
+    from picture_capture.quality import inference_monitor
+    from picture_capture.ui.environment_center import EnvironmentCenter
+
+    displayed = []
+    label = SimpleNamespace(configure=lambda **kwargs: displayed.append(kwargs["text"]))
+    monkeypatch.setattr(inference_monitor, "recent_model_events", lambda _: [])
+    fake = SimpleNamespace(_status_labels={"inference": label})
+
+    EnvironmentCenter._refresh_inference_status(fake)
+
+    assert displayed and "模型初始化" in displayed[0]
+
+
+def test_deferred_performance_reports_imports_quality_owner(tmp_path, monkeypatch):
+    """Opening the report directory must resolve the moved UI owner's parent."""
+    from types import SimpleNamespace
+    from picture_capture.quality import draw_performance_profile
+    from picture_capture.ui import environment_center as env
+
+    monkeypatch.setattr(draw_performance_profile, "_directory", lambda: tmp_path)
+    launched = []
+    if env.os.name == "nt":
+        monkeypatch.setattr(env.os, "startfile", lambda path: launched.append(path))
+    else:
+        monkeypatch.setattr(env.subprocess, "Popen", lambda argv: launched.append(argv))
+    env.EnvironmentCenter._open_draw_performance_reports(SimpleNamespace())
+
+    assert (tmp_path / "reports").is_dir()
+    assert launched
