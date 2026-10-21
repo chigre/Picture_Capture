@@ -1,5 +1,5 @@
 from picture_capture.layout import visualization_summary as summary
-from picture_capture.layout_visualization_role_theme import (
+from picture_capture.layout.visualization_role_theme import (
     BODY_ROLE_COLOR,
     ENTRY_ROLE_COLOR,
     install_layout_role_theme,

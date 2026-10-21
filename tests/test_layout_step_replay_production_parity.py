@@ -164,7 +164,7 @@ def test_mask_enabled_no_regions_still_appears(monkeypatch):
 
 
 def test_bracket_stage_is_not_omitted_and_source_upgrades_are_visible(monkeypatch):
-    from picture_capture import ordinary_bracket_pair
+from picture_capture.ordinary import bracket_pair as ordinary_bracket_pair
     trace = LayoutStepTrace()
     a = Entry("", 20, 55, ocr_source="page_understanding:ordinary_layout_role")
     processing._record_ordinary_debug_stage(
@@ -207,7 +207,7 @@ def test_ocr_mode_currently_selected_still_replays_real_ordinary_pipeline():
 
 
 def test_matched_bracket_shapes_are_frozen_without_changing_detector_output():
-    from picture_capture.ordinary_bracket_pair import recover_bracketed_ordinary_entries
+    from picture_capture.ordinary.bracket_pair import recover_bracketed_ordinary_entries
 
     image = Image.new("L", (760, 660), 255)
     pen = ImageDraw.Draw(image)
