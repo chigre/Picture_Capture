@@ -1075,7 +1075,7 @@ def _records_to_canonical_band(
     records: list[OCRRecord], source_band_size: tuple[int, int], transform_kind: str
 ) -> list[OCRRecord]:
     """Map OCR boxes to analysis space without transforming OCR input pixels."""
-    from .layout_transform import LayoutTransform
+    from .geometry.layout_transform import LayoutTransform
 
     transform = LayoutTransform(transform_kind)
     return [
