@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture import layout_composition as composed
+from picture_capture.layout import composition as composed
 from picture_capture import page_understanding as understanding
 from picture_capture.models import AppSettings
 

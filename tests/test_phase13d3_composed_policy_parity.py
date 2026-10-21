@@ -5,10 +5,10 @@ from PIL import Image, ImageDraw
 
 from picture_capture.design import page_design as base
 from picture_capture.design import layout_policy as policy
-from picture_capture import layout_composition
+from picture_capture.layout import composition as layout_composition
 from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical
-from picture_capture.layout_profile_anchor import anchor_resolved_layout_to_profile
+from picture_capture.layout.profile_anchor import anchor_resolved_layout_to_profile
 from picture_capture.models import AppSettings
 
 

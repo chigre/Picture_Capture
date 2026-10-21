@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from picture_capture.boundary_placement import refine_boundaries_toward_head_top
+from picture_capture.layout.boundary_placement import refine_boundaries_toward_head_top
 from picture_capture.design.page_design import (
     ColumnDesign,
     DictionaryPageLayout,

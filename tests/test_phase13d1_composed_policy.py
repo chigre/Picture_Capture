@@ -4,7 +4,7 @@ from dataclasses import replace
 from PIL import Image
 
 from picture_capture.design import layout_policy as policy
-from picture_capture import layout_composition
+from picture_capture.layout import composition as layout_composition
 from picture_capture.models import AppSettings
 
 

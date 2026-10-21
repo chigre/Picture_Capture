@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_visualization_summary import _format_summary, _summary_box
+from picture_capture.layout.visualization_summary import _format_summary, _summary_box
 
 
 class _Geometry:

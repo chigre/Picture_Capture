@@ -10,15 +10,15 @@ from typing import Any
 
 from PIL import Image
 
-from .design import page_design as base
-from .design import layout_policy as policy
-from .layout_physical_indent import (
+from ..design import page_design as base
+from ..design import layout_policy as policy
+from ..layout_physical_indent import (
     explicit_physical_layout_ops,
     normalize_layout_roles,
 )
-from .layout_profile_anchor import anchor_resolved_layout_to_profile
-from .profile.indent_ui import indent_type_label
-from .layout.step_trace import LayoutStepTrace
+from .profile_anchor import anchor_resolved_layout_to_profile
+from ..profile.indent_ui import indent_type_label
+from .step_trace import LayoutStepTrace
 
 
 def infer_composed_physical_page_layout(
@@ -125,7 +125,7 @@ def understand_composed_page(
     This is an opt-in service in Phase 13E1. GUI and worker routing stays
     unchanged until the full parity and cache/persistence gates are green.
     """
-    from . import page_understanding
+    from .. import page_understanding
 
     ops = explicit_physical_layout_ops()
 

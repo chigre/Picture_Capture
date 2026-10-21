@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from picture_capture.design import page_design as base
-from picture_capture import layout_composition as composed
+from picture_capture.layout import composition as composed
 from picture_capture import layout_core_understanding as core
 from picture_capture.layout import line_start_refinement as robust
 from picture_capture import layout_physical_indent as physical

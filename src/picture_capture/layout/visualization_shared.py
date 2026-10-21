@@ -11,12 +11,12 @@ two role assignments for one page.
 from pathlib import Path
 from typing import Any
 
-from .design.layout_policy import resolve_page_layout_policy
-from .layout_rows_cache import capture_layout_rows
-from .image_utils import build_analysis_image
-from .layout.role_provenance import indent_blocks_with_entry_sources
-from .layout_physical_indent import normalized_physical_indents
-from .processing import (
+from ..design.layout_policy import resolve_page_layout_policy
+from ..layout_rows_cache import capture_layout_rows
+from ..image_utils import build_analysis_image
+from .role_provenance import indent_blocks_with_entry_sources
+from ..layout_physical_indent import normalized_physical_indents
+from ..processing import (
     ORDINARY_AUTO_LAYOUT_FIELDS,
     _geometry_from_page_understanding,
     _understand_page_current,
@@ -79,7 +79,7 @@ def _indent_lanes_from_understanding(understanding: Any) -> list[dict[str, Any]]
 
 def _shared_snapshot_for_app_impl(app: Any) -> Any:
     """Build the ordinary shared Layout snapshot without cache-capture routing."""
-    from . import layout_visualization_ui as ui
+    from .. import layout_visualization_ui as ui
 
     if getattr(app, "image", None) is None:
         raise RuntimeError("没有可显示的页面图像")

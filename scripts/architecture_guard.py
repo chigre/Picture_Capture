@@ -750,6 +750,21 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / current).is_file():
             violations.append(f"canonical lexicon/text owner missing: {current}")
 
+    # Issue #562: true Layout geometry/composition/diagnostic owners; no root shims.
+    moved_layout_followup = {
+        "boundary_placement": "layout/boundary_placement.py",
+        "layout_profile_anchor": "layout/profile_anchor.py",
+        "layout_composition": "layout/composition.py",
+        "page_x_registration": "layout/page_x_registration.py",
+        "layout_visualization_shared": "layout/visualization_shared.py",
+        "layout_visualization_summary": "layout/visualization_summary.py",
+    }
+    for former, canonical in moved_layout_followup.items():
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired Layout root module returned: {former}.py")
+        if not (PACKAGE_ROOT / canonical).is_file():
+            violations.append(f"canonical Layout owner missing: {canonical}")
+
     return violations
 
 

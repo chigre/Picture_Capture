@@ -217,7 +217,7 @@ def test_shadow_flags_body_indent_after_verified_bracket_without_deleting_line()
 
 
 def test_layout_role_strips_are_directly_based_on_exported_physical_rows(monkeypatch):
-    from picture_capture.layout_visualization_summary import _draw_role_strips
+    from picture_capture.layout.visualization_summary import _draw_role_strips
 
     import picture_capture.large_head_visualization_ui as ui
     report = _report()

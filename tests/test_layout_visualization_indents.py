@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_visualization_shared import _indent_blocks_from_understanding
-from picture_capture.layout_visualization_summary import _format_summary, _role_style
+from picture_capture.layout.visualization_shared import _indent_blocks_from_understanding
+from picture_capture.layout.visualization_summary import _format_summary, _role_style
 
 
 class _Column:

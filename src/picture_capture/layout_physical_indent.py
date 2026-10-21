@@ -700,7 +700,7 @@ def _install_page_understanding_finalization() -> None:
 def install_physical_indent_inference() -> None:
     """Install the single physical-indent implementation used by all consumers."""
     from .design import page_design as page_design
-    from .layout_profile_anchor import install_profile_layout_anchor
+    from .layout.profile_anchor import install_profile_layout_anchor
 
     global _BASE_LINE_FEATURE
     if getattr(page_design, "_physical_indent_inference_installed", False):

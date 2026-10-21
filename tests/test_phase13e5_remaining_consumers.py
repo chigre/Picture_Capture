@@ -2,7 +2,7 @@
 from pathlib import Path
 import ast
 
-from picture_capture import layout_composition
+from picture_capture.layout import composition as layout_composition
 from picture_capture.training import export_page_understanding as training
 
 
@@ -20,7 +20,7 @@ def test_training_diagnostics_binds_explicit_composed_service():
 def test_profile_validation_uses_composed_service_inside_worker():
     tree = ast.parse((ROOT / "profile/validation_modes.py").read_text(encoding="utf-8"))
     imports = [alias.name for node in ast.walk(tree)
-               if isinstance(node, ast.ImportFrom) and node.module == "layout_composition"
+               if isinstance(node, ast.ImportFrom) and node.module == "layout.composition"
                for alias in node.names]
     calls = [n.func.id for n in ast.walk(tree)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]

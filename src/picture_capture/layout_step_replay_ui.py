@@ -474,7 +474,7 @@ class LayoutStepReplayWindow:
         a different installed source tree. Report resolved imports instead of
         assuming the downloaded files are the ones currently running.
         """
-        from . import layout_composition
+        from .layout import composition as layout_composition
         from .design import layout_policy as dictionary_page_layout_policy
         from . import layout_physical_indent
         modules = [

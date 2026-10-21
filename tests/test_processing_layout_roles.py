@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import layout_physical_indent, layout_visualization_shared, processing
+from picture_capture import layout_physical_indent, processing
+from picture_capture.layout import visualization_shared as layout_visualization_shared
 from picture_capture.entry_classification import register_layout_line_classification
 from picture_capture.models import AppSettings, Entry
 

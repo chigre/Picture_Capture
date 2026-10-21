@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from picture_capture.page_x_registration import _robust_page_delta
+from picture_capture.layout.page_x_registration import _robust_page_delta
 
 
 def test_sparse_first_column_cannot_drag_two_column_profile_origin() -> None:

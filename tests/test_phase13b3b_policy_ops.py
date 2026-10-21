@@ -6,7 +6,7 @@ from PIL import Image
 
 from picture_capture.design import page_design as base
 from picture_capture.design import layout_policy as policy
-from picture_capture import layout_profile_anchor as anchor
+from picture_capture.layout import profile_anchor as anchor
 from picture_capture.models import AppSettings
 
 

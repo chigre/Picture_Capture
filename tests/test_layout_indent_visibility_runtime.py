@@ -89,7 +89,7 @@ def test_visible_renderer_draws_left_and_right_column_indent_blocks():
 
 
 def test_static_visibility_preserves_lane_then_prepared_summary_order():
-    from picture_capture.layout_visualization_summary import _finalize_summary_text
+    from picture_capture.layout.visualization_summary import _finalize_summary_text
 
     app = SimpleNamespace(
         _layout_visualization_indent_lanes=[
@@ -116,7 +116,7 @@ def test_phase5k_static_visibility_ownership():
     root = Path(__file__).resolve().parents[1]
     package = root / "src" / "picture_capture"
     gui = (package / "bootstrap" / "gui.py").read_text(encoding="utf-8")
-    summary = (package / "layout_visualization_summary.py").read_text(encoding="utf-8")
+    summary = (package / "layout/visualization_summary.py").read_text(encoding="utf-8")
     lane = (package / "layout" / "lane_summary_extension.py").read_text(encoding="utf-8")
     guard = (root / "scripts" / "architecture_guard.py").read_text(encoding="utf-8")
 

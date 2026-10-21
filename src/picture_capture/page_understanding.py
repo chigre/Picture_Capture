@@ -28,7 +28,7 @@ from PIL import Image
 
 from .design import page_design as base
 from .design import page_design_refined as refined
-from .boundary_placement import refine_boundaries_toward_head_top
+from .layout.boundary_placement import refine_boundaries_toward_head_top
 from .design.layout_policy import infer_dictionary_page_layout
 from .models import AppSettings, Entry
 from .profile.indent_ui import indent_type_label

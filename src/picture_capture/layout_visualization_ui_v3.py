@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
-from .layout_visualization_summary import draw_layout_visualization_detailed
+from .layout.visualization_summary import draw_layout_visualization_detailed
 
 
 _DENOISE_LABEL_TO_VALUE = {
@@ -254,7 +254,7 @@ def draw_layout_visualization_if_enabled(app: Any) -> None:
             if mode == "详细":
                 draw_layout_visualization_detailed(app)
             else:
-                from .layout_visualization_summary import draw_layout_visualization_clean
+                from .layout.visualization_summary import draw_layout_visualization_clean
                 draw_layout_visualization_clean(app)
             from .layout.details_window import refresh_layout_details_if_open
             refresh_layout_details_if_open(app)

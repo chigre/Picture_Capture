@@ -61,7 +61,7 @@ def resolve_unlined_physical_rows(
     # Escalate geometry only through the explicit physical-only policy
     # composition. This independent spawn worker no longer needs to install
     # process-global Layout hooks before the detector can run.
-    from ..layout_composition import infer_composed_physical_page_layout
+    from ..layout.composition import infer_composed_physical_page_layout
 
     try:
         layout, _page_settings, _applied = infer_composed_physical_page_layout(
