@@ -18,6 +18,21 @@ OWNERS = {
     "auxiliary_crop_partition": "crop.auxiliary_partition",
 }
 
+def _retired_relative_root_import(path: Path, item: ast.ImportFrom, retired: str) -> bool:
+    if item.level <= 0 or (item.module or "") != retired:
+        return False
+    try:
+        relative_dir = path.parent.relative_to(ROOT)
+    except ValueError:
+        # Non-package tests/scripts are not authorized to import removed helpers.
+        return True
+    package_parts = ("picture_capture", *relative_dir.parts)
+    if item.level > len(package_parts):
+        return True
+    target = package_parts[:len(package_parts) - (item.level - 1)] + (retired,)
+    return target == ("picture_capture", retired)
+
+
 @pytest.mark.parametrize("retired, target", sorted(OWNERS.items()))
 def test_page_utilities_have_one_canonical_owner(retired: str, target: str) -> None:
     assert not (ROOT / f"{retired}.py").exists()
@@ -39,7 +54,7 @@ def test_no_retired_python_imports_in_source_tests_or_scripts() -> None:
                     mod = item.module or ""
                     assert not any(mod == "picture_capture." + retired or
                                    mod.startswith("picture_capture." + retired + ".") or
-                                   (item.level > 0 and mod == retired and path.parent == ROOT)
+                                   _retired_relative_root_import(path, item, retired)
                                    for retired in OWNERS), (path, item.lineno)
                     if mod in ("", "picture_capture"):
                         assert not any(n.name in OWNERS for n in item.names), (path, item.lineno)
