@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import picture_capture.processing as processing
-from picture_capture import processing_publish
+from picture_capture.crop import publish as processing_publish
 
 
 def test_phase7i_core_reexports_publish_helpers_from_new_owner() -> None:
