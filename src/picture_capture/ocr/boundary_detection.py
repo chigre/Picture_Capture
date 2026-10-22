@@ -53,7 +53,7 @@ def detect_ocr_headword_boundaries(
     leave it ``None`` and use the canonical shared OCR channel.
     """
 
-    from ..evidence_fusion import detect_paddle_headwords as legacy_detect
+    from .evidence_fusion import detect_paddle_headwords as legacy_detect
 
     if engine is not None:
         return legacy_detect(
