@@ -3,18 +3,61 @@ name: CI
 on:
   push:
     branches: [main, audit/settings-contract-thresholds-help-scroll-20261015]
+    tags: ["v*"]
   pull_request:
     branches: [main, feat/integrated-ocr-runtime-monitor-20261014]
+  schedule:
+    - cron: "19 4 * * *"  # daily full test; 12:19 Asia/Singapore
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  classify:
+    name: Risk tier
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+      os313: ${{ steps.tier.outputs.os313 }}
+      os310: ${{ steps.tier.outputs.os310 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify Git diff
+        id: tier
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            python scripts/ci_risk_tier.py --base "$BASE_SHA" --github-output "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_TYPE" == "branch" ]]; then
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              python scripts/ci_risk_tier.py --base HEAD^ --github-output "$GITHUB_OUTPUT"
+            else
+              python scripts/ci_risk_tier.py --full --github-output "$GITHUB_OUTPUT"
+            fi
+          else
+            python scripts/ci_risk_tier.py --full --github-output "$GITHUB_OUTPUT"
+          fi
+
+  docs:
+    name: Documentation architecture check
+    needs: classify
+    if: needs.classify.outputs.tier == 'docs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/architecture_guard.py
+
   test:
+    needs: classify
+    if: needs.classify.outputs.tier != 'docs'
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+      matrix: ${{ fromJSON(needs.classify.outputs.os313) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
@@ -94,10 +137,11 @@ jobs:
 
   python310-compat:
     name: "Python 3.10 / ${{ matrix.os }}"
+    needs: classify
+    if: needs.classify.outputs.tier != 'docs'
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+      matrix: ${{ fromJSON(needs.classify.outputs.os310) }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
@@ -133,3 +177,35 @@ jobs:
         run: uv run --locked --python 3.10 ruff check --select F821 src tests scripts run.py run_tests.py
       - name: Build wheel
         run: uv build --wheel
+
+
+  required:
+    name: Risk-tier CI gate
+    needs: [classify, docs, test, python310-compat]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required tier results
+        shell: bash
+        env:
+          CLASSIFY: ${{ needs.classify.result }}
+          TIER: ${{ needs.classify.outputs.tier }}
+          DOCS: ${{ needs.docs.result }}
+          PY313: ${{ needs.test.result }}
+          PY310: ${{ needs.python310-compat.result }}
+        run: |
+          python - <<'PY'
+          import os
+          c, t, d, p13, p10 = (os.getenv(k) for k in ("CLASSIFY", "TIER", "DOCS", "PY313", "PY310"))
+          print(f"classify={c} tier={t} docs={d} py313={p13} py310={p10}")
+          if c != "success":
+              raise SystemExit("risk classification failed")
+          if t == "docs":
+              if (d, p13, p10) != ("success", "skipped", "skipped"):
+                  raise SystemExit("docs tier checks failed")
+          elif t in ("fast", "full"):
+              if p13 != "success" or p10 != "success":
+                  raise SystemExit("platform checks failed")
+          else:
+              raise SystemExit(f"unknown risk tier {t!r}")
+          PY

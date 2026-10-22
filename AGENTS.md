@@ -19,6 +19,6 @@ This file applies to every bug fix, feature, refactor, and AI-assisted change.
 ## Validation and delivery
 - Add a regression reproducing each bug, including reopening or round-tripping state where relevant.
 - New features need unit tests for behavior plus GUI smoke/integration coverage for changed wiring; negative cases and cross-platform behavior matter.
-- Run `python scripts/architecture_guard.py`, `python scripts/change_architecture_guard.py --base <base-ref>`, the focused tests, and the full CI.
+- Run `python scripts/architecture_guard.py`, `python scripts/change_architecture_guard.py --base <base-ref>`, the focused tests, and the full CI **required for the independently computed tier** in `docs/architecture/CI_RISK_POLICY.md`. High-risk behavior/platform/schema changes and release runs still require the full Windows/macOS/Ubuntu matrix; fast/documentation checks must not be presented as macOS testing.
 - A green CI is necessary but not proof of every GUI behavior. State what was and was not tested.
 - Use `.github/PULL_REQUEST_TEMPLATE.md` as the review checklist. Never silently weaken a test to accommodate an accidental behavioral regression.

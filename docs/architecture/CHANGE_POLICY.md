@@ -19,7 +19,7 @@ A helper must never import the large GUI shell to reach functionality. Pass data
 2. **Design** minimal changes and identify which module owns each new responsibility.
 3. **Implement** with explicit imports, without growing legacy debt; keep the public compatibility surface unchanged unless deliberate.
 4. **Test** failing-before/passing-after regression for the bug; persistence round-trip and at least one edge case where applicable.
-5. **Verify** architecture ratchets and change-specific guard; full cross-platform CI, GUI smoke, and wheel build.
+5. **Verify** architecture ratchets and change-specific guard; run the risk-tier CI required for the exact Git diff (including GUI smoke and wheel for code changes), plus the full Windows/macOS/Ubuntu matrix for behavioral, platform-sensitive, schema/persistence, GPU/spawn and release changes. See `CI_RISK_POLICY.md`.
 6. **Review** diff and state side effects (focus loss, autosave, reorder/section identity, undo/navigation, zoom, export, restart).
 7. **Merge only after green gates**; document residual limitations honestly.
 
@@ -37,3 +37,7 @@ Exceptions are narrowly scoped and must document the ownership reason, compatibi
 
 ## Pull request acceptance
 The PR template captures responsibility boundaries, state ownership, behavior parity, tests, and architecture gate output. PRs violating an enforced rule cannot be merged until the code is redesigned; any proposed change to an enforcement rule belongs in a separate, explicit architecture review.
+
+## Risk-tier CI acceptance (approved 2026-10-22)
+
+The former unconditional six-platform-per-PR requirement is superseded by [`CI_RISK_POLICY.md`](CI_RISK_POLICY.md): docs-only gets architecture validation, proven mechanical/import-only changes get Ubuntu Python 3.13 + Ubuntu/Windows Python 3.10 full regressions, and any actual production behavior/platform/schema change gets six OS/Python jobs. A daily full default-branch CI, release-tag full CI and manual full rerun retain macOS coverage. No PR may override the classifier with an assertion or label. Required gate + CodeQL + review/branch protection still apply; main postmerge and outstanding human GPU/Tk/PDIC parity must be reported separately.
