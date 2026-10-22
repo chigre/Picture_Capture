@@ -6,7 +6,7 @@ from pathlib import Path
 import threading
 
 import pytest
-import picture_capture.single_line_parallel as parallel
+import picture_capture.crop.single_line_parallel as parallel
 
 
 class _ThreadPoolLikeProcessPool(ThreadPoolExecutor):

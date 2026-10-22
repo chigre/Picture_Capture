@@ -79,7 +79,9 @@ def test_critical_paths_full_even_on_import_only_change():
               "src/picture_capture/image_utils.py",
               "src/picture_capture/geometry/layout_transform.py",
               "src/picture_capture/refinement/parallel.py",
-              "src/picture_capture/refinement/separator_y.py"):
+              "src/picture_capture/refinement/separator_y.py",
+              "src/picture_capture/crop/single_line_parallel.py",
+              "src/picture_capture/crop/unlined_line_export.py"):
         assert tier([("M", p, p)], "import math\n", "import cmath\n") == "full"
 
 

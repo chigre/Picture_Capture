@@ -41,9 +41,9 @@ def test_lined_and_unlined_exports_opt_into_pdic_edit_without_claiming_pages():
         assert "foreground_page_edit=True" not in segment
         assert "max_workers=workers" in segment
     # Both workers are read-only consumers of atomic on-disk PDIC revisions.
-    source = (ROOT / "single_line_parallel.py").read_text(encoding="utf-8")
+    source = (ROOT / "crop/single_line_parallel.py").read_text(encoding="utf-8")
     assert "formats.read_pdic(formats.pdic_path(image_path))" in source
-    source = (ROOT / "unlined_line_export.py").read_text(encoding="utf-8")
+    source = (ROOT / "crop/unlined_line_export.py").read_text(encoding="utf-8")
     assert "formats.read_pdic(formats.pdic_path(image_path))" in source
 
 

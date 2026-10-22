@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import picture_capture.ui.controllers.crop as crop_module
 from picture_capture.ui.controllers.crop import CropController
-from picture_capture.unlined_line_export import UnlinedPageResult
+from picture_capture.crop.unlined_line_export import UnlinedPageResult
 
 
 class _StatusVar:
@@ -149,6 +149,6 @@ def test_unlined_stopped_and_error_paths_restore_buttons(tmp_path, monkeypatch):
 def test_controller_looks_up_unlined_worker_through_module_for_fast_path_patch():
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/ui/controllers/crop.py").read_text(encoding="utf-8")
-    assert "from ... import unlined_line_export as unlined_export" in source
+    assert "from ...crop import unlined_line_export as unlined_export" in source
     assert "unlined_export.export_unlined_page_job" in source
     assert "from ...unlined_line_export import export_unlined_page_job" not in source
