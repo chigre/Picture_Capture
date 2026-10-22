@@ -36,7 +36,7 @@ def test_project_manifest_roundtrip_routes_managed_storage_without_moving_scan(
     assert storage.is_managed_project(root)
     assert storage.settings_path(root) == storage.storage_root(root) / storage.SETTINGS_FILENAME
     assert scan.read_bytes() == b"original user-owned scan bytes"
-    assert "\\n  " in raw
+    assert raw.splitlines()[1].startswith('  "format"')
     assert _staged(manifest) == []
 
     storage.ensure_project_storage(root, "2.15")
