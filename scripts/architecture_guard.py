@@ -604,7 +604,7 @@ def collect_violations() -> list[str]:
             )
 
     ui_terminology_source = (
-        PACKAGE_ROOT / "ui_terminology.py"
+        PACKAGE_ROOT / "ui/terminology_compat.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_UI_TERMINOLOGY_MUTATIONS:
         if marker in ui_terminology_source:
@@ -1068,6 +1068,23 @@ def collect_violations() -> list[str]:
             violations.append(f"retired no-op installer domain owner missing: {canonical}")
         elif signature not in target.read_text(encoding="utf-8"):
             violations.append(f"retired no-op installer contract missing: {canonical}")
+
+    # Issue #562: the training scope parser and retired UI text normalizer
+    # are package-owned leaves. Do not reintroduce root compatibility modules
+    # or hand historical GUI/selection state back to these helpers.
+    for former, canonical, signature in (
+        ("training_export_ui.py", "training/legacy_scope_ui.py",
+         "def resolve_export_indices("),
+        ("ui_terminology.py", "ui/terminology_compat.py",
+         "def normalize_ui_text("),
+    ):
+        if (PACKAGE_ROOT / former).is_file():
+            violations.append(f"retired root helper returned: {former}")
+        owner = PACKAGE_ROOT / canonical
+        if not owner.is_file():
+            violations.append(f"missing canonical helper owner: {canonical}")
+        elif signature not in owner.read_text(encoding="utf-8"):
+            violations.append(f"canonical helper lost its implementation: {canonical}")
 
     return violations
 

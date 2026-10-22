@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 from picture_capture.profile import indent_ui as profile_indent_ui
 
-from picture_capture import training_export_ui
+from picture_capture.training import legacy_scope_ui as training_export_ui
 from picture_capture.ui.controllers.export import ExportController
-from picture_capture.ui_terminology import (
+from picture_capture.ui.terminology_compat import (
     install_app_tooltip_terminology,
     install_ui_terminology,
     normalize_ui_text,
@@ -63,7 +63,7 @@ def test_ui_terminology_installers_are_retired_compatibility_noops():
     root = Path(__file__).resolve().parents[1]
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     terminology = (
-        root / "src/picture_capture/ui_terminology.py"
+        root / "src/picture_capture/ui/terminology_compat.py"
     ).read_text(encoding="utf-8")
 
     assert "install_ui_terminology()" not in gui
@@ -75,7 +75,7 @@ def test_ui_terminology_installers_are_retired_compatibility_noops():
 
 def test_product_python_sources_use_canonical_ui_terms():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    compatibility = root / "ui_terminology.py"
+    compatibility = root / "ui/terminology_compat.py"
     legacy_terms = (
         "三、融合 / OCR画线参数",
         "三、OCR画线参数（默认）",

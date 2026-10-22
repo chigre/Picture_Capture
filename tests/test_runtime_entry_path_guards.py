@@ -16,7 +16,7 @@ from picture_capture.ocr.action_guard import (
 )
 from picture_capture.ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from picture_capture.ui.settings import schema as settings_schema
-from picture_capture.ui_terminology import normalize_ui_text
+from picture_capture.ui.terminology_compat import normalize_ui_text
 
 
 class _Var:
