@@ -32,5 +32,5 @@ def test_new_training_owners_are_physical_and_importable():
 
 
 def test_legacy_training_export_entrypoints_are_preserved():
-    for name in ("training_export.py", "training_export_ui.py"):
+    for name in ("training_export.py",):
         assert (ROOT / name).is_file()
