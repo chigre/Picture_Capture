@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from ..formats import pdic_path, write_pdic
+from ..io.formats import pdic_path, write_pdic
 from ..project_storage import page_sections_read_path_for_image, simplified_review_path_for_image
 from .events import sha256_file
 from .transactions import (

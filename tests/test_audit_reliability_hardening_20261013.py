@@ -164,7 +164,7 @@ def test_bad_crop_settings_version_is_safe_and_corrupt_json_is_reported(tmp_path
 
 def test_page_artifact_edit_invalidates_metadata_clock(tmp_path, monkeypatch):
     from picture_capture.project import metadata_cache as cache
-    from picture_capture.formats import write_pdic
+    from picture_capture.io.formats import write_pdic
     from picture_capture.models import Entry
 
     monkeypatch.setattr(cache, "user_config_root", lambda: tmp_path / "config")

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.formats import write_pdic
+from picture_capture.io.formats import write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ocr_page_resume import (
     input_fingerprint, resume_path, validated_resume, write_page_resume,

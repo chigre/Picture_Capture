@@ -149,7 +149,7 @@ def previous_entry_ref_for_image(previous_image_path) -> tuple[str, int] | None:
     if previous_image_path is None:
         return None
     from pathlib import Path
-    from ..formats import pdic_path, read_pdic
+    from ..io.formats import pdic_path, read_pdic
 
     previous = Path(previous_image_path)
     entries = read_pdic(pdic_path(previous))
@@ -185,7 +185,7 @@ def write_ordered_auto_ppp(
     """
     from pathlib import Path
     from PIL import Image, ImageOps
-    from ..formats import write_ppp
+    from ..io.formats import write_ppp
     from ..processing_core import derive_nominal_geometry
     from ..profile.semantics import effective_page_settings
     from ..page_sections import read_page_sections

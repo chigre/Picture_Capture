@@ -1,7 +1,7 @@
 """Unchanged autosaves must preserve PDIC/PPP file contents and mtimes."""
 from pathlib import Path
 
-from picture_capture.formats import write_pdic, write_ppp
+from picture_capture.io.formats import write_pdic, write_ppp
 from picture_capture.models import Entry, PolygonRegion
 
 

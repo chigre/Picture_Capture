@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from picture_capture.app import PictureCaptureApp, ReviewWindow
-from picture_capture.formats import pdic_path, write_pdic
+from picture_capture.io.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
 from picture_capture.proofreading.save_safety import (
     protect_app_pdic_commit, protect_review_pdic_commit,

@@ -15,7 +15,7 @@ from tkinter import messagebox
 from typing import Any
 
 from .crop import complete_crop_widths
-from ...formats import pdic_path, read_ppp, write_ppp
+from ...io.formats import pdic_path, read_ppp, write_ppp
 from ...models import PolygonRegion
 from ...illustration.labels import (
     illustration_labels, label_text, user_edited_link, previous_entry_ref_for_image,

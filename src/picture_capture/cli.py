@@ -13,7 +13,7 @@ from .bootstrap.core import build_core_services
 # as GUI and spawn workers before importing formats/processing callables by value.
 build_core_services()
 
-from .formats import pdic_path, read_pdic, read_ppp, write_pdic
+from .io.formats import pdic_path, read_pdic, read_ppp, write_pdic
 from .image_utils import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME

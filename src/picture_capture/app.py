@@ -33,7 +33,7 @@ from .ui.appearance import (
     themed_display_image,
     usage_guide_palette,
 )
-from .gui_io import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
+from .io.gui_io import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, write_text_atomic
 from .ocr.action_guard import LENS_MODE_LABELS, LENS_MODE_VALUES, guard_ocr_action_selection
 from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
@@ -254,7 +254,6 @@ from .processing import (
     refine_existing_entries,
 )
 
-
 DETECTION_LABELS = {
     "combined": "融合画线（推荐｜普通几何＋OCR语义）",
     "paddleocr": "PaddleOCR（单独｜词头＋坐标）",
@@ -285,19 +284,16 @@ OCR_TO_PROJECT_LANGUAGE = {
     "jpn": "ja", "japan": "ja", "kor": "ko", "korean": "ko", "rus": "ru",
 }
 
-
 def project_language_from_ocr(ocr_language: str) -> str:
     """Map the first configured OCR language to an ISO 639-1 code."""
     first = next((part.strip().lower() for part in str(ocr_language or "").split("+") if part.strip()), "")
     return OCR_TO_PROJECT_LANGUAGE.get(first, first if len(first) == 2 and first.isalpha() else "")
-
 
 def transformed_geometry_pending(settings: AppSettings) -> bool:
     """Return whether a configured transform is unknown to the geometry adapter."""
     return str(getattr(settings, "layout_transform", "identity") or "identity") not in {
         "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
     }
-
 
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}
 OCR_SCOPE_VALUES = {label: value for value, label in OCR_SCOPE_LABELS.items()}
@@ -310,7 +306,6 @@ OCR_REFRESH_VALUES = {label: value for value, label in OCR_REFRESH_LABELS.items(
 def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_width: int) -> AppSettings:
     """Return review settings unchanged; geometry is already source pixels."""
     return replace(settings)
-
 
 def _review_crop_context(
     image: Image.Image,
@@ -326,13 +321,11 @@ def _review_crop_context(
         derive_geometry(analysis_image, effective),
     )
 
-
 def _is_cjk_review_index(settings: AppSettings) -> bool:
     """Return whether the active index/profile is Chinese-oriented."""
     language = str(getattr(settings, "ocr_language", "") or "").strip().lower()
     profile = str(getattr(settings, "dictionary_profile_id", "") or "").strip().lower()
     return language.startswith("chi_") or profile.startswith("cjk_")
-
 
 def _effective_review_single_cjk_line_height(settings: AppSettings) -> int:
     """Resolve the review-only height for one-character CJK headwords.
@@ -350,7 +343,6 @@ def _effective_review_single_cjk_line_height(settings: AppSettings) -> int:
     base = max(1, int(getattr(settings, "character_height", 1) or 1))
     multiplier = 2.5 if _is_cjk_review_index(settings) else 1.6
     return max(base, round(base * multiplier))
-
 
 def _effective_review_regular_crop_height(settings: AppSettings) -> int:
     """Resolve ordinary proofreading crop height in parameter pixels."""
@@ -15596,7 +15588,7 @@ class PictureCaptureApp(tk.Tk):
             and not bool(getattr(self.settings, "layout_mask_illustrations_use_existing", False))
             and self.current_page is not None
         ):
-            from .formats import write_ppp
+            from .io.formats import write_ppp
             self._sync_polygon_label_texts()
             self._save_normalized_ppp()
         self.settings.detection_method = method

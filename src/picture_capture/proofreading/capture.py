@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from uuid import uuid4, uuid5, NAMESPACE_URL
 
-from ..formats import pdic_path, read_pdic
+from ..io.formats import pdic_path, read_pdic
 from ..project_storage import data_root
 from .events import append_event, append_rename_batch, load_events, make_event, sha256_file
 from .section import section_fields_for_event

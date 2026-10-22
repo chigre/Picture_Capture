@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture import formats, processing
+from picture_capture.io import formats
+from picture_capture import processing
 from picture_capture.bootstrap.core import CoreServices, build_core_services
 
 

@@ -116,7 +116,7 @@ def mask_large_illustrations_for_layout(
                 "无法确定 PPP 文件。"
             )
         from ..project_storage import ppp_read_path_for_image
-        from ..formats import read_ppp
+        from ..io.formats import read_ppp
         ppp_file = ppp_read_path_for_image(Path(source_image_path))
         if not ppp_file.is_file():
             raise FileNotFoundError(

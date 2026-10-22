@@ -262,7 +262,7 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
 def test_gui_composition_uses_static_pdic_io_and_review_classification():
     import picture_capture.app as app_module
     import picture_capture.bootstrap.gui as gui_bootstrap
-    import picture_capture.gui_io as gui_io
+    import picture_capture.io.gui_io as gui_io
 
     source = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
     assert "install_pdic_classification(formats)" not in source
@@ -336,8 +336,8 @@ def test_gui_baseline_capture_wraps_core_classification_without_reinstall(tmp_pa
 def test_gui_pdic_io_resolves_current_formats_callables_at_call_time(
     tmp_path: Path, monkeypatch,
 ):
-    import picture_capture.gui_io as gui_io
-    from picture_capture import formats
+    import picture_capture.io.gui_io as gui_io
+    from picture_capture.io import formats
 
     reads: list[Path] = []
     writes: list[tuple[Path, list[Entry]]] = []
@@ -380,7 +380,8 @@ def test_gui_pdic_io_resolves_current_formats_callables_at_call_time(
 
 def test_core_composition_installs_classification_for_non_gui_consumers():
     import picture_capture
-    from picture_capture import formats, processing
+    from picture_capture.io import formats
+    from picture_capture import processing
     from picture_capture.bootstrap.core import build_core_services
 
     build_core_services()

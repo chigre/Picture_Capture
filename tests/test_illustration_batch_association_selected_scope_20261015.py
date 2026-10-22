@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from PIL import Image
 import pytest
 
-from picture_capture.formats import read_pdic, read_ppp, write_pdic, write_ppp
+from picture_capture.io.formats import read_pdic, read_ppp, write_pdic, write_ppp
 from picture_capture.models import AppSettings, Entry, PolygonRegion
 from picture_capture.processing_core import Geometry
 from picture_capture.project_storage import ppp_read_path_for_image, ppp_write_path_for_image
@@ -327,7 +327,7 @@ def test_first_figure_links_to_previous_saved_last_ordinal_and_preserves_pdic(tm
         [Entry("current first", 15, 260)],
         250, ("080102", "080101", "080103"),
     )
-    from picture_capture.formats import write_ppp
+    from picture_capture.io.formats import write_ppp
     source = ppp_read_path_for_image(current)
     write_ppp(source, [
         PolygonRegion("", [(20, 25), (90, 25), (90, 85), (20, 85)]),

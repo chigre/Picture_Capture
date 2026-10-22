@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.formats import read_ppp, write_ppp
+from picture_capture.io.formats import read_ppp, write_ppp
 from picture_capture.models import Entry, PolygonRegion
 from picture_capture.processing_core import Geometry
 from picture_capture.ui.controllers import illustration as ui

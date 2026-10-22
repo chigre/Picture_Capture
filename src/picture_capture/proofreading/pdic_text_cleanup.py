@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from tkinter import messagebox
 
-from ..formats import pdic_path, read_pdic, read_text_detected, write_text_atomic
+from ..io.formats import pdic_path, read_pdic, read_text_detected, write_text_atomic
 
 
 def clear_pdic_words(path: Path) -> int:

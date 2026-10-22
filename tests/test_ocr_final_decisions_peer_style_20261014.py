@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from picture_capture.ocr.evidence_fusion import _rescue_local_peer_style_continuations
-from picture_capture.formats import read_pdic, write_pdic
+from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ocr.final_decisions import (
     apply_final_review_annotations,

@@ -12,7 +12,7 @@ from pathlib import Path
 import json
 import uuid
 
-from ..formats import write_text_atomic
+from ..io.formats import write_text_atomic
 from ..project_storage import is_managed_project, storage_root
 
 FORMAT = "picture-capture-illustrated-entries-v1"

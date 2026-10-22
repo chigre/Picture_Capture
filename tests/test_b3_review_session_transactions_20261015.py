@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.formats import pdic_path, read_pdic, write_pdic
+from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
 from picture_capture.proofreading.transactions import (
     ReviewSessionHistory, snapshot_review,

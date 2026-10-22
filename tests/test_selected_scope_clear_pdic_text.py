@@ -1,7 +1,7 @@
 """Selected-scope PDIC text clearing preserves every marker field."""
 from pathlib import Path
 
-from picture_capture.formats import read_pdic
+from picture_capture.io.formats import read_pdic
 from picture_capture.proofreading.pdic_text_cleanup import clear_pdic_words
 
 

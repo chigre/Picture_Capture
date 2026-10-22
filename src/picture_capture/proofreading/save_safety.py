@@ -12,7 +12,7 @@ from typing import Any
 
 import tkinter as tk
 
-from ..formats import pdic_path
+from ..io.formats import pdic_path
 
 
 def _bytes_or_absent(path):

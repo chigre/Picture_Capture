@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import NAMESPACE_URL, uuid5
 
-from picture_capture.formats import pdic_path, read_pdic, write_pdic
+from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
 from picture_capture.proofreading.capture import (
     _project_identity, capture_saved_review_rename,

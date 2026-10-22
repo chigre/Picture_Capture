@@ -43,7 +43,7 @@ def _persist(window: Any) -> None:
     ):
         return
     try:
-        from ..formats import pdic_path, write_pdic
+        from ..io.formats import pdic_path, write_pdic
 
         write_pdic(
             pdic_path(parent.current_page),

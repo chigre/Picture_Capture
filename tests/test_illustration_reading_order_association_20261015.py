@@ -121,7 +121,7 @@ def test_editing_only_changes_link_not_number_page_or_source():
 
 def test_background_automatic_detection_persists_reading_order_and_auto_origin(tmp_path):
     from PIL import Image
-    from picture_capture.formats import read_ppp, write_ppp
+    from picture_capture.io.formats import read_ppp, write_ppp
     from picture_capture.illustration.detection import is_auto_illustration_region
     from picture_capture.models import AppSettings
     from picture_capture.processing_core import detect_illustrations_to_ppp

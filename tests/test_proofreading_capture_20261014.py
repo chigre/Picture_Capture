@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from picture_capture.formats import pdic_path, read_pdic, write_pdic
+from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.proofreading.capture import (
     capture_saved_review_deletion, _project_identity,
