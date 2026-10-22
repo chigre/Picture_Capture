@@ -849,7 +849,7 @@ def get_paddle_engine(settings: AppSettings) -> Any:
     # Layout analysis and full OCR use separate Paddle pipelines. Once formal
     # OCR starts, the detection-only model is no longer needed and may otherwise
     # pin a second large CPU/GPU allocation for the rest of the session.
-    from .layout_detection import clear_text_detection_cache
+    from .layout.detection import clear_text_detection_cache
     clear_text_detection_cache()
     # Avoid the PaddlePaddle 3.3.x CPU PIR/oneDNN incompatibility also for
     # ordinary OCR, not only the separate layout detector.
