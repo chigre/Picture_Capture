@@ -13,6 +13,7 @@ from typing import Any, Iterable
 import json
 import os
 import tempfile
+import threading
 import weakref
 from collections import OrderedDict
 
@@ -21,6 +22,12 @@ from .models import AppSettings, Entry
 ENTRY_SOURCES = {"indent", "symbol_sample", "large_head", "ocr", "manual", "unknown"}
 ENTRY_SCALES = {"regular", "oversized"}
 SIDECAR_FORMAT = "picture-capture-entry-classification-v1"
+
+# Keep reads, manual-override matching and atomic publication in one
+# same-process transaction. A lock limited to os.replace cannot stop a second
+# writer from loading stale classification rows and erasing a user correction.
+# Reentrant to allow future nested sidecar helpers without lock-order inversions.
+_SIDECAR_TRANSACTION_LOCK = threading.RLock()
 
 
 @dataclass(slots=True)
@@ -378,6 +385,11 @@ def _meta_from_row(row: dict[str, Any]) -> EntryClassification:
 
 
 def apply_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> None:
+    with _SIDECAR_TRANSACTION_LOCK:
+        _apply_classification_sidecar_locked(entries, pdic_path)
+
+
+def _apply_classification_sidecar_locked(entries: Iterable[Entry], pdic_path: Path) -> None:
     rows = _read_sidecar(classification_sidecar_path(pdic_path))
     used: set[int] = set()
     for entry in entries:
@@ -412,6 +424,11 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> bool:
 
 
 def write_classification_sidecar(entries: Iterable[Entry], pdic_path: Path) -> bool:
+    with _SIDECAR_TRANSACTION_LOCK:
+        return _write_classification_sidecar_locked(entries, pdic_path)
+
+
+def _write_classification_sidecar_locked(entries: Iterable[Entry], pdic_path: Path) -> bool:
     path = classification_sidecar_path(pdic_path)
     old_rows = _read_sidecar(path)
     used: set[int] = set()
