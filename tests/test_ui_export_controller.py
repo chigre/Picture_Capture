@@ -330,7 +330,7 @@ def test_build_picdic_wiring_moves_only_action_orchestration_to_export_controlle
     assert "build_picdic_package" not in block
     assert "PicDicBuildCancelled" not in block
     assert "from .picdic import PicDicBuildCancelled, build_picdic_package" not in imports
-    assert "from ...picdic import PicDicBuildCancelled, build_picdic_package" in controller
+    assert "from ...io.picdic import PicDicBuildCancelled, build_picdic_package" in controller
     assert "    def build_picdic(self) -> None:" in controller
     menu = (ROOT / "src/picture_capture/ui/compact_task_menus.py").read_text(encoding="utf-8")
     assert '("PicDic制作", "build_picdic")' in menu
@@ -577,7 +577,7 @@ def test_export_picdic_index_wiring_keeps_app_wrapper_and_format_boundaries() ->
     assert "_start_batch_task" not in block
     assert "read_picdic_index_records" not in block
     assert "read_picdic_index_records" not in imports
-    assert "from ...formats import pdic_path, read_pdic, read_picdic_index_records" in controller
+    assert "from ...io.formats import pdic_path, read_pdic, read_picdic_index_records" in controller
     assert "from ...project_storage import exports_root, qt_root" in controller
     assert "    def export_picdic_index(self) -> None:" in controller
     assert "os.replace(temp, target)" in controller
