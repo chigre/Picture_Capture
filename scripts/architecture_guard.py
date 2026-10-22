@@ -932,6 +932,14 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "layout/symbol_evidence.py").is_file():
         violations.append("canonical Layout sampled symbol evidence owner missing")
 
+
+    # Issue #562: the legacy OCR-channel execution bridge has one OCR package owner.
+    # Retired root compatibility copies must not reappear as thin shims.
+    if (PACKAGE_ROOT / "ocr_channel_legacy.py").is_file():
+        violations.append("retired root OCR-channel bridge owner returned")
+    if not (PACKAGE_ROOT / "ocr/channel_legacy.py").is_file():
+        violations.append("canonical OCR-channel bridge owner missing")
+
     return violations
 
 

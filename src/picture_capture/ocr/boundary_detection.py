@@ -11,7 +11,7 @@ placement logic.
 The mature parser/arbitration implementation still lives behind
 ``evidence_fusion.detect_paddle_headwords``. Historical ``paddle_*`` setting
 translation and the temporary parser-runner bridge are both isolated in
-:mod:`picture_capture.ocr_channel_legacy`; this consumer therefore depends only
+:mod:`picture_capture.ocr.channel_legacy`; this consumer therefore depends only
 on the shared OCR-channel contract plus the stable parser backend.
 """
 
@@ -21,7 +21,7 @@ from typing import Any
 from PIL import Image
 
 from ..models import AppSettings
-from ..ocr_channel_legacy import (
+from .channel_legacy import (
     apply_channel_plan_to_legacy_boundary_settings,
     route_legacy_boundary_ocr_through_channel,
 )
