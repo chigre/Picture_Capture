@@ -623,8 +623,8 @@ def collect_violations() -> list[str]:
     # Do not re-create root shims, delete owners, or silently rename the key routines.
     for retired, owner, signature in (
         ("layout_core_understanding", "core_understanding", "def understand_layout_core("),
-        ("layout_physical_indent", "physical_indent", "def "),
-        ("layout_detection_legacy", "detector_legacy", "def "),
+        ("layout_physical_indent", "physical_indent", "def projection_line_runs("),
+        ("layout_detection_legacy", "detector_legacy", "def detect_layout_parameters("),
     ):
         if (PACKAGE_ROOT / (retired + ".py")).exists():
             violations.append(f"retired Layout root module returned: {retired}")
