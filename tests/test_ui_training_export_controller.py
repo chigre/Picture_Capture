@@ -163,7 +163,7 @@ def test_phase5f_training_export_ownership_is_explicit():
     app = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
     bootstrap = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     controller = (root / "src/picture_capture/ui/controllers/export.py").read_text(encoding="utf-8")
-    compat = (root / "src/picture_capture/training_export_ui.py").read_text(encoding="utf-8")
+    compat = (root / "src/picture_capture/training/legacy_scope_ui.py").read_text(encoding="utf-8")
 
     start = app.index("    def export_training_package(")
     end = app.index("\n    def show_help_dialog", start)
