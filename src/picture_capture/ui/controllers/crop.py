@@ -14,7 +14,7 @@ from typing import Any
 import tkinter as tk
 import threading
 
-from ... import unlined_line_export as unlined_export
+from ...crop import unlined_line_export as unlined_export
 from ...crop.export_output import normalize_project_crop_widths
 from ...formats import pdic_path, read_pdic, read_ppp, write_ppp
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
@@ -26,7 +26,7 @@ from ...processing import (
 )
 from ...project_storage import ppp_read_path_for_image, qt_root
 from ...crop.single_line_merge_settings import load_merge_by_page
-from ...single_line_parallel import configured_single_line_workers, single_line_page_job
+from ...crop.single_line_parallel import configured_single_line_workers, single_line_page_job
 from ...crop.unlined_export_filter_settings import load_unlined_filter_settings
 
 

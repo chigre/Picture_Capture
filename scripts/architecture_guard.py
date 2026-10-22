@@ -646,9 +646,21 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical refinement owner missing: {new_owner}")
         elif signature not in canonical.read_text(encoding="utf-8"):
             violations.append(f"canonical refinement routine missing: {new_owner}")
+    # #562: all real line-export coordinators live together in crop/.
+    for retired, owner, expected in (
+        ("single_line_parallel", "single_line_parallel", "def single_line_page_job("),
+        ("unlined_line_export", "unlined_line_export", "def export_unlined_page_job("),
+    ):
+        if (PACKAGE_ROOT / (retired + ".py")).exists():
+            violations.append(f"retired root line-export coordinator returned: {retired}")
+        implementation = PACKAGE_ROOT / "crop" / (owner + ".py")
+        if not implementation.is_file():
+            violations.append(f"canonical crop line-export owner missing: {owner}")
+        elif expected not in implementation.read_text(encoding="utf-8"):
+            violations.append(f"canonical line-export worker missing: {owner}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 27:
-        violations.append(f"root Python module count regressed: {root_py_count} > 27")
+    if root_py_count > 25:
+        violations.append(f"root Python module count regressed: {root_py_count} > 25")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

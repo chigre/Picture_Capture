@@ -29,20 +29,20 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
-from .design import page_design as page_design
-from . import formats
-from .image_utils import build_analysis_image, normalize_page_rgb
-from .refinement.analysis import whiten_illustrations_for_export
-from .layout.core_understanding import understand_layout_core
-from .page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
-from .project_storage import qt_root
-from .crop.single_line_merge_settings import _trim_white_border, load_merge_by_page
+from ..design import page_design as page_design
+from .. import formats
+from ..image_utils import build_analysis_image, normalize_page_rgb
+from ..refinement.analysis import whiten_illustrations_for_export
+from ..layout.core_understanding import understand_layout_core
+from ..page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
+from ..project_storage import qt_root
+from .single_line_merge_settings import _trim_white_border, load_merge_by_page
 from .single_line_parallel import configured_single_line_workers
-from .crop.unlined_export_filter_settings import (
+from .unlined_export_filter_settings import (
     DEFAULT_BLANK_INK_PERCENT,  # Legacy utility default only.
     load_unlined_filter_settings,
 )
-from .unlined.physical_rows_resolver import resolve_unlined_physical_rows
+from ..unlined.physical_rows_resolver import resolve_unlined_physical_rows
 
 
 OUTPUT_DIRNAME = "PSW_UNLINED"
@@ -259,7 +259,7 @@ def left_contiguous_white_percent(image: Image.Image) -> float:
     exported image. See unlined_blank_detection for the conservative definition
     of a meaningful ink component.
     """
-    from .unlined.blank_detection import noise_tolerant_left_white_percent
+    from ..unlined.blank_detection import noise_tolerant_left_white_percent
     return noise_tolerant_left_white_percent(image)
 
 def _atomic_text(path: Path, text: str) -> None:

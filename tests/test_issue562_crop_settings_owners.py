@@ -17,7 +17,7 @@ def test_crop_settings_ownership_and_exports():
 
 
 def test_crop_settings_import_callers_use_canonical_owner():
-    for rel in ("single_line_parallel.py", "unlined_line_export.py", "ui/settings/crop.py", "ui/controllers/crop.py"):
+    for rel in ("crop/single_line_parallel.py", "crop/unlined_line_export.py", "ui/settings/crop.py", "ui/controllers/crop.py"):
         txt = (ROOT / rel).read_text(encoding="utf-8")
         assert "from .single_line_merge_settings import" not in txt
         assert "from .unlined_export_filter_settings import" not in txt

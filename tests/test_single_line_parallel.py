@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import json
 
-import picture_capture.single_line_parallel as single_line_parallel
+import picture_capture.crop.single_line_parallel as single_line_parallel
 
 
 def test_single_line_parallel_reuses_integrated_crop_worker_setting(tmp_path, monkeypatch):
@@ -63,7 +63,7 @@ def test_single_line_parallel_serial_coordinator_owns_shared_log(tmp_path, monke
 def test_single_line_parallel_source_keeps_page_files_independent_and_log_coordinated():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "single_line_parallel.py"
+        / "src" / "picture_capture" / "crop/single_line_parallel.py"
     ).read_text(encoding="utf-8")
     page_start = source.index("def single_line_page_job(")
     page_end = source.index("\ndef run_single_line_pages(", page_start)

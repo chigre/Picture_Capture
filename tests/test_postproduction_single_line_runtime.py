@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.models import Entry
-import picture_capture.single_line_parallel as parallel
+import picture_capture.crop.single_line_parallel as parallel
 import picture_capture.ui.controllers.crop as crop_module
 from picture_capture.ui.controllers.crop import CropController
 

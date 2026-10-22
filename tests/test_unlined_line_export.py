@@ -15,7 +15,7 @@ from picture_capture.crop.unlined_export_filter_settings import (
     load_unlined_filter_settings,
     save_unlined_filter_settings,
 )
-from picture_capture.unlined_line_export import (
+from picture_capture.crop.unlined_line_export import (
     OUTPUT_DIRNAME,
     UnlinedRow,
     _save_unlined_rows,
@@ -257,7 +257,7 @@ def test_unlined_ui_is_explicit_and_reuses_parallel_crop_setting():
         root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
     ).read_text(encoding="utf-8")
     app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    exporter = (root / "src" / "picture_capture" / "unlined_line_export.py").read_text(encoding="utf-8")
+    exporter = (root / "src" / "picture_capture" / "crop/unlined_line_export.py").read_text(encoding="utf-8")
     filters = (root / "src" / "picture_capture" / "crop" / "unlined_export_filter_settings.py").read_text(encoding="utf-8")
     crop_ui = (
         root / "src" / "picture_capture" / "ui" / "settings" / "crop.py"

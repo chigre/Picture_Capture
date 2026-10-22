@@ -66,7 +66,7 @@ def prepare_gui_application() -> Any:
     # SettingsDialog behavior. Single-line merge and unlined-export filters
     # likewise belong to the static crop Settings schema/UI.
     # Unlined QA now owns its physical-row fast path statically in
-    # unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
+    # crop.unlined_line_export.export_unlined_page_job; no GUI-time worker mutation
     # is required.
     # Layout visualization controls/drawing are wired statically by app.py.
     # Layout role colors plus physical-lane/prepared-indent diagnostics are

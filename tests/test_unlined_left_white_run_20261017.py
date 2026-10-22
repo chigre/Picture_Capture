@@ -10,7 +10,7 @@ from picture_capture.crop.settings import (
     normalize_crop_settings_payload,
 )
 from picture_capture.models import AppSettings
-from picture_capture.unlined_line_export import (
+from picture_capture.crop.unlined_line_export import (
     UnlinedRow,
     _save_unlined_rows,
     left_contiguous_white_percent,

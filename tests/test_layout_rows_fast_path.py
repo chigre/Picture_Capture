@@ -167,15 +167,15 @@ def test_fast_recovery_source_cannot_call_full_layout_or_semantic_evidence():
 
 
 def test_unlined_export_worker_is_static_physical_fast_path_and_pickleable():
-    from picture_capture import unlined_line_export as exporter
+    from picture_capture.crop import unlined_line_export as exporter
     from picture_capture.unlined.physical_rows_resolver import (
         resolve_unlined_physical_rows,
     )
 
     job = exporter.export_unlined_page_job
-    assert job.__module__ == "picture_capture.unlined_line_export"
+    assert job.__module__ == "picture_capture.crop.unlined_line_export"
     payload = pickle.dumps(job)
-    assert b"picture_capture.unlined_line_export" in payload
+    assert b"picture_capture.crop.unlined_line_export" in payload
 
     source = inspect.getsource(job)
     assert "resolve_unlined_physical_rows" in source
@@ -207,7 +207,7 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
         root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"
     ).read_text(encoding="utf-8")
     exporter = (
-        root / "src" / "picture_capture" / "unlined_line_export.py"
+        root / "src" / "picture_capture" / "crop/unlined_line_export.py"
     ).read_text(encoding="utf-8")
 
     layout_core = (
