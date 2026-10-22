@@ -84,7 +84,7 @@ def test_audit_maps_all_fields_and_new_separator_controls(tmp_path):
         ui_path, status = audit.user_ui_path(groups[name])
         assert "横线Y精修" in ui_path and status == "static_schema_location"
         assert name in help_keys["SETTING_HELP"]
-        assert any("separator_y_refinement.py" in x
+        assert any("refinement/separator_y.py" in x
                    for x in audit.source_runtime_refs(refs[name]["reads"]))
     assert candidates and any(item["kind"] == "numeric_keyword_default" for item in candidates)
 
@@ -107,7 +107,7 @@ def test_audit_maps_all_fields_and_new_separator_controls(tmp_path):
         if row["name"] in names:
             assert "横线Y精修" in row["settings_center_path"]
             assert row["dedicated_help"] == "True"
-            assert "separator_y_refinement.py" in row["runtime_static_read_sites"]
+            assert "refinement/separator_y.py" in row["runtime_static_read_sites"]
             assert row["runtime_status"] == "targeted_behavior_test"
             assert "test_ink_safe_separator_20261014.py" in row["targeted_algorithm_runtime_test"]
             assert "test_every_appsettings_value_roundtrips_through_json" in row["persistence_runtime_test"]

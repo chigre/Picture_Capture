@@ -6,7 +6,7 @@ import pytest
 
 from picture_capture.models import AppSettings
 from picture_capture.refinement import analysis as prep
-from picture_capture import marker_refinement_parallel as parallel
+from picture_capture.refinement import parallel as parallel
 from picture_capture.design import layout_policy as policy
 
 

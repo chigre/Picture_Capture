@@ -45,7 +45,7 @@ def test_outside_anchor_and_invalid_roi_are_noops():
 
 
 def test_shared_refiner_is_reversible_and_does_not_change_candidate_classification(monkeypatch):
-    import picture_capture.separator_y_refinement as shared
+    import picture_capture.refinement.separator_y as shared
 
     ink = np.full((110, 55), 255, dtype=np.uint8)
     ink[48:53, :35] = 45
@@ -129,7 +129,7 @@ def test_white_gap_search_fraction_and_grayscale_threshold_affect_runtime():
 
 
 def test_white_gap_thresholds_are_actually_consumed_by_shared_refiner(monkeypatch):
-    import picture_capture.separator_y_refinement as shared
+    import picture_capture.refinement.separator_y as shared
 
     gray = np.full((110, 55), 255, dtype=np.uint8)
     gray[48:53, :35] = 45

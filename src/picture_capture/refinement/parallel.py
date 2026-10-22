@@ -13,14 +13,14 @@ import re
 import tempfile
 from typing import Any
 
-from .models import AppSettings
+from ..models import AppSettings
 
 
 def refinement_uses_page_layout(settings: AppSettings) -> bool:
     """Whether explicit Y refinement needs per-page physical fields (JSON or GPU)."""
     if not bool(getattr(settings, "ordinary_auto_layout", False)):
         return False
-    from .refinement.layoutrows import requested_refinement_fields
+    from .layoutrows import requested_refinement_fields
 
     return bool(requested_refinement_fields(settings))
 
@@ -29,7 +29,7 @@ def _page_has_usable_refinement_json(page: Path, page_index: int,
                                     settings: AppSettings) -> bool:
     """Cheap parent-side preflight; no decoding scan pixels or launching Paddle."""
     from PIL import Image
-    from .refinement.layoutrows import cached_refinement_settings
+    from .layoutrows import cached_refinement_settings
 
     try:
         with Image.open(page) as opened:
@@ -54,7 +54,7 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     for disposable illustration masks. No subprocess ever writes PDIC.
     """
     if configured is None:
-        from .runtime_environment import runtime_setting
+        from ..runtime_environment import runtime_setting
         configured = str(runtime_setting("paddle_cpu_workers", "auto") or "auto")
     try:
         requested = int(configured)
@@ -86,7 +86,7 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
 
 
 def _inputs_for_page(page: Path) -> tuple[Path, ...]:
-    from .project_storage import (
+    from ..project_storage import (
         pdic_path_for_image, ppp_read_path_for_image,
         ppp_write_path_for_image, profile_path, settings_path,
         page_sections_path_for_image, page_sections_read_path_for_image,
@@ -121,10 +121,10 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
                     require_cached_layout: bool = False) -> dict[str, Any]:
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
-    from .formats import read_pdic, pdic_path
-    from .image_utils import normalize_page_rgb
-    from .processing_core import refine_existing_entries
-    from .refinement.analysis import (
+    from ..formats import read_pdic, pdic_path
+    from ..image_utils import normalize_page_rgb
+    from ..processing_core import refine_existing_entries
+    from .analysis import (
         reset_refinement_layout_audit, read_refinement_layout_audit,
         finish_refinement_layout_audit,
         reset_refinement_layout_source, read_refinement_layout_source,
@@ -201,7 +201,7 @@ def _edit_original_pdic(raw: bytes, before: tuple, after: tuple,
     No BOM, encoding, newline, extra PDIC columns, word or page-link
     normalization is permitted. Unsupported encodings fail closed.
     """
-    from .text.encoding import decode_text_bytes
+    from ..text.encoding import decode_text_bytes
 
     decoded, encoding = decode_text_bytes(raw)
     if decoded.encode(encoding) != raw:
@@ -241,7 +241,7 @@ def _edit_original_pdic(raw: bytes, before: tuple, after: tuple,
 
 def _atomic_bytes(path: Path, payload: bytes, *, expected_sha: str) -> bool:
     """Atomic one-file publication with last-moment source revalidation."""
-    from .project_storage import note_page_artifact_edit
+    from ..project_storage import note_page_artifact_edit
 
     original = path.read_bytes()
     if hashlib.sha256(original).hexdigest() != expected_sha:
@@ -285,9 +285,9 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
         return {"index": int(page_index), "page": page.name,
                 "skipped": 1, "reason": "页面身份不符"}
 
-    from .formats import pdic_path, read_pdic
-    from .refinement.guard import validate_refined_markers
-    from .models import Entry
+    from ..formats import pdic_path, read_pdic
+    from .guard import validate_refined_markers
+    from ..models import Entry
     try:
         if ownership_check is not None and not ownership_check(int(page_index)):
             raise ValueError("当前页已由人工操作占用")

@@ -22,11 +22,11 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 
-from .models import AppSettings
+from ..models import AppSettings
 
 # Capture the mature engine before compatibility facades redirect their public
 # ``refine_separator_y`` symbol back to this module. This prevents recursion.
-from . import paddle_headwords_core as _paddle_core
+from .. import paddle_headwords_core as _paddle_core
 
 _ENGINE_REFINE_SEPARATOR_Y = _paddle_core.refine_separator_y
 
@@ -58,7 +58,7 @@ def refine_separator_y(
     # The same automatic-Y checkbox owns both the local valley refinement
     # and its ink-safety verification. The old independent gap flag is retained
     # only for loading historical project settings, never consulted here.
-    from .refinement.ink_safe_separator import refine_to_verified_white_gap
+    from .ink_safe_separator import refine_to_verified_white_gap
     refined_y, gap_details = refine_to_verified_white_gap(
         gray, int(refined_y), int(coarse_y),
         max(2, int(round(float(line_height or 0)))),
@@ -102,7 +102,7 @@ def refined_layout_entry_y_by_line(
     supplies the common Y refiner with each entry row's coarse Y and column ROI.
     """
     try:
-        from .design import page_design as page_design
+        from ..design import page_design as page_design
 
         layout = understanding.layout
         settings = understanding.page_settings
@@ -163,7 +163,7 @@ def refined_layout_entry_y_by_line(
             refined = max(coarse - max_move, min(coarse + max_move, int(refined)))
             result[id(line)] = max(0, min(height - 1, int(refined)))
             if diagnostics is not None:
-                from .paddle_headwords_core import _separator_analysis_x_bounds
+                from ..paddle_headwords_core import _separator_analysis_x_bounds
                 local_x0, local_x1 = _separator_analysis_x_bounds(
                     band.shape[1], effective, 1.0,
                 )

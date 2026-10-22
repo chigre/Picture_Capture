@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import picture_capture.paddle_headwords as ph
 from picture_capture.models import AppSettings
-from picture_capture import separator_y_refinement as shared_y
+from picture_capture.refinement import separator_y as shared_y
 
 
 def _accepted_anchor(boldness: float, height: float = 1.0, gap: float = 18.0):

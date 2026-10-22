@@ -95,7 +95,7 @@ def test_unrelated_setting_change_still_reuses_physical_json(tmp_path, monkeypat
 
 def test_unrelated_row_padding_switch_reuses_needed_json_fields(tmp_path, monkeypatch):
     from picture_capture.design import layout_policy as policy
-    from picture_capture import marker_refinement_parallel as batch
+    from picture_capture.refinement import parallel as batch
     settings = _settings()
     settings.ordinary_auto_row_padding = True
     page = tmp_path / "page.png"
@@ -123,7 +123,7 @@ def test_unrelated_row_padding_switch_reuses_needed_json_fields(tmp_path, monkey
 
 def test_row_padding_only_requires_no_layout_detector(tmp_path, monkeypatch):
     from picture_capture.design import layout_policy as policy
-    from picture_capture import marker_refinement_parallel as batch
+    from picture_capture.refinement import parallel as batch
     settings = _settings()
     for _field, flag in policy.AUTO_LAYOUT_FIELDS:
         setattr(settings, flag, False)

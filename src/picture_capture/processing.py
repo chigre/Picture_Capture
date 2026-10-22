@@ -31,7 +31,7 @@ from .ordinary.visual import recover_ordinary_visual_entries
 from .layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .layout.page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
-from .separator_y_refinement import refined_layout_entry_y_by_line
+from .refinement.separator_y import refined_layout_entry_y_by_line
 from .training.baseline import save_automatic_baseline
 
 
