@@ -5,13 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.models import AppSettings, Entry
-from picture_capture.pdic_restore import (
+from picture_capture.proofreading.pdic_restore import (
     build_page_lookup,
     parse_merged_pdic_text,
     resolve_page_token,
     write_pdic_atomic,
 )
-import picture_capture.pdic_restore as restore_module
+import picture_capture.proofreading.pdic_restore as restore_module
 import picture_capture.ui.controllers.export as export_module
 from picture_capture.ui.controllers.export import ExportController
 
@@ -377,3 +377,49 @@ def test_restore_wiring_keeps_app_wrapper_alias_and_ui_binding() -> None:
     assert "def _write_pdic_atomic(" not in app
     assert "parse_merged_pdic_text as _parse_merged_pdic_text" in app
     assert "write_pdic_atomic as _write_pdic_atomic" in app
+
+
+def test_restore_canonical_owner_does_not_leave_root_shim() -> None:
+    import importlib.util
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "src/picture_capture/pdic_restore.py").exists()
+    assert (root / "src/picture_capture/proofreading/pdic_restore.py").is_file()
+    assert importlib.util.find_spec("picture_capture.pdic_restore") is None
+    assert importlib.util.find_spec("picture_capture.proofreading.pdic_restore") is not None
+    script = (
+        "import sys; "
+        "from picture_capture.proofreading.pdic_restore import parse_merged_pdic_text; "
+        "assert callable(parse_merged_pdic_text); "
+        "assert 'tkinter' not in sys.modules; "
+        "assert 'picture_capture.app' not in sys.modules"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=root,
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_atomic_restore_replace_failure_keeps_old_pdic_and_cleans_temp(monkeypatch, tmp_path) -> None:
+    import pytest
+
+    target = tmp_path / "001.pdic"
+    previous = b"original-pdic-lines\\n"
+    target.write_bytes(previous)
+    intermediate = tmp_path / ".001.pdic.restore.tmp"
+
+    def staged_write(path: Path, *_args) -> None:
+        Path(path).write_bytes(b"new-pdic-lines\\n")
+
+    def fail_replace(_source, _target) -> None:
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(restore_module, "write_pdic", staged_write)
+    monkeypatch.setattr(restore_module.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated replace failure"):
+        write_pdic_atomic(target, [], 100, ("001", "@", "@"))
+    assert target.read_bytes() == previous
+    assert not intermediate.exists()

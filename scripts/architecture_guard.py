@@ -1102,6 +1102,22 @@ def collect_violations() -> list[str]:
         elif signature not in owner.read_text(encoding="utf-8"):
             violations.append(f"canonical helper lost its implementation: {canonical}")
 
+    # Issue #562: backup PDIC restoration has one physical proofreading owner.
+    # Retiring the old path must not leave a forwarding stub or duplicate writer.
+    backup_owner = PACKAGE_ROOT / "proofreading/pdic_restore.py"
+    if (PACKAGE_ROOT / "pdic_restore.py").is_file():
+        violations.append("retired root PDIC restoration implementation returned")
+    if not backup_owner.is_file():
+        violations.append("canonical PDIC restoration owner missing")
+    else:
+        backup_source = backup_owner.read_text(encoding="utf-8")
+        for signature in (
+            "def build_page_lookup(", "def resolve_page_token(",
+            "def parse_merged_pdic_text(", "def write_pdic_atomic(",
+        ):
+            if signature not in backup_source:
+                violations.append(f"canonical PDIC restoration function missing: {signature}")
+
     return violations
 
 
