@@ -34,9 +34,10 @@ PROFILE_FILENAME = "dictionary_profile.json"
 LEGACY_SETTINGS_FILENAME = "picture_capture_settings.json"
 LEGACY_INI_FILENAME = "_Mysettings.ini"
 
-# A manifest determines the managed-v2 vs legacy project route. Prevent
-# overlapping same-process publications (especially on Windows os.replace).
-_MANIFEST_WRITE_LOCK = threading.Lock()
+# A manifest determines the managed-v2 vs legacy project route. A single
+# reentrant lock covers same-process readers and the entire read/modify/publish
+# transaction, not just os.replace: Windows rejects replacing an open reader.
+_MANIFEST_WRITE_LOCK = threading.RLock()
 
 
 def storage_root(project_root: Path) -> Path:
@@ -63,22 +64,24 @@ def _parse_managed_manifest_cached(path_string: str, identity: tuple[int, ...]) 
 
 def is_managed_project(project_root: Path) -> bool:
     path = manifest_path(project_root)
-    try:
-        stat = path.stat()
-    except OSError:
-        return False
-    if not path.is_file():
-        return False
-    # File IDs detect atomic replace. ctime catches edits where mtime was reset.
-    identity = (
-        int(stat.st_dev), int(stat.st_ino), int(stat.st_size),
-        int(stat.st_mtime_ns), int(stat.st_ctime_ns),
-    )
-    return _parse_managed_manifest_cached(str(path), identity)
+    with _MANIFEST_WRITE_LOCK:
+        try:
+            stat = path.stat()
+        except OSError:
+            return False
+        if not path.is_file():
+            return False
+        # File IDs detect atomic replace. ctime catches edits where mtime was reset.
+        identity = (
+            int(stat.st_dev), int(stat.st_ino), int(stat.st_size),
+            int(stat.st_mtime_ns), int(stat.st_ctime_ns),
+        )
+        return _parse_managed_manifest_cached(str(path), identity)
 
 
 def clear_managed_manifest_cache() -> None:
-    _parse_managed_manifest_cached.cache_clear()
+    with _MANIFEST_WRITE_LOCK:
+        _parse_managed_manifest_cached.cache_clear()
 
 
 def settings_path(project_root: Path) -> Path:
@@ -312,25 +315,29 @@ def ensure_project_storage(project_root: Path, software_version: str) -> Path:
     ):
         (target / rel).mkdir(parents=True, exist_ok=True)
     manifest = manifest_path(root)
-    if manifest.exists():
-        try:
-            payload = json.loads(manifest.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
+    # Keep discovery, read, update, publication and cache invalidation together.
+    # Otherwise another same-process opener may hold a Windows read handle while
+    # os.replace runs, or prepare its payload from an outdated manifest.
+    with _MANIFEST_WRITE_LOCK:
+        if manifest.exists():
+            try:
+                payload = json.loads(manifest.read_text(encoding="utf-8"))
+                if not isinstance(payload, dict):
+                    payload = _manifest_payload(root, software_version)
+            except Exception:
                 payload = _manifest_payload(root, software_version)
-        except Exception:
+            payload.update({
+                "format": PROJECT_FORMAT,
+                "format_version": PROJECT_FORMAT_VERSION,
+                "project_name": root.name,
+                "last_opened_with": str(software_version),
+                "storage_root": STORAGE_DIRNAME,
+                "settings": SETTINGS_FILENAME,
+            })
+        else:
             payload = _manifest_payload(root, software_version)
-        payload.update({
-            "format": PROJECT_FORMAT,
-            "format_version": PROJECT_FORMAT_VERSION,
-            "project_name": root.name,
-            "last_opened_with": str(software_version),
-            "storage_root": STORAGE_DIRNAME,
-            "settings": SETTINGS_FILENAME,
-        })
-    else:
-        payload = _manifest_payload(root, software_version)
-    _write_json_atomic(manifest, payload)
-    clear_managed_manifest_cache()
+        _write_json_atomic(manifest, payload)
+        clear_managed_manifest_cache()
     return target
 
 
