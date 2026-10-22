@@ -705,9 +705,17 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical persistence owner missing: {old}")
         elif fn not in owned.read_text(encoding="utf-8"):
             violations.append(f"canonical persistence routine missing: {old}")
+    # OCR resume must fingerprint the whole package after its physical move.
+    if (PACKAGE_ROOT / "ocr_page_resume.py").exists():
+        violations.append("retired root OCR resume implementation returned")
+    resume_owner = PACKAGE_ROOT / "ocr/page_resume.py"
+    if not resume_owner.is_file():
+        violations.append("canonical OCR resume owner missing")
+    elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
+        violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 16:
-        violations.append(f"root Python module count regressed: {root_py_count} > 16")
+    if root_py_count > 15:
+        violations.append(f"root Python module count regressed: {root_py_count} > 15")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

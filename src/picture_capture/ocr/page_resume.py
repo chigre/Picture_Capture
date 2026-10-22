@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .io.formats import write_text_atomic
+from ..io.formats import write_text_atomic
 
 
 RESUME_FORMAT = "picture-capture-ocr-page-resume-v1"
@@ -37,7 +37,7 @@ def _algorithm_environment_key() -> str:
     Source bytes and stable relative paths are hashed once per process. When
     package source is unavailable, raise OSError so validated_resume fails closed.
     """
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     sources = sorted(
         (path for path in root.rglob("*.py") if path.is_file()),
         key=lambda path: path.relative_to(root).as_posix(),
@@ -201,7 +201,7 @@ def write_page_resume(
     signature = input_fingerprint(
         image_path, settings, page_index, method, dependencies=dependencies,
     )
-    from .io.formats import read_pdic
+    from ..io.formats import read_pdic
     # A truncated/invalid PDIC must never become a completed checkpoint.
     actual = read_pdic(pdic_path)
     if len(actual) != int(marker_count):
