@@ -151,7 +151,7 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
         assert text.index(expected_import) < text.index(helper_call) < text.index(paddle_import)
 
 def test_legacy_boundary_bridge_no_longer_uses_core_paddle_runner_helpers():
-    import picture_capture.ocr_channel_legacy as legacy
+    import picture_capture.ocr.channel_legacy as legacy
 
     source = Path(legacy.__file__).read_text(encoding="utf-8")
     assert "normalize_paddle_result" in source

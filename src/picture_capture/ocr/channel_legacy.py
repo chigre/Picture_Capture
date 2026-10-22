@@ -21,9 +21,9 @@ from dataclasses import replace
 import threading
 from typing import Any, Iterator
 
-from . import paddle_headwords_core as _legacy_core
-from .models import AppSettings
-from .ocr_channel import (
+from .. import paddle_headwords_core as _legacy_core
+from ..models import AppSettings
+from ..ocr_channel import (
     OcrChannelCandidate,
     OcrChannelPlan,
     OcrChannelSession,

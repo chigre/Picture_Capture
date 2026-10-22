@@ -12,7 +12,7 @@ from picture_capture.ocr_channel import (
     choose_ocr_text,
     resolve_ocr_channel_plan,
 )
-from picture_capture.ocr_channel_legacy import (
+from picture_capture.ocr.channel_legacy import (
     apply_channel_plan_to_legacy_boundary_settings,
     route_legacy_boundary_ocr_through_channel,
 )
