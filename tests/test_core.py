@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
+from picture_capture.io.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp, read_picdic_index_records
 from picture_capture.app import (
     PictureCaptureApp, _candidate_choice_rows, _parse_words_of_pages_text, _fill_page_entries,
     _build_words_page_lookup, _resolve_words_page_token, _parse_merged_pdic_text, _write_pdic_atomic,
@@ -3428,7 +3428,7 @@ def test_v291_training_export_keeps_images_labels_and_ocr_provenance(tmp_path):
     import json
     import zipfile
     from PIL import Image
-    from picture_capture.formats import write_pdic, write_ppp
+    from picture_capture.io.formats import write_pdic, write_ppp
     from picture_capture.models import AppSettings, Entry, PolygonRegion
     from picture_capture.training_export import (
         copy_project_context, export_training_page, make_training_zip, write_training_manifest,
@@ -4443,7 +4443,7 @@ def test_v2101_auto_illustration_detection_writes_ppp_and_preserves_manual(tmp_p
     from PIL import Image, ImageDraw
     from picture_capture.models import AppSettings, PolygonRegion
     from picture_capture.processing import detect_illustrations_to_ppp
-    from picture_capture.formats import write_ppp, read_ppp
+    from picture_capture.io.formats import write_ppp, read_ppp
 
     page = tmp_path / "p001.png"
     image = Image.new("RGB", (1000, 1400), "white")
@@ -5516,7 +5516,7 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
     pdic = tmp_path / "0001.pdic"
     pdic.write_text("一#10#20#0.85#19.07#0001###\n", encoding="utf-8")
-    from picture_capture.formats import read_picdic_index_records
+    from picture_capture.io.formats import read_picdic_index_records
     assert read_picdic_index_records(pdic) == ["一\t0.85\t19.07\t0001"]
 
 
@@ -6498,7 +6498,7 @@ def test_v21122_hotfix5_review_delete_commits_text_removes_shared_entry_and_dese
 
 
 def test_v212_new_project_centralizes_program_data_under_picturecapture(tmp_path):
-    from picture_capture.formats import pdic_path, write_pdic, write_ppp
+    from picture_capture.io.formats import pdic_path, write_pdic, write_ppp
     from picture_capture.models import Entry, PolygonRegion, ProjectState
     from picture_capture.project_storage import (
         is_managed_project, ppp_write_path_for_image, qt_root, settings_path, storage_root,
@@ -6549,7 +6549,7 @@ def test_v212_legacy_project_open_remains_non_destructive_until_migration(tmp_pa
 
 
 def test_v212_migration_moves_program_owned_files_and_preserves_user_files(tmp_path):
-    from picture_capture.formats import pdic_path, read_pdic
+    from picture_capture.io.formats import pdic_path, read_pdic
     from picture_capture.models import AppSettings, ProjectState
     from picture_capture.project_storage import (
         is_managed_project, migrate_legacy_project, ocr_cache_root, profile_path,
@@ -7711,7 +7711,7 @@ def test_crop_plan_uses_same_source_y_profile_boundaries_as_main_geometry():
 def test_training_export_uses_source_coordinates_only(tmp_path):
     import json
     from PIL import Image
-    from picture_capture.formats import write_pdic, write_ppp
+    from picture_capture.io.formats import write_pdic, write_ppp
     from picture_capture.models import AppSettings, Entry, PolygonRegion
     from picture_capture.training_export import export_training_page
     from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
