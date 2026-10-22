@@ -408,10 +408,26 @@ def collect_violations() -> list[str]:
     for rel in sorted(module_class_proxy_files - LEGACY_MODULE_CLASS_PROXY_FILES):
         violations.append(f"new dynamic module-class proxy: {rel}")
 
+    # #562: physically own the shared mirror in compat/ without a root shim.
+    mirror_owner = PACKAGE_ROOT / "compat/facade_mirror.py"
+    if (PACKAGE_ROOT / "facade_compat.py").is_file():
+        violations.append("retired root facade compatibility owner returned")
+    if not mirror_owner.is_file():
+        violations.append("canonical facade compatibility owner missing")
+    else:
+        mirror_source = mirror_owner.read_text(encoding="utf-8")
+        for signature in (
+            "class CoreAssignmentMirrorModule(",
+            "def publish_core_namespace(",
+            "def install_core_assignment_mirror(",
+        ):
+            if signature not in mirror_source:
+                violations.append(f"canonical facade compatibility implementation missing: {signature}")
+
     facade_compat_users_now: set[str] = set()
     for path in _python_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
-        if rel == "facade_compat.py":
+        if rel == "compat/facade_mirror.py":
             continue
         source = path.read_text(encoding="utf-8")
         if FACADE_NAMESPACE_CALL in source or FACADE_MIRROR_CALL in source:

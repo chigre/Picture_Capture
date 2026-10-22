@@ -17,7 +17,7 @@ plugins, tests and user tooling keep working unchanged.
 """
 
 from . import paddle_headwords_core as _core
-from .facade_compat import install_core_assignment_mirror, publish_core_namespace
+from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
 
 # This historical public path owns the broad core namespace contract. Copy core
 # symbols first, then let evidence-fusion overrides replace selected decisions.

@@ -4,8 +4,8 @@ import sys
 import types
 from pathlib import Path
 
-from picture_capture import facade_compat
-from picture_capture.facade_compat import (
+from picture_capture.compat import facade_mirror as facade_compat
+from picture_capture.compat.facade_mirror import (
     install_core_assignment_mirror,
     publish_core_namespace,
 )
@@ -109,7 +109,7 @@ def test_assignment_mirror_reinstall_refreshes_registered_core() -> None:
 
 
 def test_phase9a_facades_use_one_explicit_compatibility_owner() -> None:
-    helper = (ROOT / "src/picture_capture/facade_compat.py").read_text(
+    helper = (ROOT / "src/picture_capture/compat/facade_mirror.py").read_text(
         encoding="utf-8"
     )
     assert "def publish_core_namespace(" in helper
@@ -122,3 +122,34 @@ def test_phase9a_facades_use_one_explicit_compatibility_owner() -> None:
         assert "vars(_core).items()" not in source
         assert "class _CoreProxyModule" not in source
         assert "sys.modules[__name__].__class__" not in source
+
+
+def test_facade_mirror_is_package_owned_without_a_root_shim() -> None:
+    import importlib.util
+
+    assert not (ROOT / "src/picture_capture/facade_compat.py").exists()
+    assert importlib.util.find_spec("picture_capture.facade_compat") is None
+    owner = ROOT / "src/picture_capture/compat/facade_mirror.py"
+    assert owner.is_file()
+    for module in ("processing.py", "paddle_headwords.py"):
+        source = (ROOT / "src/picture_capture" / module).read_text(encoding="utf-8")
+        assert "from .compat.facade_mirror import " in source
+        assert "from .facade_compat import " not in source
+
+
+def test_canonical_facade_mirror_imports_without_gui() -> None:
+    import subprocess
+
+    script = (
+        "import sys; "
+        "from picture_capture.compat import facade_mirror; "
+        "assert callable(facade_mirror.publish_core_namespace); "
+        "assert callable(facade_mirror.install_core_assignment_mirror); "
+        "assert 'picture_capture.app' not in sys.modules; "
+        "assert 'tkinter' not in sys.modules"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT, capture_output=True, text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
