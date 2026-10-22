@@ -26,7 +26,7 @@ from .settings import (
     UNLINED_FILTER_BLANK_KEY,
     UNLINED_FILTER_ENABLED_KEY,
 )
-from ..project_storage import crop_settings_path
+from ..persistence.project_storage import crop_settings_path
 
 CROP_SETTINGS_FILENAME = "_CropSettings.json"
 FILTER_ENABLED_KEY = UNLINED_FILTER_ENABLED_KEY

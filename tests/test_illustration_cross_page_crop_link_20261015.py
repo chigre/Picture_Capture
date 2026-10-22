@@ -13,7 +13,7 @@ from picture_capture.illustration.labels import (
     illustration_labels, previous_entry_ref_for_image,
 )
 from picture_capture.models import AppSettings, Entry, PolygonRegion
-from picture_capture.page_sections import PageSection
+from picture_capture.persistence.page_sections import PageSection
 from picture_capture.processing_core import Geometry
 
 

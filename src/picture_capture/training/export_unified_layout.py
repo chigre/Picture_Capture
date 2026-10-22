@@ -14,7 +14,7 @@ from typing import Any
 from PIL import Image
 
 from ..image_utils import normalize_page_rgb
-from ..page_sections import read_page_sections
+from ..persistence.page_sections import read_page_sections
 
 
 def write_training_unified_layout_diagnostic(

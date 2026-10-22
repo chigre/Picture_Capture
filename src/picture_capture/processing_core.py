@@ -18,7 +18,7 @@ from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_langua
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .image_utils import normalize_page_rgb
 from .geometry.layout_transform import LayoutTransform
-from .page_sections import (
+from .persistence.page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
     reading_lane_index, section_index_for_v, v_is_inside_sections,
 )
@@ -27,7 +27,7 @@ from .profile.semantics import (
 )
 from .ocr.engines import find_tesseract
 from .io.formats import read_pdic, read_ppp, write_pdic, write_ppp
-from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
+from .persistence.project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
 from .crop.publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
 from .illustration.labels import previous_entry_ref_for_image

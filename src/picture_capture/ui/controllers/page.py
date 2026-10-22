@@ -18,8 +18,8 @@ from ..appearance import themed_display_image
 from ...io.formats import pdic_path, read_pdic, read_ppp
 from ...image_utils import normalize_page_rgb
 from ...preprocess.image_metadata_status import image_dpi
-from ...page_sections import read_page_sections
-from ...project_storage import ocr_cache_root, ppp_read_path_for_image
+from ...persistence.page_sections import read_page_sections
+from ...persistence.project_storage import ocr_cache_root, ppp_read_path_for_image
 
 
 class PageController:

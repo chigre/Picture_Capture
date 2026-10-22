@@ -7,7 +7,7 @@ import pytest
 
 from picture_capture.io.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
-from picture_capture.project_storage import simplified_review_path_for_image
+from picture_capture.persistence.project_storage import simplified_review_path_for_image
 from picture_capture.proofreading.transactions import snapshot_review, _recovery_path
 from picture_capture.proofreading.save_safety import protect_review_pdic_commit
 from picture_capture.proofreading.review_bundle import commit_review_bundle

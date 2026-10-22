@@ -11,8 +11,8 @@ from pathlib import Path
 from PIL import Image
 
 from ..geometry.layout_transform import LayoutTransform
-from ..page_sections import read_page_sections
-from ..project_storage import page_sections_read_path_for_image
+from ..persistence.page_sections import read_page_sections
+from ..persistence.project_storage import page_sections_read_path_for_image
 from .events import sha256_file
 
 

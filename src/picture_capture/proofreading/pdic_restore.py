@@ -13,7 +13,7 @@ import re
 
 from ..io.formats import write_pdic
 from ..models import Entry as WordEntry
-from ..project_storage import note_page_artifact_edit
+from ..persistence.project_storage import note_page_artifact_edit
 
 
 def build_page_lookup(

@@ -17,7 +17,7 @@ from picture_capture.layout.rows_cache import (
 )
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.models import AppSettings
-from picture_capture.project_storage import ensure_project_storage
+from picture_capture.persistence.project_storage import ensure_project_storage
 
 
 def _physical_layout(size=(200, 200)):

@@ -5,7 +5,7 @@ from picture_capture.illustration.labels import (
     illustration_labels, label_text, user_edited_link,
 )
 from picture_capture.models import Entry, PolygonRegion
-from picture_capture.page_sections import PageSection
+from picture_capture.persistence.page_sections import PageSection
 from picture_capture.processing_core import Geometry
 
 

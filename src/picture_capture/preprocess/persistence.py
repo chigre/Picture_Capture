@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 from typing import Iterable
 
-from ..project_storage import image_preprocess_data_root
+from ..persistence.project_storage import image_preprocess_data_root
 from .models import PreprocessAnalysis
 
 

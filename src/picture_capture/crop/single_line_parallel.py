@@ -15,9 +15,9 @@ import json
 from typing import Any, Callable
 
 from ..io import formats
-from ..page_sections import read_page_sections
+from ..persistence.page_sections import read_page_sections
 from ..processing import append_crop_log, resolve_crop_worker_count, split_single_lines
-from ..project_storage import crop_settings_path, qt_root
+from ..persistence.project_storage import crop_settings_path, qt_root
 from .single_line_merge_settings import load_merge_by_page, merge_page_line_images
 
 

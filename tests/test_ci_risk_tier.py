@@ -73,7 +73,9 @@ def test_behavior_change_requires_full():
 
 
 def test_critical_paths_full_even_on_import_only_change():
-    for p in ("src/picture_capture/windows_gpu.py",
+    for p in ("src/picture_capture/persistence/project_storage.py",
+              "src/picture_capture/persistence/page_sections.py",
+              "src/picture_capture/windows_gpu.py",
               "src/picture_capture/runtime/windows_gpu.py",
               "src/picture_capture/runtime/environment.py",
               "src/picture_capture/bootstrap/worker.py",

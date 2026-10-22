@@ -9,7 +9,7 @@ import pytest
 
 from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
-from picture_capture.project_storage import simplified_review_path_for_image
+from picture_capture.persistence.project_storage import simplified_review_path_for_image
 from picture_capture.proofreading.candidate_delete import commit_candidate_delete
 from picture_capture.proofreading.candidate_history import CandidateReviewHistory
 from picture_capture.proofreading.transactions import snapshot_review

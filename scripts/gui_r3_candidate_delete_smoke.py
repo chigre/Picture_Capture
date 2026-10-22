@@ -18,7 +18,7 @@ from PIL import Image
 
 from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import Entry
-from picture_capture.project_storage import simplified_review_path_for_image
+from picture_capture.persistence.project_storage import simplified_review_path_for_image
 from picture_capture.proofreading import transactions as tx
 from picture_capture.ui.review_candidate_delete_actions import (
     delete_owned_review_candidate,

@@ -13,9 +13,9 @@ import re
 from tkinter import simpledialog
 
 from ..io.formats import pdic_path, read_pdic
-from ..page_sections import v_is_inside_sections
+from ..persistence.page_sections import v_is_inside_sections
 from ..profile.semantics import entry_allowed_by_page_template
-from ..project_storage import simplified_review_path_for_image
+from ..persistence.project_storage import simplified_review_path_for_image
 from ..proofreading.simplified_review import entry_key, read_records
 from ..proofreading.events import sha256_file
 
@@ -151,7 +151,7 @@ def move_entry_via_dialog(app, entry):
             # Before touching PDIC, ensure any existing journal is current,
             # unambiguous, and tied to the very image being moved.
             from ..proofreading.capture import _owned_ids_at_saved_snapshot, _project_identity
-            from ..project_storage import data_root
+            from ..persistence.project_storage import data_root
             from uuid import NAMESPACE_URL, uuid5
             relative = page.resolve().relative_to(Path(project.root).resolve()).as_posix()
             page_id = f"{_project_identity(Path(project.root))}/{relative}"

@@ -26,7 +26,7 @@ from ...processing import (
     append_crop_log, append_illustration_crop_log, detect_illustrations_job,
     split_illustrations_job,
 )
-from ...project_storage import qt_root
+from ...persistence.project_storage import qt_root
 
 
 class IllustrationController:

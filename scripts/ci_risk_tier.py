@@ -17,6 +17,7 @@ ALWAYS_FULL = {
     "src/picture_capture/io/formats.py", "src/picture_capture/io/picdic.py",
     "src/picture_capture/io/gui_io.py",
     "src/picture_capture/project_storage.py", "src/picture_capture/page_sections.py",
+    "src/picture_capture/persistence/project_storage.py", "src/picture_capture/persistence/page_sections.py",
     "src/picture_capture/pdic_restore.py", "src/picture_capture/processing_publish.py",
     "src/picture_capture/entry_classification.py",
     "src/picture_capture/windows_gpu.py", "src/picture_capture/runtime_environment.py",

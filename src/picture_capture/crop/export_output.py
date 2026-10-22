@@ -10,7 +10,7 @@ from typing import Callable
 
 from PIL import Image, ImageChops
 
-from ..project_storage import qt_root
+from ..persistence.project_storage import qt_root
 
 
 ENTRY_WIDTH_MODE_KEY = "entry_width_mode"

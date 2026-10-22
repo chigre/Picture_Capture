@@ -13,7 +13,7 @@ import tempfile
 from PIL import Image
 
 from ..image_utils import normalize_page_rgb
-from ..project_storage import qt_root
+from ..persistence.project_storage import qt_root
 
 _PREVIEW_VERSION = 1
 _PREVIEW_SIZE = (76, 96)

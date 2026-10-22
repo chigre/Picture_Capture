@@ -10,7 +10,7 @@ import pytest
 from picture_capture.io.formats import read_pdic, read_ppp, write_pdic, write_ppp
 from picture_capture.models import AppSettings, Entry, PolygonRegion
 from picture_capture.processing_core import Geometry
-from picture_capture.project_storage import ppp_read_path_for_image, ppp_write_path_for_image
+from picture_capture.persistence.project_storage import ppp_read_path_for_image, ppp_write_path_for_image
 from picture_capture.illustration.batch_association import (
     associate_existing_ppp_page, associate_existing_ppp_job,
 )

@@ -49,7 +49,7 @@ from .semantics import (
     page_template_analysis_image,
     page_variant,
 )
-from ..project_storage import (
+from ..persistence.project_storage import (
     headword_filter_rules_path,
     ocr_cache_root,
     profile_path as project_profile_path,

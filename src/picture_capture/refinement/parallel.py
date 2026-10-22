@@ -86,7 +86,7 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
 
 
 def _inputs_for_page(page: Path) -> tuple[Path, ...]:
-    from ..project_storage import (
+    from ..persistence.project_storage import (
         pdic_path_for_image, ppp_read_path_for_image,
         ppp_write_path_for_image, profile_path, settings_path,
         page_sections_path_for_image, page_sections_read_path_for_image,
@@ -241,7 +241,7 @@ def _edit_original_pdic(raw: bytes, before: tuple, after: tuple,
 
 def _atomic_bytes(path: Path, payload: bytes, *, expected_sha: str) -> bool:
     """Atomic one-file publication with last-moment source revalidation."""
-    from ..project_storage import note_page_artifact_edit
+    from ..persistence.project_storage import note_page_artifact_edit
 
     original = path.read_bytes()
     if hashlib.sha256(original).hexdigest() != expected_sha:

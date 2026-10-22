@@ -17,7 +17,7 @@ from typing import Any
 from PIL import Image
 
 from .settings import SINGLE_LINE_MERGE_KEY
-from ..project_storage import crop_settings_path
+from ..persistence.project_storage import crop_settings_path
 
 CROP_SETTINGS_FILENAME = "_CropSettings.json"
 MERGE_KEY = SINGLE_LINE_MERGE_KEY

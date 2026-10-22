@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from picture_capture import project_storage as storage
+from picture_capture.persistence import project_storage as storage
 
 
 def test_managed_manifest_reader_cannot_overlap_replace(

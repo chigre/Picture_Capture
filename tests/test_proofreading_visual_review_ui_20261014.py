@@ -32,7 +32,7 @@ def _project(tmp_path):
         entry_id="stable-1", pdic_sha256=sha256_file(pdic),
         image_sha256=sha256_file(page),
     )
-    from picture_capture.project_storage import data_root
+    from picture_capture.persistence.project_storage import data_root
     from uuid import uuid5, NAMESPACE_URL
     journal = (
         data_root(tmp_path) / "ProofreadingEvidence"
@@ -90,7 +90,7 @@ def test_no_identity_or_corrupt_project_identity_never_creates_a_journal(tmp_pat
     page.write_bytes(b"image")
     assert journal_for_existing_page(tmp_path, page) is None
     assert not (tmp_path / "ProofreadingEvidence").exists()
-    from picture_capture.project_storage import data_root
+    from picture_capture.persistence.project_storage import data_root
     identity = data_root(tmp_path) / "ProofreadingEvidence" / "project_identity.json"
     identity.parent.mkdir(parents=True, exist_ok=True)
     identity.write_text('{"format":"untrusted","project_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')

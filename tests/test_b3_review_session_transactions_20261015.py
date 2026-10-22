@@ -133,7 +133,7 @@ def test_ocr_or_override_drift_refuses_snapshot_and_undo(tmp_path, sidecar):
 
 
 def test_simplified_sidecar_change_is_reversed_with_saved_pdic(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review = _case(tmp_path)
     before = snapshot_review(review)
     assert before
@@ -216,7 +216,7 @@ def test_ui_wiring_exposes_explicit_review_save_undo_redo():
 
 
 def test_multi_file_interruption_rolls_back_without_changing_ui(tmp_path, monkeypatch):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review = _case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     simplified.parent.mkdir(parents=True, exist_ok=True)
@@ -248,7 +248,7 @@ def test_multi_file_interruption_rolls_back_without_changing_ui(tmp_path, monkey
 
 
 def test_crash_recovery_rolls_back_partial_two_file_update(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review = _case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     simplified.parent.mkdir(parents=True, exist_ok=True)
@@ -269,7 +269,7 @@ def test_crash_recovery_rolls_back_partial_two_file_update(tmp_path):
 
 
 def test_complete_multifile_recovery_keeps_target_and_clears_marker(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review = _case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     original = pdic_path(page).read_bytes()
@@ -498,7 +498,7 @@ def test_external_sidecar_change_at_last_preflight_refuses_undo(tmp_path, monkey
 
 @pytest.mark.parametrize("source", ["section", "profile"])
 def test_section_or_profile_drift_invalidates_saved_history(tmp_path, source):
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         page_sections_path_for_image, profile_path,
     )
     page, rows, review = _case(tmp_path)
@@ -519,7 +519,7 @@ def test_section_or_profile_drift_invalidates_saved_history(tmp_path, source):
 
 @pytest.mark.parametrize("source", ["section", "profile"])
 def test_section_or_profile_last_moment_source_race_refuses_undo(tmp_path, monkeypatch, source):
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         page_sections_path_for_image, profile_path,
     )
     page, rows, review = _case(tmp_path)
@@ -587,7 +587,7 @@ def _manual_owned_case(tmp_path):
 
 
 def test_three_file_owned_bundle_atomic_commit_without_editing_live_rows(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review, override, _cache = _manual_owned_case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     simplified.parent.mkdir(parents=True, exist_ok=True)
@@ -612,7 +612,7 @@ def test_three_file_owned_bundle_atomic_commit_without_editing_live_rows(tmp_pat
 def test_three_file_owned_bundle_write_failure_recovers_without_ui_mutation(
     tmp_path, monkeypatch, failed_role,
 ):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, rows, review, override, _cache = _manual_owned_case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     simplified.parent.mkdir(parents=True, exist_ok=True)
@@ -647,7 +647,7 @@ def test_three_file_owned_bundle_write_failure_recovers_without_ui_mutation(
 
 
 def test_three_file_crash_mid_commit_reopens_with_trusted_manual_path(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, _, _, override, _cache = _manual_owned_case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     original_pdic = pdic_path(page).read_bytes()
@@ -675,7 +675,7 @@ def test_three_file_crash_mid_commit_reopens_with_trusted_manual_path(tmp_path):
 
 
 def test_three_file_completed_commit_recovery_keeps_all_targets(tmp_path):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     page, _, _, override, _cache = _manual_owned_case(tmp_path)
     simplified = simplified_review_path_for_image(page)
     old = pdic_path(page).read_bytes()

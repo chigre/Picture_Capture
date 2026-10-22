@@ -226,7 +226,7 @@ def test_existing_ppp_whitefill_receives_path_and_does_not_redetect(monkeypatch,
     path = tmp_path / "scan.png"
     # Exercise the existing-PPP branch, not the absent-PPP identity path.
     monkeypatch.setattr(
-        "picture_capture.project_storage.ppp_read_path_for_image",
+        "picture_capture.persistence.project_storage.ppp_read_path_for_image",
         lambda _: tmp_path / "saved.ppp",
     )
     (tmp_path / "saved.ppp").write_text("fixture", encoding="utf-8")

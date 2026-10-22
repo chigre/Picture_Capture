@@ -16,7 +16,7 @@ from ...crop.settings import (
     UNLINED_FILTER_BLANK_KEY,
     UNLINED_FILTER_ENABLED_KEY,
 )
-from ...project_storage import qt_root
+from ...persistence.project_storage import qt_root
 from ...io.formats import write_text_atomic
 from ...crop.single_line_merge_settings import (
     MERGE_HELP,

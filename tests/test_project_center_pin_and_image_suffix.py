@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from picture_capture.project_storage import settings_path
+from picture_capture.persistence.project_storage import settings_path
 from picture_capture.project.recent_projects import (
     load_recent_projects, recent_project_details, set_recent_project_pinned,
 )

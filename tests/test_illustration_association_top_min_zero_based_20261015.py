@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from picture_capture.illustration.labels import illustration_labels
 from picture_capture.models import Entry, PolygonRegion
-from picture_capture.page_sections import PageSection
+from picture_capture.persistence.page_sections import PageSection
 from picture_capture.processing_core import Geometry
 
 

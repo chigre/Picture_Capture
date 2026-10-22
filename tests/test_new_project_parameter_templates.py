@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.models import AppSettings
-from picture_capture.project_storage import crop_settings_path, settings_path
+from picture_capture.persistence.project_storage import crop_settings_path, settings_path
 from picture_capture.project.parameter_templates import (
     apply_parameters_to_project, capture_parameters, save_default_parameters,
 )

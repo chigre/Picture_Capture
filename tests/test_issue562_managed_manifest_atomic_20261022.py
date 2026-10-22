@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture import project_storage as storage
+from picture_capture.persistence import project_storage as storage
 
 
 def _staged(path: Path) -> list[Path]:

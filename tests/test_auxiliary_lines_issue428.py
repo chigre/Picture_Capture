@@ -144,7 +144,7 @@ def test_actual_whole_entry_export_matches_same_preview_plan(tmp_path):
 
 def test_managed_project_auxiliary_sidecar_uses_data_storage(tmp_path):
     import json
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         PROJECT_FORMAT, PROJECT_FORMAT_VERSION, manifest_path,
     )
     manifest = manifest_path(tmp_path)

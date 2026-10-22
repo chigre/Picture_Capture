@@ -14,7 +14,7 @@ import json
 import shutil
 
 from ..models import AppSettings
-from ..project_storage import (
+from ..persistence.project_storage import (
     settings_path, profile_path, replace_rules_path,
     headword_filter_rules_path,
 )

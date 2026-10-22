@@ -139,7 +139,7 @@ def install_simple_page_tree_actions(app: Any, tree: ttk.Treeview) -> None:
     """Mirror original bookmark and section editing in the simple page view."""
     from tkinter import simpledialog
 
-    from picture_capture.project_storage import settings_path
+    from picture_capture.persistence.project_storage import settings_path
 
     def selected_column(event: Any) -> str | None:
         name = str(tree.identify_column(event.x) or "")

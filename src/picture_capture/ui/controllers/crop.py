@@ -24,7 +24,7 @@ from ...processing import (
     split_whole_entries,
     split_whole_entries_job,
 )
-from ...project_storage import ppp_read_path_for_image, qt_root
+from ...persistence.project_storage import ppp_read_path_for_image, qt_root
 from ...crop.single_line_merge_settings import load_merge_by_page
 from ...crop.single_line_parallel import configured_single_line_workers, single_line_page_job
 from ...crop.unlined_export_filter_settings import load_unlined_filter_settings

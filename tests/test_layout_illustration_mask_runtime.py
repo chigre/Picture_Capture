@@ -397,7 +397,7 @@ def test_static_page_mask_closes_copy_when_understanding_raises(monkeypatch):
 def test_existing_ppp_mask_never_redetects_or_rewrites(tmp_path, monkeypatch):
     import numpy as np
     from picture_capture.io.formats import write_ppp
-    from picture_capture.project_storage import ppp_write_path_for_image
+    from picture_capture.persistence.project_storage import ppp_write_path_for_image
     page = tmp_path / "page.png"
     Image.new("RGB", (400, 300), (20, 30, 40)).save(page)
     ppp = ppp_write_path_for_image(page)
@@ -439,7 +439,7 @@ def test_existing_ppp_missing_is_error_not_implicit_scan(tmp_path):
 
 def test_automatic_layout_mask_persists_detected_regions_once(tmp_path, monkeypatch):
     from picture_capture.io.formats import read_ppp
-    from picture_capture.project_storage import ppp_read_path_for_image
+    from picture_capture.persistence.project_storage import ppp_read_path_for_image
     import picture_capture.processing_core as core
     page = tmp_path / "auto.png"
     Image.new("RGB", (400, 300), "white").save(page)

@@ -71,7 +71,7 @@ from .preprocess.text_line_geometry import (
     analyze_text_line_geometry,
     separator_track_points,
 )
-from .project_storage import image_preprocess_output_root
+from .persistence.project_storage import image_preprocess_output_root
 from .preprocess.models import (
     DEFAULT_SAFETY_MARGIN_PX,
     PREPROCESS_FORMAT,

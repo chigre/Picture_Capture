@@ -70,7 +70,7 @@ def test_refine_existing_ppp_still_uses_existing_mask_and_does_not_redetect(
     ppp = tmp_path / "scan.ppp"
     ppp.write_text("not-real-ppp", encoding="utf-8")
     monkeypatch.setattr(
-        "picture_capture.project_storage.ppp_read_path_for_image",
+        "picture_capture.persistence.project_storage.ppp_read_path_for_image",
         lambda _: ppp,
     )
     calls = []

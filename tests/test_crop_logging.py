@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import picture_capture.processing as processing
 from picture_capture.crop import logging as crop_logging
-from picture_capture.project_storage import crop_log_path, qt_root
+from picture_capture.persistence.project_storage import crop_log_path, qt_root
 
 
 def test_phase7l_core_reexports_crop_logging_helpers() -> None:
