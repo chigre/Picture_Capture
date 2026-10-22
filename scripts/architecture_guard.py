@@ -1003,6 +1003,25 @@ def collect_violations() -> list[str]:
         if "from .training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
             violations.append("training legacy matcher export disconnected")
 
+    # Issue #562: project-context snapshot and v2 manifest serialization have
+    # one import-light training owner behind the historical root API.
+    manifest_owner = PACKAGE_ROOT / "training/manifest_v2.py"
+    legacy_export = PACKAGE_ROOT / "training_export.py"
+    if not manifest_owner.is_file():
+        violations.append("training v2 manifest/context canonical owner missing")
+    else:
+        manifest_source = manifest_owner.read_text(encoding="utf-8")
+        legacy_source = legacy_export.read_text(encoding="utf-8")
+        for name in ("copy_project_context", "write_training_manifest"):
+            if f"def {name}(" not in manifest_source:
+                violations.append(f"training v2 canonical owner missing {name}")
+            if f"def {name}(" in legacy_source:
+                violations.append(f"training v2 implementation duplicated at root: {name}")
+        if "from .training.manifest_v2 import (" not in legacy_source:
+            violations.append("legacy training exporter lost canonical manifest/context re-exports")
+        if "TRAINING_EXPORT_FORMAT" not in manifest_source:
+            violations.append("training v2 canonical format marker missing")
+
     return violations
 
 
