@@ -4379,7 +4379,10 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
-    training = (root / "src" / "picture_capture" / "training_export.py").read_text(encoding="utf-8")
+    # The ZIP publisher was physically moved under training/ for Issue #562.
+    training = (
+        root / "src" / "picture_capture" / "training" / "zip_publish.py"
+    ).read_text(encoding="utf-8")
     export_controller = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "export.py"
     ).read_text(encoding="utf-8")
