@@ -954,6 +954,22 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "ocr/evidence_fusion.py").is_file():
         violations.append("canonical supervised OCR fusion owner missing")
 
+    # Issue #562: stable public OCR channel re-exports pure text arbitration
+    # from one import-light OCR owner; never duplicate the voting algorithm.
+    arb = PACKAGE_ROOT / "ocr/text_arbitration.py"
+    channel = PACKAGE_ROOT / "ocr_channel.py"
+    if not arb.is_file():
+        violations.append("OCR text arbitration canonical owner missing")
+    else:
+        owner_source = arb.read_text(encoding="utf-8")
+        facade_source = channel.read_text(encoding="utf-8")
+        if "def choose_ocr_text(" not in owner_source or "def channel_text_key(" not in owner_source:
+            violations.append("OCR arbitration implementation absent from canonical owner")
+        if "def choose_ocr_text(" in facade_source or "def channel_text_key(" in facade_source:
+            violations.append("OCR voting algorithm duplicated in channel facade")
+        if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
+            violations.append("OCR channel stopped exporting canonical text arbitration")
+
     return violations
 
 
