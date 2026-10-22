@@ -14,7 +14,7 @@ from typing import Any
 
 from PIL import Image
 
-from ..layout_rows_cache import (
+from ..layout.rows_cache import (
     load_layout_rows_cache,
     recover_physical_rows_fast,
     write_layout_rows_cache,

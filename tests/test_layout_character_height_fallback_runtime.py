@@ -12,7 +12,7 @@ from picture_capture.layout.character_height import (
     apply_character_height_fallback,
     observed_character_height,
 )
-from picture_capture.layout_detection import LayoutEstimate
+from picture_capture.layout.detection import LayoutEstimate
 
 
 class _Backend:
@@ -134,7 +134,7 @@ def test_static_fallback_leaves_non_fallback_estimate_by_identity() -> None:
 
 
 def test_layout_detection_caches_raw_estimate_and_reapplies_fallback(monkeypatch) -> None:
-    from picture_capture import layout_detection
+    from picture_capture.layout import detection as layout_detection
     from picture_capture.layout import character_height as layout_character_height
     from picture_capture.layout import reliability as layout_reliability
     from picture_capture.models import AppSettings
@@ -177,7 +177,7 @@ def test_layout_detection_caches_raw_estimate_and_reapplies_fallback(monkeypatch
 def test_character_height_fallback_has_static_ownership_without_installer() -> None:
     root = Path(__file__).resolve().parents[1]
     package_init = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
-    detector = (root / "src/picture_capture/layout_detection.py").read_text(encoding="utf-8")
+    detector = (root / "src/picture_capture/layout/detection.py").read_text(encoding="utf-8")
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     gui = (root / "src/picture_capture/bootstrap/gui.py").read_text(encoding="utf-8")
     worker = (root / "src/picture_capture/bootstrap/worker.py").read_text(encoding="utf-8")

@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageOps
 
 from .preprocess.document_unwarping import unwarp_document_image
 from .image_utils import normalize_page_rgb
-from .layout_detection import (
+from .layout.detection import (
     LayoutEstimate,
     analysis_ink_mask,
     detect_text_polygons,

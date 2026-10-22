@@ -21,7 +21,7 @@ from .dictionary import (
 )
 from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ..image_utils import normalize_page_rgb
-from ..layout_detection import aggregate_layout_estimates
+from ..layout.detection import aggregate_layout_estimates
 from .layout_bootstrap import (
     detect_profile_layout_parameters as detect_layout_parameters,
     apply_profile_ink_height_suggestion,

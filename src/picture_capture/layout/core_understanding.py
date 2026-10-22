@@ -498,7 +498,7 @@ def _publish_captured_result(
     page_index: int,
 ) -> PageUnderstanding:
     """Publish LayoutRows for the current explicit capture scope, if any."""
-    from ..layout_rows_cache import publish_captured_layout
+    from ..layout.rows_cache import publish_captured_layout
 
     publish_captured_layout(result.layout, int(page_index))
     return result

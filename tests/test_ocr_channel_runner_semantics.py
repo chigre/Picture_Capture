@@ -68,11 +68,11 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
 
     events: list[str] = []
 
-    layout_module = ModuleType("picture_capture.layout_detection")
+    layout_module = ModuleType("picture_capture.layout.detection")
     layout_module.clear_text_detection_cache = lambda: events.append(
         "clear_text_detection_cache"
     )
-    monkeypatch.setitem(sys.modules, "picture_capture.layout_detection", layout_module)
+    monkeypatch.setitem(sys.modules, "picture_capture.layout.detection", layout_module)
 
     windows_module = ModuleType("picture_capture.windows_gpu")
     windows_module.configure_windows_nvidia_dlls = lambda: events.append(

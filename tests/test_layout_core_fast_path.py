@@ -34,7 +34,7 @@ def test_layout_core_and_auto_layout_have_bounded_caches() -> None:
     core = Path("src/picture_capture/layout/core_understanding.py").read_text(
         encoding="utf-8"
     )
-    detector = Path("src/picture_capture/layout_detection.py").read_text(
+    detector = Path("src/picture_capture/layout/detection.py").read_text(
         encoding="utf-8"
     )
     assert "_CACHE_LIMIT = 6" in core

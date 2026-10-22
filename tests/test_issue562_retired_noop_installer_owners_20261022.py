@@ -27,7 +27,7 @@ def test_retired_imports_have_one_physical_domain_owner_without_root_shims():
 def test_layout_install_noop_never_changes_live_detector_or_policy():
     from picture_capture.layout import detector_live_binding
     from picture_capture.design import layout_policy
-    from picture_capture import layout_detection
+    from picture_capture.layout import detection as layout_detection
 
     original = layout_policy.detect_layout_parameters
     assert detector_live_binding.install_live_layout_detector_binding() is None

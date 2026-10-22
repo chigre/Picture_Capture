@@ -33,7 +33,7 @@ from picture_capture.image_preprocessing import (
     save_analysis,
     save_manual_perspective_quad,
 )
-from picture_capture.layout_detection import detect_text_polygons
+from picture_capture.layout.detection import detect_text_polygons
 from picture_capture.models import AppSettings
 
 
@@ -79,7 +79,7 @@ def test_text_polygon_detection_preserves_polygon_geometry(monkeypatch) -> None:
                 }
             ]
 
-    import picture_capture.layout_detection as layout_detection
+    import picture_capture.layout.detection as layout_detection
 
     monkeypatch.setattr(layout_detection, "_get_text_detector", lambda _settings: FakeDetector())
     polygons = detect_text_polygons(Image.new("RGB", (200, 120), "white"), AppSettings())

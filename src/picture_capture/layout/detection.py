@@ -19,8 +19,8 @@ from typing import Any
 
 import numpy as np
 
-from .layout import detector_legacy as _legacy
-from .image_utils import build_analysis_image, normalize_page_rgb
+from . import detector_legacy as _legacy
+from ..image_utils import build_analysis_image, normalize_page_rgb
 
 for _name in dir(_legacy):
     if _name.startswith("__") or _name == "detect_layout_parameters":
@@ -40,7 +40,7 @@ _LAYOUT_ESTIMATE_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 
 def _layout_estimate_cache_key(image, settings) -> tuple[Any, ...]:
     digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
-    from .layout.scale_experiment import FLAG
+    from .scale_experiment import FLAG
     return (str(image.mode), tuple(image.size), digest, repr(settings), os.environ.get(FLAG, "off"))
 
 
@@ -91,7 +91,7 @@ def detect_text_polygons(image, settings, *, limit_side_len: int = 2400):
 
 def detect_layout_parameters(image, settings):
     from time import perf_counter
-    from .quality.draw_performance_profile import enabled, record_page
+    from ..quality.draw_performance_profile import enabled, record_page
     tracking = enabled()
     tick = perf_counter() if tracking else 0.0
     stages = {}
@@ -101,8 +101,8 @@ def detect_layout_parameters(image, settings):
             now = perf_counter()
             stages[stage] = now - tick
             tick = now
-    from .layout.character_height import apply_character_height_fallback
-    from .layout.reliability import detect_layout_parameters_reliable
+    from .character_height import apply_character_height_fallback
+    from .reliability import detect_layout_parameters_reliable
 
     analysis_image = build_analysis_image(image, settings)
     mark("facade_analysis_image")
@@ -113,7 +113,7 @@ def detect_layout_parameters(image, settings):
     if raw is not None:
         _LAYOUT_ESTIMATE_CACHE.move_to_end(key)
     else:
-        from .layout.scale_experiment import detect_at_scale
+        from .scale_experiment import detect_at_scale
         raw, scale_used = detect_at_scale(
             analysis_image, settings, sys.modules[__name__],
             detect_layout_parameters_reliable,

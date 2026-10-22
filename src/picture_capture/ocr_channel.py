@@ -290,7 +290,7 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
     # Preserve the mature runner's process bootstrap before constructing a new
     # PaddleOCR pipeline. TextDetection and general OCR keep separate caches;
     # dropping the former avoids retaining two heavyweight Paddle pipelines.
-    from .layout_detection import clear_text_detection_cache
+    from .layout.detection import clear_text_detection_cache
     clear_text_detection_cache()
 
     # Paddle 3.x may otherwise re-enable the PIR path after another pipeline has

@@ -74,7 +74,7 @@ def ordinary_page_layout_settings(
     if not bool(getattr(current, "ordinary_auto_layout", False)):
         return current, {}
 
-    from .layout_detection import detect_layout_parameters
+    from .layout.detection import detect_layout_parameters
 
     detector_settings = replace(current)
     if bool(getattr(current, "ordinary_auto_columns", True)):

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 
-from picture_capture.layout_detection import LayoutEstimate
+from picture_capture.layout.detection import LayoutEstimate
 from picture_capture.layout.reliability import _fuse_fixed_geometry, clean_layout_speckles
 from picture_capture.models import AppSettings
 

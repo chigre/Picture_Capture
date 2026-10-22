@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..image_utils import normalize_page_rgb
-from ..layout_detection import analysis_ink_mask
+from ..layout.detection import analysis_ink_mask
 from ..models import AppSettings
 from .geometry import horizontal_column_rows
 from .text_line_geometry import (

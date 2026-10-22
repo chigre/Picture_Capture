@@ -27,8 +27,8 @@ import tempfile
 import numpy as np
 from PIL import Image, ImageOps
 
-from .geometry.layout_transform import LayoutTransform
-from .project_storage import data_root, is_managed_project, qt_root
+from ..geometry.layout_transform import LayoutTransform
+from ..project_storage import data_root, is_managed_project, qt_root
 
 
 CACHE_FORMAT = "picture-capture-layout-rows-v1"
@@ -396,9 +396,9 @@ def recover_physical_rows_fast(
     page_index: int = 0,
 ) -> Any | None:
     """Recover physical rows from Profile geometry without Paddle/semantic work."""
-    from .design import page_design as base
-    from .layout_detection import analysis_ink_mask
-    from .layout.physical_indent import _credible_first_ink_x, projection_line_runs
+    from ..design import page_design as base
+    from .detection import analysis_ink_mask
+    from .physical_indent import _credible_first_ink_x, projection_line_runs
 
     # projection_line_runs statically preserves long dense projection bands.
 
@@ -523,8 +523,8 @@ def resolve_physical_rows_layout(
     # unusual title geometry or damaged columns make fixed/Profile geometry
     # implausible.  Semantic evidence still is not needed by the caller, but the
     # reliable Layout Core owns the robust per-page geometry detector.
-    from .image_utils import build_analysis_image
-    from .layout.core_understanding import understand_layout_core
+    from ..image_utils import build_analysis_image
+    from .core_understanding import understand_layout_core
 
     analysis = build_analysis_image(image, settings)
     try:

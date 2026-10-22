@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from picture_capture import layout_detection
+from picture_capture.layout import detection as layout_detection
 
 from picture_capture.profile import setup as profile_setup
 from picture_capture.models import AppSettings
@@ -99,7 +99,7 @@ def test_gui_bootstrap_no_longer_installs_profile_detector() -> None:
 
 def test_profile_bootstrap_uses_printed_ink_height_not_page_height_guess(monkeypatch) -> None:
     from PIL import ImageDraw
-    from picture_capture.layout_detection import LayoutEstimate
+    from picture_capture.layout.detection import LayoutEstimate
 
     clear_profile_layout_bootstrap_cache()
 

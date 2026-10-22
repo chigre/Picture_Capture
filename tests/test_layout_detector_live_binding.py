@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
     import picture_capture.design.layout_policy as policy
-    import picture_capture.layout_detection as layout_detection
+    import picture_capture.layout.detection as layout_detection
 
     first = SimpleNamespace(character_height=39)
     second = SimpleNamespace(character_height=59)
@@ -48,7 +48,7 @@ def test_live_binding_is_static_and_needs_no_bootstrap_installer():
     core = (root / "src/picture_capture/bootstrap/core.py").read_text(encoding="utf-8")
     package = (root / "src/picture_capture/__init__.py").read_text(encoding="utf-8")
 
-    assert "from .. import layout_detection" in policy
+    assert "from ..layout import detection as layout_detection" in policy
     assert "return layout_detection.detect_layout_parameters(image, settings)" in policy
     assert "install_live_layout_detector_binding" not in core
     assert "install_live_layout_detector_binding" not in package
