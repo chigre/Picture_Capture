@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from PIL import Image, ImageDraw
 
 from picture_capture.design.page_design import _leading_width
-from picture_capture.layout_core_understanding import (
+from picture_capture.layout.core_understanding import (
     clear_layout_understanding_cache, understand_layout_core,
 )
 from picture_capture.layout.step_trace import LayoutStepTrace

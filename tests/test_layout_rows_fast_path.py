@@ -104,7 +104,7 @@ def test_static_capture_publisher_uses_explicit_context_settings(tmp_path):
 
 
 def test_layout_core_cache_hit_still_publishes_capture(monkeypatch):
-    from picture_capture import layout_core_understanding as core
+    from picture_capture.layout import core_understanding as core
     from picture_capture import layout_rows_cache as rows
 
     image = Image.new("RGB", (16, 16), "white")
@@ -211,7 +211,7 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     ).read_text(encoding="utf-8")
 
     layout_core = (
-        root / "src" / "picture_capture" / "layout_core_understanding.py"
+        root / "src" / "picture_capture" / "layout/core_understanding.py"
     ).read_text(encoding="utf-8")
     rows = (
         root / "src" / "picture_capture" / "layout_rows_cache.py"

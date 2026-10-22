@@ -16,27 +16,27 @@ import math
 from typing import Any, Iterable
 
 from PIL import Image
-from .layout.step_trace import LayoutStepTrace
+from .step_trace import LayoutStepTrace
 
 # Keep the old local name for downstream monkeypatch and cache tests, but
 # obtain physical policy/layout through the explicit composition boundary.
-from .layout.composition import infer_composed_physical_page_layout as infer_dictionary_page_layout
-from .layout_physical_indent import (
+from .composition import infer_composed_physical_page_layout as infer_dictionary_page_layout
+from .physical_indent import (
     _suppress_display_head_duplicate_entries,
     normalize_layout_roles,
 )
-from .models import AppSettings, Entry
-from .ordinary.evidence_fusion import promote_evidence_to_layout_roles
-from .ordinary.large_head_evidence import detect_ordinary_large_head_entries
-from .ordinary.symbol_evidence import detect_ordinary_symbol_entries
-from .layout.page_understanding import (
+from ..models import AppSettings, Entry
+from ..ordinary.evidence_fusion import promote_evidence_to_layout_roles
+from ..ordinary.large_head_evidence import detect_ordinary_large_head_entries
+from ..ordinary.symbol_evidence import detect_ordinary_symbol_entries
+from .page_understanding import (
     PageUnderstanding,
     _apply_explicit_indent_semantics,
     _generic_body_indent_is_proven,
     _physical_reliable,
     uses_cjk_role_model,
 )
-from .layout.symbol_evidence import SymbolEvidenceResult
+from .symbol_evidence import SymbolEvidenceResult
 
 
 _CACHE_LIMIT = 6
@@ -370,7 +370,7 @@ def _suppress_large_evidence_duplicate_entries(
 
 def _debug_layout_role_snapshot(layout: Any) -> dict[int, dict[str, Any]]:
     """Role and provenance of each physical row; diagnostics only."""
-    from .entry_classification import get_layout_line_classification
+    from ..entry_classification import get_layout_line_classification
 
     snapshot: dict[int, dict[str, Any]] = {}
     for index, column in enumerate(list(getattr(layout, "columns", ()) or ())):
@@ -498,7 +498,7 @@ def _publish_captured_result(
     page_index: int,
 ) -> PageUnderstanding:
     """Publish LayoutRows for the current explicit capture scope, if any."""
-    from .layout_rows_cache import publish_captured_layout
+    from ..layout_rows_cache import publish_captured_layout
 
     publish_captured_layout(result.layout, int(page_index))
     return result
@@ -519,7 +519,7 @@ def understand_layout_core(
     isolated diagnostic run never mutates the normal cached Layout objects.
     """
     from time import perf_counter as _perf
-    from .quality.draw_performance_profile import enabled as _prof_on, record_page
+    from ..quality.draw_performance_profile import enabled as _prof_on, record_page
     _profiling = _prof_on()
     _last = _perf() if _profiling else 0.0
     _stages = {}
@@ -593,7 +593,7 @@ def understand_layout_core(
             "rescued_columns": 0, "rescued_rows": 0, "cjk_bracket_rows": 0,
         }
     else:
-        from .layout.role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
+        from .role_visual_consistency import suppress_contradictory_cjk_body_lane_entries
         visual_role_check = suppress_contradictory_cjk_body_lane_entries(
             image, page_settings, layout,
         )
@@ -609,7 +609,7 @@ def understand_layout_core(
             )
         # Keep visible Layout and downstream ordinary drawings consistent:
         # restore only when a separate observation proves actual entry starts.
-        from .layout.column_indent_recovery import restore_proven_column_indents
+        from .column_indent_recovery import restore_proven_column_indents
         restored_indents = restore_proven_column_indents(
             image, page_settings, layout, page_index=int(page_index),
         )
@@ -654,7 +654,7 @@ def understand_layout_core(
         trace=trace,
     )
     _mark("layout_core_symbol_large_head_evidence")
-    from .layout.verified_oversized_heads import recover_verified_oversized_heads
+    from .verified_oversized_heads import recover_verified_oversized_heads
     verified_heads = (
         recover_verified_oversized_heads(
             image, layout, visual_role_check["repaired_indices"],
@@ -670,7 +670,7 @@ def understand_layout_core(
     # Final conservative check for a split large glyph. An indent-derived
     # second start is removed only if the leading ink physically continues
     # across that boundary; independent symbol/head evidence is preserved.
-    from .layout.oversized_ink_continuation import suppress_oversized_ink_continuation
+    from .oversized_ink_continuation import suppress_oversized_ink_continuation
     ink_continuation = (
         suppress_oversized_ink_continuation(image, layout)
         if cjk else {"candidate_pairs": 0, "demoted_fragments": 0}
@@ -685,7 +685,7 @@ def understand_layout_core(
     # Keep a separate immutable record of why each final Layout role became an
     # entry. Future confidence gates must be validated against real scans
     # before changing this canonical ordinary-mode output.
-    from .geometry.boundary_evidence import proposed_layout_boundaries, serialize_proposals
+    from ..geometry.boundary_evidence import proposed_layout_boundaries, serialize_proposals
     result.boundary_proposals = serialize_proposals(proposed_layout_boundaries(result))
     layout.reason += (
         f"; page_understanding={role_model}:layout_core"

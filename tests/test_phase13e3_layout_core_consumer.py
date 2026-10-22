@@ -2,7 +2,7 @@
 from PIL import Image, ImageDraw
 
 from picture_capture.design import layout_policy as policy
-from picture_capture import layout_core_understanding as core
+from picture_capture.layout import core_understanding as core
 from picture_capture.models import AppSettings
 
 

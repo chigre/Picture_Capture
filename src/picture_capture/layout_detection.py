@@ -1,6 +1,6 @@
 """Layout detection compatibility facade with reliability fusion enabled.
 
-The original detector implementation is kept in layout_detection_legacy.py so
+The original detector implementation is kept in layout/detector_legacy.py so
 all existing public/private helpers and test monkeypatch points remain available.
 
 Layout is no longer the owner of page denoising. It consumes the same
@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from . import layout_detection_legacy as _legacy
+from .layout import detector_legacy as _legacy
 from .image_utils import build_analysis_image, normalize_page_rgb
 
 for _name in dir(_legacy):
@@ -148,7 +148,7 @@ def detect_layout_parameters(image, settings):
 
 
 # Historical source-contract markers retained for compatibility tests/tools.
-# Executable implementations live in layout_detection_legacy.py and are
+# Executable implementations live in layout/detector_legacy.py and are
 # re-exported by this facade; the current reliable detector still starts from
 # alpha-safe normalized RGB and configures Windows NVIDIA DLLs in that backend.
 # source = normalize_page_rgb(image)

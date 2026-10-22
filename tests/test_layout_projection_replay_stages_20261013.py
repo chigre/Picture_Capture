@@ -9,14 +9,14 @@ from __future__ import annotations
 from PIL import Image, ImageDraw
 import numpy as np
 
-from picture_capture.layout_physical_indent import (
+from picture_capture.layout.physical_indent import (
     _raw_projection_runs, projection_line_runs,
 )
 from picture_capture.layout.step_trace import LayoutStepTrace
 from picture_capture.ui.layout_step_replay import (
     _projection_candidates_for_display, _format_stage, _candidate_at_source,
 )
-from picture_capture.layout_core_understanding import (
+from picture_capture.layout.core_understanding import (
     understand_layout_core, clear_layout_understanding_cache,
 )
 from picture_capture.models import AppSettings

@@ -83,7 +83,7 @@ def _foreign_column_tail_replacement(
     Genuine negative first-X drift/overhang is preserved when print continues
     across the semantic left edge or the gap is ambiguous.
     """
-    from ..layout_physical_indent import _credible_first_ink_x
+    from ..layout.physical_indent import _credible_first_ink_x
 
     if (
         row.ndim != 2 or row.size == 0
@@ -144,7 +144,7 @@ def remeasure_layout_indents_from_ink(
 
     Return updated row counts by column, in the original local-X convention.
     """
-    from ..layout_physical_indent import _credible_first_ink_x
+    from ..layout.physical_indent import _credible_first_ink_x
 
     ops = base.current_layout_ops() if ops is None else ops
 

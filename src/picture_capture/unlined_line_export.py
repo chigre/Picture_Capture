@@ -33,7 +33,7 @@ from .design import page_design as page_design
 from . import formats
 from .image_utils import build_analysis_image, normalize_page_rgb
 from .refinement.analysis import whiten_illustrations_for_export
-from .layout_core_understanding import understand_layout_core
+from .layout.core_understanding import understand_layout_core
 from .page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
 from .project_storage import qt_root
 from .crop.single_line_merge_settings import _trim_white_border, load_merge_by_page

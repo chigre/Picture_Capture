@@ -9,10 +9,10 @@ from typing import Any, Iterable
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from .models import AppSettings
-from .runtime_environment import resolve_paddle_device
-from .image_utils import normalize_page_rgb
-from .geometry.layout_transform import LayoutTransform
+from ..models import AppSettings
+from ..runtime_environment import resolve_paddle_device
+from ..image_utils import normalize_page_rgb
+from ..geometry.layout_transform import LayoutTransform
 
 
 @dataclass(slots=True)
@@ -121,8 +121,8 @@ def _get_text_detector(settings: AppSettings) -> Any:
 
     Preserve PR494's strict CPU worker and staged GPU inference guards.
     """
-    from .ordinary.gpu_pipeline import reject_cpu_worker_detector
-    from .quality.inference_performance import (
+    from ..ordinary.gpu_pipeline import reject_cpu_worker_detector
+    from ..quality.inference_performance import (
         InferencePolicy, resolve_inference_policy, paddle_constructor_variants,
     )
 
@@ -140,7 +140,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
         return _TEXT_DETECTION_CACHE[key]
 
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from .windows_gpu import configure_windows_nvidia_dlls
+    from ..windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
     try:
         from paddleocr import TextDetection
@@ -168,7 +168,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
         except Exception as exc:
             last_exc = exc
             continue
-        from .quality.inference_monitor import record_model_event
+        from ..quality.inference_monitor import record_model_event
         record_model_event("TextDetection", policy.device, policy.mkldnn, policy.cpu_threads)
         _TEXT_DETECTION_CACHE.clear()
         _TEXT_DETECTION_CACHE[key] = detector
@@ -555,7 +555,7 @@ def infer_layout_from_boxes(
     start_y_source = body_top
     bottom_y_source = body_bottom
     character_height_source = max(1, round(float(np.median([box[3] - box[1] for box in filtered]))))
-    from .layout.textbox_leading import estimate_row_padding_from_boxes
+    from .textbox_leading import estimate_row_padding_from_boxes
     measured_padding, pitch_pairs = estimate_row_padding_from_boxes(
         groups, character_height_source,
     )
@@ -869,7 +869,7 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     installed Paddle/PaddleX stack still cannot execute detection.
     """
     from time import perf_counter as _perf
-    from .quality.draw_performance_profile import enabled as _profile_enabled, record_page
+    from ..quality.draw_performance_profile import enabled as _profile_enabled, record_page
     _tracking = _profile_enabled()
     _tick = _perf() if _tracking else 0.0
     _steps = {}

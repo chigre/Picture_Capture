@@ -30,7 +30,7 @@ from ..design.page_design_refined import (
     detect_entries_from_page_design,
     layout_diagnostics,
 )
-from ..layout_physical_indent import explicit_physical_layout_ops
+from ..layout.physical_indent import explicit_physical_layout_ops
 from ..image_utils import normalize_page_rgb
 from ..models import AppSettings, Entry
 from ..page_sections import read_page_sections

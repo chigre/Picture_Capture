@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
+from picture_capture.layout.core_understanding import _resolve_directional_body_lanes
 
 
 def _line(role: str = "unknown") -> SimpleNamespace:

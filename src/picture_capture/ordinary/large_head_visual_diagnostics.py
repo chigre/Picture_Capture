@@ -16,7 +16,7 @@ from PIL import Image
 
 from ..image_utils import build_analysis_image
 from ..models import AppSettings
-from ..layout_core_understanding import understand_layout_core
+from ..layout.core_understanding import understand_layout_core
 from ..profile.semantics import effective_page_settings
 
 
@@ -75,7 +75,7 @@ def _diagnostic_settings(effective: AppSettings) -> dict[str, Any]:
 def _diagnostic_layout(layout: Any) -> dict[str, Any]:
     """Serialize physical row evidence from the SAME traced Layout run."""
     from ..entry_classification import get_layout_line_classification
-    from ..layout_physical_indent import normalized_physical_indents
+    from ..layout.physical_indent import normalized_physical_indents
 
     rows: list[dict[str, Any]] = []
     for col_index, column in enumerate(list(getattr(layout, "columns", ()) or ())):

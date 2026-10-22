@@ -15,7 +15,7 @@ from ..design.layout_policy import resolve_page_layout_policy
 from ..layout_rows_cache import capture_layout_rows
 from ..image_utils import build_analysis_image
 from .role_provenance import indent_blocks_with_entry_sources
-from ..layout_physical_indent import normalized_physical_indents
+from ..layout.physical_indent import normalized_physical_indents
 from ..processing import (
     ORDINARY_AUTO_LAYOUT_FIELDS,
     _geometry_from_page_understanding,

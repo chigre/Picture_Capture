@@ -267,7 +267,7 @@ def _understanding(reason="base"):
 
 def test_static_page_mask_disabled_preserves_original_image_identity(monkeypatch):
     from picture_capture import processing
-    from picture_capture import layout_core_understanding
+    from picture_capture.layout import core_understanding as layout_core_understanding
     from picture_capture.layout import illustration_mask as masking
 
     original = object()
@@ -297,7 +297,7 @@ def test_static_page_mask_disabled_preserves_original_image_identity(monkeypatch
 
 def test_static_page_mask_enabled_passes_copy_appends_reason_and_closes(monkeypatch):
     from picture_capture import processing
-    from picture_capture import layout_core_understanding
+    from picture_capture.layout import core_understanding as layout_core_understanding
     from picture_capture.layout import illustration_mask as masking
 
     original = object()

@@ -476,7 +476,7 @@ class LayoutStepReplayWindow:
         """
         from ..layout import composition as layout_composition
         from ..design import layout_policy as dictionary_page_layout_policy
-        from .. import layout_physical_indent
+        from ..layout import physical_indent as layout_physical_indent
         modules = [
             ("回放窗口", __file__),
             ("阶段采集器", __import__(

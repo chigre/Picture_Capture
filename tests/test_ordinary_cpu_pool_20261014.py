@@ -77,7 +77,7 @@ def test_cpu_worker_forces_device_and_reuses_original_pdics_writer(monkeypatch):
 
 
 def test_cpu_only_detector_explicit_threads_no_gpu_fallback(monkeypatch):
-    from picture_capture import layout_detection_legacy as legacy
+    from picture_capture.layout import detector_legacy as legacy
     from picture_capture.runtime_environment import resolve_paddle_device
 
     observed = []
@@ -109,7 +109,7 @@ def test_cpu_only_detector_explicit_threads_no_gpu_fallback(monkeypatch):
 
 
 def test_cpu_only_constructor_incompatibility_must_abort_not_attempt_gpu(monkeypatch):
-    from picture_capture import layout_detection_legacy as legacy
+    from picture_capture.layout import detector_legacy as legacy
 
     received = []
     fake = ModuleType("paddleocr")

@@ -307,7 +307,7 @@ def test_ordinary_marker_stage_trace_snapshots_exact_provenance_without_mutation
 
 
 def test_role_change_debug_trace_exposes_precise_source_and_role_transitions():
-    from picture_capture.layout_core_understanding import _debug_role_changes
+    from picture_capture.layout.core_understanding import _debug_role_changes
 
     original = {4: {"column": 0, "canonical_y": 204,
                     "role": "body", "source": "indent"}}

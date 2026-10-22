@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image
 
 from picture_capture.layout import composition as layout_composition
-from picture_capture import layout_core_understanding as core
+from picture_capture.layout import core_understanding as core
 from picture_capture import processing
 from picture_capture.models import AppSettings
 

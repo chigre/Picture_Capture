@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from picture_capture.layout_physical_indent import (
+from picture_capture.layout.physical_indent import (
     _logical_slots_for_oversized_run as logical_slots_without_loss,
 )
 
@@ -28,7 +28,7 @@ def test_long_page_band_stays_within_projection_acceptance_height():
 def test_physical_indent_statically_owns_long_band_fallback():
     root = Path(__file__).resolve().parents[1]
 
-    assert logical_slots_without_loss.__module__ == "picture_capture.layout_physical_indent"
+    assert logical_slots_without_loss.__module__ == "picture_capture.layout.physical_indent"
     assert not (root / "src/picture_capture/layout_row_recovery_runtime.py").exists()
 
 

@@ -38,7 +38,7 @@ def test_page_x_line_family_honors_explicit_ops(monkeypatch):
 
 
 def test_drift_remeasurement_honors_explicit_ops(monkeypatch):
-    import picture_capture.layout_physical_indent as physical
+    import picture_capture.layout.physical_indent as physical
 
     seen = []
     monkeypatch.setattr(physical, "_credible_first_ink_x", lambda row, ref: 4)

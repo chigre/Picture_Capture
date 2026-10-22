@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
+from picture_capture.layout.core_understanding import _resolve_directional_body_lanes
 
 
 def _line(first_x: float) -> SimpleNamespace:

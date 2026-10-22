@@ -52,7 +52,7 @@ def resolve_entry_ocr_row_metrics(
     analysis = None
     try:
         from ..image_utils import build_analysis_image
-        from ..layout_core_understanding import understand_layout_core
+        from ..layout.core_understanding import understand_layout_core
 
         analysis = build_analysis_image(image, settings)
         understanding = understand_layout_core(

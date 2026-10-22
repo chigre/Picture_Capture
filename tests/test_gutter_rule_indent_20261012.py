@@ -12,7 +12,7 @@ from picture_capture.design import page_design as base
 from picture_capture.layout.column_drift import (
     _gutter_divider_right_edge, remeasure_layout_indents_from_ink,
 )
-from picture_capture.layout_physical_indent import (
+from picture_capture.layout.physical_indent import (
     physical_indent_modes, assign_binary_roles,
 )
 
@@ -80,7 +80,7 @@ def test_right_column_indents_survive_gutter_rule():
     # The print sample deliberately has MORE true heads than body starts.
     # Final semantics must select the rightmost *body* family by direction,
     # not the most populous physical indent family.
-    from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
+    from picture_capture.layout.core_understanding import _resolve_directional_body_lanes
     _resolve_directional_body_lanes(layout)
     assert sum(m.support for m in layout.columns[1].entry_modes) >= 12
 
