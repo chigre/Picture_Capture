@@ -50,7 +50,7 @@ def test_migration_casefold_collision_preserves_sources(tmp_path):
 
 
 def test_crop_publish_rolls_back_when_os_replace_fails(tmp_path, monkeypatch):
-    from picture_capture import processing_publish as publish
+    from picture_capture.crop import publish
 
     old, staged = tmp_path / "target.txt", tmp_path / ".target.tmp"
     old.write_text("old")
