@@ -11,7 +11,7 @@ from picture_capture.ordinary.large_head_evidence import (
     detect_ordinary_large_head_entries,
 )
 from picture_capture.ui import large_head_visualization as ui
-from picture_capture import layout_visualization_ui_v3 as v3
+from picture_capture.ui import layout_visualization_ui_v3 as v3
 
 
 class _Flag:
@@ -178,7 +178,7 @@ def test_session_only_switch_never_becomes_an_appsettings_field(monkeypatch):
     """Regression for AttributeError: no 'show_large_head_diagnostics'."""
     import tkinter as tk
     from tkinter import ttk
-    import picture_capture.layout_visualization_ui_v3 as layout_controls
+    import picture_capture.ui.layout_visualization_ui_v3 as layout_controls
 
     class Widget:
         def __init__(self, parent, **kwargs):

@@ -601,9 +601,27 @@ def collect_violations() -> list[str]:
                 f"OCR crop-preview class mutation returned: {marker}"
             )
 
-    layout_visualization_source = (
-        PACKAGE_ROOT / "layout_visualization_ui_v3.py"
-    ).read_text(encoding="utf-8")
+    # #562: the active v3 diagnostic controls have exactly one physical UI owner.
+    # Preserve the static Tk/no-monkeypatch scan at the moved source.
+    if (PACKAGE_ROOT / "layout_visualization_ui_v3.py").is_file():
+        violations.append("retired root Layout visualization v3 owner returned")
+    layout_v3_owner = PACKAGE_ROOT / "ui/layout_visualization_ui_v3.py"
+    if not layout_v3_owner.is_file():
+        violations.append("canonical Layout visualization v3 owner missing")
+        layout_visualization_source = ""
+    else:
+        layout_visualization_source = layout_v3_owner.read_text(encoding="utf-8")
+        for signature in (
+            "def draw_layout_visualization_if_enabled(",
+            "def add_layout_visualization_controls(",
+            "def _set_layout_exclusive_visibility(",
+            "def toggle_layout_step_replay(",
+        ):
+            if signature not in layout_visualization_source:
+                violations.append(f"Layout visualization v3 UI owner lost: {signature}")
+    root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
+    if root_py_count > 32:
+        violations.append(f"root Python module count regressed: {root_py_count} > 32")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

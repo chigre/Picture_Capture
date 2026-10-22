@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import picture_capture.layout_visualization_ui_v3 as layout_ui
+import picture_capture.ui.layout_visualization_ui_v3 as layout_ui
 
 
 class _Var:
@@ -17,7 +17,7 @@ class _Var:
 
 
 def test_layout_toggle_is_ui_local_and_not_persisted() -> None:
-    text = Path("src/picture_capture/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
+    text = Path("src/picture_capture/ui/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
 
     assert 'text="显示Layout"' in text
     assert 'quick_bool_vars["show_layout_visualization"]' not in text
@@ -55,7 +55,7 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
     helper = (
-        root / "src" / "picture_capture" / "layout_visualization_ui_v3.py"
+        root / "src" / "picture_capture" / "ui" / "layout_visualization_ui_v3.py"
     ).read_text(encoding="utf-8")
 
     state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
@@ -76,3 +76,28 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
     assert "cls._section_frame =" not in helper
     assert "cls._build_quick_settings =" not in helper
     assert "cls.redraw =" not in helper
+
+
+def test_v3_controls_have_a_single_ui_owner_and_import_without_window() -> None:
+    import importlib.util
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "src/picture_capture/layout_visualization_ui_v3.py").exists()
+    owner = root / "src/picture_capture/ui/layout_visualization_ui_v3.py"
+    assert owner.is_file()
+    assert importlib.util.find_spec("picture_capture.layout_visualization_ui_v3") is None
+    assert importlib.util.find_spec("picture_capture.ui.layout_visualization_ui_v3") is not None
+    script = (
+        "import sys, tkinter; "
+        "from picture_capture.ui import layout_visualization_ui_v3 as ui; "
+        "assert callable(ui.draw_layout_visualization_if_enabled); "
+        "assert tkinter._default_root is None; "
+        "assert 'picture_capture.app' not in sys.modules"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script], cwd=root,
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
