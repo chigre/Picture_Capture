@@ -970,6 +970,23 @@ def collect_violations() -> list[str]:
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
 
+    # Issue #562: keep EXIF/alpha/source-space ink predicates in one
+    # preprocess owner, with unchanged function-object exports from image_utils.
+    pixel_owner = PACKAGE_ROOT / "preprocess/page_pixels.py"
+    image_facade = PACKAGE_ROOT / "image_utils.py"
+    if not pixel_owner.is_file():
+        violations.append("preprocess page pixel primitives owner missing")
+    else:
+        owner_source = pixel_owner.read_text(encoding="utf-8")
+        facade_source = image_facade.read_text(encoding="utf-8")
+        for pixel_fn in ("normalize_page_rgb", "_box_sum", "_generic_analysis_ink"):
+            if f"def {pixel_fn}(" not in owner_source:
+                violations.append(f"page pixel owner missing {pixel_fn}")
+            if f"def {pixel_fn}(" in facade_source:
+                violations.append(f"duplicate page pixel implementation: {pixel_fn}")
+        if "from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in facade_source:
+            violations.append("image_utils lost stable page pixel re-exports")
+
     return violations
 
 
