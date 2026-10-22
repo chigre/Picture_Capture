@@ -16,7 +16,7 @@ from .compat import normalize_content_font_setting
 from .overlay_opacity import normalize_opacity as line_opacity
 from ..illustration.fill_opacity import normalize_opacity as fill_opacity
 from ..preprocess.adaptive_denoise import DENOISE_ENV, normalize_denoise_strength
-from ..layout_visualization_ui_v3 import _DENOISE_VALUE_TO_LABEL
+from .layout_visualization_ui_v3 import _DENOISE_VALUE_TO_LABEL
 
 
 # Value types intentionally match the original quick UI, including the

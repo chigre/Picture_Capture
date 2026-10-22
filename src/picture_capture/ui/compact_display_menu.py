@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import font, ttk
 from typing import Any, Callable
 
-from picture_capture.layout_visualization_ui_v3 import (
+from picture_capture.ui.layout_visualization_ui_v3 import (
     _invalidate_layout_snapshot,
     _set_layout_exclusive_visibility,
 )
@@ -245,7 +245,7 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     # The visible 280px palette is a separate widget tree from the legacy
     # quick-settings owner.  Reuse its session-only variable/callback; merely
     # adding the checkbox to the hidden owner leaves users without an entry.
-    from picture_capture.layout_visualization_ui_v3 import toggle_layout_step_replay
+    from picture_capture.ui.layout_visualization_ui_v3 import toggle_layout_step_replay
     replay_var = app._layout_step_replay_var
     row = line()
 
@@ -267,14 +267,14 @@ def build_compact_display_menu(app: Any, parent: tk.Misc) -> ttk.Frame:
     # blocks on top of the scanned dictionary.
     row = line()
     label(row, "Layout叠加")
-    from picture_capture.layout_visualization_ui_v3 import LAYOUT_DISPLAY_MODES
+    from picture_capture.ui.layout_visualization_ui_v3 import LAYOUT_DISPLAY_MODES
     density = ttk.Combobox(
         row, textvariable=app._layout_display_density_var,
         values=LAYOUT_DISPLAY_MODES, state="readonly",
         width=9, style="PC.Display.TCombobox",
     )
     density.pack(side="left", padx=(4, 0), pady=0)
-    from picture_capture.layout_visualization_ui_v3 import on_layout_density_change
+    from picture_capture.ui.layout_visualization_ui_v3 import on_layout_density_change
     density.bind(
         "<<ComboboxSelected>>",
         lambda _event: on_layout_density_change(app),

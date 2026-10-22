@@ -193,7 +193,7 @@ def test_actual_compact_palette_contains_inspector_button():
     ).read_text(encoding="utf-8")
     assert 'text="查看Layout候选/异常", command=open_layout_inspector' in source
     overlay = (
-        root / "src/picture_capture/layout_visualization_ui_v3.py"
+        root / "src/picture_capture/ui/layout_visualization_ui_v3.py"
     ).read_text(encoding="utf-8")
     assert "draw_unified_candidate_overlay(app, layout_enabled=True)" in overlay
     assert "add_unified_layout_inspector_controls(app, section)" in overlay

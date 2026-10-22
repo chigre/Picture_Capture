@@ -24,8 +24,11 @@ def test_ui_owner_is_physical_without_old_root_alias(name: str) -> None:
     assert importlib.util.find_spec("picture_capture.ui." + name) is not None
 
 
-def test_high_risk_layout_v3_and_historical_compatibility_remain_at_root() -> None:
-    assert (PACKAGE / "layout_visualization_ui_v3.py").is_file()
+def test_high_risk_layout_v3_and_historical_compatibility_have_ui_owners() -> None:
+    assert not (PACKAGE / "layout_visualization_ui_v3.py").exists()
+    assert (PACKAGE / "ui/layout_visualization_ui_v3.py").is_file()
+    assert importlib.util.find_spec("picture_capture.layout_visualization_ui_v3") is None
+    assert importlib.util.find_spec("picture_capture.ui.layout_visualization_ui_v3") is not None
     assert not (PACKAGE / "ui_terminology.py").exists()
     assert (PACKAGE / "ui" / "terminology_compat.py").is_file()
 

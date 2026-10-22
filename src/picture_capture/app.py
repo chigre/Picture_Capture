@@ -214,7 +214,7 @@ from .illustration.fill_opacity import (
     create_alpha_canvas_polygon, refresh_alpha_polygon_fill,
 )
 from .ui.ocr_crop_preview import draw_ocr_crop_preview
-from .layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
+from .ui.layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
 from .ui.auxiliary_line_controller import AuxiliaryLineController
 from .crop.auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification
@@ -297,7 +297,6 @@ def transformed_geometry_pending(settings: AppSettings) -> bool:
     return str(getattr(settings, "layout_transform", "identity") or "identity") not in {
         "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
     }
-
 
 
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}

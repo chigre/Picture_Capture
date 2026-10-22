@@ -117,7 +117,7 @@ def test_diff_tracks_removed_and_added_rows():
 
 
 def test_toggle_is_ephemeral_and_trace_is_opt_in():
-    controls = Path("src/picture_capture/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
+    controls = Path("src/picture_capture/ui/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
     core_source = Path("src/picture_capture/layout_core_understanding.py").read_text(encoding="utf-8")
     assert 'text="查看 LAYOUT 分析过程"' in controls
     assert "tk.BooleanVar(value=False)" in controls

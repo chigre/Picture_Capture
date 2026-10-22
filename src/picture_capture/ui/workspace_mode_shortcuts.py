@@ -8,7 +8,7 @@ from __future__ import annotations
 import tkinter as tk
 from typing import Any
 
-from ..layout_visualization_ui_v3 import (
+from .layout_visualization_ui_v3 import (
     _invalidate_layout_snapshot, _set_layout_exclusive_visibility,
 )
 
