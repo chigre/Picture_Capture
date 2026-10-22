@@ -1046,6 +1046,29 @@ def collect_violations() -> list[str]:
         if 'make_training_zip.__module__ = "picture_capture.training_export"' not in zip_source:
             violations.append("training ZIP function legacy pickle identity lost")
 
+    # Issue #562: retire two no-op installers whose product effects are now
+    # statically owned by Layout policy and the Settings schema. Physical root
+    # stubs must not return just to satisfy stale diagnostic import paths.
+    for former, canonical, signature in (
+        (
+            "layout_detector_live_binding",
+            "layout/detector_live_binding.py",
+            "def install_live_layout_detector_binding()",
+        ),
+        (
+            "settings_help_restore",
+            "ui/settings/legacy_help_restore.py",
+            "def install_settings_help_restore(",
+        ),
+    ):
+        if (PACKAGE_ROOT / f"{former}.py").exists():
+            violations.append(f"retired no-op installer returned to root: {former}.py")
+        target = PACKAGE_ROOT / canonical
+        if not target.is_file():
+            violations.append(f"retired no-op installer domain owner missing: {canonical}")
+        elif signature not in target.read_text(encoding="utf-8"):
+            violations.append(f"retired no-op installer contract missing: {canonical}")
+
     return violations
 
 

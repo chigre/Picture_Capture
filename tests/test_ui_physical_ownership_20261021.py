@@ -25,7 +25,7 @@ def test_ui_owner_is_physical_without_old_root_alias(name: str) -> None:
 
 
 def test_high_risk_layout_v3_and_historical_compatibility_remain_at_root() -> None:
-    for name in ("layout_visualization_ui_v3", "ui_terminology", "settings_help_restore"):
+    for name in ("layout_visualization_ui_v3", "ui_terminology"):
         assert (PACKAGE / (name + ".py")).is_file()
 
 
