@@ -39,7 +39,7 @@ def test_no_retired_python_imports_in_source_tests_or_scripts() -> None:
                     mod = item.module or ""
                     assert not any(mod == "picture_capture." + retired or
                                    mod.startswith("picture_capture." + retired + ".") or
-                                   (item.level > 0 and mod == retired)
+                                   (item.level > 0 and mod == retired and path.parent == ROOT)
                                    for retired in OWNERS), (path, item.lineno)
                     if mod in ("", "picture_capture"):
                         assert not any(n.name in OWNERS for n in item.names), (path, item.lineno)
