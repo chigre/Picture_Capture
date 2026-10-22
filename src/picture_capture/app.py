@@ -265,8 +265,7 @@ OCR_ENGINE_VALUES = {label: value for value, label in OCR_ENGINE_LABELS.items()}
 APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
 APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
 
-# ISO 639-1 project language codes; common languages are kept at
-# the front of the readonly selectors; the rest remain alphabetized.
+# ISO 639-1; common languages first, then alphabetical.
 PROJECT_LANGUAGE_CODES = (
     "en", "zh", "es", "fr", "de", "it", "pt", "ja", "ko", "ru",
     "ar", "nl", "pl", "tr", "vi",
