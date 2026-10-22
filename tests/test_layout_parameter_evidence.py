@@ -46,7 +46,7 @@ def test_multi_page_median_excludes_unobserved_placeholders():
 
 
 def test_per_page_unmeasured_gap_keeps_existing_profile(monkeypatch):
-    from picture_capture import layout_detection
+    from picture_capture.layout import detection as layout_detection
     settings = AppSettings(
         ordinary_auto_layout=True,
         ordinary_auto_row_padding=True,

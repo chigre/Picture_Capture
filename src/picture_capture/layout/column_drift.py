@@ -302,7 +302,7 @@ def finalize_layout_column_drift(
     foreign_tails: dict[int, int] = {}
     measured_overhangs: dict[int, tuple[int, int]] = {}
     if page_ink is None:
-        from ..layout_detection import analysis_ink_mask
+        from ..layout.detection import analysis_ink_mask
 
         source, canonical, _transform, effective = base._analysis_page(
             image,

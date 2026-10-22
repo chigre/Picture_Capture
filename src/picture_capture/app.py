@@ -133,7 +133,7 @@ from .ui.dialogs.common import _build_modern_dialog_heading
 from .ui.dialogs.old_new_comparison import OldNewComparisonWindow
 from .ui.dialogs.ocr_conflict import OCRConflictReviewDialog
 from .ui.dialogs.crop_settings import CropSettingsDialog
-from .layout_detection import detect_layout_consistency, detect_layout_parameters
+from .layout.detection import detect_layout_consistency, detect_layout_parameters
 from .ui.layout_detection_actions import (
     detect_layout_current as _run_detect_layout_current,
     detect_layout_consistency_selected as _run_detect_layout_consistency_selected,
@@ -356,7 +356,6 @@ def _effective_review_regular_crop_height(settings: AppSettings) -> int:
     row_padding = max(0, int(getattr(settings, "row_padding", 0) or 0))
     return max(1, line_height + row_padding)
 
-
 def _review_line_box(
     entry: WordEntry,
     geometry,
@@ -464,7 +463,6 @@ def _apply_focused_review_page_updates(
         raise
     return planned, []
 
-
 class SettingsDialog(tk.Toplevel):
     FIELDS = _settings_schema.FIELDS
     PROFILE_FIELD_GROUPS = _settings_schema.PROFILE_FIELD_GROUPS
@@ -494,7 +492,6 @@ class SettingsDialog(tk.Toplevel):
     OCR_ADVANCED_CHECKS = _settings_schema.OCR_ADVANCED_CHECKS
     DISPLAY_STYLE_CHECKS = _settings_schema.DISPLAY_STYLE_CHECKS
     DISPLAY_CHECKS = _settings_schema.DISPLAY_CHECKS
-
 
     def _show_settings_help(
         self,
@@ -1924,8 +1921,6 @@ class SettingsDialog(tk.Toplevel):
         """Open the shared environment center instead of a transient status dialog."""
         self.parent.show_environment_center()
 
-
-
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
     """Default proofreading window size: 60% screen width and 70% screen height."""
     screen_w = max(1, int(screen_w))
@@ -1933,7 +1928,6 @@ def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
     width = min(screen_w, max(560, int(round(screen_w * 0.60))))
     height = min(screen_h, max(420, int(round(screen_h * 0.70))))
     return width, height
-
 
 class ReviewWindow(tk.Toplevel):
     # Keep diacritics in predictable vowel groups so visual lookup is quick.
@@ -4159,7 +4153,6 @@ class ReviewWindow(tk.Toplevel):
             return None
         return local
 
-
     def _toggle_review_panel(self, panel: str) -> None:
         if panel == "digit":
             expanded = not self.digit_map_expanded.get()
@@ -4891,7 +4884,6 @@ class ReviewWindow(tk.Toplevel):
             self.parent.status_var.set(
                 "校对内容已保存，但本地校对操作日志写入失败，请检查磁盘权限。"
             )
-
 
     def _bound_row_entries(self) -> list[WordEntry]:
         """Return stable rendered-row bindings, with compatibility fallback."""

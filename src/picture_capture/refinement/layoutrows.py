@@ -41,7 +41,7 @@ def cached_refinement_settings(page: Path, source_size: tuple[int, int],
     Missing physical fields still fall back safely.
     """
     import json
-    from ..layout_rows_cache import (
+    from ..layout.rows_cache import (
         layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
         _same_image_fingerprint, _layout_from_payload,
     )
@@ -108,7 +108,7 @@ def refinement_cache_miss_reason(page: Path, source_size: tuple[int, int],
                                  settings: Any, page_index: int) -> str:
     """Explain why an existing JSON cannot safely replace fresh detection."""
     import json
-    from ..layout_rows_cache import (
+    from ..layout.rows_cache import (
         layout_rows_cache_path, CACHE_FORMAT, CACHE_ALGORITHM_VERSION,
         _same_image_fingerprint,
     )

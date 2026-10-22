@@ -17,7 +17,7 @@ from typing import Any
 
 from PIL import Image
 
-from .. import layout_detection
+from ..layout import detection as layout_detection
 from ..image_utils import build_analysis_image
 from ..geometry.layout_transform import LayoutTransform
 

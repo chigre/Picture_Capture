@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from picture_capture import layout_rows_cache as cache
+from picture_capture.layout import rows_cache as cache
 from picture_capture.models import AppSettings
 
 

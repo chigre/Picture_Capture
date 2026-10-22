@@ -24,7 +24,7 @@ from picture_capture.models import (
     AppSettings, Entry, ProjectState, project_cover_path, project_page_images,
 )
 from picture_capture.geometry.layout_transform import LayoutTransform
-from picture_capture.layout_detection import _analysis_ink_mask
+from picture_capture.layout.detection import _analysis_ink_mask
 from picture_capture.processing import (
     _collapse_ordinary_oversized_cjk_split_markers, _column_tracking_dimensions,
     _recover_ordinary_oversized_cjk_missing_markers,
@@ -3543,7 +3543,7 @@ def test_column_tracking_percentages_scale_with_page_geometry():
 
 
 def test_ordinary_auto_layout_applies_only_checked_page_specific_fields(monkeypatch):
-    import picture_capture.layout_detection as layout_detection
+    import picture_capture.layout.detection as layout_detection
 
     estimate = SimpleNamespace(
         columns=3,

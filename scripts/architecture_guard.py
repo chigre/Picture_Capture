@@ -468,7 +468,7 @@ def collect_violations() -> list[str]:
                 f"paddle_headwords import-time core mutation returned: {marker}"
             )
 
-    layout_rows_source = (PACKAGE_ROOT / "layout_rows_cache.py").read_text(encoding="utf-8")
+    layout_rows_source = (PACKAGE_ROOT / "layout/rows_cache.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_LAYOUT_ROWS_ASSIGNMENTS:
         if marker in layout_rows_source:
             violations.append(
@@ -671,9 +671,21 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical I/O owner missing: {owner}")
         elif token not in target.read_text(encoding="utf-8"):
             violations.append(f"canonical I/O owner missing key routine: {owner}")
+    # #562: Layout detector and fast row-cache have physical owners under layout/.
+    for retired, owner, fn in (
+        ("layout_detection", "detection", "def detect_layout_parameters("),
+        ("layout_rows_cache", "rows_cache", "def load_layout_rows_cache("),
+    ):
+        if (PACKAGE_ROOT / (retired + ".py")).exists():
+            violations.append(f"retired Layout root returned: {retired}")
+        owned = PACKAGE_ROOT / "layout" / (owner + ".py")
+        if not owned.is_file():
+            violations.append(f"canonical Layout owner missing: {owner}")
+        elif fn not in owned.read_text(encoding="utf-8"):
+            violations.append(f"canonical Layout routine missing: {owner}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 22:
-        violations.append(f"root Python module count regressed: {root_py_count} > 22")
+    if root_py_count > 20:
+        violations.append(f"root Python module count regressed: {root_py_count} > 20")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

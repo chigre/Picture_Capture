@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from ..image_utils import normalize_page_rgb
-from ..layout_detection import LayoutEstimate, infer_layout_from_boxes
+from ..layout.detection import LayoutEstimate, infer_layout_from_boxes
 from ..models import AppSettings
 
 

@@ -14,7 +14,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..design import page_design as base
-from ..layout_detection import LayoutEstimate, analysis_ink_mask
+from ..layout.detection import LayoutEstimate, analysis_ink_mask
 from ..models import AppSettings
 from ..profile.indent_ui import indent_type_label
 

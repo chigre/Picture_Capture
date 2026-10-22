@@ -15,7 +15,7 @@ from tkinter import messagebox
 from PIL import Image
 
 from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from ..layout_detection import detect_layout_consistency, detect_layout_parameters
+from ..layout.detection import detect_layout_consistency, detect_layout_parameters
 from ..geometry.layout_transform import LayoutTransform
 from ..project_storage import exports_root
 
@@ -47,7 +47,7 @@ def detect_layout_current(self) -> None:
     def done(_completed, _total, stopped, results, error) -> None:
         if error or not results:
             return
-        from ..layout_detection import aggregate_layout_estimates
+        from ..layout.detection import aggregate_layout_estimates
         values, consistency = aggregate_layout_estimates(
             results,
             columns_policy=self.settings.layout_columns_policy,

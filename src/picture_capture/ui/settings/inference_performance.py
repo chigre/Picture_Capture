@@ -118,7 +118,7 @@ def build_inference_performance_group(dialog, parent: ttk.Frame) -> None:
             save_runtime_setting("paddle_mkldnn", chosen_mkldnn)
             clear_runtime_caches()
             from ...ocr_channel import clear_ocr_channel_paddle_engine_cache
-            from ...layout_detection import clear_text_detection_cache
+            from ...layout.detection import clear_text_detection_cache
             clear_ocr_channel_paddle_engine_cache()
             clear_text_detection_cache()
         except Exception as exc:

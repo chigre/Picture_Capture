@@ -10,7 +10,7 @@ import math
 import tkinter as tk
 from typing import Any
 
-from ..layout_rows_cache import _profile_geometry, load_layout_rows_cache
+from ..layout.rows_cache import _profile_geometry, load_layout_rows_cache
 
 
 def _number(value: Any) -> float | None:

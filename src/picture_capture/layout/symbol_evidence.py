@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..image_utils import normalize_page_rgb
-from ..layout_detection import analysis_ink_mask
+from ..layout.detection import analysis_ink_mask
 from ..models import AppSettings, Entry
 from ..ordinary.visual import _components
 from ..visual.marker_templates import (

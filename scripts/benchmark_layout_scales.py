@@ -20,7 +20,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from picture_capture.image_utils import normalize_page_rgb
-from picture_capture.layout_detection import detect_layout_parameters, clear_layout_estimate_cache
+from picture_capture.layout.detection import detect_layout_parameters, clear_layout_estimate_cache
 from picture_capture.models import AppSettings
 
 

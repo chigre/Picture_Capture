@@ -7,7 +7,7 @@ import pickle
 
 from PIL import Image, ImageDraw
 
-from picture_capture.layout_rows_cache import (
+from picture_capture.layout.rows_cache import (
     CACHE_DIRNAME,
     capture_layout_rows,
     load_layout_rows_cache,
@@ -105,7 +105,7 @@ def test_static_capture_publisher_uses_explicit_context_settings(tmp_path):
 
 def test_layout_core_cache_hit_still_publishes_capture(monkeypatch):
     from picture_capture.layout import core_understanding as core
-    from picture_capture import layout_rows_cache as rows
+    from picture_capture.layout import rows_cache as rows
 
     image = Image.new("RGB", (16, 16), "white")
     settings = AppSettings()
@@ -214,7 +214,7 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
         root / "src" / "picture_capture" / "layout/core_understanding.py"
     ).read_text(encoding="utf-8")
     rows = (
-        root / "src" / "picture_capture" / "layout_rows_cache.py"
+        root / "src" / "picture_capture" / "layout/rows_cache.py"
     ).read_text(encoding="utf-8")
 
     assert "install_layout_rows_persistence_runtime()" not in gui

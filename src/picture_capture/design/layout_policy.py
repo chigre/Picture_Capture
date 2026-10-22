@@ -28,7 +28,7 @@ from PIL import Image, ImageOps
 
 from . import page_design as base
 from . import page_design_refined as refined
-from ..layout_detection import analysis_ink_mask, LayoutEstimate
+from ..layout.detection import analysis_ink_mask, LayoutEstimate
 from ..layout.column_drift import finalize_layout_column_drift
 from ..models import AppSettings
 from ..layout.parameter_evidence import row_padding_is_measured
@@ -46,7 +46,7 @@ def detect_layout_parameters(image: Image.Image, settings: AppSettings) -> Layou
     prepared = take_prepared_layout(image, settings)
     if prepared is not None:
         return prepared
-    from .. import layout_detection
+    from ..layout import detection as layout_detection
 
     return layout_detection.detect_layout_parameters(image, settings)
 
