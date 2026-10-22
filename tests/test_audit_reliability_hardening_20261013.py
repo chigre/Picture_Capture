@@ -10,7 +10,7 @@ from PIL import Image
 from picture_capture.crop.export_output import normalize_project_crop_widths
 from picture_capture.crop.settings import load_crop_settings, normalize_crop_settings_payload
 from picture_capture.models import AppSettings
-from picture_capture.processing_publish import (
+from picture_capture.crop.publish import (
     _journal_path,
     _publish_file_transaction,
     _write_journal,
