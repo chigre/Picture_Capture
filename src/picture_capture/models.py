@@ -7,6 +7,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 
 from PIL import Image
 
@@ -22,6 +23,10 @@ from .profile.settings_migrations import (
 IMAGE_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp"}
 PROJECT_COVER_STEMS = ("_cover", "_project_cover")
 PROJECT_COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+# Windows can deny overlapping os.replace calls on the same live settings file.
+# Serialize in-process publications without changing the JSON schema or owner.
+_APP_SETTINGS_SAVE_LOCK = threading.Lock()
 
 
 def _normalize_display_opacity(value: object, default: float = 40.0) -> float:
@@ -831,24 +836,25 @@ class AppSettings(metaclass=_AppSettingsMeta):
         # Publish only fully written settings: interrupted writes must not
         # truncate an existing project configuration. A unique same-directory
         # temporary file also prevents parallel saves sharing a fixed .tmp.
-        temporary: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=path.parent,
-                prefix=f".{path.name}.",
-                suffix=".tmp",
-                delete=False,
-            ) as stream:
-                temporary = Path(stream.name)
-                stream.write(serialized)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, path)
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
+        with _APP_SETTINGS_SAVE_LOCK:
+            temporary: Path | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=path.parent,
+                    prefix=f".{path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as stream:
+                    temporary = Path(stream.name)
+                    stream.write(serialized)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, path)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
