@@ -48,6 +48,10 @@ def test_managed_manifest_reader_cannot_overlap_replace(
             raise PermissionError("emulated Windows open-reader replacement refusal")
         return original_replace(source, destination)
 
+    # Preserve the decorated parser's public cache interface. The writer
+    # invalidates it after publication, including during this interleaving.
+    paused_parse.cache_clear = original_parse.cache_clear
+    paused_parse.cache_info = original_parse.cache_info
     monkeypatch.setattr(storage, "_parse_managed_manifest_cached", paused_parse)
     monkeypatch.setattr(storage.os, "replace", emulate_windows_replace)
 
