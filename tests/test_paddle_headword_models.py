@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pickle
 
-import picture_capture.evidence_fusion as evidence_fusion
+import picture_capture.ocr.evidence_fusion as evidence_fusion
 import picture_capture.paddle_headwords as public_headwords
 import picture_capture.paddle_headwords_core as core
 from picture_capture.ocr import headword_models as models
