@@ -130,7 +130,8 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
     install_doc = (root / "docs" / "ocr-install.md").read_text(encoding="utf-8")
 
     assert not (package / "windows_gpu_runtime.py").exists()
-    assert not (package / "windows_gpu.py").exists()\n    assert (package / "runtime/windows_gpu.py").exists()
+    assert not (package / "windows_gpu.py").exists()
+    assert (package / "runtime/windows_gpu.py").exists()
     assert "windows_gpu_runtime.py" not in guard
     assert "picture_capture.runtime.windows_gpu import configure_windows_nvidia_dlls" in verify
     assert "src/picture_capture/runtime/windows_gpu.py" in install_doc
