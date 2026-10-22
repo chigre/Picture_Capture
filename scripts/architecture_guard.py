@@ -604,7 +604,7 @@ def collect_violations() -> list[str]:
             )
 
     ui_terminology_source = (
-        PACKAGE_ROOT / "ui_terminology.py"
+        PACKAGE_ROOT / "ui/terminology_compat.py"
     ).read_text(encoding="utf-8")
     for marker in FORBIDDEN_UI_TERMINOLOGY_MUTATIONS:
         if marker in ui_terminology_source:
