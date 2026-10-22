@@ -37,6 +37,14 @@ def _write_journal(path: Path, payload: dict) -> None:
 
 
 def _recover_journal(journal: Path, *, allowed_root: Path | None = None) -> None:
+    journal = Path(journal)
+    # A journal itself must belong to the same project as the paths it names.
+    # Checking only its payload would let a symlinked QT child directory make
+    # startup consume an external journal and mutate in-project crop files.
+    if allowed_root is not None:
+        boundary = Path(allowed_root).resolve()
+        if not journal.resolve().is_relative_to(boundary):
+            raise ValueError(f"Crop journal is outside its project: {journal}")
     payload = json.loads(journal.read_text(encoding="utf-8"))
     if payload.get("version") != 1:
         raise ValueError(f"Unsupported crop transaction: {journal}")
