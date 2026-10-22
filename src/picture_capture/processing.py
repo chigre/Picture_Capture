@@ -19,7 +19,7 @@ from typing import Any
 
 from PIL import Image
 
-from .facade_compat import install_core_assignment_mirror, publish_core_namespace
+from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
 from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
 from .page_sections import PageSection
