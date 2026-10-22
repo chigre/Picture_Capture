@@ -24,7 +24,7 @@ from picture_capture.training.export_v3 import (
     compare_automatic_and_final,
     select_page_range,
 )
-from picture_capture.training_export_ui import resolve_export_indices
+from picture_capture.training.legacy_scope_ui import resolve_export_indices
 
 
 def _line(x: int, y: int, patch: np.ndarray) -> LayoutLine:
