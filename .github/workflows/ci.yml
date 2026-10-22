@@ -68,7 +68,7 @@ jobs:
       - name: Install uv and Python 3.13
         uses: astral-sh/setup-uv@v6
         with:
-          uv-version: "0.13.5" # Avoid GitHub releases API lookup for >=0.11 under rate limiting.
+          version: "0.13.5" # Pin setup-uv input; bypass version-range GitHub API lookups.
           python-version: "3.13"
           enable-cache: true
 
@@ -152,7 +152,7 @@ jobs:
       - name: Set up uv and Python 3.10
         uses: astral-sh/setup-uv@v6
         with:
-          uv-version: "0.13.5" # Avoid GitHub releases API lookup for >=0.11 under rate limiting.
+          version: "0.13.5" # Pin setup-uv input; bypass version-range GitHub API lookups.
           python-version: "3.10"
           enable-cache: true
       - name: Install locked dependencies using Python 3.10
