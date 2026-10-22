@@ -29,7 +29,7 @@ def test_policy_detector_binding_tracks_runtime_replacement(monkeypatch):
 
 def test_retired_installer_is_a_compatibility_noop():
     import picture_capture.design.layout_policy as policy
-    from picture_capture.layout_detector_live_binding import (
+    from picture_capture.layout.detector_live_binding import (
         install_live_layout_detector_binding,
     )
 
