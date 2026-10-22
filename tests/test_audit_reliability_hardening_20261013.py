@@ -10,7 +10,7 @@ from PIL import Image
 from picture_capture.crop.export_output import normalize_project_crop_widths
 from picture_capture.crop.settings import load_crop_settings, normalize_crop_settings_payload
 from picture_capture.models import AppSettings
-from picture_capture.processing_publish import (
+from picture_capture.crop.publish import (
     _journal_path,
     _publish_file_transaction,
     _write_journal,
@@ -50,7 +50,7 @@ def test_migration_casefold_collision_preserves_sources(tmp_path):
 
 
 def test_crop_publish_rolls_back_when_os_replace_fails(tmp_path, monkeypatch):
-    from picture_capture import processing_publish as publish
+    from picture_capture.crop import publish
 
     old, staged = tmp_path / "target.txt", tmp_path / ".target.tmp"
     old.write_text("old")

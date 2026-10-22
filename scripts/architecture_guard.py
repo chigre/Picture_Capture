@@ -940,6 +940,13 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "ocr/channel_legacy.py").is_file():
         violations.append("canonical OCR-channel bridge owner missing")
 
+    # Issue #562: crop publication transaction has one physical Crop owner.
+    # Keep the root path absent; its legacy tests now import the canonical owner.
+    if (PACKAGE_ROOT / "processing_publish.py").is_file():
+        violations.append("retired root crop publishing owner returned")
+    if not (PACKAGE_ROOT / "crop/publish.py").is_file():
+        violations.append("canonical Crop publishing owner missing")
+
     return violations
 
 
