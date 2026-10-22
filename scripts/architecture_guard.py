@@ -1022,6 +1022,30 @@ def collect_violations() -> list[str]:
         if "TRAINING_EXPORT_FORMAT" not in manifest_source:
             violations.append("training v2 canonical format marker missing")
 
+    # Issue #562: the training archive publisher has a single physical owner,
+    # with the historical public module exporting the *same* class and callable.
+    zip_owner = PACKAGE_ROOT / "training/zip_publish.py"
+    legacy_training = PACKAGE_ROOT / "training_export.py"
+    if not zip_owner.is_file():
+        violations.append("canonical training ZIP publish owner missing")
+    else:
+        zip_source = zip_owner.read_text(encoding="utf-8")
+        training_source = legacy_training.read_text(encoding="utf-8")
+        if "class TrainingExportCancelled(" not in zip_source:
+            violations.append("training ZIP cancellation owner missing")
+        if "def make_training_zip(" not in zip_source:
+            violations.append("training ZIP publisher owner missing")
+        if "class TrainingExportCancelled(" in training_source:
+            violations.append("duplicate root training ZIP cancellation exception")
+        if "def make_training_zip(" in training_source:
+            violations.append("duplicate root training ZIP publisher")
+        if "from .training.zip_publish import TrainingExportCancelled, make_training_zip" not in training_source:
+            violations.append("legacy training ZIP publisher aliases disconnected")
+        if 'TrainingExportCancelled.__module__ = "picture_capture.training_export"' not in zip_source:
+            violations.append("training ZIP exception legacy pickle identity lost")
+        if 'make_training_zip.__module__ = "picture_capture.training_export"' not in zip_source:
+            violations.append("training ZIP function legacy pickle identity lost")
+
     return violations
 
 

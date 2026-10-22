@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 import json
 import shutil
-import uuid
-import zipfile
 
 from PIL import Image, ImageOps
 
@@ -26,6 +24,7 @@ from .project_storage import ocr_cache_root, ppp_read_path_for_image
 from .training.manifest_v2 import (
     TRAINING_EXPORT_FORMAT, copy_project_context, write_training_manifest,
 )
+from .training.zip_publish import TrainingExportCancelled, make_training_zip
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -259,40 +258,3 @@ def export_training_page(
     }
 
 
-class TrainingExportCancelled(RuntimeError):
-    """Raised when a training-package build is cooperatively stopped."""
-
-
-def make_training_zip(
-    staging_root: Path,
-    zip_path: Path,
-    *,
-    should_stop: Callable[[], bool] | None = None,
-) -> Path:
-    """Create the training ZIP off to the side and publish it only when complete."""
-    staging_root = Path(staging_root)
-    zip_path = Path(zip_path)
-    zip_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_zip = zip_path.with_name(f".{zip_path.name}.{uuid.uuid4().hex}.tmp")
-
-    def check_stop() -> None:
-        if should_stop is not None and should_stop():
-            raise TrainingExportCancelled("训练标记包导出已停止")
-
-    try:
-        temp_zip.unlink(missing_ok=True)
-        paths = sorted(staging_root.rglob("*"), key=lambda p: p.as_posix().casefold())
-        check_stop()
-        with zipfile.ZipFile(
-            temp_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6,
-        ) as zf:
-            for path in paths:
-                check_stop()
-                if path.is_file():
-                    zf.write(path, arcname=path.relative_to(staging_root).as_posix())
-        check_stop()
-        temp_zip.replace(zip_path)
-    except Exception:
-        temp_zip.unlink(missing_ok=True)
-        raise
-    return zip_path
