@@ -4,7 +4,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import json
 import math
+import os
 import re
+import tempfile
 
 from PIL import Image
 
@@ -819,11 +821,34 @@ class AppSettings(metaclass=_AppSettingsMeta):
         return max(1, self.character_height + self.row_padding)
 
     def to_json(self, path: Path) -> None:
+        path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = canonicalize_app_settings_payload(asdict(self))
         for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
             payload[name] = _normalize_display_opacity(payload.get(name, 40.0))
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+
+        # Publish only fully written settings: interrupted writes must not
+        # truncate an existing project configuration. A unique same-directory
+        # temporary file also prevents parallel saves sharing a fixed .tmp.
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+                stream.write(serialized)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
