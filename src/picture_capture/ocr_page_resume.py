@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .formats import write_text_atomic
+from .io.formats import write_text_atomic
 
 
 RESUME_FORMAT = "picture-capture-ocr-page-resume-v1"
@@ -201,7 +201,7 @@ def write_page_resume(
     signature = input_fingerprint(
         image_path, settings, page_index, method, dependencies=dependencies,
     )
-    from .formats import read_pdic
+    from .io.formats import read_pdic
     # A truncated/invalid PDIC must never become a completed checkpoint.
     actual = read_pdic(pdic_path)
     if len(actual) != int(marker_count):

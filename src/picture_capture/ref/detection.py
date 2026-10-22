@@ -15,7 +15,7 @@ from PIL import Image, ImageOps
 
 from ..image_utils import normalize_page_rgb
 
-from ..formats import pdic_path, read_pdic
+from ..io.formats import pdic_path, read_pdic
 from ..page_sections import read_page_sections
 from .boxes import (
     RefBox, box_intersection_fraction, next_ref_id, read_ref_boxes,

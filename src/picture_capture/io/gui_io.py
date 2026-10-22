@@ -12,8 +12,8 @@ at call time so application imports do not depend on bootstrap mutating
 from pathlib import Path
 
 from . import formats as _formats
-from .models import Entry
-from .training.baseline import build_write_pdic_capture
+from ..models import Entry
+from ..training.baseline import build_write_pdic_capture
 
 
 pdic_path = _formats.pdic_path

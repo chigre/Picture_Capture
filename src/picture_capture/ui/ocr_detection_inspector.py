@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 
-from ..formats import pdic_path
+from ..io.formats import pdic_path
 from ..ocr.final_decisions import load_current_final_decisions
 from ..project_storage import ocr_cache_root
 

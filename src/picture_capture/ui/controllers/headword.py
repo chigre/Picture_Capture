@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from ...formats import pdic_path, read_pdic, write_pdic
+from ...io.formats import pdic_path, read_pdic, write_pdic
 from ...page_sections import read_page_sections
 from ...processing import derive_nominal_geometry, sort_entries_reading_order
 from ...text.encoding import read_text_detected

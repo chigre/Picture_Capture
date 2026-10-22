@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from picture_capture.picdic import _manifest_crop_path
+from picture_capture.io.picdic import _manifest_crop_path
 
 
 def test_only_direct_pww_crop_is_accepted(tmp_path):

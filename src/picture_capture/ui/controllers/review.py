@@ -6,7 +6,7 @@ from tkinter import messagebox
 from typing import Any
 
 from ...lexicon.collation import LATIN_ORDER, collation_key, display_key, profile_label
-from ...formats import pdic_path, read_pdic
+from ...io.formats import pdic_path, read_pdic
 
 
 class ReviewController:

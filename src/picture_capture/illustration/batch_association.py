@@ -12,7 +12,7 @@ from glob import escape
 from pathlib import Path
 from PIL import Image
 
-from ..formats import pdic_path, read_pdic, read_ppp, write_ppp
+from ..io.formats import pdic_path, read_pdic, read_ppp, write_ppp
 from ..text.encoding import read_text_detected
 from .labels import illustration_labels
 from ..models import AppSettings, PolygonRegion

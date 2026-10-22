@@ -17,7 +17,7 @@ import os
 import tempfile
 from typing import Any
 
-from ..formats import pdic_path, read_pdic
+from ..io.formats import pdic_path, read_pdic
 from ..project_storage import (
     note_page_artifact_edit,
     page_sections_read_path_for_image,

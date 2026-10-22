@@ -66,7 +66,7 @@ from picture_capture.visual.marker_templates import (
     split_configured_symbols,
 )
 from picture_capture.project_storage import profile_path, qt_root, settings_path
-from picture_capture.picdic import PicDicBuildCancelled, build_picdic_package
+from picture_capture.io.picdic import PicDicBuildCancelled, build_picdic_package
 from picture_capture.training_export import TrainingExportCancelled, make_training_zip
 from picture_capture.project.recent_projects import (
     load_recent_projects, recent_project_details, remove_recent_project, touch_recent_project,
@@ -4160,7 +4160,7 @@ def test_round3_wordslist_reader_does_not_materialize_full_text_source():
 
 def test_concurrency_atomic_text_replace_failure_preserves_previous_file(tmp_path, monkeypatch):
     import pytest
-    import picture_capture.formats as formats
+    import picture_capture.io.formats as formats
 
     target = tmp_path / "page.pdic"
     target.write_text("old-complete\n", encoding="utf-8")
@@ -4181,7 +4181,7 @@ def test_concurrency_atomic_text_replace_failure_preserves_previous_file(tmp_pat
 
 def test_concurrency_picdic_pair_rolls_back_when_second_publish_fails(tmp_path, monkeypatch):
     import pytest
-    import picture_capture.picdic as picdic
+    import picture_capture.io.picdic as picdic
 
     root = tmp_path / "dictionary"
     pww = qt_root(root) / "PWW"

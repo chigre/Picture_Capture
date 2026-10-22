@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.formats import read_pdic, write_pdic
+from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ocr.pdic_preservation import preserve_prior_pdic
 from picture_capture.ocr.lazy_secondary import can_skip_tesseract_diagnostic_column

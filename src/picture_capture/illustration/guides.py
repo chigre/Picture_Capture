@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from hashlib import sha256
 from pathlib import Path
-from ..formats import write_text_atomic
+from ..io.formats import write_text_atomic
 from .entries import entry_root
 
 FORMAT = "picture-capture-illustrated-guides-v1"

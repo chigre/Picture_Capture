@@ -8,8 +8,8 @@ import re
 import zipfile
 import uuid
 
-from .project_storage import qt_root
-from .runtime_environment import case_insensitive_child
+from ..project_storage import qt_root
+from ..runtime_environment import case_insensitive_child
 
 
 _LANGUAGE_NAMES = {

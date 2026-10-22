@@ -15,7 +15,7 @@ from typing import Any
 
 from PIL import Image
 
-from ...formats import pdic_path, read_pdic, write_pdic
+from ...io.formats import pdic_path, read_pdic, write_pdic
 from ...image_utils import normalize_page_rgb
 from ...layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary

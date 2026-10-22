@@ -8,7 +8,7 @@ from PIL import Image
 
 from picture_capture import processing_core as core
 from picture_capture.crop.plan_formatting import canonical_polygon_link
-from picture_capture.formats import write_pdic, write_ppp, read_ppp
+from picture_capture.io.formats import write_pdic, write_ppp, read_ppp
 from picture_capture.illustration.labels import (
     illustration_labels, previous_entry_ref_for_image,
 )
@@ -66,7 +66,7 @@ def test_previous_ordinal_reads_saved_pdic_and_never_guesses_missing(tmp_path):
     )
     # Reader is case-aware on Linux. Use the canonical PDIC path in case a
     # managed project places it elsewhere.
-    from picture_capture.formats import pdic_path
+    from picture_capture.io.formats import pdic_path
     target = pdic_path(previous)
     if target != previous.with_suffix(".PDIC"):
         previous.with_suffix(".PDIC").replace(target)

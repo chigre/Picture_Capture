@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from ..formats import write_text_atomic
+from ..io.formats import write_text_atomic
 from .entries import IllustratedEntry, read_entries
 from ..project_storage import exports_root
 

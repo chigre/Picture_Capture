@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from picture_capture.app import PictureCaptureApp
-from picture_capture.formats import pdic_path, write_pdic
+from picture_capture.io.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
 
 

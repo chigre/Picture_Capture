@@ -14,7 +14,7 @@ import re
 
 from PIL import Image
 
-from ..formats import write_text_atomic
+from ..io.formats import write_text_atomic
 from ..project_storage import is_managed_project, storage_root
 
 

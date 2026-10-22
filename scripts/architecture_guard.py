@@ -658,9 +658,22 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical crop line-export owner missing: {owner}")
         elif expected not in implementation.read_text(encoding="utf-8"):
             violations.append(f"canonical line-export worker missing: {owner}")
+    # #562: persistence formats, package archiver, and GUI capture are physical io/ owners.
+    for former, owner, token in (
+        ("formats", "formats", "def write_pdic("),
+        ("picdic", "picdic", "def build_picdic_package("),
+        ("gui_io", "gui_io", "def read_pdic("),
+    ):
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired I/O root module returned: {former}")
+        target = PACKAGE_ROOT / "io" / (owner + ".py")
+        if not target.is_file():
+            violations.append(f"canonical I/O owner missing: {owner}")
+        elif token not in target.read_text(encoding="utf-8"):
+            violations.append(f"canonical I/O owner missing key routine: {owner}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 25:
-        violations.append(f"root Python module count regressed: {root_py_count} > 25")
+    if root_py_count > 22:
+        violations.append(f"root Python module count regressed: {root_py_count} > 22")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

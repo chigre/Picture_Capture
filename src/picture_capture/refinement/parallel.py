@@ -121,7 +121,7 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
                     require_cached_layout: bool = False) -> dict[str, Any]:
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
-    from ..formats import read_pdic, pdic_path
+    from ..io.formats import read_pdic, pdic_path
     from ..image_utils import normalize_page_rgb
     from ..processing_core import refine_existing_entries
     from .analysis import (
@@ -285,7 +285,7 @@ def commit_refined_page_result(page_index: int, result: dict[str, Any],
         return {"index": int(page_index), "page": page.name,
                 "skipped": 1, "reason": "页面身份不符"}
 
-    from ..formats import pdic_path, read_pdic
+    from ..io.formats import pdic_path, read_pdic
     from .guard import validate_refined_markers
     from ..models import Entry
     try:

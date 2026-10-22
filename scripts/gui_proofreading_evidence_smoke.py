@@ -18,7 +18,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from PIL import Image, ImageDraw
 
-from picture_capture.formats import pdic_path, write_pdic
+from picture_capture.io.formats import pdic_path, write_pdic
 from picture_capture.models import Entry
 from picture_capture.project_storage import data_root
 from picture_capture.proofreading.capture import _project_identity

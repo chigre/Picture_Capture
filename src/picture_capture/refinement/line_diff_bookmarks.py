@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from ..formats import pdic_path, read_pdic
+from ..io.formats import pdic_path, read_pdic
 from ..project_storage import settings_path
 from ..training.baseline import baseline_path_for_pdic, load_automatic_baseline
 

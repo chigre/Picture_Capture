@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 from ...geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from ...crop.settings import CROP_SETTINGS_VERSION
 from ...project_storage import qt_root
-from ...formats import write_text_atomic
+from ...io.formats import write_text_atomic
 from ..compat import fit_window_to_work_area
 from .common import _build_modern_dialog_heading
 

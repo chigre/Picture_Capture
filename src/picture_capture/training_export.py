@@ -7,7 +7,7 @@ import shutil
 
 from PIL import Image, ImageOps
 
-from .formats import pdic_path, read_pdic, read_ppp
+from .io.formats import pdic_path, read_pdic, read_ppp
 from .image_utils import normalize_page_rgb
 from .models import AppSettings
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract

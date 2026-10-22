@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from picture_capture.app import PictureCaptureApp
-from picture_capture.formats import pdic_path, write_pdic
+from picture_capture.io.formats import pdic_path, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
@@ -83,7 +83,7 @@ def test_deferred_ocr_save_disk_failure_never_flushes_evidence_or_sidecar(tmp_pa
 def test_manual_override_save_failure_blocks_all_evidence_after_pdic_commit(tmp_path):
     """The PDIC may be durable, but an uncommitted override is not evidence."""
     page, pdic = _page(tmp_path)
-    from picture_capture.formats import read_pdic
+    from picture_capture.io.formats import read_pdic
     calls: list[str] = []
 
     def failed_override():

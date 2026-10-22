@@ -25,7 +25,7 @@ import shutil
 
 from PIL import Image
 
-from .. import formats
+from ...io import formats
 from ..design.page_design_refined import (
     detect_entries_from_page_design,
     layout_diagnostics,

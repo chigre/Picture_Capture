@@ -20,7 +20,7 @@ from picture_capture.bootstrap.core import build_core_services
 
 build_core_services()
 
-from picture_capture.formats import pdic_path, read_pdic
+from picture_capture.io.formats import pdic_path, read_pdic
 from picture_capture.models import Entry, ProjectState
 from picture_capture.quality.detection_quality_metrics import marker_metrics
 from picture_capture.page_sections import read_page_sections

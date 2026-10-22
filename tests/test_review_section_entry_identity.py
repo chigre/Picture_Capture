@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from PIL import Image
 
 from picture_capture.app import ReviewWindow
-from picture_capture.formats import read_pdic, write_pdic
+from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.page_sections import PageSection, read_page_sections, write_page_sections
 from picture_capture.processing_core import derive_geometry, sort_entries_reading_order

@@ -14,6 +14,8 @@ ALWAYS_FULL = {
     "src/picture_capture/__init__.py", "src/picture_capture/__main__.py",
     "src/picture_capture/app.py", "src/picture_capture/cli.py",
     "src/picture_capture/models.py", "src/picture_capture/formats.py",
+    "src/picture_capture/io/formats.py", "src/picture_capture/io/picdic.py",
+    "src/picture_capture/io/gui_io.py",
     "src/picture_capture/project_storage.py", "src/picture_capture/page_sections.py",
     "src/picture_capture/pdic_restore.py", "src/picture_capture/processing_publish.py",
     "src/picture_capture/entry_classification.py",

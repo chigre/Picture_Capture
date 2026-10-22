@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.formats import pdic_path, read_pdic, write_pdic
+from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.proofreading.capture import capture_saved_explicit_marker_move
 from picture_capture.proofreading.events import load_events, sha256_file
