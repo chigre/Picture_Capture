@@ -17,7 +17,10 @@ from typing import Iterable
 import hashlib
 from functools import lru_cache
 import json
+import os
 import shutil
+import tempfile
+import threading
 
 from .runtime_environment import case_insensitive_child
 
@@ -30,6 +33,10 @@ SETTINGS_FILENAME = "settings.json"
 PROFILE_FILENAME = "dictionary_profile.json"
 LEGACY_SETTINGS_FILENAME = "picture_capture_settings.json"
 LEGACY_INI_FILENAME = "_Mysettings.ini"
+
+# A manifest determines the managed-v2 vs legacy project route. Prevent
+# overlapping same-process publications (especially on Windows os.replace).
+_MANIFEST_WRITE_LOCK = threading.Lock()
 
 
 def storage_root(project_root: Path) -> Path:
@@ -270,10 +277,29 @@ def _manifest_payload(project_root: Path, software_version: str) -> dict:
 
 
 def _write_json_atomic(path: Path, payload: dict) -> None:
+    """Publish one complete project manifest without a shared fixed .tmp."""
+    path = Path(path)
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    with _MANIFEST_WRITE_LOCK:
+        temp: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                temp = Path(stream.name)
+                stream.write(serialized)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, path)
+        finally:
+            if temp is not None:
+                temp.unlink(missing_ok=True)
 
 
 def ensure_project_storage(project_root: Path, software_version: str) -> Path:
