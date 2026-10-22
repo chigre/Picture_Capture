@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import json
+import os
+import tempfile
+import threading
 
 from PIL import Image, ImageOps
 
@@ -16,6 +19,10 @@ from .project_storage import (
 
 PAGE_SECTIONS_FORMAT = "picture-capture-page-sections-v2"
 PAGE_SECTIONS_COORDINATE_SPACE = SOURCE_COORDINATE_SPACE
+
+# Serialize same-process sidecar replacement *and* Section=0 removal.
+# The unique staging file prevents different writers sharing a fixed .tmp.
+_PAGE_SECTIONS_WRITE_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,9 +225,13 @@ def write_page_sections(
     ]
     if any(current.top_v < previous.bottom_v for previous, current in zip(rows, rows[1:])):
         raise ValueError("SECTION 区域不能互相重叠")
-    if not rows and migrated_page_sections_path_for_image(image_path) is None:
-        path.unlink(missing_ok=True)
-        return path
+    if not rows:
+        # Do not allow Section=0 unlink to race with a concurrent publisher.
+        # Migrated projects still need an explicit empty canonical sidecar.
+        with _PAGE_SECTIONS_WRITE_LOCK:
+            if migrated_page_sections_path_for_image(image_path) is None:
+                path.unlink(missing_ok=True)
+                return path
 
     # A migrated QT sidecar is read when the canonical file is absent. For
     # Section=0 we must write an explicit empty canonical record instead of
@@ -257,8 +268,25 @@ def write_page_sections(
             for index, section in enumerate(rows)
         ],
     }
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp.replace(path)
+    with _PAGE_SECTIONS_WRITE_LOCK:
+        temp: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                temp = Path(stream.name)
+                stream.write(serialized)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, path)
+        finally:
+            if temp is not None:
+                temp.unlink(missing_ok=True)
     return path
