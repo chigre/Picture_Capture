@@ -28,7 +28,7 @@ from .profile.semantics import (
 from .ocr.engines import find_tesseract
 from .formats import read_pdic, read_ppp, write_pdic, write_ppp
 from .project_storage import pdic_path_for_image, ppp_read_path_for_image, ppp_write_path_for_image, qt_root, special_pages_path
-from .processing_publish import _publish_file_transaction, _publish_temp_path
+from .crop.publish import _publish_file_transaction, _publish_temp_path
 from .crop.export_output import prepare_crop_background
 from .illustration.labels import previous_entry_ref_for_image
 from .crop.plan_formatting import (
