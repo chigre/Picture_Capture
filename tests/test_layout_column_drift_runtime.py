@@ -232,7 +232,7 @@ def test_column_drift_is_static_and_shared_helper_ownership_is_explicit():
     large_head = (
         root / "src/picture_capture/ordinary/large_head_evidence.py"
     ).read_text(encoding="utf-8")
-    physical = (root / "src/picture_capture/layout_physical_indent.py").read_text(encoding="utf-8")
+    physical = (root / "src/picture_capture/layout/physical_indent.py").read_text(encoding="utf-8")
 
     assert "install_ordinary_large_head_runtime" not in core
     assert "install_ordinary_large_head_role_guard" not in core
@@ -261,8 +261,8 @@ def test_neighbour_tail_bleed_cannot_define_right_body_lane():
     Entire right-column body stays at +3, heads at +52, irrespective of Y.
     No private dictionary text/pixels are part of this fixture.
     """
-    from picture_capture.layout_core_understanding import _resolve_directional_body_lanes
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.core_understanding import _resolve_directional_body_lanes
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     height, width, ref = 1000, 830, 20.0
     ink = np.zeros((height, width), dtype=bool)
@@ -311,7 +311,7 @@ def test_neighbour_tail_bleed_cannot_define_right_body_lane():
 
 def test_cross_boundary_continuous_genuine_negative_overhang_is_preserved():
     """Do not discard real protruding text spanning the semantic left edge."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((100, 680), dtype=bool)
     left = base.ColumnDesign(0, 40, 390, 40)
@@ -336,7 +336,7 @@ def test_cross_boundary_continuous_genuine_negative_overhang_is_preserved():
 
 def test_genuine_moderately_negative_indent_stays_negative_next_to_other_column():
     """A true nearby outdent is preserved even with a blank inner gutter."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((100, 680), dtype=bool)
     left = base.ColumnDesign(0, 40, 390, 40)
@@ -360,7 +360,7 @@ def test_genuine_moderately_negative_indent_stays_negative_next_to_other_column(
 
 
 def test_finalizer_diagnostic_counts_foreign_neighbour_tails_without_moving_geometry():
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     img = Image.new("L", (680, 100), color=255)
     ink = np.zeros((100, 680), dtype=bool)
@@ -385,7 +385,7 @@ def test_finalizer_diagnostic_counts_foreign_neighbour_tails_without_moving_geom
 
 def test_isolated_outdented_marker_is_not_called_previous_column_text():
     """A genuine detached left-prefix survives without prior-column support."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((100, 680), dtype=bool)
     left = base.ColumnDesign(0, 40, 390, 40)
@@ -411,7 +411,7 @@ def test_isolated_outdented_marker_is_not_called_previous_column_text():
 
 def test_undistorted_right_column_uses_its_inside_ink_not_maximum_probe_radius():
     """A clear 92px potential gutter does not cause 92px applied skew."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((600, 3220), dtype=bool)
     left = base.ColumnDesign(0, 101, 1591, 94)
@@ -443,7 +443,7 @@ def test_undistorted_right_column_uses_its_inside_ink_not_maximum_probe_radius()
 
 def test_genuine_outdents_report_actual_ink_distance_not_possible_safety_window():
     """True negative-X ink is retained as a measured 15px outdent."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((200, 680), dtype=bool)
     first = base.ColumnDesign(0, 40, 390, 40)
@@ -469,7 +469,7 @@ def test_genuine_outdents_report_actual_ink_distance_not_possible_safety_window(
 
 def test_foreign_tail_rejection_has_zero_accepted_gutter_overhang():
     """Reject foreign source without recording it as real skew."""
-    from picture_capture.layout_physical_indent import explicit_physical_layout_ops
+    from picture_capture.layout.physical_indent import explicit_physical_layout_ops
 
     ink = np.zeros((150, 680), dtype=bool)
     first = base.ColumnDesign(0, 40, 390, 40)

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture import layout_core_understanding as core
+from picture_capture.layout import core_understanding as core
 from picture_capture.layout.step_trace import LayoutStepTrace, diff_rows
 from picture_capture.ui.layout_step_replay import (
     _format_stage, _row_at_position, _run_replay, _stage_rows_for_display,
@@ -118,7 +118,7 @@ def test_diff_tracks_removed_and_added_rows():
 
 def test_toggle_is_ephemeral_and_trace_is_opt_in():
     controls = Path("src/picture_capture/ui/layout_visualization_ui_v3.py").read_text(encoding="utf-8")
-    core_source = Path("src/picture_capture/layout_core_understanding.py").read_text(encoding="utf-8")
+    core_source = Path("src/picture_capture/layout/core_understanding.py").read_text(encoding="utf-8")
     assert 'text="查看 LAYOUT 分析过程"' in controls
     assert "tk.BooleanVar(value=False)" in controls
     assert "show_layout_step_replay(app)" in controls

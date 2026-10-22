@@ -619,9 +619,24 @@ def collect_violations() -> list[str]:
         ):
             if signature not in layout_visualization_source:
                 violations.append(f"Layout visualization v3 UI owner lost: {signature}")
+    # #562: three real Layout analysis implementations now belong to layout/.
+    # Do not re-create root shims, delete owners, or silently rename the key routines.
+    for retired, owner, signature in (
+        ("layout_core_understanding", "core_understanding", "def understand_layout_core("),
+        ("layout_physical_indent", "physical_indent", "def projection_line_runs("),
+        ("layout_detection_legacy", "detector_legacy", "def detect_layout_parameters("),
+    ):
+        if (PACKAGE_ROOT / (retired + ".py")).exists():
+            violations.append(f"retired Layout root module returned: {retired}")
+        owned = PACKAGE_ROOT / "layout" / (owner + ".py")
+        if not owned.is_file():
+            violations.append(f"Layout domain implementation missing: {owner}")
+        elif signature not in owned.read_text(encoding="utf-8"):
+            violations.append(f"Layout domain implementation missing function: {owner}")
+
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 32:
-        violations.append(f"root Python module count regressed: {root_py_count} > 32")
+    if root_py_count > 29:
+        violations.append(f"root Python module count regressed: {root_py_count} > 29")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

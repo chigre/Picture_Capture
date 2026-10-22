@@ -54,7 +54,7 @@ def _ensure_layout_runtime() -> None:
     only the two lower-level idempotent installers remain here.
     """
     from .layout.line_start_refinement import install_robust_line_starts
-    from .layout_physical_indent import install_physical_indent_inference
+    from .layout.physical_indent import install_physical_indent_inference
 
     install_robust_line_starts()
     install_physical_indent_inference()
@@ -132,7 +132,7 @@ def _understand_page_current(
         # explicit Physical Layout composition. Legacy installer preparation is
         # no longer part of the normal detection path.
         if layout_only:
-            from .layout_core_understanding import understand_layout_core
+            from .layout.core_understanding import understand_layout_core
 
             understanding = understand_layout_core(
                 analysis_image,

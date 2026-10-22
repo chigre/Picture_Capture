@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from picture_capture.layout.character_height import apply_character_height_fallback
-from picture_capture.layout_detection_legacy import (
+from picture_capture.layout.detector_legacy import (
     LayoutEstimate,
     VerticalRuleEstimate,
     _projection_layout_estimate,
@@ -41,7 +41,7 @@ def test_projection_only_page_recovers_physical_height_without_fallback_label():
 
 def test_projection_column_discovery_can_report_a_real_separator(monkeypatch):
     """The 'detect' path must not drop all separator evidence by construction."""
-    from picture_capture import layout_detection_legacy as detector
+    from picture_capture.layout import detector_legacy as detector
 
     image = Image.new("RGB", (800, 1200), "white")
     draw = ImageDraw.Draw(image)

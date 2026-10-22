@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..layout_physical_indent import normalized_physical_indents
+from ..layout.physical_indent import normalized_physical_indents
 
 
 def drift_corrected_indent_blocks(understanding: Any) -> list[dict[str, Any]]:

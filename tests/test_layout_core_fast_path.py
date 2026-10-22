@@ -7,7 +7,7 @@ def test_processing_routes_ordinary_to_layout_only_fast_path() -> None:
     source = Path("src/picture_capture/processing.py").read_text(encoding="utf-8")
     assert "ordinary_mode = method not in" in source
     assert "layout_only=ordinary_mode" in source
-    assert "from .layout_core_understanding import understand_layout_core" in source
+    assert "from .layout.core_understanding import understand_layout_core" in source
 
 
 def test_layout_visualization_uses_layout_only_fast_path() -> None:
@@ -19,7 +19,7 @@ def test_layout_visualization_uses_layout_only_fast_path() -> None:
 
 
 def test_layout_core_skips_semantic_and_symbol_work() -> None:
-    source = Path("src/picture_capture/layout_core_understanding.py").read_text(
+    source = Path("src/picture_capture/layout/core_understanding.py").read_text(
         encoding="utf-8"
     )
     assert "detect_symbol_evidence(" not in source
@@ -31,7 +31,7 @@ def test_layout_core_skips_semantic_and_symbol_work() -> None:
 
 
 def test_layout_core_and_auto_layout_have_bounded_caches() -> None:
-    core = Path("src/picture_capture/layout_core_understanding.py").read_text(
+    core = Path("src/picture_capture/layout/core_understanding.py").read_text(
         encoding="utf-8"
     )
     detector = Path("src/picture_capture/layout_detection.py").read_text(

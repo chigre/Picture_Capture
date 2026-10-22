@@ -398,7 +398,7 @@ def recover_physical_rows_fast(
     """Recover physical rows from Profile geometry without Paddle/semantic work."""
     from .design import page_design as base
     from .layout_detection import analysis_ink_mask
-    from .layout_physical_indent import _credible_first_ink_x, projection_line_runs
+    from .layout.physical_indent import _credible_first_ink_x, projection_line_runs
 
     # projection_line_runs statically preserves long dense projection bands.
 
@@ -524,7 +524,7 @@ def resolve_physical_rows_layout(
     # implausible.  Semantic evidence still is not needed by the caller, but the
     # reliable Layout Core owns the robust per-page geometry detector.
     from .image_utils import build_analysis_image
-    from .layout_core_understanding import understand_layout_core
+    from .layout.core_understanding import understand_layout_core
 
     analysis = build_analysis_image(image, settings)
     try:

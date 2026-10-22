@@ -28,7 +28,7 @@ def test_processing_full_understanding_calls_explicit_service(monkeypatch):
 
 
 def test_processing_layout_only_still_uses_layout_core(monkeypatch):
-    from picture_capture import layout_core_understanding as core
+    from picture_capture.layout import core_understanding as core
 
     marker = object()
     monkeypatch.setattr(core, "understand_layout_core",

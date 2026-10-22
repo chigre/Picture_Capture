@@ -31,7 +31,7 @@ def test_base_page_design_detector_forwards_to_refined_without_runtime(monkeypat
 
 
 def test_core_composition_keeps_processing_layout_entry_point_static():
-    from picture_capture import layout_physical_indent as physical
+    from picture_capture.layout import physical_indent as physical
     from picture_capture import processing
     from picture_capture.bootstrap.core import build_core_services
 

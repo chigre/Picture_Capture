@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_physical_indent import assign_binary_roles
+from picture_capture.layout.physical_indent import assign_binary_roles
 
 
 class Mode(SimpleNamespace):

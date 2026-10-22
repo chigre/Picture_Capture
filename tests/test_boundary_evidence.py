@@ -54,6 +54,6 @@ def test_source_provenance_is_available_from_page_understanding_diagnostics():
 
     source = Path(page_module.__file__).read_text(encoding="utf-8")
     assert '"boundary_proposals": list(understanding.boundary_proposals)' in source
-    from picture_capture import layout_core_understanding
+    from picture_capture.layout import core_understanding as layout_core_understanding
     other = Path(layout_core_understanding.__file__).read_text(encoding="utf-8")
     assert "result.boundary_proposals = serialize_proposals(" in other

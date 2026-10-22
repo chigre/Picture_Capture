@@ -21,7 +21,7 @@ import tracemalloc
 
 from PIL import Image
 
-from picture_capture.layout_core_understanding import _image_fingerprint
+from picture_capture.layout.core_understanding import _image_fingerprint
 from picture_capture.project_storage import (
     _parse_managed_manifest_cached,
     is_managed_project,

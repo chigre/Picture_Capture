@@ -12,7 +12,7 @@ from PIL import Image
 
 from ..design import page_design as base
 from ..design import layout_policy as policy
-from ..layout_physical_indent import (
+from ..layout.physical_indent import (
     explicit_physical_layout_ops,
     normalize_layout_roles,
 )

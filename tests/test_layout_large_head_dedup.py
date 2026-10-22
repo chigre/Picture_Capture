@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from picture_capture.layout_core_understanding import (
+from picture_capture.layout.core_understanding import (
     _suppress_large_evidence_duplicate_entries,
 )
 from picture_capture.models import Entry

@@ -100,7 +100,7 @@ def test_unexpected_cpu_paddle_model_guard_invalidates_page():
 
 
 def test_real_paddle_detector_entrypoint_refuses_cpu_stage_before_import():
-    from picture_capture.layout_detection_legacy import _get_text_detector
+    from picture_capture.layout.detector_legacy import _get_text_detector
 
     prepared = PreparedLayoutEstimate(
         value="geom", page_size=(30, 40), source_size_bytes=100,

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from picture_capture.layout_physical_indent import normalize_layout_roles
+from picture_capture.layout.physical_indent import normalize_layout_roles
 
 
 class _Mode:

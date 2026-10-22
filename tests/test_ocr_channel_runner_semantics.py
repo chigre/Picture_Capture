@@ -139,13 +139,13 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
         ("ocr_channel.py", "from paddleocr import PaddleOCR"),
         ("paddle_headwords_core.py", "from paddleocr import PaddleOCR"),
         ("preprocess/document_unwarping.py", "from paddleocr import DocPreprocessor"),
-        ("layout_detection_legacy.py", "from paddleocr import TextDetection"),
+        ("layout/detector_legacy.py", "from paddleocr import TextDetection"),
     )
     helper_import = "from .windows_gpu import configure_windows_nvidia_dlls"
     helper_call = "configure_windows_nvidia_dlls()"
     for filename, paddle_import in cases:
         text = (package / filename).read_text(encoding="utf-8")
-        expected_import = ("from ..windows_gpu import configure_windows_nvidia_dlls" if filename.startswith("preprocess/") else helper_import)
+        expected_import = ("from ..windows_gpu import configure_windows_nvidia_dlls" if filename.startswith(("preprocess/", "layout/")) else helper_import)
         assert expected_import in text
         assert paddle_import in text
         assert text.index(expected_import) < text.index(helper_call) < text.index(paddle_import)

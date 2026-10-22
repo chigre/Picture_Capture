@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.layout_physical_indent import _credible_first_ink_x
+from picture_capture.layout.physical_indent import _credible_first_ink_x
 
 
 def test_thin_horizontal_leading_glyph_counts_as_text_start() -> None:

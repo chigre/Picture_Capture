@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from picture_capture.layout_physical_indent import (
+from picture_capture.layout.physical_indent import (
     _logical_slots_for_oversized_run,
     projection_line_runs,
 )
