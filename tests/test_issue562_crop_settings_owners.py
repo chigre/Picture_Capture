@@ -19,7 +19,14 @@ def test_crop_settings_ownership_and_exports():
 def test_crop_settings_import_callers_use_canonical_owner():
     for rel in ("crop/single_line_parallel.py", "crop/unlined_line_export.py", "ui/settings/crop.py", "ui/controllers/crop.py"):
         txt = (ROOT / rel).read_text(encoding="utf-8")
-        assert "from .single_line_merge_settings import" not in txt
-        assert "from .unlined_export_filter_settings import" not in txt
+        # Crop implementations now share a package with the settings owners;
+        # one-dot imports there are canonical, unlike retired root imports.
+        if rel.startswith("crop/"):
+            assert "from .single_line_merge_settings import" in txt
+        else:
+            assert "from .single_line_merge_settings import" not in txt
+            assert "from .unlined_export_filter_settings import" not in txt
+        assert "from .crop.single_line_merge_settings import" not in txt
+        assert "from .crop.unlined_export_filter_settings import" not in txt
         assert "from ...single_line_merge_settings import" not in txt
         assert "from ...unlined_export_filter_settings import" not in txt
