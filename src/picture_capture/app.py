@@ -15636,7 +15636,7 @@ class PictureCaptureApp(tk.Tk):
                 and not force_refresh
             ):
                 from .persistence.project_storage import page_sections_read_path_for_image
-                from .ocr_page_resume import validated_resume
+                from .ocr.page_resume import validated_resume
                 resume_dependencies = (
                     filter_path,
                     project_profile_path(project.root),
@@ -15740,7 +15740,7 @@ class PictureCaptureApp(tk.Tk):
                         page_sections_read_path_for_image(page),
                         *((replace_rules_path(project.root),) if method == "combined" else ()),
                     )
-                from .ocr_page_resume import write_page_resume
+                from .ocr.page_resume import write_page_resume
                 try:
                     write_page_resume(
                         ocr_cache_root(project.root), page, pdic_path(page),

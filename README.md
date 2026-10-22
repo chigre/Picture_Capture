@@ -330,6 +330,7 @@ CI 当前覆盖 Windows、Ubuntu、macOS，并包含真实 Tk GUI construction s
 | [docs/platform-support.md](docs/platform-support.md) | Windows/Linux/macOS 平台支持边界 |
 | [docs/cc-cedict-install.md](docs/cc-cedict-install.md) | CC-CEDICT 本地词典安装 |
 | [docs/architecture.md](docs/architecture.md) | OCR / 词头管线与存储架构 |
+| [根层模块归属清单](docs/architecture/ROOT_MODULE_CLASSIFICATION_20261023.md) | 剩余根层文件的领域归属、兼容契约与已迁移路径 |
 | [docs/coordinate-system.md](docs/coordinate-system.md) | 原图像素坐标、canonical 变换与旧项目迁移 |
 | [docs/legacy-function-map.md](docs/legacy-function-map.md) | 旧 VB.NET 功能到 Python 的映射 |
 

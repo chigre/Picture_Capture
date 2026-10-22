@@ -10,6 +10,7 @@ import pytest
 BASE = Path(__file__).resolve().parents[1]
 ROOT = BASE / "src" / "picture_capture"
 OWNERS = {
+    "ocr_page_resume": "ocr.page_resume",
     "coordinate_space": "geometry.coordinate_space",
     "layout_transform": "geometry.layout_transform",
     "page_list_helpers": "project.page_list_helpers",
@@ -61,7 +62,7 @@ def test_no_retired_python_imports_in_source_tests_or_scripts() -> None:
 
 
 def test_preserve_high_risk_root_entrypoints() -> None:
-    for name in ("app", "processing_core", "ocr_page_resume"):
+    for name in ("app", "processing_core"):
         assert (ROOT / (name + ".py")).is_file()
 
 

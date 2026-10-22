@@ -2,6 +2,21 @@
 
 This is the crash-recovery checkpoint for the modular-architecture refactor. GitHub live state is authoritative: before any production write, revalidate `main`, open PRs, relevant callers/import order, and current tests.
 
+## Current root-ownership checkpoint (2026-10-23)
+
+For the current physical module classification, use
+[`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
+and the latest entries in
+[`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
+Project/SECTION persistence merged through #628 at `7d004fdf` (18→16),
+after six-platform PR CI, CodeQL and review/thread checks;
+the next candidate moves OCR resume into `ocr/page_resume.py` with a verified
+whole-package fingerprint (16→15). All 15 remaining roots have explicit domain
+ownership and retention reasons. CI/review acceptance is separate from this
+classification; oversized module extraction and real-scan/native GPU validation
+remain open. The phase log below is historical and does not describe current
+physical file locations.
+
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
 

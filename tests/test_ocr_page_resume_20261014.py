@@ -8,7 +8,7 @@ import pytest
 
 from picture_capture.io.formats import write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.ocr_page_resume import (
+from picture_capture.ocr.page_resume import (
     input_fingerprint, resume_path, validated_resume, write_page_resume,
 )
 from picture_capture.ui.settings import schema
@@ -137,18 +137,18 @@ def test_resume_invalidates_when_detection_source_changes(
     tmp_path, monkeypatch, module_name,
 ):
     """Even same-length edits to newly introduced modules must force OCR again."""
-    from picture_capture import ocr_page_resume as resume_module
+    from picture_capture.ocr import page_resume as resume_module
 
     fake_package = tmp_path / "fake_picture_capture"
-    fake_package.mkdir()
-    (fake_package / "ocr_page_resume.py").write_bytes(b"resume-v1")
+    (fake_package / "ocr").mkdir(parents=True)
+    (fake_package / "ocr" / "page_resume.py").write_bytes(b"resume-v1")
     algorithm = fake_package / module_name
     algorithm.parent.mkdir(parents=True, exist_ok=True)
     algorithm.write_bytes(b"version-A")
 
     # Simulate installing an updated package, with otherwise identical image,
     # settings, Profile, filter rules and saved PDIC.
-    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr_page_resume.py"))
+    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr" / "page_resume.py"))
     resume_module._algorithm_environment_key.cache_clear()
     try:
         image, pdic, settings, deps = _case(tmp_path)
@@ -164,12 +164,12 @@ def test_resume_invalidates_when_detection_source_changes(
 def test_resume_invalidates_after_a_new_detection_module_is_added(
     tmp_path, monkeypatch,
 ):
-    from picture_capture import ocr_page_resume as resume_module
+    from picture_capture.ocr import page_resume as resume_module
 
     fake_package = tmp_path / "fake_picture_capture"
-    fake_package.mkdir()
-    (fake_package / "ocr_page_resume.py").write_bytes(b"resume-v1")
-    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr_page_resume.py"))
+    (fake_package / "ocr").mkdir(parents=True)
+    (fake_package / "ocr" / "page_resume.py").write_bytes(b"resume-v1")
+    monkeypatch.setattr(resume_module, "__file__", str(fake_package / "ocr" / "page_resume.py"))
     resume_module._algorithm_environment_key.cache_clear()
     try:
         image, pdic, settings, deps = _case(tmp_path)
@@ -185,11 +185,11 @@ def test_resume_invalidates_after_a_new_detection_module_is_added(
 def test_resume_fails_closed_without_readable_detection_sources(
     tmp_path, monkeypatch,
 ):
-    from picture_capture import ocr_page_resume as resume_module
+    from picture_capture.ocr import page_resume as resume_module
 
     fake_package = tmp_path / "fake_picture_capture"
-    fake_package.mkdir()
-    source = fake_package / "ocr_page_resume.py"
+    (fake_package / "ocr").mkdir(parents=True)
+    source = fake_package / "ocr" / "page_resume.py"
     source.write_bytes(b"resume-v1")
     monkeypatch.setattr(resume_module, "__file__", str(source))
     resume_module._algorithm_environment_key.cache_clear()
@@ -208,7 +208,7 @@ def test_resume_invalidates_after_tesseract_binary_replacement(
 ):
     """A pip-level version check alone cannot detect replaced Tesseract binaries."""
     import subprocess
-    from picture_capture import ocr_page_resume as resume_module
+    from picture_capture.ocr import page_resume as resume_module
 
     image, pdic, settings, deps = _case(tmp_path)
     executable = tmp_path / "tesseract-for-test"
