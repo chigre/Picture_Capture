@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from picture_capture.evidence_fusion import _rescue_local_peer_style_continuations
+from picture_capture.ocr.evidence_fusion import _rescue_local_peer_style_continuations
 from picture_capture.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ocr.final_decisions import (
@@ -216,7 +216,7 @@ def test_peer_style_promotes_real_lexical_candidate_once_and_records_provenance(
 
 def test_production_filter_hook_freezes_peer_anchors_before_existing_rescues(monkeypatch):
     from PIL import Image
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     candidate = _continuation()
     initial_peers = [_peer(25), _peer(115)]  # Inadequate on its own.
@@ -248,7 +248,7 @@ def test_production_filter_hook_freezes_peer_anchors_before_existing_rescues(mon
 
 def test_peer_style_is_explicitly_opt_in_and_can_be_rolled_back(tmp_path, monkeypatch):
     from PIL import Image
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
     from picture_capture.ui.settings import schema
 
     default = AppSettings()
@@ -282,7 +282,7 @@ def test_peer_style_is_explicitly_opt_in_and_can_be_rolled_back(tmp_path, monkey
 
 def test_default_disabled_state_does_not_mutate_preexisting_ocr_diagnostics(monkeypatch):
     from PIL import Image
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     diagnostic = {"accepted": False, "reject_reason": "continuation_fragment",
                   "text": "ordinary example", "features": {}}
