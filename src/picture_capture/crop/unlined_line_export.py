@@ -30,7 +30,7 @@ import numpy as np
 from PIL import Image
 
 from ..design import page_design as page_design
-from ...io import formats
+from ..io import formats
 from ..image_utils import build_analysis_image, normalize_page_rgb
 from ..refinement.analysis import whiten_illustrations_for_export
 from ..layout.core_understanding import understand_layout_core

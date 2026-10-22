@@ -14,7 +14,7 @@ from pathlib import Path
 import json
 from typing import Any, Callable
 
-from ...io import formats
+from ..io import formats
 from ..page_sections import read_page_sections
 from ..processing import append_crop_log, resolve_crop_worker_count, split_single_lines
 from ..project_storage import crop_settings_path, qt_root

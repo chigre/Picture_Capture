@@ -37,7 +37,7 @@ def build_core_services() -> CoreServices:
     # classification descriptors are static model boundaries. Core composition
     # no longer mutates either model class before exposing process services.
 
-    from ...io import formats
+    from ..io import formats
     from ..entry_classification import install_pdic_classification
 
     install_pdic_classification(formats)
