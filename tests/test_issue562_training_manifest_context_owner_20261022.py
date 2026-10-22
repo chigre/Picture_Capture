@@ -10,7 +10,7 @@ import sys
 
 from picture_capture import training_export
 from picture_capture.models import AppSettings
-from picture_capture.project_storage import (
+from picture_capture.persistence.project_storage import (
     settings_path, profile_path, replace_rules_path, headword_filter_rules_path,
 )
 from picture_capture.training import manifest_v2

@@ -21,11 +21,18 @@ def test_persistence_owner_is_physical_and_importable(name: str):
 
 
 def test_source_uses_no_retired_storage_imports():
-    for path in (REPO / "src").rglob("*.py"):
+    for path in sorted(p for folder in ("src", "tests", "scripts")
+                       for p in (REPO / folder).rglob("*.py")):
+        if path.name == Path(__file__).name:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        within = path.parent.relative_to(ROOT).parts
+        within = path.parent.relative_to(ROOT).parts if path.is_relative_to(ROOT) else ()
         package = ("picture_capture", *within)
         for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                assert not any(node.value == "picture_capture." + old or
+                               node.value.startswith("picture_capture." + old + ".")
+                               for old in OWNERS), (path, node.lineno)
             if isinstance(node, ast.Import):
                 assert all(name.name not in {"picture_capture.project_storage", "picture_capture.page_sections"}
                            for name in node.names), (path, node.lineno)
