@@ -26,13 +26,13 @@ from picture_capture.page_sections import (
 )
 from picture_capture.project_storage import ensure_project_storage, page_sections_path_for_image
 from picture_capture.processing import Geometry, ColumnPath, sort_entries_reading_order, sort_entries_column_y
-from picture_capture.layout_detection import (
+from picture_capture.layout.detection import (
     _detect_persistent_vertical_rule,
     _projection_layout_estimate,
     detect_layout_parameters,
     infer_layout_from_boxes,
 )
-from picture_capture.layout_detection import LayoutEstimate, aggregate_layout_estimates
+from picture_capture.layout.detection import LayoutEstimate, aggregate_layout_estimates
 from picture_capture.geometry.layout_transform import LayoutTransform
 from picture_capture.lexicon.collation import available_profile_labels, collation_key, parse_custom_order
 from picture_capture.profile.dictionary import (
@@ -3668,7 +3668,7 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app_text = (package / "app.py").read_text(encoding="utf-8")
     training_text = (package / "training_export.py").read_text(encoding="utf-8")
-    layout_text = (package / "layout_detection.py").read_text(encoding="utf-8")
+    layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
     paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
 
     assert "self.image = normalize_page_rgb(opened)" in app_text
@@ -7495,7 +7495,7 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
 
     runtime_source = Path("src/picture_capture/windows_gpu.py").read_text(encoding="utf-8")
     paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
-    layout_source = Path("src/picture_capture/layout_detection.py").read_text(encoding="utf-8")
+    layout_source = Path("src/picture_capture/layout/detection.py").read_text(encoding="utf-8")
     verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")
     assert "add_dll_directory" in runtime_source
     assert 'glob("*/bin")' in runtime_source

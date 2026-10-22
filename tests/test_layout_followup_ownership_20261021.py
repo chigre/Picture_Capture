@@ -24,8 +24,10 @@ def test_no_legacy_root_layout_shim(old: str, new: str) -> None:
 
 
 def test_retained_layout_entrypoints_are_untouched() -> None:
-    for name in ("layout_rows_cache",):
-        assert (PACKAGE / (name + ".py")).is_file()
+    assert not (PACKAGE / "layout_rows_cache.py").exists()
+    assert (PACKAGE / "layout/rows_cache.py").is_file()
+    assert not (PACKAGE / "layout_detection.py").exists()
+    assert (PACKAGE / "layout/detection.py").is_file()
     for former, owner in (("layout_core_understanding", "core_understanding"),
                           ("layout_physical_indent", "physical_indent"),
                           ("layout_detection_legacy", "detector_legacy")):
