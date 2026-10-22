@@ -65,7 +65,7 @@ def test_refinement_rejects_other_page_json(tmp_path):
 
 
 def test_cached_batch_restores_four_or_eight_workers(tmp_path):
-    from picture_capture.marker_refinement_parallel import configured_refine_workers
+    from picture_capture.refinement.parallel import configured_refine_workers
 
     settings = AppSettings(columns=1, manual_x=11, column_width=80)
     settings.ordinary_auto_layout = True

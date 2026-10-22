@@ -10,7 +10,7 @@ The stable parser/evidence implementation remains in
 :mod:`picture_capture.paddle_headwords_core`; training-export-driven decision
 refinements remain in :mod:`picture_capture.ocr.evidence_fusion`; separator-Y
 refinement is shared by Layout, OCR, and existing-PDIC workflows in
-:mod:`picture_capture.separator_y_refinement`.
+:mod:`picture_capture.refinement.separator_y`.
 
 This historical module path remains the public/runtime import surface so older
 plugins, tests and user tooling keep working unchanged.
@@ -26,7 +26,7 @@ publish_core_namespace(globals(), _core)
 from .ocr import evidence_fusion as _fusion
 from .ocr.evidence_fusion import *  # noqa: F401,F403
 from .ocr.boundary_detection import detect_ocr_headword_boundaries
-from .separator_y_refinement import refine_separator_y as _shared_refine_separator_y
+from .refinement.separator_y import refine_separator_y as _shared_refine_separator_y
 
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.
 

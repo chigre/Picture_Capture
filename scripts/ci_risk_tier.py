@@ -25,6 +25,7 @@ ALWAYS_FULL = {
     "src/picture_capture/image_utils.py", "src/picture_capture/image_preprocessing.py",
     "src/picture_capture/layout_detection.py", "src/picture_capture/layout_detection_legacy.py",
     "src/picture_capture/layout_rows_cache.py", "src/picture_capture/separator_y_refinement.py",
+    "src/picture_capture/refinement/parallel.py", "src/picture_capture/refinement/separator_y.py",
 }
 ALWAYS_FULL_PREFIXES = (
     # Domain paths whose imports may alter coordinate frames, model ownership,

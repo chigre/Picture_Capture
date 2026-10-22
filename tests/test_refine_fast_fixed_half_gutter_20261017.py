@@ -137,7 +137,7 @@ def test_y_engine_checks_the_actual_fast_band_without_entering_next_column(monke
 
 def test_fast_button_and_spawn_worker_have_isolated_mode():
     from picture_capture.ui.compact_task_menus import ACTION_GROUPS
-    from picture_capture.marker_refinement_parallel import refine_page_job
+    from picture_capture.refinement.parallel import refine_page_job
     import inspect
 
     assert any(("精修Y·固定半栏距", "refine_y_fixed_half_gutter") in group

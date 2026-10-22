@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from picture_capture import marker_refinement_parallel as parallel
+from picture_capture.refinement import parallel as parallel
 from picture_capture.models import AppSettings
 
 
@@ -240,7 +240,7 @@ def test_parallel_parent_coordinator_gui_contract():
 
 
 def test_replace_failure_does_not_modify_pdic_or_leave_temp(prepared_page, monkeypatch):
-    from picture_capture import marker_refinement_parallel as module
+    from picture_capture.refinement import parallel as module
     page, pdic, original = prepared_page
     computed = module.refine_page_job(str(page), AppSettings(ordinary_auto_layout=False), 7)
 

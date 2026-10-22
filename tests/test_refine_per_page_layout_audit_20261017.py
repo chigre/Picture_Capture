@@ -7,7 +7,7 @@ from dataclasses import replace
 from PIL import Image
 
 from picture_capture.models import AppSettings
-from picture_capture import marker_refinement_parallel as batch
+from picture_capture.refinement import parallel as batch
 
 
 def test_two_pages_both_get_separate_physical_layout_measurements(tmp_path, monkeypatch):

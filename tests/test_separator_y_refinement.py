@@ -11,7 +11,7 @@ from PIL import Image
 
 from picture_capture import paddle_headwords, processing, processing_core
 from picture_capture.models import AppSettings
-from picture_capture import separator_y_refinement as shared_y
+from picture_capture.refinement import separator_y as shared_y
 
 
 class _IdentityTransform:
@@ -22,7 +22,7 @@ class _IdentityTransform:
 def test_paddle_fresh_import_keeps_core_native_while_public_refiner_is_shared() -> None:
     code = (
         "from picture_capture import paddle_headwords as ph; "
-        "from picture_capture import separator_y_refinement as shared; "
+        "from picture_capture.refinement import separator_y as shared; "
         "assert ph.refine_separator_y is shared.refine_separator_y; "
         "assert ph._core.refine_separator_y is ph._native_refine_separator_y; "
         "assert ph._core.refine_separator_y is not shared.refine_separator_y"

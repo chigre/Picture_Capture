@@ -21,7 +21,7 @@ from ..models import AppSettings, Entry
 from ..lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
 from ..page_sections import PageSection
 from ..paddle_headwords_core import HeadwordFilterRule, OCRRecord
-from ..separator_y_refinement import refine_separator_y as _shared_separator_y_refiner
+from ..refinement.separator_y import refine_separator_y as _shared_separator_y_refiner
 
 # Source-guard compatibility markers. The executable implementations live in
 # paddle_headwords_core.py; these exact markers remain here because established

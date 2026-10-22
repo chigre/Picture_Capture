@@ -634,9 +634,21 @@ def collect_violations() -> list[str]:
         elif signature not in owned.read_text(encoding="utf-8"):
             violations.append(f"Layout domain implementation missing function: {owner}")
 
+    # Issue #562: refinement batch ownership and Windows-spawn coordinator ABI.
+    for former, new_owner, signature in (
+        ("marker_refinement_parallel", "parallel", "def refine_page_job("),
+        ("separator_y_refinement", "separator_y", "def refine_separator_y("),
+    ):
+        if (PACKAGE_ROOT / (former + ".py")).exists():
+            violations.append(f"retired refinement root module returned: {former}")
+        canonical = PACKAGE_ROOT / "refinement" / (new_owner + ".py")
+        if not canonical.is_file():
+            violations.append(f"canonical refinement owner missing: {new_owner}")
+        elif signature not in canonical.read_text(encoding="utf-8"):
+            violations.append(f"canonical refinement routine missing: {new_owner}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 29:
-        violations.append(f"root Python module count regressed: {root_py_count} > 29")
+    if root_py_count > 27:
+        violations.append(f"root Python module count regressed: {root_py_count} > 27")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

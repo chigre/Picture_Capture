@@ -1,7 +1,8 @@
 """Read-only per-line Layout Y refinement diagnostics stay synchronized with real output."""
 import inspect
 
-from picture_capture import processing, separator_y_refinement
+from picture_capture import processing
+from picture_capture.refinement import separator_y as separator_y_refinement
 
 
 def test_refiner_exposes_optional_diagnostics_without_changing_default_signature():
