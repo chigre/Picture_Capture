@@ -75,4 +75,3 @@ def write_training_manifest(
     path = Path(staging_root) / "dataset_manifest.json"
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
-
