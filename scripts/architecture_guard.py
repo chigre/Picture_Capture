@@ -987,6 +987,22 @@ def collect_violations() -> list[str]:
         if "from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in facade_source:
             violations.append("image_utils lost stable page pixel re-exports")
 
+    # Issue #562: training candidate/PDIC linkage is source-space aware and
+    # has one physical owner; keep its historic root import for consumers.
+    gt_owner = PACKAGE_ROOT / "training/ground_truth_matching.py"
+    training_entry = PACKAGE_ROOT / "training_export.py"
+    if not gt_owner.is_file():
+        violations.append("training ground-truth matching owner missing")
+    else:
+        gt_source = gt_owner.read_text(encoding="utf-8")
+        entry_source = training_entry.read_text(encoding="utf-8")
+        if "def _candidate_ground_truth_link(" not in gt_source:
+            violations.append("canonical training matcher implementation missing")
+        if "def _candidate_ground_truth_link(" in entry_source:
+            violations.append("training matcher implementation duplicated at root")
+        if "from .training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
+            violations.append("training legacy matcher export disconnected")
+
     return violations
 
 
