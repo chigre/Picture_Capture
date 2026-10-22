@@ -14,6 +14,7 @@ OWNERS = {
     "layout_transform": "geometry.layout_transform",
     "page_list_helpers": "project.page_list_helpers",
     "page_word_mapping": "proofreading.page_word_mapping",
+    "pdic_restore": "proofreading.pdic_restore",
     "auxiliary_crop_partition": "crop.auxiliary_partition",
 }
 
@@ -46,5 +47,5 @@ def test_no_retired_python_imports_in_source_tests_or_scripts() -> None:
 
 def test_preserve_high_risk_root_entrypoints() -> None:
     for name in ("app", "processing_core", "page_sections", "layout_rows_cache",
-                 "pdic_restore", "project_storage", "ocr_page_resume"):
+                 "project_storage", "ocr_page_resume"):
         assert (ROOT / (name + ".py")).is_file()

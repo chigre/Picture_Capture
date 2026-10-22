@@ -21,7 +21,7 @@ from PIL import Image
 from ... import __version__
 from ...formats import pdic_path, read_pdic, read_picdic_index_records
 from ...page_sections import read_page_sections
-from ...pdic_restore import parse_merged_pdic_text, write_pdic_atomic
+from ...proofreading.pdic_restore import parse_merged_pdic_text, write_pdic_atomic
 from ...picdic import PicDicBuildCancelled, build_picdic_package
 from ...processing import (
     derive_nominal_geometry, export_ocred, import_ocred,

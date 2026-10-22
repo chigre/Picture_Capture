@@ -39,7 +39,7 @@ from .models import (
     AppSettings, Entry as WordEntry, PolygonRegion, ProjectState, project_page_images,
     read_noncomment_lines, resolve_wordslist_path, resolved_tesseract_language,
 )
-from .pdic_restore import (
+from .proofreading.pdic_restore import (
     build_page_lookup as _build_words_page_lookup, parse_merged_pdic_text as _parse_merged_pdic_text,
     resolve_page_token as _resolve_words_page_token, write_pdic_atomic as _write_pdic_atomic,
 )
