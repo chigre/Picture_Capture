@@ -47,15 +47,19 @@ def git(*args: str) -> str:
 
 
 def non_import_ast(source: str) -> str:
-    """Preserve non-import behavior, including literals, functions and class bodies."""
-    class DropImports(ast.NodeTransformer):
-        def visit_Import(self, node: ast.Import):  # noqa: N802
-            return None
-
-        def visit_ImportFrom(self, node: ast.ImportFrom):  # noqa: N802
-            return None
-
-    return ast.dump(DropImports().visit(ast.parse(source)), include_attributes=False)
+    """Ignore only top-level imports; nested and __future__ imports affect behavior."""
+    module = ast.parse(source)
+    module.body = [
+        node for node in module.body
+        if not (
+            isinstance(node, ast.Import)
+            or (
+                isinstance(node, ast.ImportFrom)
+                and node.module != "__future__"
+            )
+        )
+    ]
+    return ast.dump(module, include_attributes=False)
 
 
 def content_equivalent_except_imports(before: str, after: str) -> bool:
@@ -105,6 +109,8 @@ def select_tier(changes, read_original, read_current):
         if _is_docs(old) and _is_docs(new):
             continue
         if _is_test(old) and _is_test(new):
+            if kind not in {"A", "M", "R"}:
+                return FULL, [f"test deleted or unrecognized status: {kind} {old} -> {new}"]
             continue
         if old == new == "scripts/architecture_guard.py" and kind == "M":
             before, after = read_original(old), read_current(new)
