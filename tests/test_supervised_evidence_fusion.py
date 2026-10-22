@@ -325,7 +325,7 @@ def test_glued_tag_parser_handles_real_user_archive_cases():
 
 
 def test_phase6b_import_keeps_core_supervised_symbols_unmutated():
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     assert fusion._core.filter_headword_records is fusion._original_filter_headword_records
     assert (
@@ -341,7 +341,7 @@ def test_phase6b_import_keeps_core_supervised_symbols_unmutated():
 
 
 def test_phase6b_filter_injects_supervised_peer_annotator(monkeypatch):
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     seen = {}
 
@@ -369,7 +369,7 @@ def test_phase6b_filter_injects_supervised_peer_annotator(monkeypatch):
 
 
 def test_phase6e_custom_core_separator_refiner_remains_authoritative(monkeypatch):
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     custom_refiner = object()
     seen = {}
@@ -392,7 +392,7 @@ def test_phase6e_custom_core_separator_refiner_remains_authoritative(monkeypatch
     assert seen["separator_y_refiner"] is custom_refiner
 
 def test_phase6b_detector_injects_supervised_filter(monkeypatch):
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     seen = {}
 
@@ -408,7 +408,7 @@ def test_phase6b_detector_injects_supervised_filter(monkeypatch):
 
 
 def test_phase6a_assignment_mirroring_is_public_facade_only(monkeypatch):
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     core = ph._core
     original_core_filter = core.filter_headword_records
@@ -425,7 +425,7 @@ def test_phase6a_assignment_mirroring_is_public_facade_only(monkeypatch):
 
 
 def test_phase6b_custom_core_filter_remains_authoritative(monkeypatch):
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     custom_filter = lambda *_args, **_kwargs: ([], [])
     seen = {}
@@ -443,7 +443,7 @@ def test_phase6b_custom_core_filter_remains_authoritative(monkeypatch):
 
 
 def test_phase6c_public_facade_owns_complete_core_namespace():
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     core_names = {
         name for name in vars(ph._core)
@@ -460,7 +460,7 @@ def test_phase6c_public_facade_owns_complete_core_namespace():
 
 
 def test_phase6c_evidence_fusion_no_longer_copies_unrelated_core_namespace():
-    import picture_capture.evidence_fusion as fusion
+    import picture_capture.ocr.evidence_fusion as fusion
 
     assert not hasattr(fusion, "OCRLine")
     assert "OCRLine" not in fusion.__all__

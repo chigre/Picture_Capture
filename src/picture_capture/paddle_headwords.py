@@ -8,7 +8,7 @@ separate consumer in :mod:`picture_capture.ocr.boundary_detection`.
 
 The stable parser/evidence implementation remains in
 :mod:`picture_capture.paddle_headwords_core`; training-export-driven decision
-refinements remain in :mod:`picture_capture.evidence_fusion`; separator-Y
+refinements remain in :mod:`picture_capture.ocr.evidence_fusion`; separator-Y
 refinement is shared by Layout, OCR, and existing-PDIC workflows in
 :mod:`picture_capture.separator_y_refinement`.
 
@@ -23,8 +23,8 @@ from .facade_compat import install_core_assignment_mirror, publish_core_namespac
 # symbols first, then let evidence-fusion overrides replace selected decisions.
 publish_core_namespace(globals(), _core)
 
-from . import evidence_fusion as _fusion
-from .evidence_fusion import *  # noqa: F401,F403
+from .ocr import evidence_fusion as _fusion
+from .ocr.evidence_fusion import *  # noqa: F401,F403
 from .ocr.boundary_detection import detect_ocr_headword_boundaries
 from .separator_y_refinement import refine_separator_y as _shared_refine_separator_y
 

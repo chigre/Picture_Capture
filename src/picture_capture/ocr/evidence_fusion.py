@@ -15,13 +15,13 @@ import re
 
 from PIL import Image
 
-from . import paddle_headwords_core as _core
-from .profile.dictionary import DictionaryProfile
-from .models import AppSettings, Entry
-from .lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
-from .page_sections import PageSection
-from .paddle_headwords_core import HeadwordFilterRule, OCRRecord
-from .separator_y_refinement import refine_separator_y as _shared_separator_y_refiner
+from .. import paddle_headwords_core as _core
+from ..profile.dictionary import DictionaryProfile
+from ..models import AppSettings, Entry
+from ..lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
+from ..page_sections import PageSection
+from ..paddle_headwords_core import HeadwordFilterRule, OCRRecord
+from ..separator_y_refinement import refine_separator_y as _shared_separator_y_refiner
 
 # Source-guard compatibility markers. The executable implementations live in
 # paddle_headwords_core.py; these exact markers remain here because established
@@ -464,7 +464,7 @@ def _rescue_local_peer_style_continuations(
     """
     if _core._is_chinese_ocr(settings) or _core._is_japanese_ocr(settings):
         return 0
-    from .ocr.peer_style import peer_style_continuation_evidence
+    from .peer_style import peer_style_continuation_evidence
 
     rescued = 0
     # Only original core-accepted anchors count: earlier rescue decisions

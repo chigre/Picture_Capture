@@ -96,4 +96,4 @@ ignore = ["E501"]
 # evidence_fusion intentionally re-exports the complete stable OCR core at
 # runtime so legacy/private integration points remain patchable. Ruff cannot
 # statically resolve names supplied by that dynamic module export.
-"src/picture_capture/evidence_fusion.py" = ["F821"]
+"src/picture_capture/ocr/evidence_fusion.py" = ["F821"]

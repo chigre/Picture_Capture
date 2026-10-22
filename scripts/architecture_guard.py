@@ -431,7 +431,7 @@ def collect_violations() -> list[str]:
                 f"historical facade bypasses shared assignment compatibility owner: {rel}"
             )
 
-    evidence_source = (PACKAGE_ROOT / "evidence_fusion.py").read_text(encoding="utf-8")
+    evidence_source = (PACKAGE_ROOT / "ocr/evidence_fusion.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_EVIDENCE_CORE_ASSIGNMENTS:
         if marker in evidence_source:
             violations.append(
@@ -946,6 +946,13 @@ def collect_violations() -> list[str]:
         violations.append("retired root crop publishing owner returned")
     if not (PACKAGE_ROOT / "crop/publish.py").is_file():
         violations.append("canonical Crop publishing owner missing")
+
+    # Issue #562: the supervised OCR evidence-fusion implementation is now
+    # physically owned by ocr/. Do not reintroduce a root compatibility shim.
+    if (PACKAGE_ROOT / "evidence_fusion.py").is_file():
+        violations.append("retired root supervised OCR fusion returned")
+    if not (PACKAGE_ROOT / "ocr/evidence_fusion.py").is_file():
+        violations.append("canonical supervised OCR fusion owner missing")
 
     return violations
 
