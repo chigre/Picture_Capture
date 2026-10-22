@@ -890,7 +890,7 @@ class ProjectState:
         # child directory. Existing legacy projects remain readable until the GUI
         # explicitly migrates them, so opening a project never silently moves data.
         # Do not create anything in an empty/non-project folder selected by mistake.
-        from .project_storage import (
+        from .persistence.project_storage import (
             ensure_project_storage, has_legacy_project_data, is_managed_project,
             profile_path as active_profile_path,
             qt_root, settings_path as active_settings_path,

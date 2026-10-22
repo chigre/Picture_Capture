@@ -34,8 +34,8 @@ from ..io import formats
 from ..image_utils import build_analysis_image, normalize_page_rgb
 from ..refinement.analysis import whiten_illustrations_for_export
 from ..layout.core_understanding import understand_layout_core
-from ..page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
-from ..project_storage import qt_root
+from ..persistence.page_sections import read_page_sections, section_index_for_v, v_is_inside_sections
+from ..persistence.project_storage import qt_root
 from .single_line_merge_settings import _trim_white_border, load_merge_by_page
 from .single_line_parallel import configured_single_line_workers
 from .unlined_export_filter_settings import (

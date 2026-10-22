@@ -11,7 +11,7 @@ import re
 from typing import Sequence
 
 from ..models import Entry, PolygonRegion
-from ..page_sections import PageSection, normalize_page_sections, section_index_for_v
+from ..persistence.page_sections import PageSection, normalize_page_sections, section_index_for_v
 
 LABEL_PATTERN = re.compile(r"^P_(\d+)\|([^|]+)\|(xxx|\d{3})(?:\|.*)?$", re.I)
 AUTO_PATTERN = re.compile(r"(?:^|\|)(AUTO_\d+)(?=\||$)", re.I)
@@ -188,7 +188,7 @@ def write_ordered_auto_ppp(
     from ..io.formats import write_ppp
     from ..processing_core import derive_nominal_geometry
     from ..profile.semantics import effective_page_settings
-    from ..page_sections import read_page_sections
+    from ..persistence.page_sections import read_page_sections
 
     source = Path(image_path)
     with Image.open(source) as opened:

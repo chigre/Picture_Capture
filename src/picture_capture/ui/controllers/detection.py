@@ -20,7 +20,7 @@ from ...image_utils import normalize_page_rgb
 from ...layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr.action_guard import guard_ocr_action_selection
-from ...page_sections import read_page_sections
+from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
     column_index,
@@ -34,7 +34,7 @@ from ...processing import (
     sort_entries_reading_order,
 )
 from ...profile.semantics import effective_page_settings, page_template_analysis_image
-from ...project_storage import (
+from ...persistence.project_storage import (
     headword_filter_rules_path,
     ocr_cache_root,
     profile_path as project_profile_path,

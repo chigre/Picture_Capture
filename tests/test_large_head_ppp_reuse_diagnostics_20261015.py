@@ -12,7 +12,7 @@ from PIL import Image
 
 from picture_capture.io.formats import write_ppp
 from picture_capture.models import AppSettings, PolygonRegion
-from picture_capture.project_storage import ppp_write_path_for_image
+from picture_capture.persistence.project_storage import ppp_write_path_for_image
 from picture_capture.ordinary import large_head_visual_diagnostics as diagnostics
 from picture_capture.ui import large_head_visualization as ui
 

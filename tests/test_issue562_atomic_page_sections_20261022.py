@@ -8,12 +8,12 @@ from pathlib import Path
 from PIL import Image
 import pytest
 
-import picture_capture.page_sections as section_io
+import picture_capture.persistence.page_sections as section_io
 from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from picture_capture.page_sections import (
+from picture_capture.persistence.page_sections import (
     PAGE_SECTIONS_FORMAT, PageSection, read_page_sections, write_page_sections,
 )
-from picture_capture.project_storage import page_sections_path_for_image
+from picture_capture.persistence.project_storage import page_sections_path_for_image
 
 
 def _page(tmp_path: Path, name: str = "scan.png") -> Path:

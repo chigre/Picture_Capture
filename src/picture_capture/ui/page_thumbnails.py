@@ -18,7 +18,7 @@ from typing import Any
 
 from PIL import Image, ImageTk
 
-from picture_capture.project_storage import settings_path
+from picture_capture.persistence.project_storage import settings_path
 from picture_capture.thumbnail.cache import thumbnail_name_map
 from picture_capture.thumbnail.tasks import ThumbnailTasks
 

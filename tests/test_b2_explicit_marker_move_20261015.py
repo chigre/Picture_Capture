@@ -10,7 +10,7 @@ from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.proofreading.capture import capture_saved_explicit_marker_move
 from picture_capture.proofreading.events import load_events, sha256_file
-from picture_capture.project_storage import data_root
+from picture_capture.persistence.project_storage import data_root
 from picture_capture.ui.entry_move_controller import move_entry_via_dialog
 
 
@@ -202,7 +202,7 @@ def test_move_dialog_preserves_source_when_destination_collides_or_is_invalid(tm
 
 
 def test_move_dialog_refuses_section_gap(tmp_path, monkeypatch):
-    from picture_capture.page_sections import PageSection
+    from picture_capture.persistence.page_sections import PageSection
     import picture_capture.ui.entry_move_controller as module
     app, page, _ = _app(tmp_path)
     app.page_sections = [PageSection(0, 90)]
@@ -213,7 +213,7 @@ def test_move_dialog_refuses_section_gap(tmp_path, monkeypatch):
 
 
 def test_move_dialog_corrupt_simplified_source_fails_closed(tmp_path, monkeypatch):
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     import picture_capture.ui.entry_move_controller as module
     app, page, _ = _app(tmp_path)
     paired = simplified_review_path_for_image(page)

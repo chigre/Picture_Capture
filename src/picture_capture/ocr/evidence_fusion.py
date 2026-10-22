@@ -19,7 +19,7 @@ from .. import paddle_headwords_core as _core
 from ..profile.dictionary import DictionaryProfile
 from ..models import AppSettings, Entry
 from ..lexicon.latin_glued_pos_headwords import glued_lemma_and_pos
-from ..page_sections import PageSection
+from ..persistence.page_sections import PageSection
 from ..paddle_headwords_core import HeadwordFilterRule, OCRRecord
 from ..refinement.separator_y import refine_separator_y as _shared_separator_y_refiner
 

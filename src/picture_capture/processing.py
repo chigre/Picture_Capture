@@ -22,7 +22,7 @@ from PIL import Image
 from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
 from .image_utils import build_analysis_image
 from .models import AppSettings, Entry
-from .page_sections import PageSection
+from .persistence.page_sections import PageSection
 from . import processing_core as _core
 from .ordinary.cjk_large_heads import recover_cjk_oversized_heads
 from .ordinary.indent_topology import finalize_indented_topology

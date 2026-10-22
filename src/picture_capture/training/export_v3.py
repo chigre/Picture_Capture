@@ -33,7 +33,7 @@ from ..design.page_design_refined import (
 from ..layout.physical_indent import explicit_physical_layout_ops
 from ..image_utils import normalize_page_rgb
 from ..models import AppSettings, Entry
-from ..page_sections import read_page_sections
+from ..persistence.page_sections import read_page_sections
 from ..processing import column_index, derive_geometry, detect_entries
 from ..profile.semantics import effective_page_settings, page_template_analysis_image
 from .baseline import load_automatic_baseline, baseline_path_for_pdic

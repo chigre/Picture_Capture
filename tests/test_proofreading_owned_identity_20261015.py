@@ -11,7 +11,7 @@ from picture_capture.proofreading.capture import (
 from picture_capture.proofreading.events import (
     append_event, load_events, make_event, sha256_file,
 )
-from picture_capture.project_storage import data_root
+from picture_capture.persistence.project_storage import data_root
 
 
 def _owned_move(tmp_path):

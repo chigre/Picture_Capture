@@ -16,10 +16,10 @@ from ..io.formats import pdic_path, read_pdic, read_ppp, write_ppp
 from ..text.encoding import read_text_detected
 from .labels import illustration_labels
 from ..models import AppSettings, PolygonRegion
-from ..page_sections import read_page_sections
+from ..persistence.page_sections import read_page_sections
 from ..processing_core import derive_geometry
 from ..profile.semantics import effective_page_settings, page_template_analysis_image
-from ..project_storage import ppp_read_path_for_image
+from ..persistence.project_storage import ppp_read_path_for_image
 from ..image_utils import normalize_page_rgb
 
 

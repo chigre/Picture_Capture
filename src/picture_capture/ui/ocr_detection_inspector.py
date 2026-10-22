@@ -12,7 +12,7 @@ from PIL import Image, ImageTk
 
 from ..io.formats import pdic_path
 from ..ocr.final_decisions import load_current_final_decisions
-from ..project_storage import ocr_cache_root
+from ..persistence.project_storage import ocr_cache_root
 
 
 def summary_and_rows(report: dict[str, Any]) -> tuple[str, list[tuple[str, str, str, str, str]]]:

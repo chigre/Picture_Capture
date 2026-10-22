@@ -21,10 +21,10 @@ from picture_capture.ui.compat import (
     AUTO_FONT_FAMILY, normalize_content_font_setting,
     recommended_content_font_candidates,
 )
-from picture_capture.page_sections import (
+from picture_capture.persistence.page_sections import (
     PageSection, build_reading_lanes, read_page_sections, write_page_sections,
 )
-from picture_capture.project_storage import ensure_project_storage, page_sections_path_for_image
+from picture_capture.persistence.project_storage import ensure_project_storage, page_sections_path_for_image
 from picture_capture.processing import Geometry, ColumnPath, sort_entries_reading_order, sort_entries_column_y
 from picture_capture.layout.detection import (
     _detect_persistent_vertical_rule,
@@ -1646,7 +1646,7 @@ class DictionaryProfileV2Tests(unittest.TestCase):
 
     def test_v3_profile_file_does_not_override_authoritative_saved_settings(self) -> None:
         import json
-        from picture_capture.project_storage import ensure_project_storage, profile_path, settings_path
+        from picture_capture.persistence.project_storage import ensure_project_storage, profile_path, settings_path
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             Image.new("RGB", (20, 30), "white").save(root / "0001.png")
@@ -4542,7 +4542,7 @@ def test_v2102_reload_wordslist_updates_project_membership_and_persists_relative
     assert project.words == ["uno", "dos"]
     assert app._project_words == {"uno", "dos"}
     assert app.settings.wordslist_path == "lists/chosen.txt"
-    from picture_capture.project_storage import settings_path
+    from picture_capture.persistence.project_storage import settings_path
     reopened = AppSettings.from_json(settings_path(tmp_path))
     assert reopened.wordslist_path == "lists/chosen.txt"
 
@@ -6500,7 +6500,7 @@ def test_v21122_hotfix5_review_delete_commits_text_removes_shared_entry_and_dese
 def test_v212_new_project_centralizes_program_data_under_picturecapture(tmp_path):
     from picture_capture.io.formats import pdic_path, write_pdic, write_ppp
     from picture_capture.models import Entry, PolygonRegion, ProjectState
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         is_managed_project, ppp_write_path_for_image, qt_root, settings_path, storage_root,
     )
 
@@ -6535,7 +6535,7 @@ def test_v212_new_project_centralizes_program_data_under_picturecapture(tmp_path
 
 def test_v212_legacy_project_open_remains_non_destructive_until_migration(tmp_path):
     from picture_capture.models import AppSettings, ProjectState
-    from picture_capture.project_storage import is_managed_project
+    from picture_capture.persistence.project_storage import is_managed_project
 
     Image.new("RGB", (80, 80), "white").save(tmp_path / "0001.png")
     AppSettings(columns=3).to_json(tmp_path / "picture_capture_settings.json")
@@ -6551,7 +6551,7 @@ def test_v212_legacy_project_open_remains_non_destructive_until_migration(tmp_pa
 def test_v212_migration_moves_program_owned_files_and_preserves_user_files(tmp_path):
     from picture_capture.io.formats import pdic_path, read_pdic
     from picture_capture.models import AppSettings, ProjectState
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         is_managed_project, migrate_legacy_project, ocr_cache_root, profile_path,
         qt_root, replace_rules_path, settings_path, storage_root,
     )
@@ -6767,7 +6767,7 @@ def test_v2124_simplified_sidecar_roundtrip(tmp_path):
 
 
 def test_v2124_managed_storage_has_simplified_sidecar_root(tmp_path):
-    from picture_capture.project_storage import ensure_project_storage, simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import ensure_project_storage, simplified_review_path_for_image
 
     page = tmp_path / "0001.png"
     page.write_bytes(b"x")
@@ -6848,7 +6848,7 @@ def test_v2125_automatic_simplified_value_is_materialized_for_persistence():
 def test_v2125_delete_aligned_simplified_entry_functionally_removes_sidecar(tmp_path):
     from types import SimpleNamespace
     from picture_capture.app import PictureCaptureApp
-    from picture_capture.project_storage import simplified_review_path_for_image
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
     from picture_capture.proofreading.simplified_review import read_records, write_records
 
     page = tmp_path / "0001.png"

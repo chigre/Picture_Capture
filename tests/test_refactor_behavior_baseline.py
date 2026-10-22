@@ -5,7 +5,7 @@ from pathlib import Path
 
 from picture_capture.io.formats import read_pdic, read_ppp, write_pdic, write_ppp
 from picture_capture.models import AppSettings, Entry, PolygonRegion
-from picture_capture.project_storage import (
+from picture_capture.persistence.project_storage import (
     ensure_project_storage,
     ocr_cache_root,
     pdic_path_for_image,

@@ -19,11 +19,11 @@ from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .crop.settings import load_crop_settings
 from .crop.export_output import normalize_project_crop_widths
-from .project_storage import (
+from .persistence.project_storage import (
     ppp_read_path_for_image, headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
     qt_root, replace_rules_path,
 )
-from .page_sections import read_page_sections
+from .persistence.page_sections import read_page_sections
 from .processing import (
     append_crop_log,
     detect_entries,

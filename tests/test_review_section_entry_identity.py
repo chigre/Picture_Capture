@@ -6,9 +6,9 @@ from PIL import Image
 from picture_capture.app import ReviewWindow
 from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
-from picture_capture.page_sections import PageSection, read_page_sections, write_page_sections
+from picture_capture.persistence.page_sections import PageSection, read_page_sections, write_page_sections
 from picture_capture.processing_core import derive_geometry, sort_entries_reading_order
-from picture_capture.project_storage import (
+from picture_capture.persistence.project_storage import (
     migrate_legacy_project, page_sections_path_for_image, page_sections_read_path_for_image,
 )
 from picture_capture.proofreading.main_editor_sync import reconcile_main_editors_after_review

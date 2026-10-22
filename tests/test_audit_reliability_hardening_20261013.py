@@ -16,7 +16,7 @@ from picture_capture.crop.publish import (
     _write_journal,
     recover_incomplete_crop_publications,
 )
-from picture_capture.project_storage import (
+from picture_capture.persistence.project_storage import (
     _same_file_payload,
     migrate_legacy_project,
     project_activity_path,

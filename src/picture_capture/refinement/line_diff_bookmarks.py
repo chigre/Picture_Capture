@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from ..io.formats import pdic_path, read_pdic
-from ..project_storage import settings_path
+from ..persistence.project_storage import settings_path
 from ..training.baseline import baseline_path_for_pdic, load_automatic_baseline
 
 

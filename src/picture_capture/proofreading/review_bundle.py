@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from ..io.formats import pdic_path, write_pdic
-from ..project_storage import page_sections_read_path_for_image, simplified_review_path_for_image
+from ..persistence.project_storage import page_sections_read_path_for_image, simplified_review_path_for_image
 from .events import sha256_file
 from .transactions import (
     _bytes_or_absent, _publish, _recovery_path, _rollback_failed_publish,

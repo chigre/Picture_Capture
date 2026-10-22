@@ -28,7 +28,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..geometry.layout_transform import LayoutTransform
-from ..project_storage import data_root, is_managed_project, qt_root
+from ..persistence.project_storage import data_root, is_managed_project, qt_root
 
 
 CACHE_FORMAT = "picture-capture-layout-rows-v1"

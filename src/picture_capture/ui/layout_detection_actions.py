@@ -17,7 +17,7 @@ from PIL import Image
 from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from ..layout.detection import detect_layout_consistency, detect_layout_parameters
 from ..geometry.layout_transform import LayoutTransform
-from ..project_storage import exports_root
+from ..persistence.project_storage import exports_root
 
 
 def detect_layout_current(self) -> None:

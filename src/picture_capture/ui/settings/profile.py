@@ -14,7 +14,7 @@ from ...profile.dictionary import (
     profile_effective_settings,
     profile_layout_summary,
 )
-from ...project_storage import profile_path as project_profile_path
+from ...persistence.project_storage import profile_path as project_profile_path
 
 
 def build_profile_tab(dialog: Any, tab: ttk.Frame) -> None:

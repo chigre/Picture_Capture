@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PIL import Image
 
-from picture_capture.page_sections import PageSection, write_page_sections
+from picture_capture.persistence.page_sections import PageSection, write_page_sections
 from picture_capture.proofreading.events import (
     append_event, make_event, sha256_file,
 )

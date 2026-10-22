@@ -65,7 +65,7 @@ from picture_capture.visual.marker_templates import (
     parse_visual_marker_samples, serialize_visual_marker_samples,
     split_configured_symbols,
 )
-from picture_capture.project_storage import profile_path, qt_root, settings_path
+from picture_capture.persistence.project_storage import profile_path, qt_root, settings_path
 from picture_capture.io.picdic import PicDicBuildCancelled, build_picdic_package
 from picture_capture.training_export import TrainingExportCancelled, make_training_zip
 from picture_capture.project.recent_projects import (

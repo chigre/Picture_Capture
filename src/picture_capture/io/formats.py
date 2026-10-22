@@ -6,7 +6,7 @@ import tempfile
 
 from ..models import Entry, PolygonRegion
 from ..text.encoding import read_text_detected
-from ..project_storage import pdic_path_for_image, note_page_artifact_edit
+from ..persistence.project_storage import pdic_path_for_image, note_page_artifact_edit
 
 
 def pdic_path(image_path: Path) -> Path:

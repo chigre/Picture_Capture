@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..profile.dictionary import write_project_profile
-from ..project_storage import profile_path
+from ..persistence.project_storage import profile_path
 
 
 def profile_changes_allowed(app: Any) -> bool:

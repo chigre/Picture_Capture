@@ -115,7 +115,7 @@ def mask_large_illustrations_for_layout(
                 "已启用使用已有的插图数据，但当前 Layout 入口没有对应图片路径，"
                 "无法确定 PPP 文件。"
             )
-        from ..project_storage import ppp_read_path_for_image
+        from ..persistence.project_storage import ppp_read_path_for_image
         from ..io.formats import read_ppp
         ppp_file = ppp_read_path_for_image(Path(source_image_path))
         if not ppp_file.is_file():

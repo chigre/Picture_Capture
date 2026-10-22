@@ -8,7 +8,7 @@ from typing import Iterable
 
 from PIL import Image
 
-from ..project_storage import image_preprocess_output_root
+from ..persistence.project_storage import image_preprocess_output_root
 
 
 def preview_output_root(project_root: Path) -> Path:

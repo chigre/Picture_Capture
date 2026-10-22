@@ -47,7 +47,7 @@ from .quality.paddle_diagnostic_formatting import (
 )
 from .runtime.environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
-from .page_sections import PageSection, normalize_page_sections, section_index_for_v
+from .persistence.page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .profile.dictionary import (
     PROFILE_FILENAME,
     DictionaryProfile,

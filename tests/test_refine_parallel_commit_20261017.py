@@ -172,7 +172,7 @@ def test_changed_pdic_or_page_blocks_commit(prepared_page):
 
 
 def test_ppp_section_or_review_change_blocks_commit(prepared_page):
-    from picture_capture.project_storage import (
+    from picture_capture.persistence.project_storage import (
         ppp_write_path_for_image, page_sections_path_for_image,
         simplified_review_path_for_image,
     )

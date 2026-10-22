@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-from ..project_storage import simplified_review_path_for_image
+from ..persistence.project_storage import simplified_review_path_for_image
 from ..proofreading.simplified_review import entry_key, read_records
 
 

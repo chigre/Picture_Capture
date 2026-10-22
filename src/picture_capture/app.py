@@ -183,7 +183,7 @@ from .image_preprocessing import (
     export_summary_csv,
 )
 from .preprocess.geometry import perspective_from_quad
-from .page_sections import (
+from .persistence.page_sections import (
     PageSection, read_page_sections, write_page_sections, v_is_inside_sections,
 )
 from .lexicon.reference_index import contains_cjk, reference_sort_key
@@ -218,7 +218,7 @@ from .ui.layout_visualization_ui_v3 import draw_layout_visualization_if_enabled
 from .ui.auxiliary_line_controller import AuxiliaryLineController
 from .crop.auxiliary_lines import AuxiliaryLineEdits
 from .proofreading.entry_classification_ui import sync_review_entry_classification
-from .project_storage import (
+from .persistence.project_storage import (
     STORAGE_DIRNAME, ensure_project_storage, exports_root, has_legacy_project_data,
     headword_filter_rules_path, is_managed_project, migrate_legacy_project,
     ocr_cache_root, ppp_read_path_for_image, ppp_write_path_for_image, simplified_review_path_for_image,
@@ -15636,7 +15636,7 @@ class PictureCaptureApp(tk.Tk):
                 and settings.ocr_resume_completed_pages
                 and not force_refresh
             ):
-                from .project_storage import page_sections_read_path_for_image
+                from .persistence.project_storage import page_sections_read_path_for_image
                 from .ocr_page_resume import validated_resume
                 resume_dependencies = (
                     filter_path,
@@ -15734,7 +15734,7 @@ class PictureCaptureApp(tk.Tk):
                 if not resume_dependencies:
                     # A forced OCR rerun bypasses prior checkpoints but still
                     # writes a *new* completed checkpoint for later resumption.
-                    from .project_storage import page_sections_read_path_for_image
+                    from .persistence.project_storage import page_sections_read_path_for_image
                     resume_dependencies = (
                         filter_path,
                         project_profile_path(project.root),

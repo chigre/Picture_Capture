@@ -12,7 +12,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from ..project_storage import project_activity_path, settings_path
+from ..persistence.project_storage import project_activity_path, settings_path
 from ..runtime.environment import user_config_root
 
 VERSION = 1

@@ -14,7 +14,7 @@ from uuid import NAMESPACE_URL, uuid5
 from PIL import Image, ImageDraw, ImageOps, ImageTk
 
 from ..io.formats import pdic_path
-from ..project_storage import data_root
+from ..persistence.project_storage import data_root
 from .events import load_events, sha256_file
 from .verification import verify_saved_action
 

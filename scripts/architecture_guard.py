@@ -695,9 +695,19 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical runtime owner missing: {owner}")
         elif required not in target.read_text(encoding="utf-8"):
             violations.append(f"canonical runtime routine missing: {owner}")
+    # Issue #562: SECTION sidecar and project routing have canonical persistence owners.
+    for old, fn in (("project_storage", "def ensure_project_storage("),
+                    ("page_sections", "def write_page_sections(")):
+        if (PACKAGE_ROOT / (old + ".py")).exists():
+            violations.append(f"retired root persistence implementation returned: {old}")
+        owned = PACKAGE_ROOT / "persistence" / (old + ".py")
+        if not owned.is_file():
+            violations.append(f"canonical persistence owner missing: {old}")
+        elif fn not in owned.read_text(encoding="utf-8"):
+            violations.append(f"canonical persistence routine missing: {old}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 18:
-        violations.append(f"root Python module count regressed: {root_py_count} > 18")
+    if root_py_count > 16:
+        violations.append(f"root Python module count regressed: {root_py_count} > 16")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

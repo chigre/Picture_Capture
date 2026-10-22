@@ -5,7 +5,7 @@ from pathlib import Path
 import picture_capture.runtime.environment as runtime
 from picture_capture.ocr.engines import find_tesseract
 from picture_capture.io.picdic import build_picdic_package
-from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image, qt_root
+from picture_capture.persistence.project_storage import pdic_path_for_image, ppp_read_path_for_image, qt_root
 
 
 def test_platform_native_user_roots(tmp_path: Path):

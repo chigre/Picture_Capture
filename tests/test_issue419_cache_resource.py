@@ -13,7 +13,7 @@ import pytest
 
 from picture_capture.lexicon import cc_cedict, network_lookup
 from picture_capture.layout import core_understanding as core
-from picture_capture import project_storage
+from picture_capture.persistence import project_storage
 
 
 def test_manifest_cache_hit_then_atomic_replacement(tmp_path):

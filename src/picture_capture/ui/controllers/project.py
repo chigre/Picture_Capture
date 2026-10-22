@@ -14,7 +14,7 @@ from typing import Any
 from tkinter import filedialog, messagebox, simpledialog
 
 from ...models import project_page_images
-from ...project_storage import has_legacy_project_data, is_managed_project
+from ...persistence.project_storage import has_legacy_project_data, is_managed_project
 
 
 class ProjectController:

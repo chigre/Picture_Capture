@@ -20,14 +20,14 @@ from PIL import Image
 
 from ... import __version__
 from ...io.formats import pdic_path, read_pdic, read_picdic_index_records
-from ...page_sections import read_page_sections
+from ...persistence.page_sections import read_page_sections
 from ...proofreading.pdic_restore import parse_merged_pdic_text, write_pdic_atomic
 from ...io.picdic import PicDicBuildCancelled, build_picdic_package
 from ...processing import (
     derive_nominal_geometry, export_ocred, import_ocred,
     sort_entries_column_y, sort_entries_reading_order,
 )
-from ...project_storage import exports_root, qt_root, training_exports_root
+from ...persistence.project_storage import exports_root, qt_root, training_exports_root
 from ...training.export_composed import (
     TrainingExportCancelled, copy_project_context, export_training_page,
     make_training_zip, write_training_manifest,

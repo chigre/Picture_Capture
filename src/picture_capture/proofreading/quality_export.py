@@ -13,7 +13,7 @@ from typing import Any
 
 from .events import audit_events, load_events, sha256_file
 from .verification import explicit_verification_counts
-from ..project_storage import page_sections_read_path_for_image
+from ..persistence.project_storage import page_sections_read_path_for_image
 
 EXPORT_FORMAT = "picture-capture-proofreading-quality-export-v1"
 

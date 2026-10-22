@@ -9,7 +9,7 @@ import tempfile
 import time
 
 from ..models import project_cover_path, project_page_images
-from ..project_storage import settings_path
+from ..persistence.project_storage import settings_path
 from ..runtime.environment import legacy_user_config_files, user_config_root
 from .recent_locking import recent_registry_lock
 
@@ -289,7 +289,7 @@ def recent_project_details(row: dict[str, object]) -> dict[str, str | int | bool
         return details
     try:
         candidates = [root.stat().st_mtime]
-        from ..project_storage import project_activity_path
+        from ..persistence.project_storage import project_activity_path
         activity = project_activity_path(root)
         if activity.is_file():
             candidates.append(activity.stat().st_mtime)

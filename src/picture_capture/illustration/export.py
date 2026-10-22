@@ -14,7 +14,7 @@ from typing import Iterable
 
 from ..io.formats import write_text_atomic
 from .entries import IllustratedEntry, read_entries
-from ..project_storage import exports_root
+from ..persistence.project_storage import exports_root
 
 COLUMNS = ("lookup", "page", "group_id", "x", "y", "w", "h",
            "primary", "languages_json", "aliases_json", "status")

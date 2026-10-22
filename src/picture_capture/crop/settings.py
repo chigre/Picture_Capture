@@ -7,7 +7,7 @@ use the same version/normalization contract without depending on one another.
 """
 
 from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from ..project_storage import qt_root
+from ..persistence.project_storage import qt_root
 import json
 from pathlib import Path
 from ..models import AppSettings

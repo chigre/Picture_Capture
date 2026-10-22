@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from picture_capture import project_storage as storage
+from picture_capture.persistence import project_storage as storage
 
 
 @pytest.mark.parametrize("invalid", ["not-a-number", [], {}, None, "3.2", 1e999])

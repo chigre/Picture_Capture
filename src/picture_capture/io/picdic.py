@@ -8,7 +8,7 @@ import re
 import zipfile
 import uuid
 
-from ..project_storage import qt_root
+from ..persistence.project_storage import qt_root
 from ..runtime.environment import case_insensitive_child
 
 

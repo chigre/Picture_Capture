@@ -16,7 +16,7 @@ from PIL import Image, ImageOps
 from ..image_utils import normalize_page_rgb
 
 from ..io.formats import pdic_path, read_pdic
-from ..page_sections import read_page_sections
+from ..persistence.page_sections import read_page_sections
 from .boxes import (
     RefBox, box_intersection_fraction, next_ref_id, read_ref_boxes,
     ref_box_ticket, ref_sample_root, write_ref_boxes,

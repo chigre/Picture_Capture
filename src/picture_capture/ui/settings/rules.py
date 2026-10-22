@@ -9,7 +9,7 @@ from ...paddle_headwords import (
     HEADWORD_FILTER_RULES_FILENAME,
     parse_headword_filter_rules,
 )
-from ...project_storage import headword_filter_rules_path
+from ...persistence.project_storage import headword_filter_rules_path
 from ...text.encoding import read_text_detected
 
 

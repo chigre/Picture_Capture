@@ -18,7 +18,7 @@ from .profile.semantics import (
     excluded_source_side_percent,
     page_template_analysis_image,
 )
-from .project_storage import ocr_cache_root, ppp_read_path_for_image
+from .persistence.project_storage import ocr_cache_root, ppp_read_path_for_image
 
 
 from .training.manifest_v2 import (

@@ -78,7 +78,7 @@ def recover_incomplete_crop_publications(project_root: Path) -> int:
     Scans only the QT root and its immediate output directories, not every PNG.
     No recovery runs during a live parallel batch; other pages may be publishing.
     """
-    from ..project_storage import qt_root
+    from ..persistence.project_storage import qt_root
 
     root = qt_root(Path(project_root))
     if not root.is_dir():
