@@ -903,7 +903,7 @@ class ProjectState:
             ensure_project_storage(root, __version__)
         # Recover page-level PNG/manifest transactions before any export can start.
         # An uncommitted transaction is rolled back; committed ones finish cleanup.
-        from .processing_publish import recover_incomplete_crop_publications
+        from .crop.publish import recover_incomplete_crop_publications
         recover_incomplete_crop_publications(root)
         json_settings = active_settings_path(root)
         if json_settings.exists():
