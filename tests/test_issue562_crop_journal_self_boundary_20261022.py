@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from picture_capture.processing_publish import (
+from picture_capture.crop.publish import (
     _journal_path,
     _recover_journal,
     _write_journal,
