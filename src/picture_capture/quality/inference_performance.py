@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 
-from ..runtime_environment import resolve_paddle_device, runtime_setting
+from ..runtime.environment import resolve_paddle_device, runtime_setting
 
 
 def _choice(env_name: str, setting_name: str, default: str, allowed: set[str]) -> str:

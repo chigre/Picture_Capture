@@ -4,7 +4,7 @@ from importlib import metadata, util
 from pathlib import Path
 from typing import Any
 
-from ..runtime_environment import effective_tesseract_configured
+from ..runtime.environment import effective_tesseract_configured
 import asyncio
 import os
 import shutil

@@ -20,6 +20,7 @@ ALWAYS_FULL = {
     "src/picture_capture/pdic_restore.py", "src/picture_capture/processing_publish.py",
     "src/picture_capture/entry_classification.py",
     "src/picture_capture/windows_gpu.py", "src/picture_capture/runtime_environment.py",
+    "src/picture_capture/runtime/windows_gpu.py", "src/picture_capture/runtime/environment.py",
     "src/picture_capture/ocr_channel.py", "src/picture_capture/ocr_channel_legacy.py",
     "src/picture_capture/ocr_page_resume.py", "src/picture_capture/paddle_headwords_core.py",
     "src/picture_capture/marker_refinement_parallel.py",
@@ -42,6 +43,7 @@ ALWAYS_FULL_PREFIXES = (
     "src/picture_capture/proofreading/", "src/picture_capture/persistence/",
     "src/picture_capture/project/", "src/picture_capture/ui/",
     "src/picture_capture/training/", "src/picture_capture/image/",
+    "src/picture_capture/runtime/",
 )
 DOC_FILES = {"README.md", "CHANGELOG.md", "CONTRIBUTING.md"}
 DOC_FULL = {"docs/architecture/CHANGE_POLICY.md", "docs/architecture/CI_RISK_POLICY.md"}

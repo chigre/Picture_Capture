@@ -12,7 +12,7 @@ import threading
 from PIL import Image
 
 from .geometry.layout_transform import LayoutTransform
-from .runtime_environment import portable_project_file
+from .runtime.environment import portable_project_file
 from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
     migrate_app_settings_payload,

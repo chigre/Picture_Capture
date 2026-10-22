@@ -52,7 +52,7 @@ def test_cpu_worker_forces_device_and_reuses_original_pdics_writer(monkeypatch):
     # mutates processing_core via facade_compat. Restore BOTH namespaces
     # before any subsequent tests to avoid a false legacy-ownership failure.
     from picture_capture import processing, processing_core
-    from picture_capture.runtime_environment import resolve_paddle_device
+    from picture_capture.runtime.environment import resolve_paddle_device
 
     original_core = processing_core.detect_entries_job
     observed = []
@@ -78,7 +78,7 @@ def test_cpu_worker_forces_device_and_reuses_original_pdics_writer(monkeypatch):
 
 def test_cpu_only_detector_explicit_threads_no_gpu_fallback(monkeypatch):
     from picture_capture.layout import detector_legacy as legacy
-    from picture_capture.runtime_environment import resolve_paddle_device
+    from picture_capture.runtime.environment import resolve_paddle_device
 
     observed = []
     fake = ModuleType("paddleocr")

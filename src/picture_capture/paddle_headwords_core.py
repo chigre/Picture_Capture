@@ -45,7 +45,7 @@ from .quality.paddle_diagnostic_formatting import (
     issues_text_impl as _diag_issues_text_impl,
     tsv_clean_impl as _diag_tsv_clean_impl,
 )
-from .runtime_environment import resolve_paddle_device
+from .runtime.environment import resolve_paddle_device
 from .image_utils import normalize_page_rgb
 from .page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .profile.dictionary import (
@@ -854,7 +854,7 @@ def get_paddle_engine(settings: AppSettings) -> Any:
     # Avoid the PaddlePaddle 3.3.x CPU PIR/oneDNN incompatibility also for
     # ordinary OCR, not only the separate layout detector.
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from .windows_gpu import configure_windows_nvidia_dlls
+    from .runtime.windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
     try:
         from paddleocr import PaddleOCR

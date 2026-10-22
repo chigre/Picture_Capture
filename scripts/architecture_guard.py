@@ -683,9 +683,21 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical Layout owner missing: {owner}")
         elif fn not in owned.read_text(encoding="utf-8"):
             violations.append(f"canonical Layout routine missing: {owner}")
+    # Issue #562: platform runtime and Windows GPU loader have canonical owners.
+    for old, owner, required in (
+        ("runtime_environment", "environment", "def resolve_paddle_device("),
+        ("windows_gpu", "windows_gpu", "def configure_windows_nvidia_dlls("),
+    ):
+        if (PACKAGE_ROOT / (old + ".py")).exists():
+            violations.append(f"retired runtime root module returned: {old}")
+        target = PACKAGE_ROOT / "runtime" / (owner + ".py")
+        if not target.is_file():
+            violations.append(f"canonical runtime owner missing: {owner}")
+        elif required not in target.read_text(encoding="utf-8"):
+            violations.append(f"canonical runtime routine missing: {owner}")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 20:
-        violations.append(f"root Python module count regressed: {root_py_count} > 20")
+    if root_py_count > 18:
+        violations.append(f"root Python module count regressed: {root_py_count} > 18")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

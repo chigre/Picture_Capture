@@ -74,11 +74,11 @@ def test_channel_paddle_engine_preserves_legacy_runtime_bootstrap(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "picture_capture.layout.detection", layout_module)
 
-    windows_module = ModuleType("picture_capture.windows_gpu")
+    windows_module = ModuleType("picture_capture.runtime.windows_gpu")
     windows_module.configure_windows_nvidia_dlls = lambda: events.append(
         "configure_windows_nvidia_dlls"
     )
-    monkeypatch.setitem(sys.modules, "picture_capture.windows_gpu", windows_module)
+    monkeypatch.setitem(sys.modules, "picture_capture.runtime.windows_gpu", windows_module)
 
     paddle_module = ModuleType("paddleocr")
 
@@ -130,10 +130,11 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
     install_doc = (root / "docs" / "ocr-install.md").read_text(encoding="utf-8")
 
     assert not (package / "windows_gpu_runtime.py").exists()
-    assert (package / "windows_gpu.py").exists()
+    assert not (package / "windows_gpu.py").exists()
+    assert (package / "runtime/windows_gpu.py").exists()
     assert "windows_gpu_runtime.py" not in guard
-    assert "picture_capture.windows_gpu import configure_windows_nvidia_dlls" in verify
-    assert "src/picture_capture/windows_gpu.py" in install_doc
+    assert "picture_capture.runtime.windows_gpu import configure_windows_nvidia_dlls" in verify
+    assert "src/picture_capture/runtime/windows_gpu.py" in install_doc
 
     cases = (
         ("ocr_channel.py", "from paddleocr import PaddleOCR"),
@@ -141,11 +142,11 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
         ("preprocess/document_unwarping.py", "from paddleocr import DocPreprocessor"),
         ("layout/detector_legacy.py", "from paddleocr import TextDetection"),
     )
-    helper_import = "from .windows_gpu import configure_windows_nvidia_dlls"
+    helper_import = "from .runtime.windows_gpu import configure_windows_nvidia_dlls"
     helper_call = "configure_windows_nvidia_dlls()"
     for filename, paddle_import in cases:
         text = (package / filename).read_text(encoding="utf-8")
-        expected_import = ("from ..windows_gpu import configure_windows_nvidia_dlls" if filename.startswith(("preprocess/", "layout/")) else helper_import)
+        expected_import = ("from ..runtime.windows_gpu import configure_windows_nvidia_dlls" if filename.startswith(("preprocess/", "layout/")) else helper_import)
         assert expected_import in text
         assert paddle_import in text
         assert text.index(expected_import) < text.index(helper_call) < text.index(paddle_import)

@@ -22,7 +22,7 @@ import shutil
 import tempfile
 import threading
 
-from .runtime_environment import case_insensitive_child
+from .runtime.environment import case_insensitive_child
 
 
 STORAGE_DIRNAME = "_PictureCapture"

@@ -74,6 +74,8 @@ def test_behavior_change_requires_full():
 
 def test_critical_paths_full_even_on_import_only_change():
     for p in ("src/picture_capture/windows_gpu.py",
+              "src/picture_capture/runtime/windows_gpu.py",
+              "src/picture_capture/runtime/environment.py",
               "src/picture_capture/bootstrap/worker.py",
               "src/picture_capture/page_sections.py",
               "src/picture_capture/image_utils.py",
@@ -88,7 +90,7 @@ def test_critical_paths_full_even_on_import_only_change():
 def test_protected_package_import_changes_still_require_full():
     for folder in ("layout", "ocr", "ordinary", "ui", "proofreading",
                    "project", "persistence", "training", "bootstrap",
-                   "geometry", "crop", "refinement"):
+                   "geometry", "crop", "refinement", "runtime"):
         p = f"src/picture_capture/{folder}/low_level.py"
         assert tier([("M", p, p)], "import math\n", "import cmath\n") == "full"
 

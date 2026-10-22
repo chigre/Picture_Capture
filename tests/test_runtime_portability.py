@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import picture_capture.runtime_environment as runtime
+import picture_capture.runtime.environment as runtime
 from picture_capture.ocr.engines import find_tesseract
 from picture_capture.io.picdic import build_picdic_package
 from picture_capture.project_storage import pdic_path_for_image, ppp_read_path_for_image, qt_root
