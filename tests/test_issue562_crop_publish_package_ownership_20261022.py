@@ -6,7 +6,6 @@ from pathlib import Path
 
 import picture_capture.processing as processing
 from picture_capture.crop import publish
-from picture_capture.models import ProjectState
 
 
 def test_crop_publish_physical_owner_and_core_identity() -> None:
