@@ -1,0 +1,1 @@
+"""Cross-platform runtime settings and Windows GPU loader implementations.\n\nNo eager Paddle/CUDA imports: callers initialize engines explicitly.\n"""\n

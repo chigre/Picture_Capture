@@ -10,7 +10,7 @@ import time
 
 from ..models import project_cover_path, project_page_images
 from ..project_storage import settings_path
-from ..runtime_environment import legacy_user_config_files, user_config_root
+from ..runtime.environment import legacy_user_config_files, user_config_root
 from .recent_locking import recent_registry_lock
 
 

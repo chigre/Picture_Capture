@@ -54,7 +54,7 @@ def configured_refine_workers(page_count: int, *, cpus: int | None = None,
     for disposable illustration masks. No subprocess ever writes PDIC.
     """
     if configured is None:
-        from ..runtime_environment import runtime_setting
+        from ..runtime.environment import runtime_setting
         configured = str(runtime_setting("paddle_cpu_workers", "auto") or "auto")
     try:
         requested = int(configured)

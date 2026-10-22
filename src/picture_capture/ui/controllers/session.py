@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ...runtime_environment import legacy_user_config_files, user_config_root
+from ...runtime.environment import legacy_user_config_files, user_config_root
 
 
 SESSION_STATE_FILENAME = "session_state.json"

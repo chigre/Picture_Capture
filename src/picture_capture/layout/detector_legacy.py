@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 from ..models import AppSettings
-from ..runtime_environment import resolve_paddle_device
+from ..runtime.environment import resolve_paddle_device
 from ..image_utils import normalize_page_rgb
 from ..geometry.layout_transform import LayoutTransform
 
@@ -140,7 +140,7 @@ def _get_text_detector(settings: AppSettings) -> Any:
         return _TEXT_DETECTION_CACHE[key]
 
     os.environ["FLAGS_enable_pir_api"] = "0"
-    from ..windows_gpu import configure_windows_nvidia_dlls
+    from ..runtime.windows_gpu import configure_windows_nvidia_dlls
     configure_windows_nvidia_dlls()
     try:
         from paddleocr import TextDetection

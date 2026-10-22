@@ -9,7 +9,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ...runtime_environment import (
+from ...runtime.environment import (
     clear_runtime_caches, runtime_setting, save_runtime_setting,
 )
 

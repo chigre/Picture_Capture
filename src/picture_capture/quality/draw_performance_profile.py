@@ -10,7 +10,7 @@ from contextvars import ContextVar
 import os
 from pathlib import Path
 import time
-from ..runtime_environment import user_data_root
+from ..runtime.environment import user_data_root
 
 _ENV = "PICTURE_CAPTURE_DRAW_PROFILE"
 _CURRENT_PAGE: ContextVar[str | None] = ContextVar("draw_profile_page", default=None)
