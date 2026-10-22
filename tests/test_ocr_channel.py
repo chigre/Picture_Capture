@@ -282,7 +282,7 @@ def test_historical_paddle_headword_entrypoint_remains_boundary_consumer_alias()
 
 
 def test_main_ui_presents_engine_selection_as_shared_ocr_channel():
-    from picture_capture.ui_terminology import normalize_ui_text
+    from picture_capture.ui.terminology_compat import normalize_ui_text
 
     assert normalize_ui_text("三、融合 / OCR画线参数") == "三、共享 OCR 通道 / OCR画线"
     assert normalize_ui_text("三、OCR画线参数（默认）") == "三、共享 OCR 通道 / OCR画线"
@@ -295,7 +295,7 @@ def test_main_ui_presents_engine_selection_as_shared_ocr_channel():
 
 
 def test_marker_only_ui_copy_states_shared_multi_ocr_without_geometry_changes():
-    from picture_capture.ui_terminology import normalize_ui_text
+    from picture_capture.ui.terminology_compat import normalize_ui_text
 
     text = normalize_ui_text(
         "仅OCR：只对已有画线做局部 PaddleOCR 补文字，不新增、删除或移动 marker。"
