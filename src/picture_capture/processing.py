@@ -323,7 +323,7 @@ def _ordinary_entries_from_layout_roles(
     diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
     """Materialize final Layout entry rows with canonical classification."""
-    from .entry_classification import copy_layout_line_classification
+    from .proofreading.classification import copy_layout_line_classification
 
     layout = understanding.layout
     refined_y_by_line = (

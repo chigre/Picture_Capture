@@ -40,7 +40,7 @@ def test_autosave_status_is_conditional_on_real_changes():
 
 
 def test_classification_sidecar_does_not_replace_unchanged_content(tmp_path):
-    from picture_capture.entry_classification import classification_sidecar_path
+    from picture_capture.proofreading.classification import classification_sidecar_path
 
     target = tmp_path / "page.pdic"
     entry = Entry(word="abc", x=12, y=23)

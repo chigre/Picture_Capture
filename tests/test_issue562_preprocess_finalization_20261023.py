@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from picture_capture import image_preprocessing as api
+from picture_capture.preprocess import pipeline as api
 from picture_capture.models import AppSettings
 from picture_capture.preprocess.finalization import finalize_preprocess_page
 
@@ -61,7 +61,7 @@ def test_leaf_first_import_does_not_initialize_facade_gui_or_paddle():
     subprocess.run([sys.executable, "-c", """
 import sys
 from picture_capture.preprocess.finalization import FinalPreprocessResult
-assert 'picture_capture.image_preprocessing' not in sys.modules
+assert 'picture_capture.preprocess.pipeline' not in sys.modules
 assert 'picture_capture.app' not in sys.modules
 assert 'paddle' not in sys.modules
 """], check=True)

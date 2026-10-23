@@ -10,7 +10,7 @@ physical Layout row metrics. OCR engine choice must never alter this crop box.
 from dataclasses import dataclass
 from typing import Any
 
-from ..entry_classification import get_entry_classification
+from ..proofreading.classification import get_entry_classification
 from ..models import AppSettings, Entry
 
 

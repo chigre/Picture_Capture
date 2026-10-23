@@ -370,7 +370,7 @@ def _suppress_large_evidence_duplicate_entries(
 
 def _debug_layout_role_snapshot(layout: Any) -> dict[int, dict[str, Any]]:
     """Role and provenance of each physical row; diagnostics only."""
-    from ..entry_classification import get_layout_line_classification
+    from ..proofreading.classification import get_layout_line_classification
 
     snapshot: dict[int, dict[str, Any]] = {}
     for index, column in enumerate(list(getattr(layout, "columns", ()) or ())):

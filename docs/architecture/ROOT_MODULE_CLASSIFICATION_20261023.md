@@ -11,7 +11,7 @@ in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. Th
 owner migration reduced 15 → 14 without root shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
 claim that Issue #562 or the oversized-module refactor is complete.
 
-## Remaining root contracts (14/14 classified)
+## Remaining root contracts (12/12 classified)
 
 Each row names an existing physical root file. Retention means keep its current
 import contract while extracting implementation separately when justified.
@@ -24,8 +24,6 @@ import contract while extracting implementation separately when justified.
 | `cli.py` | bootstrap | Installed `picture-capture-cli` entry and explicit core-service composition before I/O capture. |
 | `launcher.py` | bootstrap | Documented backward-compatible `main` / `prepare_app_module` facade. |
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
-| `entry_classification.py` | proofreading | One process-wide weakref/LRU classification registry, sidecar transaction lock and bootstrap I/O integration; moving only imports does not simplify this ownership. |
-| `image_preprocessing.py` | preprocess | Public preprocessing facade; model/helper pickle identities explicitly name this module. Skew/rotation and content-frame bodies now live in `preprocess/deskew.py` and `preprocess/content_bounds.py`, with call-time detector adapters retained here. Orthogonal policy/step payloads and saved geometry rendering are owned by `preprocess/orthogonal_policy.py` and `preprocess/replay.py`; their root adapters supply current audits/transforms explicitly. Preview/crop/encoding bodies belong to `preprocess/rendering.py`. The source evidence stage of analysis belongs to `preprocess/source_evidence.py`, with explicit per-page results and call-time operations/policies. Final re-detection, alignment/crop diagnostics and confidence are owned by `preprocess/finalization.py`. Projective candidate generation/safety/selection belongs to `preprocess/projective_selection.py`, with explicit operation/policy composition. Candidate pixel acceptance and retained-image re-audit belong to `preprocess/pixel_row_policy.py`. Explicit UVDoc fallback and automatic post-perspective re-detection belong to `preprocess/geometry_stages.py`. The manual quadrilateral correction and selected automatic/explicit projective application, diagnostics and safety warning mapping belong to `preprocess/perspective_stages.py`. The complete multi-pass orthogonal correction/acceptance/convergence and retained-pixel audit orchestration belong to `preprocess/orthogonal_pipeline.py`; both owners receive current operations and policies at call time. The public facade remains below 100000 bytes. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
 | `paddle_headwords_core.py` | ocr | Retained historical OCR core/model and patchable exported functions; selected review-finalization chain lives in `ocr/review_finalization.py` and the full multi-engine sequence matching, Lens arbitration and coordinate mapping now live in `ocr/pairing_arbitration.py`. OCR image-first symbol/marker and CJK visual projection/context evidence resides in `ocr/visual_evidence.py`; the whole verified CJK local-recovery and three-way separator Y refinement chain now resides in `ocr/cjk_recovery.py`, while original call signatures and recovery policy names remain in the patchable core. The entire OCR candidate parsing, visual-structure scoring, accept/reject and per-page diagnostic orchestration now resides in `ocr/candidate_filter.py` with 42 call-time bindings. The complete multi-engine page invocation (45 live patchable callbacks/policies), raw/reusable cache, review arbitration and v3 report write transaction now belongs to `ocr/page_detection.py` with the original core detection entrypoint preserved as a live adapter. GUI preprocessing operations already live in `ui/preprocess_workflow.py` (merged #647). The complete GUI batch ownership/dispatch/parallel queue/pause-stop lifecycle now resides in `ui/batch_workflow.py` (12 original app method adapters); existing batch results and status semantics remain unchanged. Existing facade mirror, original cache/pickle identity and runtime model remain unchanged. |
@@ -60,6 +58,20 @@ coordinates, or dataclass identities change.
 The inventory regression compares this table with the actual root files. The
 architecture guard prohibits the retired resume root, requires its canonical
 owner and the whole-package fingerprint anchor, and ratchets the root count to
-14. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
+12. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
 force. Native CUDA and real scanned-page/manual GUI parity are not established
 by automated CI. No root shim, new runtime installer or proxy is introduced.
+
+
+## 2026-10-24 further root migration in PR #663 (14 → 12)
+
+`entry_classification.py` is now `proofreading/classification.py`: its weakref/LRU
+registry, single read/modify/write sidecar transaction lock and JSON-v1 format
+stay together. `image_preprocessing.py` is now `preprocess/pipeline.py`: its
+patchable callable methods remain together; preprocessing dataclasses are already
+owned by `preprocess/models.py`. Internal imports are migrated; external Python
+imports from the two retired root paths must be updated. Historical PDIC/PPP data
+format is unchanged. `training_export.py` is **retained**: both
+`TrainingExportCancelled` and `make_training_zip` explicitly retain
+`picture_capture.training_export` pickle identities, so dropping this module
+without a migration mechanism would break unpickling.

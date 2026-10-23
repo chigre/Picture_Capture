@@ -38,7 +38,7 @@ def build_core_services() -> CoreServices:
     # no longer mutates either model class before exposing process services.
 
     from ..io import formats
-    from ..entry_classification import install_pdic_classification
+    from ..proofreading.classification import install_pdic_classification
 
     install_pdic_classification(formats)
 

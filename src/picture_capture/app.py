@@ -183,7 +183,7 @@ from .profile.semantics import (
 from .preprocess.analysis_image import normalize_page_rgb
 from .ui import preprocess_workflow as _preprocess_ui
 from .ui import batch_workflow as _batch_workflow
-from .image_preprocessing import (
+from .preprocess.pipeline import (
     PreprocessAnalysis,
     analysis_is_current as preprocess_analysis_is_current,
     analyze_preprocess_path,

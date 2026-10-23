@@ -24,7 +24,6 @@ MAX_PROCESSING_CORE_FACADE_BYTES = 144_300
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
-    "image_preprocessing.py": 150_818,
     "profile/setup.py": 174_009,
     "processing_core.py": 158_561,
 }
@@ -717,8 +716,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 14:
-        violations.append(f"root Python module count regressed: {root_py_count} > 14")
+    if root_py_count > 12:
+        violations.append(f"root Python module count regressed: {root_py_count} > 12")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -829,7 +828,7 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical preprocessing owner missing: {canonical}")
 
     # Deskew primitives/content frames have one physical owner, not root copies.
-    preprocess_facade = PACKAGE_ROOT / "image_preprocessing.py"
+    preprocess_facade = PACKAGE_ROOT / "preprocess/pipeline.py"
     preprocess_source = preprocess_facade.read_text(encoding="utf-8")
     for owner, routines in {
         "deskew.py": ("_normalize_half_turn", "_weighted_median", "estimate_skew_from_polygons",
@@ -2447,6 +2446,27 @@ def collect_violations() -> list[str]:
             violations.append("OCR voting algorithm duplicated in channel facade")
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
+
+    # Issue #562: relocate both public functional owners without root shims.
+    for old, new in (
+        ("entry_classification.py", "proofreading/classification.py"),
+        ("image_preprocessing.py", "preprocess/pipeline.py"),
+    ):
+        if (PACKAGE_ROOT / old).exists():
+            violations.append(f"retired root owner returned: {old}")
+        if not (PACKAGE_ROOT / new).is_file():
+            violations.append(f"canonical owner missing: {new}")
+    classification = PACKAGE_ROOT / "proofreading/classification.py"
+    if classification.is_file():
+        code = classification.read_text(encoding="utf-8")
+        for required in ("class EntryClassification:", "def install_pdic_classification(",
+                         "def write_classification_sidecar(", "_SIDECAR_TRANSACTION_LOCK"):
+            if required not in code:
+                violations.append(f"classification transaction owner missing: {required}")
+    # Same patchable public preprocessing functions; only physical location changed.
+    canonical_preprocess = PACKAGE_ROOT / "preprocess/pipeline.py"
+    if canonical_preprocess.is_file() and "def analyze_preprocess_page(" not in canonical_preprocess.read_text(encoding="utf-8"):
+        violations.append("canonical preprocess pipeline entrypoint missing")
 
     # Issue #562: root image_utils retired; EXIF/alpha ink has exactly one leaf
     # and shared denoise analysis belongs to the canonical preprocess package.

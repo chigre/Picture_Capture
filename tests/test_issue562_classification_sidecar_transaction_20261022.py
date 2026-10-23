@@ -11,7 +11,7 @@ from threading import Event, Thread, current_thread
 
 import pytest
 
-from picture_capture import entry_classification as cls
+from picture_capture.proofreading import classification as cls
 from picture_capture.models import Entry
 
 

@@ -6,7 +6,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
-from picture_capture.entry_classification import (
+from picture_capture.proofreading.classification import (
     apply_classification_sidecar,
     classification_sidecar_path,
     classified_entry_crop_height,

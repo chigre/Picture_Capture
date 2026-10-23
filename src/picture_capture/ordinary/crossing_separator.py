@@ -17,7 +17,7 @@ import statistics
 import numpy as np
 from PIL import Image
 
-from ..entry_classification import get_entry_classification, register_entry_classification
+from ..proofreading.classification import get_entry_classification, register_entry_classification
 from ..models import Entry
 
 

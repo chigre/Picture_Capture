@@ -15,7 +15,7 @@ import numpy as np
 from PIL import Image
 
 from ..design import page_design as base
-from ..entry_classification import register_layout_line_classification
+from ..proofreading.classification import register_layout_line_classification
 from ..models import Entry
 from ..layout.page_understanding import uses_cjk_role_model
 

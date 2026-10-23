@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from picture_capture.entry_classification import register_entry_classification
+from picture_capture.proofreading.classification import register_entry_classification
 from picture_capture.ocr.entry_crop import (
     EntryOcrRowMetrics,
     entry_ocr_content_height,

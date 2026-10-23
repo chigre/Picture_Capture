@@ -1520,3 +1520,16 @@ importers must use `picture_capture.preprocess.analysis_image`. Architecture
 ratchets verify deletion, canonical owner, no duplicated pixel implementations,
 and root-file count <=14. Full six-platform CI/CodeQL and real scanned-page
 comparison are separate release gates.
+
+
+## #562 PR #663 continuation — two physical module relocations
+
+Following 15→14 for image analysis, `entry_classification.py` is moved into
+`proofreading/classification.py` with the complete registry, manual override
+sidecar lock and JSON-v1 transaction. `image_preprocessing.py` moves to
+`preprocess/pipeline.py` with patchable whole-page preprocessing methods
+intact; persisted model types remain in `preprocess/models.py`. Root count
+falls 14→12, no root shims; in-repository callers/tests use canonical imports.
+External Python imports need migration. `training_export.py` remains as the
+verified pickle identity of ZIP functions/exceptions; do not retire it without
+checking older archives or creating an explicit compatibility solution.

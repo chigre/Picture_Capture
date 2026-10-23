@@ -23,7 +23,7 @@ from ..profile.semantics import effective_page_settings
 def _nearest_layout_row(
     layout: Any, item: dict[str, Any],
 ) -> tuple[str, str]:
-    from ..entry_classification import get_layout_line_classification
+    from ..proofreading.classification import get_layout_line_classification
 
     index = int(item["column"])
     columns = list(getattr(layout, "columns", ()) or ())
@@ -74,7 +74,7 @@ def _diagnostic_settings(effective: AppSettings) -> dict[str, Any]:
 
 def _diagnostic_layout(layout: Any) -> dict[str, Any]:
     """Serialize physical row evidence from the SAME traced Layout run."""
-    from ..entry_classification import get_layout_line_classification
+    from ..proofreading.classification import get_layout_line_classification
     from ..layout.physical_indent import normalized_physical_indents
 
     rows: list[dict[str, Any]] = []

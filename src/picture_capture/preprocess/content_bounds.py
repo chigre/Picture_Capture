@@ -187,4 +187,4 @@ def _projection_skew_fallback(
 
 
 # Root API exports this helper too; preserve its callable identity.
-_smooth_1d.__module__ = "picture_capture.image_preprocessing"
+_smooth_1d.__module__ = "picture_capture.preprocess.pipeline"

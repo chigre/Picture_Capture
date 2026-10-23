@@ -2455,7 +2455,7 @@ def _ordinary_marker_local_crop(
     *crop box* into source coordinates; do not inverse-transform recognized
     text, change a marker, or silently reverse CJK strings.
     """
-    from .entry_classification import get_entry_classification
+    from .proofreading.classification import get_entry_classification
     from .ocr.entry_crop import entry_ocr_crop_box
     from .ocr.entry_visual_scale import visual_oversized_head_height
 

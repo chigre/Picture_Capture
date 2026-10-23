@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 from types import SimpleNamespace
 
-from picture_capture import image_preprocessing
+from picture_capture.preprocess import pipeline as image_preprocessing
 from picture_capture.preprocess import canvas as canvas_helpers
 
 
@@ -18,7 +18,7 @@ def test_phase7o_stable_module_reexports_canvas_helpers() -> None:
 def test_phase7o_output_canvas_info_keeps_historical_callable_path() -> None:
     helper = image_preprocessing.output_canvas_info
 
-    assert helper.__module__ == "picture_capture.image_preprocessing"
+    assert helper.__module__ == "picture_capture.preprocess.pipeline"
     assert pickle.loads(pickle.dumps(helper)) is helper
 
 
