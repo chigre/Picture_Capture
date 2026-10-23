@@ -68,7 +68,6 @@ def test_layout_percent_and_pixel_fields_use_shared_traces():
 
     text = source(compact_layout_profile_menu)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
-    preprocess = (ROOT / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
     for name in ("columns", "start_y", "manual_x", "column_width", "gutter",
                  "character_height", "row_padding", "body_indent", "horizontal_tolerance"):
         assert f'"{name}"' in text
@@ -132,6 +131,7 @@ def test_ocr_and_drawing_panels_keep_existing_handlers_in_requested_order():
 def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess():
     tools = source(workspace_tools)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
+    preprocess = (ROOT / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
     for title, builder in (
         ("图片预处理(前置)", "build_preprocess_menu"),
         ("一、版面参数", "build_layout_menu"),
