@@ -38,7 +38,7 @@ class LexiconCompareDeps:
 
 
 def reload_wordslist_reference(
-    self, selected_path: Path | None = None, *, persist: bool = True, redraw: bool = True,
+    self, deps: LexiconCompareDeps, selected_path: Path | None = None, *, persist: bool = True, redraw: bool = True,
 ) -> tuple[Path, int]:
     """Reload the auxiliary wordslist and optionally remember a newly chosen file."""
     resolve_wordslist_path = deps.resolve_wordslist_path
@@ -67,7 +67,7 @@ def reload_wordslist_reference(
     return path, len(words)
 
 def _request_wordslist_reload(
-    self, selected_path: Path | None = None, *, persist: bool = True,
+    self, deps: LexiconCompareDeps, selected_path: Path | None = None, *, persist: bool = True,
     redraw: bool = True, on_done=None, on_error=None,
 ) -> None:
     """Read a potentially huge wordslist off-thread, then commit it on Tk."""
