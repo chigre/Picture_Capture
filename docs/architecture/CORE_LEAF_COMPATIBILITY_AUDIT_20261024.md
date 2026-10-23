@@ -241,6 +241,23 @@ keep PR #663 Draft pending representative GUI scan/edit/save/reopen acceptance.
 Previous exact-head baseline `b22bb190` passed complete six-platform CI
 and all three-platform OCR smoke. Verify this new head independently.
 
+## Fourteenth-batch addendum: grammar-tail state machine — 2026-10-24
+
+- `ocr/grammar_tail_parsing.py` now owns five in-memory parser primitives:
+  leading morphology cues, double-bar/ambiguous parallel markers, whitespace
+  cursor advancement, structured grammar-tail state machine and diagnostic bug
+  tag generation. The historical `paddle_headwords_core` entrypoints retain
+  signatures, origins and the original `GrammarTailParse` pickle identity.
+- The core forwards the current POS finder, prefix-modifier stripper, cursor,
+  regex module, usage-abbreviation inventory and grammar result constructor
+  on every call. No page/cache JSON fields, sidecar files or acceptance
+  arbitration logic were moved.
+- `tests/test_issue562_core_leaf_round14_grammar_20261024.py` characterizes
+  parallel markers, morphology, POS and usage parsing, patchable grammar hooks
+  and ordered deduplicated bug tags.
+- Across round 14: **three** new physical leaf modules, **13** historical
+  function implementations extracted, without adding root-level shims.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
