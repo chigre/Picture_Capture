@@ -205,7 +205,6 @@ def _set_workspace_preprocess_locked(self, deps: PreprocessUiDeps, locked: bool)
     """Disable ordinary-edit controls while preserving page navigation."""
     tk = deps.tk
     ttk = deps.ttk
-
     section_keys = ("normal", "aux", "ocr", "actions", "postproduction")
     if locked:
         if self._preprocess_locked_widgets:
@@ -812,7 +811,6 @@ def show_preprocess_diagnostics(self, deps: PreprocessUiDeps) -> None:
     ttk = deps.ttk
     fit_window_to_work_area = deps.fit_window_to_work_area
     preprocess_result_summary = deps.preprocess_result_summary
-
     if not self.project or self.current_page is None:
         messagebox.showinfo("诊断信息", "请先打开项目。", parent=self)
         return
@@ -1020,7 +1018,6 @@ def promote_preprocessed_working_images(self, deps: PreprocessUiDeps) -> None:
     promote_processed_pages = deps.promote_processed_pages
     ocr_cache_root = deps.ocr_cache_root
     ppp_read_path_for_image = deps.ppp_read_path_for_image
-
     if not self.project:
         messagebox.showinfo("设为工作图片", "请先打开项目。", parent=self)
         return
