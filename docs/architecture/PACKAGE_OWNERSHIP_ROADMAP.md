@@ -1414,3 +1414,24 @@ refresh debounce, thread-side PIL work and manual edit/undo sequencing.
 No PDIC/PPP/simplified or settings schema changes, no increased size ratchets.
 Require full six-platform CI, CodeQL, independent review, and real scanned-page
 GUI save/close/reopen parity before the remaining human acceptance is closed.
+
+## Issue #562 — page index, SECTION and TXT fill-status owner batch (2026-10-23)
+
+Following merged #657, extract **41 related PictureCaptureApp methods in one PR**:
+34 methods for page-index Treeview sizing/sorting/navigation/bookmarks,
+SECTION page-count editing, list-cell overlays and page metadata into
+`ui/page_index_workflow.py`; and seven methods for persisted TXT-vs-line
+count status into `ui/word_fill_status_workflow.py`. The main GUI class
+retains each original call signature as a thin delegate, capturing live
+functions and constants with frozen dataclass dependencies. Neither owner
+imports the main GUI shell or changes the settings/PDIC/PPP/SECTION formats.
+
+Preserve page-coordinate identity when SECTION count is changed, existing
+SECTION transform canonical sizes and bounds, page-list selection/viewport,
+bookmark persistence, sorting without scrolling jumps on background updates,
+status sidecar version 2 + v1 inference, atomic `os.replace` and cleanup,
+no-data/stale/mismatch semantics and refresh throttling. Architecture guard
+locks 41 physical implementations and native delegates without loosening
+baselines; behavior and roundtrip regression tests cover the highest-risk
+flows. Require high-risk exact-head full six-platform CI and security checks;
+manual real-project UI/section/sidecar reopen validation remains separate.
