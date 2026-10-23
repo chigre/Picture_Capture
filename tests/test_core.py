@@ -8170,7 +8170,7 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in pointer_source
     assert 'if app.image is None or app._section_editing:' in canvas
     assert 'app.canvas.delete("cursor-guide")' in canvas
-    assert 'text="双击进入Section编辑模式"' in text
+    assert 'text="双击进入Section编辑模式"' in PAGE_INDEX_SOURCE
     assert "def canvas_left_double_click" in text
     assert "self._finish_section_editing()" in PAGE_INDEX_SOURCE
 
