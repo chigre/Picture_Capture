@@ -7,6 +7,13 @@ the native static tooltip helper, with runtime patchpoint-compatible delegation.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    import tkinter as tk
+    from .controllers import ProjectController
+
 
 
 @dataclass(frozen=True)
