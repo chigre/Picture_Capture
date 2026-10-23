@@ -132,7 +132,6 @@ def detect_paddle_headwords(
     normalize_page_rgb = deps.normalize_page_rgb
     OCRRecord = deps.OCRRecord
     asdict = deps.asdict
-
     filter_records = record_filter or filter_headword_records
     signature = _cache_signature(image, geometry, settings)
     runtime_width = geometry.transform.canonical_size(image.size)[0]
