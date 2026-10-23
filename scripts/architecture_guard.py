@@ -1163,6 +1163,50 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: single physical OCR candidate scoring, reject/accept decision,
+    # CJK visual fallback and diagnostic report owner. Keep live core patch
+    # seams and avoid a hidden second implementation or heavyweight import.
+    candidate_filter_owner = PACKAGE_ROOT / "ocr/candidate_filter.py"
+    candidate_filter_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not candidate_filter_owner.is_file():
+        violations.append("complete OCR candidate filter owner missing")
+    else:
+        candidate_tree = ast.parse(candidate_filter_owner.read_text(encoding="utf-8"))
+        names = {
+            node.name for node in candidate_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        }
+        if not {"HeadwordFilterDeps", "filter_headword_records"} <= names:
+            violations.append("canonical candidate filter lost decision pipeline/dependency contract")
+        for node in candidate_tree.body:
+            if isinstance(node, ast.ImportFrom) and node.module in {
+                "paddle_headwords_core", "app", "processing",
+            }:
+                violations.append("candidate filter may not import heavyweight root facades")
+        owner_functions = [
+            node for node in candidate_tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "filter_headword_records"
+        ]
+        if len(owner_functions) != 1 or len(owner_functions[0].body) < 20:
+            violations.append("candidate filter implementation must remain in canonical owner")
+    if candidate_filter_core.is_file():
+        core_tree = ast.parse(candidate_filter_core.read_text(encoding="utf-8"))
+        adapters = [
+            node for node in core_tree.body if isinstance(node, ast.FunctionDef)
+            and node.name == "filter_headword_records"
+        ]
+        if len(adapters) != 1 or not any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_headword_filter"
+            and node.func.attr == "filter_headword_records"
+            for node in ast.walk(adapters[0])
+        ):
+            violations.append("original OCR candidate filtering adapter must delegate")
+        if _normalized_source_size(candidate_filter_core) > 197_680:
+            violations.append("paddle_headwords_core exceeds 197680-byte OCR candidate filter ceiling")
+
     # #562: move the entire verified oversized CJK recovery chain and
     # all three marker-Y refinement paths to one canonical OCR owner.
     recovery_owner = PACKAGE_ROOT / "ocr/cjk_recovery.py"
