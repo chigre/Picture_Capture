@@ -1163,6 +1163,49 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: selected OCR review dedup, persisted Entry conversion and quality
+    # report now share one canonical import-light OCR leaf. Keep call-time public
+    # patch seams and never move model/pickle types into implementation leaves.
+    ocr_review_owner = PACKAGE_ROOT / "ocr/review_finalization.py"
+    ocr_review_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not ocr_review_owner.is_file():
+        violations.append("canonical OCR review finalization owner missing")
+    else:
+        owner_tree = ast.parse(ocr_review_owner.read_text(encoding="utf-8"))
+        expected = {
+            "ReviewFinalizationDeps", "_review_candidate_box_height",
+            "_review_candidates_same_cjk_glyph", "_review_candidate_priority",
+            "_normalize_cjk_review_word", "_looks_like_multi_cjk_headword",
+            "_review_candidates_same_cjk_compound", "_candidate_has_single_cjk_identity",
+            "_candidate_line_height", "_boxes_same_large_cjk_region",
+            "_single_cjk_duplicate_pair", "_deduplicate_selected_cjk_review_candidates",
+            "_entries_from_review_candidates", "_update_project_quality_summary",
+        }
+        actual = {node.name for node in owner_tree.body
+                  if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not expected <= actual:
+            violations.append("complete selected OCR review finalization chain missing")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module == "paddle_headwords_core"
+               for node in owner_tree.body):
+            violations.append("OCR finalization leaf must not import OCR core at runtime")
+    if ocr_review_core.is_file():
+        core_tree = ast.parse(ocr_review_core.read_text(encoding="utf-8"))
+        for name in ("_deduplicate_selected_cjk_review_candidates",
+                     "_entries_from_review_candidates",
+                     "_update_project_quality_summary"):
+            wrappers = [node for node in core_tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == name]
+            if len(wrappers) != 1 or not any(
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_review_finalization"
+                and node.func.attr == name for node in ast.walk(wrappers[0])
+            ):
+                violations.append(f"OCR public review finalization adapter not delegated: {name}")
+        if _normalized_source_size(ocr_review_core) > 351_540:
+            violations.append("paddle_headwords_core regressed beyond 351540-byte reviewed OCR finalization ceiling")
+
     # Issue #562: dictionary reference, lexical evidence and text decoding
     # own implementation leaves, without old-root compatibility shims.
     migrated_lexicon_text = {
