@@ -768,7 +768,7 @@ diagnostic mapping, oversized app/processing/OCR cores and real scanned-page/man
 GUI/native CUDA acceptance remain open work.
 
 
-## Issue #562 — candidate pixel acceptance and retained-image re-audit (2026-10-23; pending acceptance)
+## Issue #562 — candidate pixel acceptance and retained-image re-audit (2026-10-23; merged #636; independent main acceptance pending)
 
 On accepted `main@88156923` (#635; exact-head and independent main six-platform
 CI/CodeQL green), move candidate body/tail pixel acceptance and final retained-pixel
@@ -807,3 +807,31 @@ prohibit retained pixel implementation returning to analysis root. Historical ba
 remain unchanged. Remaining manual/UVDoc/orthogonal orchestration and diagnostics,
 oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
 acceptance remain open work.
+
+
+## Issue #562 — explicit UVDoc and post-perspective redetection stages (2026-10-23; candidate)
+
+After #636, retain the current public analysis facade, but move explicit user-selected
+UVDoc fallback and auto-perspective pixel re-detection into
+`preprocess/geometry_stages.py`. No auto UVDoc path is introduced. Call-time
+`unwarp_document_image` and `detect_text_polygons` are injected; result objects
+carry only working image/polygon/mode/redetection values and are not persisted.
+
+Preserve UVDoc failure warning and prior image/box identity, success clearing
+stale boxes, method append order, and post-perspective detection only for
+`requested=auto`, `actual=perspective`, with nonempty boxes. The min-box gate is
+inclusive; failed, insufficient or exception-raising detection retains the
+transformed input boxes and prior warnings. Successful detection converts
+every polygon with `np.asarray(..., dtype=float)` before recording the method.
+The previous exact public signature, persisted model, image transforms,
+coordinate conventions and downstream orthogonal pass remain unchanged.
+
+Current branch `refactor/562-geometry-stage-redetection` shrinks the facade
+**98305→97436 bytes**, while retaining 15 classified root files. Ratchet the
+normalized facade ceiling 98310→97440 and require both canonical leaf routines
+and explicit composition in the analysis adapter; no historical baseline
+relaxation. New direct tests cover skip/success/failure, injected operations,
+identity, warning/method order, threshold inclusivity and polygon conversion.
+Cross-platform CI/GUI/wheel/CodeQL, exact-head review and independent merged-main
+validation remain required before acceptance. Native UVDoc/CUDA, real scanned-page
+and manual GUI testing are still outstanding.
