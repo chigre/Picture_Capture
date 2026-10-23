@@ -274,6 +274,7 @@ def test_single_column_fit_includes_two_gutters():
 def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     app, _ = sources()
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
+    selection = (ROOT / "ui" / "review_selection_workflow.py").read_text(encoding="utf-8")
     assert 'mini.winfo_manager() == "grid"' in app
     assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
     assert 'if compact_workspace:' in app
@@ -282,9 +283,9 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     assert 'width = max(1, work_right - x)' in app
     assert 'height = max(1, safe_client_height)' in app
     assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
-    assert '_review_line_box(' in app
-    assert 'canvas.xview_moveto(' in app
-    assert 'canvas.yview_moveto(' in app
+    assert '_review_line_box(' in selection
+    assert 'canvas.xview_moveto(' in selection
+    assert 'canvas.yview_moveto(' in selection
     assert 'app._scroll_review_entry_into_view(entry)' in review
 
 

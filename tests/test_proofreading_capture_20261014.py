@@ -4,6 +4,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+REVIEW_SELECTION_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src" / "picture_capture" / "ui" / "review_selection_workflow.py"
+).read_text(encoding="utf-8")
+
+
 from picture_capture.io.formats import pdic_path, read_pdic, write_pdic
 from picture_capture.models import AppSettings, Entry
 from picture_capture.proofreading.capture import (
@@ -342,8 +348,8 @@ def test_ocr_checkbox_flushes_after_both_pdic_and_override_writes():
         assert snippet.index(prefix + "_flush_pending_manual_override()") < snippet.index(
             prefix + "_flush_proofreading_candidate_evidence()"
         )
-    assert "self._queue_proofreading_candidate_evidence(cand, selected)" in app
-    assert 'state["_pending_evidence_toggle"] = False' in app
+    assert "self._queue_proofreading_candidate_evidence(cand, selected)" in REVIEW_SELECTION_SOURCE
+    assert 'state["_pending_evidence_toggle"] = False' in REVIEW_SELECTION_SOURCE
 
 
 def test_proven_single_canvas_addition_creates_unverified_local_event(tmp_path):
@@ -412,7 +418,7 @@ def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
         assert part.index("write_pdic(") < part.index(
             prefix + "_flush_proofreading_add_evidence()"
         )
-    assert 'state["_pending_evidence_add"] = False' in app
+    assert 'state["_pending_evidence_add"] = False' in REVIEW_SELECTION_SOURCE
 
 
 def test_named_ocr_same_word_y_position_switch_is_audited_after_both_saves(tmp_path):

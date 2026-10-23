@@ -1435,3 +1435,21 @@ locks 41 physical implementations and native delegates without loosening
 baselines; behavior and roundtrip regression tests cover the highest-risk
 flows. Require high-risk exact-head full six-platform CI and security checks;
 manual real-project UI/section/sidecar reopen validation remains separate.
+
+
+## Issue #562 — OCR review candidate selection, evidence and deferred saves (2026-10-23)
+
+After merged #658, extract 17 `PictureCaptureApp` methods into
+`ui/review_selection_workflow.py`: OCR manual-selection sidecar read/flush/write,
+queued add/toggle evidence (committed only after PDIC and override files),
+candidate position-switch/checkbox/manual choice, deferred save scheduling,
+review navigation, cache-derived quality/metadata and conflict dialog launch.
+Keep all native callback names, annotations and keyword-only semantics, snapshot
+live module helpers per call, and avoid imports from heavyweight `app.py`.
+The existing `_flush_deferred_page_save` bridge remains in the shell and retains
+the proven write-before-journal flush ordering from `proofreading/deferred_save.py`.
+No persisted PDIC, PPP, sidecar or settings format changes. Coalesced edits,
+cross-page pending override flushing, duplicate/ambiguous evidence rejection,
+entry-editor synchronization and GUI cancellation remain behavioral invariants.
+Human real-page OCR toggle/save/reopen and position-switch parity is required
+beyond automated Linux/Windows/macOS test passes.
