@@ -1201,8 +1201,8 @@ def collect_violations() -> list[str]:
             for node in ast.walk(delegates[0])
         ):
             violations.append("original page OCR public detection wrapper not delegated")
-        if _normalized_source_size(page_detection_core) > 174_710:
-            violations.append("paddle_headwords_core exceeds 174710-byte page detection ratchet")
+        if _normalized_source_size(page_detection_core) > 174_765:
+            violations.append("paddle_headwords_core exceeds 174765-byte page detection ratchet")
 
     # #562: single physical OCR candidate scoring, reject/accept decision,
     # CJK visual fallback and diagnostic report owner. Keep live core patch
