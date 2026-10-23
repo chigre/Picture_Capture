@@ -40,7 +40,7 @@ def test_single_owner_and_compatible_callable(name):
     fn = getattr(api, name)
     assert pickle.loads(pickle.dumps(fn)) is fn
     assert Path(getattr(rendering, name).__code__.co_filename) == Path(rendering.__file__)
-    defs = {n.name: n for n in ast.parse(Path(api.__file__).read_text()).body
+    defs = {n.name: n for n in ast.parse(Path(api.__file__).read_text(encoding="utf-8")).body
             if isinstance(n, ast.FunctionDef)}
     assert len(defs[name].body) == 1
     assert isinstance(defs[name].body[0], ast.Return)
