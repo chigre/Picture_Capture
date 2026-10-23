@@ -1488,3 +1488,17 @@ No new root shim or persisted schema. Preserve PDIC source X/Y, manual-selection
 override, editor-focused after fill, skip whole-page redraw on checkbox toggles,
 and keep unsaved simplified-review row deletion coordinated with persisted file.
 Require six-platform CI, security and real scan GUI parity. Human signoff is separate.
+
+
+## Issue #562 — selected Y-refinement and existing-marker OCR (2026-10-24)
+
+Two previously embedded native Tk batch actions now belong to
+`ui/selected_marker_actions.py` with shell callback signatures intact,
+per-call frozen dependency injection, and no new root facade. The Y-refinement
+action corrects a stale import of the retired `marker_refinement_parallel`
+module to canonical `refinement.parallel`. Preserve Windows spawn-safe
+read-only worker execution, bounded model instancing, parent-owned guarded
+PDIC publication, and edit locks; existing-marker OCR keeps original X/Y
+and count, retains manual text, and saves the foreground editor before
+dispatch. Physical owner/test ratchets and real scan GUI acceptance remain
+separate from synthetic CI.

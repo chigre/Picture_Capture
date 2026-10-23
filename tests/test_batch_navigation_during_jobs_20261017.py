@@ -97,16 +97,18 @@ def test_core_page_commit_skips_stale_foreground_autosave_in_background_jobs():
         "save_review_before_page_change(self, index"
     )
     assert "if self._can_save_current_during_batch_navigation():" in load
-    assert "skip_current_save=True" in (source + load)
+    marker_actions = (ROOT / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
+    assert "skip_current_save=True" in (source + load + marker_actions)
 
 
 def test_refinement_and_lined_exports_inherit_navigable_batch_runner_defaults():
     source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     crop = (ROOT / "src/picture_capture/ui/controllers/crop.py").read_text(encoding="utf-8")
     assert "allow_page_navigation: bool = True" in source
-    refine = source.split("    def refine_lines_selected_scope(", 1)[1].split(
-        "    def ocr_ordinary_lines_text_selected_scope(", 1
+    owner_source = (ROOT / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
+    refine = owner_source.split("def refine_lines_selected_scope(", 1)[1].split(
+        "def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
-    assert 'self._start_parallel_batch_task(\n            "精修画线",' in refine
+    assert 'self._start_parallel_batch_task(\n        "精修画线",' in refine
     assert "foreground_page_edit=True" in refine
     assert '"单行切图",\n            indices,' in crop

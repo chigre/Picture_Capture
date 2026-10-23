@@ -143,7 +143,7 @@ def test_fast_button_and_spawn_worker_have_isolated_mode():
     assert any(("精修Y·固定半栏距", "refine_y_fixed_half_gutter") in group
                for group in ACTION_GROUPS if group)
     assert inspect.signature(refine_page_job).parameters["fixed_half_gutter"].default is False
-    app = (Path(__file__).resolve().parents[1]
-           / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    assert "settings, index, fixed_half_gutter" in app
-    assert "foreground_page_edit=True, allow_pdic_edits=True" in app
+    marker_actions = (Path(__file__).resolve().parents[1]
+                      / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
+    assert "settings, index, fixed_half_gutter" in marker_actions
+    assert "foreground_page_edit=True, allow_pdic_edits=True" in marker_actions

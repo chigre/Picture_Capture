@@ -63,10 +63,10 @@ def test_auto_layout_refinement_serializes_gpu_model_even_with_six_cpu_workers()
 
 def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
     source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "selected_marker_actions.py"
     ).read_text(encoding="utf-8")
-    scope = source.split("    def refine_lines_selected_scope(", 1)[1].split(
-        "    def ocr_ordinary_lines_text_selected_scope(", 1
+    scope = source.split("def refine_lines_selected_scope(", 1)[1].split(
+        "def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
     assert "fixed_half_gutter=fixed_half_gutter" in scope
     assert "configured_refine_workers(" in scope
@@ -79,7 +79,7 @@ def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
         Path(__file__).resolve().parents[1] / "src" / "picture_capture"
         / "ui" / "batch_workflow.py"
     ).read_text(encoding="utf-8")
-    assert "return _batch_workflow._start_parallel_batch_task(" in source
+    assert "return _batch_workflow._start_parallel_batch_task(" in (Path(__file__).resolve().parents[1] / "src/picture_capture/app.py").read_text(encoding="utf-8")
     dispatcher = batch_owner.split("def _start_parallel_batch_task(", 1)[1].split(
         "def _poll_batch_queue(", 1
     )[0]
@@ -230,10 +230,10 @@ def test_same_coords_never_replace_original(prepared_page, monkeypatch):
 
 
 def test_parallel_parent_coordinator_gui_contract():
-    path = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    path = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "selected_marker_actions.py"
     code = path.read_text(encoding="utf-8")
-    snippet = code.split("    def refine_lines_selected_scope(", 1)[1].split(
-        "    def ocr_ordinary_lines_text_selected_scope(", 1
+    snippet = code.split("def refine_lines_selected_scope(", 1)[1].split(
+        "def ocr_ordinary_lines_text_selected_scope(", 1
     )[0]
     assert "_start_parallel_batch_task(" in snippet
     assert "foreground_page_edit=True, allow_pdic_edits=True" in snippet

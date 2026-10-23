@@ -120,9 +120,8 @@ def test_gui_composition_no_longer_installs_ocr_guard_and_actions_call_it_static
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
     assert controller.count("guard_ocr_action_selection(app)") >= 2
-    start = app.index("    def ocr_ordinary_lines_text_selected_scope")
-    end = app.index("\n    def ", start + 8)
-    existing_marker_action = app[start:end]
+    owner_source = (root / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
+    existing_marker_action = owner_source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     assert "guard_ocr_action_selection(self)" in existing_marker_action
     assert existing_marker_action.index("guard_ocr_action_selection(self)") < (
         existing_marker_action.index("self.guard()")
