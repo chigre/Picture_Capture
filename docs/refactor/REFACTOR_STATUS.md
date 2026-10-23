@@ -8,14 +8,16 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Project/SECTION persistence merged through #628 at `7d004fdf` (18→16),
-after six-platform PR CI, CodeQL and review/thread checks;
-the next candidate moves OCR resume into `ocr/page_resume.py` with a verified
-whole-package fingerprint (16→15). All 15 remaining roots have explicit domain
-ownership and retention reasons. CI/review acceptance is separate from this
-classification; oversized module extraction and real-scan/native GPU validation
-remain open. The phase log below is historical and does not describe current
-physical file locations.
+Root classification and verified OCR resume ownership merged through #629 at
+`6871cea5`: 15 remaining roots, with exact-head and postmerge six-platform CI
+and CodeQL passed. All retained roots have explicit ownership and retention
+reasons. The next implementation batch extracts deskew/rotation/content-frame
+logic into `preprocess/deskew.py` and `preprocess/content_bounds.py`, reducing
+`image_preprocessing.py` from 150797 to 137295 bytes while retaining its API,
+pickle identities and call-time detector adapters. This batch's CI/review
+acceptance is pending. Oversized-module extraction and real-scan/native GPU
+validation remain open. The phase log below is historical and does not describe
+current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
