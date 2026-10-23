@@ -45,6 +45,7 @@ from .crop.plan_formatting import (
 from .ocr.text_io import export_ocred, import_ocred, load_replace_rules, process_ocr_text
 from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
+from .ordinary import ink_threshold as _ink_threshold
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 
 
@@ -580,42 +581,19 @@ def _page_geometry_context(
 
 
 def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
-    """Return a stable Otsu threshold for ordinary left-edge detection."""
-    hist = np.bincount(gray.ravel(), minlength=256).astype(np.float64)
-    total = float(hist.sum())
-    if total <= 0:
-        return 127
-    probability = hist / total
-    omega = np.cumsum(probability)
-    means = np.cumsum(probability * np.arange(256, dtype=np.float64))
-    global_mean = means[-1]
-    denominator = omega * (1.0 - omega)
-    score = np.zeros(256, dtype=np.float64)
-    valid = denominator > 1e-12
-    score[valid] = ((global_mean * omega[valid] - means[valid]) ** 2) / denominator[valid]
-    return int(min(235, max(40, int(np.argmax(score)))))
+    """Stable legacy core threshold entry; implementation now lives in ordinary."""
+    return _ink_threshold.otsu_threshold(gray, np_module=np)
 
 
 def _left_edge_ink_mask(gray: np.ndarray, settings: AppSettings) -> np.ndarray:
-    """Compatibility foreground mask for layout-analysis regressions.
-
-    Restored VB ordinary drawing no longer uses this Otsu/adaptive path for its
-    headword anchor or separator decision. Draw_Auto uses the fixed RGB-sum
-    threshold directly on full-resolution source pixels, matching the VB code.
-    """
-    mode = str(getattr(settings, "analysis_threshold_mode", "auto") or "auto").strip().lower()
-    if mode == "fixed":
-        threshold = int(round(float(getattr(settings, "darkness_threshold", 600)) / 3.0))
-        return gray < min(255, max(0, threshold))
-    if mode == "adaptive":
-        radius = max(3, round(min(gray.shape[:2]) * 0.008))
-        local = np.asarray(
-            Image.fromarray(gray, mode="L").filter(ImageFilter.BoxBlur(radius=radius)),
-            dtype=np.int16,
-        )
-        return gray.astype(np.int16) < (local - 10)
-    return gray < _left_edge_otsu_threshold(gray)
-
+    """Foreground mask through the current threshold callback and image modules."""
+    return _ink_threshold.ink_mask(
+        gray, settings,
+        otsu_fn=_left_edge_otsu_threshold,
+        np_module=np,
+        image_class=Image,
+        image_filter=ImageFilter,
+    )
 
 def _legacy_is_point(
     rgb_sum: np.ndarray,
