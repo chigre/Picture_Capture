@@ -22,6 +22,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 def _geometry():
     return SimpleNamespace(
         column_starts=[20, 120], column_widths=[80, 80],
+        column_paths=[],
         source_size=(240, 180),
         source_to_canonical=lambda x, y: (x, y),
         x_at=lambda i, v: 20 + 100 * i,
