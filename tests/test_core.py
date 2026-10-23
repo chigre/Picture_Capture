@@ -1802,10 +1802,10 @@ def test_load_page_resets_scroll_position_without_resetting_zoom():
 
 def test_v273_main_entry_membership_border_rule_is_wordslist_driven():
     from pathlib import Path
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "main_entry_actions.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _style_entry_editor(")
-    end = text.index("    def _paddle_cache_path", start)
+    start = text.index("def _style_entry_editor(")
+    end = text.index("def _fill_main_entry_from_ocr(", start)
     block = text[start:end]
     assert 'border = "#d32f2f"' in block
     assert 'thickness = 2' in block
@@ -1852,15 +1852,15 @@ def test_v274_main_redraw_wires_compact_ocr_selector_next_to_entry():
 
 
 def test_v275_main_ocr_button_has_fixed_compact_label():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "main_entry_actions.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _create_main_ocr_menu(")
-    end = text.index("    def _paddle_cache_path", start)
+    start = text.index("def _create_main_ocr_menu(")
+    end = text.index("def update_entry(", start)
     block = text[start:end]
     assert 'text="OCR ▾"' in block
     assert 'text=f"OCR:' not in block
-    fill_start = text.index("    def _fill_main_entry_from_ocr(")
-    fill_end = text.index("    def _create_main_ocr_menu(", fill_start)
+    fill_start = text.index("def _fill_main_entry_from_ocr(")
+    fill_end = text.index("def _create_main_ocr_menu(", fill_start)
     fill_block = text[fill_start:fill_end]
     assert "menu_button.configure(text=" not in fill_block
 
@@ -6866,10 +6866,9 @@ def test_v2125_main_delete_path_removes_aligned_simplified_record():
     import inspect
     import picture_capture.app as app_module
 
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def _delete_aligned_simplified_entry")
-    end = text.index("    def auto_detect_current", start)
-    body = text[start:end]
+    text = (Path(inspect.getsourcefile(app_module)).parent / "ui" / "main_entry_actions.py").read_text(encoding="utf-8")
+    start = text.index("def _delete_aligned_simplified_entry")
+    body = text[start:]
     assert "simplified_entry_key(entry.x, entry.y)" in body
     assert "read_simplified_records(path)" in body
     assert "write_simplified_records(path, stem, records)" in body
@@ -8275,7 +8274,8 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'display_meta: list[tuple[int, int]] = []' in FOCUSED_FILTER_SOURCE
     assert 'bg="#e6e6e6"' in overlay
     assert 'fg="#000000"' in overlay
-    assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
+    entry_source = (root / "ui/main_entry_actions.py").read_text(encoding="utf-8")
+    assert "def _entry_sequence_text(deps: MainEntryActionsDeps, index: int, total: int) -> str:" in entry_source
     shared_button = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
     assert 'text="[X]"' in shared_button
     assert 'bg=("#9d042f" if kind == "entry" else "#f5b83d")' in shared_button

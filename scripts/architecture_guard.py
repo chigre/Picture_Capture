@@ -1722,6 +1722,56 @@ def collect_violations() -> list[str]:
             ):
                 violations.append(f"native page/lexicon callback missing: {name}")
 
+    # Issue #562 — the main editor's physical owner cannot regress to GUI shell bodies.
+    main_entry_names = {
+        "_remove_entry_overlay",
+        "_entry_sequence_text",
+        "_refresh_entry_index_labels",
+        "_update_entry_overlays_local",
+        "_confidence_bg",
+        "_style_entry_editor",
+        "_entry_overlay_style",
+        "_candidate_for_entry",
+        "_short_ocr_menu_word",
+        "_fill_main_entry_from_ocr",
+        "_create_main_ocr_menu",
+        "update_entry",
+        "focus_next",
+        "focus_previous",
+        "_delete_aligned_simplified_entry",
+        "delete_entry",
+    }
+    entry_owner_path = PACKAGE_ROOT / "ui/main_entry_actions.py"
+    if not entry_owner_path.is_file():
+        violations.append("main-entry physical owner missing")
+    else:
+        entry_tree = ast.parse(entry_owner_path.read_text(encoding="utf-8"))
+        entry_funcs = {node.name for node in entry_tree.body
+                       if isinstance(node, ast.FunctionDef)}
+        if not main_entry_names <= entry_funcs:
+            violations.append("main-entry physical methods missing")
+        if not any(isinstance(node, ast.ClassDef) and node.name == "MainEntryActionsDeps"
+                   for node in entry_tree.body):
+            violations.append("main-entry dependency model missing")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"app", "picture_capture.app"}
+               for node in ast.walk(entry_tree)):
+            violations.append("main-entry owner imports GUI shell")
+    for name in main_entry_names:
+        wrapper = selection_adapters.get(name)
+        if wrapper is None or not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_main_entry_actions"
+            and node.func.attr == name for node in ast.walk(wrapper)
+        ) or not any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "_main_entry_actions_deps"
+            for node in ast.walk(wrapper)
+        ):
+            violations.append(f"main-entry native delegate missing: {name}")
+
     # Issue #562 — page-index and persisted fill-status are single-source owners.
     page_index_owners = {
         "page_index_workflow.py": [
