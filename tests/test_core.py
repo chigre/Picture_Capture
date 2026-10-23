@@ -92,6 +92,11 @@ REVIEW_WORKSPACE_SOURCE = (
     / "src/picture_capture/ui/review_workspace_workflow.py"
 ).read_text(encoding="utf-8")
 
+FOCUSED_FILTER_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/focused_filter_workflow.py"
+).read_text(encoding="utf-8")
+
 class FormatTests(unittest.TestCase):
 
     def test_layout_transform_points_boxes_images_and_markers_round_trip(self) -> None:
@@ -6194,8 +6199,8 @@ def test_v21121_review_ui_exposes_selectable_ocr_compare_after_check_and_arrow_n
     assert '"PaddleOCR": "paddle"' in review
     assert '"Tesseract": "tesseract"' in review
     assert '"LENS": "lens"' in review
-    assert 'editor.bind("<Up>"' in review
-    assert 'editor.bind("<Down>"' in review
+    assert 'editor.bind("<Up>"' in FOCUSED_FILTER_SOURCE
+    assert 'editor.bind("<Down>"' in FOCUSED_FILTER_SOURCE
     assert 'self._scroll_editor_into_view(index)' in review
 
 
@@ -6263,7 +6268,7 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     assert 'self._review_vertical_padding_apply_job: str | None = None' in review
     assert 'text="上下边距："' in REVIEW_WORKSPACE_SOURCE
     assert 'textvariable=self.review_vertical_padding_var' in REVIEW_WORKSPACE_SOURCE
-    assert 'ipady=max(0, int(self.parent.settings.review_entry_vertical_padding))' in review
+    assert 'ipady=max(0, int(self.parent.settings.review_entry_vertical_padding))' in FOCUSED_FILTER_SOURCE
     assert 'editor.pack_configure(ipady=padding)' in review
 
 
@@ -8226,16 +8231,16 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text
     assert 'self.focused_page_range_var = parent.page_range_spec_var' in text
-    assert 'indices = self.parent._parse_page_spec(' in text
-    assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in text
-    assert '"ocr_words": ocr_words' in text
-    assert 'reasons.append(f"OCR不匹配（OCR结果：{ocr_word}）")' in text
-    assert 'f"序号 {int(target.get(\'sequence_number\', index + 1))} | 原因：{reason}"' in text
-    assert 'text="填充OCR结果"' in text
+    assert 'indices = self.parent._parse_page_spec(' in FOCUSED_FILTER_SOURCE
+    assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in FOCUSED_FILTER_SOURCE
+    assert '"ocr_words": ocr_words' in FOCUSED_FILTER_SOURCE
+    assert 'reasons.append(f"OCR不匹配（OCR结果：{ocr_word}）")' in FOCUSED_FILTER_SOURCE
+    assert 'f"序号 {int(target.get(\'sequence_number\', index + 1))} | 原因：{reason}"' in FOCUSED_FILTER_SOURCE
+    assert 'text="填充OCR结果"' in FOCUSED_FILTER_SOURCE
     assert "def _fill_filter_ocr_result(self, index: int) -> None:" in text
-    assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in text
-    assert 'focused-filter-scan-rest-' in text
-    assert 'display_meta: list[tuple[int, int]] = []' in text
+    assert '"""Fast filter pass using only PDIC and OCR JSON, never page pixels."""' in FOCUSED_FILTER_SOURCE
+    assert 'focused-filter-scan-rest-' in FOCUSED_FILTER_SOURCE
+    assert 'display_meta: list[tuple[int, int]] = []' in FOCUSED_FILTER_SOURCE
     assert 'bg="#e6e6e6"' in overlay
     assert 'fg="#000000"' in overlay
     assert "def _entry_sequence_text(index: int, total: int) -> str:" in text
