@@ -52,6 +52,9 @@ from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
 from .ordinary import ink_threshold as _ink_threshold
 from .ordinary import separator_position_policy as _separator_policy
+from .ordinary import auto_layout_policy as _auto_layout_policy
+from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
+from .ocr import ordinary_marker_crop as _ordinary_marker_crop
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 
 
@@ -73,44 +76,11 @@ ORDINARY_AUTO_LAYOUT_FIELDS: tuple[tuple[str, str], ...] = (
 def ordinary_page_layout_settings(
     image: Image.Image, settings: AppSettings
 ) -> tuple[AppSettings, dict[str, int]]:
-    """Return page-specific ordinary settings after optional layout detection.
-
-    The project settings are never mutated.  When the master switch is enabled,
-    one layout estimate is made for this page and only explicitly selected
-    fields replace their project-level values.  bottom_y is deliberately absent:
-    the effective page bottom comes from the page height, Profile footer rule,
-    or Page SECTION bounds instead of a manually editable main-panel value.
-    """
-    current = replace(settings)
-    if not bool(getattr(current, "ordinary_auto_layout", False)):
-        return current, {}
-
-    from .layout.detection import detect_layout_parameters
-
-    detector_settings = replace(current)
-    if bool(getattr(current, "ordinary_auto_columns", True)):
-        # "Auto columns" detects page column count even when
-        # the project Profile normally fixes it.
-        detector_settings.layout_columns_policy = "detect"
-    estimate = detect_layout_parameters(image, detector_settings)
-
-    from .layout.parameter_evidence import row_padding_is_measured
-
-    applied: dict[str, int] = {}
-    for field_name, switch_name in ORDINARY_AUTO_LAYOUT_FIELDS:
-        if not bool(getattr(current, switch_name, True)):
-            continue
-        if field_name == "row_padding" and not row_padding_is_measured(estimate):
-            continue
-        value = int(getattr(estimate, field_name))
-        setattr(current, field_name, value)
-        applied[field_name] = value
-
-    # The old manual-columns/manual-Y mode is retired.  Keep the persisted
-    # compatibility fields readable, but never let them alter the new flow.
-    current.manual_columns = False
-    return current, applied
-
+    """Historical page-specific automatic layout policy entrypoint."""
+    return _auto_layout_policy.ordinary_page_layout_settings(
+        image, settings,
+        replace_fn=replace, field_switches=ORDINARY_AUTO_LAYOUT_FIELDS,
+    )
 
 @dataclass(slots=True)
 class ColumnPath:
@@ -1403,101 +1373,18 @@ def _entry_with_fused_metadata(
     *,
     use_semantic_position: bool = False,
 ) -> Entry:
-    """Keep one canonical marker while inheriting OCR semantics/review metadata."""
-    source = str(semantic.ocr_source or semantic.final_engine or "ocr")
-    anchor = semantic if use_semantic_position else position
-    return Entry(
-        word=str(semantic.word or position.word or ""),
-        x=int(anchor.x),
-        y=int(anchor.y),
-        current_page=str(semantic.current_page or position.current_page or ""),
-        previous_page=str(semantic.previous_page or position.previous_page or "@"),
-        next_page=str(semantic.next_page or position.next_page or "@"),
-        confidence=semantic.confidence,
-        ocr_source=f"combined:{source}",
-        alphabetical_warning=str(semantic.alphabetical_warning or ""),
-        candidate_id=str(semantic.candidate_id or ""),
-        final_engine=str(semantic.final_engine or ""),
-        issue_type=str(semantic.issue_type or ""),
-        parser_score=semantic.parser_score,
-        manually_selected=bool(semantic.manually_selected),
-        ocr_box_height=semantic.ocr_box_height,
-        ocr_line_height_reference=semantic.ocr_line_height_reference,
-        ocr_visual_run_height=semantic.ocr_visual_run_height,
-        ocr_leading_height_ratio=semantic.ocr_leading_height_ratio,
-        ocr_single_cjk=bool(semantic.ocr_single_cjk),
-        ocr_oversized_cjk=bool(semantic.ocr_oversized_cjk),
+    """Historical fusion Entry constructor; keep the runtime class identity."""
+    return _fusion_entry_mapping.entry_with_fused_metadata(
+        position, semantic,
+        use_semantic_position=use_semantic_position, entry_cls=Entry,
     )
 
 
 def _review_candidate_to_entry(candidate: dict) -> Entry | None:
-    """Convert one OCR review candidate into runtime Entry metadata."""
-    if str(candidate.get("position_variant", "refined")) != "refined":
-        return None
-    try:
-        x = int(candidate.get("source_x"))
-        y = int(candidate.get("source_y"))
-    except (TypeError, ValueError):
-        return None
-    if y <= 0:
-        return None
-
-    engine = str(candidate.get("final_engine") or "")
-    side = candidate.get(engine, {}) if engine else {}
-    side = side if isinstance(side, dict) else {}
-    features = side.get("features", {}) if isinstance(side, dict) else {}
-    features = features if isinstance(features, dict) else {}
-    box = candidate.get("box") or side.get("box") or []
-    box_height = None
-    if isinstance(box, (list, tuple)) and len(box) == 4:
-        try:
-            box_height = float(max(1, int(box[3]) - int(box[1])))
-        except (TypeError, ValueError):
-            box_height = None
-
-    issue_types = [
-        str(value) for value in list(candidate.get("issue_types", []) or [])
-        if str(value)
-    ]
-    return Entry(
-        word=str(candidate.get("word") or side.get("lemma") or ""),
-        x=x,
-        y=y,
-        confidence=(
-            float(candidate.get("confidence"))
-            if candidate.get("confidence") is not None else None
-        ),
-        ocr_source=f"latent:{engine or 'ocr'}",
-        alphabetical_warning=str(candidate.get("alphabetical_warning") or ""),
-        candidate_id=str(candidate.get("candidate_id") or ""),
-        final_engine=engine,
-        issue_type=",".join(issue_types),
-        parser_score=(
-            float(candidate.get("score"))
-            if candidate.get("score") is not None else None
-        ),
-        manually_selected=bool(candidate.get("manual_override")),
-        ocr_box_height=box_height,
-        ocr_line_height_reference=(
-            float(features.get("line_height_reference"))
-            if features.get("line_height_reference") is not None else None
-        ),
-        ocr_visual_run_height=(
-            float(features.get("cjk_visual_run_height"))
-            if features.get("cjk_visual_run_height") is not None else None
-        ),
-        ocr_leading_height_ratio=(
-            float(features.get("leading_record_height_ratio"))
-            if features.get("leading_record_height_ratio") is not None else None
-        ),
-        ocr_single_cjk=bool(features.get("cjk_single_visual")),
-        ocr_oversized_cjk=bool(
-            features.get("cjk_oversized_recovery")
-            or features.get("cjk_visual_projection_rescue")
-            or features.get("cjk_single_strong_visual")
-        ),
+    """Historical validated review-to-Entry conversion."""
+    return _fusion_entry_mapping.review_candidate_to_entry(
+        candidate, entry_cls=Entry,
     )
-
 
 _COMBINED_HARD_NEGATIVE_REASONS = {
     "continuation_fragment",
@@ -2229,46 +2116,12 @@ def _ordinary_marker_local_crop(
     row_metrics=None,
     source_image: Image.Image | None = None,
 ) -> tuple[Image.Image, bool]:
-    """Crop one marker in the physical direction of the printed text.
-
-    Geometry and the entry's classification are measured in canonical
-    coordinates, but a horizontal OCR engine must receive actual source
-    glyphs, not a mirror/rotation imposed for Layout analysis. Invert the
-    *crop box* into source coordinates; do not inverse-transform recognized
-    text, change a marker, or silently reverse CJK strings.
-    """
-    from .proofreading.classification import get_entry_classification
-    from .ocr.entry_crop import entry_ocr_crop_box
-    from .ocr.entry_visual_scale import visual_oversized_head_height
-
-    metrics_height = (
-        float(row_metrics.line_height) if row_metrics is not None
-        else float(settings.character_height)
+    """Historical marker OCR crop; leave source pixel direction unchanged."""
+    return _ordinary_marker_crop.ordinary_marker_local_crop(
+        canonical, entry, geometry, settings,
+        row_metrics=row_metrics, source_image=source_image,
+        normalize_rgb_fn=normalize_page_rgb,
     )
-    visual_height = visual_oversized_head_height(
-        canonical, entry, geometry, settings, line_height=metrics_height,
-    )
-    box = entry_ocr_crop_box(
-        entry,
-        geometry,
-        settings,
-        canonical.size,
-        row_metrics=row_metrics,
-        visual_head_height=visual_height,
-    )
-    meta = get_entry_classification(entry)
-    large_for_ocr = meta.entry_scale == "oversized" or visual_height > 0
-    horizontal = str(getattr(settings, "layout_writing_mode", "")) == "horizontal-tb"
-    if horizontal and source_image is not None:
-        source_box = geometry.transform.canonical_box_to_source(
-            box, geometry.source_size,
-        )
-        return (
-            normalize_page_rgb(source_image.crop(source_box)),
-            large_for_ocr,
-        )
-    return normalize_page_rgb(canonical.crop(box)), large_for_ocr
-
 
 def ocr_existing_entry_words_from_markers(
     image: Image.Image,
