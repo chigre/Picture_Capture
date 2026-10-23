@@ -3732,10 +3732,10 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
 
 
 def test_v294_candidate_checkbox_uses_local_overlay_update_and_deferred_save():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "review_selection_workflow.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def set_candidate_selected(")
-    end = text.index("    def apply_candidate_choice", start)
+    start = text.index("def set_candidate_selected(")
+    end = text.index("def apply_candidate_choice(", start)
     block = text[start:end]
     assert "self._update_entry_overlays_local(" in block
     assert "self._schedule_deferred_page_save(sync_editors=False)" in block
