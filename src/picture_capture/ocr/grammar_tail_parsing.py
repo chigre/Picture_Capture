@@ -111,21 +111,21 @@ def parse_structured_tail(
     for _ in range(6):
         cursor = consume_space_fn(tail, cursor)
         rest = tail[cursor:]
-        vm = variant_re_module.match(rest)
+        vm = variant_re.match(rest)
         if vm:
             value = vm.group("v").strip()
             variants.append(value)
             cursor += vm.end()
             trace.append(f"variant:{value}")
             continue
-        im = closed_inflection_re_module.match(rest)
+        im = closed_inflection_re.match(rest)
         if im:
             value = im.group("i").strip()
             inflections.append(value)
             cursor += im.end()
             trace.append(f"inflection:{value}")
             continue
-        om = open_inflection_re_module.match(rest)
+        om = open_inflection_re.match(rest)
         if om:
             value = om.group("i").strip()
             inflections.append(value)
@@ -143,7 +143,7 @@ def parse_structured_tail(
         rf"(?:\[[^\]]{{1,180}}(?:\]|{pos_ahead})|/[^/]{{1,180}}(?:/|{pos_ahead}))",
         flags=re_module.UNICODE | re_module.IGNORECASE,
     )
-    pronunciation_match = pronunciation_re_module.match(tail[cursor:])
+    pronunciation_match = pronunciation_re.match(tail[cursor:])
     if pronunciation_match:
         pronunciation = pronunciation_match.group(0).strip()
         cursor += pronunciation_match.end()
