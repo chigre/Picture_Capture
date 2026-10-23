@@ -31,7 +31,7 @@ import contract while extracting implementation separately when justified.
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
 | `paddle_headwords_core.py` | ocr | Historical OCR core/model pickle identities; large implementation extraction remains separate work. |
 | `processing.py` | processing / ordinary | Public detection facade and assignment mirroring; ordinary/GPU worker coordination contract. |
-| `processing_core.py` | processing / crop | Historical geometry/crop types and functions; large implementation extraction remains separate work. |
+| `processing_core.py` | processing / crop | Historical geometry/crop dataclass/pickle identities and public call-time adapters; canonical whole-entry planning and export now reside in `crop/page_workflow.py`. The whole-entry page crop plan, entry/PPP pairing, union crop, staging and atomic publication execution live in `crop/page_workflow.py`, with live callback composition from the retained `processing_core.py` facade. Page crop dataclass/pickle identities and root public entry points remain stable. |
 | `training_export.py` | training | Training API and monkeypatch boundary; ZIP cancellation and publisher preserve this module's pickle identity. |
 
 ## Canonical moved owners and consumers

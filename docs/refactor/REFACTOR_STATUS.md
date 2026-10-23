@@ -8,23 +8,20 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are merged through #638
-(`efb3a7f3`); the latest PR acceptance was reported after CI passed.
-This candidate moves the **complete** automatic orthogonal closed loop
-(estimate, safe gain, projected candidate, pixel warp and fresh detection,
-body/tail/separator/header audit, accept/rollback, convergence, retained-image
-re-audit and nonlinear-curvature warning) into
-`preprocess/orthogonal_pipeline.py`. Runtime composition explicitly supplies
-14 operations and 16 numeric policies at call time; the returned 59 historical
-per-page diagnostics are restored before the identical persisted-model
-constructor. No root shim/installer, algorithm redesign or format change.
-Facade **75841→55316** normalized bytes, root count **15**, normalized ceiling
-**75850→55320**. Direct synthetic owner tests and canonical ownership guards
-added. Exact-head six-platform CI/CodeQL, GUI smoke, compatibility, wheel
-and reviews, followed by independent merged-main acceptance, remain to be
-established. Actual scanned-page/manual GUI and native UVDoc/CUDA/GPU
-validation are still explicitly outstanding. The older phase log below
-is historical rather than a current physical inventory.
+Root classification and preprocessing extractions are merged through #639
+(`f3619e3e`) after user-confirmed CI green. A new large crop workflow batch
+moves whole-entry SECTION-aware piece planning, illustration pairing, plan
+staging/publication, white-fill/union crop and atomic whole-page export to
+`crop/page_workflow.py`. Legacy models/pickle identities and public function
+signatures remain in `processing_core.py`, delegated with 41 live operation
+and constructor references at call time. Core shrinks **158531→144295**
+normalized UTF-8 bytes; new guard ceiling **144300** while historic
+oversized baseline stays immutable. Root count **15**. New direct unit and
+synthetic PNG/staging integration tests added. Current branch
+`refactor/562-page-crop-workflow` requires exact-head six-platform CI,
+CodeQL, GUI smoke, compatibility, wheel and review before merge, then an
+independent postmerge main check. Big GUI and OCR cores and native/manual
+scanned-page checks remain future work. Older log below is historical.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
