@@ -1154,6 +1154,7 @@ def _sync_autosave_label(self, deps: ReviewWorkspaceDeps) -> None:
 
 
 def _toggle_shared_autosave(self, deps: ReviewWorkspaceDeps) -> None:
+    """Update the shared autosave caption before toggling the app setting."""
     self._sync_autosave_label()
     self.parent.toggle_autosave()
 
@@ -1165,6 +1166,8 @@ def open_sort_rules(self, deps: ReviewWorkspaceDeps) -> None:
 
 
 def run_order_check(self, deps: ReviewWorkspaceDeps) -> None:
+    """Dispatch the existing all-pages/current-page scope without remapping it."""
+    # The current Tk scope variable remains the single authority.
     self.check_order(self.order_scope_var.get() == "all")
 
 
