@@ -8,21 +8,25 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification, preprocessing, crop and OCR refactors are merged
-through #642 (main merge `76d5c32e`). After exact-head #642 CI success,
-the current `refactor/562-ocr-visual-cjk-evidence` branch migrates the
-**complete 17-function visual OCR marker and CJK projection/right-context
-evidence chain** to `ocr/visual_evidence.py`, preserving 17 patchable
-legacy call signatures/docstrings and injecting 29 current callbacks and
-symbol-policy mappings per invocation. OCR core normalized bytes
-**313040→278675** (−34365), strict additional cap **278685**,
-unchanged historical oversize baseline and **15** classified root
-Python modules. Tests include marker components, CJK glyph/Unicode,
-context report keys, call-time patches and import isolation. Exact-head
-six-matrix CI, GUI/compatibility/wheel, CodeQL, reviews and independent
-postmerge main check have not yet been established. Native GPU/CUDA,
-hands-on GUI and real scanned pages remain outstanding. Historical
-phase and recovery log follows below.
+Architecture classification, preprocessing, crop and OCR extractions are
+merged through #643, latest main merge `7adb614a`. Current candidate
+branch `refactor/562-cjk-recovery-separator-refinement` migrates
+**9 whole oversized-CJK recovery and separator-Y refinement functions**
+to `ocr/cjk_recovery.py` as one stable stage: ordinary line-height,
+local Paddle crop rescue, giant OCR box split, image-first Han glyph
+recovery, verified-only raw-duplicate suppression, and normal/adaptive/
+first-content marker Y placement. Public original functions and recovered
+record model identities remain in the OCR core, with frozen call-time
+`CjkRecoveryDeps` passing **22 original runtime callbacks/policies**
+including the core's shared verified recovery code set. Source bodies
+match the originals after only alias removal. Core normalized bytes
+**278675→246682** (−31993), new strict **246690-byte** cap;
+15 original physical root Python modules. Direct no-import/pixel,
+recovery provenance and separator regression tests added.
+The current PR requires exact-head six-system CI, GUI smoke,
+compatibility/wheel, CodeQL, review and independent postmerge main
+checks; native scan/GPU/CUDA/manual GUI validation is unverified.
+Historical status below is retained for recovery.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
