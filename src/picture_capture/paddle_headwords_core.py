@@ -30,6 +30,7 @@ from .ocr import lemma_repairs as _lemma_repairs
 from .ocr import line_grouping as _line_grouping
 from .ocr import alphabetical_warnings as _alphabetical_warnings
 from .ocr import band_preprocessing as _band_preprocessing
+from .ocr import language_resolution as _language_resolution
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -247,23 +248,13 @@ def _headword_script_compatibility(
     )
 
 def _is_chinese_ocr(settings: AppSettings) -> bool:
-    """Return True when the active OCR language is Simplified/Traditional Chinese."""
-    lang = (settings.ocr_language or "").lower()
-    paddle_lang = (settings.paddle_language or "").lower()
-    parts = {part.strip() for part in lang.split("+") if part.strip()}
-    return bool(
-        parts.intersection({"chi_sim", "chi_tra", "ch", "chinese_cht"})
-        or paddle_lang in {"ch", "chi_sim", "chi_tra", "chinese_cht"}
-    )
+    """Historical Chinese OCR script selector."""
+    return _language_resolution.is_chinese_ocr(settings)
 
 
 def _is_japanese_ocr(settings: AppSettings) -> bool:
-    """Return True when the active OCR language is Japanese."""
-    lang = (settings.ocr_language or "").lower()
-    paddle_lang = (settings.paddle_language or "").lower()
-    parts = {part.strip() for part in lang.split("+") if part.strip()}
-    return bool(parts.intersection({"jpn", "jpn_vert", "japan"}) or paddle_lang == "japan")
-
+    """Historical Japanese OCR script selector."""
+    return _language_resolution.is_japanese_ocr(settings)
 
 _SYMBOL_FAMILY_BY_LITERAL = {
     "○": "circle_open", "◯": "circle_open", "◦": "circle_open",
@@ -743,20 +734,8 @@ def _parse_chinese_single_character_headword(text: str, settings: AppSettings) -
     return None
 
 def _paddle_language(settings: AppSettings) -> str:
-    if settings.paddle_language.strip():
-        return settings.paddle_language.strip()
-    mapping = {
-        "eng": "en", "ita": "it", "spa": "es", "fra": "fr",
-        "por": "pt", "deu": "de", "chi_sim": "ch", "chi_tra": "chinese_cht",
-    }
-    # Tesseract accepts composite packs such as spa+eng; Paddle expects one
-    # language/model family. Prefer the first recognized component.
-    parts = [part.strip() for part in settings.ocr_language.split("+") if part.strip()]
-    for part in parts:
-        if part in mapping:
-            return mapping[part]
-    return mapping.get(settings.ocr_language, settings.ocr_language)
-
+    """Historical Paddle model-language mapping, preserving a public patch hook."""
+    return _language_resolution.paddle_language(settings)
 
 def clear_paddle_engine_cache(*, keep_key: tuple[str, str, str, bool] | None = None) -> None:
     """Drop cached Paddle engines that are no longer the active configuration.

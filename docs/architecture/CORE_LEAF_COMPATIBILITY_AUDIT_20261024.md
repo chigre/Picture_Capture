@@ -77,6 +77,30 @@ issue must be assessed separately, not conflated with OCR/geometry parity.
 The current refactor commits must be judged on their **own** exact-head CI and
 OCR smoke results before PR readiness.
 
+## Sixth, seventh and eighth extractions — 2026-10-24
+
+- `ordinary/separator_position_policy.py` owns local whitespace evidence and
+  ordinary/OCR marker-position choice, preserving live core scoring callbacks.
+- `ocr/alphabetical_warnings.py` owns diagnostic-only alphabetical anomalies,
+  retaining SECTION/column/axis ordering and public patch points.
+- `crop/entry_vertical_bounds.py` owns literal-pixel crop top/bottom bounds
+  and special-page lookup, with current geometry, special-pages paths and pixel
+  converters passed by historical `processing_core` callables.
+- `ocr/band_preprocessing.py` owns Paddle input RGB/grayscale/autocontrast/
+  binary modes, scaling and OCR-local Otsu, while the legacy core forwards
+  the current image normalizer and threshold callback at call time.
+- `ocr/language_resolution.py` owns historical Chinese/Japanese selectors and
+  Paddle model mapping. These must remain distinct from the semantic language
+  script guard; the original fallback priorities are preserved.
+- Regression coverage: `test_issue562_core_leaf_round6_20261024.py`,
+  `test_issue562_core_leaf_round7_20261024.py`, and
+  `test_issue562_core_leaf_round8_20261024.py`.
+
+These changes leave the historical core functions, ten root modules,
+persisted data classes, OCR cache keys, PDIC/PPP sidecar schemas and crop
+publish transactions untouched. Last fully verified green baseline before
+this series: `e573b64d`. Review the *new exact-head* CI before acceptance.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
