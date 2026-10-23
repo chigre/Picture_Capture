@@ -19,6 +19,7 @@ def test_delete_control_tied_to_shape_not_editable_label():
     source = (Path(__file__).resolve().parents[1] / "src" /
               "picture_capture" / "app.py").read_text(encoding="utf-8")
     canvas_source = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    pointer_source = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     overlay = (Path(__file__).resolve().parents[1] / "src" /
                "picture_capture" / "illustration" / "delete_overlay.py").read_text(encoding="utf-8")
     assert "if show_shapes else None" in canvas_source
@@ -32,5 +33,5 @@ def test_delete_control_tied_to_shape_not_editable_label():
     assert 'bg="#bdbdbd"' in overlay
     assert 'anchor="center"' in overlay
     assert 'f"ppp-delete-{region_index}"' in overlay
-    assert 'self.canvas.coords(record["delete_window"], center_x, center_y)' in source
+    assert 'self.canvas.coords(record["delete_window"], center_x, center_y)' in pointer_source
     assert 'delete_button.pack(side="left"' not in source

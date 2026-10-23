@@ -41,8 +41,9 @@ def test_illustration_fill_is_static_rgba_ownership():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
     guard = (root / "scripts/architecture_guard.py").read_text(encoding="utf-8")
+    pointer_source = (root / "src/picture_capture/ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     assert "create_alpha_canvas_polygon" in app
-    assert "refresh_alpha_polygon_fill(self, region_index)" in app
+    assert "refresh_alpha_polygon_fill(self, region_index)" in pointer_source
     assert "illustration_fill_color, stipple=" not in app
     assert not (root / "src/picture_capture/illustration_fill_opacity_runtime.py").exists()
     assert '"illustration_fill_opacity_runtime.py"' not in guard

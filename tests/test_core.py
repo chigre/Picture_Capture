@@ -3885,9 +3885,9 @@ def test_v295_illustration_crop_bounds_clip_to_header_without_mutating_polygon(t
 
 def test_v295_right_click_is_next_page_outside_polygon_mode():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def canvas_right_click(")
-    end = text.index("    def canvas_motion", start)
+    text = (source.parent / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
+    start = text.index("def canvas_right_click(")
+    end = len(text)
     block = text[start:end]
     assert "self.change_page(1)" in block
     assert "self.auto_detect_current(clicked_x=x)" not in block
@@ -4964,14 +4964,16 @@ def test_v2111_rectangular_ppp_supports_four_side_drag_geometry():
 def test_v2111_ui_restores_hide_overlay_and_removes_crop_dialog_preview():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    pointer_source = (source.parent / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
+    render_source = (source.parent / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     display = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'check(line(), "隐藏线框（插图除外）", app.hide_var, app._toggle_hide_overlays)' in display
     crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert 'preview_canvas' not in crop_class
     assert '主界面完整预览' not in crop_class
     assert '词条右侧额外留白' in crop_class
-    assert 'create_illustration_delete_control' in text
-    assert 'edge_handles' in text
+    assert 'create_illustration_delete_control' in render_source
+    assert 'edge_handles' in pointer_source or 'edge_handles' in render_source
 
 
 def test_v2113_gui_paths_do_not_use_raw_xy_entry_sort():
@@ -8119,15 +8121,16 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
+    pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
     assert 'self.page_list.heading("section", text="域", anchor="center")' in text
     assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
     assert "minvalue=0, maxvalue=10" in text
     assert "def _drag_page_section_boundary_to" in text
-    assert "该位置位于 SECTION 间空白区，不添加词条。" in text
+    assert "该位置位于 SECTION 间空白区，不添加词条。" in pointer_source
     assert "page_sections=list(self.page_sections)" in text
-    assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in text
+    assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in pointer_source
     assert 'if app.image is None or app._section_editing:' in canvas
     assert 'app.canvas.delete("cursor-guide")' in canvas
     assert 'text="双击进入Section编辑模式"' in text

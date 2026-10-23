@@ -173,10 +173,11 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     source = (root / "app.py").read_text(encoding="utf-8")
     controller = (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
+    pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in source
-    assert 'self._auxiliary_controller.delete_at_chip(x, y)' in source
-    assert 'self._auxiliary_controller.add(x, y)' in source
-    assert 'not self._section_editing and not self.polygon_draw_var.get()' in source
+    assert 'self._auxiliary_controller.delete_at_chip(x, y)' in pointer_source
+    assert 'self._auxiliary_controller.add(x, y)' in pointer_source
+    assert 'not self._section_editing and not self.polygon_draw_var.get()' in pointer_source
     shared = (root / "ui" / "overlay_delete_button.py").read_text(encoding="utf-8")
     assert "create_overlay_delete_button(" in controller
     assert 'text="[X]"' in shared
