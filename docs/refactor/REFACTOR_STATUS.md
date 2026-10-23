@@ -8,17 +8,17 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are accepted through #632 at
-`80ef82a9`, with exact-head and independent postmerge six-platform CI and CodeQL
-passed. Root count remains 15, all explicitly classified. The current candidate
-extracts the source evidence stage from `analyze_preprocess_page` into
-`preprocess/source_evidence.py`: text detection/fallback, line warnings, OCR/projection
-skew, physical header anchoring and automatic rotation policy. An explicit per-page
-result feeds unchanged later transform stages. Facade shrinks 125548→121552 bytes;
-current operation and policy values are supplied at call time. Exact-head CI/review
-and postmerge acceptance for this candidate are pending. Large later analysis/app/core
-extraction and real-scan/native GPU validation remain open. The phase log below is
-historical and does not describe current physical file locations.
+Root classification and preprocessing extractions are accepted through #633 at
+`6356509a`, with exact-head and independent main six-platform CI/CodeQL passed.
+Root count remains 15, all explicitly classified. The current candidate extracts
+final re-detection, horizontal audit, crop bounds, warnings and confidence/status
+from `analyze_preprocess_page` into `preprocess/finalization.py`. Seven current
+operations are supplied at call time; an explicit 22-field per-page result feeds
+the unchanged persisted-model constructor. Facade shrinks 121552→115065 bytes.
+Exact-head CI/review and independent main acceptance remain pending. Central
+perspective/orthogonal stages, oversized app/core and real-scan/manual/native GPU
+acceptance remain open. The phase log below is historical and does not describe
+current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

@@ -663,7 +663,7 @@ baseline is loosened. Native CUDA/real scanned-page/manual GUI acceptance and th
 analysis/app/core decomposition remain open work.
 
 
-## Issue #562 — source geometry evidence stage (2026-10-23; pending acceptance)
+## Issue #562 — source geometry evidence stage (2026-10-23; accepted #633)
 
 On accepted `main@80ef82a9` (#632; exact-head and independent main six-platform
 CI/CodeQL green), begin decomposing `analyze_preprocess_page` itself. The new
@@ -692,3 +692,39 @@ main acceptance remain required. Tighten normalized facade ceiling125550→12156
 require the source owner/composition and reject direct source skew collection returning
 to the analysis root. No historical baseline is loosened. Real scanned-page/manual
 GUI/native CUDA and large later-stage analysis/app/core acceptance remain open.
+
+
+## Issue #562 — final page audit, retained bounds and confidence (2026-10-23; pending acceptance)
+
+On accepted `main@6356509a` (#633; exact-head and independent main six-platform
+CI/CodeQL green), extract the final measurement stage of `analyze_preprocess_page`
+into `preprocess/finalization.py`. This owner re-detects advanced transformed pages
+when needed, keeps transformed original boxes on detector failures, summarizes final
+horizontal alignment, chooses structural/projection crop bounds, adds review warnings
+and computes evidence count/confidence/status. A frozen 22-field per-page result feeds
+the existing `PreprocessAnalysis` constructor, whose fields/conversions remain unchanged.
+Root count remains15; facade shrinks **121552→115065 bytes** (−6487).
+
+Seven current operations are explicitly supplied at call time: text detector,
+horizontal auditor, absolute quality evaluator, structural/projection bounds,
+box expansion and text bounds. Original source dimensions are passed separately
+from the corrected working image. Existing warnings/method lists remain shared only
+within the current page so ordering and model serialization stay identical. No GUI or
+public-facade import, global hook/installer, namespace copy or persisted-model clone.
+
+37 new cases cover re-detection gates and polygon identity, detector/structure/audit
+failures, UVDoc-only insufficient/unavailable warnings, legacy optional tail defaults,
+all final alignment metrics, warning ordering, projection failure propagation, margins,
+confidence/area thresholds, source pixel immutability and public save/reopen/pickle.
+116 focused existing/new cases pass. Frozen #633 comparison verifies unchanged
+extracted algorithm and complete model-constructor AST after result/dependency-name
+normalization,1728 final-result/warning/method cases and96 complete public analysis
+payload/crop-pixel cases (UVDoc stubbed). Local3290 passed/3 skipped; compatibility93;
+F821/compile/wheel and architecture/change guards required. Exact-head six-platform
+CI/GUI smoke/CodeQL/review plus independent main checks gate acceptance.
+
+Tighten normalized facade ceiling121560→115070; require the finalization owner and
+composition, prohibit final crop calls returning to the analysis root. Historical
+baselines remain untouched. Remaining central perspective/orthogonal algorithm stages,
+oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
+acceptance are still open work.

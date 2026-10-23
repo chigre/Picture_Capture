@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 121_560
+MAX_PREPROCESS_FACADE_BYTES = 115_070
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -899,6 +899,22 @@ def collect_violations() -> list[str]:
                and isinstance(node.func.value, ast.Name) and node.func.value.id == "_source_evidence"
                and node.func.attr == "collect_source_geometry_evidence" for node in ast.walk(analysis_adapter)):
         violations.append("preprocessing analysis must compose the source evidence owner")
+    finalization_owner = PACKAGE_ROOT / "preprocess/finalization.py"
+    if not finalization_owner.is_file():
+        violations.append("canonical preprocessing finalization owner missing")
+    else:
+        owner_tree = ast.parse(finalization_owner.read_text(encoding="utf-8"))
+        if not any(isinstance(node, ast.FunctionDef) and node.name == "finalize_preprocess_page"
+                   for node in owner_tree.body):
+            violations.append("preprocessing finalization routine missing")
+    if any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+           and node.func.id in {"_expand_box_px", "_rotated_text_box", "_projection_content_box"}
+           for node in ast.walk(analysis_adapter)):
+        violations.append("final crop/confidence implementation must remain in preprocess/finalization.py")
+    if not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+               and isinstance(node.func.value, ast.Name) and node.func.value.id == "_finalization"
+               and node.func.attr == "finalize_preprocess_page" for node in ast.walk(analysis_adapter)):
+        violations.append("preprocessing analysis must compose the finalization owner")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 

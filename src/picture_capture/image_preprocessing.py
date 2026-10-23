@@ -153,6 +153,7 @@ from .preprocess.orthogonal_policy import (
 
 
 
+from .preprocess import finalization as _finalization
 from .preprocess import source_evidence as _source_evidence
 from .preprocess import rendering as _rendering
 from .preprocess.rendering import PREVIEW_YELLOW, PREVIEW_OUTLINE
@@ -271,7 +272,6 @@ def analyze_preprocess_page(
     source_header_rule_angle_deg = evidence.source_header_rule_angle_deg
     source_header_rule_residual_px = evidence.source_header_rule_residual_px
     applied = evidence.applied
-    layout_source_boxes = 0
 
     working = deskew_image(source, applied)
     working_polygons = (
@@ -2062,183 +2062,23 @@ def analyze_preprocess_page(
             "已保留前一步结果，可手动选择UVDoc复核。"
         )
 
-    # Advanced transforms change the page geometry. Re-run TextDetection on the
-    # corrected image before final structural cropping. If that second pass
-    # fails, the mathematically transformed original polygons remain a safe
-    # fallback and preserve non-destructive export.
-    final_polygons = working_polygons
-    if (
-        polygons
-        and actual_geometry_mode in {"manual_perspective", "perspective", "uvdoc"}
-        and not advanced_redetected
-    ):
-        try:
-            redetected = detect_text_polygons(working, settings)
-            if len(redetected) >= 4:
-                final_polygons = redetected
-                method_parts.append("redetect")
-            else:
-                warnings.append("高级纠正后文本框过少，最终裁边沿用变换后的原检测框。")
-        except Exception as exc:
-            warnings.append(f"高级纠正后版面复检失败，沿用变换后的原检测框：{exc}")
-
-    final_alignment_row_count = 0
-    final_alignment_valid_column_count = 0
-    final_alignment_edge_pair_count = 0
-    final_alignment_top_edge_p90_abs_deg = 0.0
-    final_alignment_bottom_edge_p90_abs_deg = 0.0
-    final_alignment_edge_pair_delta_p90_deg = 0.0
-    final_alignment_worst_edge_deg = 0.0
-    final_alignment_worst_region_deg = 0.0
-    final_alignment_worst_tail_p90_abs_deg = 0.0
-    final_alignment_column_top_tail_p90_abs_deg: tuple[float, ...] = ()
-    final_alignment_column_bottom_tail_p90_abs_deg: tuple[float, ...] = ()
-    final_alignment_trend_deg = 0.0
-    final_alignment_worst_column_trend_deg = 0.0
-    final_alignment_quality_score = 0.0
-    final_alignment_verdict = "insufficient"
-    if (
-        final_polygons
-        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
-            "vertical"
-        )
-    ):
-        try:
-            final_audit = audit_horizontal_alignment(
-                final_polygons,
-                final_polygons,
-                size=working.size,
-                settings=settings,
-            )
-            final_alignment_row_count = int(final_audit.row_count)
-            final_alignment_valid_column_count = int(
-                final_audit.valid_column_count
-            )
-            final_alignment_edge_pair_count = int(final_audit.edge_pair_count)
-            final_alignment_top_edge_p90_abs_deg = float(
-                final_audit.after_top_edge_p90_abs_deg
-            )
-            final_alignment_bottom_edge_p90_abs_deg = float(
-                final_audit.after_bottom_edge_p90_abs_deg
-            )
-            final_alignment_edge_pair_delta_p90_deg = float(
-                final_audit.after_edge_pair_delta_p90_deg
-            )
-            final_alignment_worst_edge_deg = float(
-                final_audit.after_worst_edge_deg
-            )
-            final_alignment_worst_region_deg = float(
-                final_audit.after_worst_region_deg
-            )
-            final_alignment_worst_tail_p90_abs_deg = float(
-                getattr(final_audit, "after_worst_tail_p90_abs_deg", 0.0)
-            )
-            final_alignment_column_top_tail_p90_abs_deg = tuple(
-                float(v)
-                for v in getattr(
-                    final_audit,
-                    "after_column_top_tail_p90_abs_deg",
-                    (),
-                )
-            )
-            final_alignment_column_bottom_tail_p90_abs_deg = tuple(
-                float(v)
-                for v in getattr(
-                    final_audit,
-                    "after_column_bottom_tail_p90_abs_deg",
-                    (),
-                )
-            )
-            final_alignment_trend_deg = float(final_audit.after_trend_deg)
-            final_alignment_worst_column_trend_deg = max(
-                [abs(float(final_audit.after_trend_deg))]
-                + [
-                    abs(float(value))
-                    for value in final_audit.after_column_trends_deg
-                ]
-            )
-            (
-                final_alignment_verdict,
-                final_alignment_quality_score,
-            ) = _absolute_horizontal_quality(final_audit)
-            if final_alignment_verdict == "failed":
-                warnings.append(
-                    "成品双边缘水平验收未通过："
-                    f"上缘P90 {final_alignment_top_edge_p90_abs_deg:.2f}°，"
-                    f"下缘P90 {final_alignment_bottom_edge_p90_abs_deg:.2f}°，"
-                    "上下缘差P90 "
-                    f"{final_alignment_edge_pair_delta_p90_deg:.2f}°，"
-                    f"最差区域 {final_alignment_worst_region_deg:.2f}°，"
-                    "页首/页尾最差P90 "
-                    f"{final_alignment_worst_tail_p90_abs_deg:.2f}°，"
-                    "最差栏趋势 "
-                    f"{final_alignment_worst_column_trend_deg:.2f}°。"
-                )
-            elif (
-                final_alignment_verdict == "insufficient"
-                and actual_geometry_mode == "uvdoc"
-            ):
-                warnings.append(
-                    "UVDoc 展平后有效双边缘文本行不足，无法完成最终水平验收。"
-                )
-        except Exception as exc:
-            if actual_geometry_mode == "uvdoc":
-                warnings.append(f"UVDoc 展平后水平验收不可用：{exc}")
-
-    layout_box: tuple[int, int, int, int] | None = None
-    if final_polygons:
-        try:
-            layout_box, layout_estimate = _layout_content_box_from_polygons(
-                final_polygons, width, height, settings,
-            )
-            layout_source_boxes = int(layout_estimate.source_boxes)
-        except Exception as exc:
-            warnings.append(f"纠正后结构裁边失败，已使用投影回退：{exc}")
-
-    if layout_box is not None:
-        raw_content_box = layout_box
-        crop_box = _expand_box_px(
-            raw_content_box, width, height, safety_margin_px,
-        )
-    else:
-        if method_parts[0] != "projection_fallback":
-            method_parts.insert(0, "projection_fallback")
-        raw_content_box = _projection_content_box(working, settings)
-        crop_box = _expand_box_px(
-            raw_content_box, width, height, safety_margin_px,
-        )
-
-    text_box = _rotated_text_box(
-        final_polygons, width, height, 0.0,
-    ) if final_polygons else None
-
-    x0, y0, x1, y1 = crop_box
-    retained_ratio = max(
-        0.0,
-        min(1.0, ((x1 - x0) * (y1 - y0)) / float(width * height)),
+    finalization = _finalization.finalize_preprocess_page(
+        working, settings,
+        source_size=(width, height),
+        polygons=polygons, working_polygons=working_polygons,
+        actual_geometry_mode=actual_geometry_mode,
+        advanced_redetected=advanced_redetected,
+        safety_margin_px=safety_margin_px,
+        angle_samples=angle_samples, angle_mad=angle_mad, correction=correction,
+        warnings=warnings, method_parts=method_parts,
+        text_detector=detect_text_polygons,
+        horizontal_auditor=audit_horizontal_alignment,
+        quality_evaluator=_absolute_horizontal_quality,
+        layout_bounds=_layout_content_box_from_polygons,
+        projection_bounds=_projection_content_box,
+        box_expander=_expand_box_px,
+        text_bounds=_rotated_text_box,
     )
-
-    if angle_samples and angle_mad > 0.65:
-        warnings.append(f"文本框倾斜角离散较大（MAD {angle_mad:.2f}°）。")
-    if abs(correction) > 3.0:
-        warnings.append(f"页面倾斜较大（{correction:+.2f}°），建议人工确认。")
-    if polygons and len(polygons) < 8:
-        warnings.append(f"有效文本框仅 {len(polygons)} 个，建议人工确认裁边。")
-    if retained_ratio < 0.45:
-        warnings.append(f"仅保留页面 {retained_ratio * 100:.1f}% 面积，裁剪幅度较大。")
-    if retained_ratio > 0.975:
-        warnings.append(f"保留页面 {retained_ratio * 100:.1f}% 面积，几乎未裁边。")
-
-    evidence_boxes = layout_source_boxes or len(final_polygons) or len(polygons)
-    confidence = min(1.0, evidence_boxes / 40.0)
-    if angle_samples:
-        confidence *= max(0.25, 1.0 - min(1.0, angle_mad / 1.5))
-    else:
-        confidence *= 0.45
-    if "projection_fallback" in method_parts:
-        confidence *= 0.55
-    confidence = max(0.0, min(1.0, confidence))
-    status = "review" if warnings or confidence < 0.45 else "normal"
 
     return PreprocessAnalysis(
         source_width=width,
@@ -2254,15 +2094,15 @@ def analyze_preprocess_page(
         source_header_rule_residual_px=round(
             float(source_header_rule_residual_px), 3
         ),
-        crop_box=crop_box,
-        raw_content_box=raw_content_box,
-        text_box=text_box,
-        source_boxes=evidence_boxes,
+        crop_box=finalization.crop_box,
+        raw_content_box=finalization.raw_content_box,
+        text_box=finalization.text_box,
+        source_boxes=finalization.evidence_boxes,
         angle_samples=angle_samples,
         angle_mad_deg=round(float(angle_mad), 4),
-        retained_ratio=retained_ratio,
-        confidence=confidence,
-        status=status,
+        retained_ratio=finalization.retained_ratio,
+        confidence=finalization.confidence,
+        status=finalization.status,
         method="+".join(dict.fromkeys(method_parts)),
         warnings=tuple(warnings),
         safety_margin_px=max(0, int(safety_margin_px)),
@@ -2593,45 +2433,45 @@ def analyze_preprocess_page(
         orthogonal_alignment_verdict=str(
             orthogonal_alignment_verdict
         ),
-        final_alignment_row_count=int(final_alignment_row_count),
+        final_alignment_row_count=int(finalization.final_alignment_row_count),
         final_alignment_valid_column_count=int(
-            final_alignment_valid_column_count
+            finalization.final_alignment_valid_column_count
         ),
-        final_alignment_edge_pair_count=int(final_alignment_edge_pair_count),
+        final_alignment_edge_pair_count=int(finalization.final_alignment_edge_pair_count),
         final_alignment_top_edge_p90_abs_deg=round(
-            float(final_alignment_top_edge_p90_abs_deg), 4
+            float(finalization.final_alignment_top_edge_p90_abs_deg), 4
         ),
         final_alignment_bottom_edge_p90_abs_deg=round(
-            float(final_alignment_bottom_edge_p90_abs_deg), 4
+            float(finalization.final_alignment_bottom_edge_p90_abs_deg), 4
         ),
         final_alignment_edge_pair_delta_p90_deg=round(
-            float(final_alignment_edge_pair_delta_p90_deg), 4
+            float(finalization.final_alignment_edge_pair_delta_p90_deg), 4
         ),
         final_alignment_worst_edge_deg=round(
-            float(final_alignment_worst_edge_deg), 4
+            float(finalization.final_alignment_worst_edge_deg), 4
         ),
         final_alignment_worst_region_deg=round(
-            float(final_alignment_worst_region_deg), 4
+            float(finalization.final_alignment_worst_region_deg), 4
         ),
         final_alignment_worst_tail_p90_abs_deg=round(
-            float(final_alignment_worst_tail_p90_abs_deg), 4
+            float(finalization.final_alignment_worst_tail_p90_abs_deg), 4
         ),
         final_alignment_column_top_tail_p90_abs_deg=tuple(
             round(float(v), 4)
-            for v in final_alignment_column_top_tail_p90_abs_deg
+            for v in finalization.final_alignment_column_top_tail_p90_abs_deg
         ),
         final_alignment_column_bottom_tail_p90_abs_deg=tuple(
             round(float(v), 4)
-            for v in final_alignment_column_bottom_tail_p90_abs_deg
+            for v in finalization.final_alignment_column_bottom_tail_p90_abs_deg
         ),
-        final_alignment_trend_deg=round(float(final_alignment_trend_deg), 4),
+        final_alignment_trend_deg=round(float(finalization.final_alignment_trend_deg), 4),
         final_alignment_worst_column_trend_deg=round(
-            float(final_alignment_worst_column_trend_deg), 4
+            float(finalization.final_alignment_worst_column_trend_deg), 4
         ),
         final_alignment_quality_score=round(
-            float(final_alignment_quality_score), 4
+            float(finalization.final_alignment_quality_score), 4
         ),
-        final_alignment_verdict=str(final_alignment_verdict),
+        final_alignment_verdict=str(finalization.final_alignment_verdict),
         line_geometry_rows=int(line_geometry.row_count),
         line_geometry_global_angle_deg=float(line_geometry.global_angle_deg),
         line_geometry_top_angle_deg=float(line_geometry.top_angle_deg),
