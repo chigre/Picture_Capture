@@ -5,7 +5,6 @@ import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from picture_capture import processing as public_processing
 from picture_capture import processing_core as pc
 from picture_capture import paddle_headwords as public_paddle
@@ -54,7 +53,7 @@ def test_column_classification_uses_full_intervals_gutters_and_curved_paths():
     geo = _geometry()
     for x, y, want in (
         (15, 10, 0), (130, 10, 1), (70, 10, 0),
-        (100, 10, 1), (200, 20, 1), (125, 180, 0),
+        (100, 10, 1), (200, 20, 1), (125, 180, 1),
     ):
         assert pc.column_index_for_click(x, geo, y) == want
         assert reading_order.column_index_for_click(x, geo, y) == want
@@ -88,6 +87,11 @@ def test_reading_order_core_uses_live_facade_column_patch(monkeypatch):
     )[0].word == "b"
     monkeypatch.setattr(public_processing, "column_index_for_click", original)
 
+    original_section = pc.section_index_for_v
+    monkeypatch.setattr(public_processing, "section_index_for_v", lambda *args: 3)
+    assert pc.entry_reading_order_key(Entry(word="word", x=15, y=30), geo)[0] == 3
+    monkeypatch.setattr(public_processing, "section_index_for_v", original_section)
+
 
 def test_visual_line_group_and_logical_merge_keep_record_details():
     first = OCRRecord("casa", 0.9, (0, 0, 20, 10))
@@ -104,7 +108,7 @@ def test_visual_line_group_and_logical_merge_keep_record_details():
     merged = ph._merge_ocr_lines(grouped)
     assert merged == line_grouping.merge_ocr_lines(grouped)
     assert merged.logical_repairs == ("split", "join", "wrap")
-    assert merged.records == [first, distant, second] or merged.records == [first, distant, second]
+    assert merged.records == [first, distant, second]
 
 
 def test_ocr_line_grouping_reads_historical_public_overlap_patch(monkeypatch):

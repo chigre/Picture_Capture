@@ -51,6 +51,32 @@ These changes do not rename or relocate the public `processing_core`,
 The root count stays at ten. OCRRecord and HeadwordParse remain the
 existing classes with unchanged pickle identities.
 
+## Fourth and fifth extraction batches — 2026-10-24
+
+- `crop/entry_column_bounds.py` owns per-column crop box calculations;
+  `processing_core` forwards using live source-pixel conversion and box clamp
+  callbacks. `ocr/lemma_repairs.py` owns length-preserving OCR digit-confusion
+  repair. These remain non-persistent helpers.
+- `geometry/reading_order.py` owns interval/gutter-aware click classification,
+  SECTION-first reading order and PDIC repair sorting. Historical core entrypoints
+  inject live column-classifier, SECTION indexing and normalization callbacks,
+  rather than capturing public patch targets at import time. The real Geometry
+  data class is **not** relocated to this calculation-only leaf.
+- `ocr/line_grouping.py` owns OCRRecord grouping and logical line merging,
+  while preserving original OCRLine model identity and live overlap callback.
+- Characterization tests `test_issue562_core_leaf_round4_20261024.py` and
+  `test_issue562_core_leaf_round5_20261024.py` check structured page ordering,
+  image crop geometry, OCR text/box/score parity and old monkeypatch hooks.
+
+## Exact-head test status notes
+
+Earlier Windows Python 3.13 CI on `5b891ecb` reported
+`_tkinter.TclError: Can't find a usable init.tcl` during a Tk-only test.
+The Linux/macOS and Python 3.10 suites passed on that head; the Tcl/Tk runner
+issue must be assessed separately, not conflated with OCR/geometry parity.
+The current refactor commits must be judged on their **own** exact-head CI and
+OCR smoke results before PR readiness.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,

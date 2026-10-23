@@ -7,11 +7,15 @@ at each call; no persisted Entry/Geometry class is moved to this module.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeAlias
 from ..models import Entry
 from ..persistence.page_sections import (
     PageSection, section_index_for_v, normalize_page_sections,
 )
+
+# The concrete Geometry class stays in processing_core for pickle and import
+# compatibility. Avoid a runtime import cycle in this calculation-only leaf.
+Geometry: TypeAlias = Any
 
 
 def column_index_for_click(x: int, geometry: Geometry, y: int = 0) -> int:
