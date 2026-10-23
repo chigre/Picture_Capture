@@ -54,6 +54,7 @@ def test_queue_sanitizes_uses_160ms_and_cancels_reverted_edit():
         _filter_pending_changes={}, _filter_save_job=None,
         after=lambda ms, fn: scheduled.append((ms, fn)) or "timer",
         after_cancel=canceled.append,
+        _flush_focused_changes=lambda: None,
     )
     deps = SimpleNamespace(tk=SimpleNamespace(TclError=Exception))
     target = {"page_index": 2, "x": 10, "y": 20, "original_word": "甲"}
