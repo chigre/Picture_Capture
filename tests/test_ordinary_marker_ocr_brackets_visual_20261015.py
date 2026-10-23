@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image, ImageDraw
 
-from picture_capture.entry_classification import (
+from picture_capture.proofreading.classification import (
     get_entry_classification, register_entry_classification,
 )
 from picture_capture.ocr.entry_crop import (

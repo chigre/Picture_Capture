@@ -2447,6 +2447,38 @@ def collect_violations() -> list[str]:
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
 
+    # Enforce retired root imports across code/tests, including strings the
+    # GitHub code-search index may not surface. Only executable AST imports.
+    retired_imports = {
+        "picture_capture.entry_classification",
+        "picture_capture.image_preprocessing",
+    }
+    for scan_root in (PACKAGE_ROOT, PACKAGE_ROOT.parents[1] / "tests",
+                      PACKAGE_ROOT.parents[1] / "scripts"):
+        if not scan_root.is_dir():
+            continue
+        for scan_path in scan_root.rglob("*.py"):
+            if scan_path == Path(__file__):
+                continue
+            try:
+                imported_tree = ast.parse(scan_path.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue  # independent compilation check reports syntax errors
+            for node in ast.walk(imported_tree):
+                if isinstance(node, ast.Import):
+                    if any(alias.name in retired_imports for alias in node.names):
+                        violations.append(f"retired module import: {scan_path}")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in retired_imports:
+                        violations.append(f"retired from-import: {scan_path}")
+                    if node.module == "picture_capture" and any(
+                        alias.name in {"entry_classification", "image_preprocessing"}
+                        for alias in node.names
+                    ):
+                        violations.append(f"retired package import: {scan_path}")
+                    if node.module in {"entry_classification", "image_preprocessing"} and node.level:
+                        violations.append(f"retired relative import: {scan_path}")
+
     # Issue #562: relocate both public functional owners without root shims.
     for old, new in (
         ("entry_classification.py", "proofreading/classification.py"),
