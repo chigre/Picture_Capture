@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import tkinter as tk
     from PIL import Image
 
 
@@ -34,6 +35,7 @@ class ReviewWorkspaceDeps:
     _focused_review_is_single_character: object
     simplified_entry_key: object
     replace: object
+    appearance_palette: object
 
 
 def _build(self, deps: ReviewWorkspaceDeps) -> None:
@@ -958,4 +960,222 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         self._set_editor_membership_color(
             row_index, row_entry.word in words
         )
+
+
+def _change_review_mode(self, deps: ReviewWorkspaceDeps) -> None:
+    """Switch modes without running a filter merely because 筛选 was selected."""
+    if self.review_mode_var.get() != "single":
+        self.parent.status_var.set("已选择筛选模式；设置条件后点击【筛选】才会刷新工作区。")
+        return
+    self._flush_focused_changes_now()
+    self._filter_rows_active = False
+    self._set_filter_navigation(False)
+    self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
+    self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
+    self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
+    self.parent._invalidate_ui_worker(f"focused-filter-prefetch-{id(self)}")
+    self._filter_batch_render_cache.clear()
+    self._filter_prefetch_key = None
+    self._filter_scan_complete = True
+    self._request_render_rows(focus_index=0, reset_scroll=True)
+
+
+def _set_filter_navigation(self, deps: ReviewWorkspaceDeps, active: bool) -> None:
+    tk = deps.tk
+    """Reuse the normal side navigation as batch navigation in filter mode."""
+    try:
+        self.prev_page_button.configure(text=("上\n一\n批" if active else "上\n一\n页"))
+        self.next_page_button.configure(text=("下\n一\n批" if active else "下\n一\n页"))
+    except tk.TclError:
+        return
+
+
+def _clear_review_workspace(self, deps: ReviewWorkspaceDeps, message: str = "") -> None:
+    ttk = deps.ttk
+    for child in self.rows.winfo_children():
+        child.destroy()
+    self.vars.clear()
+    self.row_entries.clear()
+    self.editors.clear()
+    self.editor_frames.clear()
+    self.simplified_vars.clear()
+    self.simplified_editors.clear()
+    self.simplified_search_buttons.clear()
+    self.simplified_actual_values.clear()
+    self.simplified_manual_flags.clear()
+    self.simplified_auto_refresh_flags.clear()
+    self.editor_crop_widths.clear()
+    self.thumbnails.clear()
+    self.filter_vars = []
+    self.filter_editors = []
+    self.filter_thumbnails = []
+    self._filter_current_batch_targets = []
+    if message:
+        ttk.Label(
+            self.rows, text=message, style="PCR.Body.TLabel",
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=24)
+        self.rows.columnconfigure(0, weight=1)
+
+
+def copy_char(self, deps: ReviewWorkspaceDeps, char: str) -> str:
+    tk = deps.tk
+    try:
+        self.clipboard_clear()
+        self.clipboard_append(str(char))
+        self.update_idletasks()
+        self.parent.status_var.set(f"已复制变音字符：{char}")
+    except tk.TclError:
+        pass
+    return "break"
+
+
+def _review_membership_colors(
+    self, deps: ReviewWorkspaceDeps, in_wordslist: bool,
+) -> tuple[str, str, str, str]:
+    appearance_palette = deps.appearance_palette
+    palette = appearance_palette(self.parent.appearance_mode)
+    background = palette["review_present_bg"] if in_wordslist else palette["review_absent_bg"]
+    return (
+        background,
+        palette["review_membership_fg"],
+        palette["review_membership_select_bg"],
+        palette["review_membership_select_fg"],
+    )
+
+
+def _configure_word_list_appearance(self, deps: ReviewWorkspaceDeps) -> None:
+    tk = deps.tk
+    appearance_palette = deps.appearance_palette
+    palette = appearance_palette(self.parent.appearance_mode)
+    dark = self.parent.appearance_mode == "dark"
+    selection_bg = "#d9d9d9" if dark else "#dce8f7"
+    try:
+        self.word_list.configure(
+            background=palette["input_bg"],
+            foreground=palette["input_fg"],
+            selectbackground=selection_bg,
+            selectforeground="#111827",
+            highlightbackground=palette["border"],
+            highlightcolor=palette["border"],
+        )
+        self.word_list.tag_configure("wordslist_number", foreground=palette["muted"])
+        self.word_list.tag_configure(
+            "wordslist_target", background="#d9d9d9", foreground="#111827"
+        )
+    except tk.TclError:
+        return
+    self.word_list_default_bg = palette["input_bg"]
+    self.word_list_default_fg = palette["input_fg"]
+
+
+def _clear_word_list_rows(self, deps: ReviewWorkspaceDeps) -> None:
+    tk = deps.tk
+    self.word_selected_local_index = None
+    try:
+        self.word_list.configure(state="normal")
+        self.word_list.delete("1.0", "end")
+        self.word_list.configure(state="disabled")
+    except tk.TclError:
+        return
+
+
+def _render_word_list_rows(self, deps: ReviewWorkspaceDeps, words: list[str]) -> None:
+    tk = deps.tk
+    self.word_selected_local_index = None
+    try:
+        self.word_list.configure(state="normal")
+        self.word_list.delete("1.0", "end")
+        digits = max(1, len(str(len(words))))
+        for offset, global_index in enumerate(self.word_window_indices):
+            self.word_list.insert(
+                "end", f"{global_index + 1:>{digits}}", ("wordslist_number",)
+            )
+            self.word_list.insert(
+                "end", f"  {words[global_index]}", ("wordslist_word",)
+            )
+            if offset + 1 < len(self.word_window_indices):
+                self.word_list.insert("end", "\n")
+        self.word_list.configure(state="disabled")
+    except tk.TclError:
+        return
+
+
+def _set_word_list_highlight(self, deps: ReviewWorkspaceDeps, local: int | None) -> None:
+    tk = deps.tk
+    try:
+        self.word_list.tag_remove("wordslist_target", "1.0", "end")
+        if local is None or not (0 <= int(local) < len(self.word_window_indices)):
+            return
+        line = int(local) + 1
+        self.word_list.tag_add(
+            "wordslist_target", f"{line}.0", f"{line}.end"
+        )
+        self.word_list.tag_raise("wordslist_target")
+        self.word_list.see(f"{line}.0")
+    except tk.TclError:
+        return
+
+
+def _word_list_local_index_from_event(self, deps: ReviewWorkspaceDeps, event: tk.Event) -> int | None:
+    tk = deps.tk
+    try:
+        line = int(str(self.word_list.index(f"@{event.x},{event.y}")).split(".", 1)[0])
+    except (tk.TclError, ValueError):
+        return None
+    local = line - 1
+    if not (0 <= local < len(self.word_window_indices)):
+        return None
+    return local
+
+
+def _toggle_review_panel(self, deps: ReviewWorkspaceDeps, panel: str) -> None:
+    if panel == "digit":
+        expanded = not self.digit_map_expanded.get()
+        self.digit_map_expanded.set(expanded)
+        self.digit_panel_title.set(("▾ " if expanded else "▸ ") + "数字替换映射")
+        if expanded:
+            self.digit_panel_body.pack(fill="x")
+        else:
+            self.digit_panel_body.pack_forget()
+        return
+    expanded = not self.accent_panel_expanded.get()
+    self.accent_panel_expanded.set(expanded)
+    self.accent_panel_title.set(("▾ " if expanded else "▸ ") + "变音字符")
+    if expanded:
+        self.accent_panel_body.pack(fill="x")
+    else:
+        self.accent_panel_body.pack_forget()
+
+
+def _sync_autosave_label(self, deps: ReviewWorkspaceDeps) -> None:
+    seconds = max(1.0, float(getattr(self.parent.settings, "batch_interval", 1.0)))
+    value = f"{seconds:g}"
+    self.autosave_label_var.set(f"自动：{value} s")
+
+
+def _toggle_shared_autosave(self, deps: ReviewWorkspaceDeps) -> None:
+    self._sync_autosave_label()
+    self.parent.toggle_autosave()
+
+
+def open_sort_rules(self, deps: ReviewWorkspaceDeps) -> None:
+    # Reuse the same modeless Settings Center so the main image remains
+    # available for reference while settings are edited.
+    self.parent.open_settings(initial_tab="sort")
+
+
+def run_order_check(self, deps: ReviewWorkspaceDeps) -> None:
+    self.check_order(self.order_scope_var.get() == "all")
+
+
+def _update_title(self, deps: ReviewWorkspaceDeps) -> None:
+    page = self.parent.current_page.name if self.parent.current_page else ""
+    if getattr(self, "_filter_rows_active", False):
+        total = len(self.filtered_targets)
+        self.title(f"词条校对 — 筛选模式 — 共 {total} 条")
+        return
+    total = len(self.editors)
+    current = self.active_index + 1 if total else 0
+    remaining = max(0, total - current)
+    self.title(f"词条校对 — {page} — 当前: {current} 剩余: {remaining} 合计: {total}")
 

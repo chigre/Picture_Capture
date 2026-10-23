@@ -125,6 +125,8 @@ from .ui.controllers import (
 )
 from .ui import project_session_workflow as _project_session
 from .ui import review_workspace_workflow as _review_workspace
+from .ui import review_reference_workflow as _review_reference
+from .ui import review_appearance_workflow as _review_appearance
 from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
 from .ui import main_canvas_render_workflow as _main_canvas_render
@@ -2518,57 +2520,16 @@ class ReviewWindow(tk.Toplevel):
         return _review_workspace._build(self, _review_workspace_deps())
 
     def _change_review_mode(self) -> None:
-        """Switch modes without running a filter merely because 筛选 was selected."""
-        if self.review_mode_var.get() != "single":
-            self.parent.status_var.set("已选择筛选模式；设置条件后点击【筛选】才会刷新工作区。")
-            return
-        self._flush_focused_changes_now()
-        self._filter_rows_active = False
-        self._set_filter_navigation(False)
-        self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-prefetch-{id(self)}")
-        self._filter_batch_render_cache.clear()
-        self._filter_prefetch_key = None
-        self._filter_scan_complete = True
-        self._request_render_rows(focus_index=0, reset_scroll=True)
+        return _review_workspace._change_review_mode(self, _review_workspace_deps())
 
     def _set_filter_navigation(self, active: bool) -> None:
-        """Reuse the normal side navigation as batch navigation in filter mode."""
-        try:
-            self.prev_page_button.configure(text=("上\n一\n批" if active else "上\n一\n页"))
-            self.next_page_button.configure(text=("下\n一\n批" if active else "下\n一\n页"))
-        except tk.TclError:
-            return
+        return _review_workspace._set_filter_navigation(self, _review_workspace_deps(), active)
 
     def _persist_focused_filter_settings(self) -> None:
         return _focused_filter._persist_focused_filter_settings(self, _focused_filter_deps())
 
     def _clear_review_workspace(self, message: str = "") -> None:
-        for child in self.rows.winfo_children():
-            child.destroy()
-        self.vars.clear()
-        self.row_entries.clear()
-        self.editors.clear()
-        self.editor_frames.clear()
-        self.simplified_vars.clear()
-        self.simplified_editors.clear()
-        self.simplified_search_buttons.clear()
-        self.simplified_actual_values.clear()
-        self.simplified_manual_flags.clear()
-        self.simplified_auto_refresh_flags.clear()
-        self.editor_crop_widths.clear()
-        self.thumbnails.clear()
-        self.filter_vars = []
-        self.filter_editors = []
-        self.filter_thumbnails = []
-        self._filter_current_batch_targets = []
-        if message:
-            ttk.Label(
-                self.rows, text=message, style="PCR.Body.TLabel",
-            ).grid(row=0, column=0, sticky="w", padx=12, pady=24)
-            self.rows.columnconfigure(0, weight=1)
+        return _review_workspace._clear_review_workspace(self, _review_workspace_deps(), message)
 
     def run_focused_filter(self) -> None:
         return _focused_filter.run_focused_filter(self, _focused_filter_deps())
@@ -2643,146 +2604,45 @@ class ReviewWindow(tk.Toplevel):
         return _focused_filter._flush_focused_changes(self, _focused_filter_deps())
 
     def copy_char(self, char: str) -> str:
-        try:
-            self.clipboard_clear()
-            self.clipboard_append(str(char))
-            self.update_idletasks()
-            self.parent.status_var.set(f"已复制变音字符：{char}")
-        except tk.TclError:
-            pass
-        return "break"
+        return _review_workspace.copy_char(self, _review_workspace_deps(), char)
 
     def _review_membership_colors(
         self, in_wordslist: bool,
     ) -> tuple[str, str, str, str]:
-        palette = appearance_palette(self.parent.appearance_mode)
-        background = palette["review_present_bg"] if in_wordslist else palette["review_absent_bg"]
-        return (
-            background,
-            palette["review_membership_fg"],
-            palette["review_membership_select_bg"],
-            palette["review_membership_select_fg"],
-        )
+        return _review_workspace._review_membership_colors(self, _review_workspace_deps(), in_wordslist)
 
     def _configure_word_list_appearance(self) -> None:
-        palette = appearance_palette(self.parent.appearance_mode)
-        dark = self.parent.appearance_mode == "dark"
-        selection_bg = "#d9d9d9" if dark else "#dce8f7"
-        try:
-            self.word_list.configure(
-                background=palette["input_bg"],
-                foreground=palette["input_fg"],
-                selectbackground=selection_bg,
-                selectforeground="#111827",
-                highlightbackground=palette["border"],
-                highlightcolor=palette["border"],
-            )
-            self.word_list.tag_configure("wordslist_number", foreground=palette["muted"])
-            self.word_list.tag_configure(
-                "wordslist_target", background="#d9d9d9", foreground="#111827"
-            )
-        except tk.TclError:
-            return
-        self.word_list_default_bg = palette["input_bg"]
-        self.word_list_default_fg = palette["input_fg"]
+        return _review_workspace._configure_word_list_appearance(self, _review_workspace_deps())
 
     def _clear_word_list_rows(self) -> None:
-        self.word_selected_local_index = None
-        try:
-            self.word_list.configure(state="normal")
-            self.word_list.delete("1.0", "end")
-            self.word_list.configure(state="disabled")
-        except tk.TclError:
-            return
+        return _review_workspace._clear_word_list_rows(self, _review_workspace_deps())
 
     def _render_word_list_rows(self, words: list[str]) -> None:
-        self.word_selected_local_index = None
-        try:
-            self.word_list.configure(state="normal")
-            self.word_list.delete("1.0", "end")
-            digits = max(1, len(str(len(words))))
-            for offset, global_index in enumerate(self.word_window_indices):
-                self.word_list.insert(
-                    "end", f"{global_index + 1:>{digits}}", ("wordslist_number",)
-                )
-                self.word_list.insert(
-                    "end", f"  {words[global_index]}", ("wordslist_word",)
-                )
-                if offset + 1 < len(self.word_window_indices):
-                    self.word_list.insert("end", "\n")
-            self.word_list.configure(state="disabled")
-        except tk.TclError:
-            return
+        return _review_workspace._render_word_list_rows(self, _review_workspace_deps(), words)
 
     def _set_word_list_highlight(self, local: int | None) -> None:
-        try:
-            self.word_list.tag_remove("wordslist_target", "1.0", "end")
-            if local is None or not (0 <= int(local) < len(self.word_window_indices)):
-                return
-            line = int(local) + 1
-            self.word_list.tag_add(
-                "wordslist_target", f"{line}.0", f"{line}.end"
-            )
-            self.word_list.tag_raise("wordslist_target")
-            self.word_list.see(f"{line}.0")
-        except tk.TclError:
-            return
+        return _review_workspace._set_word_list_highlight(self, _review_workspace_deps(), local)
 
     def _word_list_local_index_from_event(self, event: tk.Event) -> int | None:
-        try:
-            line = int(str(self.word_list.index(f"@{event.x},{event.y}")).split(".", 1)[0])
-        except (tk.TclError, ValueError):
-            return None
-        local = line - 1
-        if not (0 <= local < len(self.word_window_indices)):
-            return None
-        return local
+        return _review_workspace._word_list_local_index_from_event(self, _review_workspace_deps(), event)
 
     def _toggle_review_panel(self, panel: str) -> None:
-        if panel == "digit":
-            expanded = not self.digit_map_expanded.get()
-            self.digit_map_expanded.set(expanded)
-            self.digit_panel_title.set(("▾ " if expanded else "▸ ") + "数字替换映射")
-            if expanded:
-                self.digit_panel_body.pack(fill="x")
-            else:
-                self.digit_panel_body.pack_forget()
-            return
-        expanded = not self.accent_panel_expanded.get()
-        self.accent_panel_expanded.set(expanded)
-        self.accent_panel_title.set(("▾ " if expanded else "▸ ") + "变音字符")
-        if expanded:
-            self.accent_panel_body.pack(fill="x")
-        else:
-            self.accent_panel_body.pack_forget()
+        return _review_workspace._toggle_review_panel(self, _review_workspace_deps(), panel)
 
     def _sync_autosave_label(self) -> None:
-        seconds = max(1.0, float(getattr(self.parent.settings, "batch_interval", 1.0)))
-        value = f"{seconds:g}"
-        self.autosave_label_var.set(f"自动：{value} s")
+        return _review_workspace._sync_autosave_label(self, _review_workspace_deps())
 
     def _toggle_shared_autosave(self) -> None:
-        self._sync_autosave_label()
-        self.parent.toggle_autosave()
+        return _review_workspace._toggle_shared_autosave(self, _review_workspace_deps())
 
     def open_sort_rules(self) -> None:
-        # Reuse the same modeless Settings Center so the main image remains
-        # available for reference while settings are edited.
-        self.parent.open_settings(initial_tab="sort")
+        return _review_workspace.open_sort_rules(self, _review_workspace_deps())
 
     def run_order_check(self) -> None:
-        self.check_order(self.order_scope_var.get() == "all")
+        return _review_workspace.run_order_check(self, _review_workspace_deps())
 
     def _update_title(self) -> None:
-        page = self.parent.current_page.name if self.parent.current_page else ""
-        if getattr(self, "_filter_rows_active", False):
-            total = len(self.filtered_targets)
-            self.title(f"词条校对 — 筛选模式 — 共 {total} 条")
-            return
-        total = len(self.editors)
-        current = self.active_index + 1 if total else 0
-        remaining = max(0, total - current)
-        self.title(f"词条校对 — {page} — 当前: {current} 剩余: {remaining} 合计: {total}")
+        return _review_workspace._update_title(self, _review_workspace_deps())
 
     def _finish_close_review(self) -> None:
         if self.parent.review_window is self:
@@ -2867,27 +2727,10 @@ class ReviewWindow(tk.Toplevel):
         return True
 
     def _effective_wordslist_locator_mode(self) -> str:
-        """Resolve the auxiliary-list locator without assuming page alignment.
-
-        Chinese projects default to a sorted external-index workflow because a
-        one-word-per-line index copied from another dictionary can contain many
-        missing/extra entries. Latin projects keep the historical sequential
-        behaviour unless the user explicitly selects the external-index mode.
-        """
-        settings = getattr(self.parent, "settings", None)
-        mode = str(getattr(settings, "wordslist_locator_mode", "auto") or "auto").lower()
-        if mode in {"sorted", "sequential"}:
-            return mode
-        if settings is not None and _is_cjk_review_index(settings):
-            return "sorted"
-        return "sequential"
+        return _review_reference._effective_wordslist_locator_mode(self, _review_reference_deps())
 
     def _change_wordslist_locator_mode(self, _event: tk.Event | None = None) -> None:
-        key = self.WORDSLIST_LOCATOR_LABEL_TO_KEY.get(self.wordslist_locator_var.get(), "auto")
-        self.parent.settings.wordslist_locator_mode = key
-        self.parent.save_settings()
-        self._previous_reference_base_cache = None
-        self.refresh_wordslist_display()
+        return _review_reference._change_wordslist_locator_mode(self, _review_reference_deps(), _event)
 
     def _refresh_cc_cedict_button_idle(self) -> None:
         try:
@@ -3258,153 +3101,19 @@ class ReviewWindow(tk.Toplevel):
 
     @staticmethod
     def _wordslist_lookup_key(word: str) -> str:
-        """Cheap lookup key for the auxiliary list, not for dictionary order validation.
-
-        Full collation_key() intentionally supports custom alphabets and multi-letter
-        collation units, but compiling that machinery 190k times is unnecessary for
-        merely positioning the review helper near an OCR word. Exact spelling lookup
-        is attempted first; this folded key is only the fallback.
-        """
-        text = unicodedata.normalize("NFKD", (word or "").casefold().strip())
-        return "".join(ch for ch in text if not unicodedata.combining(ch) and ch.isalnum())
+        return _review_reference._wordslist_lookup_key(_review_reference_deps(), word)
 
     def refresh_wordslist_display(self) -> None:
-        reference_words = self.parent.project.words if self.parent.project else []
-        self._clear_word_list_rows()
-        self.word_highlight_index = None
-        self.word_window_start = 0
-        self.word_window_indices = []
-
-        # Build the lookup structures once when the file changes.  This is O(n)
-        # plus one sort, but unlike the old implementation it never creates
-        # 190k Tk list items.  Exact lookup is the common path during review.
-        self.word_keys = [self._wordslist_lookup_key(word) for word in reference_words]
-        self.word_exact_index = {}
-        self.word_exact_indices = {}
-        for i, word in enumerate(reference_words):
-            key = word.strip().casefold()
-            self.word_exact_index.setdefault(key, i)
-            self.word_exact_indices.setdefault(key, []).append(i)
-        # Keep the historical lightweight folded index for Latin/sequential
-        # fallback.  Do NOT precompute pinyin for a 100k–200k Chinese index:
-        # sorted external-index lookup below performs a lazy O(log n) binary
-        # search and caches only the handful of probed pinyin keys.
-        if self.word_keys and all(self.word_keys[i - 1] <= self.word_keys[i] for i in range(1, len(self.word_keys))):
-            self.sorted_word_keys = self.word_keys
-            self.sorted_word_indices = list(range(len(self.word_keys)))
-        else:
-            lightweight_pairs = sorted((key, i) for i, key in enumerate(self.word_keys))
-            self.sorted_word_keys = [key for key, _i in lightweight_pairs]
-            self.sorted_word_indices = [i for _key, i in lightweight_pairs]
-        self.word_sort_key_cache = {}
-
-        if self.parent.project:
-            path = resolve_wordslist_path(self.parent.project.root, self.parent.settings.wordslist_path)
-            self.word_window_var.set(f"{path.name} | 0-0 / {len(reference_words)}")
-        else:
-            self.word_window_var.set("未选择 | 0-0 / 0")
-        if reference_words:
-            if self.vars and 0 <= self.active_index < len(self.vars):
-                self.locate_reference_word(self.vars[self.active_index].get())
-            else:
-                self._show_wordslist_window(0)
+        return _review_reference.refresh_wordslist_display(self, _review_reference_deps())
 
     def _show_wordslist_window(self, target: int) -> None:
-        """Render only a small window around one global wordslist index."""
-        words = self.parent.project.words if self.parent.project else []
-        if not words:
-            self._clear_word_list_rows()
-            self.word_window_indices = []
-            self.word_window_start = 0
-            self.word_highlight_index = None
-            if hasattr(self, "word_window_var"):
-                if self.parent.project:
-                    path = resolve_wordslist_path(
-                        self.parent.project.root, self.parent.settings.wordslist_path
-                    )
-                    self.word_window_var.set(f"{path.name} | 0-0 / 0")
-                else:
-                    self.word_window_var.set("未选择 | 0-0 / 0")
-            return
-        target = max(0, min(int(target), len(words) - 1))
-        span = self.word_window_radius * 2 + 1
-        start = max(0, target - self.word_window_radius)
-        start = min(start, max(0, len(words) - span))
-        end = min(len(words), start + span)
-        self.word_window_start = start
-        self.word_window_indices = list(range(start, end))
-        if hasattr(self, "word_window_var"):
-            path = resolve_wordslist_path(
-                self.parent.project.root, self.parent.settings.wordslist_path
-            )
-            self.word_window_var.set(
-                f"{path.name} | {start + 1}-{end} / {len(words)}"
-            )
-        self._render_word_list_rows(words)
-        local = target - start
-        self.word_highlight_index = local
-        self._set_word_list_highlight(local)
+        return _review_reference._show_wordslist_window(self, _review_reference_deps(), target)
 
     def shift_wordslist_window(self, direction: int) -> None:
-        """Browse the large reference list by 100 rows without bulk rendering."""
-        words = self.parent.project.words if self.parent.project else []
-        if not words:
-            return
-        span = self.word_window_radius * 2 + 1
-        step = 100
-        start = max(
-            0,
-            min(
-                self.word_window_start + int(direction) * step,
-                max(0, len(words) - span),
-            ),
-        )
-        target = min(
-            len(words) - 1,
-            start + min(self.word_window_radius, max(0, len(words) - 1 - start)),
-        )
-        self._show_wordslist_window(target)
+        return _review_reference.shift_wordslist_window(self, _review_reference_deps(), direction)
 
     def choose_wordslist_file(self) -> None:
-        if not self.parent.project:
-            return
-        current = resolve_wordslist_path(self.parent.project.root, self.parent.settings.wordslist_path)
-        chosen = filedialog.askopenfilename(
-            parent=self, title="选择 wordslist 参考词表",
-            initialdir=str(current.parent if current.parent.exists() else self.parent.project.root),
-            initialfile=current.name if current.name else "wordslist.txt",
-            filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")],
-        )
-        if not chosen:
-            return
-        self.word_window_var.set(f"{Path(chosen).name} | 正在读取…")
-
-        def loaded(path: Path, count: int) -> None:
-            try:
-                if not self.winfo_exists():
-                    return
-            except tk.TclError:
-                return
-            self.refresh_wordslist_display()
-            words = self.parent._project_words
-            for i, _editor in enumerate(self.editors):
-                self._set_editor_membership_color(i, self.vars[i].get().strip() in words)
-            self.parent.status_var.set(
-                f"已选择 wordslist：{path}｜{count} 条；校对右侧参考词表已更新。"
-            )
-
-        def failed(exc: Exception) -> None:
-            try:
-                if self.winfo_exists():
-                    self.refresh_wordslist_display()
-                    messagebox.showerror("wordslist 读取失败", str(exc), parent=self)
-            except tk.TclError:
-                pass
-
-        self.parent._request_wordslist_reload(
-            Path(chosen), persist=True, redraw=True,
-            on_done=loaded, on_error=failed,
-        )
+        return _review_reference.choose_wordslist_file(self, _review_reference_deps())
 
     # Thin class-level UI delegation; the transaction service owns decisions.
     from .ui.review_transaction_actions import undo_saved_review, redo_saved_review
@@ -3643,153 +3352,28 @@ class ReviewWindow(tk.Toplevel):
             self._refresh_cc_simplified_comparison(index)
 
     def _schedule_review_font_apply(self) -> None:
-        """Apply review-font edits quickly while coalescing rapid Spinbox typing."""
-        if self._review_font_apply_job is not None:
-            try:
-                self.after_cancel(self._review_font_apply_job)
-            except tk.TclError:
-                pass
-        self._review_font_apply_job = self.after(120, self._apply_review_font_settings)
+        return _review_appearance._schedule_review_font_apply(self, _review_appearance_deps())
 
     def _apply_review_font_settings(self) -> None:
-        self._review_font_apply_job = None
-        family = normalize_content_font_setting(self.review_font_family_var.get())
-        try:
-            size = int(float(self.review_font_size_var.get().strip()))
-        except (TypeError, ValueError):
-            return
-        size = max(6, min(96, size))
-        # Normalize the visible value after clamping, but avoid recursive work
-        # unless the text actually differs.
-        if self.review_font_size_var.get() != str(size):
-            self.review_font_size_var.set(str(size))
-            return
-        bold = bool(self.review_font_bold_var.get())
-        italic = bool(self.review_font_italic_var.get())
-        settings = self.parent.settings
-        settings.review_entry_font_family = family
-        settings.review_entry_font_size = size
-        settings.review_font_semantics_version = 2
-        settings.review_entry_font_bold = bold
-        settings.review_entry_font_italic = italic
-
-        resolved_family = resolve_content_font_family(
-            self, family, self.parent.settings.ocr_language,
-        )
-        spec = _entry_font_spec(resolved_family, size, bold, italic)
-        measure_font = font.Font(
-            family=resolved_family, size=size,
-            weight="bold" if bold else "normal",
-            slant="italic" if italic else "roman",
-        )
-        char_px = max(1, measure_font.measure("0"))
-        for index, editor in enumerate(self.editors):
-            width_px = self.editor_crop_widths[index] if index < len(self.editor_crop_widths) else 0
-            width_chars = max(8, min(140, round(width_px / char_px))) if width_px else int(editor.cget("width"))
-            try:
-                editor.configure(font=spec, width=width_chars)
-            except tk.TclError:
-                pass
-        self.parent.save_settings()
+        return _review_appearance._apply_review_font_settings(self, _review_appearance_deps())
 
     def _schedule_review_simplified_font_apply(self) -> None:
-        """Coalesce edits to the Simplified companion typography."""
-        if self._review_simplified_font_apply_job is not None:
-            try:
-                self.after_cancel(self._review_simplified_font_apply_job)
-            except tk.TclError:
-                pass
-        self._review_simplified_font_apply_job = self.after(120, self._apply_review_simplified_font_settings)
+        return _review_appearance._schedule_review_simplified_font_apply(self, _review_appearance_deps())
 
     def _apply_review_simplified_font_settings(self) -> None:
-        self._review_simplified_font_apply_job = None
-        family = normalize_content_font_setting(self.review_simplified_font_family_var.get())
-        try:
-            size = int(float(self.review_simplified_font_size_var.get().strip()))
-        except (TypeError, ValueError):
-            return
-        size = max(6, min(96, size))
-        if self.review_simplified_font_size_var.get() != str(size):
-            self.review_simplified_font_size_var.set(str(size))
-            return
-        bold = bool(self.review_simplified_font_bold_var.get())
-        italic = bool(self.review_simplified_font_italic_var.get())
-        settings = self.parent.settings
-        settings.review_simplified_font_family = family
-        settings.review_simplified_font_size = size
-        settings.review_simplified_font_bold = bold
-        settings.review_simplified_font_italic = italic
-
-        resolved_family = resolve_content_font_family(
-            self, family, self.parent.settings.ocr_language,
-        )
-        spec = _entry_font_spec(resolved_family, size, bold, italic)
-        measure_font = font.Font(
-            family=resolved_family, size=size,
-            weight="bold" if bold else "normal",
-            slant="italic" if italic else "roman",
-        )
-        char_px = max(1, measure_font.measure("0"))
-        for index, editor in enumerate(self.simplified_editors):
-            width_px = self.editor_crop_widths[index] if index < len(self.editor_crop_widths) else 0
-            width_chars = max(8, min(140, round(width_px / char_px))) if width_px else int(editor.cget("width"))
-            try:
-                editor.configure(font=spec, width=width_chars)
-            except tk.TclError:
-                pass
-        self.parent.save_settings()
+        return _review_appearance._apply_review_simplified_font_settings(self, _review_appearance_deps())
 
     def _schedule_review_padding_apply(self) -> None:
-        if self._review_padding_apply_job is not None:
-            try:
-                self.after_cancel(self._review_padding_apply_job)
-            except tk.TclError:
-                pass
-        self._review_padding_apply_job = self.after(120, self._apply_review_padding_setting)
+        return _review_appearance._schedule_review_padding_apply(self, _review_appearance_deps())
 
     def _apply_review_padding_setting(self) -> None:
-        self._review_padding_apply_job = None
-        try:
-            padding = int(float(self.review_left_padding_var.get().strip()))
-        except (TypeError, ValueError):
-            return
-        padding = max(0, min(80, padding))
-        if self.review_left_padding_var.get() != str(padding):
-            self.review_left_padding_var.set(str(padding))
-            return
-        self.parent.settings.review_entry_left_padding = padding
-        for editor in self.editors:
-            try:
-                editor.pack_configure(padx=(padding, 0))
-            except tk.TclError:
-                pass
-        self.parent.save_settings()
+        return _review_appearance._apply_review_padding_setting(self, _review_appearance_deps())
 
     def _schedule_review_vertical_padding_apply(self) -> None:
-        if self._review_vertical_padding_apply_job is not None:
-            try:
-                self.after_cancel(self._review_vertical_padding_apply_job)
-            except tk.TclError:
-                pass
-        self._review_vertical_padding_apply_job = self.after(120, self._apply_review_vertical_padding_setting)
+        return _review_appearance._schedule_review_vertical_padding_apply(self, _review_appearance_deps())
 
     def _apply_review_vertical_padding_setting(self) -> None:
-        self._review_vertical_padding_apply_job = None
-        try:
-            padding = int(float(self.review_vertical_padding_var.get().strip()))
-        except (TypeError, ValueError):
-            return
-        padding = max(0, min(30, padding))
-        if self.review_vertical_padding_var.get() != str(padding):
-            self.review_vertical_padding_var.set(str(padding))
-            return
-        self.parent.settings.review_entry_vertical_padding = padding
-        for editor in self.editors:
-            try:
-                editor.pack_configure(ipady=padding)
-            except tk.TclError:
-                pass
-        self.parent.save_settings()
+        return _review_appearance._apply_review_vertical_padding_setting(self, _review_appearance_deps())
 
     def _review_height_pixels_from_percent_var(
         self,
@@ -3798,13 +3382,7 @@ class ReviewWindow(tk.Toplevel):
         minimum: int,
         maximum: int,
     ) -> tuple[int, str]:
-        raw = variable.get().strip().rstrip("%").strip()
-        percent = float(raw)
-        percent = max(0.0, min(100.0, percent))
-        pixels = _review_height_percent_to_pixels(self.parent.image, percent)
-        pixels = max(minimum, min(maximum, pixels))
-        normalized = _format_review_height_percent(self.parent.image, pixels)
-        return pixels, normalized
+        return _review_appearance._review_height_pixels_from_percent_var(self, _review_appearance_deps(), variable, minimum=minimum, maximum=maximum)
 
     @staticmethod
     def _review_height_pixels_from_pixel_var(
@@ -3813,474 +3391,75 @@ class ReviewWindow(tk.Toplevel):
         minimum: int,
         maximum: int,
     ) -> tuple[int, str]:
-        pixels = int(round(float(variable.get().strip().rstrip("px").strip())))
-        pixels = max(minimum, min(maximum, pixels))
-        return pixels, str(pixels)
+        return _review_appearance._review_height_pixels_from_pixel_var(_review_appearance_deps(), variable, minimum=minimum, maximum=maximum)
 
     def _sync_review_height_vars(self) -> None:
-        """Refresh linked % + px controls without changing persisted pixel values."""
-        self._syncing_review_height_vars = True
-        try:
-            values = (
-                (
-                    self.review_line_height_var,
-                    self.review_line_height_px_var,
-                    max(1, int(self.parent.settings.character_height)),
-                ),
-                (
-                    self.review_row_padding_var,
-                    self.review_row_padding_px_var,
-                    max(0, int(self.parent.settings.row_padding)),
-                ),
-                (
-                    self.review_regular_crop_height_var,
-                    self.review_regular_crop_height_px_var,
-                    _effective_review_regular_crop_height(self.parent.settings),
-                ),
-                (
-                    self.review_single_cjk_line_height_var,
-                    self.review_single_cjk_line_height_px_var,
-                    _effective_review_single_cjk_line_height(self.parent.settings),
-                ),
-            )
-            for percent_var, pixel_var, pixels in values:
-                rendered_percent = _format_review_height_percent(self.parent.image, pixels)
-                rendered_pixels = str(int(pixels))
-                if percent_var.get() != rendered_percent:
-                    percent_var.set(rendered_percent)
-                if pixel_var.get() != rendered_pixels:
-                    pixel_var.set(rendered_pixels)
-            self._review_height_edit_source.clear()
-        finally:
-            self._syncing_review_height_vars = False
+        return _review_appearance._sync_review_height_vars(self, _review_appearance_deps())
 
     def _schedule_review_line_height_apply(self, source: str = "percent") -> None:
-        if self._syncing_review_height_vars:
-            return
-        self._review_height_edit_source["line_height"] = source
-        if self._review_line_height_apply_job is not None:
-            try:
-                self.after_cancel(self._review_line_height_apply_job)
-            except tk.TclError:
-                pass
-        self._review_line_height_apply_job = self.after(160, self._apply_review_line_height_setting)
+        return _review_appearance._schedule_review_line_height_apply(self, _review_appearance_deps(), source)
 
     def _apply_review_line_height_setting(self) -> None:
-        self._review_line_height_apply_job = None
-        try:
-            if self._review_height_edit_source.get("line_height") == "pixel":
-                line_height, _normalized = self._review_height_pixels_from_pixel_var(
-                    self.review_line_height_px_var, minimum=1, maximum=500
-                )
-            else:
-                line_height, _normalized = self._review_height_pixels_from_percent_var(
-                    self.review_line_height_var, minimum=1, maximum=500
-                )
-        except (TypeError, ValueError):
-            return
-        self.parent.settings.character_height = line_height
-        self._sync_review_height_vars()
-        self.parent.sync_quick_settings()
-        self.parent.save_settings()
-        self._commit_edits()
-        active = self.active_index
-        self._request_render_rows(focus_index=active)
-        self.parent.redraw()
+        return _review_appearance._apply_review_line_height_setting(self, _review_appearance_deps())
 
     def _schedule_review_row_padding_apply(self, source: str = "percent") -> None:
-        if self._syncing_review_height_vars:
-            return
-        self._review_height_edit_source["row_padding"] = source
-        if self._review_row_padding_apply_job is not None:
-            try:
-                self.after_cancel(self._review_row_padding_apply_job)
-            except tk.TclError:
-                pass
-        self._review_row_padding_apply_job = self.after(160, self._apply_review_row_padding_setting)
+        return _review_appearance._schedule_review_row_padding_apply(self, _review_appearance_deps(), source)
 
     def _apply_review_row_padding_setting(self) -> None:
-        self._review_row_padding_apply_job = None
-        try:
-            if self._review_height_edit_source.get("row_padding") == "pixel":
-                padding, _normalized = self._review_height_pixels_from_pixel_var(
-                    self.review_row_padding_px_var, minimum=0, maximum=200
-                )
-            else:
-                padding, _normalized = self._review_height_pixels_from_percent_var(
-                    self.review_row_padding_var, minimum=0, maximum=200
-                )
-        except (TypeError, ValueError):
-            return
-        self.parent.settings.row_padding = padding
-        self._sync_review_height_vars()
-        self.parent.sync_quick_settings()
-        self.parent.save_settings()
-        self._commit_edits()
-        self._request_render_rows(focus_index=self.active_index)
-        self.parent.redraw()
+        return _review_appearance._apply_review_row_padding_setting(self, _review_appearance_deps())
 
     def _schedule_review_regular_crop_height_apply(self, source: str = "percent") -> None:
-        if self._syncing_review_height_vars:
-            return
-        self._review_height_edit_source["regular_crop_height"] = source
-        if self._review_regular_crop_height_apply_job is not None:
-            try:
-                self.after_cancel(self._review_regular_crop_height_apply_job)
-            except tk.TclError:
-                pass
-        self._review_regular_crop_height_apply_job = self.after(
-            160, self._apply_review_regular_crop_height_setting
-        )
+        return _review_appearance._schedule_review_regular_crop_height_apply(self, _review_appearance_deps(), source)
 
     def _apply_review_regular_crop_height_setting(self) -> None:
-        self._review_regular_crop_height_apply_job = None
-        try:
-            if self._review_height_edit_source.get("regular_crop_height") == "pixel":
-                height, _normalized = self._review_height_pixels_from_pixel_var(
-                    self.review_regular_crop_height_px_var, minimum=1, maximum=500
-                )
-            else:
-                height, _normalized = self._review_height_pixels_from_percent_var(
-                    self.review_regular_crop_height_var, minimum=1, maximum=500
-                )
-        except (TypeError, ValueError):
-            return
-        self.parent.settings.review_regular_crop_height = height
-        self._sync_review_height_vars()
-        self.parent.save_settings()
-        self._commit_edits()
-        self._request_render_rows(focus_index=self.active_index)
+        return _review_appearance._apply_review_regular_crop_height_setting(self, _review_appearance_deps())
 
     def _schedule_review_single_cjk_height_apply(self, source: str = "percent") -> None:
-        if self._syncing_review_height_vars:
-            return
-        self._review_height_edit_source["single_cjk_height"] = source
-        if self._review_single_cjk_height_apply_job is not None:
-            try:
-                self.after_cancel(self._review_single_cjk_height_apply_job)
-            except tk.TclError:
-                pass
-        self._review_single_cjk_height_apply_job = self.after(160, self._apply_review_single_cjk_height_setting)
+        return _review_appearance._schedule_review_single_cjk_height_apply(self, _review_appearance_deps(), source)
 
     def _apply_review_single_cjk_height_setting(self) -> None:
-        self._review_single_cjk_height_apply_job = None
-        try:
-            if self._review_height_edit_source.get("single_cjk_height") == "pixel":
-                line_height, _normalized = self._review_height_pixels_from_pixel_var(
-                    self.review_single_cjk_line_height_px_var, minimum=1, maximum=500
-                )
-            else:
-                line_height, _normalized = self._review_height_pixels_from_percent_var(
-                    self.review_single_cjk_line_height_var, minimum=1, maximum=500
-                )
-        except (TypeError, ValueError):
-            return
-        self.parent.settings.review_single_cjk_line_height = line_height
-        self._sync_review_height_vars()
-        self.parent.save_settings()
-        self._commit_edits()
-        active = self.active_index
-        self._request_render_rows(focus_index=active)
+        return _review_appearance._apply_review_single_cjk_height_setting(self, _review_appearance_deps())
 
     def _schedule_review_extended_crop_multiplier_apply(self) -> None:
-        """Debounce changes without regenerating all inline proofreading crops."""
-        job = self._review_extended_crop_multiplier_job
-        if job is not None:
-            try:
-                self.after_cancel(job)
-            except tk.TclError:
-                pass
-        self._review_extended_crop_multiplier_job = self.after(
-            240, self._apply_review_extended_crop_multiplier_setting
-        )
+        return _review_appearance._schedule_review_extended_crop_multiplier_apply(self, _review_appearance_deps())
 
     def _apply_review_extended_crop_multiplier_setting(
         self, *, revert_invalid: bool = False,
     ) -> None:
-        job = self._review_extended_crop_multiplier_job
-        self._review_extended_crop_multiplier_job = None
-        if job is not None:
-            try:
-                self.after_cancel(job)
-            except tk.TclError:
-                pass
-        previous = float(
-            getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
-        )
-        try:
-            multiplier = parse_review_crop_multiplier(
-                self.review_extended_crop_multiplier_var.get()
-            )
-        except (TypeError, ValueError):
-            # Do not interrupt intermediate values while the user is typing.
-            if revert_invalid:
-                self.review_extended_crop_multiplier_var.set(f"{previous:g}")
-            return
-        rendered = f"{multiplier:g}"
-        if self.review_extended_crop_multiplier_var.get() != rendered:
-            self.review_extended_crop_multiplier_var.set(rendered)
-        if multiplier == previous:
-            return
-        self.parent.settings.review_extended_crop_height_multiplier = multiplier
-        self._active_crop_fixed_size = None
-        self.parent.save_settings()
-        self._update_active_crop_preview(self.active_index)
+        return _review_appearance._apply_review_extended_crop_multiplier_setting(self, _review_appearance_deps(), revert_invalid=revert_invalid)
 
     def _apply_review_main_ocr_display_options(self) -> None:
-        self.parent.settings.review_main_show_ocr_choices = bool(self.review_main_ocr_choices_var.get())
-        self.parent.settings.review_main_show_ocr_background = bool(self.review_main_ocr_background_var.get())
-        self.parent.save_settings()
-        self.parent.redraw()
+        return _review_appearance._apply_review_main_ocr_display_options(self, _review_appearance_deps())
 
     def change_review_zoom(self, factor: float) -> None:
-        self._commit_edits()
-        self.review_zoom_auto = False
-        self.review_zoom = max(0.20, min(2.5, self.review_zoom * factor))
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self.parent.save_settings()
-        self.review_zoom_var.set(f"{_format_layout_percent(self.review_zoom * 100.0)}%")
-        active = self.active_index
-        self._request_render_rows(focus_index=active)
+        return _review_appearance.change_review_zoom(self, _review_appearance_deps(), factor)
 
     def apply_review_zoom_text(self, _event=None) -> None:
-        raw = self.review_zoom_var.get().strip()
-        if not raw or raw.casefold().startswith(("自动", "auto")):
-            if self.review_zoom_auto:
-                return
-            self.reset_review_zoom()
-            return
-        try:
-            percent = float(raw.rstrip("%"))
-        except ValueError:
-            self.review_zoom_var.set(
-                f"自动 {_format_layout_percent(self.review_zoom * 100.0)}%"
-                if self.review_zoom_auto else f"{_format_layout_percent(self.review_zoom * 100.0)}%"
-            )
-            return
-        self._commit_edits()
-        self.review_zoom_auto = False
-        self.review_zoom = min(2.5, max(0.20, percent / 100.0))
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self.parent.save_settings()
-        self.review_zoom_var.set(f"{_format_layout_percent(self.review_zoom * 100.0)}%")
-        active = self.active_index
-        self._request_render_rows(focus_index=active)
+        return _review_appearance.apply_review_zoom_text(self, _review_appearance_deps(), _event)
 
     def reset_review_zoom(self) -> None:
-        self._commit_edits()
-        self.review_zoom_auto = True
-        self.parent.settings.review_zoom_percent = 0.0
-        self.parent.save_settings()
-        self.review_zoom_var.set("自动")
-        self._review_auto_zoom_width = self._review_image_area_width()
-        active = self.active_index
-        self._request_render_rows(focus_index=active)
+        return _review_appearance.reset_review_zoom(self, _review_appearance_deps())
 
     def _exact_reference_position(self, word: str, near: int | None = None) -> int | None:
-        key = (word or "").strip().casefold()
-        if not key:
-            return None
-        positions = self.word_exact_indices.get(key, [])
-        if not positions:
-            return None
-        if near is None:
-            return positions[0]
-        return min(positions, key=lambda value: abs(value - near))
+        return _review_reference._exact_reference_position(self, _review_reference_deps(), word, near=near)
 
     def _previous_page_reference_target(self, active_index: int) -> int | None:
-        """Infer a current-page reference position from preceding PDIC tail anchors."""
-        project = self.parent.project
-        current_page_index = int(self.parent.current_index)
-        if not project or current_page_index <= 0:
-            return None
-        cached = self._previous_reference_base_cache
-        if cached is not None and cached[0] == current_page_index:
-            return None if cached[1] is None else cached[1] + max(0, active_index)
-
-        # Compute the expected reference index of the first entry on this page
-        # once, then reuse it for consecutive empty/error entries.
-        skipped_entries = 0
-        base: int | None = None
-        for page_index in range(current_page_index - 1, max(-1, current_page_index - 6), -1):
-            try:
-                entries = read_pdic(pdic_path(project.images[page_index]))
-            except Exception:
-                entries = []
-            for local_index in range(len(entries) - 1, -1, -1):
-                pos = self._exact_reference_position(entries[local_index].word)
-                if pos is None:
-                    continue
-                distance_to_first = (len(entries) - local_index) + skipped_entries
-                base = pos + distance_to_first
-                break
-            if base is not None:
-                break
-            skipped_entries += len(entries)
-        self._previous_reference_base_cache = (current_page_index, base)
-        return None if base is None else base + max(0, active_index)
+        return _review_reference._previous_page_reference_target(self, _review_reference_deps(), active_index)
 
     def _current_wordslist_global_target(self) -> int | None:
-        if self.word_window_indices and self.word_highlight_index is not None:
-            local = min(max(0, int(self.word_highlight_index)), len(self.word_window_indices) - 1)
-            return self.word_window_indices[local]
-        return None
+        return _review_reference._current_wordslist_global_target(self, _review_reference_deps())
 
     def _sorted_reference_position(self, word: str) -> int | None:
-        """Binary-search the native page-less list by pinyin/alphabet key lazily."""
-        stripped = (word or "").strip()
-        words = self.parent.project.words if self.parent.project else []
-        if not stripped or not words:
-            return None
-        # Use the primary pinyin/alphabet key only. Chinese dictionaries often
-        # use their own secondary rule (tone, stroke count, radical, etc.) for
-        # homophones, so imposing Unicode as a secondary comparison could make
-        # an otherwise pinyin-sorted external list appear non-monotonic. Exact
-        # spelling lookup above still places a known word precisely.
-        key = reference_sort_key(stripped)[0]
-        lo, hi = 0, len(words)
-        cache = self.word_sort_key_cache
-        while lo < hi:
-            mid = (lo + hi) // 2
-            mid_key = cache.get(mid)
-            if mid_key is None:
-                mid_key = reference_sort_key(words[mid])
-                cache[mid] = mid_key
-            if mid_key[0] < key:
-                lo = mid + 1
-            else:
-                hi = mid
-        return min(max(0, lo), len(words) - 1)
+        return _review_reference._sorted_reference_position(self, _review_reference_deps(), word)
 
     def _infer_sorted_reference_target(self, active_index: int, current_word: str) -> int:
-        """Locate an external page-less index by exact word / collation, not row offset."""
-        words = self.parent.project.words if self.parent.project else []
-        if not words:
-            return 0
-
-        near = self._current_wordslist_global_target()
-        current_exact = self._exact_reference_position(current_word, near=near)
-        if current_exact is not None:
-            return current_exact
-
-        previous_anchor: tuple[int, int] | None = None
-        next_anchor: tuple[int, int] | None = None
-        for index in range(active_index - 1, -1, -1):
-            if index >= len(self.vars):
-                continue
-            pos = self._exact_reference_position(self.vars[index].get(), near=near)
-            if pos is not None:
-                previous_anchor = (index, pos)
-                break
-        for index in range(active_index + 1, len(self.vars)):
-            pos = self._exact_reference_position(self.vars[index].get(), near=near)
-            if pos is not None:
-                next_anchor = (index, pos)
-                break
-
-        stripped = (current_word or "").strip()
-        if stripped:
-            target = self._sorted_reference_position(stripped)
-            if target is not None:
-                # Exact neighbouring terms are useful bounds, but never assume
-                # one row in this dictionary equals one row in the external one.
-                if previous_anchor and next_anchor and previous_anchor[1] <= next_anchor[1]:
-                    return max(previous_anchor[1], min(next_anchor[1], target))
-                if previous_anchor and target < previous_anchor[1]:
-                    return previous_anchor[1]
-                if next_anchor and target > next_anchor[1]:
-                    return next_anchor[1]
-                return target
-
-        if previous_anchor and next_anchor and previous_anchor[1] <= next_anchor[1]:
-            return round((previous_anchor[1] + next_anchor[1]) / 2)
-        if previous_anchor:
-            return previous_anchor[1]
-        if next_anchor:
-            return next_anchor[1]
-        if near is not None:
-            return near
-        return 0
+        return _review_reference._infer_sorted_reference_target(self, _review_reference_deps(), active_index, current_word)
 
     def _infer_reference_target(self, active_index: int, current_word: str) -> int:
-        words = self.parent.project.words if self.parent.project else []
-        if not words:
-            return 0
-        if self._effective_wordslist_locator_mode() == "sorted":
-            return self._infer_sorted_reference_target(active_index, current_word)
-
-        # Do not trust the current OCR/edit field first: it may be empty or a
-        # valid-looking but wrong word. Neighbouring already-verified words are
-        # stronger anchors for locating the auxiliary dictionary list.
-        previous_anchor: tuple[int, int] | None = None
-        next_anchor: tuple[int, int] | None = None
-        for index in range(active_index - 1, -1, -1):
-            if index >= len(self.vars):
-                continue
-            pos = self._exact_reference_position(self.vars[index].get())
-            if pos is not None:
-                previous_anchor = (index, pos)
-                break
-        for index in range(active_index + 1, len(self.vars)):
-            pos = self._exact_reference_position(self.vars[index].get())
-            if pos is not None:
-                next_anchor = (index, pos)
-                break
-
-        if previous_anchor and next_anchor:
-            prev_i, prev_pos = previous_anchor
-            next_i, next_pos = next_anchor
-            prev_estimate = prev_pos + (active_index - prev_i)
-            next_estimate = next_pos - (next_i - active_index)
-            if prev_pos < next_pos:
-                target = round((prev_estimate + next_estimate) / 2)
-                return max(prev_pos, min(next_pos, target))
-            # If the two anchors conflict, the preceding verified entry is the
-            # more natural typing direction and therefore wins.
-            return prev_estimate
-        if previous_anchor:
-            prev_i, prev_pos = previous_anchor
-            return prev_pos + (active_index - prev_i)
-        if next_anchor:
-            next_i, next_pos = next_anchor
-            return next_pos - (next_i - active_index)
-
-        # No usable surrounding word on this page. Use current content only now.
-        current_exact = self._exact_reference_position(current_word)
-        if current_exact is not None:
-            return current_exact
-
-        previous_page = self._previous_page_reference_target(active_index)
-        if previous_page is not None:
-            return previous_page
-
-        # Last-resort fuzzy/collation position for a non-empty OCR result. Keep
-        # the current virtual-list position for a blank field rather than jumping
-        # back to the beginning of a 190k-word list.
-        stripped = (current_word or "").strip()
-        if stripped and self.sorted_word_keys:
-            key = self._wordslist_lookup_key(stripped)
-            pos = bisect.bisect_left(self.sorted_word_keys, key)
-            pos = min(max(0, pos), len(self.sorted_word_indices) - 1)
-            return self.sorted_word_indices[pos]
-        if self.word_window_indices and self.word_highlight_index is not None:
-            local = min(max(0, self.word_highlight_index), len(self.word_window_indices) - 1)
-            return self.word_window_indices[local]
-        return 0
+        return _review_reference._infer_reference_target(self, _review_reference_deps(), active_index, current_word)
 
     def locate_reference_word(self, word: str, active_index: int | None = None) -> None:
-        if not self.parent.project or not self.parent.project.words:
-            return
-        words = self.parent.project.words
-        index = self.active_index if active_index is None else int(active_index)
-        target = self._infer_reference_target(index, word)
-        target = max(0, min(int(target), len(words) - 1))
-
-        if target not in self.word_window_indices:
-            self._show_wordslist_window(target)
-            return
-        local = target - self.word_window_start
-        self.word_highlight_index = local
-        self._set_word_list_highlight(local)
+        return _review_reference.locate_reference_word(self, _review_reference_deps(), word, active_index=active_index)
 
     def scroll_rows(self, event: tk.Event) -> str:
         self.canvas.yview_scroll((-1 if event.delta > 0 else 1) * 3, "units")
@@ -5318,6 +4497,35 @@ def _review_workspace_deps() -> _review_workspace.ReviewWorkspaceDeps:
         _focused_review_is_single_character=_focused_review_is_single_character,
         simplified_entry_key=simplified_entry_key,
         replace=replace,
+        appearance_palette=appearance_palette,
+    )
+
+
+def _review_reference_deps() -> _review_reference.ReviewReferenceDeps:
+    """Capture original wordslist search, selection and UI patchpoints."""
+    return _review_reference.ReviewReferenceDeps(
+        tk=tk, filedialog=filedialog, messagebox=messagebox,
+        Path=Path, unicodedata=unicodedata, bisect=bisect,
+        resolve_wordslist_path=resolve_wordslist_path,
+        read_pdic=read_pdic, pdic_path=pdic_path,
+        reference_sort_key=reference_sort_key,
+        _is_cjk_review_index=_is_cjk_review_index,
+    )
+
+
+def _review_appearance_deps() -> _review_appearance.ReviewAppearanceDeps:
+    """Capture original live style, crop and zoom helpers per callback."""
+    return _review_appearance.ReviewAppearanceDeps(
+        tk=tk, font=font,
+        normalize_content_font_setting=normalize_content_font_setting,
+        resolve_content_font_family=resolve_content_font_family,
+        _entry_font_spec=_entry_font_spec,
+        _review_height_percent_to_pixels=_review_height_percent_to_pixels,
+        _format_review_height_percent=_format_review_height_percent,
+        _effective_review_regular_crop_height=_effective_review_regular_crop_height,
+        _effective_review_single_cjk_line_height=_effective_review_single_cjk_line_height,
+        parse_review_crop_multiplier=parse_review_crop_multiplier,
+        _format_layout_percent=_format_layout_percent,
     )
 
 
