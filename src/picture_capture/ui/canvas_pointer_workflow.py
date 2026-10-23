@@ -5,12 +5,20 @@ their implementation and uses only dependencies captured at call time.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import tkinter as tk
+    from ..models import PolygonRegion
 
 
 @dataclass(frozen=True)
 class CanvasPointerDeps:
     """Original live module symbols for an individual canvas interaction."""
     tk: object
+    label_text: object
+    user_edited_link: object
+    messagebox: object
     polygon_delete_center: object
     refresh_alpha_polygon_fill: object
     PageSection: object
@@ -23,6 +31,8 @@ class CanvasPointerDeps:
 
 def _sync_polygon_label_texts(self, deps: CanvasPointerDeps) -> None:
     """Carry edited association codes across redraw without reassigning IDs."""
+    label_text = deps.label_text
+    user_edited_link = deps.user_edited_link
     tk = deps.tk
     if self.__dict__.get("_suppress_polygon_label_sync", False):
         return
@@ -77,6 +87,7 @@ def _nearest_polygon_edge(self, deps: CanvasPointerDeps, x: int, y: int, radius_
 @staticmethod
 
 def _delete_polygon_region(self, deps: CanvasPointerDeps, region: PolygonRegion) -> None:
+    messagebox = deps.messagebox
     if self._batch_active and self._batch_allow_pdic_edits:
         self.status_var.set("插图识别期间暂不修改 PPP。")
         return

@@ -1317,13 +1317,13 @@ and geometry, SECTION edit and bounds drag, polygon drawing mode, and canvas
 left/right mouse press/drag/release. Keep original `PictureCaptureApp` method
 signatures, Tk callback names, event return conventions, current image-space
 coordinates, redraw and persistence semantics. A frozen `CanvasPointerDeps`
-holds 9 live app module dependencies per invocation without a
+holds 12 live app module dependencies per invocation without a
 circular import. Existing `_rectangle_bounds`, `_set_rectangle_side`,
 `_external_polygon_label_position` static geometry helpers and SECTION
 writer remain on the class without relocation. Only internal import path
 change is `.ui.workspace_mode_shortcuts` to `.workspace_mode_shortcuts`.
-`app.py` 598661→579632 UTF-8 bytes (−19029,
-3.18%); strict ratchet 579648 bytes.
+`app.py` 598661→579737 UTF-8 bytes (−18924,
+3.16%); strict ratchet 579753 bytes.
 Preserve PPP data labels, write operations and undo/redo paths, auxiliary
 priority, source/canonical geometry and image editing guards. New owner AST
 checks, callback dispatch, staticmethod preservation and monkeypatch tests

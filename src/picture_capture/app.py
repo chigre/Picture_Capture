@@ -6238,6 +6238,9 @@ def _canvas_pointer_deps() -> _canvas_pointer.CanvasPointerDeps:
     """Snapshot app symbols preserving original patched Tk and geometry seams."""
     return _canvas_pointer.CanvasPointerDeps(
         tk=tk,
+        label_text=label_text,
+        user_edited_link=user_edited_link,
+        messagebox=messagebox,
         polygon_delete_center=polygon_delete_center,
         refresh_alpha_polygon_fill=refresh_alpha_polygon_fill,
         PageSection=PageSection,

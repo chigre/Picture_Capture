@@ -62,7 +62,7 @@ def test_pointer_live_dependency_patchpoints(monkeypatch):
     assert gui._canvas_pointer_deps().nearest_polygon_segment is sentinel
     monkeypatch.setattr(gui, "PageSection", sentinel)
     assert gui._canvas_pointer_deps().PageSection is sentinel
-    assert len(owner.CanvasPointerDeps.__dataclass_fields__) == 9
+    assert len(owner.CanvasPointerDeps.__dataclass_fields__) == 12
 
 
 def test_original_static_geometry_contract_is_retained():
