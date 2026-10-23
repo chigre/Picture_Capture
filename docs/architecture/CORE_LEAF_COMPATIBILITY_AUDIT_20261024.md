@@ -216,6 +216,31 @@ The previous exact head `67a0000d` passed full six-platform CI and all three
 OCR smoke jobs. The present commit requires independent exact-head CI;
 keep PR #663 Draft pending representative GUI scan/edit/save/reopen acceptance.
 
+## Fourteenth extraction batch — nominal/curved geometry and editable rules — 2026-10-24
+
+- `geometry/geometry_construction.py` owns four prior `processing_core`
+  geometry constructions (nominal canonical, nominal source transform, actual
+  canonical analysis, actual source transform). The old core wrappers inject
+  **current** RGB normalizer, transform class, pixel scaling, column nudges,
+  deformable-column tracker, and the original `Geometry` and `ColumnPath`
+  constructors at call time. No class moves or pickle path changes.
+- `ocr/user_filter_rules.py` owns parsing, BOM-safe loading, matching and
+  deterministic `reject > accept` priority of user-editable headword rules.
+  The old core retains the actual `_RULE_ALIASES`/`_RULE_KINDS` registry,
+  `HeadwordFilterRule` constructor, parser and matcher patch seams.
+  No user-facing rule syntax or on-disk rule format was changed.
+- `tests/test_issue562_core_leaf_round14_geometry_20261024.py` and
+  `tests/test_issue562_core_leaf_round14_rules_20261024.py` cover nominal
+  and curved column paths, mirrored/rotated source transform, constructor
+  identity, live geometry dependencies, rule aliases, regex validation, BOM
+  and matched-rule priority.
+- Root directory remains **10 physical Python files**. Raw OCR engine
+  caches, PDIC/PPP schema, manual arbitration, crop publish transactions
+  and GUI workflows remain untouched.
+
+Previous exact-head baseline `b22bb190` passed complete six-platform CI
+and all three-platform OCR smoke. Verify this new head independently.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
