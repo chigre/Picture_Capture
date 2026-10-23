@@ -179,14 +179,14 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'activebackground=colors["accent_soft"]' in guide_source
     assert 'highlightthickness=0, takefocus=False' in guide_source
     assert 'self.parent_app._apply_current_appearance(self)' in guide_source
-    assert 'word_list_default_fg = palette["input_fg"]' in app_source
-    assert 'background="#d9d9d9", foreground="#111827"' in app_source
+    assert 'word_list_default_fg = palette["input_fg"]' in review_source
+    assert 'background="#d9d9d9", foreground="#111827"' in review_source
     assert 'editor_frame._pc_skip_classic_appearance = True' in review_source
     focused_source = (ROOT / "src/picture_capture/ui/focused_filter_workflow.py").read_text(encoding="utf-8")
     assert 'editor._pc_skip_classic_appearance = True' in focused_source
-    assert 'palette["review_present_bg"]' in app_source
-    assert 'palette["review_absent_bg"]' in app_source
-    assert 'palette["review_membership_fg"]' in app_source
+    assert 'palette["review_present_bg"]' in review_source
+    assert 'palette["review_absent_bg"]' in review_source
+    assert 'palette["review_membership_fg"]' in review_source
     assert 'self._apply_current_appearance(dialog)' in project_session
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
     assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source

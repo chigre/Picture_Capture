@@ -150,8 +150,9 @@ def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_on
     assert 'text="切片更大高度范围倍数:"' in ui
     assert "review_extended_crop_multiplier_var" in ui
     assert ui.index('text="切片更大高度范围倍数:"') < ui.index('def add_review_height_control') if 'def add_review_height_control' in ui else True
-    apply = source.split('    def _apply_review_extended_crop_multiplier_setting(', 1)[1].split(
-        '    def _apply_review_main_ocr_display_options(', 1
+    appearance_source = (Path(module.__file__).parent / "ui/review_appearance_workflow.py").read_text(encoding="utf-8")
+    apply = appearance_source.split('def _apply_review_extended_crop_multiplier_setting(', 1)[1].split(
+        '\ndef _apply_review_main_ocr_display_options(', 1
     )[0]
     assert "self.parent.settings.review_extended_crop_height_multiplier = multiplier" in apply
     assert "self._active_crop_fixed_size = None" in apply
