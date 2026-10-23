@@ -31,7 +31,7 @@ from PIL import Image
 
 from ..design import page_design as page_design
 from ..io import formats
-from ..image_utils import build_analysis_image, normalize_page_rgb
+from ..preprocess.analysis_image import build_analysis_image, normalize_page_rgb
 from ..refinement.analysis import whiten_illustrations_for_export
 from ..layout.core_understanding import understand_layout_core
 from ..persistence.page_sections import read_page_sections, section_index_for_v, v_is_inside_sections

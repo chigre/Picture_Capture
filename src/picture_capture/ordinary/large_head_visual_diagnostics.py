@@ -14,7 +14,7 @@ from typing import Any
 
 from PIL import Image
 
-from ..image_utils import build_analysis_image
+from ..preprocess.analysis_image import build_analysis_image
 from ..models import AppSettings
 from ..layout.core_understanding import understand_layout_core
 from ..profile.semantics import effective_page_settings

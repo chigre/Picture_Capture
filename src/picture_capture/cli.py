@@ -14,7 +14,7 @@ from .bootstrap.core import build_core_services
 build_core_services()
 
 from .io.formats import pdic_path, read_pdic, read_ppp, write_pdic
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .models import ProjectState
 from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from .crop.settings import load_crop_settings

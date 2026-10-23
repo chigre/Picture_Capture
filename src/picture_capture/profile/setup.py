@@ -20,7 +20,7 @@ from .dictionary import (
     write_project_profile,
 )
 from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import aggregate_layout_estimates
 from .layout_bootstrap import (
     detect_profile_layout_parameters as detect_layout_parameters,

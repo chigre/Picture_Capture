@@ -717,8 +717,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 15:
-        violations.append(f"root Python module count regressed: {root_py_count} > 15")
+    if root_py_count > 14:
+        violations.append(f"root Python module count regressed: {root_py_count} > 14")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -2448,22 +2448,32 @@ def collect_violations() -> list[str]:
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
 
-    # Issue #562: keep EXIF/alpha/source-space ink predicates in one
-    # preprocess owner, with unchanged function-object exports from image_utils.
+    # Issue #562: root image_utils retired; EXIF/alpha ink has exactly one leaf
+    # and shared denoise analysis belongs to the canonical preprocess package.
     pixel_owner = PACKAGE_ROOT / "preprocess/page_pixels.py"
-    image_facade = PACKAGE_ROOT / "image_utils.py"
-    if not pixel_owner.is_file():
-        violations.append("preprocess page pixel primitives owner missing")
+    analysis_owner = PACKAGE_ROOT / "preprocess/analysis_image.py"
+    if (PACKAGE_ROOT / "image_utils.py").exists():
+        violations.append("retired root image_utils.py returned")
+    if not pixel_owner.is_file() or not analysis_owner.is_file():
+        violations.append("canonical preprocessing page pixel/analysis owner missing")
     else:
-        owner_source = pixel_owner.read_text(encoding="utf-8")
-        facade_source = image_facade.read_text(encoding="utf-8")
+        pixel_source = pixel_owner.read_text(encoding="utf-8")
+        analysis_source = analysis_owner.read_text(encoding="utf-8")
         for pixel_fn in ("normalize_page_rgb", "_box_sum", "_generic_analysis_ink"):
-            if f"def {pixel_fn}(" not in owner_source:
+            if f"def {pixel_fn}(" not in pixel_source:
                 violations.append(f"page pixel owner missing {pixel_fn}")
-            if f"def {pixel_fn}(" in facade_source:
+            if f"def {pixel_fn}(" in analysis_source:
                 violations.append(f"duplicate page pixel implementation: {pixel_fn}")
-        if "from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in facade_source:
-            violations.append("image_utils lost stable page pixel re-exports")
+        if "from .page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in analysis_source:
+            violations.append("analysis image owner lost canonical pixel function identity")
+        if "def build_analysis_image(" not in analysis_source:
+            violations.append("shared image analysis function missing")
+        for source_path in PACKAGE_ROOT.rglob("*.py"):
+            if source_path == analysis_owner:
+                continue
+            source_text = source_path.read_text(encoding="utf-8")
+            if re.search(r"(?m)^\s*(?:from\s+(?:picture_capture\.|\.+)|import\s+picture_capture\.)image_utils\b|^\s*from\s+picture_capture\s+import\s+image_utils\b", source_text):
+                violations.append(f"retired image_utils import remains: {source_path.relative_to(PACKAGE_ROOT)}")
 
     # Issue #562: training candidate/PDIC linkage is source-space aware and
     # has one physical owner; keep its historic root import for consumers.

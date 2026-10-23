@@ -180,7 +180,7 @@ from .profile.wizard import ProjectProfileWizard, _screen_work_area
 from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .ui import preprocess_workflow as _preprocess_ui
 from .ui import batch_workflow as _batch_workflow
 from .image_preprocessing import (

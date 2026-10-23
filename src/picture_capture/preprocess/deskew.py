@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 
 
 def _normalize_half_turn(angle: float) -> float:

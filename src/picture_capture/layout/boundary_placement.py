@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from ..design.page_design import DictionaryPageLayout, _leading_width
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import analysis_ink_mask
 from ..models import AppSettings, Entry
 from ..profile.semantics import effective_page_settings

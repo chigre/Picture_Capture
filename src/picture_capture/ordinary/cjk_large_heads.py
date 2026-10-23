@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..models import AppSettings, Entry
 from .postprocess import _separator_near_next_line
 from ..ordinary.visual import (

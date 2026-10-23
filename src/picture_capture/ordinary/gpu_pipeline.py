@@ -128,7 +128,7 @@ def prepare_gpu_layout_job(
     image_path: str, settings: Any, page_index: int,
 ) -> PreparedLayoutEstimate:
     """One GPU model-owning process; no PDIC, baseline or settings writes."""
-    from ..image_utils import build_analysis_image, normalize_page_rgb
+    from ..preprocess.analysis_image import build_analysis_image, normalize_page_rgb
     from ..profile.semantics import effective_page_settings
     from ..layout.detection import detect_layout_parameters
 

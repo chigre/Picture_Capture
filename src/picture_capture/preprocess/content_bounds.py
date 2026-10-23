@@ -6,7 +6,7 @@ from typing import Callable, Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import LayoutEstimate
 from ..models import AppSettings
 from .deskew import _polygon_boxes

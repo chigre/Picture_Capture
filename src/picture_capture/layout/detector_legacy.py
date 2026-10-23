@@ -11,7 +11,7 @@ from PIL import Image, ImageFilter, ImageOps
 
 from ..models import AppSettings
 from ..runtime.environment import resolve_paddle_device
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..geometry.layout_transform import LayoutTransform
 
 

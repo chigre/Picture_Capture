@@ -17,7 +17,7 @@ from .crop.auxiliary_lines import read_auxiliary_lines
 from .crop import page_workflow as _page_workflow
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .geometry.layout_transform import LayoutTransform
 from .persistence.page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,

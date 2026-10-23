@@ -51,7 +51,7 @@ def resolve_entry_ocr_row_metrics(
     fallback = _fallback_row_metrics(settings)
     analysis = None
     try:
-        from ..image_utils import build_analysis_image
+        from ..preprocess.analysis_image import build_analysis_image
         from ..layout.core_understanding import understand_layout_core
 
         analysis = build_analysis_image(image, settings)

@@ -9,7 +9,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from .marker_templates import build_visual_marker_sample, trim_visual_marker_crop
 
 

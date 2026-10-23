@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from .preprocess.document_unwarping import unwarp_document_image
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .layout.detection import (
     LayoutEstimate,
     analysis_ink_mask,

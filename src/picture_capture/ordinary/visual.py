@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..models import AppSettings, Entry
 
 

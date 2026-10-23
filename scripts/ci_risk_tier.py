@@ -27,7 +27,7 @@ ALWAYS_FULL = {
     "src/picture_capture/marker_refinement_parallel.py",
     "src/picture_capture/single_line_parallel.py", "src/picture_capture/unlined_line_export.py",
     "src/picture_capture/crop/single_line_parallel.py", "src/picture_capture/crop/unlined_line_export.py",
-    "src/picture_capture/image_utils.py", "src/picture_capture/image_preprocessing.py",
+    "src/picture_capture/preprocess/analysis_image.py", "src/picture_capture/image_preprocessing.py",
     "src/picture_capture/layout_detection.py", "src/picture_capture/layout_detection_legacy.py",
     "src/picture_capture/layout/detection.py", "src/picture_capture/layout/rows_cache.py",
     "src/picture_capture/layout_rows_cache.py", "src/picture_capture/separator_y_refinement.py",

@@ -7,11 +7,11 @@ The repository's launch/install wrappers remain at repository root so documented
 OS launch commands continue to work.
 
 PR #628 merged as `7d004fdf`, grouping project and SECTION storage implementations
-in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. The following OCR resume move reduces 16 → 15 without root
-shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
+in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. The following OCR resume move reduced 16 → 15, and the shared image-analysis
+owner migration reduced 15 → 14 without root shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
 claim that Issue #562 or the oversized-module refactor is complete.
 
-## Remaining root contracts (15/15 classified)
+## Remaining root contracts (14/14 classified)
 
 Each row names an existing physical root file. Retention means keep its current
 import contract while extracting implementation separately when justified.
@@ -26,7 +26,6 @@ import contract while extracting implementation separately when justified.
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
 | `entry_classification.py` | proofreading | One process-wide weakref/LRU classification registry, sidecar transaction lock and bootstrap I/O integration; moving only imports does not simplify this ownership. |
 | `image_preprocessing.py` | preprocess | Public preprocessing facade; model/helper pickle identities explicitly name this module. Skew/rotation and content-frame bodies now live in `preprocess/deskew.py` and `preprocess/content_bounds.py`, with call-time detector adapters retained here. Orthogonal policy/step payloads and saved geometry rendering are owned by `preprocess/orthogonal_policy.py` and `preprocess/replay.py`; their root adapters supply current audits/transforms explicitly. Preview/crop/encoding bodies belong to `preprocess/rendering.py`. The source evidence stage of analysis belongs to `preprocess/source_evidence.py`, with explicit per-page results and call-time operations/policies. Final re-detection, alignment/crop diagnostics and confidence are owned by `preprocess/finalization.py`. Projective candidate generation/safety/selection belongs to `preprocess/projective_selection.py`, with explicit operation/policy composition. Candidate pixel acceptance and retained-image re-audit belong to `preprocess/pixel_row_policy.py`. Explicit UVDoc fallback and automatic post-perspective re-detection belong to `preprocess/geometry_stages.py`. The manual quadrilateral correction and selected automatic/explicit projective application, diagnostics and safety warning mapping belong to `preprocess/perspective_stages.py`. The complete multi-pass orthogonal correction/acceptance/convergence and retained-pixel audit orchestration belong to `preprocess/orthogonal_pipeline.py`; both owners receive current operations and policies at call time. The public facade remains below 100000 bytes. |
-| `image_utils.py` | preprocess | Shared image-analysis API and public helper contract; pixel primitives already owned by `preprocess/page_pixels.py`. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
 | `paddle_headwords_core.py` | ocr | Retained historical OCR core/model and patchable exported functions; selected review-finalization chain lives in `ocr/review_finalization.py` and the full multi-engine sequence matching, Lens arbitration and coordinate mapping now live in `ocr/pairing_arbitration.py`. OCR image-first symbol/marker and CJK visual projection/context evidence resides in `ocr/visual_evidence.py`; the whole verified CJK local-recovery and three-way separator Y refinement chain now resides in `ocr/cjk_recovery.py`, while original call signatures and recovery policy names remain in the patchable core. The entire OCR candidate parsing, visual-structure scoring, accept/reject and per-page diagnostic orchestration now resides in `ocr/candidate_filter.py` with 42 call-time bindings. The complete multi-engine page invocation (45 live patchable callbacks/policies), raw/reusable cache, review arbitration and v3 report write transaction now belongs to `ocr/page_detection.py` with the original core detection entrypoint preserved as a live adapter. GUI preprocessing operations already live in `ui/preprocess_workflow.py` (merged #647). The complete GUI batch ownership/dispatch/parallel queue/pause-stop lifecycle now resides in `ui/batch_workflow.py` (12 original app method adapters); existing batch results and status semantics remain unchanged. Existing facade mirror, original cache/pickle identity and runtime model remain unchanged. |
@@ -49,9 +48,18 @@ import contract while extracting implementation separately when justified.
   unchanged. Changed source paths/bytes conservatively invalidate prior cache
   keys, so a prior completed page may be recalculated once after upgrading.
 
+The former `image_utils.py` implementation is now the physical
+`preprocess/analysis_image.py`, with pixel primitives re-exported by identity
+from `preprocess/page_pixels.py`. All in-repository consumers have been routed
+to the canonical owner; this **retired root import path is a deliberate Python
+import compatibility change**, unlike the retained pickle-bearing facades.
+Migration: replace `picture_capture.image_utils` with
+`picture_capture.preprocess.analysis_image`. No serialized data format, image
+coordinates, or dataclass identities change.
+
 The inventory regression compares this table with the actual root files. The
 architecture guard prohibits the retired resume root, requires its canonical
 owner and the whole-package fingerprint anchor, and ratchets the root count to
-15. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
+14. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
 force. Native CUDA and real scanned-page/manual GUI parity are not established
 by automated CI. No root shim, new runtime installer or proxy is introduced.
