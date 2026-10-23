@@ -19,8 +19,8 @@ callback dispatch. A frozen `ProjectSessionDeps` captures **30 current
 app module helpers** per call and seven owner-local relative imports
 are updated solely for package placement. All nine function bodies
 match merged main after reversing dependency aliases and relative
-imports. Source `app.py` **706512→665242 normalized bytes**,
-net reduction **41270**, strict additional cap **665255**,
+imports. Source `app.py` **706512→665254 normalized bytes**,
+net reduction **41258**, strict additional cap **665270**,
 unchanged historical oversized baseline and 15 root modules.
 Targeted Tk adapter, Project loader/page handoff and import isolation
 tests plus architecture AST guard were added. Exact-head complete
