@@ -23,7 +23,7 @@ from .headword_models import HeadwordFilterRule, HeadwordParse, OCRRecord
 
 @dataclass(frozen=True)
 class HeadwordFilterDeps:
-    """Forty-one original policy objects and functions bound per invocation."""
+    """Forty-two original policy objects and functions bound per invocation."""
     evaluate_headword_filter_rules: object
     _headword_script_compatibility: object
     _is_chinese_ocr: object
@@ -65,6 +65,7 @@ class HeadwordFilterDeps:
     Entry: object
     load_dictionary_profile: object
     leading_relation_label: object
+    starts_with_internal_article_symbol: object
 
 
 def filter_headword_records(
@@ -129,6 +130,7 @@ def filter_headword_records(
     Entry = deps.Entry
     load_dictionary_profile = deps.load_dictionary_profile
     leading_relation_label = deps.leading_relation_label
+    starts_with_internal_article_symbol = deps.starts_with_internal_article_symbol
     refine_y = separator_y_refiner or refine_separator_y
     if profile is None and _is_chinese_ocr(settings):
         # Backward-compatible direct API behavior: before v2.10 Chinese parsing
