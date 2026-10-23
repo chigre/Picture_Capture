@@ -53,7 +53,6 @@ def _set_foreground_batch_state(
 def _claim_page_for_manual_edit(
     deps: BatchWorkflowDeps, self, index: int | None = None) -> bool:
     """ claim page for manual edit."""
-
     if index is None:
         index = self.current_index
     if not self._batch_active:
@@ -91,7 +90,6 @@ def _can_save_current_during_batch_navigation(
 def _entry_keypress_batch_guard(
     deps: BatchWorkflowDeps, self, event: tk.Event) -> str | None:
     """Claim a pending page before a key can mutate a foreground Entry."""
-
     if not self._batch_active:
         return None
     keysym = str(getattr(event, "keysym", ""))
@@ -121,7 +119,6 @@ def _start_batch_task(
     threading = deps.threading
     traceback = deps.traceback
     messagebox = deps.messagebox
-
     if self._batch_active:
         messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
         return False
@@ -251,7 +248,6 @@ def _start_parallel_batch_task(
     traceback = deps.traceback
     messagebox = deps.messagebox
     resolve_crop_worker_count = deps.resolve_crop_worker_count
-
     if self._batch_active:
         messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
         return False
