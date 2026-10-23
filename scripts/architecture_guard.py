@@ -1163,6 +1163,56 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: move the entire verified oversized CJK recovery chain and
+    # all three marker-Y refinement paths to one canonical OCR owner.
+    recovery_owner = PACKAGE_ROOT / "ocr/cjk_recovery.py"
+    recovery_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not recovery_owner.is_file():
+        violations.append("canonical local CJK OCR recovery and refinement owner missing")
+    else:
+        recovery_tree = ast.parse(recovery_owner.read_text(encoding="utf-8"))
+        required = {
+            "CjkRecoveryDeps", "_robust_record_line_height",
+            "_single_cjk_from_local_records",
+            "_recover_oversized_cjk_ocr_records",
+            "_record_already_represents_oversized_run",
+            "_recover_image_first_oversized_cjk_records",
+            "_suppress_raw_records_shadowed_by_verified_cjk_recovery",
+            "refine_separator_y", "refine_separator_y_adaptive",
+            "refine_first_content_y",
+        }
+        actual = {
+            node.name for node in recovery_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        }
+        if not required <= actual:
+            violations.append("full CJK OCR recovery and separator refinement owner incomplete")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"paddle_headwords_core", "processing", "app"}
+               for node in recovery_tree.body):
+            violations.append("CJK recovery owner imports heavyweight facade at runtime")
+    if recovery_core.is_file():
+        core_tree = ast.parse(recovery_core.read_text(encoding="utf-8"))
+        for name in ("_recover_oversized_cjk_ocr_records",
+                     "_recover_image_first_oversized_cjk_records",
+                     "_suppress_raw_records_shadowed_by_verified_cjk_recovery",
+                     "refine_separator_y", "refine_separator_y_adaptive",
+                     "refine_first_content_y"):
+            wrappers = [
+                node for node in core_tree.body
+                if isinstance(node, ast.FunctionDef) and node.name == name
+            ]
+            if len(wrappers) != 1 or not any(
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_cjk_recovery"
+                and node.func.attr == name
+                for node in ast.walk(wrappers[0])
+            ):
+                violations.append(f"CJK OCR recovery core adapter not delegated: {name}")
+        if _normalized_source_size(recovery_core) > 246_690:
+            violations.append("paddle_headwords_core exceeds 246690-byte recovered OCR ratchet")
+
     # #562: visual marker/cjk pixel evidence belongs to one canonical OCR
     # owner. Preserve core compatibility functions and their call-time patches.
     visual_evidence_owner = PACKAGE_ROOT / "ocr/visual_evidence.py"
