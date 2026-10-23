@@ -837,7 +837,7 @@ validation remain required before acceptance. Native UVDoc/CUDA, real scanned-pa
 and manual GUI testing are still outstanding.
 
 
-## Issue #562 — full manual/selected projective execution chain (2026-10-23; candidate)
+## Issue #562 — full manual/selected projective execution chain (2026-10-23; merged #638)
 
 Starting from merged `main@e5696d72` (#637), move the manual four-point
 perspective application and the downstream selected automatic/explicit perspective
@@ -867,3 +867,37 @@ call-time operations and leaf imports. Existing full regression, cross-platform
 Python3.10/3.13 and OS matrix, GUI smoke, compatibility, wheel, CodeQL and
 reviews are mandatory gates before merging. Real scanned-page, manual UI,
 UVDoc/CUDA and actual GPU resource validation remain pending.
+
+
+## Issue #562 — complete orthogonal closed-loop execution and retained audit (2026-10-23; candidate)
+
+On merged `main@efb3a7f3` (#638), move the whole orthogonal residual-correction
+pipeline from `analyze_preprocess_page` to `preprocess/orthogonal_pipeline.py`.
+The extracted owner includes 59 defaulted per-page orthogonal diagnostics, the
+full gated multi-pass estimate/pixel-transform/re-detect/audit/retain-or-rollback
+loop, convergence conditions, final retained-pixel re-audit via canonical
+`pixel_row_policy`, and the nonlinear-curve manual UVDoc review warning.
+The `OrthogonalRuntime` captures **14 current callbacks and 16 scalar gates
+at call time**; explicit `OrthogonalRunResult` returns 59 diagnostics plus the
+actual retained image/boxes, geometry strength/mode, redetection state and
+retained pixel diagnostics. No global hooks, installer, facade/GUI imports,
+persisted model clone, new root shim or new GPU resource.
+
+Preserve automatic-mode and writing-direction guards; min-polygon thresholds,
+pixel-driven vs OCR-driven scoring and exact inequalities; separator/header/
+tail safety checks; warning and method order; per-pass partial observations,
+first-valid baseline, retained candidate vs loop stop separation, late rejected
+pass preserving the previously accepted pixels, existing fallback state and
+source coordinates. The `PreprocessAnalysis` constructor and saved field
+conversion/rounding remain byte-for-byte unchanged. The algorithm body moved
+byte-for-byte; only the explicit owner boundary and caller result restoration
+differ. Facade **75841→55316 bytes** (−20525), normal ceiling
+**75850→55320**, retained root count **15**. Architecture guards require
+physical canonical owners and correct composition, with no historical oversized
+module baseline weakened. Tests cover skipped modes, vertical writing, absent
+boxes, estimator failure, policy budget failure, accepted candidate/retained
+re-audit, accepted first pass followed by failed second pass, callback and
+warning order, identity and source isolation. Complete cross-platform
+Python3.10/3.13, GUI smoke, compatibility, wheel, CodeQL, reviews, and
+postmerge independent main checks remain mandatory. Native UVDoc/CUDA, real
+scan/manual GUI acceptance still cannot be inferred from these synthetic tests.

@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 75_850
+MAX_PREPROCESS_FACADE_BYTES = 55_320
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -941,11 +941,51 @@ def collect_violations() -> list[str]:
     if any(isinstance(node, ast.Name) and node.id == "retained_pixel_rows"
            for node in ast.walk(analysis_adapter)):
         violations.append("retained pixel audit implementation must remain in preprocess/pixel_row_policy.py")
-    calls = {node.func.attr for node in ast.walk(analysis_adapter)
-             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-             and isinstance(node.func.value, ast.Name) and node.func.value.id == "_pixel_row_policy"}
-    if not {"assess_candidate_pixels", "reaudit_retained_pixels"} <= calls:
-        violations.append("preprocessing analysis must compose candidate/retained pixel policy")
+    orthogonal_loop_owner = PACKAGE_ROOT / "preprocess/orthogonal_pipeline.py"
+    if not orthogonal_loop_owner.is_file():
+        violations.append("canonical closed-loop orthogonal pipeline owner missing")
+        orthogonal_loop_tree = None
+    else:
+        orthogonal_loop_tree = ast.parse(orthogonal_loop_owner.read_text(encoding="utf-8"))
+        loop_objects = {node.name for node in orthogonal_loop_tree.body
+                        if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not {"OrthogonalRuntime", "OrthogonalRunResult",
+                "run_orthogonal_pipeline"} <= loop_objects:
+            violations.append("closed-loop orthogonal owner entrypoints missing")
+    if not any(isinstance(node, ast.Call)
+               and isinstance(node.func, ast.Attribute)
+               and isinstance(node.func.value, ast.Name)
+               and node.func.value.id == "_orthogonal_pipeline"
+               and node.func.attr == "run_orthogonal_pipeline"
+               for node in ast.walk(analysis_adapter)):
+        violations.append("preprocessing facade must compose closed-loop orthogonal owner")
+    if any(isinstance(node, ast.Name)
+           and node.id in {"pixel_assessment", "candidate_pixel_rows", "candidate_image",
+                           "baseline_pixel_rows", "pass_index"}
+           for node in ast.walk(analysis_adapter)):
+        violations.append("orthogonal candidate execution implementation returned to public facade")
+    if orthogonal_loop_tree is not None:
+        pipeline_fn = next((node for node in orthogonal_loop_tree.body
+                            if isinstance(node, ast.FunctionDef)
+                            and node.name == "run_orthogonal_pipeline"), None)
+        if pipeline_fn is None:
+            violations.append("closed-loop orthogonal function implementation missing")
+        else:
+            pixel_calls = {node.func.attr for node in ast.walk(pipeline_fn)
+                           if isinstance(node, ast.Call)
+                           and isinstance(node.func, ast.Attribute)
+                           and isinstance(node.func.value, ast.Name)
+                           and node.func.value.id == "_pixel_row_policy"}
+            if not {"assess_candidate_pixels", "reaudit_retained_pixels"} <= pixel_calls:
+                violations.append("closed-loop owner must compose canonical pixel policy twice")
+            if not any(isinstance(node, ast.For) and isinstance(node.target, ast.Name)
+                       and node.target.id == "pass_index" for node in ast.walk(pipeline_fn)):
+                violations.append("closed-loop owner must retain the multi-pass correction loop")
+    if any(isinstance(node, ast.Call)
+           and isinstance(node.func, ast.Attribute)
+           and isinstance(node.func.value, ast.Name)
+           and node.func.value.id == "_pixel_row_policy" for node in ast.walk(analysis_adapter)):
+        violations.append("pixel acceptance or retained audit returned to public facade")
     geometry_stage_owner = PACKAGE_ROOT / "preprocess/geometry_stages.py"
     if not geometry_stage_owner.is_file():
         violations.append("canonical optional geometry stage owner missing")

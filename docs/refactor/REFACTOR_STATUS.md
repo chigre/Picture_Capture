@@ -8,22 +8,23 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are merged through #637
-(`e5696d72`), after exact PR-head CI passed; independent main validation
-is not asserted here. The current larger extraction moves full manual
-quadrilateral correction and selected projective execution, diagnostic mapping,
-warning construction and pixel application to
-`preprocess/perspective_stages.py`. A 72-field explicitly initialized working
-diagnostic state replaces in-function default setup; manual callback errors
-retain historical partial diagnostics. The facade composes current operations
-and thresholds, with saved analysis constructor unchanged. UVDoc remains
-between manual and selected projective stages. Facade **97436→75841** bytes,
-root count **15**, normalized ceiling 97440→75850. Exact-head cross-platform
-CI/CodeQL, compatibility, wheel, GUI smoke, reviews and postmerge main
-acceptance are required before marking the candidate accepted.
-Oversized app/processing/OCR cores, advanced orthogonal orchestration and
-native CUDA/UVDoc, real page/manual GUI validation remain open.
-The older phase log below is historical, not a current physical inventory.
+Root classification and preprocessing extractions are merged through #638
+(`efb3a7f3`); the latest PR acceptance was reported after CI passed.
+This candidate moves the **complete** automatic orthogonal closed loop
+(estimate, safe gain, projected candidate, pixel warp and fresh detection,
+body/tail/separator/header audit, accept/rollback, convergence, retained-image
+re-audit and nonlinear-curvature warning) into
+`preprocess/orthogonal_pipeline.py`. Runtime composition explicitly supplies
+14 operations and 16 numeric policies at call time; the returned 59 historical
+per-page diagnostics are restored before the identical persisted-model
+constructor. No root shim/installer, algorithm redesign or format change.
+Facade **75841→55316** normalized bytes, root count **15**, normalized ceiling
+**75850→55320**. Direct synthetic owner tests and canonical ownership guards
+added. Exact-head six-platform CI/CodeQL, GUI smoke, compatibility, wheel
+and reviews, followed by independent merged-main acceptance, remain to be
+established. Actual scanned-page/manual GUI and native UVDoc/CUDA/GPU
+validation are still explicitly outstanding. The older phase log below
+is historical rather than a current physical inventory.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
