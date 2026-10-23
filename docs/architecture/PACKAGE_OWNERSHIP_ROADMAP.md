@@ -975,7 +975,7 @@ remain separate unverified gates. `app.py` and additional OCR detection
 and image-feature orchestration remain future #562 work.
 
 
-## Issue #562 — OCR image-first visual marker and CJK evidence (2026-10-23; candidate)
+## Issue #562 — OCR image-first visual marker and CJK evidence (2026-10-23; merged #643)
 
 On merged `main@76d5c32e` (#642), extract the **complete 17-function**
 visual-image evidence block to the canonical import-light
@@ -1008,3 +1008,42 @@ pytest, GUI smoke, legacy compatibility, wheel, CodeQL/review state and
 independent main-push acceptance remain mandatory before closing PR.
 Native GPU/CUDA, scanned-page and hands-on GUI parity are still outstanding,
 as are the remaining image/OCR orchestration core and massive `app.py`.
+
+
+## Issue #562 — oversized CJK OCR local recovery and separator placement (2026-10-23; candidate)
+
+From merged #643 (`main@7adb614a`), migrate the **complete 9-function**
+oversized Han OCR recovery and marker placement chain to canonical
+`ocr/cjk_recovery.py`. This includes robust ordinary OCR-line height
+estimation; tight local single-Han OCR selection; multi-entry giant-box
+split/recovery by independent oversized visual runs; pre-existing valid
+recovery detection; image-first local re-OCR of glyphs lost by Paddle;
+verified recovery suppression of shadowing raw OCR records; and
+**coarse valley, adaptive blank-band and first-content-onset**
+separator Y refinements.
+
+Keep the legacy `_VERIFIED_OVERSIZED_CJK_RECOVERIES` code set in the original
+OCR core and pass it live per call; it is also consumed by the remaining
+headword candidate parser. The frozen `CjkRecoveryDeps` captures **22 live
+operations, callbacks and policy tokens** from the old core per invocation,
+including the raw Paddle engine/crop hooks and visual projection owner.
+This avoids moving public identities, caching contracts, monkeypatch
+boundaries, external engine startup, or installing globals on import.
+Raw OCR cache stays immutable: suppression occurs exclusively on the
+effective derived record list, with the same recovery provenance/audit.
+All three marker refiner signatures, diagnostics and cutoffs remain unchanged.
+
+The oversized `paddle_headwords_core.py` changes **278675→246682**
+normalized UTF-8 bytes (−31993, 11.5%), with new guard cap **246690**,
+unchanged older baselines, and **15 root modules**. The nine owner bodies
+were audited verbatim against main after removing only explicit dependency
+aliases; no OCR detection algorithms or heuristics were redesigned.
+Dedicated tests cover import isolation, 22 live bindings, giant-box
+median robustness, Chinese/vertical guards, verified vs raw dedup,
+local crop selection via patched parser, recovery identity, and all three
+Y-refiner active/disabled cases. Full exact-head Windows/macOS/Ubuntu
+Python 3.10/3.13 CI, F821, wheel, compatibility, GUI smoke, CodeQL,
+review and postmerge main checks are required before acceptance.
+Scanned-page native Paddle/CUDA and manual GUI parity remain unverified.
+Further large `filter_headword_records`, `detect_paddle_headwords` and
+`app.py` flow extraction remain open in Issue #562.
