@@ -10341,12 +10341,12 @@ class PictureCaptureApp(tk.Tk):
 
 
     def open_recent_project(self) -> None:
-    """Show recent projects as a modern, information-focused card list."""
+        """Show recent projects as a modern, information-focused card list."""
         return _project_session.open_recent_project(self, _project_session_deps())
 
     @staticmethod
     def _attach_tooltip(widget: tk.Widget, message: str) -> None:
-    """Attach a lightweight native Tk tooltip without external dependencies."""
+        """Attach a lightweight native Tk tooltip without external dependencies."""
         return _project_session._attach_tooltip(_project_session_deps(), widget, message)
 
     def _project_controller_for_call(self) -> ProjectController:
@@ -10365,7 +10365,7 @@ class PictureCaptureApp(tk.Tk):
         launch_profile_setup: bool = False,
         parameter_template_root: Path | None = None,
     ) -> None:
-    """Prepare project files off-thread and commit the prepared state on Tk."""
+        """Prepare project files off-thread and commit the prepared state on Tk."""
         return _project_session._load_project(self, _project_session_deps(), root, requested_suffix=requested_suffix, target_page=target_page, target_index=target_index, target_view_scale=target_view_scale, launch_profile_setup=launch_profile_setup, parameter_template_root=parameter_template_root)
 
     def on_page_select(self, _event: tk.Event) -> None:
