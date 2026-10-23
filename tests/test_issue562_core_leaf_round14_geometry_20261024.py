@@ -59,7 +59,7 @@ def test_nominal_geometry_equivalence_and_live_offset_patch(monkeypatch):
     assert got.column_starts == direct.column_starts
     assert got.column_widths == direct.column_widths
     assert got.column_starts == [14, 63]
-    assert (got.top_y, got.bottom_y) == (10, 85)
+    assert (got.top, got.bottom) == (10, 85)
     assert all(type(path) is core.ColumnPath for path in got.column_paths)
     original = core._column_start_offsets_canonical
     monkeypatch.setattr(facade, "_column_start_offsets_canonical", lambda *_: [0, 0])
@@ -83,7 +83,7 @@ def test_actual_geometry_straight_column_and_live_deformation_hook(monkeypatch):
     img = Image.new("RGB", (180, 100), "white")
     g = core.derive_geometry(img, cfg)
     assert g.column_starts == [14, 63]
-    assert (g.top_y, g.bottom_y) == (10, 85)
+    assert (g.top, g.bottom) == (10, 85)
     assert g.source_size == img.size
     assert type(g) is core.Geometry
     assert all(type(v) is core.ColumnPath for v in g.column_paths)
