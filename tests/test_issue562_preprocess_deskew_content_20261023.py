@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import replace
+import importlib.util
 import pickle
 from pathlib import Path
 import subprocess
@@ -138,3 +139,31 @@ def test_layout_wrapper_passes_current_estimator_and_keeps_header_and_last_colum
     assert facade._layout_content_box_from_polygons(polygons, 100, 80, settings)[0] == (10, 5, 94, 75)
     with pytest.raises(RuntimeError, match="文本框过少"):
         facade._layout_content_box_from_polygons(polygons[:3], 100, 80, settings)
+
+
+def test_preprocessing_size_guard_normalizes_crlf_and_still_rejects_growth(tmp_path, monkeypatch):
+    repo = Path(__file__).resolve().parents[1]
+    path = repo / "scripts/architecture_guard.py"
+    spec = importlib.util.spec_from_file_location("preprocess_architecture_guard", path)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    source_path = Path(facade.__file__).resolve()
+    canonical = source_path.read_text(encoding="utf-8").encode("utf-8")
+    windows = tmp_path / "image_preprocessing.py"
+    windows.write_bytes(canonical.replace(b"\n", b"\r\n"))
+    assert windows.stat().st_size > 137_300
+    assert guard._normalized_source_size(windows) == len(canonical) <= 137_300
+    original = guard._normalized_source_size
+    reads = []
+
+    def normalized(path):
+        if path.resolve() == source_path:
+            reads.append(path)
+            return original(windows)
+        return original(path)
+
+    monkeypatch.setattr(guard, "_normalized_source_size", normalized)
+    assert guard.collect_violations() == []
+    assert len(reads) >= 2  # Oversized baseline and the new extraction ratchet.
+    windows.write_bytes(canonical + b"# actual source growth" * 10)
+    assert any("deskew/content extraction" in v for v in guard.collect_violations())

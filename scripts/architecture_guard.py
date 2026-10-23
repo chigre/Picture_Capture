@@ -847,7 +847,7 @@ def collect_violations() -> list[str]:
             if owner == "deskew.py" or routine == "_smooth_1d":
                 if f"def {routine}(" in preprocess_source:
                     violations.append(f"preprocessing primitive duplicated at root: {routine}")
-    if preprocess_facade.stat().st_size > 137_300:
+    if _normalized_source_size(preprocess_facade) > 137_300:
         violations.append("preprocessing facade regressed beyond deskew/content extraction (137300 bytes)")
 
     # Issue #562: canonical REF package owns box storage/detection/OCR.
