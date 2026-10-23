@@ -8,20 +8,22 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are merged through #636
-(`fb59bb1c`); independent merged-main acceptance remains to be checked.
-Root count stays 15, all explicitly classified. The current candidate moves
-explicit user-selected UVDoc fallback and post-perspective re-detection into
-`preprocess/geometry_stages.py`. Current native unwarper/detector callbacks and
-minimum-box policy are injected at call time; warnings and method order,
-failed-stage box identity, image transforms and saved analysis are unchanged.
-Facade shrinks 98305→97436 bytes; normalized size ceiling tightens to 97440.
-Exact-head six-platform CI, GUI smoke, wheel, CodeQL, review and independent
-merged-main acceptance remain pending for this candidate. Manual quadrilateral,
-projective diagnostic mapping and orthogonal orchestration remain, alongside
-oversized app/processing/OCR cores. Native CUDA/UVDoc, real scanned-page
-and manual GUI verification remain outstanding. The historical phase log below
-does not describe current physical file locations.
+Root classification and preprocessing extractions are merged through #637
+(`e5696d72`), after exact PR-head CI passed; independent main validation
+is not asserted here. The current larger extraction moves full manual
+quadrilateral correction and selected projective execution, diagnostic mapping,
+warning construction and pixel application to
+`preprocess/perspective_stages.py`. A 72-field explicitly initialized working
+diagnostic state replaces in-function default setup; manual callback errors
+retain historical partial diagnostics. The facade composes current operations
+and thresholds, with saved analysis constructor unchanged. UVDoc remains
+between manual and selected projective stages. Facade **97436→75841** bytes,
+root count **15**, normalized ceiling 97440→75850. Exact-head cross-platform
+CI/CodeQL, compatibility, wheel, GUI smoke, reviews and postmerge main
+acceptance are required before marking the candidate accepted.
+Oversized app/processing/OCR cores, advanced orthogonal orchestration and
+native CUDA/UVDoc, real page/manual GUI validation remain open.
+The older phase log below is historical, not a current physical inventory.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
