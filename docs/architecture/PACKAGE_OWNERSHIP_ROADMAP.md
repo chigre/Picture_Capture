@@ -1339,11 +1339,11 @@ page scan with cancellation, dynamic batch availability and indicators,
 snapshot/preload/cache, Tk-safe background crop preparation and row painting,
 and batch navigation. All ReviewWindow public signatures remain, including
 the original `@staticmethod _prepare_filter_batch_payload` ABI. A frozen
-`FocusedFilterDeps` captures 27 original live module symbols
+`FocusedFilterDeps` captures 28 original live module symbols
 on each event; no import of heavyweight `app` or startup side effects.
 Preserve original asynchronous worker order, serials, page indexing,
 OCR comparison, crop boxes and fonts, editor keyboard focus and staged saves.
-`app.py` UTF-8 579737→551158 bytes (−28579,
-4.93%); new strict size cap 551174.
+`app.py` UTF-8 579737→551193 bytes (−28544,
+4.92%); new strict size cap 551209.
 Require exact-head 6-platform CI/pytest/GUI smoke/F821/wheel, CodeQL,
 independent review and real-page GUI proofread validation prior to merge.

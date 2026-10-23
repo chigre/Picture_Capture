@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class FocusedFilterDeps:
     """Original app-level bindings captured separately for each operation."""
+    ReviewWindow: object
     messagebox: object
     _focused_review_character_tokens: object
     read_pdic: object
@@ -569,6 +570,8 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
     self._filter_prefetch_key = cache_key
     worker_key = f"focused-filter-prefetch-{id(self)}"
 
+    ReviewWindow = deps.ReviewWindow
+
     def worker(
         local_targets=targets, local_pages=pages, local_settings=settings,
         local_viewer_width=viewer_width, local_available_width=available_width,
@@ -662,6 +665,8 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         return
 
     self._clear_review_workspace("正在异步生成本批切词行…")
+
+    ReviewWindow = deps.ReviewWindow
 
     def worker(
         local_targets=targets, local_pages=pages, local_settings=settings,

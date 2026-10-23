@@ -1938,6 +1938,7 @@ def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
 def _focused_filter_deps() -> _focused_filter.FocusedFilterDeps:
     """Retain original live app module patchpoints on focused UI dispatch."""
     return _focused_filter.FocusedFilterDeps(
+        ReviewWindow=ReviewWindow,
         messagebox=messagebox,
         _focused_review_character_tokens=_focused_review_character_tokens,
         read_pdic=read_pdic,
