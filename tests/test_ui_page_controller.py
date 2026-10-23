@@ -109,9 +109,8 @@ def test_rejected_selection_followup_event_does_not_restore_again() -> None:
 
 def test_selection_restore_avoids_empty_selection_and_duplicate_events() -> None:
     source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = source.index("    def _set_page_list_selection(")
-    end = source.index("    def _select_page_from_lined_overlay(", start)
-    block = source[start:end]
+    page_source = (ROOT / "src/picture_capture/ui/page_index_workflow.py").read_text(encoding="utf-8")
+    block = page_source.split("def _set_page_list_selection(", 1)[1].split("\ndef _clear_lined_cell_overlays(", 1)[0]
     assert "stale = tuple(value for value in selected if value != iid)" in block
     assert "self.page_list.selection_remove(*stale)" in block
     assert "if iid not in selected:" in block

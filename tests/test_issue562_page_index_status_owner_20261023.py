@@ -218,6 +218,9 @@ def test_section_count_unchanged_source_bounds_are_retained():
     )
     deps = SimpleNamespace(
         read_page_sections=lambda _: original,
+        Image=object(), normalize_page_rgb=object(),
+        page_template_analysis_image=object(), derive_geometry=object(),
+        PageSection=object(),
         effective_page_settings=lambda settings, size, index: settings,
         LayoutTransform=lambda kind: SimpleNamespace(kind=kind,
                                                        canonical_size=lambda s: s),
