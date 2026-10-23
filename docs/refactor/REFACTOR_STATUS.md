@@ -8,16 +8,17 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are accepted through #631 at
-`5abbb8a2`, with exact-head and postmerge six-platform CI and CodeQL passed.
-Root count remains 15, all explicitly classified. The current candidate moves
-six preview/crop/canvas/encoding implementations into `preprocess/rendering.py`,
-shrinking the preprocessing API from 128042 to 125548 bytes. Historical public
-signatures/pickle paths and call-time operation replacement seams remain.
-Exact-head CI/review and postmerge acceptance for this candidate are pending.
-Oversized analysis/app/core extraction and real-scan/native GPU validation remain open.
-The phase log below
-is historical and does not describe current physical file locations.
+Root classification and preprocessing extractions are accepted through #632 at
+`80ef82a9`, with exact-head and independent postmerge six-platform CI and CodeQL
+passed. Root count remains 15, all explicitly classified. The current candidate
+extracts the source evidence stage from `analyze_preprocess_page` into
+`preprocess/source_evidence.py`: text detection/fallback, line warnings, OCR/projection
+skew, physical header anchoring and automatic rotation policy. An explicit per-page
+result feeds unchanged later transform stages. Facade shrinks 125548→121552 bytes;
+current operation and policy values are supplied at call time. Exact-head CI/review
+and postmerge acceptance for this candidate are pending. Large later analysis/app/core
+extraction and real-scan/native GPU validation remain open. The phase log below is
+historical and does not describe current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

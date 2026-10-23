@@ -639,7 +639,7 @@ New tests cover ownership/pickle, leaf-first import, quality/count/cap boundarie
 Guard requires the two canonical owners and rejects duplicated pure bodies. Tighten the preprocessing facade ceiling 137300→128050, now named `MAX_PREPROCESS_FACADE_BYTES`, continuing to use normalized LF source size. Existing CRLF/actual-growth regression follows this named policy limit; its rejection requirement is preserved. No old oversized baseline is relaxed. Full exact-head six-platform CI, GUI smoke, wheel, CodeQL, reviews and independent postmerge main checks are required before acceptance. Large analysis/app/core work remains open.
 
 
-## Issue #562 — reviewed image rendering and file encoding (2026-10-23; pending acceptance)
+## Issue #562 — reviewed image rendering and file encoding (2026-10-23; accepted #632)
 
 On accepted `main@5abbb8a2` (#631; exact-head and postmerge six-platform CI/CodeQL passed),
 move six preview/crop/canvas/encoding bodies to `preprocess/rendering.py`. Retain six
@@ -661,3 +661,34 @@ independent main acceptance are required. Tighten normalized facade ceiling to12
 new ownership guard requires six thin adapters and their canonical bodies. No historical
 baseline is loosened. Native CUDA/real scanned-page/manual GUI acceptance and the large
 analysis/app/core decomposition remain open work.
+
+
+## Issue #562 — source geometry evidence stage (2026-10-23; pending acceptance)
+
+On accepted `main@80ef82a9` (#632; exact-head and independent main six-platform
+CI/CodeQL green), begin decomposing `analyze_preprocess_page` itself. The new
+`preprocess/source_evidence.py` owns source detection, too-few-box/failure fallback,
+line-geometry warnings, OCR/projection angle estimation, horizontal physical header
+anchoring, dead zone and automatic rotation limit. `SourceGeometryEvidence` hands
+13 explicitly named values to the subsequent transform stages. Its lists are per-page
+working state; the result container is frozen and is never written to a project.
+Root Python count remains15; facade shrinks **125548→121552 bytes**.
+
+Composition supplies six current operations/factories and five current scalar policies
+at call time, preserving the existing root replacement seams without installing global
+hooks. Source normalization, mode normalization, manual handles, later geometry/cropping
+and the existing `PreprocessAnalysis` constructor stay in their current positions.
+Warnings, ordering, inclusive header quality bounds, vertical-page skip, sample count,
+projection fallback, disabled deskew and retained coordinate/schema/pickle contracts
+are unchanged. Leaf-first import must load neither root facade/GUI nor Paddle.
+
+37 new tests cover failure branches, exact policy thresholds, width-scaled residuals,
+mode-specific warnings, ordered input-identity callbacks, per-page state and public
+analysis→save/reopen/pickle. Frozen #632 comparison checks the extracted algorithm AST,
+360 source-evidence results and48 complete analysis payload/cropped-pixel cases (UVDoc
+stubbed). Full local regression and compatibility runner, normalized LF/CRLF guard,
+F821/compile/wheel, exact-head six-platform CI/GUI smoke/CodeQL/reviews and independent
+main acceptance remain required. Tighten normalized facade ceiling125550→121560;
+require the source owner/composition and reject direct source skew collection returning
+to the analysis root. No historical baseline is loosened. Real scanned-page/manual
+GUI/native CUDA and large later-stage analysis/app/core acceptance remain open.
