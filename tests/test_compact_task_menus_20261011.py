@@ -132,6 +132,7 @@ def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess()
     tools = source(workspace_tools)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
     preprocess = (ROOT / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
+    pointer_source = (ROOT / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     for title, builder in (
         ("图片预处理(前置)", "build_preprocess_menu"),
         ("一、版面参数", "build_layout_menu"),
@@ -141,7 +142,7 @@ def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess()
         assert f'sections["{title}"] = {builder}(app, content)' in tools
     assert 'compact_sections.get(compact_titles.get(key, ""))' in preprocess
     assert 'self.preprocess_mode_button.configure(' in preprocess
-    assert 'self.polygon_draw_button.configure(' in app
+    assert 'self.polygon_draw_button.configure(' in pointer_source
 
 
 def test_postproduction_menu_is_renamed_but_export_callback_unchanged():

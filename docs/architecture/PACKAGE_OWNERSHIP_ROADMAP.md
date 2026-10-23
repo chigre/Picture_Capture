@@ -1307,3 +1307,25 @@ pytest, compatibility, GUI smoke, F821, wheel, CodeQL and review checks. Real
 project GUI verification and post-merge main CI remain separate outstanding
 acceptance steps. The next independent batch should examine remaining
 main-canvas pointer/event and proofreading interactions.
+
+
+## Issue #562 — PPP interaction and SECTION drag ownership (2026-10-23; candidate)
+
+Following merged #651, move 16 physical main canvas interaction methods to
+`ui/canvas_pointer_workflow.py`: PPP label state, polygon hit-testing/drag
+and geometry, SECTION edit and bounds drag, polygon drawing mode, and canvas
+left/right mouse press/drag/release. Keep original `PictureCaptureApp` method
+signatures, Tk callback names, event return conventions, current image-space
+coordinates, redraw and persistence semantics. A frozen `CanvasPointerDeps`
+holds 12 live app module dependencies per invocation without a
+circular import. Existing `_rectangle_bounds`, `_set_rectangle_side`,
+`_external_polygon_label_position` static geometry helpers and SECTION
+writer remain on the class without relocation. Only internal import path
+change is `.ui.workspace_mode_shortcuts` to `.workspace_mode_shortcuts`.
+`app.py` 598661→579737 UTF-8 bytes (−18924,
+3.16%); strict ratchet 579753 bytes.
+Preserve PPP data labels, write operations and undo/redo paths, auxiliary
+priority, source/canonical geometry and image editing guards. New owner AST
+checks, callback dispatch, staticmethod preservation and monkeypatch tests
+accompany the extraction. No merge before exact-head six-platform CI,
+security checks, independent review and manual real-page GUI verification.

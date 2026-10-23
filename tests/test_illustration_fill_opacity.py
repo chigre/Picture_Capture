@@ -113,10 +113,11 @@ def test_app_source_uses_direct_static_polygon_opacity_path():
     root = Path(__file__).resolve().parents[1]
     source = (root / "src/picture_capture/app.py").read_text(encoding="utf-8")
     render_source = (root / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    pointer_source = (root / "src/picture_capture/ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     assert "clear_alpha_polygon_records(self)" in render_source
     assert "create_alpha_canvas_polygon(" in render_source
     assert "opacity=self.settings.illustration_fill_opacity" in render_source
-    assert "refresh_alpha_polygon_fill(self, region_index)" in source
+    assert "refresh_alpha_polygon_fill(self, region_index)" in pointer_source
     state = (root / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
     display = (root / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert '"illustration_fill_opacity": int' in state

@@ -1336,6 +1336,44 @@ def collect_violations() -> list[str]:
         if _normalized_source_size(gui_project_app) > 598_677:
             violations.append("app.py exceeds 598677-byte main canvas render ratchet")
 
+    # #562: PPP/SECTION mouse interaction has one physical owner with all
+    # original PictureCaptureApp callback signatures retained as adapters.
+    pointer_owner = PACKAGE_ROOT / "ui/canvas_pointer_workflow.py"
+    if not pointer_owner.is_file():
+        violations.append("canvas pointer owner missing")
+    else:
+        pointer_ast = ast.parse(pointer_owner.read_text(encoding="utf-8"))
+        funcs = {n.name: n for n in pointer_ast.body if isinstance(n, ast.FunctionDef)}
+        for name in ["_sync_polygon_label_texts","_nearest_polygon_vertex","_nearest_polygon_edge","_delete_polygon_region","_polygon_label_canvas_position","_update_polygon_canvas_geometry","_set_section_editing","_restore_cursor_guides_after_section_edit","_finish_section_editing","_nearest_section_boundary","_drag_page_section_boundary_to","toggle_polygon_drawing","canvas_left_click","canvas_left_drag","canvas_left_release","canvas_right_click"]:
+            fn = funcs.get(name)
+            if fn is None or len(fn.body) < 2:
+                violations.append(f"canvas pointer method owner incomplete: {name}")
+        if not any(isinstance(n, ast.ClassDef) and n.name == "CanvasPointerDeps"
+                   for n in pointer_ast.body):
+            violations.append("canvas pointer dependencies not owned")
+        if any(isinstance(n, ast.ImportFrom) and n.module in {"app", "processing"}
+               for n in ast.walk(pointer_ast)):
+            violations.append("canvas pointer owner imports heavyweight app/processing")
+    if gui_project_app.is_file():
+        pointer_app_ast = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+        pointer_class = next((n for n in pointer_app_ast.body if
+                              isinstance(n, ast.ClassDef) and n.name == "PictureCaptureApp"), None)
+        if pointer_class is None:
+            violations.append("canvas pointer Tk class missing")
+        else:
+            adapters = {n.name: n for n in pointer_class.body if isinstance(n, ast.FunctionDef)}
+            for name in ["_sync_polygon_label_texts","_nearest_polygon_vertex","_nearest_polygon_edge","_delete_polygon_region","_polygon_label_canvas_position","_update_polygon_canvas_geometry","_set_section_editing","_restore_cursor_guides_after_section_edit","_finish_section_editing","_nearest_section_boundary","_drag_page_section_boundary_to","toggle_polygon_drawing","canvas_left_click","canvas_left_drag","canvas_left_release","canvas_right_click"]:
+                fn = adapters.get(name)
+                if fn is None or not any(
+                    isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and isinstance(n.func.value, ast.Name)
+                    and n.func.value.id == "_canvas_pointer"
+                    and n.func.attr == name for n in ast.walk(fn)
+                ):
+                    violations.append(f"canvas pointer Tk method not delegated: {name}")
+        if _normalized_source_size(gui_project_app) > 579_753:
+            violations.append("app.py exceeds 579753-byte canvas pointer ratchet")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {
