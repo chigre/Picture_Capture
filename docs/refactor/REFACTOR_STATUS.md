@@ -8,25 +8,25 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Architecture classification, preprocessing, crop and OCR extractions are
-merged through #643, latest main merge `7adb614a`. Current candidate
-branch `refactor/562-cjk-recovery-separator-refinement` migrates
-**9 whole oversized-CJK recovery and separator-Y refinement functions**
-to `ocr/cjk_recovery.py` as one stable stage: ordinary line-height,
-local Paddle crop rescue, giant OCR box split, image-first Han glyph
-recovery, verified-only raw-duplicate suppression, and normal/adaptive/
-first-content marker Y placement. Public original functions and recovered
-record model identities remain in the OCR core, with frozen call-time
-`CjkRecoveryDeps` passing **22 original runtime callbacks/policies**
-including the core's shared verified recovery code set. Source bodies
-match the originals after only alias removal. Core normalized bytes
-**278675→246682** (−31993), new strict **246690-byte** cap;
-15 original physical root Python modules. Direct no-import/pixel,
-recovery provenance and separator regression tests added.
-The current PR requires exact-head six-system CI, GUI smoke,
-compatibility/wheel, CodeQL, review and independent postmerge main
-checks; native scan/GPU/CUDA/manual GUI validation is unverified.
-Historical status below is retained for recovery.
+Architecture classification, preprocessing, crop and OCR extractions
+are merged through #644 (main merge `01a279d7`, six-platform CI
+passed). This candidate large refactor branch
+`refactor/562-ocr-candidate-filter-pipeline` moves the **complete
+`filter_headword_records` 1,135-line dictionary-headword filtering,
+image evidence, structure/visual scoring, forced rules, acceptance and
+diagnostic lifecycle** into canonical `ocr/candidate_filter.py`.
+Original core retains one live, signature-compatible wrapper and binds
+**41 original functions/policy values** per invocation; no new root
+file or patchpoint installer. Model/pickle, raw caches, output
+diagnostics and user decision semantics stay unchanged. Core normalized
+UTF-8 source **246682→197587 bytes**, reduction **49095**,
+strict additional guard **197600**, unchanged historical oversized
+baseline and 15 root modules. New isolation, monkeypatch,
+interface and empty-data regression tests plus AST ownership guard.
+Exact-head full six-platform CI, GUI/compatibility/wheel, CodeQL/reviews
+and independent merged-main validation are outstanding for this branch.
+Native real scanned-page, GUI manual and GPU/CUDA parity are not yet
+established. Historical status continues below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
