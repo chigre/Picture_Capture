@@ -38,8 +38,11 @@ def test_refinement_batch_progress_callback_uses_existing_canonical_owner() -> N
     from picture_capture.refinement.progress import report_refinement_page
 
     app_source = (PACKAGE / "app.py").read_text(encoding="utf-8")
-    assert "from .refinement.progress import report_refinement_page" in app_source
-    assert "from .marker_refinement_progress import report_refinement_page" not in app_source
+    batch = (PACKAGE / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_batch_task(" in app_source
+    assert "from ..refinement.progress import report_refinement_page" in batch
+    assert "from .refinement.progress import report_refinement_page" not in batch
+    assert "from .marker_refinement_progress import report_refinement_page" not in batch
 
     status = []
     ui = SimpleNamespace(
