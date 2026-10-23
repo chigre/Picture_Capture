@@ -31,9 +31,9 @@ def test_missing_folder_is_not_opened(tmp_path):
 
 def test_project_center_card_has_folder_action_distinct_from_project_load():
     source = (Path(__file__).resolve().parents[1] / "src" /
-              "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = source.index("    def open_recent_project(self)")
-    section = source[start:source.index("\n    @staticmethod", start)]
+              "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def open_recent_project(")
+    section = source[start:source.index("\ndef _attach_tooltip(", start)]
     assert "add_open_folder_button(actions, root, dialog, exists)" in section
     adapter = (Path(__file__).resolve().parents[1] / "src" /
                "picture_capture" / "project" / "folder_launcher.py").read_text(encoding="utf-8")
