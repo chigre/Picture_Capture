@@ -1010,7 +1010,7 @@ Native GPU/CUDA, scanned-page and hands-on GUI parity are still outstanding,
 as are the remaining image/OCR orchestration core and massive `app.py`.
 
 
-## Issue #562 — oversized CJK OCR local recovery and separator placement (2026-10-23; candidate)
+## Issue #562 — oversized CJK OCR local recovery and separator placement (2026-10-23; merged #644)
 
 From merged #643 (`main@7adb614a`), migrate the **complete 9-function**
 oversized Han OCR recovery and marker placement chain to canonical
@@ -1047,3 +1047,44 @@ review and postmerge main checks are required before acceptance.
 Scanned-page native Paddle/CUDA and manual GUI parity remain unverified.
 Further large `filter_headword_records`, `detect_paddle_headwords` and
 `app.py` flow extraction remain open in Issue #562.
+
+
+## Issue #562 — complete OCR candidate filtering and diagnosis (2026-10-23; candidate)
+
+On merged #644 (`main@01a279d7`, exact-head six-platform CI passed),
+extract the **entire 1,135-line `filter_headword_records` orchestration
+and decision pipeline** into canonical `ocr/candidate_filter.py`. It is
+one cohesive responsibility, not a collection of unrelated small helpers:
+OCR records → merged/repaired lines → dictionary Profile/regex rules →
+independent visual separators, printed marker lanes and CJK image-first
+evidence → per-candidate structure/typography/position/quality scoring →
+user forced accept/reject → selected `Entry` and complete machine-readable
+diagnostics, with duplicate Y suppression and per-page metadata.
+
+The historical `paddle_headwords_core.filter_headword_records` callable
+retains the **same positional/optional arguments, defaults and docstring**.
+A frozen `HeadwordFilterDeps` captures **41 live original callable and
+policy references** from the legacy core at each invocation: 36 named
+OCR operations plus `Entry`, the current dictionary and verified CJK
+codes, profile loader and relationship label mapper. The canonical owner
+does not import the heavy OCR core, GUI, native Paddle engine or root
+`processing`. No persistent model, pickle path, OCR raw cache,
+diagnostic JSON field, candidate ordering, selection threshold, manual
+override or on-disk format is changed; algorithm body is transferred
+verbatim apart from explicit alias bindings.
+
+Normalized OCR core changes **246682→197587 UTF-8 bytes** (−49095, 19.9%)
+with new strict size cap **197600**, unchanged historical oversized
+baseline and **15 physical root Python modules**. Newly added direct
+tests cover isolated import, exactly 41 current dependencies, legacy
+call signature/docstrings, zero-candidate behavior, real-time grouping
+monkeypatch, complete optional-argument forwarding and live Profile/
+CJK-code policy patching. A strict AST architecture guard ensures only
+the new canonical owner implements candidate filtering.
+
+Before merge require the exact-head Windows/macOS/Ubuntu Python 3.10/3.13
+full pytest, compatibility runner, GUI smoke, wheel, F821, golden
+fixture/benchmark provenance, CodeQL and reviews/unresolved threads.
+Independent merged-main CI plus native scanned-page/manual GUI/GPU-CUDA
+acceptance remain separate. Issue #562 remains open for the remaining
+large `detect_paddle_headwords` orchestration and huge `app.py`.
