@@ -1374,6 +1374,53 @@ def collect_violations() -> list[str]:
         if _normalized_source_size(gui_project_app) > 579_753:
             violations.append("app.py exceeds 579753-byte canvas pointer ratchet")
 
+    # #562: physical owner for focused scan, prefetch and Tk review rows.
+    focused_owner = PACKAGE_ROOT / "ui/focused_filter_workflow.py"
+    if not focused_owner.is_file():
+        violations.append("focused filter owner missing")
+    else:
+        owner_ast = ast.parse(focused_owner.read_text(encoding="utf-8"))
+        owner_funcs = {node.name: node for node in owner_ast.body
+                       if isinstance(node, ast.FunctionDef)}
+        for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch"]:
+            fn = owner_funcs.get(name)
+            if fn is None or len(fn.body) < 3 or fn.decorator_list:
+                violations.append(f"focused filter implementation missing: {name}")
+        if not any(isinstance(node, ast.ClassDef) and node.name == "FocusedFilterDeps"
+                   for node in owner_ast.body):
+            violations.append("focused filter live deps missing")
+        if any(isinstance(node, ast.ImportFrom) and node.module in {"app", "processing"}
+               for node in ast.walk(owner_ast)):
+            violations.append("focused filter imports heavyweight app/processing")
+    if gui_project_app.is_file():
+        app_ast = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+        rev = next((node for node in app_ast.body if isinstance(node, ast.ClassDef)
+                    and node.name == "ReviewWindow"), None)
+        if rev is None:
+            violations.append("focused filter ReviewWindow missing")
+        else:
+            adapter_funcs = {node.name: node for node in rev.body
+                             if isinstance(node, ast.FunctionDef)}
+            for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch"]:
+                fn = adapter_funcs.get(name)
+                if fn is None or not any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "_focused_filter"
+                    and node.func.attr == name
+                    for node in ast.walk(fn)
+                ):
+                    violations.append(f"focused filter ReviewWindow adapter missing: {name}")
+            prep = adapter_funcs.get("_prepare_filter_batch_payload")
+            if prep is None or not any(
+                isinstance(d, ast.Name) and d.id == "staticmethod"
+                for d in prep.decorator_list
+            ):
+                violations.append("focused filter static payload ABI missing")
+        if _normalized_source_size(gui_project_app) > 551_174:
+            violations.append("app.py exceeds 551174-byte focused filter ratchet")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {
