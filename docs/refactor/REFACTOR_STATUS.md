@@ -17,11 +17,11 @@ It covers policy, image/band transforms, Paddle/Tesseract/Lens,
 local CJK recovery, candidate arbitration, manual override and compact
 v3 persistent JSON without changing output keys, coordinate domains,
 raw source records or sidecar cleanup. The old public method retains
-the original 9-parameter signature/docstring and binds **44 live
+the original 9-parameter signature/docstring and binds **45 live
 old OCR operations/policies** per call; two internal relative imports
 are updated to account for the leaf's package location. Core shrinks
-**197668→174697 normalized UTF-8 bytes** (−22971), additional strict
-size cap **174710**, historical oversize baseline unchanged and 15
+**197668→174754 normalized UTF-8 bytes** (−22914), additional strict
+size cap **174765**, historical oversize baseline unchanged and 15
 physical root Python files. Direct import/patch/API/safety tests plus
 full original regression suite remain configured. Exact-head CI,
 compatibility, GUI smoke, wheel, CodeQL, reviews and independent
