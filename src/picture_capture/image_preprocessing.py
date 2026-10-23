@@ -153,6 +153,7 @@ from .preprocess.orthogonal_policy import (
 
 
 
+from .preprocess import geometry_stages as _geometry_stages
 from .preprocess import pixel_row_policy as _pixel_row_policy
 from .preprocess import projective_selection as _projective_selection
 from .preprocess import finalization as _finalization
@@ -495,21 +496,17 @@ def analyze_preprocess_page(
         except Exception as exc:
             warnings.append(f"手动四角透视纠正不可用：{exc}")
 
-    # UVDoc remains an explicit user-selected fallback for severe document
-    # curvature. Automatic mode no longer runs a neural warp before the
-    # deterministic final straightener: UVDoc is not designed to guarantee
-    # sub-degree row/column orthogonality and can add an unnecessary resample.
+    # Keep explicit neural unwarp separate from the automatic geometry path.
+    uvdoc_stage = _geometry_stages.apply_explicit_uvdoc(
+        working, working_polygons, actual_geometry_mode,
+        requested_geometry_mode=requested_geometry_mode,
+        document_unwarper=unwarp_document_image,
+        warnings=warnings, method_parts=method_parts,
+    )
+    working = uvdoc_stage.image
+    working_polygons = uvdoc_stage.polygons
+    actual_geometry_mode = uvdoc_stage.geometry_mode
     advanced_redetected = False
-    if requested_geometry_mode == "uvdoc":
-        try:
-            working = unwarp_document_image(working)
-            working_polygons = []
-            actual_geometry_mode = "uvdoc"
-            method_parts.append("uvdoc")
-        except Exception as exc:
-            warnings.append(
-                f"Paddle UVDoc 展平不可用，已保留前一步几何结果：{exc}"
-            )
 
     # Advanced projective geometry is staged after the global small-angle
     # correction:
@@ -951,39 +948,18 @@ def analyze_preprocess_page(
                 f"{perspective_row_after_trend_deg:+.2f}°。"
             )
 
-    # A safe perspective can fix the page frame while leaving body-row
-    # geometry unresolved (0004-type pages). Re-detect on the actual
-    # perspective-corrected pixels before the nonlinear stage so orthogonal
-    # refinement does not inherit only mathematically transformed pre-warp
-    # boxes.
-    if (
-        requested_geometry_mode == "auto"
-        and actual_geometry_mode == "perspective"
-        and working_polygons
-    ):
-        try:
-            post_perspective_polygons = detect_text_polygons(
-                working,
-                settings,
-            )
-            if (
-                len(post_perspective_polygons)
-                >= POST_PERSPECTIVE_REDETECT_MIN_BOXES
-            ):
-                working_polygons = [
-                    np.asarray(poly, dtype=float)
-                    for poly in post_perspective_polygons
-                ]
-                advanced_redetected = True
-                method_parts.append("post_perspective_redetect")
-            else:
-                warnings.append(
-                    "透视后正文复检文本框不足，正交细化沿用变换后的原检测框。"
-                )
-        except Exception as exc:
-            warnings.append(
-                f"透视后正文复检不可用，正交细化沿用变换后的原检测框：{exc}"
-            )
+    # Re-detect on the actual perspective-corrected pixels before the
+    # orthogonal normalizer; retain transformed boxes on failure.
+    post_perspective = _geometry_stages.redetect_after_perspective(
+        working, working_polygons, settings,
+        requested_geometry_mode=requested_geometry_mode,
+        actual_geometry_mode=actual_geometry_mode,
+        text_detector=detect_text_polygons,
+        min_boxes=POST_PERSPECTIVE_REDETECT_MIN_BOXES,
+        warnings=warnings, method_parts=method_parts,
+    )
+    working_polygons = post_perspective.polygons
+    advanced_redetected = post_perspective.redetected
 
     # Final deterministic orthogonal normalizer.
     #
