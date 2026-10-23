@@ -166,5 +166,9 @@ def test_preprocessing_size_guard_normalizes_crlf_and_still_rejects_growth(tmp_p
     monkeypatch.setattr(guard, "_normalized_source_size", normalized)
     assert guard.collect_violations() == []
     assert len(reads) >= 2  # Oversized baseline and the new extraction ratchet.
-    windows.write_bytes(canonical + b"# actual source growth" * 10)
+    # The moved pipeline is shorter, so fixed-size synthetic growth can stay
+    # below the unchanged limit. Always cross the actual byte ceiling.
+    growth = b"# actual source growth"
+    extra = (guard.MAX_PREPROCESS_FACADE_BYTES - len(canonical)) // len(growth) + 2
+    windows.write_bytes(canonical + growth * extra)
     assert any("preprocessing facade regressed beyond extracted owners" in v for v in guard.collect_violations())
