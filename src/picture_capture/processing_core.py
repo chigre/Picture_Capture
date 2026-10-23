@@ -18,6 +18,7 @@ from .crop import page_workflow as _page_workflow
 from .crop import polygon_geometry as _polygon_geometry
 from .crop import worker_policy as _crop_worker_policy
 from .crop import entry_column_bounds as _entry_column_bounds
+from .crop import entry_vertical_bounds as _entry_vertical_bounds
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
@@ -2678,55 +2679,22 @@ def split_single_lines(
 def _special_bounds(
     root: Path, page_stem: str, geometry: Geometry,
 ) -> tuple[int, int]:
-    path = special_pages_path(root)
-    if not path.exists():
-        return geometry.top, geometry.bottom
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
-        fields = raw.split("\t")
-        if fields and fields[0] == page_stem:
-            top = int(fields[1]) if len(fields) > 1 and fields[1].strip() else geometry.top
-            bottom = int(fields[2]) if len(fields) > 2 and fields[2].strip() else geometry.bottom
-            return max(0, top), max(top + 1, bottom)
-    return geometry.top, geometry.bottom
+    """Historical special-page bounds hook, with the current path resolver."""
+    return _entry_vertical_bounds.special_bounds(
+        root, page_stem, geometry, special_path_fn=special_pages_path,
+    )
 
 
 def entry_crop_bounds(
     image: Image.Image, settings: AppSettings, *, top_y: int | None = None, bottom_y: int | None = None,
     root: Path | None = None, page_stem: str = "",
 ) -> tuple[int, int]:
-    """Resolve whole-entry crop bounds in canonical full-resolution pixels.
-
-    Crop bounds are literal original-image pixel values. No page-width or display-width conversion is performed.
-    """
-    geometry = derive_geometry(image, settings)
-    canonical_width, canonical_height = geometry.transform.canonical_size(image.size)
-    if top_y is None and bottom_y is None and root is not None:
-        top, bottom = _special_bounds(root, page_stem, geometry)
-        return max(0, top), min(canonical_height, bottom)
-
-    top_value = (
-        _source_px(settings.start_y)
-        if top_y is None
-        else _source_px(max(0, int(top_y)))
+    """Historical full-resolution bounds hook with live geometry dependencies."""
+    return _entry_vertical_bounds.entry_crop_bounds(
+        image, settings, top_y=top_y, bottom_y=bottom_y, root=root, page_stem=page_stem,
+        geometry_fn=derive_geometry, special_bounds_fn=_special_bounds,
+        source_px_fn=_source_px,
     )
-    if bottom_y is None:
-        bottom_value = (
-            _source_px(max(0, int(settings.bottom_y)))
-            if bool(getattr(settings, "crop_to_bottom_y", False))
-            and int(getattr(settings, "bottom_y", 0) or 0) > 0
-            else 0
-        )
-    else:
-        bottom_value = (
-            0
-            if int(bottom_y) <= 0
-            else _source_px(max(0, int(bottom_y)))
-        )
-    top = max(0, min(canonical_height - 1, int(top_value)))
-    bottom = canonical_height if bottom_value <= 0 else max(
-        top + 1, min(canonical_height, int(bottom_value))
-    )
-    return top, bottom
 
 def _entry_crop_box_for_column(
     image: Image.Image, settings: AppSettings, geometry: Geometry, col: int, y0: int, y1: int,

@@ -29,6 +29,7 @@ from .ocr import headword_script as _headword_script
 from .ocr import lemma_repairs as _lemma_repairs
 from .ocr import line_grouping as _line_grouping
 from .ocr import alphabetical_warnings as _alphabetical_warnings
+from .ocr import band_preprocessing as _band_preprocessing
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -961,27 +962,12 @@ def run_paddle_band(band: Image.Image, settings: AppSettings, engine: Any | None
 def prepare_ocr_band(
     band: Image.Image, *, max_long_side: int = 2800, mode: str = "original",
 ) -> tuple[Image.Image, float]:
-    """Return a temporary OCR image and source-to-input coordinate scale."""
-    source = normalize_page_rgb(band)
-    mode = str(mode or "original").strip().lower()
-    if mode in {"grayscale", "gray", "auto_contrast", "binary"}:
-        gray = ImageOps.grayscale(source)
-        if mode in {"auto_contrast", "binary"}:
-            gray = ImageOps.autocontrast(gray)
-        if mode == "binary":
-            array = np.asarray(gray)
-            threshold = _otsu_threshold(array)
-            gray = Image.fromarray(np.where(array > threshold, 255, 0).astype(np.uint8), mode="L")
-        source = gray.convert("RGB")
-    limit = max(256, int(max_long_side or 2800))
-    scale = min(1.0, limit / max(source.size))
-    if scale < 1.0:
-        source = source.resize(
-            (max(1, round(source.width * scale)), max(1, round(source.height * scale))),
-            Image.Resampling.LANCZOS,
-        )
-    return source, scale
-
+    """Historical OCR band preprocessing with current image/Otsu callbacks."""
+    return _band_preprocessing.prepare_ocr_band(
+        band, max_long_side=max_long_side, mode=mode,
+        normalize_rgb_fn=normalize_page_rgb, otsu_fn=_otsu_threshold,
+        image_ops=ImageOps, image_cls=Image, np_module=np,
+    )
 
 def _records_to_canonical_band(
     records: list[OCRRecord], source_band_size: tuple[int, int], transform_kind: str
@@ -1959,41 +1945,8 @@ def _true_runs(values: np.ndarray) -> list[tuple[int, int]]:
 
 
 def _otsu_threshold(gray: np.ndarray) -> int:
-    """Return a conservative page-local black/white threshold.
-
-    Dictionary scans are usually high contrast, but paper tone and antialiasing
-    vary by source. Otsu keeps the separator refinement independent of a
-    project-specific hardcoded gray value. The clamp prevents an unusually
-    bright or dark crop from turning most of the paper into ink.
-    """
-    if gray.size == 0:
-        return 180
-    hist = np.bincount(gray.astype(np.uint8).ravel(), minlength=256).astype(np.float64)
-    total = float(gray.size)
-    weighted_total = float(np.dot(np.arange(256, dtype=np.float64), hist))
-    background_weight = 0.0
-    background_sum = 0.0
-    best_variance = -1.0
-    best_threshold = 180
-    for threshold in range(256):
-        background_weight += hist[threshold]
-        if background_weight <= 0:
-            continue
-        foreground_weight = total - background_weight
-        if foreground_weight <= 0:
-            break
-        background_sum += threshold * hist[threshold]
-        background_mean = background_sum / background_weight
-        foreground_mean = (weighted_total - background_sum) / foreground_weight
-        between = background_weight * foreground_weight * (background_mean - foreground_mean) ** 2
-        if between > best_variance:
-            best_variance = between
-            best_threshold = threshold
-    return int(min(220, max(80, best_threshold)))
-
-
-
-
+    """Historical black/white threshold; implementation owned by OCR band leaf."""
+    return _band_preprocessing.otsu_threshold(gray, np_module=np)
 
 def _separator_analysis_x_bounds(
     width: int,
