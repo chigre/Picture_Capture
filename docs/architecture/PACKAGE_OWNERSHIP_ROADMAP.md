@@ -1106,7 +1106,7 @@ failure remaining nonfatal.
 
 The public `paddle_headwords_core.detect_paddle_headwords` retains its
 nine argument names, defaults, typing shape and docstring, delegating
-to the owner using a frozen `PageDetectionDeps` that captures **44
+to the owner using a frozen `PageDetectionDeps` that captures **45
 current original callbacks/models/policy functions per call**.
 No install-time callback registration, circular heavyweight core import,
 new physical root Python shim, GUI import, or native OCR import on module
@@ -1115,10 +1115,10 @@ load. Two function-internal lazy imports change only their relative path
 code now physically resides in `ocr/`; all other algorithm text remains
 identical after eliminating the new dependency aliases.
 
-The OCR core normalized byte size shrinks **197668→174697**
-(−22971, ~11.6%), with new strict guard **174710** and unchanged prior
+The OCR core normalized byte size shrinks **197668→174754**
+(−22914, ~11.6%), with new strict guard **174765** and unchanged prior
 oversized baselines and **15 root Python modules**. Direct tests verify
-owner isolation, 44 live monkeypatch hooks, exact original entrypoint
+owner isolation, 45 live monkeypatch hooks, exact original entrypoint
 signature/docstring, complete explicit optional-argument forwarding,
 and engine-disable error policy. Full existing multi-OCR, cache,
 CJK/local, review, coordinate and quality regression tests remain active.
