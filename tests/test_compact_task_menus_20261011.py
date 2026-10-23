@@ -68,6 +68,7 @@ def test_layout_percent_and_pixel_fields_use_shared_traces():
 
     text = source(compact_layout_profile_menu)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
+    preprocess = (ROOT / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
     for name in ("columns", "start_y", "manual_x", "column_width", "gutter",
                  "character_height", "row_padding", "body_indent", "horizontal_tolerance"):
         assert f'"{name}"' in text
@@ -138,8 +139,8 @@ def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess()
         ("四、画线 / OCR / 插图 / 校对", "build_drawing_menu"),
     ):
         assert f'sections["{title}"] = {builder}(app, content)' in tools
-    assert 'compact_sections.get(compact_titles.get(key, ""))' in app
-    assert 'self.preprocess_mode_button.configure(' in app
+    assert 'compact_sections.get(compact_titles.get(key, ""))' in preprocess
+    assert 'self.preprocess_mode_button.configure(' in preprocess
     assert 'self.polygon_draw_button.configure(' in app
 
 
