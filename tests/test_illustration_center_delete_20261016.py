@@ -18,9 +18,10 @@ def test_concave_illustration_x_remains_inside():
 def test_delete_control_tied_to_shape_not_editable_label():
     source = (Path(__file__).resolve().parents[1] / "src" /
               "picture_capture" / "app.py").read_text(encoding="utf-8")
+    canvas_source = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     overlay = (Path(__file__).resolve().parents[1] / "src" /
                "picture_capture" / "illustration" / "delete_overlay.py").read_text(encoding="utf-8")
-    assert "if show_shapes else None" in source
+    assert "if show_shapes else None" in canvas_source
     assert "delete_button.pack" not in overlay
     assert 'font=fixed_overlay_control_font(app.canvas, app.settings.ocr_language)' in overlay
     assert 'width=3' in overlay

@@ -98,7 +98,7 @@ def test_no_auxiliary_only_export_when_no_real_entry():
 
 def test_preview_and_real_export_use_same_crop_planner():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    app = (root / "app.py").read_text(encoding="utf-8")
+    app = (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     core = (root / "processing_core.py").read_text(encoding="utf-8")
     owner = (root / "crop" / "page_workflow.py").read_text(encoding="utf-8")
     assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in app

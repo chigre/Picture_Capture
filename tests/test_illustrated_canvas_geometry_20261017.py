@@ -135,7 +135,7 @@ def test_grid_profile_limits_and_payload():
 
 def test_main_canvas_hook_and_bindtag_are_isolated_from_normal_page():
     base=Path(__file__).resolve().parents[1]/"src"/"picture_capture"
-    app=(base/"app.py").read_text("utf-8")
+    app=(base/"ui/main_canvas_render_workflow.py").read_text("utf-8")
     source=(base/"ui"/"illustrated_main_canvas.py").read_text("utf-8")
     assert "render_illustrated_main_overlay(self)" in app
     assert "if render_illustrated_main_overlay(self):" in app
