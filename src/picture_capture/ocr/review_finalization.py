@@ -49,9 +49,10 @@ def _review_candidate_box_height(
 
 def _review_candidates_same_cjk_glyph(
     deps: ReviewFinalizationDeps, left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Return True when two selected rows are duplicate detections of one Han glyph."""
     _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
     _review_candidate_box_height = deps._review_candidate_box_height
-    """Return True when two selected rows are duplicate detections of one Han glyph."""
+
     if int(left.get("column", -1)) != int(right.get("column", -2)):
         return False
     lw = str(left.get("word", "")).strip()
@@ -128,9 +129,6 @@ def _looks_like_multi_cjk_headword(
 
 def _review_candidates_same_cjk_compound(
     deps: ReviewFinalizationDeps, left: dict[str, Any], right: dict[str, Any]) -> bool:
-    _review_candidate_box_height = deps._review_candidate_box_height
-    _normalize_cjk_review_word = deps._normalize_cjk_review_word
-    _looks_like_multi_cjk_headword = deps._looks_like_multi_cjk_headword
     """Return True when two selected rows are duplicate detections of one CJK compound headword.
 
     This handles ordinary-size Chinese bracketed compounds such as 【並肩】 that
@@ -138,6 +136,10 @@ def _review_candidates_same_cjk_compound(
     neighbouring real entries, require the normalized lemma to match exactly and
     the physical boxes to overlap strongly or have almost identical centres.
     """
+    _review_candidate_box_height = deps._review_candidate_box_height
+    _normalize_cjk_review_word = deps._normalize_cjk_review_word
+    _looks_like_multi_cjk_headword = deps._looks_like_multi_cjk_headword
+
     if int(left.get("column", -1)) != int(right.get("column", -2)):
         return False
     lw = _normalize_cjk_review_word(str(left.get("word", "")))
@@ -174,8 +176,6 @@ def _review_candidates_same_cjk_compound(
 
 def _candidate_has_single_cjk_identity(
     deps: ReviewFinalizationDeps, item: dict[str, Any]) -> bool:
-    _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
-    _normalize_cjk_review_word = deps._normalize_cjk_review_word
     """Return True when review metadata identifies a large single-Han headword.
 
     Do not rely only on the final OCR word: the two OCR engines can disagree on
@@ -183,6 +183,9 @@ def _candidate_has_single_cjk_identity(
     Parser traces and each engine's lemma/raw/corrected forms are therefore also
     inspected.
     """
+    _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
+    _normalize_cjk_review_word = deps._normalize_cjk_review_word
+
     values = [str(item.get("word", ""))]
     for engine in ("paddle", "tesseract", "lens"):
         side = item.get(engine, {}) or {}
@@ -210,8 +213,9 @@ def _candidate_line_height(
 
 def _boxes_same_large_cjk_region(
     deps: ReviewFinalizationDeps, left: dict[str, Any], right: dict[str, Any]) -> bool:
-    _review_candidate_box_height = deps._review_candidate_box_height
     """Check whether two candidates plausibly cover the same oversized glyph."""
+    _review_candidate_box_height = deps._review_candidate_box_height
+
     lbox = left.get("box") or []
     rbox = right.get("box") or []
     if not (isinstance(lbox, (list, tuple)) and len(lbox) == 4 and isinstance(rbox, (list, tuple)) and len(rbox) == 4):
@@ -230,10 +234,6 @@ def _boxes_same_large_cjk_region(
 
 def _single_cjk_duplicate_pair(
     deps: ReviewFinalizationDeps, left: dict[str, Any], right: dict[str, Any]) -> bool:
-    _candidate_has_single_cjk_identity = deps._candidate_has_single_cjk_identity
-    _candidate_line_height = deps._candidate_line_height
-    _boxes_same_large_cjk_region = deps._boxes_same_large_cjk_region
-    _SINGLE_CJK_LINE_DEDUP_RATIO = deps._SINGLE_CJK_LINE_DEDUP_RATIO
     """Use a wider Y tolerance for duplicate large single-character entries.
 
     OCR and visual-projection channels can refine the separator independently,
@@ -241,6 +241,11 @@ def _single_cjk_duplicate_pair(
     single-character pair may therefore use 0.55 of a normal text line, but only
     when geometry still says both candidates belong to the same large glyph.
     """
+    _candidate_has_single_cjk_identity = deps._candidate_has_single_cjk_identity
+    _candidate_line_height = deps._candidate_line_height
+    _boxes_same_large_cjk_region = deps._boxes_same_large_cjk_region
+    _SINGLE_CJK_LINE_DEDUP_RATIO = deps._SINGLE_CJK_LINE_DEDUP_RATIO
+
     if int(left.get("column", -1)) != int(right.get("column", -2)):
         return False
     if not (_candidate_has_single_cjk_identity(left) and _candidate_has_single_cjk_identity(right)):
@@ -256,10 +261,6 @@ def _single_cjk_duplicate_pair(
 
 def _deduplicate_selected_cjk_review_candidates(
     deps: ReviewFinalizationDeps, review_candidates: list[dict[str, Any]]) -> int:
-    _review_candidate_box_height = deps._review_candidate_box_height
-    _review_candidate_priority = deps._review_candidate_priority
-    _single_cjk_duplicate_pair = deps._single_cjk_duplicate_pair
-    _FINAL_LINE_DEDUP_RATIO = deps._FINAL_LINE_DEDUP_RATIO
     """Suppress duplicate final separator lines with type-aware Y tolerances.
 
     Ordinary/bracketed entries keep the strict ~0.22-normal-line rule.  Large
@@ -273,6 +274,11 @@ def _deduplicate_selected_cjk_review_candidates(
     pronunciation/radical metadata (e.g. between 播 ba and Bộ:), while the upper
     line is the true entry-start separator.
     """
+    _review_candidate_box_height = deps._review_candidate_box_height
+    _review_candidate_priority = deps._review_candidate_priority
+    _single_cjk_duplicate_pair = deps._single_cjk_duplicate_pair
+    _FINAL_LINE_DEDUP_RATIO = deps._FINAL_LINE_DEDUP_RATIO
+
     merged = 0
     by_column: dict[int, list[dict[str, Any]]] = {}
     for item in review_candidates:
