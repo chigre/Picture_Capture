@@ -8,15 +8,15 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and the first preprocessing extraction are accepted through
-#630 at `03976b1c`, with exact-head and postmerge six-platform CI and CodeQL
-passed. Root count remains 15, all explicitly classified. The current candidate
-extracts orthogonal policy/step payloads and saved geometry replay into
-`preprocess/orthogonal_policy.py` and `preprocess/replay.py`, shrinking the
-preprocessing API from 137295 to 128042 bytes. Public import/pickle contracts and
-call-time audit/transform replacement seams remain. Exact-head CI/review and
-postmerge acceptance for this candidate are pending. Oversized analysis/app/core
-extraction and real-scan/native GPU validation remain open. The phase log below
+Root classification and preprocessing extractions are accepted through #631 at
+`5abbb8a2`, with exact-head and postmerge six-platform CI and CodeQL passed.
+Root count remains 15, all explicitly classified. The current candidate moves
+six preview/crop/canvas/encoding implementations into `preprocess/rendering.py`,
+shrinking the preprocessing API from 128042 to 125548 bytes. Historical public
+signatures/pickle paths and call-time operation replacement seams remain.
+Exact-head CI/review and postmerge acceptance for this candidate are pending.
+Oversized analysis/app/core extraction and real-scan/native GPU validation remain open.
+The phase log below
 is historical and does not describe current physical file locations.
 
 ## Current phase

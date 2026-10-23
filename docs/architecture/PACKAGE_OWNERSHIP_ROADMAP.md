@@ -628,7 +628,7 @@ Verification prepared: 46 existing preprocessing/ownership/pixel tests and 22 ne
 Cross-platform gate correction: the first Windows Python3.10 architecture run exposed a disk-size/CRLF mismatch in the newly added facade ceiling. Reuse existing `_normalized_source_size()` for that check, keeping the ceiling137300 unchanged. Added a synthetic Windows checkout regression that proves both LF/CRLF equivalence and rejection of actual source growth. No production algorithm or facade byte changed by this fix.
 
 
-## Issue #562 — orthogonal acceptance policy and saved-geometry replay extraction (2026-10-23; pending acceptance)
+## Issue #562 — orthogonal acceptance policy and saved-geometry replay extraction (2026-10-23; accepted #631)
 
 On accepted `main@03976b1c754984796e0e76ea1ef660d5e72187f2` (#630; exact-head and postmerge six-platform CI/CodeQL passed), move six related policy/step-payload functions into `preprocess/orthogonal_policy.py` and saved geometry rendering into `preprocess/replay.py`. The retained API shrinks **137295→128042 bytes** (−9253), root count remains 15. Five pure helpers retain historical callable/pickle module names. The candidate selector and `geometry_corrected_image` stay as thin root adapters supplying current auditors, polygon/image transforms, quality evaluator and step decoder explicitly. Public signatures and the geometry renderer's docstring remain; no new proxy, installer, namespace copy or GUI-to-domain dependency.
 
@@ -637,3 +637,27 @@ Keep original score weights, mildest-gain ordering, fractional safe cap, worst-c
 New tests cover ownership/pickle, leaf-first import, quality/count/cap boundaries, rejected/absent candidates, payload round trips, save/reopen/replay order and legacy/disabled branches. Frozen-base comparison normalizes only explicit dependency parameters/names: all seven original function bodies are unchanged, and 182 deterministic numerical/payload/pixel comparisons pass (including curve/grid replay; native UVDoc is stubbed). Retain synthetic-vs-native validation limits: real scanned-page/manual GUI/native CUDA acceptance is not established.
 
 Guard requires the two canonical owners and rejects duplicated pure bodies. Tighten the preprocessing facade ceiling 137300→128050, now named `MAX_PREPROCESS_FACADE_BYTES`, continuing to use normalized LF source size. Existing CRLF/actual-growth regression follows this named policy limit; its rejection requirement is preserved. No old oversized baseline is relaxed. Full exact-head six-platform CI, GUI smoke, wheel, CodeQL, reviews and independent postmerge main checks are required before acceptance. Large analysis/app/core work remains open.
+
+
+## Issue #562 — reviewed image rendering and file encoding (2026-10-23; pending acceptance)
+
+On accepted `main@5abbb8a2` (#631; exact-head and postmerge six-platform CI/CodeQL passed),
+move six preview/crop/canvas/encoding bodies to `preprocess/rendering.py`. Retain six
+thin historical API functions with identical signatures and callable/pickle paths.
+The facade supplies normalization, saved geometry rendering, overlays, crop rendering,
+canvas factory and save renderers at call time. The leaf imports only models/Pillow,
+never the root facade or GUI. Root count remains 15; facade shrinks **128042→125548 bytes**.
+
+Preserve clamp/overlay RGBA behavior, original crop coordinates, source immutability,
+canvas expansion without scan resampling, preview minimum long side 320 and no upscaling,
+JPEG preview quality88/optimization, full JPEG quality95/no subsampling, TIFF LZW,
+and destination parent creation. Existing source and result paths/formats remain unchanged.
+Frozen #631 comparison verifies all six public signatures and normalized AST bodies,
+plus deterministic pixel and byte-for-byte encoded output parity. New tests cover
+leaf-first imports, callable ownership, live replacements, palette/alpha/grayscale,
+canvas overflow, JPEG/TIFF/PNG reopen and preview bounds. Full local regressions,
+compatibility runner, wheel, guards, F821 and exact-head six-platform CI/CodeQL plus
+independent main acceptance are required. Tighten normalized facade ceiling to125550;
+new ownership guard requires six thin adapters and their canonical bodies. No historical
+baseline is loosened. Native CUDA/real scanned-page/manual GUI acceptance and the large
+analysis/app/core decomposition remain open work.

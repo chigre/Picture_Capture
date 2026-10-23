@@ -8,6 +8,7 @@ ratcheted independently as the modular-architecture refactor progresses.
 """
 
 from pathlib import Path
+import ast
 import re
 
 
@@ -18,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 128_050
+MAX_PREPROCESS_FACADE_BYTES = 125_550
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -866,6 +867,21 @@ def collect_violations() -> list[str]:
             if routine not in {"_choose_orthogonal_candidate", "geometry_corrected_image"}:
                 if f"def {routine}(" in preprocess_source:
                     violations.append(f"orthogonal primitive duplicated at root: {routine}")
+    # Preview/crop/encoding bodies belong to the rendering leaf, not the API.
+    rendering_owner = PACKAGE_ROOT / "preprocess/rendering.py"
+    if not rendering_owner.is_file():
+        violations.append("canonical preprocessing rendering owner missing")
+    else:
+        rendering_tree = ast.parse(rendering_owner.read_text(encoding="utf-8"))
+        owned = {node.name for node in rendering_tree.body if isinstance(node, ast.FunctionDef)}
+        for routine in ("overlay_excluded_regions", "review_image", "processed_image",
+                        "processed_image_with_canvas", "save_review_preview", "save_processed_page"):
+            if routine not in owned:
+                violations.append(f"preprocessing rendering routine missing: {routine}")
+            adapter = next((node for node in ast.parse(preprocess_source).body
+                            if isinstance(node, ast.FunctionDef) and node.name == routine), None)
+            if adapter is None or len(adapter.body) != 1 or not isinstance(adapter.body[0], ast.Return):
+                violations.append(f"preprocessing rendering API must remain a thin adapter: {routine}")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 
