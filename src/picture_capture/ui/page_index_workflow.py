@@ -37,7 +37,7 @@ class PageIndexDeps:
     read_ppp: object
 
 
-def _resize_sidebar_content(self, deps: PageIndexDeps,, event: tk.Event | None = None) -> None:
+def _resize_sidebar_content(self, deps: PageIndexDeps, event: tk.Event | None = None) -> None:
     """Fill unused sidebar height while retaining scrolling when necessary."""
     tk = deps.tk
     canvas = self.__dict__.get("sidebar_canvas")
@@ -59,7 +59,7 @@ def _resize_sidebar_content(self, deps: PageIndexDeps,, event: tk.Event | None =
         return
 
 
-def _apply_page_list_display_columns(self, deps: PageIndexDeps,, *, save: bool = True) -> None:
+def _apply_page_list_display_columns(self, deps: PageIndexDeps, *, save: bool = True) -> None:
     """Apply optional Treeview columns while keeping 页面 permanently visible."""
     settings_path = deps.settings_path
     if not hasattr(self, "page_list"):
@@ -85,7 +85,7 @@ def _apply_page_list_display_columns(self, deps: PageIndexDeps,, *, save: bool =
     self._schedule_page_cell_overlay_refresh()
 
 
-def _page_list_configured(self, deps: PageIndexDeps,, _event=None) -> None:
+def _page_list_configured(self, deps: PageIndexDeps, _event=None) -> None:
     """Keep visible page-list columns filling the full Treeview width."""
     self._fit_page_list_columns()
     self._schedule_page_cell_overlay_refresh()
@@ -128,7 +128,7 @@ def _fit_page_list_columns(self, deps: PageIndexDeps) -> None:
     self._schedule_page_cell_overlay_refresh()
 
 
-def _hide_page_list_section_heading_hint(self, deps: PageIndexDeps,, _event=None) -> None:
+def _hide_page_list_section_heading_hint(self, deps: PageIndexDeps, _event=None) -> None:
     tk = deps.tk
     popup = getattr(self, "_page_list_section_heading_hint", None)
     if popup is not None:
@@ -139,7 +139,7 @@ def _hide_page_list_section_heading_hint(self, deps: PageIndexDeps,, _event=None
     self._page_list_section_heading_hint = None
 
 
-def _page_list_section_heading_motion(self, deps: PageIndexDeps,, event: tk.Event) -> None:
+def _page_list_section_heading_motion(self, deps: PageIndexDeps, event: tk.Event) -> None:
     """Show the SECTION edit hint only while the pointer is over its heading."""
     tk = deps.tk
     ttk = deps.ttk
@@ -167,7 +167,7 @@ def _page_list_section_heading_motion(self, deps: PageIndexDeps,, event: tk.Even
     self._page_list_section_heading_hint = tip
 
 
-def _page_list_right_click(self, deps: PageIndexDeps,, event: tk.Event) -> str | None:
+def _page_list_right_click(self, deps: PageIndexDeps, event: tk.Event) -> str | None:
     """Right-click a heading to choose which optional list columns are visible."""
     tk = deps.tk
     if not hasattr(self, "page_list") or self.page_list.identify_region(event.x, event.y) != "heading":
@@ -217,17 +217,17 @@ def _schedule_page_cell_overlay_refresh(self, deps: PageIndexDeps) -> None:
     self._page_overlay_refresh_job = self.after_idle(run)
 
 
-def _page_list_scroll(self, deps: PageIndexDeps,, *args) -> None:
+def _page_list_scroll(self, deps: PageIndexDeps, *args) -> None:
     self.page_list.yview(*args)
     self._schedule_page_cell_overlay_refresh()
 
 
-def _page_list_hscroll(self, deps: PageIndexDeps,, *args) -> None:
+def _page_list_hscroll(self, deps: PageIndexDeps, *args) -> None:
     self.page_list.xview(*args)
     self._schedule_page_cell_overlay_refresh()
 
 
-def _page_list_yscroll(self, deps: PageIndexDeps,, first: str, last: str) -> None:
+def _page_list_yscroll(self, deps: PageIndexDeps, first: str, last: str) -> None:
     if hasattr(self, "page_scroll"):
         self.page_scroll.set(first, last)
     self._schedule_page_cell_overlay_refresh()
@@ -246,7 +246,7 @@ def _update_page_list_sort_headings(self, deps: PageIndexDeps) -> None:
         self.page_list.heading(column, text=label + (arrow if column == active else ""))
 
 
-def _apply_page_list_sort(self, deps: PageIndexDeps,, *, ensure_current_visible: bool = False) -> None:
+def _apply_page_list_sort(self, deps: PageIndexDeps, *, ensure_current_visible: bool = False) -> None:
     _sorted_page_list_rows = deps._sorted_page_list_rows
     if not hasattr(self, "page_list") or not self._page_list_sort_column:
         return
@@ -280,7 +280,7 @@ def _schedule_page_list_resort(self, deps: PageIndexDeps) -> None:
     self._page_list_sort_job = self.after(80, run)
 
 
-def _sort_page_list(self, deps: PageIndexDeps,, column: str) -> None:
+def _sort_page_list(self, deps: PageIndexDeps, column: str) -> None:
     tk = deps.tk
     if column not in {"bookmark", "page", "section", "lined", "fill_status", "illustrations"}:
         return
@@ -298,7 +298,7 @@ def _sort_page_list(self, deps: PageIndexDeps,, column: str) -> None:
     self._apply_page_list_sort(ensure_current_visible=True)
 
 
-def _page_list_column_at(self, deps: PageIndexDeps,, x: int) -> str | None:
+def _page_list_column_at(self, deps: PageIndexDeps, x: int) -> str | None:
     """Return the logical Treeview column under a display-space X coordinate."""
     tk = deps.tk
     token = str(self.page_list.identify_column(x) or "")
@@ -313,7 +313,7 @@ def _page_list_column_at(self, deps: PageIndexDeps,, x: int) -> str | None:
     return str(display[display_index]) if 0 <= display_index < len(display) else None
 
 
-def _page_section_count_text(self, deps: PageIndexDeps,, index: int) -> str:
+def _page_section_count_text(self, deps: PageIndexDeps, index: int) -> str:
     read_page_sections = deps.read_page_sections
     if not self.project or not (0 <= index < len(self.project.images)):
         return "0"
@@ -323,7 +323,7 @@ def _page_section_count_text(self, deps: PageIndexDeps,, index: int) -> str:
         return "0"
 
 
-def _set_page_section_count(self, deps: PageIndexDeps,, index: int, count: int) -> None:
+def _set_page_section_count(self, deps: PageIndexDeps, index: int, count: int) -> None:
     """Set a page's explicit SECTION count, preserving bounds when count is unchanged."""
     Image = deps.Image
     read_page_sections = deps.read_page_sections
@@ -399,7 +399,7 @@ def _set_page_section_count(self, deps: PageIndexDeps,, index: int, count: int) 
     self._request_page_load(index, force=True)
 
 
-def _edit_page_section_index(self, deps: PageIndexDeps,, index: int) -> None:
+def _edit_page_section_index(self, deps: PageIndexDeps, index: int) -> None:
     """Shared SECTION entry path for the 域 double-click and 区 shortcut."""
     simpledialog = deps.simpledialog
     read_page_sections = deps.read_page_sections
@@ -438,7 +438,7 @@ def toggle_current_page_section_editing(self, deps: PageIndexDeps) -> None:
     self._edit_page_section_index(self.current_index)
 
 
-def _page_list_section_double_click(self, deps: PageIndexDeps,, event: tk.Event) -> str | None:
+def _page_list_section_double_click(self, deps: PageIndexDeps, event: tk.Event) -> str | None:
     """Edit the page-level Section count directly from the page list."""
     if self._preprocess_mode_active():
         self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
@@ -466,7 +466,7 @@ def _bookmark_stems(self, deps: PageIndexDeps) -> set[str]:
     }
 
 
-def _page_list_bookmark_click(self, deps: PageIndexDeps,, event: tk.Event) -> str | None:
+def _page_list_bookmark_click(self, deps: PageIndexDeps, event: tk.Event) -> str | None:
     """Toggle only the bookmark cell; never swallow ordinary page clicks."""
     settings_path = deps.settings_path
     # This handler is bound to every left click on the Treeview. Determine
@@ -501,7 +501,7 @@ def _page_list_bookmark_click(self, deps: PageIndexDeps,, event: tk.Event) -> st
     return "break"
 
 
-def jump_to_bookmark(self, deps: PageIndexDeps,, direction: int) -> None:
+def jump_to_bookmark(self, deps: PageIndexDeps, direction: int) -> None:
     """Jump to the nearest bookmarked page before or after this page."""
     if not self.project or self.current_index < 0:
         return
@@ -521,7 +521,7 @@ def jump_to_bookmark(self, deps: PageIndexDeps,, direction: int) -> None:
     self._request_page_load(max(candidates) if direction < 0 else min(candidates))
 
 
-def _center_page_list_iid(self, deps: PageIndexDeps,, iid: str) -> None:
+def _center_page_list_iid(self, deps: PageIndexDeps, iid: str) -> None:
     """Place one page row as close as possible to the vertical viewport center."""
     tk = deps.tk
     try:
@@ -543,7 +543,7 @@ def _center_page_list_iid(self, deps: PageIndexDeps,, iid: str) -> None:
         return
 
 
-def _set_page_list_selection(self, deps: PageIndexDeps,, index: int, *, ensure_visible: bool = True) -> None:
+def _set_page_list_selection(self, deps: PageIndexDeps, index: int, *, ensure_visible: bool = True) -> None:
     """Synchronize the Treeview to exactly one page iid.
 
     Programmatic page changes must replace, not accumulate, Treeview
@@ -648,7 +648,7 @@ def _refresh_lined_cell_overlays(self, deps: PageIndexDeps) -> None:
     self._apply_current_appearance(self.page_list)
 
 
-def _page_metadata(self, deps: PageIndexDeps,, index: int) -> str:
+def _page_metadata(self, deps: PageIndexDeps, index: int) -> str:
     read_pdic = deps.read_pdic
     pdic_path = deps.pdic_path
     if not self.project or not (0 <= index < len(self.project.images)):
@@ -662,7 +662,7 @@ def _page_metadata(self, deps: PageIndexDeps,, index: int) -> str:
         return "0"
 
 
-def _page_illustration_count_text(self, deps: PageIndexDeps,, index: int) -> str:
+def _page_illustration_count_text(self, deps: PageIndexDeps, index: int) -> str:
     """Return the effective PPP region count for one page, blank for zero.
 
     The current page uses the in-memory polygon list so manual additions and
@@ -685,7 +685,7 @@ def _page_illustration_count_text(self, deps: PageIndexDeps,, index: int) -> str
     return str(count) if count > 0 else ""
 
 
-def _update_page_row(self, deps: PageIndexDeps,, index: int) -> None:
+def _update_page_row(self, deps: PageIndexDeps, index: int) -> None:
     Path = deps.Path
     if not self.project or not hasattr(self, "page_list") or not (0 <= index < len(self.project.images)):
         return
@@ -729,7 +729,7 @@ def _update_page_row(self, deps: PageIndexDeps,, index: int) -> None:
     self._schedule_page_cell_overlay_refresh()
 
 
-def _refresh_page_metadata_step(self, deps: PageIndexDeps,, generation: int, start: int) -> None:
+def _refresh_page_metadata_step(self, deps: PageIndexDeps, generation: int, start: int) -> None:
     if generation != self._page_meta_generation or not self.project:
         return
     batch = 8
