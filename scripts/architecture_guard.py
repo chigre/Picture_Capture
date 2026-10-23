@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 105_240
+MAX_PREPROCESS_FACADE_BYTES = 98_310
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -930,6 +930,22 @@ def collect_violations() -> list[str]:
                and isinstance(node.func.value, ast.Name) and node.func.value.id == "_projective_selection"
                and node.func.attr == "select_projective_candidate" for node in ast.walk(analysis_adapter)):
         violations.append("preprocessing analysis must compose the projective selection owner")
+    pixel_policy_owner = PACKAGE_ROOT / "preprocess/pixel_row_policy.py"
+    if not pixel_policy_owner.is_file():
+        violations.append("canonical pixel row acceptance owner missing")
+    else:
+        owner_tree = ast.parse(pixel_policy_owner.read_text(encoding="utf-8"))
+        routines = {node.name for node in owner_tree.body if isinstance(node, ast.FunctionDef)}
+        if not {"assess_candidate_pixels", "reaudit_retained_pixels"} <= routines:
+            violations.append("pixel row acceptance/re-audit routines missing")
+    if any(isinstance(node, ast.Name) and node.id == "retained_pixel_rows"
+           for node in ast.walk(analysis_adapter)):
+        violations.append("retained pixel audit implementation must remain in preprocess/pixel_row_policy.py")
+    calls = {node.func.attr for node in ast.walk(analysis_adapter)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+             and isinstance(node.func.value, ast.Name) and node.func.value.id == "_pixel_row_policy"}
+    if not {"assess_candidate_pixels", "reaudit_retained_pixels"} <= calls:
+        violations.append("preprocessing analysis must compose candidate/retained pixel policy")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 

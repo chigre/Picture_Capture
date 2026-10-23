@@ -153,6 +153,7 @@ from .preprocess.orthogonal_policy import (
 
 
 
+from .preprocess import pixel_row_policy as _pixel_row_policy
 from .preprocess import projective_selection as _projective_selection
 from .preprocess import finalization as _finalization
 from .preprocess import source_evidence as _source_evidence
@@ -1340,93 +1341,22 @@ def analyze_preprocess_page(
                 )
                 <= HORIZONTAL_ALIGNMENT_MAX_TAIL_DEG
             )
-            pixel_row_available = bool(
-                candidate_pixel_rows.sample_count >= 8
-                and candidate_pixel_rows.valid_column_count >= 1
+            pixel_assessment = _pixel_row_policy.assess_candidate_pixels(
+                candidate_pixel_rows, baseline_pixel_rows,
+                row_p90_max_px=PIXEL_ROW_PROFILE_P90_MAX_PX,
+                row_worst_max_px=PIXEL_ROW_PROFILE_WORST_MAX_PX,
+                tail_p90_max_px=PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX,
+                tail_worst_max_px=PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
+                tail_progress_ratio=ORTHOGONAL_TAIL_PROGRESS_RATIO,
+                tail_max_regression_px=ORTHOGONAL_TAIL_MAX_REGRESSION_PX,
             )
-            pixel_row_safe = bool(
-                pixel_row_available
-                and candidate_pixel_rows.p90_shift_px
-                <= PIXEL_ROW_PROFILE_P90_MAX_PX
-                and candidate_pixel_rows.worst_shift_px
-                <= PIXEL_ROW_PROFILE_WORST_MAX_PX
-            )
-            pixel_row_improved = bool(
-                pixel_row_available
-                and baseline_pixel_rows.sample_count >= 8
-                and baseline_pixel_rows.p90_shift_px > 1e-6
-                and candidate_pixel_rows.p90_shift_px
-                <= baseline_pixel_rows.p90_shift_px * 0.70
-                and candidate_pixel_rows.worst_shift_px
-                <= max(
-                    PIXEL_ROW_PROFILE_WORST_MAX_PX,
-                    baseline_pixel_rows.worst_shift_px * 0.80,
-                )
-            )
-            if pixel_row_safe:
-                orthogonal_pixel_row_verdict = "passed"
-            elif pixel_row_improved:
-                orthogonal_pixel_row_verdict = "improved_review"
-            elif pixel_row_available:
-                orthogonal_pixel_row_verdict = "failed"
-            else:
-                orthogonal_pixel_row_verdict = "insufficient"
-
-            pixel_tail_available = bool(
-                candidate_pixel_rows.bottom_tail_sample_count >= 2
-                and candidate_pixel_rows.bottom_tail_valid_column_count >= 1
-            )
-            pixel_tail_safe = bool(
-                pixel_tail_available
-                and candidate_pixel_rows.bottom_tail_p90_shift_px
-                <= PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
-                and candidate_pixel_rows.bottom_tail_worst_shift_px
-                <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
-            )
-            baseline_tail_available = bool(
-                baseline_pixel_rows.bottom_tail_sample_count >= 2
-                and baseline_pixel_rows.bottom_tail_valid_column_count >= 1
-            )
-            pixel_tail_improved = bool(
-                pixel_tail_available
-                and baseline_tail_available
-                and baseline_pixel_rows.bottom_tail_p90_shift_px > 1e-6
-                and candidate_pixel_rows.bottom_tail_p90_shift_px
-                <= baseline_pixel_rows.bottom_tail_p90_shift_px
-                * ORTHOGONAL_TAIL_PROGRESS_RATIO
-                and candidate_pixel_rows.bottom_tail_worst_shift_px
-                <= baseline_pixel_rows.bottom_tail_worst_shift_px
-                + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
-            )
-            # Candidate retention and loop convergence are intentionally
-            # different decisions. A pass that dramatically fixes the body
-            # must not be discarded merely because a tiny page-tail residual
-            # needs another pass. Keep it when the physical tail has not
-            # meaningfully regressed; only the stop gate below requires tail
-            # PASS. This prevents the v23 0014 regression (body 5→1 px,
-            # tail 6→4.3 px) from rolling the whole page back to deskew.
-            pixel_tail_retainable = bool(
-                not pixel_tail_available
-                or pixel_tail_safe
-                or pixel_tail_improved
-                or (
-                    baseline_tail_available
-                    and candidate_pixel_rows.bottom_tail_p90_shift_px
-                    <= baseline_pixel_rows.bottom_tail_p90_shift_px
-                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
-                    and candidate_pixel_rows.bottom_tail_worst_shift_px
-                    <= baseline_pixel_rows.bottom_tail_worst_shift_px
-                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
-                )
-            )
-            if pixel_tail_safe:
-                orthogonal_bottom_tail_verdict = "passed"
-            elif pixel_tail_improved:
-                orthogonal_bottom_tail_verdict = "improved_review"
-            elif pixel_tail_available:
-                orthogonal_bottom_tail_verdict = "failed"
-            else:
-                orthogonal_bottom_tail_verdict = "insufficient"
+            pixel_row_available = pixel_assessment.row_available
+            pixel_row_safe = pixel_assessment.row_safe
+            pixel_row_improved = pixel_assessment.row_improved
+            pixel_tail_available = pixel_assessment.tail_available
+            pixel_tail_retainable = pixel_assessment.tail_retainable
+            orthogonal_pixel_row_verdict = pixel_assessment.row_verdict
+            orthogonal_bottom_tail_verdict = pixel_assessment.tail_verdict
 
             vertical_required = bool(estimate.separator_point_count >= 7)
             vertical_safe = True
@@ -1677,128 +1607,38 @@ def analyze_preprocess_page(
             ):
                 break
 
-    # Re-audit the actual retained pixels after all accepted/rejected
-    # attempts. A later rejected residual pass must not overwrite diagnostics
-    # for the earlier accepted page.
-    if orthogonal_applied and working_polygons:
-        try:
-            retained_pixel_rows = audit_pixel_row_profiles(
-                working,
-                working_polygons,
-                settings,
-            )
-            if retained_pixel_rows.sample_count >= 8:
-                orthogonal_pixel_row_sample_count = int(
-                    retained_pixel_rows.sample_count
-                )
-                if orthogonal_initial_pixel_row_available:
-                    orthogonal_before_pixel_row_p90_px = float(
-                        orthogonal_initial_pixel_row_p90_px
-                    )
-                    orthogonal_before_pixel_row_worst_px = float(
-                        orthogonal_initial_pixel_row_worst_px
-                    )
-                orthogonal_after_pixel_row_p90_px = float(
-                    retained_pixel_rows.p90_shift_px
-                )
-                orthogonal_after_pixel_row_worst_px = float(
-                    retained_pixel_rows.worst_shift_px
-                )
-                orthogonal_bottom_tail_sample_count = int(
-                    retained_pixel_rows.bottom_tail_sample_count
-                )
-                if orthogonal_initial_bottom_tail_available:
-                    orthogonal_before_bottom_tail_p90_px = float(
-                        orthogonal_initial_bottom_tail_p90_px
-                    )
-                    orthogonal_before_bottom_tail_worst_px = float(
-                        orthogonal_initial_bottom_tail_worst_px
-                    )
-                orthogonal_after_bottom_tail_p90_px = float(
-                    retained_pixel_rows.bottom_tail_p90_shift_px
-                )
-                orthogonal_after_bottom_tail_worst_px = float(
-                    retained_pixel_rows.bottom_tail_worst_shift_px
-                )
-                retained_safe = bool(
-                    retained_pixel_rows.p90_shift_px
-                    <= PIXEL_ROW_PROFILE_P90_MAX_PX
-                    and retained_pixel_rows.worst_shift_px
-                    <= PIXEL_ROW_PROFILE_WORST_MAX_PX
-                )
-                retained_improved = bool(
-                    orthogonal_initial_pixel_row_available
-                    and orthogonal_initial_pixel_row_p90_px > 1e-6
-                    and retained_pixel_rows.p90_shift_px
-                    <= orthogonal_initial_pixel_row_p90_px * 0.70
-                    and retained_pixel_rows.worst_shift_px
-                    <= max(
-                        PIXEL_ROW_PROFILE_WORST_MAX_PX,
-                        orthogonal_initial_pixel_row_worst_px * 0.80,
-                    )
-                )
-                if retained_safe:
-                    orthogonal_pixel_row_verdict = "passed"
-                elif retained_improved:
-                    orthogonal_pixel_row_verdict = "improved_review"
-                else:
-                    orthogonal_pixel_row_verdict = "failed"
-
-                retained_tail_available = bool(
-                    retained_pixel_rows.bottom_tail_sample_count >= 2
-                    and retained_pixel_rows.bottom_tail_valid_column_count >= 1
-                )
-                retained_tail_safe = bool(
-                    retained_tail_available
-                    and retained_pixel_rows.bottom_tail_p90_shift_px
-                    <= PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX
-                    and retained_pixel_rows.bottom_tail_worst_shift_px
-                    <= PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX
-                )
-                retained_tail_improved = bool(
-                    retained_tail_available
-                    and orthogonal_initial_bottom_tail_available
-                    and orthogonal_initial_bottom_tail_p90_px > 1e-6
-                    and retained_pixel_rows.bottom_tail_p90_shift_px
-                    <= orthogonal_initial_bottom_tail_p90_px
-                    * ORTHOGONAL_TAIL_PROGRESS_RATIO
-                    and retained_pixel_rows.bottom_tail_worst_shift_px
-                    <= orthogonal_initial_bottom_tail_worst_px
-                    + ORTHOGONAL_TAIL_MAX_REGRESSION_PX
-                )
-                if retained_tail_safe:
-                    orthogonal_bottom_tail_verdict = "passed"
-                elif retained_tail_improved:
-                    orthogonal_bottom_tail_verdict = "improved_review"
-                elif retained_tail_available:
-                    orthogonal_bottom_tail_verdict = "failed"
-                else:
-                    orthogonal_bottom_tail_verdict = "insufficient"
-
-                if (
-                    orthogonal_pixel_row_verdict == "passed"
-                    and (
-                        not retained_tail_available
-                        or orthogonal_bottom_tail_verdict == "passed"
-                    )
-                ):
-                    orthogonal_alignment_verdict = "passed"
-                elif (
-                    orthogonal_pixel_row_verdict
-                    in {"passed", "improved_review"}
-                    and (
-                        not retained_tail_available
-                        or orthogonal_bottom_tail_verdict
-                        in {"passed", "improved_review"}
-                    )
-                ):
-                    orthogonal_alignment_verdict = "improved_review"
-                else:
-                    orthogonal_alignment_verdict = "failed"
-        except Exception as exc:
-            warnings.append(
-                f"最终正交像素行复检不可用：{exc}"
-            )
+    retained_pixels = _pixel_row_policy.reaudit_retained_pixels(
+        working, working_polygons, settings,
+        applied=orthogonal_applied, warnings=warnings,
+        current=_pixel_row_policy.RetainedPixelDiagnostics(
+            row_sample_count=orthogonal_pixel_row_sample_count,
+            before_row_p90_px=orthogonal_before_pixel_row_p90_px,
+            after_row_p90_px=orthogonal_after_pixel_row_p90_px,
+            before_row_worst_px=orthogonal_before_pixel_row_worst_px,
+            after_row_worst_px=orthogonal_after_pixel_row_worst_px,
+            row_verdict=orthogonal_pixel_row_verdict,
+            tail_sample_count=orthogonal_bottom_tail_sample_count,
+            before_tail_p90_px=orthogonal_before_bottom_tail_p90_px,
+            after_tail_p90_px=orthogonal_after_bottom_tail_p90_px,
+            before_tail_worst_px=orthogonal_before_bottom_tail_worst_px,
+            after_tail_worst_px=orthogonal_after_bottom_tail_worst_px,
+            tail_verdict=orthogonal_bottom_tail_verdict,
+            alignment_verdict=orthogonal_alignment_verdict,
+        ),
+        pixel_auditor=audit_pixel_row_profiles,
+        initial_row_available=orthogonal_initial_pixel_row_available,
+        initial_row_p90_px=orthogonal_initial_pixel_row_p90_px,
+        initial_row_worst_px=orthogonal_initial_pixel_row_worst_px,
+        initial_tail_available=orthogonal_initial_bottom_tail_available,
+        initial_tail_p90_px=orthogonal_initial_bottom_tail_p90_px,
+        initial_tail_worst_px=orthogonal_initial_bottom_tail_worst_px,
+        row_p90_max_px=PIXEL_ROW_PROFILE_P90_MAX_PX,
+        row_worst_max_px=PIXEL_ROW_PROFILE_WORST_MAX_PX,
+        tail_p90_max_px=PIXEL_ROW_BOTTOM_TAIL_P90_MAX_PX,
+        tail_worst_max_px=PIXEL_ROW_BOTTOM_TAIL_WORST_MAX_PX,
+        tail_progress_ratio=ORTHOGONAL_TAIL_PROGRESS_RATIO,
+        tail_max_regression_px=ORTHOGONAL_TAIL_MAX_REGRESSION_PX,
+    )
 
     if (
         requested_geometry_mode == "auto"
@@ -2108,40 +1948,40 @@ def analyze_preprocess_page(
             float(orthogonal_pixel_angle_confidence), 6
         ),
         orthogonal_pixel_row_sample_count=int(
-            orthogonal_pixel_row_sample_count
+            retained_pixels.row_sample_count
         ),
         orthogonal_before_pixel_row_p90_px=round(
-            float(orthogonal_before_pixel_row_p90_px), 3
+            float(retained_pixels.before_row_p90_px), 3
         ),
         orthogonal_after_pixel_row_p90_px=round(
-            float(orthogonal_after_pixel_row_p90_px), 3
+            float(retained_pixels.after_row_p90_px), 3
         ),
         orthogonal_before_pixel_row_worst_px=round(
-            float(orthogonal_before_pixel_row_worst_px), 3
+            float(retained_pixels.before_row_worst_px), 3
         ),
         orthogonal_after_pixel_row_worst_px=round(
-            float(orthogonal_after_pixel_row_worst_px), 3
+            float(retained_pixels.after_row_worst_px), 3
         ),
         orthogonal_pixel_row_verdict=str(
-            orthogonal_pixel_row_verdict
+            retained_pixels.row_verdict
         ),
         orthogonal_bottom_tail_sample_count=int(
-            orthogonal_bottom_tail_sample_count
+            retained_pixels.tail_sample_count
         ),
         orthogonal_before_bottom_tail_p90_px=round(
-            float(orthogonal_before_bottom_tail_p90_px), 3
+            float(retained_pixels.before_tail_p90_px), 3
         ),
         orthogonal_after_bottom_tail_p90_px=round(
-            float(orthogonal_after_bottom_tail_p90_px), 3
+            float(retained_pixels.after_tail_p90_px), 3
         ),
         orthogonal_before_bottom_tail_worst_px=round(
-            float(orthogonal_before_bottom_tail_worst_px), 3
+            float(retained_pixels.before_tail_worst_px), 3
         ),
         orthogonal_after_bottom_tail_worst_px=round(
-            float(orthogonal_after_bottom_tail_worst_px), 3
+            float(retained_pixels.after_tail_worst_px), 3
         ),
         orthogonal_bottom_tail_verdict=str(
-            orthogonal_bottom_tail_verdict
+            retained_pixels.tail_verdict
         ),
         orthogonal_safe_gain_cap=round(
             float(orthogonal_safe_gain_cap), 6
@@ -2179,7 +2019,7 @@ def analyze_preprocess_page(
         ),
         orthogonal_vertical_verdict=str(orthogonal_vertical_verdict),
         orthogonal_alignment_verdict=str(
-            orthogonal_alignment_verdict
+            retained_pixels.alignment_verdict
         ),
         final_alignment_row_count=int(finalization.final_alignment_row_count),
         final_alignment_valid_column_count=int(
