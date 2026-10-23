@@ -29,7 +29,7 @@ def test_physical_implementation_delegates_maintain_original_native_abi(
     callbacks = {n.name: n for n in app_cls.body if isinstance(n, ast.FunctionDef)}
     owner_ast = ast.parse((ROOT / "ui" / filename).read_text(encoding="utf-8"))
     owned = {n.name: n for n in owner_ast.body if isinstance(n, ast.FunctionDef)}
-    assert set(names) <= owned
+    assert set(names) <= set(owned)
     for name in names:
         assert name in callbacks
         calls = [n for n in ast.walk(callbacks[name]) if isinstance(n, ast.Call)]
@@ -101,9 +101,8 @@ def test_page_scope_current_bookmark_and_to_specified_selection():
 
 
 def test_wordslist_reload_rejects_missing_project_and_preserves_current_state(tmp_path):
-    import picture_capture.models as models
     view=SimpleNamespace(project=None)
-    deps=SimpleNamespace()
+    deps=shell._lexicon_compare_deps()
     with pytest.raises(ValueError,match="尚未打开项目"):
         lexicon.reload_wordslist_reference(view,deps)
     errors=[]
