@@ -61,8 +61,6 @@ def _nearest_polygon_vertex(self, deps: CanvasPointerDeps, x: int, y: int, radiu
                 best = (ri, pi); best_d2 = d2
     return best
 
-@staticmethod
-
 def _nearest_polygon_edge(self, deps: CanvasPointerDeps, x: int, y: int, radius_screen: float = 9.0) -> tuple[int, str] | None:
     """Hit-test the four draggable sides of rectangular PPP regions."""
     radius_source = radius_screen / max(self.view_scale, 1e-6)
@@ -84,8 +82,6 @@ def _nearest_polygon_edge(self, deps: CanvasPointerDeps, x: int, y: int, radius_
                 best_distance = distance
     return best
 
-@staticmethod
-
 def _delete_polygon_region(self, deps: CanvasPointerDeps, region: PolygonRegion) -> None:
     messagebox = deps.messagebox
     if self._batch_active and self._batch_allow_pdic_edits:
@@ -105,9 +101,6 @@ def _delete_polygon_region(self, deps: CanvasPointerDeps, region: PolygonRegion)
         self._drag_polygon_vertex = None
         self._drag_polygon_edge = None
         self.status_var.set(f"已删除 PPP 插图：{name}")
-
-@staticmethod
-@staticmethod
 
 def _polygon_label_canvas_position(self, deps: CanvasPointerDeps, region: PolygonRegion, widget: tk.Widget) -> tuple[float, float]:
     tk = deps.tk

@@ -18,6 +18,9 @@ def test_canonical_pointer_owns_methods_and_no_heavy_app_import():
     methods = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
     for name in METHOD_NAMES:
         assert len(methods[name].body) > 2
+        # All migrated functions are ordinary module functions; decorators
+        # on adjacent legacy staticmethods belong only to app.py.
+        assert methods[name].decorator_list == []
     assert not any(
         isinstance(n, ast.ImportFrom) and n.module in {"app", "processing"}
         for n in ast.walk(tree)
