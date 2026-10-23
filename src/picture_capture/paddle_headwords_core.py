@@ -4139,6 +4139,7 @@ def _page_detection_deps() -> _page_detection.PageDetectionDeps:
         normalize_page_rgb=normalize_page_rgb,
         OCRRecord=OCRRecord,
         asdict=asdict,
+        _FINAL_LINE_DEDUP_RATIO=_FINAL_LINE_DEDUP_RATIO,
     )
 
 
