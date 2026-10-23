@@ -300,7 +300,7 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'extended_review_crop_box(' in REVIEW_CROP_SOURCE
     assert 'center_y - half_height' not in app
     assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in REVIEW_CROP_SOURCE
-    assert 'self._update_active_crop_preview(index)' in app
+    assert 'self._update_active_crop_preview(index)' in REVIEW_ENTRY_SOURCE
 
 
 def test_current_review_entry_keeps_ordinary_row_and_pinned_crop():
@@ -347,7 +347,7 @@ def test_inline_review_slice_uses_text_based_height_without_classification():
     assert 'editor_text=editor_texts[index]' in REVIEW_WORKSPACE_SOURCE
     assert 'ordinary_height_only=True' not in app
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in REVIEW_CROP_SOURCE
-    assert 'self._update_active_crop_preview(index)' in app
+    assert 'self._update_active_crop_preview(index)' in REVIEW_ENTRY_SOURCE
 
 
 def test_workspace_mode_is_restored_from_last_session():

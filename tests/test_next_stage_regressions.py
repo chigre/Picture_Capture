@@ -4118,7 +4118,7 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
 
     page_owner = (root / "src/picture_capture/ui/review_page_lifecycle.py").read_text(encoding="utf-8")
     prefetch = page_owner.split("def _schedule_adjacent_preload(", 1)[1].split("\ndef change_page(", 1)[0]
-    worker_start = prefetch.index("            def worker(")
+    worker_start = prefetch.index("        def worker(")
     worker = prefetch[worker_start:]
     assert "local_anchor_index=anchor_index" in worker
     assert "self.parent.current_index" not in worker
