@@ -192,7 +192,7 @@ def test_explicit_unsafe_perspective_warns_after_transform(page):
     assert not state.perspective_auto_safe
     assert warnings[-1].startswith("已按用户显式选择执行投影矫正；该候选未通过自动安全门。")
     assert "来源=none" in warnings[-1]
-    assert methods == ["deskew", "perspective"]
+    assert methods == ["deskew", "perspective", "horizontal_vp", "horizontal_vp_optimized"]
 
 
 def test_candidate_without_apply_preserves_full_previous_methods(page):
