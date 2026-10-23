@@ -48,15 +48,11 @@ def test_lined_and_unlined_exports_opt_into_pdic_edit_without_claiming_pages():
 
 
 def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
-    src = (ROOT / "app.py").read_text(encoding="utf-8")
-    refiner = body_between(
-        src, "    def refine_lines_selected_scope(",
-        "    def ocr_ordinary_lines_text_selected_scope(",
-    )
-    only_ocr = body_between(
-        src, "    def ocr_ordinary_lines_text_selected_scope(",
-        "    def _detect_pages(",
-    )
+    src = (ROOT / "ui/selected_marker_actions.py").read_text(encoding="utf-8")
+    refiner = src.split("def refine_lines_selected_scope(", 1)[1].split(
+        "def ocr_ordinary_lines_text_selected_scope(", 1
+    )[0]
+    only_ocr = src.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     detector = (ROOT / "ui/controllers/detection.py").read_text(encoding="utf-8")
     batch_ocr = body_between(
         detector, "    def batch_ocr(", "    def run_ocr_draw(",
