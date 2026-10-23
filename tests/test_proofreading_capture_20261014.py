@@ -399,7 +399,11 @@ def test_actual_canvas_click_is_stage_only_and_flushes_after_saved_pdic():
     app = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    click = app[app.index("    def canvas_left_click("):app.index("    def canvas_left_drag(")]
+    pointer = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+        / "ui" / "canvas_pointer_workflow.py"
+    ).read_text(encoding="utf-8")
+    click = pointer[pointer.index("def canvas_left_click("):pointer.index("def canvas_left_drag(")]
     assert click.index('queue_add(source_x, source_y)') < click.index(
         'self.entries.append(WordEntry("", source_x, source_y))'
     )
