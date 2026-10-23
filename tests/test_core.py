@@ -6349,10 +6349,10 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert "_review_height_pixels_from_pixel_var" in review
     assert "_sync_review_height_vars" in review
     assert "self._sync_review_height_vars()" in REVIEW_APPEARANCE_SOURCE
-    assert 'self._schedule_review_line_height_apply("pixel")' in REVIEW_WORKSPACE_SOURCE
-    assert 'self._schedule_review_row_padding_apply("pixel")' in REVIEW_WORKSPACE_SOURCE
-    assert 'self._schedule_review_regular_crop_height_apply("pixel")' in REVIEW_WORKSPACE_SOURCE
-    assert 'self._schedule_review_single_cjk_height_apply("pixel")' in REVIEW_WORKSPACE_SOURCE
+    assert 'self._schedule_review_line_height_apply("pixel")' in review
+    assert 'self._schedule_review_row_padding_apply("pixel")' in review
+    assert 'self._schedule_review_regular_crop_height_apply("pixel")' in review
+    assert 'self._schedule_review_single_cjk_height_apply("pixel")' in review
     assert 'text="显示 OCR 内容选择"' not in review
     assert 'text="显示 OCR 底色"' not in review
     assert 'self.settings.review_main_show_ocr_choices = False' in text
