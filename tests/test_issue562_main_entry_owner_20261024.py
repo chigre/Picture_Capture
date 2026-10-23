@@ -43,9 +43,9 @@ def test_entry_number_and_confidence_fixed_semantics():
     assert cls._entry_sequence_text(0,100)=="000"
     assert cls._entry_sequence_text(99,100)=="099"
     assert cls._short_ocr_menu_word("a"*15,12)=="a"*11+"…"
-    assert cls._confidence_bg(None)=="#eeeeee"
-    assert cls._confidence_bg(.95)=="#c8e6c9"
-    assert cls._confidence_bg(.64)=="#ffcdd2"
+    assert cls._confidence_bg(SimpleNamespace(), None)=="#eeeeee"
+    assert cls._confidence_bg(SimpleNamespace(), .95)=="#c8e6c9"
+    assert cls._confidence_bg(SimpleNamespace(), .64)=="#ffcdd2"
 
 def test_main_ocr_menu_duplicate_alternatives_skip_tk_creation():
     fake=SimpleNamespace(canvas=object())
