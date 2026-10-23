@@ -48,6 +48,7 @@ from .ocr.text_io import export_ocred, import_ocred, load_replace_rules, process
 from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
 from .ordinary import ink_threshold as _ink_threshold
+from .ordinary import separator_position_policy as _separator_policy
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 
 
@@ -1365,18 +1366,8 @@ def _recover_ordinary_oversized_cjk_missing_markers(
 
 
 def _is_single_cjk_headword(word: str) -> bool:
-    """Return True only for one normalized Han ideograph."""
-    text = str(word or "").strip()
-    if len(text) != 1:
-        return False
-    code = ord(text)
-    return (
-        0x3400 <= code <= 0x4DBF
-        or 0x4E00 <= code <= 0x9FFF
-        or 0xF900 <= code <= 0xFAFF
-        or 0x20000 <= code <= 0x323AF
-    )
-
+    """Historical single-Han predicate. Logic owned by ordinary separator policy."""
+    return _separator_policy.is_single_cjk_headword(word)
 
 def _separator_whitespace_score(
     image: Image.Image,
@@ -1385,55 +1376,15 @@ def _separator_whitespace_score(
     settings: AppSettings,
     gray: np.ndarray | None = None,
 ) -> float | None:
-    """Return 0..1 local blank-boundary evidence at one marker Y."""
-    if geometry.transform.kind not in {"identity", "mirror_x"}:
-        return None
-    if gray is None:
-        gray = np.asarray(ImageOps.grayscale(normalize_page_rgb(image)), dtype=np.uint8)
-    if gray.size == 0:
-        return None
-    y = max(0, min(gray.shape[0] - 1, int(entry.y)))
-    try:
-        col = column_index_for_click(int(entry.x), geometry, y)
-        edge_x, direction = _ordinary_source_column_edge(geometry, col, y)
-    except (IndexError, ValueError, RuntimeError):
-        return None
-    column_width = max(
-        20,
-        int(geometry.column_widths[col])
-        if col < len(geometry.column_widths) else int(getattr(settings, "column_width", 200) or 200),
+    """Historical grayscale boundary score; call-time dependencies preserved."""
+    return _separator_policy.separator_whitespace_score(
+        image, entry, geometry, settings, gray,
+        np_module=np, image_ops=ImageOps,
+        normalize_rgb_fn=normalize_page_rgb,
+        column_fn=column_index_for_click,
+        source_edge_fn=_ordinary_source_column_edge,
+        otsu_fn=_left_edge_otsu_threshold,
     )
-    character_height = max(
-        4, int(round(float(getattr(settings, "character_height", 26) or 26)))
-    )
-    roi_width = max(
-        24,
-        min(round(column_width * 0.38), round(character_height * 9.0)),
-    )
-    other_x = int(edge_x) + int(direction) * int(roi_width)
-    x0 = max(0, min(int(edge_x), int(other_x)))
-    x1 = min(gray.shape[1], max(int(edge_x), int(other_x)) + 1)
-    if x1 - x0 < 12:
-        return None
-
-    vertical_radius = max(4, round(character_height * 0.65))
-    n0 = max(0, y - vertical_radius)
-    n1 = min(gray.shape[0], y + vertical_radius + 1)
-    neighborhood = gray[n0:n1, x0:x1]
-    if neighborhood.size == 0:
-        return None
-    threshold = _left_edge_otsu_threshold(neighborhood)
-
-    row_scores: list[float] = []
-    for yy in range(max(0, y - 1), min(gray.shape[0], y + 2)):
-        row = gray[yy, x0:x1]
-        if row.size:
-            ink_ratio = float(np.mean(row <= threshold))
-            row_scores.append(1.0 - ink_ratio)
-    if not row_scores:
-        return None
-    return float(np.median(np.asarray(row_scores, dtype=float)))
-
 
 def _prefer_ocr_separator_position(
     image: Image.Image | None,
@@ -1443,29 +1394,12 @@ def _prefer_ocr_separator_position(
     settings: AppSettings,
     gray: np.ndarray | None = None,
 ) -> tuple[bool, float | None, float | None]:
-    """Choose OCR Y only when its local blank boundary is materially stronger."""
-    if image is None:
-        return _is_single_cjk_headword(ocr.word), None, None
-    ordinary_score = _separator_whitespace_score(
-        image, ordinary, geometry, settings, gray,
+    """Historical OCR-vs-ordinary marker decision with current callbacks."""
+    return _separator_policy.prefer_ocr_separator_position(
+        image, ordinary, ocr, geometry, settings, gray,
+        score_fn=_separator_whitespace_score,
+        single_cjk_fn=_is_single_cjk_headword,
     )
-    ocr_score = _separator_whitespace_score(
-        image, ocr, geometry, settings, gray,
-    )
-    if ordinary_score is None or ocr_score is None:
-        return _is_single_cjk_headword(ocr.word), ordinary_score, ocr_score
-
-    single_cjk = _is_single_cjk_headword(ocr.word)
-    # Keep the historical preferred source when both markers already sit in
-    # equally clean whitespace. Switch only for a clear image-derived gain.
-    margin = 0.035 if single_cjk else 0.055
-    minimum_good = 0.94
-    if ocr_score >= minimum_good and ocr_score >= ordinary_score + margin:
-        return True, ordinary_score, ocr_score
-    if ordinary_score >= minimum_good and ordinary_score >= ocr_score + margin:
-        return False, ordinary_score, ocr_score
-    return single_cjk, ordinary_score, ocr_score
-
 
 def _entry_with_fused_metadata(
     position: Entry,

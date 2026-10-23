@@ -28,6 +28,7 @@ from .ocr import paddle_results as _paddle_results
 from .ocr import headword_script as _headword_script
 from .ocr import lemma_repairs as _lemma_repairs
 from .ocr import line_grouping as _line_grouping
+from .ocr import alphabetical_warnings as _alphabetical_warnings
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -3198,16 +3199,8 @@ def _candidate_rows(diagnostics: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _alphabetical_sort_key(word: str) -> str:
-    """Approximate Spanish dictionary collation for anomaly detection only."""
-    value = (word or "").casefold().strip()
-    # Preserve ñ as distinct from n while stripping acute/diaeresis accents.
-    value = value.replace("ñ", "\ue000")
-    value = "".join(
-        ch for ch in unicodedata.normalize("NFD", value)
-        if unicodedata.category(ch) != "Mn"
-    )
-    value = value.replace("\ue000", "n~")
-    return "".join(ch for ch in value if ch.isalpha() or ch == "~")
+    """Keep the historical annotation-only dictionary collation helper."""
+    return _alphabetical_warnings.alphabetical_sort_key(word, unicode_data=unicodedata)
 
 
 def _annotate_alphabetical_warnings(
@@ -3217,86 +3210,24 @@ def _annotate_alphabetical_warnings(
     top_v: int | None = None,
     bottom_v: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Annotate, never reject, order anomalies along the real page reading path."""
-    warnings: list[dict[str, Any]] = []
-    effective_sections = None
-    if page_sections and top_v is not None and bottom_v is not None:
-        effective_sections = normalize_page_sections(page_sections, int(top_v), int(bottom_v))
-
-    for engine in ("paddle", "tesseract", "lens"):
-        seq: list[tuple[int, int, dict[str, Any], str]] = []
-        for col in report_columns:
-            diagnostics = (
-                col.get("candidates", []) if engine == "paddle"
-                else (col.get(engine, {}) or {}).get("candidates", [])
-            )
-            col_idx = int(col.get("column", 0))
-            for cand in _candidate_rows(diagnostics):
-                cand["alphabetical_warning"] = ""
-                if not cand.get("accepted"):
-                    continue
-                lemma = str(cand.get("normalized_headword", ""))
-                key = _alphabetical_sort_key(lemma)
-                if not key:
-                    continue
-                axis_v = _candidate_axis_v(cand) or 0
-                section_idx = (
-                    section_index_for_v(
-                        axis_v, effective_sections, int(top_v), int(bottom_v),
-                    )
-                    if effective_sections is not None else 0
-                )
-                seq.append((section_idx, col_idx, cand, key))
-
-        seq.sort(key=lambda item: (
-            item[0], item[1], _candidate_axis_v(item[2]) or 0,
-        ))
-        for i, (section_idx, col_idx, cand, key) in enumerate(seq):
-            prev_key = seq[i - 1][3] if i > 0 else ""
-            next_key = seq[i + 1][3] if i + 1 < len(seq) else ""
-            prev_lemma = str(seq[i - 1][2].get("normalized_headword", "")) if i > 0 else ""
-            next_lemma = str(seq[i + 1][2].get("normalized_headword", "")) if i + 1 < len(seq) else ""
-            warning = ""
-            if prev_key and key < prev_key:
-                warning = f"alphabetical_backtrack_vs:{prev_lemma}"
-            elif prev_key and next_key and prev_key <= next_key and key > next_key:
-                warning = f"alphabetical_forward_outlier_between:{prev_lemma}|{next_lemma}"
-            if warning:
-                cand["alphabetical_warning"] = warning
-                warnings.append({
-                    "engine": engine,
-                    "section": section_idx + 1,
-                    "column": col_idx,
-                    "source_y": cand.get("source_y"),
-                    "lemma": cand.get("normalized_headword", ""),
-                    "warning": warning,
-                })
-    return warnings
+    """Flag diagnostic order anomalies; never alter acceptance decisions."""
+    return _alphabetical_warnings.annotate_alphabetical_warnings(
+        report_columns, page_sections, top_v=top_v, bottom_v=bottom_v,
+        candidate_rows_fn=_candidate_rows,
+        axis_fn=_candidate_axis_v,
+        sort_key_fn=_alphabetical_sort_key,
+        section_fn=section_index_for_v,
+        normalize_fn=normalize_page_sections,
+    )
 
 
 def _apply_alphabetical_warnings_to_entries(
     report_columns: list[dict[str, Any]], entries: list[Entry], tolerance: int = 5,
 ) -> None:
-    warning_candidates: list[tuple[str, int, str, str]] = []
-    for col in report_columns:
-        for engine, diagnostics in (
-            ("paddle", col.get("candidates", [])),
-            ("tesseract", (col.get("tesseract", {}) or {}).get("candidates", [])),
-            ("lens", (col.get("lens", {}) or {}).get("candidates", [])),
-        ):
-            for cand in _candidate_rows(diagnostics):
-                warning = str(cand.get("alphabetical_warning", ""))
-                if warning and cand.get("accepted"):
-                    warning_candidates.append((
-                        engine, int(cand.get("source_y", 0)),
-                        str(cand.get("normalized_headword", "")), warning,
-                    ))
-    for entry in entries:
-        for engine, y, lemma, warning in warning_candidates:
-            if entry.ocr_source == engine and entry.word.casefold() == lemma.casefold() and abs(entry.y - y) <= tolerance:
-                entry.alphabetical_warning = warning
-                break
-
+    return _alphabetical_warnings.apply_alphabetical_warnings_to_entries(
+        report_columns, entries, tolerance=tolerance,
+        candidate_rows_fn=_candidate_rows,
+    )
 
 def _ocr_pairing_deps() -> _ocr_pairing.OcrPairingDeps:
     """Snapshot current monkeypatchable matching operations for this call."""
