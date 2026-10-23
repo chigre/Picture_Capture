@@ -24,6 +24,7 @@ from .ocr import visual_evidence as _visual_evidence
 from .ocr import cjk_recovery as _cjk_recovery
 from .ocr import candidate_filter as _headword_filter
 from .ocr import page_detection as _page_detection
+from .ocr import paddle_results as _paddle_results
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -985,40 +986,15 @@ def unwrap_column_band(
 
 
 def _json_payload(result: Any) -> dict[str, Any]:
-    payload = getattr(result, "json", result)
-    if callable(payload):
-        payload = payload()
-    if not isinstance(payload, dict):
-        raise RuntimeError("PaddleOCR 返回了无法解析的结果格式")
-    nested = payload.get("res")
-    return nested if isinstance(nested, dict) else payload
+    """Historical patch point for PaddleOCR 3.x result decoding."""
+    return _paddle_results._json_payload(result)
 
 
 def extract_ocr_records(result: Any) -> list[OCRRecord]:
-    payload = _json_payload(result)
-    raw_texts = payload.get("rec_texts")
-    raw_scores = payload.get("rec_scores")
-    raw_boxes = payload.get("rec_boxes")
-    texts = list(raw_texts) if raw_texts is not None else []
-    scores = list(raw_scores) if raw_scores is not None else []
-    boxes = list(raw_boxes) if raw_boxes is not None else []
-    if not boxes:
-        raw_polygons = payload.get("rec_polys")
-        polygons = list(raw_polygons) if raw_polygons is not None else []
-        for polygon in polygons:
-            array = np.asarray(polygon)
-            boxes.append([array[:, 0].min(), array[:, 1].min(), array[:, 0].max(), array[:, 1].max()])
-    records: list[OCRRecord] = []
-    for text, score, box in zip(texts, scores, boxes):
-        values = [int(round(float(value))) for value in list(box)]
-        if len(values) != 4:
-            continue
-        x0, y0, x1, y1 = values
-        if x1 <= x0 or y1 <= y0:
-            continue
-        records.append(OCRRecord(str(text).strip(), float(score), (x0, y0, x1, y1)))
-    return sorted(records, key=lambda item: (item.box[1], item.box[0]))
-
+    """Decode via the current core callbacks, preserving legacy monkeypatches."""
+    return _paddle_results.extract_ocr_records(
+        result, payload_reader=_json_payload, record_type=OCRRecord, np_module=np,
+    )
 
 def run_paddle_band(band: Image.Image, settings: AppSettings, engine: Any | None = None) -> list[OCRRecord]:
     engine = engine or get_paddle_engine(settings)
