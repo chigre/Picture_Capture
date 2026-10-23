@@ -183,10 +183,13 @@ def test_pre_split_project_inherits_old_crop_width_once(tmp_path: Path):
 
 def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
     import picture_capture.processing_core as processing_core
+    from picture_capture.ocr import ordinary_marker_crop
 
     source = Path(processing_core.__file__).read_text(encoding="utf-8")
+    crop_owner = Path(ordinary_marker_crop.__file__).read_text(encoding="utf-8")
     assert "resolve_entry_ocr_row_metrics(" in source
-    assert "entry_ocr_crop_box(" in source
+    assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in source
+    assert "entry_ocr_crop_box(" in crop_owner
     assert "OcrChannelSession" in source
     assert "channel.recognize_crop(" in source
     assert "choose_ocr_text(" in source

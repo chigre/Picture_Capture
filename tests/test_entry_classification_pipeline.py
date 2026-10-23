@@ -237,15 +237,19 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     import picture_capture.processing_core as processing_core
     import picture_capture.proofreading.entry_classification_ui as review
 
+    from picture_capture.ocr import ordinary_marker_crop
+
     marker_ocr_source = Path(processing_core.__file__).read_text(encoding="utf-8")
+    crop_owner_source = Path(ordinary_marker_crop.__file__).read_text(encoding="utf-8")
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
     # Marker OCR still uses structural classification, while proofreading
     # uses the actual editor text length and deliberately ignores classification.
-    assert "entry_ocr_crop_box(" in marker_ocr_source
+    assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in marker_ocr_source
+    assert "entry_ocr_crop_box(" in crop_owner_source
     assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
-    assert 'meta.entry_scale == "oversized"' in marker_ocr_source
+    assert 'meta.entry_scale == "oversized"' in crop_owner_source
     review_start = app_source.index("def _review_line_box(")
     review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
     review_line_box = app_source[review_start:review_end]
