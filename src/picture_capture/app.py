@@ -3300,6 +3300,7 @@ def _page_index_deps() -> _page_index.PageIndexDeps:
         read_pdic=read_pdic,
         pdic_path=pdic_path,
         read_ppp=read_ppp,
+        visible_page_iids=visible_page_iids,
     )
 
 

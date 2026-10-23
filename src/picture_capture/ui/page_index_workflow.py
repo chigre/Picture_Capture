@@ -35,6 +35,7 @@ class PageIndexDeps:
     read_pdic: object
     pdic_path: object
     read_ppp: object
+    visible_page_iids: object
 
 
 def _resize_sidebar_content(self, deps: PageIndexDeps, event: tk.Event | None = None) -> None:
@@ -582,6 +583,7 @@ def _clear_lined_cell_overlays(self, deps: PageIndexDeps) -> None:
 
 def _visible_page_list_iids(self, deps: PageIndexDeps) -> list[str]:
     """Shared viewport scanner for semantic cell overlays and thumbnails."""
+    visible_page_iids = deps.visible_page_iids
     return visible_page_iids(self.page_list) if hasattr(self, "page_list") else []
 
 

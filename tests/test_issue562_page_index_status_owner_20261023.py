@@ -231,3 +231,12 @@ def test_section_count_unchanged_source_bounds_are_retained():
     assert written[0][0] is original
     assert written[0][1]["canonical_width"] == 150
     assert written[0][1]["canonical_height"] == 160
+
+
+def test_page_cell_visible_row_scanner_uses_injected_live_helper():
+    calls = []
+    tree = object()
+    view = SimpleNamespace(page_list=tree)
+    fake_deps = SimpleNamespace(visible_page_iids=lambda w: calls.append(w) or ["11", "12"])
+    assert page_index._visible_page_list_iids(view, fake_deps) == ["11", "12"]
+    assert calls == [tree]
