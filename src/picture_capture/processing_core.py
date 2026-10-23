@@ -21,6 +21,7 @@ from .crop import entry_column_bounds as _entry_column_bounds
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
+from .geometry import reading_order as _reading_order
 from .preprocess.page_pixels import normalize_page_rgb
 from .geometry.layout_transform import LayoutTransform
 from .persistence.page_sections import (
@@ -2238,43 +2239,8 @@ def column_index(x: int, geometry: Geometry, y: int = 0) -> int:
 
 
 def column_index_for_click(x: int, geometry: Geometry, y: int = 0) -> int:
-    """Return the visual column containing a manual click.
-
-    Manual drawing must use each column's full horizontal interval, not the
-    nearest column start. If the click is genuinely in a gutter or outside all
-    columns, choose the interval boundary nearest to the click.
-    """
-    x, canonical_y = geometry.source_to_canonical(int(x), int(y))
-    if not geometry.column_starts:
-        return 0
-    intervals: list[tuple[int, int]] = []
-    for i, nominal_start in enumerate(geometry.column_starts):
-        # Use the same Y-dependent path that drawing, OCR and cropping use.
-        # The previous nominal-only classifier could assign a marker to the
-        # adjacent column after the visible left edge had curved away.
-        start = (
-            geometry.x_at(i, int(canonical_y))
-            if i < len(geometry.column_paths)
-            else int(nominal_start)
-        )
-        width = geometry.column_widths[i] if i < len(geometry.column_widths) else 1
-        right = int(start) + max(1, int(width))
-        intervals.append((int(start), right))
-        if int(start) <= x < right or (i == len(geometry.column_starts) - 1 and x == right):
-            return i
-
-    def distance_to_interval(pair: tuple[int, tuple[int, int]]) -> tuple[int, int]:
-        i, (left, right) = pair
-        if x < left:
-            distance = left - x
-        elif x > right:
-            distance = x - right
-        else:
-            distance = 0
-        return distance, i
-
-    return min(enumerate(intervals), key=distance_to_interval)[0]
-
+    """Historical public/processing column classifier."""
+    return _reading_order.column_index_for_click(x, geometry, y)
 
 
 def entry_reading_order_key(
@@ -2282,11 +2248,11 @@ def entry_reading_order_key(
     geometry: Geometry,
     page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
 ) -> tuple[int, int, int, int]:
-    """Canonical dictionary order: SECTION first, then column, then position."""
-    u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-    column = column_index_for_click(int(entry.x), geometry, int(entry.y))
-    section = section_index_for_v(v, page_sections, geometry.top, geometry.bottom)
-    return (section, column, v, u)
+    """Preserve SECTION/column/V/U ordering and live historical patch points."""
+    return _reading_order.entry_reading_order_key(
+        entry, geometry, page_sections,
+        column_fn=column_index_for_click, section_fn=section_index_for_v,
+    )
 
 
 def sort_entries_reading_order(
@@ -2294,16 +2260,11 @@ def sort_entries_reading_order(
     geometry: Geometry,
     page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
 ) -> list[Entry]:
-    """Return one stable order shared by UI, OCR, filling and cropping."""
-    effective = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
-
-    def key(entry: Entry) -> tuple[int, int, int, int]:
-        u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-        column = column_index_for_click(int(entry.x), geometry, int(entry.y))
-        section = section_index_for_v(v, effective, geometry.top, geometry.bottom)
-        return (section, column, v, u)
-
-    return sorted(entries, key=key)
+    return _reading_order.sort_entries_reading_order(
+        entries, geometry, page_sections,
+        column_fn=column_index_for_click, section_fn=section_index_for_v,
+        normalize_fn=normalize_page_sections,
+    )
 
 
 def sort_entries_column_y(
@@ -2311,20 +2272,11 @@ def sort_entries_column_y(
     geometry: Geometry,
     page_sections: list[PageSection] | tuple[PageSection, ...] | None = None,
 ) -> list[Entry]:
-    """Stable PDIC repair order: SECTION, visual column, then V; never raw X."""
-    effective = normalize_page_sections(page_sections, geometry.top, geometry.bottom)
-    return sorted(
-        entries,
-        key=lambda entry: (
-            section_index_for_v(
-                geometry.source_to_canonical(int(entry.x), int(entry.y))[1],
-                effective, geometry.top, geometry.bottom,
-            ),
-            column_index_for_click(int(entry.x), geometry, int(entry.y)),
-            geometry.source_to_canonical(int(entry.x), int(entry.y))[1],
-        ),
+    return _reading_order.sort_entries_column_y(
+        entries, geometry, page_sections,
+        column_fn=column_index_for_click, section_fn=section_index_for_v,
+        normalize_fn=normalize_page_sections,
     )
-
 
 def clamp_box(box: tuple[int, int, int, int], image: Image.Image) -> tuple[int, int, int, int]:
     left, top, right, bottom = box
