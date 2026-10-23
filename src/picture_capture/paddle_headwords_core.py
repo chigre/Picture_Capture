@@ -3109,6 +3109,7 @@ def _headword_filter_deps() -> _headword_filter.HeadwordFilterDeps:
         Entry=Entry,
         load_dictionary_profile=load_dictionary_profile,
         leading_relation_label=leading_relation_label,
+        starts_with_internal_article_symbol=starts_with_internal_article_symbol,
     )
 
 
