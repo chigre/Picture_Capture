@@ -18,11 +18,11 @@ manual perspective quad editor, analysis worker/actions, diagnostics,
 review navigation, preprocessed working-page promotion, batch preview
 and processed image exports, corrected display-photo caching. All 24
 historical Tk instance/static entrypoints and signatures remain in
-the app, delegating with **42 original live global references** bound
+the app, delegating with **43 original live global references** bound
 per call. All moved algorithms verified byte-for-byte identical after
 removing only new dependency aliases. `app.py` normalized source
-**784697→732966 bytes** (−51731, 6.59%), additional strict ceiling
-**732985**, historical oversize baseline unchanged, **15 root modules**.
+**784697→733009 bytes** (−51688, 6.59%), additional strict ceiling
+**733025**, historical oversize baseline unchanged, **15 root modules**.
 Added direct Tk signature/static/patch/isolation tests and AST ownership
 guard. Six-system exact-head CI, GUI smoke, legacy compatibility,
 CodeQL/reviews and postmerge main acceptance are not established yet
