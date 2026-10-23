@@ -154,6 +154,7 @@ from .preprocess.orthogonal_policy import (
 
 
 from .preprocess import geometry_stages as _geometry_stages
+from .preprocess import perspective_stages as _perspective_stages
 from .preprocess import pixel_row_policy as _pixel_row_policy
 from .preprocess import projective_selection as _projective_selection
 from .preprocess import finalization as _finalization
@@ -283,218 +284,24 @@ def analyze_preprocess_page(
     )
     actual_geometry_mode = "deskew"
     geometry_strength = 0.0
-    perspective_matrix: tuple[float, ...] | None = None
-    perspective_source_quad: tuple[float, ...] | None = None
-    perspective_target_quad: tuple[float, ...] | None = None
-    perspective_classification = "none"
-    perspective_candidate_source = "none"
-    perspective_horizontal_vanishing_x = 0.0
-    perspective_horizontal_vanishing_y = 0.0
-    perspective_horizontal_row_count = 0
-    perspective_horizontal_column_count = 0
-    perspective_horizontal_vp_column_spread_deg = 0.0
-    perspective_horizontal_strength = 0.0
-    perspective_structural_applied = False
-    perspective_structural_safe = False
-    perspective_row_valid_column_count = 0
-    perspective_row_valid_column_indices: tuple[int, ...] = ()
-    perspective_row_column_row_counts: tuple[int, ...] = ()
-    perspective_row_after_worst_region_deg = 0.0
-    perspective_row_after_worst_column_metric_deg = 0.0
-    perspective_row_after_worst_column_index = -1
-    perspective_row_before_column_top_angles_deg: tuple[float, ...] = ()
-    perspective_row_after_column_top_angles_deg: tuple[float, ...] = ()
-    perspective_row_before_column_middle_angles_deg: tuple[float, ...] = ()
-    perspective_row_after_column_middle_angles_deg: tuple[float, ...] = ()
-    perspective_row_before_column_bottom_angles_deg: tuple[float, ...] = ()
-    perspective_row_after_column_bottom_angles_deg: tuple[float, ...] = ()
-    perspective_row_before_column_trends_deg: tuple[float, ...] = ()
-    perspective_row_after_column_trends_deg: tuple[float, ...] = ()
-    perspective_row_before_top_angle_deg = 0.0
-    perspective_row_after_top_angle_deg = 0.0
-    perspective_row_before_bottom_angle_deg = 0.0
-    perspective_row_after_bottom_angle_deg = 0.0
-    perspective_row_before_trend_deg = 0.0
-    perspective_row_after_trend_deg = 0.0
-    perspective_row_before_metric_deg = 0.0
-    perspective_row_after_metric_deg = 0.0
-    perspective_row_improvement_ratio = 0.0
-    perspective_row_alignment_verdict = "insufficient"
-    perspective_candidate_strength_px = 0.0
-    perspective_left_drift_px = 0.0
-    perspective_right_drift_px = 0.0
-    perspective_common_drift_px = 0.0
-    perspective_width_delta_px = 0.0
-    perspective_width_change_ratio = 0.0
-    perspective_scale_top = 1.0
-    perspective_scale_bottom = 1.0
-    perspective_scale_delta_ratio = 0.0
-    perspective_jacobian_samples = 0
-    perspective_jacobian_horizontal_scale_span_ratio = 0.0
-    perspective_jacobian_vertical_scale_span_ratio = 0.0
-    perspective_jacobian_area_scale_span_ratio = 0.0
-    perspective_jacobian_anisotropy_p95_ratio = 0.0
-    perspective_jacobian_min_determinant = 1.0
-    perspective_text_scale_samples = 0
-    perspective_text_scale_inline_ratio_p05 = 1.0
-    perspective_text_scale_inline_ratio_median = 1.0
-    perspective_text_scale_inline_ratio_p95 = 1.0
-    perspective_text_scale_cross_ratio_p05 = 1.0
-    perspective_text_scale_cross_ratio_median = 1.0
-    perspective_text_scale_cross_ratio_p95 = 1.0
-    perspective_text_scale_inline_ratio_span_ratio = 0.0
-    perspective_text_scale_cross_ratio_span_ratio = 0.0
-    perspective_text_scale_inline_ratio_gradient_ratio = 0.0
-    perspective_text_scale_cross_ratio_gradient_ratio = 0.0
-    perspective_text_scale_anisotropy_p95_ratio = 0.0
-    perspective_text_scale_before_inline_gradient_ratio = 0.0
-    perspective_text_scale_after_inline_gradient_ratio = 0.0
-    perspective_text_scale_before_cross_gradient_ratio = 0.0
-    perspective_text_scale_after_cross_gradient_ratio = 0.0
-    perspective_text_scale_before_score = 0.0
-    perspective_text_scale_after_score = 0.0
-    perspective_text_scale_verdict = "insufficient"
-    perspective_auto_safe = False
+    perspective_state = _perspective_stages.PerspectiveState()
 
-    # A saved manual quadrilateral is expressed in original-source pixels.
-    # Rotate those four handles through the same small-angle correction first,
-    # then rectify before any automatic perspective/dewarp stage.
-    if manual_quad is not None:
-        try:
-            rotated_quad: list[float] = []
-            for index in range(0, 8, 2):
-                x, y = _rotate_point_same_canvas(
-                    manual_quad[index], manual_quad[index + 1],
-                    width, height, applied,
-                )
-                rotated_quad.extend((x, y))
-            manual_estimate = perspective_from_quad(
-                rotated_quad, working.size,
-            )
-            perspective_matrix = manual_estimate.matrix
-            perspective_source_quad = tuple(manual_estimate.source_quad)
-            perspective_target_quad = tuple(manual_estimate.target_quad)
-            perspective_classification = str(manual_estimate.classification)
-            perspective_candidate_source = "manual"
-            perspective_candidate_strength_px = float(manual_estimate.strength_px)
-            perspective_left_drift_px = float(manual_estimate.left_drift_px)
-            perspective_right_drift_px = float(manual_estimate.right_drift_px)
-            perspective_common_drift_px = float(manual_estimate.common_drift_px)
-            perspective_width_delta_px = float(manual_estimate.width_delta_px)
-            perspective_width_change_ratio = float(manual_estimate.width_change_ratio)
-            perspective_scale_top = float(manual_estimate.scale_top)
-            perspective_scale_bottom = float(manual_estimate.scale_bottom)
-            perspective_scale_delta_ratio = float(manual_estimate.scale_delta_ratio)
-            geometry_strength = max(
-                geometry_strength, float(manual_estimate.strength_px)
-            )
-            if working_polygons:
-                manual_candidate_polygons = transform_polygons_homography(
-                    working_polygons, perspective_matrix,
-                )
-                jacobian_audit = audit_homography_distortion(
-                    perspective_matrix,
-                    working.size,
-                    polygons=working_polygons,
-                )
-                text_scale_audit = audit_text_scale_stability(
-                    working_polygons,
-                    manual_candidate_polygons,
-                    working.size,
-                    writing_mode=settings.layout_writing_mode,
-                )
-                row_audit = audit_horizontal_alignment(
-                    working_polygons,
-                    manual_candidate_polygons,
-                    size=working.size,
-                    settings=settings,
-                )
-                perspective_row_before_top_angle_deg = row_audit.before_top_angle_deg
-                perspective_row_after_top_angle_deg = row_audit.after_top_angle_deg
-                perspective_row_before_bottom_angle_deg = row_audit.before_bottom_angle_deg
-                perspective_row_after_bottom_angle_deg = row_audit.after_bottom_angle_deg
-                perspective_row_before_trend_deg = row_audit.before_trend_deg
-                perspective_row_after_trend_deg = row_audit.after_trend_deg
-                perspective_row_before_metric_deg = row_audit.before_metric_deg
-                perspective_row_after_metric_deg = row_audit.after_metric_deg
-                perspective_row_improvement_ratio = row_audit.improvement_ratio
-                perspective_row_alignment_verdict = row_audit.verdict
-                perspective_jacobian_samples = jacobian_audit.sample_count
-                perspective_jacobian_horizontal_scale_span_ratio = (
-                    jacobian_audit.horizontal_scale_span_ratio
-                )
-                perspective_jacobian_vertical_scale_span_ratio = (
-                    jacobian_audit.vertical_scale_span_ratio
-                )
-                perspective_jacobian_area_scale_span_ratio = (
-                    jacobian_audit.area_scale_span_ratio
-                )
-                perspective_jacobian_anisotropy_p95_ratio = (
-                    jacobian_audit.anisotropy_p95_ratio
-                )
-                perspective_jacobian_min_determinant = (
-                    jacobian_audit.min_determinant
-                )
-                perspective_text_scale_samples = text_scale_audit.sample_count
-                perspective_text_scale_inline_ratio_p05 = (
-                    text_scale_audit.inline_ratio_p05
-                )
-                perspective_text_scale_inline_ratio_median = (
-                    text_scale_audit.inline_ratio_median
-                )
-                perspective_text_scale_inline_ratio_p95 = (
-                    text_scale_audit.inline_ratio_p95
-                )
-                perspective_text_scale_cross_ratio_p05 = (
-                    text_scale_audit.cross_ratio_p05
-                )
-                perspective_text_scale_cross_ratio_median = (
-                    text_scale_audit.cross_ratio_median
-                )
-                perspective_text_scale_cross_ratio_p95 = (
-                    text_scale_audit.cross_ratio_p95
-                )
-                perspective_text_scale_inline_ratio_span_ratio = (
-                    text_scale_audit.inline_ratio_span_ratio
-                )
-                perspective_text_scale_cross_ratio_span_ratio = (
-                    text_scale_audit.cross_ratio_span_ratio
-                )
-                perspective_text_scale_inline_ratio_gradient_ratio = (
-                    text_scale_audit.inline_ratio_gradient_ratio
-                )
-                perspective_text_scale_cross_ratio_gradient_ratio = (
-                    text_scale_audit.cross_ratio_gradient_ratio
-                )
-                perspective_text_scale_anisotropy_p95_ratio = (
-                    text_scale_audit.anisotropy_p95_ratio
-                )
-                perspective_text_scale_before_inline_gradient_ratio = (
-                    text_scale_audit.before_inline_gradient_ratio
-                )
-                perspective_text_scale_after_inline_gradient_ratio = (
-                    text_scale_audit.after_inline_gradient_ratio
-                )
-                perspective_text_scale_before_cross_gradient_ratio = (
-                    text_scale_audit.before_cross_gradient_ratio
-                )
-                perspective_text_scale_after_cross_gradient_ratio = (
-                    text_scale_audit.after_cross_gradient_ratio
-                )
-                perspective_text_scale_before_score = text_scale_audit.before_score
-                perspective_text_scale_after_score = text_scale_audit.after_score
-                perspective_text_scale_verdict = text_scale_audit.verdict
-            else:
-                manual_candidate_polygons = []
-            working = apply_homography_image(
-                working, perspective_matrix,
-            )
-            if manual_candidate_polygons:
-                working_polygons = manual_candidate_polygons
-            actual_geometry_mode = "manual_perspective"
-            method_parts.append("manual_perspective")
-        except Exception as exc:
-            warnings.append(f"手动四角透视纠正不可用：{exc}")
+    manual_stage = _perspective_stages.apply_manual_perspective(
+        working, working_polygons, manual_quad,
+        width, height, applied, settings, perspective_state,
+        geometry_strength, method_parts, warnings,
+        point_rotator=_rotate_point_same_canvas,
+        manual_estimator=perspective_from_quad,
+        polygon_transformer=transform_polygons_homography,
+        distortion_auditor=audit_homography_distortion,
+        text_scale_auditor=audit_text_scale_stability,
+        row_auditor=audit_horizontal_alignment,
+        homography_warper=apply_homography_image,
+    )
+    working = manual_stage.image
+    working_polygons = manual_stage.polygons
+    actual_geometry_mode = manual_stage.geometry_mode
+    geometry_strength = manual_stage.geometry_strength
 
     # Keep explicit neural unwarp separate from the automatic geometry path.
     uvdoc_stage = _geometry_stages.apply_explicit_uvdoc(
@@ -542,411 +349,95 @@ def analyze_preprocess_page(
             horizontal_min_trend_deg=HORIZONTAL_VP_MIN_TREND_DEG,
             horizontal_column_spread_max_deg=HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
         )
-        selected_entry = selection.selected_entry
-        selected_candidate = selection.selected_candidate
-        selected_horizontal_strength = selection.selected_horizontal_strength
-        diagnostic_entry = selection.diagnostic_entry
-        diagnostic_candidate = selection.diagnostic_candidate
-        diagnostic_horizontal_strength = selection.diagnostic_horizontal_strength
-        perspective_structural_applied = selection.perspective_structural_applied
-        perspective_structural_safe = selection.perspective_structural_safe
-        structural_auto_safe = selection.structural_auto_safe
-        horizontal_auto_safe = selection.horizontal_auto_safe
-        structural_candidate = selection.structural_candidate
-        structural_entry = selection.structural_entry
-        line_supports_perspective = selection.line_supports_perspective
-        horizontal_total_candidate = selection.horizontal_total_candidate
-        horizontal_full = selection.horizontal_full
-        horizontal_row_audit = selection.horizontal_row_audit
-        horizontal_strength = selection.horizontal_strength
-
-        if diagnostic_entry is not None and diagnostic_candidate is not None:
-            perspective = diagnostic_candidate
-            jacobian_audit = diagnostic_entry["jacobian"]
-            text_scale_audit = diagnostic_entry["text_scale"]
-            row_audit = diagnostic_entry["row"]
-
-            source_quad_value = getattr(perspective, "source_quad", None)
-            target_quad_value = getattr(perspective, "target_quad", None)
-            perspective_source_quad = (
-                tuple(float(v) for v in source_quad_value)
-                if source_quad_value is not None else None
-            )
-            perspective_target_quad = (
-                tuple(float(v) for v in target_quad_value)
-                if target_quad_value is not None else None
-            )
-            perspective_candidate_source = str(
-                getattr(perspective, "candidate_source", "structural")
-            )
-            perspective_classification = str(
-                getattr(perspective, "classification", "unknown")
-            )
-            perspective_horizontal_vanishing_x = float(
-                getattr(perspective, "horizontal_vanishing_x", 0.0)
-            )
-            perspective_horizontal_vanishing_y = float(
-                getattr(perspective, "horizontal_vanishing_y", 0.0)
-            )
-            perspective_horizontal_row_count = int(
-                getattr(perspective, "horizontal_row_count", 0)
-            )
-            perspective_horizontal_column_count = int(
-                getattr(perspective, "horizontal_column_count", 0)
-            )
-            perspective_horizontal_vp_column_spread_deg = float(
-                getattr(
-                    perspective,
-                    "horizontal_vp_column_spread_deg",
-                    0.0,
-                )
-            )
-            perspective_horizontal_strength = float(
-                diagnostic_horizontal_strength
-            )
-            perspective_candidate_strength_px = float(
-                getattr(perspective, "strength_px", 0.0)
-            )
-            perspective_left_drift_px = float(
-                getattr(perspective, "left_drift_px", 0.0)
-            )
-            perspective_right_drift_px = float(
-                getattr(perspective, "right_drift_px", 0.0)
-            )
-            perspective_common_drift_px = float(
-                getattr(perspective, "common_drift_px", 0.0)
-            )
-            perspective_width_delta_px = float(
-                getattr(perspective, "width_delta_px", 0.0)
-            )
-            perspective_width_change_ratio = max(
-                0.0, float(getattr(perspective, "width_change_ratio", 0.0))
-            )
-            perspective_scale_top = max(
-                0.0, float(getattr(perspective, "scale_top", 1.0))
-            )
-            perspective_scale_bottom = max(
-                0.0, float(getattr(perspective, "scale_bottom", 1.0))
-            )
-            perspective_scale_delta_ratio = max(
-                0.0, float(getattr(perspective, "scale_delta_ratio", 0.0))
-            )
-
-            perspective_row_valid_column_count = int(
-                getattr(row_audit, "valid_column_count", 0)
-            )
-            perspective_row_valid_column_indices = tuple(
-                int(value)
-                for value in getattr(row_audit, "valid_column_indices", ())
-            )
-            perspective_row_column_row_counts = tuple(
-                getattr(row_audit, "column_row_counts", ())
-            )
-            perspective_row_after_worst_region_deg = float(
-                getattr(row_audit, "after_worst_region_deg", 0.0)
-            )
-            perspective_row_after_worst_column_metric_deg = float(
-                getattr(
-                    row_audit,
-                    "after_worst_column_metric_deg",
-                    0.0,
-                )
-            )
-            perspective_row_after_worst_column_index = int(
-                getattr(row_audit, "after_worst_column_index", -1)
-            )
-            perspective_row_before_column_top_angles_deg = tuple(
-                getattr(row_audit, "before_column_top_angles_deg", ())
-            )
-            perspective_row_after_column_top_angles_deg = tuple(
-                getattr(row_audit, "after_column_top_angles_deg", ())
-            )
-            perspective_row_before_column_middle_angles_deg = tuple(
-                getattr(row_audit, "before_column_middle_angles_deg", ())
-            )
-            perspective_row_after_column_middle_angles_deg = tuple(
-                getattr(row_audit, "after_column_middle_angles_deg", ())
-            )
-            perspective_row_before_column_bottom_angles_deg = tuple(
-                getattr(row_audit, "before_column_bottom_angles_deg", ())
-            )
-            perspective_row_after_column_bottom_angles_deg = tuple(
-                getattr(row_audit, "after_column_bottom_angles_deg", ())
-            )
-            perspective_row_before_column_trends_deg = tuple(
-                getattr(row_audit, "before_column_trends_deg", ())
-            )
-            perspective_row_after_column_trends_deg = tuple(
-                getattr(row_audit, "after_column_trends_deg", ())
-            )
-            perspective_row_before_top_angle_deg = row_audit.before_top_angle_deg
-            perspective_row_after_top_angle_deg = row_audit.after_top_angle_deg
-            perspective_row_before_bottom_angle_deg = row_audit.before_bottom_angle_deg
-            perspective_row_after_bottom_angle_deg = row_audit.after_bottom_angle_deg
-            perspective_row_before_trend_deg = row_audit.before_trend_deg
-            perspective_row_after_trend_deg = row_audit.after_trend_deg
-            perspective_row_before_metric_deg = row_audit.before_metric_deg
-            perspective_row_after_metric_deg = row_audit.after_metric_deg
-            perspective_row_improvement_ratio = row_audit.improvement_ratio
-            perspective_row_alignment_verdict = row_audit.verdict
-
-            perspective_jacobian_samples = jacobian_audit.sample_count
-            perspective_jacobian_horizontal_scale_span_ratio = (
-                jacobian_audit.horizontal_scale_span_ratio
-            )
-            perspective_jacobian_vertical_scale_span_ratio = (
-                jacobian_audit.vertical_scale_span_ratio
-            )
-            perspective_jacobian_area_scale_span_ratio = (
-                jacobian_audit.area_scale_span_ratio
-            )
-            perspective_jacobian_anisotropy_p95_ratio = (
-                jacobian_audit.anisotropy_p95_ratio
-            )
-            perspective_jacobian_min_determinant = (
-                jacobian_audit.min_determinant
-            )
-            perspective_text_scale_samples = text_scale_audit.sample_count
-            perspective_text_scale_inline_ratio_p05 = text_scale_audit.inline_ratio_p05
-            perspective_text_scale_inline_ratio_median = (
-                text_scale_audit.inline_ratio_median
-            )
-            perspective_text_scale_inline_ratio_p95 = text_scale_audit.inline_ratio_p95
-            perspective_text_scale_cross_ratio_p05 = text_scale_audit.cross_ratio_p05
-            perspective_text_scale_cross_ratio_median = (
-                text_scale_audit.cross_ratio_median
-            )
-            perspective_text_scale_cross_ratio_p95 = text_scale_audit.cross_ratio_p95
-            perspective_text_scale_inline_ratio_span_ratio = (
-                text_scale_audit.inline_ratio_span_ratio
-            )
-            perspective_text_scale_cross_ratio_span_ratio = (
-                text_scale_audit.cross_ratio_span_ratio
-            )
-            perspective_text_scale_inline_ratio_gradient_ratio = (
-                text_scale_audit.inline_ratio_gradient_ratio
-            )
-            perspective_text_scale_cross_ratio_gradient_ratio = (
-                text_scale_audit.cross_ratio_gradient_ratio
-            )
-            perspective_text_scale_anisotropy_p95_ratio = (
-                text_scale_audit.anisotropy_p95_ratio
-            )
-            perspective_text_scale_before_inline_gradient_ratio = (
-                text_scale_audit.before_inline_gradient_ratio
-            )
-            perspective_text_scale_after_inline_gradient_ratio = (
-                text_scale_audit.after_inline_gradient_ratio
-            )
-            perspective_text_scale_before_cross_gradient_ratio = (
-                text_scale_audit.before_cross_gradient_ratio
-            )
-            perspective_text_scale_after_cross_gradient_ratio = (
-                text_scale_audit.after_cross_gradient_ratio
-            )
-            perspective_text_scale_before_score = text_scale_audit.before_score
-            perspective_text_scale_after_score = text_scale_audit.after_score
-            perspective_text_scale_verdict = text_scale_audit.verdict
-
-        perspective_auto_safe = bool(
-            requested_geometry_mode == "auto"
-            and selected_entry is not None
-            and (
-                selected_candidate is structural_candidate
-                and structural_auto_safe
-                or selected_candidate is horizontal_total_candidate
-                and horizontal_auto_safe
-            )
+        projective_stage = _perspective_stages.apply_selected_perspective(
+            selection, working, working_polygons,
+            actual_geometry_mode, geometry_strength, perspective_state,
+            requested_geometry_mode=requested_geometry_mode,
+            line_geometry=line_geometry,
+            method_parts=method_parts, warnings=warnings,
+            homography_warper=apply_homography_image,
+            horizontal_scale_span_max=AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
+            vertical_scale_span_max=AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX,
+            area_scale_span_max=AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
+            anisotropy_p95_max=AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
         )
+        working = projective_stage.image
+        working_polygons = projective_stage.polygons
+        actual_geometry_mode = projective_stage.geometry_mode
+        geometry_strength = projective_stage.geometry_strength
 
-        if (
-            requested_geometry_mode == "auto"
-            and selected_candidate is horizontal_total_candidate
-            and structural_candidate is not None
-            and not structural_auto_safe
-        ):
-            warnings.append(
-                "栏结构候选未通过自动 keystone/尺度安全门；"
-                f"已改用安全的优化水平投影（λ={selected_horizontal_strength:.3f}），"
-                "不叠加危险的 structural 变换。"
-            )
-        if (
-            requested_geometry_mode == "auto"
-            and structural_auto_safe
-            and selected_candidate is structural_candidate
-            and horizontal_full is not None
-            and not horizontal_auto_safe
-        ):
-            if horizontal_row_audit is not None:
-                worst_index = (
-                    horizontal_row_audit.after_worst_column_index + 1
-                    if horizontal_row_audit.after_worst_column_index >= 0
-                    else 0
-                )
-                warnings.append(
-                    "已执行安全的栏结构透视，但残余水平投影未通过自动门："
-                    f"最优强度 {horizontal_strength:.3f}，"
-                    f"全页行趋势 {horizontal_row_audit.before_trend_deg:+.2f}°→"
-                    f"{horizontal_row_audit.after_trend_deg:+.2f}°，"
-                    f"最差区域残余 {horizontal_row_audit.after_worst_region_deg:.2f}°"
-                    + (
-                        f"（第 {worst_index} 栏）"
-                        if worst_index else ""
-                    )
-                    + "。已保留 structural 结果，未强行继续拉伸文字。"
-                )
-            else:
-                warnings.append(
-                    "已执行安全的栏结构透视，但残余水平投影证据不足；"
-                    "已保留 structural 结果。"
-                )
-
-        if selected_entry is not None and selected_candidate is not None:
-            apply_perspective = bool(
-                float(getattr(selected_candidate, "strength_px", 0.0)) >= 0.75
-            )
-            if apply_perspective:
-                perspective_matrix = selected_candidate.matrix
-                geometry_strength = max(
-                    geometry_strength,
-                    float(getattr(selected_candidate, "strength_px", 0.0)),
-                )
-                working = apply_homography_image(
-                    working, perspective_matrix,
-                )
-                working_polygons = selected_entry["polygons"]
-                actual_geometry_mode = "perspective"
-                method_parts.append("perspective")
-                if perspective_structural_applied:
-                    method_parts.append("structural")
-                if selected_horizontal_strength > 0.0:
-                    method_parts.append("horizontal_vp")
-                    method_parts.append("horizontal_vp_optimized")
-        elif requested_geometry_mode == "auto":
-            review_reasons: list[str] = []
-            if (
-                structural_candidate is not None
-                and not structural_auto_safe
-                and not line_geometry.separator_curve_reliable
-            ):
-                classification = str(
-                    getattr(structural_candidate, "classification", "unknown")
-                )
-                if classification == "parallel_drift":
-                    review_reasons.append(
-                        "栏结构主要呈同向平行漂移，不作为 keystone 自动执行"
-                    )
-                elif not line_supports_perspective:
-                    review_reasons.append("文本行几何证据不足或与栏结构透视不一致")
-                if structural_entry is not None:
-                    structural_j = structural_entry["jacobian"]
-                    structural_t = structural_entry["text_scale"]
-                    if (
-                        structural_j.horizontal_scale_span_ratio
-                        > AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
-                    ):
-                        review_reasons.append(
-                            "栏结构候选横向局部尺度漂移 "
-                            f"{structural_j.horizontal_scale_span_ratio * 100:.2f}% 超限"
-                        )
-                    if (
-                        structural_j.vertical_scale_span_ratio
-                        > AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
-                    ):
-                        review_reasons.append(
-                            "栏结构候选纵向局部尺度漂移 "
-                            f"{structural_j.vertical_scale_span_ratio * 100:.2f}% 超限"
-                        )
-                    if (
-                        structural_j.area_scale_span_ratio
-                        > AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
-                    ):
-                        review_reasons.append(
-                            "栏结构候选局部面积尺度漂移 "
-                            f"{structural_j.area_scale_span_ratio * 100:.2f}% 超限"
-                        )
-                    if (
-                        structural_j.anisotropy_p95_ratio
-                        > AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
-                    ):
-                        review_reasons.append(
-                            "栏结构候选局部横纵不等比例拉伸 "
-                            f"{structural_j.anisotropy_p95_ratio * 100:.2f}% 超限"
-                        )
-                    if structural_t.verdict == "worse":
-                        review_reasons.append(
-                            "栏结构候选配对文本框尺度场超限："
-                            f"行向 {structural_t.inline_ratio_span_ratio * 100:.2f}% / "
-                            f"跨行 {structural_t.cross_ratio_span_ratio * 100:.2f}%"
-                        )
-            if (
-                horizontal_full is not None
-                and not horizontal_auto_safe
-                and not line_geometry.separator_curve_reliable
-            ):
-                if horizontal_row_audit is not None:
-                    worst_index = (
-                        horizontal_row_audit.after_worst_column_index + 1
-                        if horizontal_row_audit.after_worst_column_index >= 0
-                        else 0
-                    )
-                    spread = float(
-                        getattr(
-                            horizontal_full,
-                            "horizontal_vp_column_spread_deg",
-                            0.0,
-                        )
-                    )
-                    edge_note = ""
-                    if int(getattr(horizontal_row_audit, "edge_pair_count", 0)) >= 8:
-                        edge_note = (
-                            "，字框上/下边缘P90 "
-                            f"{horizontal_row_audit.after_top_edge_p90_abs_deg:.2f}°/"
-                            f"{horizontal_row_audit.after_bottom_edge_p90_abs_deg:.2f}°"
-                            "，上下边缘分歧P90 "
-                            f"{horizontal_row_audit.after_edge_pair_delta_p90_deg:.2f}°"
-                        )
-                    review_reasons.append(
-                        "残余水平投影优化未同时满足分栏水平改善、"
-                        "单行上下边缘水平性与尺度安全："
-                        f"强度 {horizontal_strength:.3f}，"
-                        f"全页Δ角 {horizontal_row_audit.before_trend_deg:+.2f}°→"
-                        f"{horizontal_row_audit.after_trend_deg:+.2f}°，"
-                        f"最差区域 {horizontal_row_audit.after_worst_region_deg:.2f}°"
-                        + (
-                            f"（第 {worst_index} 栏）"
-                            if worst_index else ""
-                        )
-                        + edge_note
-                        + (
-                            f"，栏间VP分歧 {spread:.2f}°"
-                            if spread > 0.0 else ""
-                        )
-                    )
-                else:
-                    review_reasons.append("残余水平投影证据不足")
-            if review_reasons:
-                warnings.append(
-                    "自动投影候选已拦截：" + "；".join(review_reasons)
-                    + "。可人工选择“自动透视”复核。"
-                )
-                method_parts.append("perspective_review")
-
-        if (
-            requested_geometry_mode == "perspective"
-            and selected_entry is not None
-            and not (
-                structural_auto_safe
-                or horizontal_auto_safe
-            )
-        ):
-            warnings.append(
-                "已按用户显式选择执行投影矫正；该候选未通过自动安全门。"
-                f"来源={perspective_candidate_source}，"
-                f"水平强度={perspective_horizontal_strength:.3f}，"
-                f"行趋势 {perspective_row_before_trend_deg:+.2f}°→"
-                f"{perspective_row_after_trend_deg:+.2f}°。"
-            )
+    perspective_matrix = perspective_state.perspective_matrix
+    perspective_source_quad = perspective_state.perspective_source_quad
+    perspective_target_quad = perspective_state.perspective_target_quad
+    perspective_classification = perspective_state.perspective_classification
+    perspective_candidate_source = perspective_state.perspective_candidate_source
+    perspective_horizontal_vanishing_x = perspective_state.perspective_horizontal_vanishing_x
+    perspective_horizontal_vanishing_y = perspective_state.perspective_horizontal_vanishing_y
+    perspective_horizontal_row_count = perspective_state.perspective_horizontal_row_count
+    perspective_horizontal_column_count = perspective_state.perspective_horizontal_column_count
+    perspective_horizontal_vp_column_spread_deg = perspective_state.perspective_horizontal_vp_column_spread_deg
+    perspective_horizontal_strength = perspective_state.perspective_horizontal_strength
+    perspective_structural_applied = perspective_state.perspective_structural_applied
+    perspective_structural_safe = perspective_state.perspective_structural_safe
+    perspective_row_valid_column_count = perspective_state.perspective_row_valid_column_count
+    perspective_row_valid_column_indices = perspective_state.perspective_row_valid_column_indices
+    perspective_row_column_row_counts = perspective_state.perspective_row_column_row_counts
+    perspective_row_after_worst_region_deg = perspective_state.perspective_row_after_worst_region_deg
+    perspective_row_after_worst_column_metric_deg = perspective_state.perspective_row_after_worst_column_metric_deg
+    perspective_row_after_worst_column_index = perspective_state.perspective_row_after_worst_column_index
+    perspective_row_before_column_top_angles_deg = perspective_state.perspective_row_before_column_top_angles_deg
+    perspective_row_after_column_top_angles_deg = perspective_state.perspective_row_after_column_top_angles_deg
+    perspective_row_before_column_middle_angles_deg = perspective_state.perspective_row_before_column_middle_angles_deg
+    perspective_row_after_column_middle_angles_deg = perspective_state.perspective_row_after_column_middle_angles_deg
+    perspective_row_before_column_bottom_angles_deg = perspective_state.perspective_row_before_column_bottom_angles_deg
+    perspective_row_after_column_bottom_angles_deg = perspective_state.perspective_row_after_column_bottom_angles_deg
+    perspective_row_before_column_trends_deg = perspective_state.perspective_row_before_column_trends_deg
+    perspective_row_after_column_trends_deg = perspective_state.perspective_row_after_column_trends_deg
+    perspective_row_before_top_angle_deg = perspective_state.perspective_row_before_top_angle_deg
+    perspective_row_after_top_angle_deg = perspective_state.perspective_row_after_top_angle_deg
+    perspective_row_before_bottom_angle_deg = perspective_state.perspective_row_before_bottom_angle_deg
+    perspective_row_after_bottom_angle_deg = perspective_state.perspective_row_after_bottom_angle_deg
+    perspective_row_before_trend_deg = perspective_state.perspective_row_before_trend_deg
+    perspective_row_after_trend_deg = perspective_state.perspective_row_after_trend_deg
+    perspective_row_before_metric_deg = perspective_state.perspective_row_before_metric_deg
+    perspective_row_after_metric_deg = perspective_state.perspective_row_after_metric_deg
+    perspective_row_improvement_ratio = perspective_state.perspective_row_improvement_ratio
+    perspective_row_alignment_verdict = perspective_state.perspective_row_alignment_verdict
+    perspective_candidate_strength_px = perspective_state.perspective_candidate_strength_px
+    perspective_left_drift_px = perspective_state.perspective_left_drift_px
+    perspective_right_drift_px = perspective_state.perspective_right_drift_px
+    perspective_common_drift_px = perspective_state.perspective_common_drift_px
+    perspective_width_delta_px = perspective_state.perspective_width_delta_px
+    perspective_width_change_ratio = perspective_state.perspective_width_change_ratio
+    perspective_scale_top = perspective_state.perspective_scale_top
+    perspective_scale_bottom = perspective_state.perspective_scale_bottom
+    perspective_scale_delta_ratio = perspective_state.perspective_scale_delta_ratio
+    perspective_jacobian_samples = perspective_state.perspective_jacobian_samples
+    perspective_jacobian_horizontal_scale_span_ratio = perspective_state.perspective_jacobian_horizontal_scale_span_ratio
+    perspective_jacobian_vertical_scale_span_ratio = perspective_state.perspective_jacobian_vertical_scale_span_ratio
+    perspective_jacobian_area_scale_span_ratio = perspective_state.perspective_jacobian_area_scale_span_ratio
+    perspective_jacobian_anisotropy_p95_ratio = perspective_state.perspective_jacobian_anisotropy_p95_ratio
+    perspective_jacobian_min_determinant = perspective_state.perspective_jacobian_min_determinant
+    perspective_text_scale_samples = perspective_state.perspective_text_scale_samples
+    perspective_text_scale_inline_ratio_p05 = perspective_state.perspective_text_scale_inline_ratio_p05
+    perspective_text_scale_inline_ratio_median = perspective_state.perspective_text_scale_inline_ratio_median
+    perspective_text_scale_inline_ratio_p95 = perspective_state.perspective_text_scale_inline_ratio_p95
+    perspective_text_scale_cross_ratio_p05 = perspective_state.perspective_text_scale_cross_ratio_p05
+    perspective_text_scale_cross_ratio_median = perspective_state.perspective_text_scale_cross_ratio_median
+    perspective_text_scale_cross_ratio_p95 = perspective_state.perspective_text_scale_cross_ratio_p95
+    perspective_text_scale_inline_ratio_span_ratio = perspective_state.perspective_text_scale_inline_ratio_span_ratio
+    perspective_text_scale_cross_ratio_span_ratio = perspective_state.perspective_text_scale_cross_ratio_span_ratio
+    perspective_text_scale_inline_ratio_gradient_ratio = perspective_state.perspective_text_scale_inline_ratio_gradient_ratio
+    perspective_text_scale_cross_ratio_gradient_ratio = perspective_state.perspective_text_scale_cross_ratio_gradient_ratio
+    perspective_text_scale_anisotropy_p95_ratio = perspective_state.perspective_text_scale_anisotropy_p95_ratio
+    perspective_text_scale_before_inline_gradient_ratio = perspective_state.perspective_text_scale_before_inline_gradient_ratio
+    perspective_text_scale_after_inline_gradient_ratio = perspective_state.perspective_text_scale_after_inline_gradient_ratio
+    perspective_text_scale_before_cross_gradient_ratio = perspective_state.perspective_text_scale_before_cross_gradient_ratio
+    perspective_text_scale_after_cross_gradient_ratio = perspective_state.perspective_text_scale_after_cross_gradient_ratio
+    perspective_text_scale_before_score = perspective_state.perspective_text_scale_before_score
+    perspective_text_scale_after_score = perspective_state.perspective_text_scale_after_score
+    perspective_text_scale_verdict = perspective_state.perspective_text_scale_verdict
+    perspective_auto_safe = perspective_state.perspective_auto_safe
 
     # Re-detect on the actual perspective-corrected pixels before the
     # orthogonal normalizer; retain transformed boxes on failure.
