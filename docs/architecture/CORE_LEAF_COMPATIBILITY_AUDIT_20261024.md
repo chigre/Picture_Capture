@@ -155,6 +155,37 @@ The last exact-head verified baseline was `552bc8c1`, which completed
 full six-platform CI and three-OS OCR smoke successfully. This newly extracted
 batch requires its **own exact-head** CI and OCR smoke before readiness.
 
+## Twelfth batch: four physical owners, seven core functions — 2026-10-24
+
+- `ocr/line_structure_repairs.py` owns three established OCR logical-line
+  recovery policies: same-row right fragments, next-row POS wraps, and the
+  bounded two-line grammar state machine. Original `paddle_headwords_core`
+  entrypoints inject current parser, overlap, merge, POS cue, prefix stripping,
+  `OCRLine` constructor, NumPy and regex functions at call time. Source
+  record boxes, first-line Y and pickle model identity remain unchanged.
+- `ordinary/auto_layout_policy.py` owns per-page optional Layout estimate
+  application. Project settings are still copied, not mutated; the original
+  switches and measured-row-padding guard are respected. Detector imports
+  remain lazy after the master toggle, and core passes current switch bindings.
+- `ordinary/fusion_entry_mapping.py` owns the combined-mode metadata
+  constructor and valid latent review-candidate-to-`Entry` conversion.
+  Current core `Entry` class is passed at invocation; this changes no
+  accepted/rejected decision, serialized fields, or PDIC/PPP schema.
+- `ocr/ordinary_marker_crop.py` owns source-direction-correct temporary
+  marker OCR crops, retaining existing live classification/visual-scale/row
+  metrics and core-normalization behavior. Crops remain in-memory.
+- Added `test_issue562_core_leaf_round12_processing_20261024.py` and
+  `test_issue562_core_leaf_round12_ocr_20261024.py` for legacy patch seams,
+  Entry metadata and class identity, physical glyph pixels, layout switch
+  policy, logical line tags and unchanged first-line anchor.
+- The prior `90f3b49c` complete CI failure was confined to
+  **Windows Python 3.10 Tcl/Tk setup** (`tk.Tcl(): init.tcl`); all other
+  CI platforms and all three OCR smoke platforms passed. The previous
+  `552bc8c1` CI was fully green. New exact-head checks are required.
+
+Keep the PR Draft until representative real-page GUI scan/edit/save/reopen
+and PDIC/PPP/crop acceptance has been independently verified.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,

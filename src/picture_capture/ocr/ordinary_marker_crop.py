@@ -16,7 +16,7 @@ from ..models import AppSettings, Entry
 def ordinary_marker_local_crop(
     canonical: Image.Image,
     entry: Entry,
-    geometry: Geometry,
+    geometry: Any,
     settings: AppSettings,
     *,
     row_metrics=None,
