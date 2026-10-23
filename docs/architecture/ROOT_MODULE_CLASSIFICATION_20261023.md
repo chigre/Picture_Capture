@@ -25,7 +25,7 @@ import contract while extracting implementation separately when justified.
 | `launcher.py` | bootstrap | Documented backward-compatible `main` / `prepare_app_module` facade. |
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
 | `entry_classification.py` | proofreading | One process-wide weakref/LRU classification registry, sidecar transaction lock and bootstrap I/O integration; moving only imports does not simplify this ownership. |
-| `image_preprocessing.py` | preprocess | Public preprocessing facade; model/helper pickle identities explicitly name this module. |
+| `image_preprocessing.py` | preprocess | Public preprocessing facade; model/helper pickle identities explicitly name this module. Skew/rotation and content-frame bodies now live in `preprocess/deskew.py` and `preprocess/content_bounds.py`, with three call-time detector adapters retained here. |
 | `image_utils.py` | preprocess | Shared image-analysis API and public helper contract; pixel primitives already owned by `preprocess/page_pixels.py`. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |

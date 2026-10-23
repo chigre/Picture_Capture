@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 
 from .preprocess.document_unwarping import unwarp_document_image
 from .image_utils import normalize_page_rgb
@@ -124,396 +124,47 @@ from .preprocess.reporting import (
     result_summary,
 )
 
+from .preprocess import content_bounds as _content_bounds
+from .preprocess.content_bounds import _smooth_1d
+from .preprocess.deskew import (
+    _normalize_half_turn,
+    _weighted_median,
+    estimate_skew_from_polygons,
+    _paper_fill,
+    deskew_image,
+    _rotate_point_same_canvas,
+    _rotate_polygons_same_canvas,
+    _rotated_text_box,
+    _polygon_boxes,
+    _expand_box_px,
+    _rotate_box_same_canvas,
+)
+
 
 PREVIEW_YELLOW = (255, 225, 110, 94)
 PREVIEW_OUTLINE = (218, 164, 24, 255)
 
 
-def _normalize_half_turn(angle: float) -> float:
-    value = float(angle)
-    while value >= 90.0:
-        value -= 180.0
-    while value < -90.0:
-        value += 180.0
-    return value
-
-
-def _weighted_median(values: list[tuple[float, float]]) -> float:
-    if not values:
-        return 0.0
-    ordered = sorted((float(value), max(0.0, float(weight))) for value, weight in values)
-    total = sum(weight for _value, weight in ordered)
-    if total <= 0:
-        return float(np.median([value for value, _weight in ordered]))
-    halfway = total / 2.0
-    running = 0.0
-    for value, weight in ordered:
-        running += weight
-        if running >= halfway:
-            return value
-    return ordered[-1][0]
-
-
-def estimate_skew_from_polygons(
-    polygons: Iterable[np.ndarray], *, writing_mode: str = "horizontal-tb",
-) -> tuple[float, int, float]:
-    """Estimate the small correction angle represented by detected text boxes.
-
-    Angles use Pillow's rotation sign convention: a positive value is the
-    counter-clockwise correction that should be applied to the source image.
-    """
-    vertical = str(writing_mode or "horizontal-tb").startswith("vertical")
-    samples: list[tuple[float, float]] = []
-    for raw in polygons:
-        poly = np.asarray(raw, dtype=float)
-        if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
-            continue
-        edges: list[tuple[float, float]] = []
-        for index in range(poly.shape[0]):
-            p0 = poly[index, :2]
-            p1 = poly[(index + 1) % poly.shape[0], :2]
-            dx = float(p1[0] - p0[0])
-            dy = float(p1[1] - p0[1])
-            length = math.hypot(dx, dy)
-            if length < 6.0:
-                continue
-            angle = _normalize_half_turn(math.degrees(math.atan2(dy, dx)))
-            deviation = _normalize_half_turn(angle - 90.0) if vertical else angle
-            if abs(deviation) <= 20.0:
-                edges.append((deviation, length))
-        if not edges:
-            continue
-        # Two long parallel sides carry most of the orientation information and
-        # avoid over-weighting irregular multi-point detector polygons.
-        for deviation, length in sorted(edges, key=lambda item: item[1], reverse=True)[:2]:
-            samples.append((deviation, length))
-
-    if not samples:
-        return 0.0, 0, 0.0
-    center = _weighted_median(samples)
-    mad = _weighted_median([(abs(value - center), weight) for value, weight in samples])
-    kept = [(value, weight) for value, weight in samples if abs(value - center) <= max(0.35, mad * 3.5)]
-    if len(kept) >= 4:
-        center = _weighted_median(kept)
-        mad = _weighted_median([(abs(value - center), weight) for value, weight in kept])
-        samples = kept
-    return float(center), len(samples), float(mad)
-
-
-def _smooth_1d(values: np.ndarray, width: int) -> np.ndarray:
-    width = max(1, int(width))
-    if width <= 1:
-        return values.astype(float, copy=False)
-    kernel = np.ones(width, dtype=float) / float(width)
-    return np.convolve(values.astype(float, copy=False), kernel, mode="same")
-
-
 def _projection_content_box(image: Image.Image, settings: AppSettings) -> tuple[int, int, int, int]:
-    """Find a conservative nonblank content envelope without OCR recognition."""
-    source = normalize_page_rgb(image)
-    scale = min(1.0, 1800.0 / max(1, max(source.size)))
-    work = source.resize(
-        (max(1, round(source.width * scale)), max(1, round(source.height * scale))),
-        Image.Resampling.BILINEAR,
-    ) if scale < 1.0 else source
-    gray = np.asarray(ImageOps.grayscale(work), dtype=np.uint8)
-    ink = analysis_ink_mask(gray, settings).copy()
-    h, w = ink.shape
-
-    # Scanner shadows and cut marks commonly live on the physical edge.  Ignore
-    # only a very narrow rim; meaningful page content is recovered below by the
-    # Paddle text envelope and the user-facing safety margin.
-    mx = max(1, round(w * 0.005))
-    my = max(1, round(h * 0.005))
-    ink[:my, :] = False
-    ink[-my:, :] = False
-    ink[:, :mx] = False
-    ink[:, -mx:] = False
-
-    rows = _smooth_1d(ink.mean(axis=1), max(3, round(h * 0.0015)))
-    cols = _smooth_1d(ink.mean(axis=0), max(3, round(w * 0.0025)))
-    positive_rows = rows[rows > 0]
-    positive_cols = cols[cols > 0]
-    row_floor = (
-        max(0.0015, float(np.percentile(positive_rows, 15)) * 0.35)
-        if positive_rows.size else 0.0015
+    return _content_bounds._projection_content_box(
+        image, settings, ink_mask_builder=analysis_ink_mask,
     )
-    col_floor = (
-        max(0.0015, float(np.percentile(positive_cols, 15)) * 0.35)
-        if positive_cols.size else 0.0015
-    )
-    active_y = np.flatnonzero(rows > row_floor)
-    active_x = np.flatnonzero(cols > col_floor)
-    if not active_y.size or not active_x.size:
-        raise RuntimeError("未检测到足够的页面墨迹，无法估计保留区域。")
-
-    back = 1.0 / max(scale, 1e-9)
-    return (
-        max(0, round(int(active_x[0]) * back)),
-        max(0, round(int(active_y[0]) * back)),
-        min(source.width, round(int(active_x[-1] + 1) * back)),
-        min(source.height, round(int(active_y[-1] + 1) * back)),
-    )
-
-
-def _paper_fill(image: Image.Image) -> tuple[int, int, int]:
-    source = normalize_page_rgb(image)
-    w, h = source.size
-    pw = max(1, round(w * 0.04))
-    ph = max(1, round(h * 0.04))
-    samples = [
-        np.asarray(source.crop((0, 0, pw, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), 0, w, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((0, max(0, h - ph), pw, h)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), max(0, h - ph), w, h)), dtype=np.uint8).reshape(-1, 3),
-    ]
-    pixels = np.concatenate(samples, axis=0)
-    median = np.median(pixels, axis=0)
-    return tuple(int(round(value)) for value in median[:3])
-
-
-def deskew_image(image: Image.Image, correction_angle_deg: float) -> Image.Image:
-    source = normalize_page_rgb(image)
-    angle = float(correction_angle_deg)
-    if abs(angle) < 1e-6:
-        return source.copy()
-    return source.rotate(
-        angle,
-        resample=Image.Resampling.BICUBIC,
-        expand=False,
-        fillcolor=_paper_fill(source),
-    )
-
-
-def _rotate_point_same_canvas(
-    x: float, y: float, width: int, height: int, angle_deg: float,
-) -> tuple[float, float]:
-    """Map a source point through Pillow-style positive CCW rotation, expand=False."""
-    if abs(float(angle_deg)) < 1e-9:
-        return float(x), float(y)
-    cx = (float(width) - 1.0) / 2.0
-    cy = (float(height) - 1.0) / 2.0
-    dx = float(x) - cx
-    dy = float(y) - cy
-    radians = math.radians(float(angle_deg))
-    cos_a = math.cos(radians)
-    sin_a = math.sin(radians)
-    return (
-        cx + dx * cos_a + dy * sin_a,
-        cy - dx * sin_a + dy * cos_a,
-    )
-
-
-def _rotate_polygons_same_canvas(
-    polygons: Iterable[np.ndarray],
-    width: int,
-    height: int,
-    angle_deg: float,
-) -> list[np.ndarray]:
-    rotated: list[np.ndarray] = []
-    for raw in polygons:
-        poly = np.asarray(raw, dtype=float)
-        if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
-            continue
-        points = [
-            _rotate_point_same_canvas(
-                float(x), float(y), width, height, angle_deg,
-            )
-            for x, y in poly[:, :2]
-        ]
-        rotated.append(np.asarray(points, dtype=float))
-    return rotated
-
-
-def _rotated_text_box(
-    polygons: Iterable[np.ndarray], width: int, height: int, angle_deg: float,
-) -> tuple[int, int, int, int] | None:
-    points: list[tuple[float, float]] = []
-    for raw in polygons:
-        poly = np.asarray(raw, dtype=float)
-        if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
-            continue
-        xs = poly[:, 0]
-        ys = poly[:, 1]
-        if float(xs.max() - xs.min()) < 3.0 or float(ys.max() - ys.min()) < 3.0:
-            continue
-        for x, y in poly[:, :2]:
-            points.append(_rotate_point_same_canvas(float(x), float(y), width, height, angle_deg))
-    if not points:
-        return None
-    xs = [point[0] for point in points]
-    ys = [point[1] for point in points]
-    return (
-        max(0, min(width - 1, math.floor(min(xs)))),
-        max(0, min(height - 1, math.floor(min(ys)))),
-        max(1, min(width, math.ceil(max(xs)) + 1)),
-        max(1, min(height, math.ceil(max(ys)) + 1)),
-    )
-
-
-def _polygon_boxes(
-    polygons: Iterable[np.ndarray], width: int, height: int,
-) -> list[tuple[int, int, int, int]]:
-    boxes: list[tuple[int, int, int, int]] = []
-    for raw in polygons:
-        poly = np.asarray(raw, dtype=float)
-        if poly.ndim != 2 or poly.shape[0] < 3 or poly.shape[1] < 2:
-            continue
-        x0 = max(0, min(width - 1, math.floor(float(poly[:, 0].min()))))
-        y0 = max(0, min(height - 1, math.floor(float(poly[:, 1].min()))))
-        x1 = max(1, min(width, math.ceil(float(poly[:, 0].max())) + 1))
-        y1 = max(1, min(height, math.ceil(float(poly[:, 1].max())) + 1))
-        if x1 - x0 >= 3 and y1 - y0 >= 3:
-            boxes.append((x0, y0, x1, y1))
-    return boxes
 
 
 def _layout_content_box_from_polygons(
-    polygons: Iterable[np.ndarray],
-    width: int,
-    height: int,
-    settings: AppSettings,
+    polygons: Iterable[np.ndarray], width: int, height: int, settings: AppSettings,
 ) -> tuple[tuple[int, int, int, int], LayoutEstimate]:
-    """Derive the retained content frame from dictionary layout, not page ink.
-
-    Horizontal bounds deliberately follow the same parameters exposed by
-    automatic layout detection:
-      first column left -> final column right.
-    Vertical bounds retain the running header / page text above the body and end
-    at the detected body bottom. Scanner specks outside the column span therefore
-    cannot enlarge the normal crop.
-    """
-    boxes = _polygon_boxes(polygons, width, height)
-    if len(boxes) < 4:
-        raise RuntimeError("Paddle文本框过少，无法建立版面保留范围")
-
-    estimate = infer_layout_from_boxes(
-        boxes,
-        (width, height),
-        display_scale=1.0,
-        ink_mask=None,
-        columns_policy=settings.layout_columns_policy,
-        fixed_columns=settings.columns,
-        column_separator_mode=settings.layout_column_separator_mode,
-    )
-    starts = tuple(int(value) for value in estimate.column_starts)
-    left = (
-        max(0, min(width - 1, starts[0]))
-        if starts else max(0, min(width - 1, int(estimate.manual_x)))
-    )
-    last_start = (
-        starts[-1]
-        if starts
-        else left
-        + max(0, int(estimate.columns) - 1)
-        * (max(1, int(estimate.column_width)) + max(0, int(estimate.gutter)))
-    )
-
-    # Preprocessing uses the column-specific outer edge retained by automatic
-    # layout detection, not the median column width used by drawing/layout logic.
-    # This keeps the final crop tied to the actual last occupied column.
-    rights = tuple(int(value) for value in estimate.column_rights)
-    if rights and len(rights) == len(starts):
-        right = rights[-1]
-    else:
-        right = int(last_start) + max(1, int(estimate.column_width))
-    right = max(int(last_start) + 1, min(width, right))
-
-    heights = [box[3] - box[1] for box in boxes]
-    median_h = max(4.0, float(np.median(heights)))
-    filtered = [
-        box for box in boxes
-        if box[3] - box[1] >= max(3.0, median_h * 0.40)
-        and box[2] - box[0] <= width * 0.92
-    ] or boxes
-
-    # Reuse the detector population but estimate the header top independently
-    # from body start_y. Only text spatially associated with the detected page
-    # layout is eligible, so edge/binding artifacts do not define Y either.
-    horizontal_pad = max(8, round(max(estimate.character_height, estimate.column_width * 0.08)))
-    upper_limit = int(estimate.start_y) + max(8, round(estimate.character_height * 1.5))
-    header_tops = [
-        box[1]
-        for box in filtered
-        if box[1] <= upper_limit
-        and left - horizontal_pad <= (box[0] + box[2]) / 2.0 <= right + horizontal_pad
-    ]
-    header_top = (
-        int(min(header_tops))
-        if header_tops else max(0, int(estimate.start_y))
-    )
-    body_bottom = max(header_top + 1, min(height, int(estimate.bottom_y)))
-    return (left, max(0, header_top), right, body_bottom), estimate
-
-
-def _expand_box_px(
-    box: tuple[int, int, int, int],
-    width: int,
-    height: int,
-    safety_margin_px: int,
-) -> tuple[int, int, int, int]:
-    margin = max(0, min(1000, int(safety_margin_px)))
-    x0, y0, x1, y1 = box
-    return (
-        max(0, x0 - margin),
-        max(0, y0 - margin),
-        min(width, x1 + margin),
-        min(height, y1 + margin),
-    )
-
-
-def _rotate_box_same_canvas(
-    box: tuple[int, int, int, int],
-    width: int,
-    height: int,
-    angle_deg: float,
-) -> tuple[int, int, int, int]:
-    x0, y0, x1, y1 = box
-    points = [
-        _rotate_point_same_canvas(x0, y0, width, height, angle_deg),
-        _rotate_point_same_canvas(x1, y0, width, height, angle_deg),
-        _rotate_point_same_canvas(x1, y1, width, height, angle_deg),
-        _rotate_point_same_canvas(x0, y1, width, height, angle_deg),
-    ]
-    xs = [point[0] for point in points]
-    ys = [point[1] for point in points]
-    return (
-        max(0, min(width - 1, math.floor(min(xs)))),
-        max(0, min(height - 1, math.floor(min(ys)))),
-        max(1, min(width, math.ceil(max(xs)))),
-        max(1, min(height, math.ceil(max(ys)))),
+    return _content_bounds._layout_content_box_from_polygons(
+        polygons, width, height, settings, layout_estimator=infer_layout_from_boxes,
     )
 
 
 def _projection_skew_fallback(
     image: Image.Image, settings: AppSettings, *, writing_mode: str,
 ) -> float:
-    """Slow but dependency-free skew fallback used only when Paddle gives no boxes."""
-    source = normalize_page_rgb(image)
-    scale = min(1.0, 1000.0 / max(1, max(source.size)))
-    work = source.resize(
-        (max(1, round(source.width * scale)), max(1, round(source.height * scale))),
-        Image.Resampling.BILINEAR,
-    ) if scale < 1.0 else source
-    gray = np.asarray(ImageOps.grayscale(work), dtype=np.uint8)
-    ink = analysis_ink_mask(gray, settings).astype(np.uint8) * 255
-    mask = Image.fromarray(ink, mode="L")
-    vertical = str(writing_mode or "horizontal-tb").startswith("vertical")
-
-    def score(angle: float) -> float:
-        rotated = mask.rotate(
-            angle, resample=Image.Resampling.NEAREST, expand=False, fillcolor=0
-        )
-        array = np.asarray(rotated, dtype=np.float32) / 255.0
-        projection = array.sum(axis=0 if vertical else 1)
-        return float(np.square(np.diff(projection)).sum())
-
-    coarse = [step * 0.25 for step in range(-10, 11)]
-    coarse_scores = [score(angle) for angle in coarse]
-    best = coarse[int(np.argmax(coarse_scores))]
-    fine = [best - 0.25 + step * 0.05 for step in range(11)]
-    fine_scores = [score(angle) for angle in fine]
-    return float(fine[int(np.argmax(fine_scores))])
+    return _content_bounds._projection_skew_fallback(
+        image, settings, writing_mode=writing_mode, ink_mask_builder=analysis_ink_mask,
+    )
 
 
 def _absolute_horizontal_quality(audit) -> tuple[str, float]:

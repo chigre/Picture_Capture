@@ -825,6 +825,31 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / canonical).is_file():
             violations.append(f"canonical preprocessing owner missing: {canonical}")
 
+    # Deskew primitives/content frames have one physical owner, not root copies.
+    preprocess_facade = PACKAGE_ROOT / "image_preprocessing.py"
+    preprocess_source = preprocess_facade.read_text(encoding="utf-8")
+    for owner, routines in {
+        "deskew.py": ("_normalize_half_turn", "_weighted_median", "estimate_skew_from_polygons",
+                      "_paper_fill", "deskew_image", "_rotate_point_same_canvas",
+                      "_rotate_polygons_same_canvas", "_rotated_text_box", "_polygon_boxes",
+                      "_expand_box_px", "_rotate_box_same_canvas"),
+        "content_bounds.py": ("_smooth_1d", "_projection_content_box",
+                              "_layout_content_box_from_polygons", "_projection_skew_fallback"),
+    }.items():
+        path = PACKAGE_ROOT / "preprocess" / owner
+        if not path.is_file():
+            violations.append(f"canonical preprocessing primitive owner missing: {owner}")
+            continue
+        source = path.read_text(encoding="utf-8")
+        for routine in routines:
+            if f"def {routine}(" not in source:
+                violations.append(f"preprocessing routine missing from {owner}: {routine}")
+            if owner == "deskew.py" or routine == "_smooth_1d":
+                if f"def {routine}(" in preprocess_source:
+                    violations.append(f"preprocessing primitive duplicated at root: {routine}")
+    if _normalized_source_size(preprocess_facade) > 137_300:
+        violations.append("preprocessing facade regressed beyond deskew/content extraction (137300 bytes)")
+
     # Issue #562: canonical REF package owns box storage/detection/OCR.
     migrated_ref = {
         "ref_boxes": "ref/boxes.py",
