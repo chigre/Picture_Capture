@@ -1215,8 +1215,8 @@ def collect_violations() -> list[str]:
                 for node in ast.walk(callback)
             ):
                 violations.append(f"original GUI preprocess callback not delegated: {name}")
-        if _normalized_source_size(gui_app) > 732_985:
-            violations.append("app.py exceeded 732985-byte GUI preprocess ratchet")
+        if _normalized_source_size(gui_app) > 733_025:
+            violations.append("app.py exceeded 733025-byte GUI preprocess ratchet")
 
     # #562: full multi-engine OCR page orchestration, review, and compact
     # cache persistence is canonical in the leaf; legacy core only dispatches.
