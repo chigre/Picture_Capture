@@ -7009,6 +7009,7 @@ def _preprocess_ui_deps() -> _preprocess_ui.PreprocessUiDeps:
         ocr_cache_root=ocr_cache_root,
         ppp_read_path_for_image=ppp_read_path_for_image,
         settings_path=settings_path,
+        AUTO_FONT_FAMILY=AUTO_FONT_FAMILY,
     )
 
 
