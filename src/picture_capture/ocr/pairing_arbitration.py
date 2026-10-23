@@ -53,7 +53,6 @@ def _alignment_key(
     Preserve all Unicode alphanumeric characters while still discarding
     punctuation/spacing and combining marks.
     """
-
     value = unicodedata.normalize("NFKD", word or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return "".join(ch for ch in value if ch.isalnum()).casefold()
@@ -74,7 +73,6 @@ def _lemma_similarity(
 def _orthographic_similarity(
     deps: OcrPairingDeps, left: str, right: str) -> float:
     """Compare final spellings while preserving meaningful Spanish diacritics."""
-
     a = re.sub(r"[^\wáéíóúüñ]+", "", unicodedata.normalize("NFC", left or "").casefold(), flags=re.UNICODE)
     b = re.sub(r"[^\wáéíóúüñ]+", "", unicodedata.normalize("NFC", right or "").casefold(), flags=re.UNICODE)
     if not a or not b:
@@ -125,7 +123,6 @@ def _pair_ocr_candidates(
     _eligible_alignment_rows = deps._eligible_alignment_rows
     _candidate_pair_score = deps._candidate_pair_score
     _make_ocr_pair = deps._make_ocr_pair
-
     paddle = _eligible_alignment_rows(paddle_diagnostics)
     tess = _eligible_alignment_rows(tess_diagnostics)
     pkeys = [_alignment_key(str(x.get("normalized_headword", ""))) for x in paddle]
@@ -184,7 +181,6 @@ def _pair_ocr_candidates(
 def _pairs_need_lens(
     deps: OcrPairingDeps, pairs: list[dict[str, Any]]) -> bool:
     """Return whether the remote third opinion could change/review a decision."""
-
     for pair in pairs:
         pa = pair.get("paddle_accepted") is True
         ta = pair.get("tesseract_accepted") is True
@@ -375,7 +371,6 @@ def _pair_with_lens_candidates(
     _eligible_alignment_rows = deps._eligible_alignment_rows
     _make_ocr_pair = deps._make_ocr_pair
     _copy_candidate_to_pair = deps._copy_candidate_to_pair
-
     lens_rows = _eligible_alignment_rows(lens_diagnostics)
     used: set[int] = set()
     for pair in pairs:
@@ -907,7 +902,6 @@ def _apply_pair_engine_position(
     geometry: "Geometry" | None,
 ) -> None:
     """Apply one engine's position without mixing temporary reading axis and source Y."""
-
     raw_v = pair.get(f"{prefix}_y")
     if raw_v is None:
         return
