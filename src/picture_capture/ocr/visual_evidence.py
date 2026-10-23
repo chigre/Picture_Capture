@@ -66,7 +66,6 @@ def _binary_rle_components(
     mask: np.ndarray,
 ) -> list[tuple[int, int, int, int, int]]:
     """Dependency-free 8-connected components for visual marker analysis."""
-
     mask = np.asarray(mask, dtype=bool)
     if mask.ndim != 2 or mask.size == 0:
         return []
@@ -134,7 +133,6 @@ def _binary_rle_components(
 def _visual_marker_shape_metrics(
     deps: VisualEvidenceDeps, mask: np.ndarray) -> dict[str, float]:
     """Geometry descriptors shared by configured visual symbol families."""
-
     mask = np.asarray(mask, dtype=bool)
     if mask.ndim != 2 or mask.size == 0 or not mask.any():
         return {
@@ -200,7 +198,6 @@ def _visual_family_symbol(
 ) -> tuple[str, str] | None:
     """Return (literal, role) for one configured visual family."""
     _SYMBOL_FAMILY_BY_LITERAL = deps._SYMBOL_FAMILY_BY_LITERAL
-
     for role, key in (("entry_marker", "entry_markers"), ("bracket_open", "bracket_openers")):
         for symbol in inventory.get(key, ()):
             if _SYMBOL_FAMILY_BY_LITERAL.get(str(symbol)) == family:
@@ -217,7 +214,6 @@ def _classify_visual_symbol_component(
     """Classify a connected component only into configured symbol families."""
     _visual_marker_shape_metrics = deps._visual_marker_shape_metrics
     _visual_family_symbol = deps._visual_family_symbol
-
     height, width = mask.shape
     if width <= 0 or height <= 0:
         return None
@@ -313,7 +309,6 @@ def _trusted_visual_marker_lanes(
     independent X anchor for visual rescue.  Generic bracket shapes are then
     allowed only near this trusted lane.
     """
-
     if not bool(inventory.get("lane_required", False)):
         return {}
 
@@ -378,7 +373,6 @@ def _apply_trusted_visual_marker_lanes(
     components.  A dictionary template may still rescue such a page, but when
     it is the sole evidence it must clear a conservative 0.70 floor.
     """
-
     lanes = dict(trusted_lanes or {})
     output: list[dict[str, Any]] = []
     for item in candidates:
@@ -439,7 +433,6 @@ def _detect_visual_entry_markers(
     _apply_trusted_visual_marker_lanes = deps._apply_trusted_visual_marker_lanes
     _otsu_threshold = deps._otsu_threshold
     match_visual_marker_template = deps.match_visual_marker_template
-
     if gray.size == 0 or gray.ndim != 2:
         return []
     if inventory is None:
@@ -614,7 +607,6 @@ def _match_visual_entry_markers_to_lines(
     median_height: float,
 ) -> dict[int, dict[str, Any]]:
     """Pair visual ○/● markers with OCR rows on the same physical line."""
-
     if not lines or not markers:
         return {}
     line_h = max(8.0, float(median_height))
@@ -668,7 +660,6 @@ def _parse_cjk_visual_marker_line(
     """
     _is_chinese_ocr = deps._is_chinese_ocr
     _repair_headword_ocr = deps._repair_headword_ocr
-
     if not _is_chinese_ocr(settings):
         return None
     parse_text, repairs = _repair_headword_ocr(text)
@@ -726,7 +717,6 @@ def _parse_visual_configured_symbol_line(
     _parse_chinese_bracketed_headword = deps._parse_chinese_bracketed_headword
     _is_japanese_ocr = deps._is_japanese_ocr
     _BRACKET_CLOSER_BY_OPENER = deps._BRACKET_CLOSER_BY_OPENER
-
     role = str(visual_symbol.get("role") or "")
     symbol = str(visual_symbol.get("symbol") or "")
     if role == "entry_marker":
@@ -780,7 +770,6 @@ def _leading_cjk_ideograph(
     image-level oversized-run gate remains mandatory.
     """
     _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
-
     normalized = unicodedata.normalize("NFKC", text or "").lstrip()
     if not normalized or not _is_single_cjk_ideograph(normalized[0]):
         return ""
@@ -826,7 +815,6 @@ def _cjk_visual_projection_runs(
     """
     _otsu_threshold = deps._otsu_threshold
     _true_runs = deps._true_runs
-
     if gray.size == 0:
         return 0, []
     ratio = max(0.25, float(pixel_scale))
@@ -921,7 +909,6 @@ def _cjk_right_context_metrics(
     changes.  This is supporting evidence, never a standalone headword decision.
     """
     _otsu_threshold = deps._otsu_threshold
-
     enabled = bool(
         getattr(settings, "profile_cjk_right_context_enabled", True)
     )
@@ -1029,7 +1016,6 @@ def _cjk_right_context_metrics(
 def _cjk_right_context_features(
     deps: VisualEvidenceDeps, metrics: dict[str, Any] | None) -> dict[str, Any]:
     """Flatten right-context diagnostics into JSON-safe candidate features."""
-
     if not metrics:
         return {}
     return {
@@ -1070,7 +1056,6 @@ def _cjk_candidate_right_context_metrics(
     right of the candidate itself.
     """
     _cjk_right_context_metrics = deps._cjk_right_context_metrics
-
     x0, y0, x1, y1 = (int(value) for value in box)
     box_height = max(1, y1 - y0)
     expected_height = max(box_height, round(max(1.0, median_height) * 1.45))
@@ -1117,7 +1102,6 @@ def _cjk_candidate_right_context_features(
     metrics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Candidate-local right-context diagnostics with a non-colliding prefix."""
-
     if not metrics:
         return {}
     return {
@@ -1170,7 +1154,6 @@ def _cjk_word_for_visual_run(
     _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
     parse_headword_text = deps.parse_headword_text
     _parse_cjk_single_with_pinyin = deps._parse_cjk_single_with_pinyin
-
     start, end = run
     center = (start + end) / 2.0
     height = max(1, end - start)
