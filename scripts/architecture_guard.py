@@ -1288,6 +1288,54 @@ def collect_violations() -> list[str]:
         if _normalized_source_size(gui_project_app) > 620_155:
             violations.append("app.py exceeds 620155-byte review workspace ratchet")
 
+    # #562: full main canvas compositing and review/highlight geometry have
+    # one physical UI owner; the public Tk class keeps callback signatures.
+    canvas_owner = PACKAGE_ROOT / "ui/main_canvas_render_workflow.py"
+    if not canvas_owner.is_file():
+        violations.append("main canvas render owner missing")
+    else:
+        canvas_tree = ast.parse(canvas_owner.read_text(encoding="utf-8"))
+        canonical = {node.name: node for node in canvas_tree.body
+                     if isinstance(node, ast.FunctionDef)}
+        for name in ("redraw", "_draw_crop_plan_preview", "_draw_page_sections",
+                     "_draw_review_entry_highlight"):
+            node = canonical.get(name)
+            if node is None or len(node.body) < 10:
+                violations.append(f"main canvas render owner incomplete: {name}")
+        if not any(
+            isinstance(node, ast.ClassDef) and node.name == "MainCanvasRenderDeps"
+            for node in canvas_tree.body
+        ):
+            violations.append("main canvas live dependencies missing")
+        if any(
+            isinstance(node, ast.ImportFrom) and node.module in {"app", "processing"}
+            for node in ast.walk(canvas_tree)
+        ):
+            violations.append("main canvas owner imports heavyweight app/processing")
+    if gui_project_app.is_file():
+        canvas_app_tree = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+        canvas_class = next((n for n in canvas_app_tree.body
+                             if isinstance(n, ast.ClassDef) and n.name == "PictureCaptureApp"), None)
+        if canvas_class is None:
+            violations.append("main PictureCaptureApp class missing")
+        else:
+            methods = {n.name: n for n in canvas_class.body
+                       if isinstance(n, ast.FunctionDef)}
+            for name in ("redraw", "_draw_crop_plan_preview", "_draw_page_sections",
+                         "_draw_review_entry_highlight"):
+                method = methods.get(name)
+                if method is None or not any(
+                    isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)
+                    and isinstance(n.func.value, ast.Name)
+                    and n.func.value.id == "_main_canvas_render"
+                    and n.func.attr == name
+                    for n in ast.walk(method)
+                ):
+                    violations.append(f"main canvas Tk adapter not delegated: {name}")
+        if _normalized_source_size(gui_project_app) > 598_677:
+            violations.append("app.py exceeds 598677-byte main canvas render ratchet")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {
