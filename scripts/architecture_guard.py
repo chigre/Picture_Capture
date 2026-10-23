@@ -961,9 +961,8 @@ def collect_violations() -> list[str]:
         violations.append("preprocessing facade must compose closed-loop orthogonal owner")
     if any(isinstance(node, ast.Name)
            and node.id in {"pixel_assessment", "candidate_pixel_rows", "candidate_image",
-                           "baseline_pixel_rows", "pass_index", "retained_pixels"}
-           for node in ast.walk(analysis_adapter)
-           if node.id not in {"retained_pixels"}):
+                           "baseline_pixel_rows", "pass_index"}
+           for node in ast.walk(analysis_adapter)):
         violations.append("orthogonal candidate execution implementation returned to public facade")
     if orthogonal_loop_tree is not None:
         pipeline_fn = next((node for node in orthogonal_loop_tree.body
