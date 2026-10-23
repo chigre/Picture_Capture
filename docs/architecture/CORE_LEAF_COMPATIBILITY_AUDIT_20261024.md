@@ -131,6 +131,30 @@ this series: `e573b64d`. Review the *new exact-head* CI before acceptance.
 Judge the current series by its own exact-head CI and three-platform OCR
 smoke. Do not infer green from the previous stable baseline alone.
 
+## Eleventh extraction batch — 2026-10-24
+
+- `crop/line_box_geometry.py` owns half-open PIL `clamp_box` and single-line
+  `line_box` calculations. Original `processing_core` functions retain
+  historical signatures and delegate with *current* `column_index`,
+  `_source_px` and `clamp_box` callbacks. This leaf computes boxes only;
+  it does not publish, rename, remove or overwrite any export files.
+- `ocr/image_separator_geometry.py` owns independent grayscale-only blank-
+  to-ink separator candidate proposals and mutual-nearest OCR-line matching.
+  The `paddle_headwords_core` wrappers supply *current*
+  `_separator_analysis_x_bounds`, `_otsu_threshold`, `_true_runs` and NumPy
+  operations. The emitted boundary keys and pairing metadata remain unchanged.
+- `tests/test_issue562_core_leaf_round11_20261024.py` checks the
+  inventory, legacy origins/signatures, literal-pixel crop geometry,
+  box/clamp/column monkeypatch hooks, synthetic blank-band candidate generation
+  and mutual-nearest OCR line pairing.
+- No `Entry`, `OCRLine` or `OCRRecord` class was relocated. Raw OCR
+  engine caches, source-coordinate persistence, GUI orchestration,
+  manual-review/arbitration, and file-publishing transactions remain untouched.
+
+The last exact-head verified baseline was `552bc8c1`, which completed
+full six-platform CI and three-OS OCR smoke successfully. This newly extracted
+batch requires its **own exact-head** CI and OCR smoke before readiness.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
