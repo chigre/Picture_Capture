@@ -232,13 +232,14 @@ def test_project_controller_has_no_reverse_dependency_on_app_module() -> None:
 def test_project_controller_wiring_keeps_picture_capture_app_compatibility_methods() -> None:
     app = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     controller = (ROOT / "src/picture_capture/ui/controllers/project.py").read_text(encoding="utf-8")
+    project_session = (ROOT / "src/picture_capture/ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "ProjectController" in imports
     assert "self.project_controller = ProjectController(self)" in app
     assert app.index("self.project_controller = ProjectController(self)") < app.index("self._build_ui()")
     assert "def _project_controller_for_call(" in app
-    assert 'self.__dict__.get("project_controller")' in app
+    assert 'self.__dict__.get("project_controller")' in project_session
 
     expected = {
         "_choose_new_project_image_suffix": "choose_new_project_image_suffix",
@@ -246,5 +247,6 @@ def test_project_controller_wiring_keeps_picture_capture_app_compatibility_metho
     }
     for app_method, controller_method in expected.items():
         assert f"def {app_method}(" in app
-        assert f"self._project_controller_for_call().{controller_method}" in app
+        assert f"self._project_controller_for_call().{controller_method}" in project_session
+        assert f"_project_session.{app_method}(" in app
         assert f"def {controller_method}(" in controller
