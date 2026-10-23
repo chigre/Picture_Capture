@@ -114,13 +114,13 @@ def test_lookup_stale_serial_never_changes_visible_status():
     view = SimpleNamespace(_network_lookup_serial=8, _network_lookup_word="new",
                            network_lookup_status_var=SimpleNamespace(set=changed.append))
     lookup._apply_network_lookup_result(
-        view, SimpleNamespace(tk=SimpleNamespace(TclError=Exception)), 7, "previous", None,
+        view, SimpleNamespace(tk=SimpleNamespace(TclError=Exception), contains_cjk=lambda _word: False), 7, "previous", None,
     )
     assert changed == []
     view.network_status_label = SimpleNamespace(configure=lambda **k: None)
     view._set_lookup_source_states = lambda **kw: changed.append(kw)
     lookup._apply_network_lookup_result(
-        view, SimpleNamespace(tk=SimpleNamespace(TclError=Exception)), 8, "new", None,
+        view, SimpleNamespace(tk=SimpleNamespace(TclError=Exception), contains_cjk=lambda _word: False), 8, "new", None,
     )
     assert changed[0] == "⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"
     assert changed[1] == {"empty": True}
