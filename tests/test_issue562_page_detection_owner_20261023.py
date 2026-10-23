@@ -41,7 +41,7 @@ def test_original_page_detection_signature_and_docstring_are_unchanged():
 
 def test_original_monkeypatch_and_cache_contracts_are_live():
     names = {f.name for f in fields(owner.PageDetectionDeps)}
-    assert len(names) == 44
+    assert len(names) == 45
     assert {
         "unwrap_column_band", "run_paddle_band", "run_tesseract_band_records",
         "_recover_oversized_cjk_ocr_records",
@@ -55,6 +55,7 @@ def test_original_monkeypatch_and_cache_contracts_are_live():
         "_entries_from_review_candidates", "compact_ocr_cache_payload",
         "_update_project_quality_summary", "OCRRecord", "PROFILE_FILENAME",
         "load_dictionary_profile", "run_google_lens", "normalize_page_rgb",
+        "_FINAL_LINE_DEDUP_RATIO",
     } <= names
     deps = core._page_detection_deps()
     assert deps.OCRRecord is OCRRecord
@@ -102,7 +103,8 @@ def test_original_adapter_forwards_all_optional_params_and_live_policy(monkeypat
         im.close()
 
 
-def test_no_ocr_engine_selected_keeps_original_explicit_failure():
+def test_no_ocr_engine_selected_keeps_original_explicit_failure(monkeypatch):
+    monkeypatch.setattr(core, "_cache_signature", lambda *args: "synthetic")
     settings = AppSettings()
     settings.paddle_use_paddleocr = False
     settings.paddle_compare_tesseract = False
