@@ -1163,6 +1163,54 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: visual marker/cjk pixel evidence belongs to one canonical OCR
+    # owner. Preserve core compatibility functions and their call-time patches.
+    visual_evidence_owner = PACKAGE_ROOT / "ocr/visual_evidence.py"
+    visual_evidence_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not visual_evidence_owner.is_file():
+        violations.append("canonical OCR visual marker and CJK evidence owner missing")
+    else:
+        visual_tree = ast.parse(visual_evidence_owner.read_text(encoding="utf-8"))
+        visual_functions = {
+            "_binary_rle_components", "_visual_marker_shape_metrics",
+            "_visual_family_symbol", "_classify_visual_symbol_component",
+            "_trusted_visual_marker_lanes", "_apply_trusted_visual_marker_lanes",
+            "_detect_visual_entry_markers", "_match_visual_entry_markers_to_lines",
+            "_parse_cjk_visual_marker_line", "_parse_visual_configured_symbol_line",
+            "_leading_cjk_ideograph", "_cjk_visual_projection_runs",
+            "_cjk_right_context_metrics", "_cjk_right_context_features",
+            "_cjk_candidate_right_context_metrics",
+            "_cjk_candidate_right_context_features", "_cjk_word_for_visual_run",
+            "VisualEvidenceDeps",
+        }
+        actual = {node.name for node in visual_tree.body
+                  if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not visual_functions <= actual:
+            violations.append("canonical visual OCR owner lacks complete marker/CJK flow")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"paddle_headwords_core", "processing", "app"}
+               for node in visual_tree.body):
+            violations.append("OCR visual owner imports a heavyweight root at runtime")
+    if visual_evidence_core.is_file():
+        core_tree = ast.parse(visual_evidence_core.read_text(encoding="utf-8"))
+        for name in ("_binary_rle_components", "_detect_visual_entry_markers",
+                     "_match_visual_entry_markers_to_lines",
+                     "_cjk_visual_projection_runs", "_cjk_right_context_metrics",
+                     "_cjk_word_for_visual_run"):
+            wrappers = [node for node in core_tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == name]
+            if len(wrappers) != 1 or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_visual_evidence"
+                and node.func.attr == name
+                for node in ast.walk(wrappers[0])
+            ):
+                violations.append(f"visual OCR core adapter must delegate: {name}")
+        if _normalized_source_size(visual_evidence_core) > 278_685:
+            violations.append("paddle_headwords_core grew beyond 278685-byte visual OCR ratchet")
+
     # #562: the full OCR matching/voting/position chain must stay in one
     # import-light canonical owner. Core signatures and live patch seams stay.
     pairing_owner = PACKAGE_ROOT / "ocr/pairing_arbitration.py"
