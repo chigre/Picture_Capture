@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 def test_ppp_label_is_above_figure_aligned_left():
     import ast
-    src = (ROOT / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    src = (ROOT / "app.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "PictureCaptureApp")
     fn = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_external_polygon_label_position")
