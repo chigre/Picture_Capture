@@ -25,6 +25,7 @@ from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
 from .geometry import reading_order as _reading_order
 from .geometry import column_offsets as _column_offsets
+from .geometry import geometry_construction as _geometry_construction
 from .preprocess.page_pixels import normalize_page_rgb
 from .preprocess import core_analysis_pixels as _analysis_pixels
 from .geometry.layout_transform import LayoutTransform
@@ -389,120 +390,39 @@ def apply_column_start_offsets(
 def _derive_nominal_geometry_canonical(
     image_width: int, image_height: int, settings: AppSettings,
 ) -> Geometry:
-    """Return nominal geometry with settings used as literal full-resolution pixels."""
-    width = max(1, int(image_width))
-    height = max(1, int(image_height))
-    count = max(1, int(settings.columns))
-
-    left = max(0, _source_px(settings.manual_x))
-    gutter = max(0, _source_px(settings.gutter))
-    column_width = max(10, _source_px(settings.column_width))
-    base_starts = [left + i * (column_width + gutter) for i in range(count)]
-    offsets = _column_start_offsets_canonical(settings, count, width)
-    starts = apply_column_start_offsets(
-        base_starts, offsets, gutter=gutter, max_x=width - 1,
+    return _geometry_construction.derive_nominal_geometry_canonical(
+        image_width, image_height, settings,
+        source_px_fn=_source_px, offsets_fn=_column_start_offsets_canonical,
+        apply_offsets_fn=apply_column_start_offsets, column_path_cls=ColumnPath,
+        geometry_cls=Geometry,
     )
 
-    widths: list[int] = []
-    for i, start_x in enumerate(starts):
-        if i + 1 < len(starts):
-            widths.append(max(1, starts[i + 1] - start_x - gutter))
-        else:
-            widths.append(max(1, width - start_x))
-
-    top = min(height - 1, max(0, _source_px(settings.start_y)))
-    bottom_setting = _source_px(settings.bottom_y)
-    if settings.crop_to_bottom_y and bottom_setting > top:
-        bottom = min(height, max(top + 1, bottom_setting))
-    else:
-        bottom = height
-    paths = [ColumnPath([(top, x), (bottom, x)]) for x in starts]
-    return Geometry(starts, widths, top, bottom, paths)
 
 def derive_nominal_geometry(image_width: int, image_height: int, settings: AppSettings) -> Geometry:
-    """Return canonical nominal geometry while retaining source mapping metadata."""
-    transform = LayoutTransform(str(getattr(settings, "layout_transform", "identity") or "identity"))
-    source_size = (max(1, int(image_width)), max(1, int(image_height)))
-    canonical_size = transform.canonical_size(source_size)
-    geometry = _derive_nominal_geometry_canonical(*canonical_size, settings)
-    geometry.transform = transform
-    geometry.source_size = source_size
-    return geometry
+    return _geometry_construction.derive_nominal_geometry(
+        image_width, image_height, settings,
+        transform_cls=LayoutTransform,
+        derive_canonical_fn=_derive_nominal_geometry_canonical,
+    )
 
 
 def _derive_geometry_canonical(image: Image.Image, settings: AppSettings) -> Geometry:
-    """Build geometry from literal full-resolution pixel settings.
-
-    Image analysis may use a downscaled copy, but configured X/Y values are
-    never round-tripped through that analysis scale.
-    """
-    analysis, analysis_scale = _analysis_image(image)
-    analysis_width, analysis_height = analysis.size
-    source_width, source_height = image.size
-    count = max(1, int(settings.columns))
-
-    left = max(0, _source_px(settings.manual_x))
-    gutter = max(0, _source_px(settings.gutter))
-    column_width = max(10, _source_px(settings.column_width))
-    base_starts = [left + i * (column_width + gutter) for i in range(count)]
-    offsets = _column_start_offsets_canonical(settings, count, source_width)
-    starts = apply_column_start_offsets(
-        base_starts, offsets, gutter=gutter, max_x=source_width - 1,
+    return _geometry_construction.derive_geometry_canonical(
+        image, settings,
+        analysis_fn=_analysis_image, source_px_fn=_source_px,
+        offsets_fn=_column_start_offsets_canonical,
+        apply_offsets_fn=apply_column_start_offsets,
+        estimate_paths_fn=_estimate_column_paths,
+        column_path_cls=ColumnPath, geometry_cls=Geometry,
     )
 
-    widths: list[int] = []
-    for i, start_x in enumerate(starts):
-        if i + 1 < len(starts):
-            widths.append(max(1, starts[i + 1] - start_x - gutter))
-        else:
-            widths.append(max(1, source_width - start_x))
-
-    top = min(source_height - 1, max(0, _source_px(settings.start_y)))
-    bottom_setting = _source_px(settings.bottom_y)
-    if settings.crop_to_bottom_y and bottom_setting > top:
-        bottom = min(source_height, max(top + 1, bottom_setting))
-    else:
-        bottom = source_height
-
-    starts_analysis = [
-        min(analysis_width - 1, max(0, round(x * analysis_scale)))
-        for x in starts
-    ]
-    widths_analysis = [
-        max(1, round(width * analysis_scale)) for width in widths
-    ]
-    top_analysis = min(
-        analysis_height - 1, max(0, round(top * analysis_scale))
-    )
-    bottom_analysis = min(
-        analysis_height, max(top_analysis + 1, round(bottom * analysis_scale))
-    )
-
-    if settings.follow_column_deformation:
-        paths = _estimate_column_paths(
-            analysis,
-            analysis_scale,
-            starts_analysis,
-            widths_analysis,
-            top_analysis,
-            bottom_analysis,
-            settings,
-            analysis_scale,
-        )
-    else:
-        paths = [ColumnPath([(top, x), (bottom, x)]) for x in starts]
-    return Geometry(starts, widths, top, bottom, paths)
 
 def derive_geometry(image: Image.Image, settings: AppSettings) -> Geometry:
-    """Build layout geometry in canonical space without changing source pixels."""
-    source = normalize_page_rgb(image)
-    transform = LayoutTransform(str(getattr(settings, "layout_transform", "identity") or "identity"))
-    canonical = transform.canonical_image_for_analysis(source)
-    geometry = _derive_geometry_canonical(canonical, settings)
-    geometry.transform = transform
-    geometry.source_size = source.size
-    return geometry
-
+    return _geometry_construction.derive_geometry(
+        image, settings,
+        normalize_rgb_fn=normalize_page_rgb, transform_cls=LayoutTransform,
+        derive_canonical_fn=_derive_geometry_canonical,
+    )
 
 def _page_geometry_context(
     image: Image.Image,
