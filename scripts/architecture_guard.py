@@ -1673,6 +1673,55 @@ def collect_violations() -> list[str]:
         ):
             violations.append(f"review selection native delegate missing: {method}")
 
+    # Issue #562 — page scope and lexicon comparison implementations are physical owners.
+    for owner_name, symbol, factory_name, owned_methods in (
+        ("page_scope_workflow.py", "_page_scope", "_page_scope_deps", {
+            "_page_number",
+            "_parse_page_spec",
+            "selected_page_indices",
+            "_paddle_temp_matches_page",
+            "cleanup_paddleocr_temp_selected_scope",
+            "jump_to_page_spec",
+        }),
+        ("lexicon_compare_workflow.py", "_lexicon_compare", "_lexicon_compare_deps", {
+            "reload_wordslist_reference",
+            "_request_wordslist_reload",
+            "import_legacy_words",
+            "_default_old_new_compare_source",
+            "_looks_page_aware_compare_source",
+            "compare_old_new_selected_scope",
+        }),
+    ):
+        owner_path = PACKAGE_ROOT / "ui" / owner_name
+        if not owner_path.is_file():
+            violations.append(f"native workflow owner missing: {owner_name}")
+            continue
+        owner_ast = ast.parse(owner_path.read_text(encoding="utf-8"))
+        implementations = {node.name for node in owner_ast.body
+                           if isinstance(node, ast.FunctionDef)}
+        if not owned_methods <= implementations:
+            violations.append(f"native workflow owner methods incomplete: {owner_name}")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"app", "picture_capture.app"}
+               for node in ast.walk(owner_ast)):
+            violations.append(f"native workflow owner imports app: {owner_name}")
+        for name in owned_methods:
+            adapter = selection_adapters.get(name)
+            if adapter is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == symbol
+                and node.func.attr == name
+                for node in ast.walk(adapter)
+            ) or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == factory_name
+                for node in ast.walk(adapter)
+            ):
+                violations.append(f"native page/lexicon callback missing: {name}")
+
     # Issue #562 — page-index and persisted fill-status are single-source owners.
     page_index_owners = {
         "page_index_workflow.py": [

@@ -133,6 +133,8 @@ from .ui import review_crop_actions as _review_crop
 from .ui import review_entry_actions as _review_entry
 from .ui import review_page_lifecycle as _review_page
 from .ui import review_selection_workflow as _review_selection
+from .ui import lexicon_compare_workflow as _lexicon_compare
+from .ui import page_scope_workflow as _page_scope
 from .ui import page_index_workflow as _page_index
 from .ui import word_fill_status_workflow as _word_fill_status
 from .ui import review_appearance_workflow as _review_appearance
@@ -3294,6 +3296,45 @@ def _review_selection_deps() -> _review_selection.ReviewSelectionDeps:
     )
 
 
+def _page_scope_deps() -> _page_scope.PageScopeDeps:
+    """Snapshot original module references afresh at each native callback."""
+    return _page_scope.PageScopeDeps(
+        re=re,
+        bookmarked_page_indices=bookmarked_page_indices,
+        messagebox=messagebox,
+        ocr_cache_root=ocr_cache_root,
+        compact_ocr_cache_file=compact_ocr_cache_file,
+        json=json,
+    )
+
+
+def _lexicon_compare_deps() -> _lexicon_compare.LexiconCompareDeps:
+    """Snapshot original module references afresh at each native callback."""
+    return _lexicon_compare.LexiconCompareDeps(
+        resolve_wordslist_path=resolve_wordslist_path,
+        read_noncomment_lines=read_noncomment_lines,
+        settings_path=settings_path,
+        words_of_pages_default_path=words_of_pages_default_path,
+        filedialog=filedialog,
+        Path=Path,
+        read_text_detected=read_text_detected,
+        write_text_atomic=write_text_atomic,
+        pdic_path=pdic_path,
+        read_pdic=read_pdic,
+        Image=Image,
+        write_pdic=write_pdic,
+        _build_words_page_lookup=_build_words_page_lookup,
+        _resolve_words_page_token=_resolve_words_page_token,
+        re=re,
+        messagebox=messagebox,
+        tk=tk,
+        _parse_words_of_pages_text=_parse_words_of_pages_text,
+        _compare_page_word_mappings=_compare_page_word_mappings,
+        _page_word_mapping_text=_page_word_mapping_text,
+        OldNewComparisonWindow=OldNewComparisonWindow,
+    )
+
+
 def _page_index_deps() -> _page_index.PageIndexDeps:
     """Snapshot original module bindings for a page index callback."""
     return _page_index.PageIndexDeps(
@@ -5606,239 +5647,29 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _page_number(path: Path) -> int | None:
-        match = re.search(r"(\d+)(?!.*\d)", path.stem)
-        return int(match.group(1)) if match else None
+        return _page_scope._page_number(_page_scope_deps(), path)
+
 
     def _parse_page_spec(self, spec: str) -> list[int]:
-        if not self.project: return []
-        tokens = [item.strip() for item in re.split(r"[,，]", spec) if item.strip()]
-        if not tokens:
-            raise ValueError("请填写指定页面范围，例如 0008-0020,0025,0030~0035。")
-        # A numeric range denotes actual numbered page filenames (0001.png,
-        # 0002.png, ...), not every filename whose final component happens to
-        # be numeric. This keeps auxiliary scans such as 0000_01.png out of
-        # ``1-100`` while retaining the historical ordinal fallback for
-        # projects that have no purely numeric filenames at all.
-        numeric_page_indices: dict[int, list[int]] = {}
-        trailing_number_indices: dict[int, list[int]] = {}
-        for index, page in enumerate(self.project.images):
-            number = self._page_number(page)
-            if number is not None:
-                trailing_number_indices.setdefault(number, []).append(index)
-            if page.stem.isdigit():
-                numeric_page_indices.setdefault(int(page.stem), []).append(index)
-        selected: list[int] = []
-        for token in tokens:
-            # Accept the range notations users commonly type/paste on Windows:
-            # 0008-0020, 0008~0020, 0008～0020, 0008–0020, 0008—0020.
-            # Leading zeroes are intentionally preserved in the input but page
-            # matching is numeric so both 8 and 0008 resolve to page 0008.
-            range_match = re.fullmatch(r"\s*(\d+)\s*[-~～–—−]\s*(\d+)\s*", token)
-            if range_match:
-                lo, hi = sorted((int(range_match.group(1)), int(range_match.group(2))))
-                page_number_indices = numeric_page_indices or trailing_number_indices
-                if page_number_indices:
-                    missing = [number for number in range(lo, hi + 1) if number not in page_number_indices]
-                    if missing:
-                        shown = ", ".join(str(number) for number in missing[:12])
-                        suffix = " …" if len(missing) > 12 else ""
-                        raise ValueError(f"页面范围中以下页码不存在：{shown}{suffix}")
-                    selected.extend(
-                        index
-                        for number in range(lo, hi + 1)
-                        for index in page_number_indices[number]
-                    )
-                elif 1 <= lo <= hi <= len(self.project.images):
-                    selected.extend(range(lo - 1, hi))
-                else:
-                    raise ValueError(f"页面范围超出项目：{token}")
-            elif token.isdigit():
-                number = int(token)
-                if number in numeric_page_indices:
-                    selected.extend(numeric_page_indices[number])
-                elif not numeric_page_indices and number in trailing_number_indices:
-                    selected.extend(trailing_number_indices[number])
-                elif 1 <= number <= len(self.project.images):
-                    selected.append(number - 1)
-                else:
-                    raise ValueError(f"找不到第 {number} 页。")
-            else:
-                raise ValueError(
-                    f"页面范围格式错误：{token}。可使用 0008-0020、0008~0020，多个范围用逗号分隔。"
-                )
-        return sorted(set(selected))
+        return _page_scope._parse_page_spec(self, _page_scope_deps(), spec)
+
 
     def selected_page_indices(self) -> list[int]:
-        if not self.project: return []
-        mode = self.page_range_var.get() if hasattr(self, "page_range_var") else "current"
-        if mode == "current": return [self.current_index] if self.current_index >= 0 else []
-        if mode == "bookmarks":
-            return bookmarked_page_indices(self.project.images, self._bookmark_stems())
-        if mode == "to_end": return list(range(max(0, self.current_index), len(self.project.images)))
-        if mode == "to_specified":
-            indices = self._parse_page_spec(self.page_range_spec_var.get())
-            if len(indices) != 1:
-                raise ValueError("当前至指定页需要输入一个结束页码")
-            end = indices[0]
-            return list(range(min(self.current_index, end), max(self.current_index, end) + 1))
-        return self._parse_page_spec(self.page_range_spec_var.get())
+        return _page_scope.selected_page_indices(self, _page_scope_deps())
 
 
     @staticmethod
     def _paddle_temp_matches_page(path: Path, page_stem: str) -> bool:
-        """Return True only for PaddleOCR temp entries owned by one page stem."""
-        name = path.name
-        stem = str(page_stem or "")
-        if not stem or name == stem:
-            return bool(stem and name == stem)
-        return any(
-            name.startswith(stem + suffix)
-            for suffix in (".", "_", "-")
-        )
+        return _page_scope._paddle_temp_matches_page(_page_scope_deps(), path, page_stem)
+
 
     def cleanup_paddleocr_temp_selected_scope(self) -> None:
-        """Compact PaddleOCR cache for the selected pages without losing reusable OCR."""
-        if not self.project:
-            messagebox.showinfo("压缩OCR缓存", "请先打开项目。", parent=self)
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc)
-            return
-        if not indices:
-            messagebox.showinfo("压缩OCR缓存", "当前页面范围为空。", parent=self)
-            return
+        return _page_scope.cleanup_paddleocr_temp_selected_scope(self, _page_scope_deps())
 
-        cache_root = ocr_cache_root(self.project.root)
-        if not cache_root.exists():
-            messagebox.showinfo(
-                "压缩OCR缓存",
-                "当前项目没有 PaddleOCR 缓存可压缩。",
-                parent=self,
-            )
-            return
-
-        page_stems = [
-            self.project.images[index].stem
-            for index in indices
-            if 0 <= int(index) < len(self.project.images)
-        ]
-        sidecar_suffixes = (
-            "_ocr_diagnostics.txt", "_ocr_comparison.txt", "_issues.tsv",
-            "_ocr_engines.tsv", "_fusion.tsv",
-        )
-
-        def human_size(size: int) -> str:
-            value = float(max(0, size))
-            units = ("B", "KB", "MB", "GB", "TB")
-            for unit in units:
-                if value < 1024.0 or unit == units[-1]:
-                    return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-                value /= 1024.0
-            return f"{size} B"
-
-        existing_pages = 0
-        estimated_bytes = 0
-        legacy_sidecars = 0
-        for stem in page_stems:
-            cache_path = cache_root / f"{stem}.json"
-            found = False
-            paths = [cache_path]
-            paths.extend(cache_root / f"{stem}{suffix}" for suffix in sidecar_suffixes)
-            for path in paths:
-                if not path.exists() or not path.is_file():
-                    continue
-                found = True
-                try:
-                    estimated_bytes += int(path.stat().st_size)
-                except OSError:
-                    pass
-                if path != cache_path:
-                    legacy_sidecars += 1
-            if found:
-                existing_pages += 1
-
-        if not existing_pages:
-            messagebox.showinfo(
-                "压缩OCR缓存",
-                f"所选 {len(indices)} 页没有对应的 PaddleOCR 缓存。",
-                parent=self,
-            )
-            return
-
-        confirmed = messagebox.askyesno(
-            "压缩 PaddleOCR 缓存",
-            (
-                f"将优化所选范围内 {existing_pages} 页的 PaddleOCR 数据。\n\n"
-                f"当前相关缓存/诊断约 {human_size(estimated_bytes)}；"
-                f"发现 {legacy_sidecars} 个旧式可再生诊断文件。\n\n"
-                "操作会：\n"
-                "• 将 <page>.json 改写为紧凑缓存，只保留复用 OCR、Project Profile 诊断和校对所需信息；\n"
-                "• 删除重复的 diagnostics/comparison/issues/engines/fusion 文本副本；\n"
-                "• 保留 <page>_manual_selection.json 人工选择；\n"
-                "• 保留 OCR 原始记录，因此之后正常“复用缓存”无需重新 OCR。\n\n"
-                "原始扫描图、PDIC/PPP、词条文字和人工校对结果均不修改。是否继续？"
-            ),
-            icon="warning",
-            parent=self,
-        )
-        if not confirmed:
-            return
-
-        before_total = 0
-        after_total = 0
-        removed_sidecars = 0
-        compacted = 0
-        failed: list[str] = []
-        for stem in page_stems:
-            cache_path = cache_root / f"{stem}.json"
-            try:
-                before, after, removed = compact_ocr_cache_file(cache_path)
-                if before <= 0 and removed <= 0:
-                    continue
-                before_total += before
-                after_total += after
-                removed_sidecars += removed
-                compacted += 1
-            except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-                failed.append(f"{stem}: {exc}")
-
-        released = max(0, before_total - after_total)
-        summary = (
-            f"已优化 {compacted} 页 PaddleOCR 缓存；"
-            f"删除 {removed_sidecars} 个重复诊断文件；"
-            f"释放约 {human_size(released)}"
-        )
-        self.status_var.set(summary)
-        if failed:
-            messagebox.showwarning(
-                "OCR缓存压缩部分完成",
-                summary + "\n\n以下页面未能压缩：\n" + "\n".join(failed[:12])
-                + ("\n…" if len(failed) > 12 else ""),
-                parent=self,
-            )
-            return
-        messagebox.showinfo(
-            "OCR缓存压缩完成",
-            summary + "\n\n人工选择、可复用 OCR 原始记录、PDIC/PPP 和校对结果均已保留。",
-            parent=self,
-        )
 
     def jump_to_page_spec(self) -> None:
-        """Navigate to the first page number typed in the specified-range box."""
-        match = re.search(r"\d+", self.page_range_spec_var.get())
-        if not match:
-            messagebox.showinfo("跳到页面", "请先在“指定”文本框输入页码。", parent=self)
-            return
-        try:
-            indices = self._parse_page_spec(match.group(0))
-        except ValueError as exc:
-            self.show_error("无法定位页面", exc)
-            return
-        if indices:
-            self.page_range_var.set("specified")
-            self.load_page(indices[0])
+        return _page_scope.jump_to_page_spec(self, _page_scope_deps())
+
 
     def _foreground_batch_state(self, index: int | None = None) -> str:
         return _batch_workflow._foreground_batch_state(_batch_workflow_deps(), self, index=index)
@@ -5923,88 +5754,14 @@ class PictureCaptureApp(tk.Tk):
     def reload_wordslist_reference(
         self, selected_path: Path | None = None, *, persist: bool = True, redraw: bool = True,
     ) -> tuple[Path, int]:
-        """Reload the auxiliary wordslist and optionally remember a newly chosen file."""
-        if not self.project:
-            raise ValueError("尚未打开项目")
-        if selected_path is not None:
-            selected_path = selected_path.expanduser().resolve()
-            if not selected_path.is_file():
-                raise FileNotFoundError(selected_path)
-            try:
-                stored = selected_path.relative_to(self.project.root.resolve()).as_posix()
-            except ValueError:
-                stored = str(selected_path)
-            self.settings.wordslist_path = stored
-            self.project.settings.wordslist_path = stored
-        path = resolve_wordslist_path(self.project.root, self.settings.wordslist_path)
-        words = read_noncomment_lines(path) if path.exists() else []
-        self.project.words = words
-        self._project_words = set(words)
-        if persist:
-            self.settings.to_json(settings_path(self.project.root))
-        if redraw and self.current_page is not None and self.image is not None:
-            self.redraw()
-        return path, len(words)
+        return _lexicon_compare.reload_wordslist_reference(self, _lexicon_compare_deps(), selected_path, persist=persist, redraw=redraw)
+
 
     def _request_wordslist_reload(
         self, selected_path: Path | None = None, *, persist: bool = True,
         redraw: bool = True, on_done=None, on_error=None,
     ) -> None:
-        """Read a potentially huge wordslist off-thread, then commit it on Tk."""
-        project = self.project
-        if project is None:
-            if on_error is not None:
-                on_error(ValueError("尚未打开项目"))
-            return
-
-        configured = self.settings.wordslist_path
-        stored_value: str | None = None
-        if selected_path is not None:
-            selected_path = selected_path.expanduser().resolve()
-            if not selected_path.is_file():
-                if on_error is not None:
-                    on_error(FileNotFoundError(selected_path))
-                return
-            try:
-                stored_value = selected_path.relative_to(project.root.resolve()).as_posix()
-            except ValueError:
-                stored_value = str(selected_path)
-            configured = stored_value
-
-        path = resolve_wordslist_path(project.root, configured)
-        self.status_var.set(f"正在后台读取 wordslist：{path.name}…")
-
-        def worker():
-            words = read_noncomment_lines(path) if path.exists() else []
-            return words
-
-        def done(words) -> None:
-            if self.project is not project:
-                return
-            if stored_value is not None:
-                self.settings.wordslist_path = stored_value
-                project.settings.wordslist_path = stored_value
-            project.words = list(words)
-            self._project_words = set(words)
-            if persist:
-                self.settings.to_json(settings_path(project.root))
-            if redraw and self.current_page is not None and self.image is not None:
-                self.redraw()
-            self.status_var.set(f"wordslist 已载入：{path.name}｜{len(words)} 条")
-            if on_done is not None:
-                on_done(path, len(words))
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if self.project is project:
-                self.status_var.set(f"wordslist 读取失败：{exc}")
-                if on_error is not None:
-                    on_error(exc)
-                else:
-                    self.show_error("wordslist 读取失败", exc)
-
-        self._start_ui_worker("wordslist-reload", worker, done, failed)
+        return _lexicon_compare._request_wordslist_reload(self, _lexicon_compare_deps(), selected_path, persist=persist, redraw=redraw, on_done=on_done, on_error=on_error)
 
 
     def open_recent_project(self) -> None:
@@ -8070,316 +7827,20 @@ class PictureCaptureApp(tk.Tk):
         self._headword_controller_for_call().fill_existing_headwords()
 
     def import_legacy_words(self) -> bool:
-        """Import legacy words in a sequential background batch.
+        return _lexicon_compare.import_legacy_words(self, _lexicon_compare_deps())
 
-        The return value now means that an import task was started; completion is
-        reported asynchronously in the status bar.
-        """
-        if not self.project or self._batch_active:
-            return False
-        project = self.project
-        path = words_of_pages_default_path(project.root)
-        if not path.exists():
-            path_text = filedialog.askopenfilename(
-                title="选择 _WordsOfPages.txt",
-                filetypes=[("文本", "*.txt"), ("全部", "*")],
-                parent=self,
-            )
-            if not path_text:
-                return False
-            path = Path(path_text)
-
-        pages = list(project.images)
-        pages_meta = [
-            (
-                page.stem,
-                pages[i - 1].stem if i > 0 else "@",
-                pages[i + 1].stem if i + 1 < len(pages) else "@",
-            )
-            for i, page in enumerate(pages)
-        ]
-        holder: dict[str, object] = {
-            "lines": None, "rich": False, "groups": None, "words": None, "cursor": 0,
-        }
-        items: list[object] = ["__parse__"] + list(range(len(pages)))
-
-        def ensure_parsed() -> None:
-            if holder["lines"] is not None:
-                return
-            text_data, _encoding = read_text_detected(path)
-            lines = [line for line in text_data.splitlines() if line.strip()]
-            rich = [line for line in lines if line.count("#") >= 7]
-            holder["lines"] = lines
-            if len(rich) == len(lines):
-                groups: dict[str, list[str]] = {}
-                for line in rich:
-                    groups.setdefault(line.split("#")[5], []).append(line)
-                holder["rich"] = True
-                holder["groups"] = groups
-            else:
-                holder["words"] = [line.split("#", 1)[0].strip() for line in lines]
-
-        def worker(item, _position: int, _total: int):
-            ensure_parsed()
-            if item == "__parse__":
-                return {"parsed": len(holder["lines"] or [])}
-            index = int(item)
-            page = pages[index]
-            changed = False
-            if bool(holder["rich"]):
-                groups = holder["groups"] if isinstance(holder["groups"], dict) else {}
-                rows = list(groups.get(page.stem, []))
-                if rows:
-                    write_text_atomic(
-                        pdic_path(page), "\n".join(rows) + "\n", encoding="utf-8",
-                    )
-                    changed = True
-            else:
-                words = holder["words"] if isinstance(holder["words"], list) else []
-                cursor = int(holder["cursor"])
-                entries = read_pdic(pdic_path(page))
-                for entry in entries:
-                    if cursor >= len(words):
-                        break
-                    entry.word = str(words[cursor])
-                    cursor += 1
-                holder["cursor"] = cursor
-                if entries:
-                    with Image.open(page) as opened:
-                        width = int(opened.width)
-                    write_pdic(pdic_path(page), entries, width, pages_meta[index])
-                    changed = True
-            return {"index": index, "changed": changed}
-
-        def done(_completed, _total, stopped, results, error):
-            if error is not None:
-                return
-            changed_indices = {
-                int(row["index"]) for row in results
-                if isinstance(row, dict) and row.get("changed") and "index" in row
-            }
-            if self.project is project and self.current_index in changed_indices:
-                self._request_page_load(
-                    self.current_index, current_already_saved=True, force=True,
-                )
-            count = len(holder["lines"] or [])
-            suffix = "（提前停止）" if stopped else ""
-            self.status_var.set(f"已导入旧版数据：{count} 条{suffix}")
-
-        started = self._start_batch_task(
-            "导入旧版数据", items, worker, done,
-            item_label=lambda item: (
-                f"解析 {path.name}" if item == "__parse__"
-                else pages[int(item)].name
-            ),
-        )
-        return bool(started)
 
     def _default_old_new_compare_source(self) -> Path | None:
-        """Return the best initial file suggestion for 【新旧比较】."""
-        candidates: list[Path] = []
-        if self._old_new_compare_source_path is not None:
-            candidates.append(self._old_new_compare_source_path)
-        if self._word_fill_source_path is not None:
-            candidates.append(self._word_fill_source_path)
-        if self.project is not None:
-            candidates.append(resolve_wordslist_path(self.project.root, self.settings.wordslist_path))
-        for candidate in candidates:
-            try:
-                if candidate.is_file():
-                    return candidate
-            except OSError:
-                continue
-        return candidates[0] if candidates else None
+        return _lexicon_compare._default_old_new_compare_source(self, _lexicon_compare_deps())
+
 
     def _looks_page_aware_compare_source(self, path: Path) -> bool:
-        """Cheaply recognize whether a TXT carries page boundaries for comparison."""
-        if not self.project or not path.is_file():
-            return False
-        page_stems = [page.stem for page in self.project.images]
-        lookup = _build_words_page_lookup(page_stems)
-        checked = 0
-        try:
-            with path.open("r", encoding="utf-8-sig") as handle:
-                for raw in handle:
-                    stripped = raw.strip()
-                    if not stripped or raw.lstrip().startswith("'"):
-                        continue
-                    checked += 1
-                    fields = raw.rstrip("\r\n").split("#")
-                    if len(fields) >= 8 and _resolve_words_page_token(fields[5], page_stems, lookup) is not None:
-                        return True
-                    tab_fields = raw.rstrip("\r\n").split("\t", 1)
-                    if len(tab_fields) == 2 and _resolve_words_page_token(tab_fields[0], page_stems, lookup) is not None:
-                        return True
-                    match = re.match(r"^\[([^\]]+)\]$", stripped)
-                    if not match:
-                        match = re.match(r"^(?:page|页码|頁碼|页|頁)\s*[:：]?\s*(\S+)\s*$", stripped, re.I)
-                    if match and _resolve_words_page_token(match.group(1), page_stems, lookup) is not None:
-                        return True
-                    if checked >= 1200:
-                        break
-        except (OSError, UnicodeError):
-            return False
-        return False
+        return _lexicon_compare._looks_page_aware_compare_source(self, _lexicon_compare_deps(), path)
+
 
     def compare_old_new_selected_scope(self, force_choose: bool = False) -> None:
-        """Compare selected-range current PDIC headwords with a page-aware wordslist.
+        return _lexicon_compare.compare_old_new_selected_scope(self, _lexicon_compare_deps(), force_choose)
 
-        ``PDIC`` is treated as the new/current version; the chosen TXT is the old
-        version.  Both are reduced to the exact ``page<TAB>headword`` representation
-        before exact line-sequence comparison, page by page.
-        """
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return
-        if self._batch_active:
-            messagebox.showinfo("批量任务正在运行", "已有批量任务正在运行，请先暂停或停止。", parent=self)
-            return
-        try:
-            indices = self.selected_page_indices()
-        except Exception as exc:
-            self.show_error("页面范围无效", exc)
-            return
-        if not indices:
-            return
-
-        source = self._old_new_compare_source_path
-        suggested = self._default_old_new_compare_source()
-        if not force_choose and (source is None or not source.is_file()):
-            if suggested is not None and self._looks_page_aware_compare_source(suggested):
-                source = suggested
-                self._old_new_compare_source_path = source
-        if force_choose or source is None or not source.is_file():
-            initialdir = self.project.root
-            initialfile = "wordslist.txt"
-            if suggested is not None:
-                initialdir = suggested.parent
-                initialfile = suggested.name
-            chosen = filedialog.askopenfilename(
-                parent=self,
-                title="选择用于新旧比较的 wordslist.txt（需含页码）",
-                initialdir=str(initialdir),
-                initialfile=initialfile,
-                filetypes=[("文本", "*.txt"), ("PDIC/文本", "*.pdic *.txt"), ("全部", "*")],
-            )
-            if not chosen:
-                return
-            source = Path(chosen)
-            self._old_new_compare_source_path = source
-
-        if source is None or not source.is_file():
-            messagebox.showerror("新旧比较", "所选 wordslist 文件不存在，请重新选择。", parent=self)
-            self._old_new_compare_source_path = None
-            return
-
-        try:
-            # Make the visible editor the authoritative newest PDIC before the
-            # background comparison starts. Other pages are already on disk.
-            self._flush_deferred_page_save()
-            self._sync_entry_editor_texts()
-            self.save_pdic(silent=True, sync_editors=False)
-        except Exception as exc:
-            self.show_error("新旧比较准备失败", exc)
-            return
-
-        project = self.project
-        pages = list(project.images)
-        all_page_stems = [page.stem for page in pages]
-        selected_stems = [pages[index].stem for index in indices]
-        selected_set = set(selected_stems)
-        holder: dict[str, object] = {"mapping": None, "present": None}
-
-        def ensure_old_mapping() -> tuple[dict[str, list[str]], set[str]]:
-            mapping = holder.get("mapping")
-            present = holder.get("present")
-            if isinstance(mapping, dict) and isinstance(present, set):
-                return mapping, present
-            text_data, _encoding = read_text_detected(source)
-            present_pages: set[str] = set()
-            parsed = _parse_words_of_pages_text(text_data, all_page_stems, present_pages=present_pages)
-            if not (present_pages & selected_set):
-                raise ValueError(
-                    "所选 wordslist 中没有当前页面范围的页码记录。\n"
-                    "新旧比较需要 page\\t词条、完整 8 字段 PDIC/_WordsOfPages，或 [页码] 分组格式。"
-                )
-            holder["mapping"] = parsed
-            holder["present"] = present_pages
-            return parsed, present_pages
-
-        def worker(index: int, _position: int, _total: int):
-            old_mapping, present_pages = ensure_old_mapping()
-            page = pages[index]
-            entries = read_pdic(pdic_path(page))
-            new_words = [str(entry.word or "").strip() for entry in entries]
-            old_words = list(old_mapping.get(page.stem, []))
-            return {
-                "index": index,
-                "page": page.stem,
-                "old": old_words,
-                "new": new_words,
-                "old_present": page.stem in present_pages,
-            }
-
-        def done(completed: int, total: int, stopped: bool, results, error) -> None:
-            if error is not None:
-                # If parsing never succeeded, make the next click ask for another
-                # old wordslist rather than repeatedly retrying a wrong file.
-                if holder.get("mapping") is None:
-                    self._old_new_compare_source_path = None
-                return
-            if stopped:
-                return
-            by_index = {
-                int(item.get("index")): item for item in results if isinstance(item, dict) and "index" in item
-            }
-            old_mapping: dict[str, list[str]] = {}
-            new_mapping: dict[str, list[str]] = {}
-            missing_old_pages: list[str] = []
-            for index, stem in zip(indices, selected_stems):
-                item = by_index.get(index, {})
-                old_mapping[stem] = list(item.get("old", []))
-                new_mapping[stem] = list(item.get("new", []))
-                if not bool(item.get("old_present", False)):
-                    missing_old_pages.append(stem)
-
-            changes, counts = _compare_page_word_mappings(selected_stems, old_mapping, new_mapping)
-            payload: dict[str, object] = {
-                "source": str(source),
-                "page_order": selected_stems,
-                "old_mapping": old_mapping,
-                "new_mapping": new_mapping,
-                "old_text": _page_word_mapping_text(selected_stems, old_mapping),
-                "new_text": _page_word_mapping_text(selected_stems, new_mapping),
-                "changes": changes,
-                "counts": counts,
-                "missing_old_pages": missing_old_pages,
-            }
-            old_window = self.old_new_compare_window
-            if old_window is not None:
-                try:
-                    if old_window.winfo_exists():
-                        old_window.destroy()
-                except tk.TclError:
-                    pass
-            window = OldNewComparisonWindow(self, payload)
-            self.old_new_compare_window = window
-            diff_total = counts["新增"] + counts["删除"] + counts["修改"]
-            self.status_var.set(
-                f"新旧比较完成：{len(selected_stems)} 页｜旧 {counts['old_rows']} 行｜"
-                f"新 {counts['new_rows']} 行｜差异 {diff_total} 条"
-            )
-
-        started = self._start_batch_task(
-            "新旧比较", indices, worker, done,
-            item_label=lambda index: pages[index].name,
-            foreground_page_edit=False,
-            refresh_page_quality=False,
-        )
-        if started:
-            self.status_var.set(
-                f"正在比较 {len(indices)} 页：当前 PDIC（新） ↔ {source.name}（旧）；可暂停或停止。"
-            )
 
     def open_review(self) -> None:
         if not (self.guard() and self.entries):
