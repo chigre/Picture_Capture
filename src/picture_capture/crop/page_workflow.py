@@ -70,7 +70,8 @@ class CropWorkflowDeps:
     _save_union_crop: object
 
 
-def _base_entry_crop_pieces(\n    deps: CropWorkflowDeps, 
+def _base_entry_crop_pieces(
+    deps: CropWorkflowDeps, 
     image: Image.Image, entries: list[Entry], settings: AppSettings,
     *, top_y: int | None = None, bottom_y: int | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
@@ -200,7 +201,8 @@ def _base_entry_crop_pieces(\n    deps: CropWorkflowDeps,
     return ordered, pieces
 
 
-def build_page_crop_plan(\n    deps: CropWorkflowDeps, 
+def build_page_crop_plan(
+    deps: CropWorkflowDeps, 
     image: Image.Image, entries: list[Entry], polygons: list[PolygonRegion], settings: AppSettings,
     *, top_y: int | None = None, bottom_y: int | None = None, illustration_margin: int = 0,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
@@ -324,7 +326,8 @@ def build_page_crop_plan(\n    deps: CropWorkflowDeps,
     )
 
 
-def _stage_page_crop_plan(\n    deps: CropWorkflowDeps, 
+def _stage_page_crop_plan(
+    deps: CropWorkflowDeps, 
     root: Path, page_stem: str, plan: PageCropPlan,
 ) -> tuple[Path, Path]:
     _stage_text_file = deps._stage_text_file
@@ -339,7 +342,8 @@ def _stage_page_crop_plan(\n    deps: CropWorkflowDeps,
     return temp, path
 
 
-def write_page_crop_plan(\n    deps: CropWorkflowDeps, root: Path, page_stem: str, plan: PageCropPlan) -> Path:
+def write_page_crop_plan(
+    deps: CropWorkflowDeps, root: Path, page_stem: str, plan: PageCropPlan) -> Path:
     _publish_file_transaction = deps._publish_file_transaction
     _stage_page_crop_plan = deps._stage_page_crop_plan
     temp, path = _stage_page_crop_plan(root, page_stem, plan)
@@ -347,7 +351,8 @@ def write_page_crop_plan(\n    deps: CropWorkflowDeps, root: Path, page_stem: st
     return path
 
 
-def _whitefill_polygons(\n    deps: CropWorkflowDeps, image: Image.Image, polygons: list[PolygonRegion], skip: set[int] | None = None) -> Image.Image:
+def _whitefill_polygons(
+    deps: CropWorkflowDeps, image: Image.Image, polygons: list[PolygonRegion], skip: set[int] | None = None) -> Image.Image:
     out=image.copy().convert("RGB")
     draw=ImageDraw.Draw(out)
     skip=skip or set()
@@ -357,7 +362,8 @@ def _whitefill_polygons(\n    deps: CropWorkflowDeps, image: Image.Image, polygo
     return out
 
 
-def _save_union_crop(\n    deps: CropWorkflowDeps, image: Image.Image, path: Path, base_box: tuple[int,int,int,int], regions: list[PolygonRegion], *, transparent_background: bool = False) -> tuple[int,int,int,int]:
+def _save_union_crop(
+    deps: CropWorkflowDeps, image: Image.Image, path: Path, base_box: tuple[int,int,int,int], regions: list[PolygonRegion], *, transparent_background: bool = False) -> tuple[int,int,int,int]:
     _polygon_bbox = deps._polygon_bbox
     clamp_box = deps.clamp_box
     prepare_crop_background = deps.prepare_crop_background
@@ -380,7 +386,8 @@ def _save_union_crop(\n    deps: CropWorkflowDeps, image: Image.Image, path: Pat
     return union
 
 
-def split_whole_entries(\n    deps: CropWorkflowDeps, 
+def split_whole_entries(
+    deps: CropWorkflowDeps, 
     image_path: Path, entries: list[Entry], settings: AppSettings, output_dir: Path,
     *, top_y: int | None = None, bottom_y: int | None = None, polygons: list[PolygonRegion] | None = None,
     entry_left_padding: int = 0, entry_right_padding: int = 0,
