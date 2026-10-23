@@ -58,7 +58,7 @@ def test_threshold_bridge_reads_public_monkeypatch_at_call_time(monkeypatch):
 
 def test_script_families_and_semantic_language_precedence():
     for text, family in (
-        ("", ""), ("  -・漢字", "other"), ("字", "han"),
+        ("", ""), ("  -・漢字", "kana"), ("字", "han"),
         ("カナ", "kana"), ("한글", "hangul"), ("café", "other"),
         ("  - 漢字", "han"),
     ):
