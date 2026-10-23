@@ -386,6 +386,6 @@ def test_auxiliary_preview_gaps_have_no_output_filenames_or_pdic_entries():
     assert all(piece["word"] != "【辅助不切】" for piece in formatted["entry_pieces"])
 
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    preview_source = (root / "app.py").read_text(encoding="utf-8")
+    preview_source = (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     assert 'text="【辅助不切】"' in preview_source
     assert '"auxiliary-gap"' in preview_source

@@ -54,6 +54,7 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
     gui = (
         root / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
+    render_source = (root / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     helper = (
         root / "src" / "picture_capture" / "ui" / "layout_visualization_ui_v3.py"
     ).read_text(encoding="utf-8")
@@ -62,16 +63,16 @@ def test_layout_visualization_is_wired_statically_in_app() -> None:
     compact = (root / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'app._layout_visualization_var = tk.BooleanVar(' in state
     assert 'check(row, "显示Layout", layout_var, toggle_layout)' in compact
-    assert app.count("draw_layout_visualization_if_enabled(self)") >= 4
+    assert render_source.count("draw_layout_visualization_if_enabled(self)") >= 4
     assert (
         "draw_ocr_crop_preview(self)\n"
-        "            draw_layout_visualization_if_enabled(self)\n"
-        "            return"
-    ) in app
+        "        draw_layout_visualization_if_enabled(self)\n"
+        "        return"
+    ) in render_source
     assert (
         "draw_ocr_crop_preview(self)\n"
-        "        draw_layout_visualization_if_enabled(self)"
-    ) in app
+        "    draw_layout_visualization_if_enabled(self)"
+    ) in render_source
     assert "install_layout_visualization(app_module)" not in gui
     assert "cls._section_frame =" not in helper
     assert "cls._build_quick_settings =" not in helper

@@ -1435,6 +1435,7 @@ def test_main_workspace_exposes_and_locks_preprocess_mode():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     preprocess = (root / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
+    render_source = (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     menu=(root / "ui/compact_task_menus.py").read_text(encoding="utf-8")
     page_controller=(root / "ui/controllers/page.py").read_text(encoding="utf-8")
@@ -1448,8 +1449,9 @@ def test_main_workspace_exposes_and_locks_preprocess_mode():
     assert 'and not getattr(app, "_batch_allow_page_navigation", False)' in page_controller
     for snippet in ("def _preprocess_mode_active(", "export_diagnostic_json(", "export_summary_csv("):
         assert snippet in preprocess
-    for snippet in ("def _preprocess_mode_active(", "allow_page_navigation: bool = True", "_redraw_preprocess_preview(size)"):
+    for snippet in ("def _preprocess_mode_active(", "allow_page_navigation: bool = True"):
         assert snippet in app
+    assert "_redraw_preprocess_preview(size)" in render_source
     assert "普通编辑已锁定" in app
 
 def test_global_deskew_prefers_reliable_physical_header_rule(

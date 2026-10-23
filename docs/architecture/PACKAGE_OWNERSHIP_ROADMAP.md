@@ -1280,3 +1280,30 @@ root-context regression tests and AST guard pin owner methods and adapters.
 Require exact-head 6-platform CI/GUI smoke/compatibility/F821/wheel plus
 review/security checks before merging; actual scanned-page GUI testing
 remains a manual gate. The main-canvas `redraw` remains a separate batch.
+
+
+## Issue #562 — main canvas overlays, SECTION and review marker painting (2026-10-23; candidate)
+
+Following merged #650, move the four physically cohesive page rendering methods
+(`PictureCaptureApp.redraw`, `_draw_crop_plan_preview`, `_draw_page_sections`
+and `_draw_review_entry_highlight`) from `app.py` to the canonical
+`ui/main_canvas_render_workflow.py` leaf. The original class retains all four
+callable method names, Python signatures, defaults, callbacks and target state.
+The frozen `MainCanvasRenderDeps` snapshots **18 original app-level
+bindings at invocation time** to keep existing monkeypatch seams and prevent
+circular imports or module-level installers. The only intended code adaptations
+within the moved bodies are relative import adjustments (`.ui.`→`.`,
+`.crop.`→`..crop.`) and the explicit dependency aliases.
+
+`app.py` normalized source: **620147→598661 bytes**
+(−21486, 3.46%); new strict ratchet **598677** bytes.
+Previous historical/owner caps and root physical module baseline remain unchanged.
+No coordinates, Section visibility, polygon/PPP label, OCR candidate controls,
+image caching, overlay ordering, transparency, scroll, crop filenames,
+settings, persistence, or page ownership behavior is deliberately changed.
+AST guard and direct regression tests pin the owner and class delegation.
+Before acceptance require exact-head Ubuntu/macOS/Windows × Python 3.10/3.13,
+pytest, compatibility, GUI smoke, F821, wheel, CodeQL and review checks. Real
+project GUI verification and post-merge main CI remain separate outstanding
+acceptance steps. The next independent batch should examine remaining
+main-canvas pointer/event and proofreading interactions.
