@@ -23,7 +23,7 @@ def settings():
 
 
 def patterns():
-    return (re.compile(".*"), re.compile(".*"), re.compile(r"s\\.f\\.|adj\\."))
+    return (re.compile(".*"), re.compile(".*"), re.compile(r"s\.f\.|adj\."))
 
 
 def parsed(text, *_args):
@@ -37,7 +37,7 @@ def parsed(text, *_args):
 
 
 def find_pos(text, regex, max_chars):
-    return re.search(r"s\\.f\\.|adj\\.", text[:max_chars]), False
+    return re.search(r"s\.f\.|adj\.", text[:max_chars]), False
 
 
 def test_historical_core_signatures_class_identity_and_leaf_presence():
