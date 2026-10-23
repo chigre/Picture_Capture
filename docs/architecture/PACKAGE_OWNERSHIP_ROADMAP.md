@@ -1063,7 +1063,7 @@ diagnostics, with duplicate Y suppression and per-page metadata.
 
 The historical `paddle_headwords_core.filter_headword_records` callable
 retains the **same positional/optional arguments, defaults and docstring**.
-A frozen `HeadwordFilterDeps` captures **41 live original callable and
+A frozen `HeadwordFilterDeps` captures **42 live original callable and
 policy references** from the legacy core at each invocation: 36 named
 OCR operations plus `Entry`, the current dictionary and verified CJK
 codes, profile loader and relationship label mapper. The canonical owner
@@ -1073,8 +1073,8 @@ diagnostic JSON field, candidate ordering, selection threshold, manual
 override or on-disk format is changed; algorithm body is transferred
 verbatim apart from explicit alias bindings.
 
-Normalized OCR core changes **246682→197587 UTF-8 bytes** (−49095, 19.9%)
-with new strict size cap **197600**, unchanged historical oversized
+Normalized OCR core changes **246682→197668 UTF-8 bytes** (−49014, 19.9%)
+with new strict size cap **197680**, unchanged historical oversized
 baseline and **15 physical root Python modules**. Newly added direct
 tests cover isolated import, exactly 41 current dependencies, legacy
 call signature/docstrings, zero-candidate behavior, real-time grouping
