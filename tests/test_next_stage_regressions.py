@@ -993,10 +993,10 @@ def test_recent_project_details_expose_requested_columns(tmp_path):
 def test_recent_projects_dialog_uses_modern_card_information_hierarchy():
     source = (
         Path(__file__).resolve().parents[1]
-        / "src" / "picture_capture" / "app.py"
+        / "src" / "picture_capture" / "ui/project_session_workflow.py"
     ).read_text(encoding="utf-8")
-    start = source.index("    def open_recent_project(self) -> None:")
-    end = source.index("\n    @staticmethod", start)
+    start = source.index("def open_recent_project(")
+    end = source.index("\ndef _attach_tooltip(", start)
     text = source[start:end]
 
     assert 'dialog.title("项目中心")' in text
@@ -1462,6 +1462,7 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
 def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferences():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     startup = text[
         text.index("        self.section_expanded = {"):
@@ -1480,8 +1481,8 @@ def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferen
     ):
         assert expected in method
     assert "persist=False" in method
-    assert "if launch_profile_setup:" in text
-    assert "self._apply_new_project_sidebar_defaults()" in text
+    assert "if launch_profile_setup:" in project_session
+    assert "self._apply_new_project_sidebar_defaults()" in project_session
 
 
 def test_binary_preview_and_font_scaling_are_display_only():
@@ -3826,6 +3827,7 @@ def test_vertical_main_editor_is_a_real_text_widget_not_a_canvas_proxy():
 def test_round1_blocking_ui_paths_use_background_workers():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
+    project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     assert "def _start_ui_worker(" in text
     assert "self._ui_worker_queue.put(event)" in text
@@ -3855,31 +3857,31 @@ def test_round1_blocking_ui_paths_use_background_workers():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
     ).read_text(encoding="utf-8")
-    page_request = text.index("    def _request_page_load(", app_start)
-    page_load = text.index("    def load_page(", page_request)
-    page_block = text[page_request:page_load]
+    page_request = project_session.index("def _request_page_load(")
+    page_load = project_session.index("def load_page(", page_request)
+    page_block = project_session[page_request:page_load]
     assert "self.page_controller.request_page_load(" in page_block
     assert "with Image.open(page) as opened:" in page_controller
     assert 'app._start_ui_worker("page-load"' in page_controller
-    select_start = text.index("    def on_page_select(", app_start)
-    assert "self.page_controller.on_page_select(_event)" in text[select_start:page_request]
+    select_start = project_session.index("def on_page_select(")
+    assert "self.page_controller.on_page_select(_event)" in project_session[select_start:page_request]
 
-    project_start = text.index("    def _load_project(", app_start)
-    project_end = text.index("\n    def on_page_select", project_start)
-    project_block = text[project_start:project_end]
-    worker_pos = project_block.index("        def worker():")
-    done_pos = project_block.index("        def done(result)")
+    project_start = project_session.index("def _load_project(")
+    project_end = project_session.index("\ndef on_page_select", project_start)
+    project_block = project_session[project_start:project_end]
+    worker_pos = project_block.index("    def worker():")
+    done_pos = project_block.index("    def done(result)")
     assert worker_pos < project_block.index("migrate_legacy_project(", worker_pos) < done_pos
     assert worker_pos < project_block.index("ProjectState.open(root)", worker_pos) < done_pos
     assert worker_pos < project_block.index("with Image.open(page) as opened:", worker_pos) < done_pos
     assert "self._start_ui_worker(" in project_block
     assert '"project-load", worker, done, failed, wait_on_close=True' in project_block
 
-    recent_start = text.index("    def open_recent_project(", app_start)
-    recent_end = text.index("\n    @staticmethod\n    def _attach_tooltip", recent_start)
-    recent_block = text[recent_start:recent_end]
-    rebuild_start = recent_block.index("        def rebuild(")
-    refresh_start = recent_block.index("        def refresh_recent_data(")
+    recent_start = project_session.index("def open_recent_project(")
+    recent_end = project_session.index("\ndef _attach_tooltip(", recent_start)
+    recent_block = project_session[recent_start:recent_end]
+    rebuild_start = recent_block.index("    def rebuild(")
+    refresh_start = recent_block.index("    def refresh_recent_data(")
     rebuild_block = recent_block[rebuild_start:refresh_start]
     assert "recent_project_details(" not in rebuild_block
     assert "Image.open(" not in rebuild_block
@@ -4250,6 +4252,7 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
+    project_session = (root / "src" / "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     worker_start = app.index("    def _ui_worker_key_active(")
     worker_end = app.index("\n    def _configure_main_workspace_styles", worker_start)
@@ -4269,9 +4272,9 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
     assert "self.withdraw()" in close
     assert "正在完成后台文件操作" in close
 
-    project_start = app.index("    def _load_project(")
-    project_end = app.index("\n    def on_page_select", project_start)
-    project = app[project_start:project_end]
+    project_start = project_session.index("def _load_project(")
+    project_end = project_session.index("\ndef on_page_select", project_start)
+    project = project_session[project_start:project_end]
     assert 'self._ui_worker_key_active("project-load")' in project
     assert 'self._ui_worker_key_active("profile-validation")' in project
     assert 'wait_on_close=True' in project
@@ -4382,6 +4385,7 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     root = Path(__file__).resolve().parents[1]
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     profile = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
+    project_session = (root / "src" / "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     # The ZIP publisher was physically moved under training/ for Issue #562.
     training = (
         root / "src" / "picture_capture" / "training" / "zip_publish.py"
@@ -4394,9 +4398,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     poll_end = app.index("\n    def _configure_main_workspace_styles", poll_start)
     assert "_ui_worker_active" in app[poll_start:poll_end]
 
-    load_start = app.index("    def _load_project(")
-    load_end = app.index("\n    def on_page_select", load_start)
-    load = app[load_start:load_end]
+    load_start = project_session.index("def _load_project(")
+    load_end = project_session.index("\ndef on_page_select", load_start)
+    load = project_session[load_start:load_end]
     assert "root == Path(self.project.root).expanduser().resolve()" in load
     assert load.index("root == Path(self.project.root).expanduser().resolve()") < load.index("def worker():")
 
