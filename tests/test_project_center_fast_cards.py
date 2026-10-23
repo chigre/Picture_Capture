@@ -51,7 +51,7 @@ def test_project_center_displays_cards_before_decoding_previews():
     entry = source.index("def open_recent_project(")
     section = source[entry:source.index("\ndef _attach_tooltip(", entry + 10)]
     metadata_done = section.index('state["cover_images"] = {}')
-    metadata_rebuild = section.index("                rebuild()", metadata_done)
+    metadata_rebuild = section.index("            rebuild()", metadata_done)
     detail_dispatch = section.index('f"{key}-details",', metadata_rebuild)
     preview_dispatch = section.index('f"{key}-previews",')
     assert metadata_done < metadata_rebuild < detail_dispatch
