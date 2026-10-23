@@ -8,18 +8,18 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are accepted through #634 at
-`5477b184`, with exact-head and independent main six-platform CI/CodeQL passed.
-Root count remains 15, all explicitly classified. The current candidate extracts
-structural/residual-horizontal projective candidate generation, distortion audits,
-safety gates, automatic/explicit selection and rejected-candidate diagnostics into
-`preprocess/projective_selection.py`. Eight current operations and seven current
-policy values feed a 17-field per-page selection. Facade shrinks 115065→105233 bytes.
-Manual/UVDoc transforms, selected-candidate diagnostic mapping and pixel application
-remain in their original positions. Exact-head CI/review and independent main
-acceptance remain pending. Remaining analysis/app/core and real-scan/manual/native
-GPU acceptance are open. The phase log below is historical and does not describe
-current physical file locations.
+Root classification and preprocessing extractions are accepted through #635 at
+`88156923`, with exact-head and independent main six-platform CI/CodeQL passed.
+Root count remains 15, all explicitly classified. The current candidate moves
+candidate body/tail pixel acceptance and final retained-image re-audit into
+`preprocess/pixel_row_policy.py`. Separate gates and explicit per-page results
+preserve retention vs convergence and partial diagnostics on measurement failure.
+Facade shrinks 105233→98305 bytes, below the normal 100000-byte module threshold;
+its normalized ceiling tightens to98310 without changing historical baselines.
+Exact-head CI/review and independent main acceptance remain pending. Remaining
+manual/UVDoc/orthogonal orchestration, diagnostic mapping, oversized app/core and
+real-scan/manual/native GPU acceptance remain open. The phase log below is
+historical and does not describe current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

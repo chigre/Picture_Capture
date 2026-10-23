@@ -730,7 +730,7 @@ oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
 acceptance are still open work.
 
 
-## Issue #562 — projective candidate generation and selection (2026-10-23; pending acceptance)
+## Issue #562 — projective candidate generation and selection (2026-10-23; accepted #635)
 
 On accepted `main@5477b184` (#634; exact-head and independent main six-platform
 CI/CodeQL green), move structural/residual-horizontal projective candidate generation,
@@ -766,3 +766,44 @@ and composition, reject returning the nested distortion/selection implementation
 root. Historical baselines stay unchanged. Remaining manual/UVDoc/orthogonal stages,
 diagnostic mapping, oversized app/processing/OCR cores and real scanned-page/manual
 GUI/native CUDA acceptance remain open work.
+
+
+## Issue #562 — candidate pixel acceptance and retained-image re-audit (2026-10-23; pending acceptance)
+
+On accepted `main@88156923` (#635; exact-head and independent main six-platform
+CI/CodeQL green), move candidate body/tail pixel acceptance and final retained-pixel
+re-audit into `preprocess/pixel_row_policy.py`. CandidatePixelAssessment carries seven
+acceptance values. RetainedPixelDiagnostics carries13 final measurements/verdicts,
+initialized explicitly from the current per-page diagnostics. Both are internal working
+results, never persisted. Current pixel auditor and six policy values are supplied at
+call time; no owner import back to facade/GUI or new global hook/installer/namespace copy.
+Root count remains15; facade shrinks **105233→98305 bytes** (−6928), now below the normal
+100000-byte threshold. Keep historical oversized baselines as historical records.
+
+Preserve candidate row sample≥8 plus valid-column≥1, final re-audit's original sample-only
+row gate, absolute and relative row limits, tail sample≥2/column≥1, baseline epsilon,
+exact floating-point comparisons, tail-progress ratio/regression budget and verdict
+priority. Tail retention and convergence remain separate: a body-improving candidate
+may remain retained while a non-regressing tail still needs another pass. Final re-audit
+uses accepted working pixels and first valid initial evidence, keeping old before-values
+when unavailable. Skipped/insufficient/failing audits preserve prior measurements, and
+an exception after some assignments preserves those partial updates and warning order.
+Image transforms, loop stop/rollback order, public signatures and model conversions,
+formats/settings/pickle/source coordinates stay unchanged.
+
+43 new tests cover candidate/retained gates and their intentional difference, exact
+boundaries, progress vs retainability, combined verdicts, insufficient/absent/exceptional
+measurement, partial updates, input identity/immutability and public live-auditor/policy
+save/reopen/pickle. Existing42 focused cases pass; full3385 passed/3 skipped; compatibility93.
+Frozen #635: both policy AST bodies, public signature and normalized model constructor
+unchanged;768 candidate cases,480 retained partial-result/warning cases and3 complete
+accepted/rejected multi-pass payload/crop-pixel fixture comparisons pass (native image
+operations stubbed by existing fixtures). F821/compile/wheel and architecture/change
+guards pass; exact-head six-platform CI/GUI smoke/CodeQL/review and independent main
+checks gate acceptance.
+
+Tighten normalized facade ceiling105240→98310 and require canonical routines/composition;
+prohibit retained pixel implementation returning to analysis root. Historical baselines
+remain unchanged. Remaining manual/UVDoc/orthogonal orchestration and diagnostics,
+oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
+acceptance remain open work.
