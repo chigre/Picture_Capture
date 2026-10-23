@@ -143,6 +143,7 @@ def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
 
 def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> None:
     app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
+    project_session = (ROOT / "src/picture_capture/ui/project_session_workflow.py").read_text(encoding="utf-8")
     session_source = (
         ROOT / "src/picture_capture/ui/controllers/session.py"
     ).read_text(encoding="utf-8")
@@ -162,10 +163,10 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert "if getattr(widget, \"_pc_appearance_map_pending\", False):" in app_source
     assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in app_source
     assert 'display = themed_display_image(display, self.appearance_mode)' in app_source
-    assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in app_source
+    assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in project_session
     assert 'appearance_mode = self.appearance_mode' in app_source
-    assert 'self._recent_projects_rebuild = rebuild' in app_source
-    assert 'getattr(event, "widget", None) is not dialog' in app_source
+    assert 'self._recent_projects_rebuild = rebuild' in project_session
+    assert 'getattr(event, "widget", None) is not dialog' in project_session
     assert '"*TCombobox*Listbox.background"' in app_source
     assert '"*TCombobox*Listbox.selectBackground"' in app_source
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
@@ -184,7 +185,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'palette["review_present_bg"]' in app_source
     assert 'palette["review_absent_bg"]' in app_source
     assert 'palette["review_membership_fg"]' in app_source
-    assert 'self._apply_current_appearance(dialog)' in app_source
+    assert 'self._apply_current_appearance(dialog)' in project_session
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
     assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source
     assert "themed_display_image(" in profile_source
