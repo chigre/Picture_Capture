@@ -188,7 +188,8 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'palette["review_absent_bg"]' in review_source
     assert 'palette["review_membership_fg"]' in review_source
     assert 'self._apply_current_appearance(dialog)' in project_session
-    assert 'themed_display_image(crop, self.parent.appearance_mode)' in app_source
+    review_crop = (ROOT / "src/picture_capture/ui/review_crop_actions.py").read_text(encoding="utf-8")
+    assert 'themed_display_image(crop, self.parent.appearance_mode)' in review_crop
     assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source
     assert "themed_display_image(" in profile_source
     assert 'preview, getattr(self.parent, "appearance_mode", "light")' in profile_source

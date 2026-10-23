@@ -139,9 +139,8 @@ def test_all_page_navigation_enters_same_shared_load_page_commit_path():
     assert "save_review_before_page_change(self, index" in load_page
     assert "self._save_current_page_by_mode(sync_editors=not review_saved)" in load_page
     assert "refresh_review_after_page_change(self, preloaded if use_preloaded else None)" in load_page
-    review_change = path.split("    def change_page(self, delta: int) -> None:", 1)[1].split(
-        "\n\n\nclass PictureCaptureApp", 1
-    )[0]
+    review_owner = (Path(module.__file__).parent / "ui/review_page_lifecycle.py").read_text(encoding="utf-8")
+    review_change = review_owner.split("def change_page(self, deps: ReviewPageDeps, delta: int) -> None:", 1)[1]
     assert review_change.count("_request_render_rows(") == 0
     assert "current_already_saved=True" in review_change
     page_module = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "controllers" / "page.py"

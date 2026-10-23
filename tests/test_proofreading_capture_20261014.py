@@ -102,9 +102,9 @@ def test_unlinked_deletion_keeps_unknown_stable_identity(tmp_path):
 
 
 def test_review_delete_only_attempts_capture_after_successful_save():
-    code = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = code.index("    def delete_review_entry(self, index:")
-    end = code.index("    def _save_digit_map(", start)
+    code = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "review_entry_actions.py").read_text(encoding="utf-8")
+    start = code.index("def delete_review_entry(")
+    end = code.index("\ndef _save_digit_map(", start)
     block = code[start:end]
     assert block.index("self.parent.save_pdic(silent=True, sync_editors=False)") < block.index(
         "capture_saved_review_deletion("
@@ -208,10 +208,10 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
     app = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    review = app.split("class ReviewWindow(", 1)[1].split("class PictureCaptureApp(", 1)[0]
+    review = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_page_lifecycle.py").read_text(encoding="utf-8")
     for name in ("save(self, *, redraw_main: bool = True)", "autosave_commit(self)"):
-        begin = review.index("    def " + name)
-        end = review.find("\n    def ", begin + 8)
+        begin = review.index("def " + name.replace("(self", "(self, deps: ReviewPageDeps"))
+        end = review.find("\ndef ", begin + 8)
         snippet = review[begin:end if end != -1 else None]
         assert snippet.index("_review_evidence_before_save()") < snippet.index(
             "self._commit_edits()"

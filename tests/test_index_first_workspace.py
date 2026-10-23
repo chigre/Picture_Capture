@@ -4,6 +4,8 @@ from picture_capture.ui import workspace_tools
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 REVIEW_WORKSPACE_SOURCE = (ROOT / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+REVIEW_CROP_SOURCE = (ROOT / "ui/review_crop_actions.py").read_text(encoding="utf-8")
+REVIEW_ENTRY_SOURCE = (ROOT / "ui/review_entry_actions.py").read_text(encoding="utf-8")
 
 
 def sources():
@@ -294,20 +296,20 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
     assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in REVIEW_WORKSPACE_SOURCE
     assert 'self._review_display_crops = list(preloaded_crops)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _update_active_crop_preview(self, index: int)' in app
-    assert 'crop.width, max(1, round(multiplier * crop.height))' in app
-    assert 'extended_review_crop_box(' in app
+    assert 'crop.width, max(1, round(multiplier * crop.height))' in REVIEW_CROP_SOURCE
+    assert 'extended_review_crop_box(' in REVIEW_CROP_SOURCE
     assert 'center_y - half_height' not in app
-    assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in app
-    assert 'self._update_active_crop_preview(index)' in app
+    assert 'preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)' in REVIEW_CROP_SOURCE
+    assert 'self._update_active_crop_preview(index)' in REVIEW_ENTRY_SOURCE
 
 
 def test_current_review_entry_keeps_ordinary_row_and_pinned_crop():
     app, _ = sources()
-    assert 'photo = self._ordinary_review_photo(index)' in app
+    assert 'photo = self._ordinary_review_photo(index)' in REVIEW_CROP_SOURCE
     assert 'self._review_row_pictures.append(picture)' in REVIEW_WORKSPACE_SOURCE
-    assert 'self._update_active_crop_preview(index)' in app
-    active = app[app.index('    def set_active(self, index: int)'):]
-    active = active[:active.index('    def _scroll_editor_into_view')]
+    assert 'self._update_active_crop_preview(index)' in REVIEW_ENTRY_SOURCE
+    active = REVIEW_ENTRY_SOURCE.split("def set_active(", 1)[1]
+    active = active.split("\ndef _scroll_editor_into_view(", 1)[0]
     assert 'picture.destroy()' not in active
     assert 'picture.grid_remove()' not in active
 
@@ -317,8 +319,8 @@ def test_review_preview_is_position_and_size_invariant_on_window_resize():
     assert 'self.active_crop_host.pack_propagate(False)' in REVIEW_WORKSPACE_SOURCE
     assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in REVIEW_WORKSPACE_SOURCE
     assert 'self._active_crop_fixed_size: tuple[int, int] | None = None' in REVIEW_WORKSPACE_SOURCE
-    assert 'if self._active_crop_fixed_size is None:' in app
-    assert 'self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)' in app
+    assert 'if self._active_crop_fixed_size is None:' in REVIEW_CROP_SOURCE
+    assert 'self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)' in REVIEW_CROP_SOURCE
 
 
 def test_next_page_button_is_packed_before_expandable_editor_area():
@@ -344,8 +346,8 @@ def test_inline_review_slice_uses_text_based_height_without_classification():
     assert 'entry, geometry, image, review_settings, next_entry,' in REVIEW_WORKSPACE_SOURCE
     assert 'editor_text=editor_texts[index]' in REVIEW_WORKSPACE_SOURCE
     assert 'ordinary_height_only=True' not in app
-    assert 'themed_display_image(crop, self.parent.appearance_mode)' in app
-    assert 'self._update_active_crop_preview(index)' in app
+    assert 'themed_display_image(crop, self.parent.appearance_mode)' in REVIEW_CROP_SOURCE
+    assert 'self._update_active_crop_preview(index)' in REVIEW_ENTRY_SOURCE
 
 
 def test_workspace_mode_is_restored_from_last_session():
@@ -371,8 +373,8 @@ def test_pinned_preview_and_every_inline_crop_coexist():
     assert 'self, self.rows, photo=photo, index=index, total=len(ordered)' in render
     assert 'self._review_row_pictures.append(picture)' in render
     assert 'if index != 0:' not in render
-    active = app[app.index('    def set_active(self, index: int)'):]
-    active = active[:active.index('    def _scroll_editor_into_view')]
+    active = REVIEW_ENTRY_SOURCE.split("def set_active(", 1)[1]
+    active = active.split("\ndef _scroll_editor_into_view(", 1)[0]
     assert 'self._update_active_crop_preview(index)' in active
     assert 'picture.destroy()' not in active
     assert 'picture.grid_remove()' not in active
@@ -547,9 +549,7 @@ def test_extreme_simple_normal_modes_have_independent_page_list_visibility(monke
 
 def test_review_pinned_crop_2_5x_and_compact_font_captions():
     app, _ = sources()
-    start = app.index("    def _update_active_crop_preview(self, index: int)")
-    end = app.index("    def _ordinary_review_photo(", start)
-    pinned = app[start:end]
+    pinned = REVIEW_CROP_SOURCE.split("def _update_active_crop_preview(", 1)[1].split("\ndef _schedule_review_crop_height_update(", 1)[0]
     assert "extended_review_crop_box(" in pinned
     assert "round(multiplier * crop.height)" in pinned
     assert "center_y - half_height" not in pinned

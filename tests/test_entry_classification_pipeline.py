@@ -277,7 +277,10 @@ def test_gui_composition_uses_static_pdic_io_and_review_classification():
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = (Path(app_module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     assert "self.active_crop_host = ttk.Frame(editor_area" in review_source
-    assert app_source.count("sync_review_entry_classification(self)") + review_source.count("sync_review_entry_classification(self)") >= 2
+    entry_source = (Path(app_module.__file__).parent / "ui/review_entry_actions.py").read_text(encoding="utf-8")
+    assert (app_source.count("sync_review_entry_classification(self)")
+            + review_source.count("sync_review_entry_classification(self)")
+            + entry_source.count("sync_review_entry_classification(self)")) >= 2
     assert '"大字头切图高："' in review_source
 
 

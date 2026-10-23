@@ -1537,6 +1537,74 @@ def collect_violations() -> list[str]:
             ):
                 violations.append(f"review lexical callback delegate missing: {method}")
 
+    # #562: explicit complete owner contract for proofreading crop, entries and page lifecycle.
+    review_lifecycle_owners = {
+        "review_crop_actions.py": [
+            "_update_active_crop_preview",
+            "_schedule_review_crop_height_update",
+            "_refresh_review_row_crop",
+            "_ordinary_review_photo"
+        ],
+        "review_entry_actions.py": [
+            "set_active",
+            "_scroll_editor_into_view",
+            "focus_index",
+            "on_key",
+            "_set_editor_membership_color",
+            "delete_review_entry",
+            "_save_digit_map",
+            "insert_char",
+            "_selected_wordslist_global_index",
+            "use_selected_word",
+            "fill_words"
+        ],
+        "review_page_lifecycle.py": [
+            "_finish_close_review",
+            "autosave_commit",
+            "_review_evidence_before_save",
+            "_review_evidence_after_save",
+            "save",
+            "_reset_rows_scroll_top",
+            "_prefetch_path_signature",
+            "_page_prefetch_signature_for",
+            "_page_prefetch_signature",
+            "_review_prefetch_key",
+            "_take_prefetched_page",
+            "_schedule_adjacent_preload",
+            "change_page"
+        ]
+    }
+    review_lifecycle_symbols = {
+        "review_crop_actions.py": "_review_crop",
+        "review_entry_actions.py": "_review_entry",
+        "review_page_lifecycle.py": "_review_page",
+    }
+    for filename, method_names in review_lifecycle_owners.items():
+        canonical = PACKAGE_ROOT / "ui" / filename
+        if not canonical.is_file():
+            violations.append(f"review lifecycle owner missing: {filename}")
+            continue
+        physical_ast = ast.parse(canonical.read_text(encoding="utf-8"))
+        physical_implementations = {
+            node.name: node for node in physical_ast.body if isinstance(node, ast.FunctionDef)
+        }
+        if any(isinstance(node, ast.ImportFrom) and node.module == "app"
+               for node in ast.walk(physical_ast)):
+            violations.append(f"review lifecycle owner imports app.py: {filename}")
+        symbol = review_lifecycle_symbols[filename]
+        for method in method_names:
+            if method not in physical_implementations:
+                violations.append(f"review lifecycle implementation missing: {filename}.{method}")
+            adapter = review_adapters.get(method)
+            if adapter is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == symbol
+                and node.func.attr == method for node in ast.walk(adapter)
+            ):
+                violations.append(f"review lifecycle callback delegate missing: {method}")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

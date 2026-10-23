@@ -130,8 +130,9 @@ def test_zoom_command_paths_still_render_both_inline_and_fixed_crops():
     for method in ("change_review_zoom", "apply_review_zoom_text", "reset_review_zoom"):
         method_body = appearance_source.split(f"def {method}(", 1)[1].split("\n\ndef ", 1)[0]
         assert "self._request_render_rows(focus_index=active)" in method_body
-    pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
-        "    def _schedule_review_crop_height_update(", 1
+    crop_source = (Path(module.__file__).parent / "ui/review_crop_actions.py").read_text(encoding="utf-8")
+    pinned = crop_source.split("def _update_active_crop_preview(", 1)[1].split(
+        "\ndef _schedule_review_crop_height_update(", 1
     )[0]
     assert "resize_fixed_review_preview(" in pinned
     assert "current_zoom = max(0.01, float(self.review_zoom))" in pinned

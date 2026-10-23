@@ -129,6 +129,9 @@ from .ui import review_reference_workflow as _review_reference
 from .ui import review_lookup_workflow as _review_lookup
 from .ui import review_simplified_workflow as _review_simplified
 from .ui import review_ocr_compare_workflow as _review_ocr
+from .ui import review_crop_actions as _review_crop
+from .ui import review_entry_actions as _review_entry
+from .ui import review_page_lifecycle as _review_page
 from .ui import review_appearance_workflow as _review_appearance
 from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
@@ -2648,86 +2651,14 @@ class ReviewWindow(tk.Toplevel):
         return _review_workspace._update_title(self, _review_workspace_deps())
 
     def _finish_close_review(self) -> None:
-        if self.parent.review_window is self:
-            self.parent.review_window = None
-        self._prefetch_closed = True
-        self.parent._invalidate_ui_worker(self._review_render_worker_key)
-        self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
-        self.parent._invalidate_ui_worker(f"focused-filter-prefetch-{id(self)}")
-        self._filter_batch_render_cache.clear()
-        self._filter_prefetch_key = None
-        if self._filter_save_job is not None:
-            try:
-                self.after_cancel(self._filter_save_job)
-            except tk.TclError:
-                pass
-            self._filter_save_job = None
-        if self._review_auto_zoom_job is not None:
-            try:
-                self.after_cancel(self._review_auto_zoom_job)
-            except tk.TclError:
-                pass
-            self._review_auto_zoom_job = None
-        self._network_lookup_serial += 1
-        if self._network_lookup_job is not None:
-            try:
-                self.after_cancel(self._network_lookup_job)
-            except tk.TclError:
-                pass
-            self._network_lookup_job = None
-        if self._network_poll_job is not None:
-            try:
-                self.after_cancel(self._network_poll_job)
-            except tk.TclError:
-                pass
-            self._network_poll_job = None
-        self._network_pending_serials.clear()
-        with self._prefetch_lock:
-            self._prefetched_pages.clear()
-        self.parent.clear_review_entry_highlight()
-        self.destroy()
-        self.parent.redraw()
+        return _review_page._finish_close_review(self, _review_page_deps())
 
     def _close_review(self) -> None:
         from .ui.review_close_actions import close_review
         close_review(self, showerror=messagebox.showerror)
 
     def autosave_commit(self) -> bool:
-        """Commit review edits for the shared main-window autosave timer."""
-        if getattr(self, "_filter_rows_active", False):
-            self._flush_focused_changes_now()
-            return True
-        if not self.parent.project or not self.parent.current_page:
-            return False
-        state = self.parent._foreground_batch_state(self.parent.current_index)
-        if state == "processing":
-            return True
-        row_entries = self._bound_row_entries()
-        word_dirty = any(
-            i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
-            for i in range(min(len(self.vars), len(row_entries)))
-        )
-        current_stem = self.parent.current_page.stem
-        simplified_dirty = current_stem in self._simplified_dirty_pages
-        dirty = word_dirty or simplified_dirty
-        if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
-            return True
-        if not dirty:
-            return True
-        from .ui.review_transaction_actions import capture_review_before, record_review_after
-        transaction_before = capture_review_before(self)
-        evidence_before = self._review_evidence_before_save()
-        from .proofreading.save_safety import protect_review_pdic_commit
-        from .proofreading.review_bundle import commit_review_bundle
-        with protect_review_pdic_commit(self):
-            self._commit_edits()
-            commit_review_bundle(self, transaction_before)
-            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self._review_evidence_after_save(evidence_before)
-        record_review_after(self, transaction_before)
-        return True
+        return _review_page.autosave_commit(self, _review_page_deps())
 
     def _effective_wordslist_locator_mode(self) -> str:
         return _review_reference._effective_wordslist_locator_mode(self, _review_reference_deps())
@@ -2808,56 +2739,10 @@ class ReviewWindow(tk.Toplevel):
         open_visual_verification(self)
 
     def _review_evidence_before_save(self) -> list[WordEntry] | None:
-        """Read the pre-edit on-disk PDIC only for explicit project-local opt-in."""
-        if not bool(getattr(
-            getattr(self.parent, "settings", None), "proofreading_event_capture", False
-        )):
-            return None
-        page = getattr(self.parent, "current_page", None)
-        if page is None or getattr(self.parent, "project", None) is None:
-            return None
-        self.__dict__["_review_evidence_source_fingerprints"] = None
-        self.__dict__["_review_evidence_prior_pdic_sha256"] = None
-        self.__dict__["_review_evidence_source_page"] = page
-        try:
-            from .proofreading.events import sha256_file
-            saved = pdic_path(page)
-            prior_sha = sha256_file(saved)
-            previous = read_pdic(saved)
-            if prior_sha is None or sha256_file(saved) != prior_sha:
-                return None
-            self.__dict__["_review_evidence_prior_pdic_sha256"] = prior_sha
-            from .proofreading.capture import verified_ocr_preedit_fingerprints
-            cache_fn = getattr(self.parent, "_paddle_cache_path", None)
-            cache = cache_fn() if callable(cache_fn) else None
-            self.__dict__["_review_evidence_source_fingerprints"] = (
-                verified_ocr_preedit_fingerprints(cache, pdic_path(page))
-            )
-            return previous
-        except (OSError, ValueError, TypeError):
-            return None
+        return _review_page._review_evidence_before_save(self, _review_page_deps())
 
     def _review_evidence_after_save(self, previous: list[WordEntry] | None) -> None:
-        """Supplement a committed PDIC, never modify or roll back user edits."""
-        if previous is None:
-            return
-        page = getattr(self.parent, "current_page", None)
-        project = getattr(self.parent, "project", None)
-        owned_page = self.__dict__.pop("_review_evidence_source_page", None)
-        if page is None or project is None or page != owned_page:
-            return
-        try:
-            from .proofreading.capture import capture_saved_review_rename
-            source = self.__dict__.pop("_review_evidence_source_fingerprints", None)
-            prior_sha = self.__dict__.pop("_review_evidence_prior_pdic_sha256", None)
-            capture_saved_review_rename(
-                project_root=project.root, page=page, prior_pdic_entries=previous,
-                source_fingerprints=source, prior_pdic_sha256=prior_sha,
-            )
-        except (OSError, ValueError, TypeError):
-            self.parent.status_var.set(
-                "校对内容已保存，但本地校对操作日志写入失败，请检查磁盘权限。"
-            )
+        return _review_page._review_evidence_after_save(self, _review_page_deps(), previous)
 
     def _bound_row_entries(self) -> list[WordEntry]:
         return _review_simplified._bound_row_entries(self, _review_simplified_deps())
@@ -3057,678 +2942,82 @@ class ReviewWindow(tk.Toplevel):
         return _review_ocr.use_ocr_word(self, _review_ocr_deps(), word)
 
     def _update_active_crop_preview(self, index: int) -> None:
-        """Expand the active preview downward from its ordinary crop's top Y."""
-        if not (0 <= index < len(self._review_display_crops)):
-            self.active_crop_photo = None
-            self.active_crop_label.configure(image="")
-            return
-        crop = self._review_display_crops[index]
-        row_entries = self._bound_row_entries()
-        if index >= len(row_entries) or self.parent.image is None:
-            return
-        try:
-            entry = row_entries[index]
-            # Match the source box calculation used by the inline-crop worker:
-            # effective page Profile settings and page-specific geometry.
-            crop_settings, geometry = _review_crop_context(
-                self.parent.image, self.parent.settings,
-                self.parent.canvas.winfo_width(), self.parent.current_index,
-            )
-            ordinary_box = _review_line_box(
-                entry, geometry, self.parent.image, crop_settings,
-                editor_text=self.vars[index].get(),
-            )
-            multiplier = parse_review_crop_multiplier(
-                getattr(self.parent.settings, "review_extended_crop_height_multiplier", 2.5)
-            )
-            extended_box = extended_review_crop_box(
-                ordinary_box, self.parent.image.height, multiplier,
-            )
-            extended = self.parent.image.crop(extended_box).convert("RGB")
-            # At the bottom of the page, pad below rather than stretching
-            # the clipped text to the expected larger preview height.
-            source_height = max(1, ordinary_box[3] - ordinary_box[1])
-            expected_height = max(1, round(source_height * multiplier))
-            if extended.height < expected_height:
-                padded = Image.new("RGB", (extended.width, expected_height), "white")
-                padded.paste(extended, (0, 0))
-                extended = padded
-            current_zoom = max(0.01, float(self.review_zoom))
-            if self._active_crop_fixed_size is None:
-                self._active_crop_fixed_size = (
-                    crop.width, max(1, round(multiplier * crop.height)),
-                )
-                self._active_crop_fixed_zoom = current_zoom
-            else:
-                from .proofreading.crop_extension import resize_fixed_review_preview
-                self._active_crop_fixed_size = resize_fixed_review_preview(
-                    self._active_crop_fixed_size,
-                    getattr(self, "_active_crop_fixed_zoom", None),
-                    current_zoom,
-                )
-                self._active_crop_fixed_zoom = current_zoom
-            preview = extended.resize(self._active_crop_fixed_size, Image.Resampling.LANCZOS)
-            self.active_crop_photo = ImageTk.PhotoImage(
-                themed_display_image(preview, self.parent.appearance_mode)
-            )
-            self.active_crop_label.configure(image=self.active_crop_photo)
-            self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)
-        except (ValueError, tk.TclError, AttributeError):
-            return
+        return _review_crop._update_active_crop_preview(self, _review_crop_deps(), index)
 
     def _schedule_review_crop_height_update(self, index: int) -> None:
-        """Debounce editor text-length transitions without rebuilding/focusing rows."""
-        flags = getattr(self, "_review_crop_single_flags", [])
-        if not (0 <= index < len(flags) and index < len(self.vars)):
-            return
-        jobs = getattr(self, "_review_crop_height_jobs", {})
-        prior = jobs.pop(index, None)
-        if prior is not None:
-            try:
-                self.after_cancel(prior)
-            except tk.TclError:
-                pass
-        if _focused_review_is_single_character(self.vars[index].get()) == flags[index]:
-            return
-        jobs[index] = self.after(120, lambda i=index: self._refresh_review_row_crop(i))
-        self._review_crop_height_jobs = jobs
+        return _review_crop._schedule_review_crop_height_update(self, _review_crop_deps(), index)
 
     def _refresh_review_row_crop(self, index: int) -> None:
-        """Re-crop only the changed editor row, with all PIL work off Tk."""
-        getattr(self, "_review_crop_height_jobs", {}).pop(index, None)
-        rows = self._bound_row_entries()
-        if not (0 <= index < len(rows) and index < len(self.vars)
-                and index < len(self._review_display_crops)):
-            return
-        image, page = self.parent.image, self.parent.current_page
-        if image is None or page is None:
-            return
-        entry = rows[index]
-        text = self.vars[index].get()
-        single = _focused_review_is_single_character(text)
-        settings = replace(self.parent.settings)
-        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
-        page_index = int(self.parent.current_index)
-        zoom = max(0.01, float(self.review_zoom))
-        generation = getattr(self, "_review_crop_render_generation", 0)
-        snapshot = replace(entry)
-
-        def worker():
-            crop_settings, geometry = _review_crop_context(
-                image, settings, viewer_width, page_index,
-            )
-            box = _review_line_box(
-                snapshot, geometry, image, crop_settings, editor_text=text,
-            )
-            crop = image.crop(box).convert("RGB")
-            return crop.resize(
-                (max(1, round(crop.width * zoom)),
-                 max(1, round(crop.height * zoom))),
-                Image.Resampling.LANCZOS,
-            )
-
-        def done(crop):
-            try:
-                if (not self.winfo_exists() or self.parent.current_page != page
-                        or getattr(self, "_review_crop_render_generation", 0) != generation
-                        or self.parent.current_index != page_index
-                        or self.parent.settings != settings
-                        or self.review_zoom != zoom
-                        or index >= len(self._review_row_pictures)
-                        or index >= len(self._bound_row_entries())
-                        or self._bound_row_entries()[index] is not entry
-                        or _focused_review_is_single_character(
-                            self.vars[index].get()) != single):
-                    return
-                self._review_display_crops[index] = crop
-                photo = self._ordinary_review_photo(index)
-                self._review_row_pictures[index].configure(image=photo)
-                self.thumbnails[index] = photo
-                self.editor_crop_widths[index] = crop.width
-                self._review_crop_single_flags[index] = single
-                if index == self.active_index:
-                    self._active_crop_fixed_size = None
-                    self._update_active_crop_preview(index)
-            except (AttributeError, IndexError, tk.TclError):
-                return
-
-        self.parent._start_ui_worker(
-            f"{self._review_render_worker_key}-height-{index}",
-            worker, done,
-        )
+        return _review_crop._refresh_review_row_crop(self, _review_crop_deps(), index)
 
     def _ordinary_review_photo(self, index: int) -> ImageTk.PhotoImage:
-        """Build the ordinary single-line crop for each review editor row."""
-        crop = self._review_display_crops[index]
-        return ImageTk.PhotoImage(
-            themed_display_image(crop, self.parent.appearance_mode)
-        )
+        return _review_crop._ordinary_review_photo(self, _review_crop_deps(), index)
 
     def set_active(self, index: int) -> None:
-        self.active_index = index
-        self._update_active_crop_preview(index)
-        self._update_title()
-        row_entries = self._bound_row_entries()
-        candidate = self._candidate_for_entry(row_entries[index]) if 0 <= index < len(row_entries) else None
-        self._show_ocr_options(candidate)
-        if 0 <= index < len(row_entries):
-            self.parent.highlight_review_entry(row_entries[index])
-        if 0 <= index < len(self.vars):
-            self.locate_reference_word(self.vars[index].get(), index)
-            self._refresh_cc_simplified_comparison(index)
-            self._schedule_network_lookup(self.vars[index].get())
-        sync_review_entry_classification(self)
+        return _review_entry.set_active(self, _review_entry_deps(), index)
 
     def _scroll_editor_into_view(self, index: int) -> None:
-        if not (0 <= index < len(self.editors)):
-            return
-        try:
-            self.update_idletasks()
-            row_box = self.rows.grid_bbox(0, index * 2)
-            if row_box and row_box[3] > 0:
-                target_top = max(0, int(row_box[1]) - 6)
-            else:
-                target_top = max(0, self.editor_frames[index].winfo_y() - 40)
-            target_bottom = self.editor_frames[index].winfo_y() + self.editor_frames[index].winfo_height() + 8
-            view_top = float(self.canvas.canvasy(0))
-            view_height = max(1, self.canvas.winfo_height())
-            total_height = max(1, self.rows.winfo_reqheight())
-            if target_top < view_top:
-                self.canvas.yview_moveto(max(0.0, min(1.0, target_top / total_height)))
-            elif target_bottom > view_top + view_height:
-                new_top = max(0, target_bottom - view_height)
-                self.canvas.yview_moveto(max(0.0, min(1.0, new_top / total_height)))
-        except tk.TclError:
-            pass
+        return _review_entry._scroll_editor_into_view(self, _review_entry_deps(), index)
 
     def focus_index(self, index: int) -> str:
-        if 0 <= index < len(self.editors):
-            self.editors[index].focus_set()
-            self.editors[index].icursor("end")
-            self.editors[index].xview_moveto(1.0)
-            self._scroll_editor_into_view(index)
-        return "break"
+        return _review_entry.focus_index(self, _review_entry_deps(), index)
 
     def on_key(self, event: tk.Event, index: int) -> None:
-        char = getattr(event, "char", "")
-        if self.replace_digits.get() and char in self.DIGIT_KEYS:
-            replacement = self.digit_map_vars[self.DIGIT_KEYS.index(char)].get()
-            if replacement:
-                editor = self.editors[index]
-                pos = editor.index("insert")
-                text = editor.get()
-                start = max(0, pos - 1)
-                editor.delete(0, "end")
-                editor.insert(0, text[:start] + replacement + text[pos:])
-                editor.icursor(start + len(replacement))
-        words = self.parent._project_words if self.parent.project else set()
-        self._set_editor_membership_color(index, self.vars[index].get().strip() in words)
-        self._refresh_simplified_for_index(index)
-        self._refresh_editor_ocr_compare(index)
-        if index == self.active_index:
-            self._refresh_ocr_similarity_colors()
-            self._refresh_cc_simplified_comparison(index)
-            self.locate_reference_word(self.vars[index].get(), index)
-            self._schedule_network_lookup(self.vars[index].get())
+        return _review_entry.on_key(self, _review_entry_deps(), event, index)
 
     def _set_editor_membership_color(self, index: int, in_wordslist: bool) -> None:
-        color, foreground, selection_bg, selection_fg = (
-            self._review_membership_colors(in_wordslist)
-        )
-        if 0 <= index < len(self.editors):
-            try:
-                self.editors[index].configure(
-                    bg=color,
-                    disabledbackground=color,
-                    foreground=foreground,
-                    disabledforeground=foreground,
-                    insertbackground=foreground,
-                    selectbackground=selection_bg,
-                    selectforeground=selection_fg,
-                )
-            except tk.TclError:
-                pass
-        if 0 <= index < len(self.editor_frames):
-            try:
-                frame = self.editor_frames[index]
-                current_border = str(frame.cget("highlightbackground"))
-                mismatch_border = current_border.lower() == "#d32f2f"
-                frame.configure(
-                    bg=color,
-                    highlightbackground=("#d32f2f" if mismatch_border else color),
-                    highlightcolor=("#d32f2f" if mismatch_border else color),
-                )
-            except tk.TclError:
-                pass
+        return _review_entry._set_editor_membership_color(self, _review_entry_deps(), index, in_wordslist)
 
     def delete_review_entry(self, index: int) -> str:
-        """Delete one proofreading row and mirror the deletion on the main page.
-
-        The review window and main canvas share ``parent.entries``.  Commit all
-        visible proofreading text before removing the selected Entry so deleting
-        a middle row cannot shift later text onto the wrong headword.  Persist the
-        PDIC immediately and redraw both views; the grave/backtick shortcut uses
-        the same path as the visible [X] button.
-        """
-        row_entries = self._bound_row_entries()
-        if not (0 <= int(index) < len(row_entries)):
-            return "break"
-        if not self.parent._claim_page_for_manual_edit():
-            return "break"
-        if str(getattr(row_entries[int(index)], "candidate_id", "") or ""):
-            # Candidate deletion publishes disk before mutating Tk/Entry.
-            from .ui.review_candidate_delete_actions import delete_owned_review_candidate
-            return delete_owned_review_candidate(self, int(index), row_entries)
-
-        # Only explicitly enabled, project-local evidence capture. Save the
-        # *previous on-disk* PDIC before mutating any shared Entry objects.
-        capture_requested = bool(getattr(
-            getattr(self.parent, "settings", None), "proofreading_event_capture", False
-        ))
-        prior_pdic_rows = None
-        prior_ocr_fingerprints = None
-        if capture_requested and self.parent.current_page is not None:
-            try:
-                prior_pdic_rows = read_pdic(pdic_path(self.parent.current_page))
-                from .proofreading.capture import verified_ocr_preedit_fingerprints
-                cache_fn = getattr(self.parent, "_paddle_cache_path", None)
-                cache = cache_fn() if callable(cache_fn) else None
-                prior_ocr_fingerprints = verified_ocr_preedit_fingerprints(
-                    cache, pdic_path(self.parent.current_page),
-                )
-            except (OSError, ValueError, TypeError):
-                prior_pdic_rows = None
-
-        # Capture before mutating shared Entry objects or saving the PDIC.
-        # OCR-linked deletion changes manual-selection ownership and will
-        # intentionally be refused by the R3 transaction classifier.
-        from .ui.review_transaction_actions import capture_review_before, record_review_after
-        transaction_before = capture_review_before(self)
-        self._commit_edits()
-        entry = row_entries[int(index)]
-        deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
-        deleted_candidate_id = str(entry.candidate_id or "")
-        candidate_id_unique = (
-            bool(deleted_candidate_id)
-            and sum(
-                str(row.get("candidate_id", "")) == deleted_candidate_id
-                for row in getattr(self.parent, "ocr_review_candidates", ())
-                if isinstance(row, dict)
-            ) == 1
-        )
-        simplified_key = simplified_entry_key(entry.x, entry.y)
-        rendered_stem = getattr(self, "_rendered_page_stem", "")
-        if rendered_stem and hasattr(self, "_simplified_page_cache"):
-            self._simplified_page_records(rendered_stem).pop(simplified_key, None)
-            self._simplified_dirty_pages.add(rendered_stem)
-
-        if entry in self.parent.entries:
-            self.parent.entries.remove(entry)
-        self.parent._sort_entries_reading_order()
-        self.parent.clear_review_entry_highlight()
-        # Do not sync stale main-canvas Entry widgets back into the shared model:
-        # the proofreading text above is the newest source of truth.
-        self.parent.save_pdic(silent=True, sync_editors=False)
-        capture_failed = False
-        if prior_pdic_rows is not None:
-            try:
-                from .proofreading.capture import capture_saved_review_deletion
-                capture_saved_review_deletion(
-                    project_root=self.parent.project.root,
-                    page=self.parent.current_page,
-                    prior_pdic_entries=prior_pdic_rows,
-                    expected_deleted=deleted_identity,
-                    deleted_candidate_id=deleted_candidate_id,
-                    candidate_id_unique=candidate_id_unique,
-                    source_fingerprints=prior_ocr_fingerprints,
-                )
-            except (OSError, ValueError, TypeError):
-                # PDIC and manual overrides were saved successfully. Evidence
-                # errors must neither undo that save nor silently claim success.
-                capture_failed = True
-        if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
-            self._persist_simplified_page(self._rendered_page_stem)
-        # The soon-to-be-rebuilt ReviewWindow rows still reference the old
-        # widgets; read the true saved parent.entries to classify this one
-        # committed deletion, then rebuild widgets for the restored identities.
-        record_review_after(self, transaction_before, allow_unbound=True)
-        self.parent.redraw()
-
-        next_index = min(int(index), max(0, len(self.parent.entries) - 1))
-        deleted_word = entry.word or "（空白词条）"
-        self.active_index = next_index if self.parent.entries else 0
-        self._request_render_rows(focus_index=self.active_index)
-        if not self.parent.entries:
-            self._show_ocr_options(None)
-            self._update_title()
-        self.parent.status_var.set(
-            f"已删除词条：{deleted_word}"
-            + ("（本地操作日志保存失败，PDIC 已保存）" if capture_failed else "")
-        )
-        return "break"
+        return _review_entry.delete_review_entry(self, _review_entry_deps(), index)
 
     def _save_digit_map(self) -> None:
-        values = [var.get() for var in self.digit_map_vars]
-        self.parent.settings.review_digit_map = values[:10]
-        self.parent.save_settings()
+        return _review_entry._save_digit_map(self, _review_entry_deps())
 
     def insert_char(self, char: str) -> None:
-        if self._filter_rows_active and getattr(self, "filter_editors", []):
-            index = max(
-                0, min(
-                    len(self.filter_editors) - 1,
-                    int(getattr(self, "filter_active_local_index", 0)),
-                )
-            )
-            editor = self.filter_editors[index]
-            editor.insert("insert", char)
-            self._on_filter_key(type("_Event", (), {"char": ""})(), index)
-            return
-        if self.editors and self.parent._claim_page_for_manual_edit():
-            self.editors[self.active_index].insert("insert", char)
-            self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
+        return _review_entry.insert_char(self, _review_entry_deps(), char)
 
     def _selected_wordslist_global_index(self) -> int | None:
-        local = self.word_selected_local_index
-        if local is not None and 0 <= int(local) < len(self.word_window_indices):
-            return self.word_window_indices[int(local)]
-        return None
+        return _review_entry._selected_wordslist_global_index(self, _review_entry_deps())
 
     def use_selected_word(self, event: tk.Event | None = None) -> None:
-        if event is not None:
-            self.word_selected_local_index = self._word_list_local_index_from_event(event)
-        source = self._selected_wordslist_global_index()
-        words = self.parent.project.words if self.parent.project else []
-        if source is None or source >= len(words) or not self.editors:
-            return
-        if not self.parent._claim_page_for_manual_edit():
-            return
-        index = self.active_index
-        self.vars[index].set(words[source])
-        self.on_key(type("_Event", (), {"char": ""})(), index)
-        # A single click fills the active box but intentionally does not advance;
-        # the user can verify the image/text pair before pressing Return.
-        self.after_idle(lambda i=index: self.focus_index(i))
+        return _review_entry.use_selected_word(self, _review_entry_deps(), event)
 
     def fill_words(self) -> None:
-        if self._effective_wordslist_locator_mode() == "sorted":
-            messagebox.showinfo(
-                "外部索引模式",
-                "当前 wordslist 按外部排序索引定位。来自另一部词典时可能存在增词/漏词，"
-                "因此不做连续批量填充；请单击参考词逐条填入。\n\n"
-                "若该词表与当前词典逐条对应，请把定位模式改为“同源连续词表”。",
-                parent=self,
-            )
-            return
-        start = self._selected_wordslist_global_index()
-        if start is None:
-            messagebox.showinfo("请选择", "请先在右侧词表中选择起始词。", parent=self)
-            return
-        if not self.parent._claim_page_for_manual_edit():
-            return
-        words = self.parent.project.words if self.parent.project else []
-        for offset in range(self.active_index, len(self.vars)):
-            source = start + offset - self.active_index
-            if source >= len(words):
-                break
-            old = self.vars[offset].get()
-            if any(marker in old for marker in ("【", "|", "\\")):
-                continue
-            self.vars[offset].set(words[source])
-            self._set_editor_membership_color(offset, True)
-            self._refresh_simplified_for_index(offset)
-        self._refresh_ocr_similarity_colors()
+        return _review_entry.fill_words(self, _review_entry_deps())
 
     def check_order(self, all_pages: bool) -> None:
         self.save()
         self.parent.check_headword_order(all_pages)
 
     def save(self, *, redraw_main: bool = True) -> bool:
-        if getattr(self, "_filter_rows_active", False):
-            self._flush_focused_changes_now()
-            return not (self._filter_save_running or self._filter_pending_changes)
-        state = self.parent._foreground_batch_state(self.parent.current_index)
-        if state == "processing":
-            self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
-            return False
-        if state == "pending":
-            row_entries = self._bound_row_entries()
-            word_dirty = any(
-                i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
-                for i in range(len(self.vars))
-            )
-            simplified_dirty = bool(self.parent.current_page and self.parent.current_page.stem in self._simplified_dirty_pages)
-            dirty = word_dirty or simplified_dirty
-            if not dirty:
-                # Browsing a pending page must not accidentally reserve it.
-                self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-                return True
-            if not self.parent._claim_page_for_manual_edit():
-                return False
-        from .ui.review_transaction_actions import capture_review_before, record_review_after
-        transaction_before = capture_review_before(self)
-        evidence_before = self._review_evidence_before_save()
-        from .proofreading.save_safety import protect_review_pdic_commit
-        from .proofreading.review_bundle import commit_review_bundle
-        with protect_review_pdic_commit(self):
-            self._commit_edits()
-            commit_review_bundle(self, transaction_before)
-            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
-        self._review_evidence_after_save(evidence_before)
-        record_review_after(self, transaction_before)
-        if self.parent.project:
-            try:
-                self.parent.settings.to_json(settings_path(self.parent.project.root))
-            except OSError:
-                pass
-        if redraw_main:
-            self.parent.redraw()
-        return True
+        return _review_page.save(self, _review_page_deps(), redraw_main=redraw_main)
 
     def _reset_rows_scroll_top(self) -> None:
-        """Return the proofreading crop/text viewport to its first row."""
-        try:
-            self.canvas.yview_moveto(0.0)
-        except tk.TclError:
-            return
-        # render_rows() rebuilds row widgets and their final scrollregion is
-        # established on idle; repeat once then so a previous page's scroll
-        # position cannot be restored by the pending geometry update.
-        def reset_after_layout() -> None:
-            try:
-                if self.canvas.winfo_exists():
-                    self.canvas.yview_moveto(0.0)
-            except tk.TclError:
-                pass
-        self.after_idle(reset_after_layout)
+        return _review_page._reset_rows_scroll_top(self, _review_page_deps())
 
     @staticmethod
     def _prefetch_path_signature(path: Path) -> tuple[bool, int, int]:
-        try:
-            stat = path.stat()
-            return True, int(stat.st_size), int(stat.st_mtime_ns)
-        except OSError:
-            return False, 0, 0
+        return _review_page._prefetch_path_signature(_review_page_deps(), path)
 
     @classmethod
     def _page_prefetch_signature_for(cls, project_root: Path, page: Path) -> tuple:
-        cache = ocr_cache_root(project_root) / f"{page.stem}.json"
-        ppp = ppp_read_path_for_image(page)
-        return (
-            cls._prefetch_path_signature(page),
-            cls._prefetch_path_signature(pdic_path(page)),
-            cls._prefetch_path_signature(ppp),
-            cls._prefetch_path_signature(cache),
-        )
+        return _review_page._page_prefetch_signature_for(cls, _review_page_deps(), project_root, page)
 
     def _page_prefetch_signature(self, page: Path) -> tuple:
-        project = self.parent.project
-        if project is None:
-            return ()
-        return self._page_prefetch_signature_for(project.root, page)
+        return _review_page._page_prefetch_signature(self, _review_page_deps(), page)
 
     def _review_prefetch_key(self) -> tuple:
-        # repr(AppSettings) intentionally includes every persisted geometry and
-        # review option.  Invalidation is conservative: an unrelated setting
-        # change may discard a prefetched crop, but a stale crop is never used.
-        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
-        return (
-            repr(self.parent.settings),
-            round(float(self.review_zoom), 6),
-            round(float(self.parent.view_scale), 6),
-            viewer_width,
-        )
+        return _review_page._review_prefetch_key(self, _review_page_deps())
 
     def _take_prefetched_page(self, index: int) -> dict | None:
-        if not self.parent.project or not (0 <= index < len(self.parent.project.images)):
-            return None
-        with self._prefetch_lock:
-            payload = self._prefetched_pages.pop(index, None)
-        if payload is None:
-            return None
-        page = self.parent.project.images[index]
-        if payload.get("project_root") != str(self.parent.project.root):
-            return None
-        if payload.get("signature") != self._page_prefetch_signature(page):
-            return None
-        return payload
+        return _review_page._take_prefetched_page(self, _review_page_deps(), index)
 
     def _schedule_adjacent_preload(self) -> None:
-        project = self.parent.project
-        if project is None or self.parent.current_index < 0 or self.parent.image is None:
-            return
-        # Capture every Tk-derived value on the UI thread. The worker below
-        # touches only filesystem/PIL/pure-Python geometry functions.
-        settings_snapshot = replace(self.parent.settings)
-        review_zoom = max(0.01, float(self.review_zoom))
-        view_scale = float(self.parent.view_scale)
-        viewer_width = max(1, int(self.parent.canvas.winfo_width()))
-        review_key = self._review_prefetch_key()
-        project_root = str(project.root)
-        anchor_index = int(self.parent.current_index)
-        targets = [
-            i for i in (anchor_index - 1, anchor_index + 1)
-            if 0 <= i < len(project.images)
-        ]
-        for index in targets:
-            page = project.images[index]
-            signature = self._page_prefetch_signature(page)
-            with self._prefetch_lock:
-                cached = self._prefetched_pages.get(index)
-                if cached is not None and cached.get("signature") == signature and cached.get("review_key") == review_key:
-                    continue
-                if index in self._prefetch_inflight:
-                    continue
-                self._prefetch_inflight.add(index)
-
-            def worker(
-                page_index=index, page_path=page, expected_signature=signature,
-                local_settings=settings_snapshot, local_review_zoom=review_zoom,
-                local_view_scale=view_scale, local_viewer_width=viewer_width,
-                local_review_key=review_key, local_project_root=project_root,
-                local_ppp_path=ppp_read_path_for_image(page),
-                local_anchor_index=anchor_index,
-            ) -> None:
-                payload = None
-                try:
-                    with Image.open(page_path) as opened:
-                        image = normalize_page_rgb(opened)
-                    entries = read_pdic(pdic_path(page_path))
-                    effective_settings = effective_page_settings(
-                        local_settings, image.size, page_index,
-                    )
-                    analysis_image = page_template_analysis_image(
-                        image, effective_settings, page_index,
-                    )
-                    geometry = derive_geometry(analysis_image, effective_settings)
-                    sections = read_page_sections(page_path)
-                    entries = sort_entries_reading_order(entries, geometry, sections)
-                    polygons = read_ppp(local_ppp_path)
-                    cache_path = ocr_cache_root(Path(local_project_root)) / f"{page_path.stem}.json"
-                    ocr_payload: dict = {}
-                    if cache_path.exists():
-                        try:
-                            loaded = json.loads(cache_path.read_text(encoding="utf-8"))
-                            if isinstance(loaded, dict):
-                                ocr_payload = loaded
-                        except Exception:
-                            ocr_payload = {}
-
-                    review_settings, review_geometry = _review_crop_context(
-                        image, local_settings, local_viewer_width, page_index
-                    )
-                    review_crops: list[Image.Image] = []
-                    for row, entry in enumerate(entries):
-                        next_entry = entries[row + 1] if row + 1 < len(entries) else None
-                        box = _review_line_box(entry, review_geometry, image, review_settings, next_entry)
-                        crop = image.crop(box).convert("RGB")
-                        crop = crop.resize(
-                            (
-                                max(1, round(crop.width * local_review_zoom)),
-                                max(1, round(crop.height * local_review_zoom)),
-                            ),
-                            Image.Resampling.LANCZOS,
-                        )
-                        review_crops.append(crop)
-
-                    display_size = (
-                        max(1, round(image.width * local_view_scale)),
-                        max(1, round(image.height * local_view_scale)),
-                    )
-                    display_image = image.resize(display_size, Image.Resampling.LANCZOS)
-                    # A file rewritten while it was being prefetched is rejected
-                    # rather than exposing a mixed old/new page snapshot.
-                    if expected_signature == self._page_prefetch_signature_for(
-                        Path(local_project_root), page_path,
-                    ):
-                        payload = {
-                            "project_root": local_project_root,
-                            "index": page_index,
-                            "signature": expected_signature,
-                            "review_key": local_review_key,
-                            "image": image,
-                            "entries": entries,
-                            "polygons": polygons,
-                            "ocr_payload": ocr_payload,
-                            "review_crops": review_crops,
-                            "display_size": display_size,
-                            "display_image": display_image,
-                            "view_scale": local_view_scale,
-                        }
-                except Exception:
-                    payload = None
-                finally:
-                    with self._prefetch_lock:
-                        self._prefetch_inflight.discard(page_index)
-                        if payload is not None and not self._prefetch_closed:
-                            self._prefetched_pages[page_index] = payload
-                            # Keep memory bounded to nearby pages even if the
-                            # user navigates rapidly back and forth.
-                            while len(self._prefetched_pages) > 4:
-                                stale = max(
-                                    self._prefetched_pages,
-                                    key=lambda i: abs(i - local_anchor_index),
-                                )
-                                self._prefetched_pages.pop(stale, None)
-
-            threading.Thread(
-                target=worker, name=f"ReviewPrefetch-{page.stem}", daemon=True
-            ).start()
+        return _review_page._schedule_adjacent_preload(self, _review_page_deps())
 
     def change_page(self, delta: int) -> None:
-        if getattr(self, "_filter_rows_active", False):
-            self.change_filter_batch(delta)
-            return
-        target = self.parent.current_index + delta
-        # Commit review edits without repainting the page we are about to leave.
-        # The parent is told that the current PDIC has already been saved, which
-        # also prevents stale main-canvas Entry widgets from overwriting the
-        # newer proofreading text during navigation.
-        self.save(redraw_main=False)
-        preloaded = self._take_prefetched_page(target)
-        self.parent.change_page(
-            delta, preloaded=preloaded, current_already_saved=True, async_allowed=False
-        )
+        return _review_page.change_page(self, _review_page_deps(), delta)
 
 
 
@@ -3929,6 +3218,60 @@ def _review_ocr_deps() -> _review_ocr.ReviewOcrDeps:
         _candidate_choice_rows=_candidate_choice_rows,
         _review_similarity_color=_review_similarity_color,
         _review_text_similarity=_review_text_similarity,
+    )
+
+
+def _review_crop_deps() -> _review_crop.ReviewCropDeps:
+    """Capture live ReviewWindow collaborators at event dispatch."""
+    return _review_crop.ReviewCropDeps(
+        tk=tk,
+        Image=Image,
+        ImageTk=ImageTk,
+        replace=replace,
+        _review_crop_context=_review_crop_context,
+        _review_line_box=_review_line_box,
+        parse_review_crop_multiplier=parse_review_crop_multiplier,
+        extended_review_crop_box=extended_review_crop_box,
+        _focused_review_is_single_character=_focused_review_is_single_character,
+        themed_display_image=themed_display_image,
+    )
+
+
+def _review_entry_deps() -> _review_entry.ReviewEntryDeps:
+    """Capture live ReviewWindow collaborators at event dispatch."""
+    return _review_entry.ReviewEntryDeps(
+        tk=tk,
+        messagebox=messagebox,
+        read_pdic=read_pdic,
+        pdic_path=pdic_path,
+        simplified_entry_key=simplified_entry_key,
+        sync_review_entry_classification=sync_review_entry_classification,
+    )
+
+
+def _review_page_deps() -> _review_page.ReviewPageDeps:
+    """Capture live ReviewWindow collaborators at event dispatch."""
+    return _review_page.ReviewPageDeps(
+        tk=tk,
+        replace=replace,
+        Image=Image,
+        json=json,
+        threading=threading,
+        Path=Path,
+        ocr_cache_root=ocr_cache_root,
+        ppp_read_path_for_image=ppp_read_path_for_image,
+        pdic_path=pdic_path,
+        read_pdic=read_pdic,
+        normalize_page_rgb=normalize_page_rgb,
+        effective_page_settings=effective_page_settings,
+        page_template_analysis_image=page_template_analysis_image,
+        derive_geometry=derive_geometry,
+        read_page_sections=read_page_sections,
+        sort_entries_reading_order=sort_entries_reading_order,
+        read_ppp=read_ppp,
+        _review_crop_context=_review_crop_context,
+        _review_line_box=_review_line_box,
+        settings_path=settings_path,
     )
 
 

@@ -1394,3 +1394,23 @@ coordinate (never list offset), manual-simplified overwrite guard, shared settin
 and original project formats. Fresh explicit collaborators are passed from app.py;
 leaf owners cannot import the GUI shell. CI and independent manual GUI verification
 remain necessary; no architecture baseline/allowlist is changed.
+
+## #562 — proofreading entry/crop/page lifecycle full owner batch (2026-10-23)
+
+After merged PR #656, consolidate **28 additional ReviewWindow methods in one PR**:
+4 crop preview / 120ms async row crop refresh callbacks to
+`ui/review_crop_actions.py`; 11 editor focus, wordlist insertion, keyboard,
+manual deletion and color methods to `ui/review_entry_actions.py`; and
+13 save/close, optional evidence, adjacent-page prefetch and page-change
+methods to `ui/review_page_lifecycle.py`.
+
+Every public method signature and staticmethod/classmethod descriptor is kept in
+`ReviewWindow` as a small delegated compatibility entrypoint. Relative imports
+are adjusted only for `ui` package ownership; live app helpers are injected per
+callback. Preserve the original saved-before-page-change flag, source coordinate
+identity and evidence capture opt-in, stale prefetch signature rejection,
+maximum four cached nearby pages, closure generation/cancel behavior, 120ms crop
+refresh debounce, thread-side PIL work and manual edit/undo sequencing.
+No PDIC/PPP/simplified or settings schema changes, no increased size ratchets.
+Require full six-platform CI, CodeQL, independent review, and real scanned-page
+GUI save/close/reopen parity before the remaining human acceptance is closed.

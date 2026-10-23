@@ -106,6 +106,19 @@ REVIEW_APPEARANCE_SOURCE = (
     Path(__file__).resolve().parents[1]
     / "src/picture_capture/ui/review_appearance_workflow.py"
 ).read_text(encoding="utf-8")
+
+REVIEW_CROP_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_crop_actions.py"
+).read_text(encoding="utf-8")
+REVIEW_ENTRY_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_entry_actions.py"
+).read_text(encoding="utf-8")
+REVIEW_PAGE_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_page_lifecycle.py"
+).read_text(encoding="utf-8")
 REVIEW_LOOKUP_SOURCE = (
     Path(__file__).resolve().parents[1]
     / "src/picture_capture/ui/review_lookup_workflow.py"
@@ -4623,7 +4636,7 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "step = 100" in REVIEW_REFERENCE_SOURCE
     assert "def _show_wordslist_window" in REVIEW_REFERENCE_SOURCE
-    assert "words = self.parent._project_words if self.parent.project else set()" in review
+    assert "words = self.parent._project_words if self.parent.project else set()" in REVIEW_ENTRY_SOURCE
     assert "set(self.parent.project.words if self.parent.project else [])" not in review
 
 
@@ -5734,7 +5747,7 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     assert '("¨", ("ä", "ë", "ï", "ö", "ü"))' in review
     assert '("¯", ("ā", "ē", "ī", "ō", "ū"))' in review
     assert "self.digit_map_vars" in review
-    assert "settings.review_digit_map = values[:10]" in review
+    assert "settings.review_digit_map = values[:10]" in REVIEW_ENTRY_SOURCE
 
 
 def test_v21116_digit_replacement_uses_editable_map_not_fixed_constant():
@@ -5743,9 +5756,7 @@ def test_v21116_digit_replacement_uses_editable_map_not_fixed_constant():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def on_key", text.index("class ReviewWindow"))
-    end = text.index("    def _save_digit_map", start)
-    body = text[start:end]
+    body = REVIEW_ENTRY_SOURCE.split("def on_key(", 1)[1].split("\ndef _set_editor_membership_color(", 1)[0]
     assert "self.digit_map_vars[self.DIGIT_KEYS.index(char)].get()" in body
     assert "DIGIT_MAP" not in body
 
@@ -6032,12 +6043,10 @@ def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def _reset_rows_scroll_top", text.index("class ReviewWindow"))
-    end = text.index("class PictureCaptureApp", start)
-    body = text[start:end]
+    body = REVIEW_PAGE_SOURCE.split("def _reset_rows_scroll_top(", 1)[1]
     assert "self.canvas.yview_moveto(0.0)" in body
     assert "self.after_idle(reset_after_layout)" in body
-    change_start = body.index("    def change_page")
+    change_start = body.index("def change_page(")
     change = body[change_start:]
     # The central main-window load_page path now owns page-switch refresh for
     # review and main-window navigation alike, avoiding a second redraw.
@@ -6088,7 +6097,7 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     review = text[start:end]
     assert 'text="文本左边距："' in REVIEW_WORKSPACE_SOURCE
     assert 'textvariable=self.review_left_padding_var' in REVIEW_WORKSPACE_SOURCE
-    assert 'self._refresh_ocr_similarity_colors()' in review
+    assert 'self._refresh_ocr_similarity_colors()' in REVIEW_ENTRY_SOURCE
     assert 'bg=bg, activebackground=bg' in REVIEW_OCR_SOURCE
     assert 'editor.pack_configure(padx=(padding, 0))' in REVIEW_APPEARANCE_SOURCE
 
@@ -6225,7 +6234,7 @@ def test_v21121_review_ui_exposes_selectable_ocr_compare_after_check_and_arrow_n
     assert '"LENS": "lens"' in review
     assert 'editor.bind("<Up>"' in FOCUSED_FILTER_SOURCE
     assert 'editor.bind("<Down>"' in FOCUSED_FILTER_SOURCE
-    assert 'self._scroll_editor_into_view(index)' in review
+    assert 'self._scroll_editor_into_view(index)' in REVIEW_ENTRY_SOURCE
 
 
 def test_v21121_review_ocr_compare_marks_only_real_mismatch_and_is_neutral_when_source_missing():
@@ -6475,8 +6484,8 @@ def test_v21122_hotfix5_review_rows_expose_x_delete_and_grave_shortcut():
     assert 'command=lambda i=index: self.delete_review_entry(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'editor.bind("<KeyPress-grave>", lambda _e, i=index: self.delete_review_entry(i))' in REVIEW_WORKSPACE_SOURCE
     assert "def delete_review_entry(self, index: int) -> str:" in review
-    assert "self.parent.save_pdic(silent=True, sync_editors=False)" in review
-    assert "self.parent.redraw()" in review
+    assert "self.parent.save_pdic(silent=True, sync_editors=False)" in REVIEW_ENTRY_SOURCE
+    assert "self.parent.redraw()" in REVIEW_ENTRY_SOURCE
 
 
 def test_v21122_hotfix5_review_delete_commits_text_removes_shared_entry_and_deselects_candidate():
@@ -8246,7 +8255,7 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert "filter_batch_top" not in text and "filter_batch_bottom" not in text
     assert 'text=("上\\n一\\n批" if active else "上\\n一\\n页")' in REVIEW_WORKSPACE_SOURCE
     assert 'text=("下\\n一\\n批" if active else "下\\n一\\n页")' in REVIEW_WORKSPACE_SOURCE
-    assert "self.change_filter_batch(delta)" in text
+    assert "self.change_filter_batch(delta)" in REVIEW_PAGE_SOURCE
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
