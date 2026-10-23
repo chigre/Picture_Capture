@@ -48,10 +48,10 @@ def test_duplicate_fusion_result_is_retained_only_when_other_real_choice_exists(
 
 def test_main_menu_guard_and_drawing_checkbox_semantics_are_separate():
     src = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    shell = (src / "app.py").read_text(encoding="utf-8")
+    shell = (src / "ui/main_entry_actions.py").read_text(encoding="utf-8")
     ui = (src / "ui" / "entry_overlay_builder.py").read_text(encoding="utf-8")
-    menu_method = shell.split("    def _create_main_ocr_menu(", 1)[1].split(
-        "\n    def _paddle_cache_path(", 1,
+    menu_method = shell.split("def _create_main_ocr_menu(", 1)[1].split(
+        "\ndef update_entry(", 1,
     )[0]
     assert "if not _has_distinct_ocr_alternatives(candidate) or not rows:" in menu_method
     assert 'tk.Checkbutton(' not in ui

@@ -1474,3 +1474,17 @@ async callbacks. CI and CodeQL cannot substitute for scanned-page GUI validation
 The 15-root-module classification remains intentional; these two owners
 further reduce the oversized Tk GUI entry implementation without weakening
 public root facades.
+
+
+## Issue #562 — main-canvas word editing and OCR menu owner (2026-10-24)
+
+Following merged #660, extract 16 original PictureCaptureApp implementations into
+`ui/main_entry_actions.py`: entry-local overlay removal/update and row numbers,
+confidence/wordslist editor styles, matching OCR candidates, alternate OCR menu,
+manual OCR fill/edit, keyboard navigation and source-coordinate linked simplified
+sidecar deletion. Native callback/staticmethod ABI remains in `app.py` as thin
+delegates; original patchable helpers resolve on each call by frozen deps.
+No new root shim or persisted schema. Preserve PDIC source X/Y, manual-selection
+override, editor-focused after fill, skip whole-page redraw on checkbox toggles,
+and keep unsaved simplified-review row deletion coordinated with persisted file.
+Require six-platform CI, security and real scan GUI parity. Human signoff is separate.
