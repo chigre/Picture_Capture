@@ -3309,6 +3309,7 @@ def _word_fill_status_deps() -> _word_fill_status.WordFillStatusDeps:
         Path=Path,
         json=json,
         os=os,
+        word_fill_status_path=word_fill_status_path,
     )
 
 

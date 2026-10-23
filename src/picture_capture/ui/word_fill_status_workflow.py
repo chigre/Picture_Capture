@@ -18,15 +18,17 @@ class WordFillStatusDeps:
     Path: object
     json: object
     os: object
+    word_fill_status_path: object
 
 
-def _word_fill_status_path(self, deps: WordFillStatusDeps, self) -> Path | None:
+def _word_fill_status_path(self, deps: WordFillStatusDeps) -> Path | None:
+    word_fill_status_path = deps.word_fill_status_path
     if not self.project:
         return None
     return word_fill_status_path(self.project.root)
 
 
-def _load_word_fill_status(self, deps: WordFillStatusDeps, self) -> None:
+def _load_word_fill_status(self, deps: WordFillStatusDeps) -> None:
     """Restore persisted TXT-vs-line count checks for the current project."""
     json = deps.json
     self._word_fill_check_status = {}
@@ -71,7 +73,7 @@ def _load_word_fill_status(self, deps: WordFillStatusDeps, self) -> None:
         self._word_fill_mismatch_pages.clear()
 
 
-def _persist_word_fill_status(self, deps: WordFillStatusDeps, self) -> None:
+def _persist_word_fill_status(self, deps: WordFillStatusDeps) -> None:
     """Atomically save persistent line-count comparison results."""
     json = deps.json
     os = deps.os
@@ -93,7 +95,7 @@ def _persist_word_fill_status(self, deps: WordFillStatusDeps, self) -> None:
             pass
 
 
-def _word_fill_status_text(self, deps: WordFillStatusDeps, self, index: int) -> str:
+def _word_fill_status_text(self, deps: WordFillStatusDeps,, index: int) -> str:
     """Return the compact per-page text shown in the new fill-status column."""
     if not self.project or not (0 <= index < len(self.project.images)):
         return "未核对"
@@ -118,8 +120,7 @@ def _word_fill_status_text(self, deps: WordFillStatusDeps, self, index: int) -> 
     return "一致"
 
 
-def _record_word_fill_check(self, deps: WordFillStatusDeps, 
-    self, index: int, line_count: int, word_count: int, *, source: str = "",
+def _record_word_fill_check(self, deps: WordFillStatusDeps,, index: int, line_count: int, word_count: int, *, source: str = "",
     has_data: bool = True, persist: bool = False, refresh_overlay: bool = True,
     refresh_row: bool = True,
 ) -> None:
@@ -154,8 +155,7 @@ def _record_word_fill_check(self, deps: WordFillStatusDeps,
         self._schedule_page_cell_overlay_refresh()
 
 
-def _refresh_word_fill_check_from_line_count(self, deps: WordFillStatusDeps, 
-    self, index: int, line_count: int, *, persist: bool = False,
+def _refresh_word_fill_check_from_line_count(self, deps: WordFillStatusDeps,, index: int, line_count: int, *, persist: bool = False,
 ) -> None:
     """Mark a prior fill check stale only when the number of lines changed.
 
@@ -198,7 +198,7 @@ def _refresh_word_fill_check_from_line_count(self, deps: WordFillStatusDeps,
         self._schedule_page_cell_overlay_refresh()
 
 
-def _clear_word_fill_checks_for_indices(self, deps: WordFillStatusDeps, self, indices, *, persist: bool = False) -> None:
+def _clear_word_fill_checks_for_indices(self, deps: WordFillStatusDeps,, indices, *, persist: bool = False) -> None:
     if not self.project:
         return
     if "_word_fill_check_status" not in self.__dict__:
