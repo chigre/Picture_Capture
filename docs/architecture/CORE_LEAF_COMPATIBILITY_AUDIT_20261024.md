@@ -186,6 +186,36 @@ batch requires its **own exact-head** CI and OCR smoke before readiness.
 Keep the PR Draft until representative real-page GUI scan/edit/save/reopen
 and PDIC/PPP/crop acceptance has been independently verified.
 
+## Thirteenth extraction batch — four owners and twelve core functions — 2026-10-24
+
+- `ocr/visual_rescue_policy.py` owns physical overlap association of accepted
+  one-Han OCR glyphs to visual ink runs; explicitly selected post-lemma grammar
+  evidence; saved Profile v1 visible visual-rescue thresholds versus Profile v0
+  backward-compatible thresholds; and the strong-left-edge visual rescue gate.
+  Historical core functions continue to pass current Han classifier and
+  threshold functions at call time.
+- `ocr/peer_typography.py` owns robust page-local median/MAD and an
+  **annotation-only** typography match of softly rejected OCR candidates.
+  It does not directly flip acceptance or relax hard semantic guards. Existing
+  core median/MAD monkeypatches remain effective through callback injection.
+- `ordinary/review_signals.py` owns hard-negative consensus (single/dual),
+  visual-positive veto, and collection of non-selected refined candidate
+  positions on the canonical reading axis. The core passes live visual
+  classifier, negative-reason registry and column-index functions.
+- `geometry/column_offsets.py` owns literal-pixel column-start nudges and
+  safe non-crossing column order. Current core pixel converter is passed
+  at invocation; Geometry/ColumnPath data classes and pickle module paths
+  stay in the original core.
+- `tests/test_issue562_core_leaf_round13_ocr_20261024.py` and
+  `tests/test_issue562_core_leaf_round13_processing_20261024.py`
+  characterize all twelve historical signatures and primary policy branches.
+- **No changes** to raw OCR caches, page/PDIC/PPP schemas, manual review
+  finalization, OCR engine selection, or crop publish transactions.
+
+The previous exact head `67a0000d` passed full six-platform CI and all three
+OCR smoke jobs. The present commit requires independent exact-head CI;
+keep PR #663 Draft pending representative GUI scan/edit/save/reopen acceptance.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
