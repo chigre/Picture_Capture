@@ -182,7 +182,8 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'word_list_default_fg = palette["input_fg"]' in app_source
     assert 'background="#d9d9d9", foreground="#111827"' in app_source
     assert 'editor_frame._pc_skip_classic_appearance = True' in review_source
-    assert 'editor._pc_skip_classic_appearance = True' in app_source
+    focused_source = (ROOT / "src/picture_capture/ui/focused_filter_workflow.py").read_text(encoding="utf-8")
+    assert 'editor._pc_skip_classic_appearance = True' in focused_source
     assert 'palette["review_present_bg"]' in app_source
     assert 'palette["review_absent_bg"]' in app_source
     assert 'palette["review_membership_fg"]' in app_source
