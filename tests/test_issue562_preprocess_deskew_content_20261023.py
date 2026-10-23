@@ -150,6 +150,7 @@ def test_preprocessing_size_guard_normalizes_crlf_and_still_rejects_growth(tmp_p
     source_path = Path(facade.__file__).resolve()
     canonical = source_path.read_text(encoding="utf-8").encode("utf-8")
     windows = tmp_path / "preprocess/pipeline.py"
+    windows.parent.mkdir(parents=True, exist_ok=True)
     windows.write_bytes(canonical.replace(b"\n", b"\r\n"))
     assert windows.stat().st_size > guard.MAX_PREPROCESS_FACADE_BYTES
     assert guard._normalized_source_size(windows) == len(canonical) <= guard.MAX_PREPROCESS_FACADE_BYTES

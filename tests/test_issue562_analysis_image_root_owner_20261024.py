@@ -15,7 +15,7 @@ def test_analysis_image_is_one_physical_owner_with_no_root_shim():
     assert not (package_root / "image_utils.py").exists()
     assert importlib.util.find_spec("picture_capture.image_utils") is None
     assert (package_root / "preprocess/analysis_image.py").is_file()
-    assert sum(1 for p in package_root.glob("*.py") if p.is_file()) == 14
+    assert sum(1 for p in package_root.glob("*.py") if p.is_file()) == 12
     assert analysis_image.normalize_page_rgb is page_pixels.normalize_page_rgb
     assert analysis_image._box_sum is page_pixels._box_sum
     assert analysis_image._generic_analysis_ink is page_pixels._generic_analysis_ink
