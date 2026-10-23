@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 97_440
+MAX_PREPROCESS_FACADE_BYTES = 75_850
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -965,6 +965,28 @@ def collect_violations() -> list[str]:
                    and node.func.value.id == "_geometry_stages"}
     if not {"apply_explicit_uvdoc", "redetect_after_perspective"} <= stage_calls:
         violations.append("preprocessing analysis must compose explicit geometry stages")
+    stage_owner = PACKAGE_ROOT / "preprocess/perspective_stages.py"
+    if not stage_owner.is_file():
+        violations.append("canonical manual/projective execution owner missing")
+    else:
+        stage_ast = ast.parse(stage_owner.read_text(encoding="utf-8"))
+        routines = {node.name for node in stage_ast.body
+                    if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not {"PerspectiveState", "apply_manual_perspective",
+                "apply_selected_perspective"} <= routines:
+            violations.append("manual and selected perspective execution owners missing")
+    projective_calls = {node.func.attr for node in ast.walk(analysis_adapter)
+                        if isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "_perspective_stages"}
+    if not {"PerspectiveState", "apply_manual_perspective",
+            "apply_selected_perspective"} <= projective_calls:
+        violations.append("analysis must explicitly compose projective stage diagnostics")
+    if any(isinstance(node, ast.Name)
+           and node.id in {"manual_estimate", "review_reasons", "diagnostic_candidate"}
+           for node in ast.walk(analysis_adapter)):
+        violations.append("manual/projective diagnostic implementation returned to facade")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 
