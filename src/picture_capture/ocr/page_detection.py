@@ -73,6 +73,7 @@ class PageDetectionDeps:
     normalize_page_rgb: object
     OCRRecord: object
     asdict: object
+    _FINAL_LINE_DEDUP_RATIO: object
 
 
 def detect_paddle_headwords(
@@ -132,6 +133,7 @@ def detect_paddle_headwords(
     normalize_page_rgb = deps.normalize_page_rgb
     OCRRecord = deps.OCRRecord
     asdict = deps.asdict
+    _FINAL_LINE_DEDUP_RATIO = deps._FINAL_LINE_DEDUP_RATIO
     filter_records = record_filter or filter_headword_records
     signature = _cache_signature(image, geometry, settings)
     runtime_width = geometry.transform.canonical_size(image.size)[0]
