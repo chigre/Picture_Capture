@@ -6201,7 +6201,6 @@ def _review_workspace_deps() -> _review_workspace.ReviewWorkspaceDeps:
         _entry_font_spec=_entry_font_spec,
         _review_editor_font_size=_review_editor_font_size,
         resolve_content_font_family=resolve_content_font_family,
-        measure_font=measure_font,
         _focused_review_is_single_character=_focused_review_is_single_character,
         simplified_entry_key=simplified_entry_key,
         replace=replace,

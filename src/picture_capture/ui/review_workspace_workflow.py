@@ -30,7 +30,6 @@ class ReviewWorkspaceDeps:
     _entry_font_spec: object
     _review_editor_font_size: object
     resolve_content_font_family: object
-    measure_font: object
     _focused_review_is_single_character: object
     simplified_entry_key: object
     replace: object
@@ -724,7 +723,6 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
     _entry_font_spec = deps._entry_font_spec
     _review_editor_font_size = deps._review_editor_font_size
     resolve_content_font_family = deps.resolve_content_font_family
-    measure_font = deps.measure_font
     _focused_review_is_single_character = deps._focused_review_is_single_character
     simplified_entry_key = deps.simplified_entry_key
     if getattr(self, "_filter_rows_active", False):

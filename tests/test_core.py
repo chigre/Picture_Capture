@@ -87,6 +87,11 @@ from picture_capture.processing import (
 )
 
 
+REVIEW_WORKSPACE_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_workspace_workflow.py"
+).read_text(encoding="utf-8")
+
 class FormatTests(unittest.TestCase):
 
     def test_layout_transform_points_boxes_images_and_markers_round_trip(self) -> None:
@@ -4558,7 +4563,7 @@ def test_v2102_review_ui_uses_wordslist_selector_not_wordsofpages_import():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'text="选择文件"' in review
+    assert 'text="选择文件"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="导入_WordsOfPages.txt"' not in review
     assert "def choose_wordslist_file" in review
     assert "refresh_wordslist_display" in review
@@ -4586,7 +4591,7 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert "self.word_window_radius = 250" in review
-    assert 'text="前100"' in review and 'text="后100"' in review
+    assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "step = 100" in review
     assert "def _show_wordslist_window" in review
     assert "words = self.parent._project_words if self.parent.project else set()" in review
@@ -5520,7 +5525,7 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     assert '"review_simplified_font_family"' in app_text
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'values=families' in display
-    assert "review_families = (AUTO_FONT_FAMILY" in app_text
+    assert "review_families = (AUTO_FONT_FAMILY" in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v21112_picdic_index_has_no_percent_signs(tmp_path):
@@ -5572,10 +5577,10 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
     assert review_auto_fit_zoom(500, 1000) == 1.98
 
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert 'text="自动", width=5, command=self.reset_review_zoom' in app_text
+    assert 'text="自动", width=5, command=self.reset_review_zoom' in REVIEW_WORKSPACE_SOURCE
     assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
-    assert "widest_crop = max(crop.width for crop in raw_crops)" in app_text
-    assert "widest_crop, auto_image_area_width, 0.99" in app_text
+    assert "widest_crop = max(crop.width for crop in raw_crops)" in REVIEW_WORKSPACE_SOURCE
+    assert "widest_crop, auto_image_area_width, 0.99" in REVIEW_WORKSPACE_SOURCE
     assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in app_text
     assert "not self.review_zoom_auto" in app_text
 
@@ -5643,11 +5648,11 @@ def test_v21115_review_window_exposes_persisted_font_controls():
     text = Path(app_module.__file__).read_text(encoding="utf-8")
     body=text.split("class ReviewWindow",1)[1].split("class PictureCaptureApp",1)[0]
     for name in ("review_font_family_var","review_font_size_var","review_entry_font_family = family","review_entry_font_size = size","self.parent.save_settings()"):
-        assert name in body
+        assert name in body or name in REVIEW_WORKSPACE_SOURCE
     # The compact review toolbar uses the abbreviated labels 粗 / 斜,
     # while keeping the same persistent settings bindings.
-    assert 'text="粗", variable=self.review_font_bold_var' in body
-    assert 'text="斜", variable=self.review_font_italic_var' in body
+    assert 'text="粗", variable=self.review_font_bold_var' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="斜", variable=self.review_font_italic_var' in REVIEW_WORKSPACE_SOURCE
     assert 'settings.review_entry_font_bold = bold' in body
     assert 'settings.review_entry_font_italic = italic' in body
 
@@ -5685,10 +5690,10 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'right, "digit", "数字替换映射"' in review
-    assert 'text="启用", variable=self.replace_digits' in review
-    assert 'right, "accent", "变音字符"' in review
-    assert '"<Button-3>", lambda _event, c=char: self.copy_char(c)' in review
+    assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
+    assert '"<Button-3>", lambda _event, c=char: self.copy_char(c)' in REVIEW_WORKSPACE_SOURCE
     assert 'DIGIT_KEYS = "1234567890"' in review
     assert '("´", ("á", "é", "í", "ó", "ú"))' in review
     assert '("`", ("à", "è", "ì", "ò", "ù"))' in review
@@ -5721,25 +5726,25 @@ def test_v21117_review_layout_matches_compact_workflow():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in review
-    assert 'textvariable=self.autosave_label_var' in review
-    assert 'text="校对模式："' in review
-    assert 'right, "digit", "数字替换映射"' in review
-    assert 'right, "accent", "变音字符"' in review
-    assert 'text="排序规则"' in review
+    assert 'self._review_flat_button(row1, "保存", self.save, role="primary")' in REVIEW_WORKSPACE_SOURCE
+    assert 'textvariable=self.autosave_label_var' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="校对模式："' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="排序规则"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="词条排序规则"' not in review
     assert 'text="词条排序检查："' not in review
-    assert 'text="当前页"' in review and 'text="所有页"' in review
+    assert 'text="当前页"' in REVIEW_WORKSPACE_SOURCE and 'text="所有页"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="上\\n一\\n页"' in review and 'text="下\\n一\\n页"' in review
-    assert 'text="词条切图显示大小："' in review
-    assert 'right, "ocr", "OCR结果"' in review
-    assert 'right, "reference", "参考词表"' in review
-    assert 'text="选择文件"' in review
-    assert 'text="从所选词开始填充至本页结束"' in review
-    assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in review
-    assert 'right, "digit", "数字替换映射"' in review
-    assert 'text="启用", variable=self.replace_digits' in review
-    assert 'right, "accent", "变音字符"' in review
+    assert 'text="词条切图显示大小："' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "ocr", "OCR结果"' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "reference", "参考词表"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="选择文件"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="从所选词开始填充至本页结束"' in REVIEW_WORKSPACE_SOURCE
+    assert 'self.word_list.bind("<ButtonRelease-1>", self.use_selected_word)' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
 
 
 def test_review_toolbar_controls_are_grouped_by_function():
@@ -5751,9 +5756,7 @@ def test_review_toolbar_controls_are_grouped_by_function():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    build_start = review.index("    def _build(self) -> None:")
-    build_end = review.index("    def _toggle_review_panel(", build_start)
-    build = review[build_start:build_end]
+    build = REVIEW_WORKSPACE_SOURCE.split("def _build(", 1)[1].split("\ndef _request_render_rows(", 1)[0]
 
     row1_start = build.index('row1 = ttk.Frame(controls')
     row1_end = build.index('ttk.Separator(controls, orient="horizontal")', row1_start)
@@ -5835,9 +5838,7 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert '"PCR.Section.TLabelframe"' not in styles
     assert '"PCR.Compact.TButton"' in styles
 
-    build_start = review.index("    def _build(self) -> None:")
-    build_end = review.index("    def _toggle_review_panel(", build_start)
-    build = review[build_start:build_end]
+    build = REVIEW_WORKSPACE_SOURCE.split("def _build(", 1)[1].split("\ndef _request_render_rows(", 1)[0]
     assert 'panes.add(left, weight=0)' in build
     assert 'panes.add(right, weight=1)' in build
     assert 'self.review_panes = panes' in build
@@ -5852,9 +5853,7 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'relief="sunken"' not in build
     assert 'relief="groove"' not in build
 
-    render_start = review.index("    def render_rows(")
-    render_end = review.index("    def _candidate_for_entry(", render_start)
-    render = review[render_start:render_end]
+    render = REVIEW_WORKSPACE_SOURCE.split("def render_rows(", 1)[1]
     assert "self._review_membership_colors(entry.word in words)" in render
     assert 'relief="flat"' in render
     assert 'highlightthickness=1' in render
@@ -5878,15 +5877,13 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     assert 'ttk.Separator(frame, orient="horizontal")' in section
     assert "body.pack_forget()" in section
 
-    build_start = review.index("    def _build(self) -> None:")
-    build_end = review.index("    def _toggle_review_panel(", build_start)
-    build = review[build_start:build_end]
+    build = REVIEW_WORKSPACE_SOURCE.split("def _build(", 1)[1].split("\ndef _request_render_rows(", 1)[0]
     assert "def add_review_height_control(" in build
     assert '"普通词条行切图高："' in build
     assert '"大字头切图高："' in build
     height_controls = build[
-        build.index("        def add_review_height_control("):
-        build.index("        zoom_row = ttk.Frame(")
+        build.index("    def add_review_height_control("):
+        build.index("    zoom_row = ttk.Frame(")
     ]
     assert 'text="px"' in height_controls
     assert 'text="%"' in height_controls
@@ -5903,8 +5900,8 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     assert 'ref_actions, text="从所选词开始填充至本页结束"' in build
     assert build.index('text="定位："') < build.index('ref_actions, text="从所选词开始填充至本页结束"')
 
-    network_start = build.index("        network_actions = ttk.Frame(")
-    network_end = build.index("        self.network_status_label", network_start)
+    network_start = build.index("    network_actions = ttk.Frame(")
+    network_end = build.index("    self.network_status_label", network_start)
     network = build[network_start:network_end]
     assert "width=15" not in network
     assert "width=14" not in network
@@ -5973,7 +5970,7 @@ def test_v21117_review_autosave_reuses_main_autosave_variable_and_tick():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'variable=self.parent.autosave_var' in review
+    assert 'variable=self.parent.autosave_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self.parent.toggle_autosave()' in review
     tick_start = text.index("    def autosave_tick", text.index("class PictureCaptureApp"))
     tick_end = text.index("    def open_settings", tick_start)
@@ -5990,9 +5987,9 @@ def test_v21118_review_page_nav_buttons_use_darker_gray():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'review_nav_bg = "#d7d7d7"' in review
-    assert 'review_nav_active_bg = "#c8c8c8"' in review
-    assert 'bg=review_nav_bg, activebackground=review_nav_active_bg' in review
+    assert 'review_nav_bg = "#d7d7d7"' in REVIEW_WORKSPACE_SOURCE
+    assert 'review_nav_active_bg = "#c8c8c8"' in REVIEW_WORKSPACE_SOURCE
+    assert 'bg=review_nav_bg, activebackground=review_nav_active_bg' in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v21118_review_page_change_resets_crop_text_scroll_to_top():
@@ -6055,8 +6052,8 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'text="文本左边距："' in review
-    assert 'textvariable=self.review_left_padding_var' in review
+    assert 'text="文本左边距："' in REVIEW_WORKSPACE_SOURCE
+    assert 'textvariable=self.review_left_padding_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self._refresh_ocr_similarity_colors()' in review
     assert 'bg=bg, activebackground=bg' in review
     assert 'editor.pack_configure(padx=(padding, 0))' in review
@@ -6126,8 +6123,8 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
-    assert '"行间空："' in review
-    assert '"普通词条行切图高："' in review
+    assert '"行间空："' in REVIEW_WORKSPACE_SOURCE
+    assert '"普通词条行切图高："' in REVIEW_WORKSPACE_SOURCE
     assert "self.review_regular_crop_height_var" in review
     detect_start = text.index("    def _detect_pages(")
     detect_end = text.index("    def clear_entries", detect_start)
@@ -6185,8 +6182,8 @@ def test_v21121_review_ui_exposes_selectable_ocr_compare_after_check_and_arrow_n
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    check_pos = review.index('text="排序检查"')
-    compare_pos = review.index('text="与OCR比较："')
+    check_pos = REVIEW_WORKSPACE_SOURCE.index('text="排序检查"')
+    compare_pos = REVIEW_WORKSPACE_SOURCE.index('text="与OCR比较："')
     assert check_pos < compare_pos
     assert '"融合结果": "fusion"' in review
     assert '"PaddleOCR": "paddle"' in review
@@ -6259,8 +6256,8 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     review = text[start:end]
     assert 'self.review_vertical_padding_var = tk.StringVar(' in review
     assert 'self._review_vertical_padding_apply_job: str | None = None' in review
-    assert 'text="上下边距："' in review
-    assert 'textvariable=self.review_vertical_padding_var' in review
+    assert 'text="上下边距："' in REVIEW_WORKSPACE_SOURCE
+    assert 'textvariable=self.review_vertical_padding_var' in REVIEW_WORKSPACE_SOURCE
     assert 'ipady=max(0, int(self.parent.settings.review_entry_vertical_padding))' in review
     assert 'editor.pack_configure(ipady=padding)' in review
 
@@ -6309,21 +6306,21 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert '"普通字/行高："' in review
-    assert '"大字头切图高："' in review
-    assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in review
-    assert '"行间空：",' in review
+    assert '"普通字/行高："' in REVIEW_WORKSPACE_SOURCE
+    assert '"大字头切图高："' in REVIEW_WORKSPACE_SOURCE
+    assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in REVIEW_WORKSPACE_SOURCE
+    assert '"行间空：",' in REVIEW_WORKSPACE_SOURCE
     assert 'self.review_row_padding_var,' in review
     assert 'self.review_row_padding_px_var,' in review
-    assert '"普通词条行切图高：",' in review
+    assert '"普通词条行切图高：",' in REVIEW_WORKSPACE_SOURCE
     assert 'self.review_regular_crop_height_var,' in review
     assert 'self.review_regular_crop_height_px_var,' in review
-    assert '"大字头切图高：",' in review
+    assert '"大字头切图高：",' in REVIEW_WORKSPACE_SOURCE
     assert 'self.review_single_cjk_line_height_var,' in review
     assert 'self.review_single_cjk_line_height_px_var,' in review
-    height_controls = review[
-        review.index("        def add_review_height_control("):
-        review.index("        zoom_row = ttk.Frame(")
+    height_controls = REVIEW_WORKSPACE_SOURCE[
+        REVIEW_WORKSPACE_SOURCE.index("    def add_review_height_control("):
+        REVIEW_WORKSPACE_SOURCE.index("    zoom_row = ttk.Frame(")
     ]
     assert 'text="px"' in height_controls
     assert 'text="%"' in height_controls
@@ -6440,9 +6437,9 @@ def test_v21122_hotfix5_review_rows_expose_x_delete_and_grave_shortcut():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'text="[X]"' in review
-    assert 'command=lambda i=index: self.delete_review_entry(i)' in review
-    assert 'editor.bind("<KeyPress-grave>", lambda _e, i=index: self.delete_review_entry(i))' in review
+    assert 'text="[X]"' in REVIEW_WORKSPACE_SOURCE
+    assert 'command=lambda i=index: self.delete_review_entry(i)' in REVIEW_WORKSPACE_SOURCE
+    assert 'editor.bind("<KeyPress-grave>", lambda _e, i=index: self.delete_review_entry(i))' in REVIEW_WORKSPACE_SOURCE
     assert "def delete_review_entry(self, index: int) -> str:" in review
     assert "self.parent.save_pdic(silent=True, sync_editors=False)" in review
     assert "self.parent.redraw()" in review
@@ -6692,7 +6689,7 @@ def test_v2122_review_ui_has_free_network_check_and_locator_mode():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert "词条联网核验结果" in review
+    assert "词条联网核验结果" in REVIEW_WORKSPACE_SOURCE
     assert 'right, "network", "网络词汇核验（免费，无需 Token）"' not in review
     assert "外部索引（拼音/字母）" in review
     assert "同源连续词表" in review
@@ -6719,17 +6716,17 @@ def test_v2123_review_ui_renames_sort_controls_and_adds_simplified_controls_afte
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'text="排序规则"' in review
+    assert 'text="排序规则"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="词条排序规则"' not in review
     assert 'text="词条排序检查："' not in review
-    assert 'text="排序检查"' in review
-    compare_pos = review.index('text="与OCR比较："')
-    simplify_pos = review.index('text="简体化词条"')
-    regenerate_pos = review.index('text="重新简体化"')
+    assert 'text="排序检查"' in REVIEW_WORKSPACE_SOURCE
+    compare_pos = REVIEW_WORKSPACE_SOURCE.index('text="与OCR比较："')
+    simplify_pos = REVIEW_WORKSPACE_SOURCE.index('text="简体化词条"')
+    regenerate_pos = REVIEW_WORKSPACE_SOURCE.index('text="重新简体化"')
     assert compare_pos < simplify_pos < regenerate_pos
-    assert 'variable=self.review_show_simplified_var' in review
-    assert 'command=self._toggle_review_simplified' in review
-    assert 'command=self.regenerate_simplified_current_page' in review
+    assert 'variable=self.review_show_simplified_var' in REVIEW_WORKSPACE_SOURCE
+    assert 'command=self._toggle_review_simplified' in REVIEW_WORKSPACE_SOURCE
+    assert 'command=self.regenerate_simplified_current_page' in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v2123_review_simplified_rows_use_equal_columns_and_expand_original_when_hidden():
@@ -6738,14 +6735,12 @@ def test_v2123_review_simplified_rows_use_equal_columns_and_expand_original_when
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def render_rows", text.index("class ReviewWindow"))
-    end = text.index("    def _candidate_for_entry", start)
-    body = text[start:end]
-    assert 'simplified_var = tk.StringVar(' in body
+    body = REVIEW_WORKSPACE_SOURCE.split("def render_rows(", 1)[1]
+    assert 'simplified_var = tk.StringVar(' in REVIEW_WORKSPACE_SOURCE
     assert 'columnconfigure(1, weight=1, uniform=f"review_pair_{index}")' in body
     assert 'columnconfigure(2, weight=1, uniform=f"review_pair_{index}")' in body
-    assert 'simplified_editor.grid_remove()' in body
-    assert 'editor_frame.grid(row=index * 2 + 1, column=0, sticky="ew"' in body
+    assert 'simplified_editor.grid_remove()' in REVIEW_WORKSPACE_SOURCE
+    assert 'editor_frame.grid(row=index * 2 + 1, column=0, sticky="ew"' in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v2123_simplified_display_uses_check_mark_when_unchanged(monkeypatch):
@@ -6796,9 +6791,9 @@ def test_v2124_review_simplified_is_editable_saved_and_has_network_button():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'state="readonly"' not in review[review.index('simplified_editor = tk.Entry'):review.index('simplified_editor.grid', review.index('simplified_editor = tk.Entry'))]
-    assert 'text="网查"' in review
-    assert 'command=lambda i=index: self.lookup_simplified_online(i)' in review
+    assert 'state="readonly"' not in REVIEW_WORKSPACE_SOURCE[REVIEW_WORKSPACE_SOURCE.index('simplified_editor = tk.Entry'):REVIEW_WORKSPACE_SOURCE.index('simplified_editor.grid', REVIEW_WORKSPACE_SOURCE.index('simplified_editor = tk.Entry'))]
+    assert 'text="网查"' in REVIEW_WORKSPACE_SOURCE
+    assert 'command=lambda i=index: self.lookup_simplified_online(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _persist_simplified_page' in review
     assert 'write_simplified_records(' in review
     assert 'def on_simplified_key' in review
@@ -7006,16 +7001,16 @@ def test_review_network_status_uses_single_line_result_block():
     assert '"⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"' in review
     assert '"⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"' in review
 
-    label_start = review.index("        self.network_status_label = tk.Label(")
-    label_end = review.index("        self._refresh_cc_cedict_button_idle()", label_start)
-    network_label = review[label_start:label_end]
+    label_start = REVIEW_WORKSPACE_SOURCE.index("    self.network_status_label = tk.Label(")
+    label_end = REVIEW_WORKSPACE_SOURCE.index("    self._refresh_cc_cedict_button_idle()", label_start)
+    network_label = REVIEW_WORKSPACE_SOURCE[label_start:label_end]
     assert "height=2" not in network_label
     assert "wraplength=" not in network_label
 
     assert "self.wordslist_label_var" not in review
-    assert 'self.word_window_var = tk.StringVar(value="wordslist.txt | 0-0 / 0")' in review
+    assert 'self.word_window_var = tk.StringVar(value="wordslist.txt | 0-0 / 0")' in REVIEW_WORKSPACE_SOURCE
     assert 'f"{path.name} | {start + 1}-{end} / {len(words)}"' in review
-    assert 'text="前100"' in review and 'text="后100"' in review
+    assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "词表（" not in review
     assert "| 显示 " not in review
 
@@ -7046,16 +7041,16 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'text="自动检查"' in review
-    assert 'text="立即"' in review
+    assert 'text="自动检查"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="立即"' in REVIEW_WORKSPACE_SOURCE
     assert 'value="CC-CEDICT(?)"' in review
     assert 'value="萌(?)"' in review
     assert 'value="Wiki(?)"' in review
-    assert 'text="网络搜索"' in review
-    assert "network_actions_more = ttk.Frame(network_box" in review
-    assert "network_actions_more, textvariable=self.moedict_lookup_var" in review
-    assert "network_actions_more, textvariable=self.wiktionary_lookup_var" in review
-    assert 'network_actions_more, text="网络搜索"' in review
+    assert 'text="网络搜索"' in REVIEW_WORKSPACE_SOURCE
+    assert "network_actions_more = ttk.Frame(network_box" in REVIEW_WORKSPACE_SOURCE
+    assert "network_actions_more, textvariable=self.moedict_lookup_var" in REVIEW_WORKSPACE_SOURCE
+    assert "network_actions_more, textvariable=self.wiktionary_lookup_var" in REVIEW_WORKSPACE_SOURCE
+    assert 'network_actions_more, text="网络搜索"' in REVIEW_WORKSPACE_SOURCE
     assert "def manage_cc_cedict" in review
     assert "install_cc_cedict_from_file(source)" in review
 
@@ -7068,8 +7063,8 @@ def test_v2129_review_window_has_independent_simplified_font_controls():
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
     start = text.index("class ReviewWindow")
     body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
-    assert 'text="词条字体："' in body
-    assert 'text="简体字体："' in body
+    assert 'text="词条字体："' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="简体字体："' in REVIEW_WORKSPACE_SOURCE
     assert 'self.review_simplified_font_family_var' in body
     assert 'self.review_simplified_font_size_var' in body
     assert 'self.review_simplified_font_bold_var' in body
@@ -7178,8 +7173,8 @@ def test_v21210_review_toolbar_has_cc_simplified_comparison():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'value="CC简(?)"' in review
-    assert 'textvariable=self.cc_simplified_compare_var' in review
-    assert 'command=self.show_cc_simplified_comparison' in review
+    assert 'textvariable=self.cc_simplified_compare_var' in REVIEW_WORKSPACE_SOURCE
+    assert 'command=self.show_cc_simplified_comparison' in REVIEW_WORKSPACE_SOURCE
     assert 'def _cc_simplified_comparison_details' in review
     assert 'cc_cedict_simplified_candidates(original)' in review
     assert 'opencc_value = simplify_text(original)' in review
@@ -7375,8 +7370,8 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert "self.review_panes = panes" in review
-    assert "self.review_control_row = row1" in review
+    assert "self.review_panes = panes" in REVIEW_WORKSPACE_SOURCE
+    assert "self.review_control_row = row1" in REVIEW_WORKSPACE_SOURCE
     assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
     assert "def _initialize_review_layout_and_rows" in review
     assert "self._fit_review_left_pane_to_toolbar()" in review
@@ -7385,8 +7380,8 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     fit = review[fit_start:fit_end]
     assert "row.winfo_reqwidth()" in fit
     assert "panes.sashpos(0, min(required, available))" in fit
-    assert "panes.add(left, weight=0)" in review
-    assert "panes.add(right, weight=1)" in review
+    assert "panes.add(left, weight=0)" in REVIEW_WORKSPACE_SOURCE
+    assert "panes.add(right, weight=1)" in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v21212_layout_behavior_fresh_defaults_are_both_off():
@@ -8205,23 +8200,23 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert "正文结束Y(原图)" not in text
     assert '"横线与文字安全距离px"' in compact_ocr
 
-    assert 'text="校对模式："' in text
-    assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in text
+    assert 'text="校对模式："' in REVIEW_WORKSPACE_SOURCE
+    assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in REVIEW_WORKSPACE_SOURCE
     assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in text
-    assert 'text="OCR不匹配"' in text
-    assert 'text="含特定字符"' in text
-    assert 'text="排除单字符"' in text
-    assert 'text="排除参考词表"' in text
-    assert 'text="单批显示数量："' in text
+    assert 'text="OCR不匹配"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="含特定字符"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="排除单字符"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="排除参考词表"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="单批显示数量："' in REVIEW_WORKSPACE_SOURCE
     assert "filter_batch_top" not in text and "filter_batch_bottom" not in text
     assert 'text=("上\\n一\\n批" if active else "上\\n一\\n页")' in text
     assert 'text=("下\\n一\\n批" if active else "下\\n一\\n页")' in text
     assert "self.change_filter_batch(delta)" in text
-    assert 'right, "digit", "数字替换映射"' in text
-    assert 'text="启用", variable=self.replace_digits' in text
-    assert 'right, "accent", "变音字符"' in text
+    assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
+    assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
+    assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
     assert 'key: tk.BooleanVar(value=(key == "reference"))' in text
-    assert 'accent_button.bind(' in text and '"<Button-3>"' in text
+    assert 'accent_button.bind(' in REVIEW_WORKSPACE_SOURCE and '"<Button-3>"' in REVIEW_WORKSPACE_SOURCE
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text
     assert 'self.focused_page_range_var = parent.page_range_spec_var' in text

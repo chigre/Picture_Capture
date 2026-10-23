@@ -1265,7 +1265,7 @@ Following merged PR #649, extract the three longest cohesive review-window
 rendering callbacks to `ui/review_workspace_workflow.py`:
 `ReviewWindow._build`, `_request_render_rows` and `render_rows`.
 Retain every historical method and original signature on the actual Tk
-class. A frozen `ReviewWorkspaceDeps` captures 18 original app symbols
+class. A frozen `ReviewWorkspaceDeps` captures 17 original app symbols
 at call time rather than importing `app`, preserving existing mock/monkeypatch
 behavior. Three lazy relative imports are adjusted from `.ui.` to `.`
 because their physical owner moved under `ui/`.
