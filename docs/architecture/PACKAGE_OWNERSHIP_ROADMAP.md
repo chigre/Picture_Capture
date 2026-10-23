@@ -1063,7 +1063,7 @@ diagnostics, with duplicate Y suppression and per-page metadata.
 
 The historical `paddle_headwords_core.filter_headword_records` callable
 retains the **same positional/optional arguments, defaults and docstring**.
-A frozen `HeadwordFilterDeps` captures **42 live original callable and
+A frozen `HeadwordFilterDeps` captures **43 live original callable and
 policy references** from the legacy core at each invocation: 36 named
 OCR operations plus `Entry`, the current dictionary and verified CJK
 codes, profile loader and relationship label mapper. The canonical owner
@@ -1147,7 +1147,7 @@ plus metadata/CSV, and manages corrected display-photo reuse.
 Original `PictureCaptureApp` still physically defines all 24 original
 instance methods, complete signatures and existing docstrings; the
 one historically `@staticmethod` perspective default remains static.
-The `_preprocess_ui_deps()` helper snapshots **42 live original
+The `_preprocess_ui_deps()` helper snapshots **43 live original
 app-level imports and patchable helpers per invocation**, preserving
 Tk callback signatures, live monkeypatch seams and dynamically
 selected file/preprocess pipelines without cyclic app imports, global
@@ -1158,8 +1158,8 @@ settings format, analysis JSON, manual-quad file, preview naming,
 export metadata, project storage, or source-image coordinate semantic
 is deliberately changed.
 
-`app.py` normalized UTF-8 shrinks **784697→732966 bytes**
-(−51731, **6.59%**), added strict cap **732985** while the original
+`app.py` normalized UTF-8 shrinks **784697→733009 bytes**
+(−51688, **6.59%**), added strict cap **733025** while the original
 historical oversized baseline remains untouched. The root module
 count stays **15**. Tests cover isolated leaf import, 24 original
 method declarations and Python signatures, static corner quad,
