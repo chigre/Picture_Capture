@@ -47,9 +47,9 @@ def test_project_cover_inventory_preserves_case_insensitive_fallback(tmp_path):
 
 def test_project_center_displays_cards_before_decoding_previews():
     source = (Path(__file__).resolve().parents[1] / "src" /
-              "picture_capture" / "app.py").read_text(encoding="utf-8")
-    entry = source.index("    def open_recent_project(self)")
-    section = source[entry:source.index("\n    def ", entry + 10)]
+              "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    entry = source.index("def open_recent_project(")
+    section = source[entry:source.index("\ndef _attach_tooltip(", entry + 10)]
     metadata_done = section.index('state["cover_images"] = {}')
     metadata_rebuild = section.index("                rebuild()", metadata_done)
     detail_dispatch = section.index('f"{key}-details",', metadata_rebuild)
