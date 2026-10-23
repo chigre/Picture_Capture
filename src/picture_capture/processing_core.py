@@ -19,6 +19,7 @@ from .crop import polygon_geometry as _polygon_geometry
 from .crop import worker_policy as _crop_worker_policy
 from .crop import entry_column_bounds as _entry_column_bounds
 from .crop import entry_vertical_bounds as _entry_vertical_bounds
+from .crop import line_box_geometry as _line_box_geometry
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
@@ -2208,34 +2209,16 @@ def sort_entries_column_y(
     )
 
 def clamp_box(box: tuple[int, int, int, int], image: Image.Image) -> tuple[int, int, int, int]:
-    left, top, right, bottom = box
-    left = min(image.width - 1, max(0, int(left)))
-    top = min(image.height - 1, max(0, int(top)))
-    right = min(image.width, max(left + 1, int(right)))
-    bottom = min(image.height, max(top + 1, int(bottom)))
-    return left, top, right, bottom
+    """Keep the historical half-open PIL box clamp."""
+    return _line_box_geometry.clamp_box(box, image)
 
 
 def line_box(entry: Entry, geometry: Geometry, image: Image.Image, settings: AppSettings) -> tuple[int, int, int, int]:
-    _entry_u, entry_v = geometry.source_to_canonical(entry.x, entry.y)
-    idx = column_index(entry.x, geometry, entry.y)
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
-    row_padding = _source_px(settings.row_padding)
-    character_height = _source_px(settings.character_height)
-    vertical_pad = abs(row_padding)
-    height = character_height + 2 * abs(row_padding)
-    width = round(geometry.column_widths[idx] * min(100.0, max(1.0, settings.crop_width_percent)) / 100.0)
-    left_extension = round(geometry.column_starts[0] * 0.5)
-    tracked_x = geometry.x_at(idx, entry_v)
-    canonical_box = (
-        tracked_x - left_extension,
-        entry_v - vertical_pad,
-        tracked_x + width,
-        entry_v - vertical_pad + height,
+    """Preserve live column, source-pixel and box-clamp facade hooks."""
+    return _line_box_geometry.line_box(
+        entry, geometry, image, settings,
+        column_fn=column_index, source_px_fn=_source_px, clamp_fn=clamp_box,
     )
-    return clamp_box(geometry.transform.canonical_box_to_source(canonical_box, geometry.source_size), image)
-
-
 
 def _ordinary_marker_local_crop(
     canonical: Image.Image,
