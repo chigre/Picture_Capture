@@ -41,12 +41,14 @@ def test_ocr_crop_preview_is_wired_statically():
     composition = Path(gui_bootstrap.__file__).read_text(encoding="utf-8")
     app_source = (root / "picture_capture" / "app.py").read_text(encoding="utf-8")
     preview_source = Path(preview.__file__).read_text(encoding="utf-8")
+    canvas_source = (root / "picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
 
     assert "install_ocr_crop_preview(app_module)" not in composition
     state = (root / "picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
     assert 'app.ocr_crop_preview_var = tk.BooleanVar(' in state
     assert 'toggle_workspace_display_preview' in (root / "picture_capture/ui/workspace_tools.py").read_text(encoding="utf-8")
-    assert app_source.count("draw_ocr_crop_preview(self)") == 2
+    assert canvas_source.count("draw_ocr_crop_preview(self)") == 2
+    assert "return _main_canvas_render.redraw(self, _main_canvas_render_deps())" in app_source
     assert "def add_ocr_crop_preview_control(" in preview_source
     assert "def draw_ocr_crop_preview(" in preview_source
     assert "App.__init__ = init" not in preview_source
@@ -58,13 +60,13 @@ def test_ocr_crop_preview_is_wired_statically():
 def test_crop_preview_early_return_keeps_ocr_preview_overlay():
     import picture_capture.app as app_module
 
-    source = Path(app_module.__file__).read_text(encoding="utf-8")
-    start = source.index("    def redraw(self) -> None:")
-    end = source.index("\n    def ", start + 10)
+    source = (Path(app_module.__file__).parent / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def redraw(self, deps: MainCanvasRenderDeps) -> None:")
+    end = source.index("\ndef _draw_page_sections(", start + 10)
     redraw = source[start:end]
 
-    crop_start = redraw.index("        if self.crop_preview_var.get():")
-    crop_end = redraw.index("        hidden = bool(self.hide_var.get())", crop_start)
+    crop_start = redraw.index("    if self.crop_preview_var.get():")
+    crop_end = redraw.index("    hidden = bool(self.hide_var.get())", crop_start)
     crop_branch = redraw[crop_start:crop_end]
 
     assert "draw_ocr_crop_preview(self)" in crop_branch

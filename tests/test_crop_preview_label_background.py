@@ -42,9 +42,9 @@ def test_crop_label_is_backed_and_readable():
 
 def test_main_crop_plan_applies_badges_to_entries_and_ppp():
     source = (Path(__file__).resolve().parents[1] /
-              "src/picture_capture/app.py").read_text(encoding="utf-8")
-    start = source.index("    def _draw_crop_plan_preview(")
-    end = source.index("    def _rulers_visible(", start)
+              "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def _draw_crop_plan_preview(")
+    end = source.index("\ndef redraw(", start)
     code = source[start:end]
     # Entry, preview-only auxiliary gap, and PPP each use a backed badge.
     assert code.count("draw_crop_preview_label(") == 3

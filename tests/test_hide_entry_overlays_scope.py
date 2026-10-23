@@ -6,10 +6,9 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_hide_overlays_only_guards_entry_drawing():
-    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    source = (ROOT / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp")
-    redraw = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "redraw")
+    redraw = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "redraw")
     section = ast.get_source_segment(source, redraw)
     assert section is not None
     start = section.index("hidden = bool(self.hide_var.get())")
