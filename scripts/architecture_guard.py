@@ -1163,6 +1163,50 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: the full OCR matching/voting/position chain must stay in one
+    # import-light canonical owner. Core signatures and live patch seams stay.
+    pairing_owner = PACKAGE_ROOT / "ocr/pairing_arbitration.py"
+    pairing_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not pairing_owner.is_file():
+        violations.append("canonical multi-engine OCR pairing/arbitration owner missing")
+    else:
+        pairing_tree = ast.parse(pairing_owner.read_text(encoding="utf-8"))
+        required = {
+            "OcrPairingDeps", "_alignment_key", "_lemma_similarity",
+            "_orthographic_similarity", "_eligible_alignment_rows",
+            "_candidate_pair_score", "_pair_ocr_candidates",
+            "_pairs_need_lens", "_make_ocr_pair", "_copy_candidate_to_pair",
+            "_pair_with_lens_candidates", "_engine_quality",
+            "_stable_candidate_id", "_issues_for_pair", "_arbitrate_pair",
+            "_apply_pair_engine_position", "_agreement_summary",
+        }
+        actual = {node.name for node in pairing_tree.body
+                  if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not required <= actual:
+            violations.append("whole OCR pairing and arbitration implementation missing")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"paddle_headwords_core", "processing"}
+               for node in pairing_tree.body):
+            violations.append("OCR pairing owner must not import heavyweight facades")
+    if pairing_core.is_file():
+        core_tree = ast.parse(pairing_core.read_text(encoding="utf-8"))
+        for name in ("_pair_ocr_candidates", "_pair_with_lens_candidates",
+                     "_arbitrate_pair", "_apply_pair_engine_position",
+                     "_agreement_summary"):
+            adapters = [node for node in core_tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == name]
+            if len(adapters) != 1 or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_ocr_pairing"
+                and node.func.attr == name
+                for node in ast.walk(adapters[0])
+            ):
+                violations.append(f"OCR pairing public adapter missing: {name}")
+        if _normalized_source_size(pairing_core) > 313_050:
+            violations.append("paddle_headwords_core grew beyond 313050-byte OCR pairing ceiling")
+
     # #562: selected OCR review dedup, persisted Entry conversion and quality
     # report now share one canonical import-light OCR leaf. Keep call-time public
     # patch seams and never move model/pickle types into implementation leaves.
