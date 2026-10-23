@@ -28,7 +28,7 @@ def test_first_paint_precedes_metadata_and_cover_workers():
     start = source.index("def open_recent_project(")
     block = source[start:source.index("\ndef _attach_tooltip(", start)]
     staged = block.index('state["details"] = [recent_project_stub_details(row) for row in rows]')
-    first_paint = block.index("                rebuild()", staged)
+    first_paint = block.index("            rebuild()", staged)
     detail_worker = block.index('f"{key}-details",', first_paint)
     preview_worker = block.index('f"{key}-previews",')
     assert staged < first_paint < detail_worker
