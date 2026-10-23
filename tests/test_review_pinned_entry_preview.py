@@ -133,7 +133,7 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
         assert "self._bound_row_entries()" in segment
         assert "self.parent._ordered_entries_reading_order()" not in segment
     assert "(id(source), int(entry.x), int(entry.y), str(entry.word))" in review_source
-    assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in source
+    assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in review_source
 
 
 def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_only():

@@ -5521,7 +5521,7 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     assert "self.settings.main_entry_font_family,\n        self.settings.ocr_language" in overlay
     assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
-    assert "self.parent.settings.review_entry_font_family,\n                self.parent.settings.ocr_language" in app_text
+    assert "self.parent.settings.review_entry_font_family,\n            self.parent.settings.ocr_language" in REVIEW_WORKSPACE_SOURCE
     assert '"review_simplified_font_family"' in app_text
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'values=families' in display
@@ -5735,7 +5735,7 @@ def test_v21117_review_layout_matches_compact_workflow():
     assert 'text="词条排序规则"' not in review
     assert 'text="词条排序检查："' not in review
     assert 'text="当前页"' in REVIEW_WORKSPACE_SOURCE and 'text="所有页"' in REVIEW_WORKSPACE_SOURCE
-    assert 'text="上\\n一\\n页"' in review and 'text="下\\n一\\n页"' in review
+    assert 'text="上\\n一\\n页"' in REVIEW_WORKSPACE_SOURCE and 'text="下\\n一\\n页"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="词条切图显示大小："' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "ocr", "OCR结果"' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "reference", "参考词表"' in REVIEW_WORKSPACE_SOURCE
@@ -5814,7 +5814,7 @@ def test_review_right_sections_use_requested_default_expansion_states():
         ("network", "词条联网核验结果"),
         ("reference", "参考词表"),
     ):
-        assert f'right, "{key}", "{title}"' in review
+        assert f'right, "{key}", "{title}"' in REVIEW_WORKSPACE_SOURCE
     assert 'def _toggle_review_right_section(self, key: str) -> None:' in review
     assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in review
     assert "body.pack_forget()" in review
@@ -6841,9 +6841,7 @@ def test_v2125_automatic_simplified_value_is_materialized_for_persistence():
     import picture_capture.app as app_module
 
     text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def render_rows(self, preloaded_crops")
-    end = text.index("    def _candidate_for_entry", start)
-    body = text[start:end]
+    body = REVIEW_WORKSPACE_SOURCE.split("def render_rows(", 1)[1]
     assert "materialized_record = {" in body
     assert '"text": "" if simplified_actual is None else str(simplified_actual)' in body
     assert "if saved_simplified is None:" in body
@@ -7024,8 +7022,8 @@ def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert "self.word_list = tk.Text(" in review
-    assert '"wordslist_number", font=(number_family, 10)' in review
+    assert "self.word_list = tk.Text(" in REVIEW_WORKSPACE_SOURCE
+    assert '"wordslist_number", font=(number_family, 10)' in REVIEW_WORKSPACE_SOURCE
     assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in review
     assert 'f"  {words[global_index]}", ("wordslist_word",)' in review
     assert "def _word_list_local_index_from_event" in review
@@ -7123,7 +7121,7 @@ def test_v2129_ocr_results_are_compact_single_row():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
-    assert 'right, "ocr", "OCR结果"' in review
+    assert 'right, "ocr", "OCR结果"' in REVIEW_WORKSPACE_SOURCE
     assert 'slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))' in review
     assert 'grid(row=0, column=slot_index' in review
     assert 'text="当前OCR结果"' not in review
@@ -7228,9 +7226,9 @@ def test_v21211_saved_automatic_simplified_record_is_not_regenerated_on_reopen_s
     import inspect
     import picture_capture.app as app_module
 
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("            saved_simplified = simplified_records.get(simplified_key)")
-    end = text.index("            simplified_var = tk.StringVar(", start)
+    text = REVIEW_WORKSPACE_SOURCE
+    start = text.index("        saved_simplified = simplified_records.get(simplified_key)")
+    end = text.index("        simplified_var = tk.StringVar(", start)
     body = text[start:end]
     assert "auto_refresh = saved_simplified is None" in body
     assert "if saved_simplified is not None:" in body

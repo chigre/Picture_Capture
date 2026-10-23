@@ -157,7 +157,7 @@ def test_explicit_confirmation_ui_controls_have_no_automatic_approval():
     assert "review_window.save(redraw_main=False)" in source
     assert "proofreading_event_capture" in source
     assert 'text="核验记录"' in review_source
-    assert "command=self._open_proofreading_visual_verification" in app
+    assert "command=self._open_proofreading_visual_verification" in review_source
 
 
 def test_visual_verification_does_not_open_after_noop_review_save(tmp_path, monkeypatch):
