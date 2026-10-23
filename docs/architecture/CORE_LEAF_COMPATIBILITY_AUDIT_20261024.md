@@ -101,6 +101,36 @@ persisted data classes, OCR cache keys, PDIC/PPP sidecar schemas and crop
 publish transactions untouched. Last fully verified green baseline before
 this series: `e573b64d`. Review the *new exact-head* CI before acceptance.
 
+## Ninth and tenth extraction batches — 2026-10-24
+
+- `preprocess/core_analysis_pixels.py` now owns legacy processing-core
+  analysis RGB resizing and OpenCV-free adaptive dark-ink masks. Original
+  `_analysis_image` and `_adaptive_dark_mask` entrypoints remain in
+  `processing_core`, and forward live source normalization, NumPy, Pillow
+  class and filter implementations. Normalized page pixels are not persisted.
+- `ocr/band_coordinates.py` owns **in-memory** mapping of OCR record boxes
+  from source-band to canonical analysis space. The old core method continues
+  to import the current `LayoutTransform` on each call and passes the original
+  `OCRRecord` constructor. Recovered-record metadata and parent-box
+  coordinates are preserved; source input pixels and raw OCR cache are
+  intentionally not rewritten.
+- `ocr/boundary_measurements.py` owns OCR ink ratio, leading-headword box,
+  contiguous true-runs, left-column separator ROI and running-header cutoff.
+  The legacy core passes its current `_true_runs` callback to header cutoff
+  at each call to preserve the public facade assignment-mirror seam.
+- `tests/test_issue562_core_leaf_round9_20261024.py` exercises image-size/
+  EXIF-alpha-safe normalization, adaptive local contrast, mirrored/rotated OCR
+  records, synthetic CJK recovery metadata and live class/image hooks.
+  `tests/test_issue562_core_leaf_round10_20261024.py` checks local box/ink,
+  OCR run intervals, separator ROI and running-header policy.
+- Root inventory remains **10** Python modules. `OCRRecord` and `OCRLine`
+  preserve their historic `__module__` and constructor identities.
+  Staged crop publishing, PDIC/PPP schemas, raw engine caches, GUI and
+  manual selection remain unchanged.
+
+Judge the current series by its own exact-head CI and three-platform OCR
+smoke. Do not infer green from the previous stable baseline alone.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,
