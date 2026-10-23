@@ -3588,9 +3588,10 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'self.image.resize(size, Image.Resampling.LANCZOS)' in cache_block
     assert 'self.image.convert("RGB")' not in cache_block
 
-    redraw_start = text.index("    def redraw(")
-    redraw_end = text.index("    def _update_view_zoom_label(", redraw_start)
-    redraw_block = text[redraw_start:redraw_end]
+    render_source = (source.parent / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    redraw_start = render_source.index("def redraw(")
+    redraw_end = render_source.index("\ndef _draw_page_sections(", redraw_start)
+    redraw_block = render_source[redraw_start:redraw_end]
     assert 'self._get_cached_display_photo(size)' in redraw_block
 
     zoom_start = text.index("    def zoom(")
@@ -4900,9 +4901,9 @@ def test_crop_preview_uses_export_filename_and_centered_entry_typography():
     assert entry_crop_piece_filename("0001", piece) == "0001_WW_007(P2).png"
 
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _draw_crop_plan_preview")
-    end = text.index("    def redraw", start)
+    text = (source.parent / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    start = text.index("def _draw_crop_plan_preview")
+    end = text.index("\ndef redraw", start)
     preview = text[start:end]
     assert "crop_preview_font_spec(" in preview
     helper = (source.parent / "crop" / "preview_display_settings.py").read_text(encoding="utf-8")
@@ -5440,6 +5441,7 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
     assert settings.show_illustration_labels is False
     assert settings.batch_interval == 3.0
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    render_text = (Path(__file__).parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     state = (Path(__file__).parents[1] / "src/picture_capture/ui/quick_state.py").read_text(encoding="utf-8")
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
@@ -5451,17 +5453,17 @@ def test_auxiliary_overlay_defaults_and_label_style_controls():
         assert token in state
     assert '"show_illustration_labels"' in state
     assert 'qb["show_illustration_labels"]' in display
-    assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in app_text
-    assert 'show_labels = bool(self.settings.show_illustration_labels)' in app_text
+    assert 'show_shapes = bool(self.polygon_var.get() or self.polygon_draw_var.get())' in render_text
+    assert 'show_labels = bool(self.settings.show_illustration_labels)' in render_text
 
     # All user-facing main-image line widths share one image->display ratio.
     assert scaled_overlay_line_width(2, 1.0) == 2
     assert scaled_overlay_line_width(2, 0.5) == 1
     assert scaled_overlay_line_width(2, 1.5) == 3
-    assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in app_text
+    assert 'scaled_overlay_line_width(self.settings.guide_width, overlay_scale)' in render_text
     assert 'scaled_overlay_line_width(self.settings.marker_height, overlay_scale)' in overlay
-    assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in app_text
-    assert 'highlightthickness=max(0, int(self.settings.illustration_label_border_width))' in app_text
+    assert 'scaled_overlay_line_width(self.settings.illustration_outline_width, overlay_scale)' in render_text
+    assert 'highlightthickness=max(0, int(self.settings.illustration_label_border_width))' in render_text
     # Sequence uses a neutral light-gray background; destructive [X] remains separate.
     assert 'index_x, index_y, index_anchor = entry_index_label_layout(' in overlay
     assert 'bg="#e6e6e6"' in overlay
@@ -5520,7 +5522,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     assert "resolve_content_font_family(" in app_text
     overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     assert "self.settings.main_entry_font_family,\n        self.settings.ocr_language" in overlay
-    assert "self.settings.illustration_label_font_family,\n                                self.settings.ocr_language" in app_text
+    render_text = (Path(__file__).parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    assert "self.settings.illustration_label_font_family,\n                            self.settings.ocr_language" in render_text
     assert "self.parent.settings.review_entry_font_family,\n            self.parent.settings.ocr_language" in REVIEW_WORKSPACE_SOURCE
     assert '"review_simplified_font_family"' in app_text
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
@@ -6359,12 +6362,12 @@ def test_main_ocr_visibility_controls_apply_immediately_and_candidate_boxes_are_
     import inspect
     import picture_capture.app as app_module
 
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
+    text = (Path(inspect.getsourcefile(app_module)).parent / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'app._apply_overlay_visibility_toggle(setting, qb[setting])' in display
     assert '"paddle_show_candidate_checkboxes"' in display
-    start = text.index("        show_candidates = (")
-    end = text.index("        show_shapes =", start)
+    start = text.index("    show_candidates = (")
+    end = text.index("    show_shapes =", start)
     candidate_block = text[start:end]
     assert "if show_candidates:" in candidate_block
     assert 'self.settings.detection_method == "paddleocr"' not in candidate_block
@@ -7417,7 +7420,8 @@ def test_v21212_review_highlight_uses_rgba_alpha_not_stipple():
     import inspect
     import picture_capture.app as app_module
 
-    body = inspect.getsource(app_module.PictureCaptureApp._draw_review_entry_highlight)
+    from picture_capture.ui import main_canvas_render_workflow as canvas_render
+    body = inspect.getsource(canvas_render._draw_review_entry_highlight)
     assert 'Image.new(' in body
     assert '"RGBA"' in body
     assert '(255, 238, 128, 92)' in body
@@ -7429,7 +7433,8 @@ def test_review_highlight_uses_the_same_geometry_as_review_crop():
     import inspect
     import picture_capture.app as app_module
 
-    body = inspect.getsource(app_module.PictureCaptureApp._draw_review_entry_highlight)
+    from picture_capture.ui import main_canvas_render_workflow as canvas_render
+    body = inspect.getsource(canvas_render._draw_review_entry_highlight)
     assert "review_settings = _review_crop_settings(" in body
     assert "left, top, right, bottom = _review_line_box(" in body
     assert "line_box(entry, geometry, self.image, self.settings)" not in body
@@ -8042,7 +8047,7 @@ def test_alphabetical_warning_uses_section_major_reading_order():
 
 def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    text = (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     aux=(root / "ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert '"显示标尺"' in aux
