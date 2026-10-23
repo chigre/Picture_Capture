@@ -1322,8 +1322,8 @@ circular import. Existing `_rectangle_bounds`, `_set_rectangle_side`,
 `_external_polygon_label_position` static geometry helpers and SECTION
 writer remain on the class without relocation. Only internal import path
 change is `.ui.workspace_mode_shortcuts` to `.workspace_mode_shortcuts`.
-`app.py` 598661→579560 UTF-8 bytes (−19101,
-3.19%); strict ratchet 579576 bytes.
+`app.py` 598661→579632 UTF-8 bytes (−19029,
+3.18%); strict ratchet 579648 bytes.
 Preserve PPP data labels, write operations and undo/redo paths, auxiliary
 priority, source/canonical geometry and image editing guards. New owner AST
 checks, callback dispatch, staticmethod preservation and monkeypatch tests

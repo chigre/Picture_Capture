@@ -9940,6 +9940,7 @@ class PictureCaptureApp(tk.Tk):
     def _nearest_polygon_vertex(self, x: int, y: int, radius_screen: float = 11.0) -> tuple[int, int] | None:
         return _canvas_pointer._nearest_polygon_vertex(self, _canvas_pointer_deps(), x, y, radius_screen)
 
+    @staticmethod
     def _rectangle_bounds(region: PolygonRegion, tolerance: int = 2) -> tuple[int, int, int, int] | None:
         """Return bounds when a four-point PPP is an axis-aligned rectangle."""
         if len(region.points) != 4:
@@ -9959,6 +9960,7 @@ class PictureCaptureApp(tk.Tk):
     def _nearest_polygon_edge(self, x: int, y: int, radius_screen: float = 9.0) -> tuple[int, str] | None:
         return _canvas_pointer._nearest_polygon_edge(self, _canvas_pointer_deps(), x, y, radius_screen)
 
+    @staticmethod
     def _set_rectangle_side(region: PolygonRegion, side: str, value: int) -> None:
         bounds = PictureCaptureApp._rectangle_bounds(region)
         if bounds is None:
@@ -9980,6 +9982,8 @@ class PictureCaptureApp(tk.Tk):
     def _delete_polygon_region(self, region: PolygonRegion) -> None:
         return _canvas_pointer._delete_polygon_region(self, _canvas_pointer_deps(), region)
 
+    @staticmethod
+    @staticmethod
     def _external_polygon_label_position(
         min_x: float, min_y: float, max_x: float, max_y: float,
         label_width: int, label_height: int, canvas_width: float, canvas_height: float,
