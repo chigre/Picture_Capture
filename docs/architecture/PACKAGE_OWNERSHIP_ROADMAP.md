@@ -1245,8 +1245,8 @@ original method bodies are identical**. Project settings and Profile
 behavior, recent-project metadata, async handoff, reading-order
 coordinates, PDIC/PPP semantics and review synchronization are unchanged.
 
-`app.py` normalized bytes **706512→665242** (−41270, **5.84%**)
-and line count falls accordingly; new strict cap **665255**.
+`app.py` normalized bytes **706512→665254** (−41258, **5.84%**)
+and line count falls accordingly; new strict cap **665270**.
 Existing oversized baseline unchanged, physical root Python module
 count remains **15**. New targeted regression tests protect leaf
 import isolation, all nine original signatures and tooltip decorator,
