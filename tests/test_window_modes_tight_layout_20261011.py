@@ -277,13 +277,14 @@ def test_header_buttons_are_compact_in_both_themes_and_preserve_preprocess_lock(
 
     source = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     app_src = (SRC.parent / "app.py").read_text(encoding="utf-8")
+    preprocess_src = (SRC / "preprocess_workflow.py").read_text(encoding="utf-8")
     assert 'button = tk.Button(' in source
     assert 'font="TkDefaultFont", anchor="center", justify="center"' in source
     assert 'bd=0, relief="flat", highlightthickness=0, padx=3, pady=1' in source
     assert 'button._pc_skip_classic_appearance = True' in source
     assert 'refresh_compact_header_buttons(self)' in app_src
-    assert 'if isinstance(widget, ttk.Widget):' in app_src
-    assert 'old_state = widget.cget("state")' in app_src
+    assert 'if isinstance(widget, ttk.Widget):' in preprocess_src
+    assert 'old_state = widget.cget("state")' in preprocess_src
 
     class Button:
         def __init__(self):

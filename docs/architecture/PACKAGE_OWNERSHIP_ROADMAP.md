@@ -1063,7 +1063,7 @@ diagnostics, with duplicate Y suppression and per-page metadata.
 
 The historical `paddle_headwords_core.filter_headword_records` callable
 retains the **same positional/optional arguments, defaults and docstring**.
-A frozen `HeadwordFilterDeps` captures **42 live original callable and
+A frozen `HeadwordFilterDeps` captures **43 live original callable and
 policy references** from the legacy core at each invocation: 36 named
 OCR operations plus `Entry`, the current dictionary and verified CJK
 codes, profile loader and relationship label mapper. The canonical owner
@@ -1090,7 +1090,7 @@ acceptance remain separate. Issue #562 remains open for the remaining
 large `detect_paddle_headwords` orchestration and huge `app.py`.
 
 
-## Issue #562 — full multi-engine OCR page detection, review, and caching (2026-10-23; candidate)
+## Issue #562 — full multi-engine OCR page detection, review, and caching (2026-10-23; merged #646)
 
 After successful merged #645 (`main@ff274e7a`), transfer the
 **entire remaining 530-line page-level `detect_paddle_headwords` workflow**
@@ -1128,3 +1128,48 @@ smoke, F821, wheel, CodeQL, review threads, independent postmerge main
 CI. Native real scanned pages, GUI/manual parity and GPU/CUDA driver
 behavior remain unverified. Issue #562 remains open for the large
 `app.py` and any remaining OCR core extraction.
+
+
+## Issue #562 — full 24-method GUI preprocessing workstream (2026-10-23; candidate)
+
+After merged #646 (`main@2848f6f8`, exact-head six OS/Python
+jobs and risk tier success), migrate all **24 contiguous
+`PictureCaptureApp` image-preprocessing methods** to the canonical
+`ui/preprocess_workflow.py` implementation. This responsibility starts
+with preprocess mode/settings and export-canvas parameter validation,
+prevents unsafe simultaneous workspace editing, edits/saves manual
+perspective four-corner quads, loads/saves page analysis, analyzes
+individual and selected pages via the app's normal worker lifecycle,
+shows crop/exclusion diagnostics and page preview, promotes verified
+exported working images, produces batch preview and processed exports
+plus metadata/CSV, and manages corrected display-photo reuse.
+
+Original `PictureCaptureApp` still physically defines all 24 original
+instance methods, complete signatures and existing docstrings; the
+one historically `@staticmethod` perspective default remains static.
+The `_preprocess_ui_deps()` helper snapshots **43 live original
+app-level imports and patchable helpers per invocation**, preserving
+Tk callback signatures, live monkeypatch seams and dynamically
+selected file/preprocess pipelines without cyclic app imports, global
+installers or new root shims. All 24 leaf algorithm bodies were compared
+against original merged-main code and match exactly after stripping
+only dependency aliases. No foreground/background worker scheduling,
+settings format, analysis JSON, manual-quad file, preview naming,
+export metadata, project storage, or source-image coordinate semantic
+is deliberately changed.
+
+`app.py` normalized UTF-8 shrinks **784697→733009 bytes**
+(−51688, **6.59%**), added strict cap **733025** while the original
+historical oversized baseline remains untouched. The root module
+count stays **15**. Tests cover isolated leaf import, 24 original
+method declarations and Python signatures, static corner quad,
+real-time monkeypatched globals, preprocess mode/config gates,
+event forwarding, and export delegation. AST architecture guard pins
+canonical owner and requires every original Tk method to delegate.
+
+Before PR acceptance require exact-head Windows/macOS/Ubuntu
+Python 3.10/3.13 CI, full pytest, legacy compatibility, Tk GUI smoke,
+architecture/change guard, undefined-name check and wheel, CodeQL and
+review-thread check. Postmerge main CI, native scanned-page and
+manual GUI/GPU testing remain separately unverified. Keep Issue #562
+open for further substantial `app.py` extraction and root consolidation.

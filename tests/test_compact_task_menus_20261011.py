@@ -131,6 +131,7 @@ def test_ocr_and_drawing_panels_keep_existing_handlers_in_requested_order():
 def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess():
     tools = source(workspace_tools)
     app = (ROOT / "app.py").read_text(encoding="utf-8")
+    preprocess = (ROOT / "ui/preprocess_workflow.py").read_text(encoding="utf-8")
     for title, builder in (
         ("图片预处理(前置)", "build_preprocess_menu"),
         ("一、版面参数", "build_layout_menu"),
@@ -138,8 +139,8 @@ def test_all_four_task_panels_are_only_visible_owners_and_locked_in_preprocess()
         ("四、画线 / OCR / 插图 / 校对", "build_drawing_menu"),
     ):
         assert f'sections["{title}"] = {builder}(app, content)' in tools
-    assert 'compact_sections.get(compact_titles.get(key, ""))' in app
-    assert 'self.preprocess_mode_button.configure(' in app
+    assert 'compact_sections.get(compact_titles.get(key, ""))' in preprocess
+    assert 'self.preprocess_mode_button.configure(' in preprocess
     assert 'self.polygon_draw_button.configure(' in app
 
 

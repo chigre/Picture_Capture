@@ -8,26 +8,26 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Architecture classification, preprocessing, crop and OCR migrations are
-merged through #645 (main `ff274e7a`, latest six-platform CI success).
-Current candidate branch `refactor/562-ocr-page-detection-orchestration`
-moves the **complete 530-line page-wide `detect_paddle_headwords`
-execution/review/cache workflow** to `ocr/page_detection.py`.
-It covers policy, image/band transforms, Paddle/Tesseract/Lens,
-local CJK recovery, candidate arbitration, manual override and compact
-v3 persistent JSON without changing output keys, coordinate domains,
-raw source records or sidecar cleanup. The old public method retains
-the original 9-parameter signature/docstring and binds **45 live
-old OCR operations/policies** per call; two internal relative imports
-are updated to account for the leaf's package location. Core shrinks
-**197668→174754 normalized UTF-8 bytes** (−22914), additional strict
-size cap **174765**, historical oversize baseline unchanged and 15
-physical root Python files. Direct import/patch/API/safety tests plus
-full original regression suite remain configured. Exact-head CI,
-compatibility, GUI smoke, wheel, CodeQL, reviews and independent
-merged-main confirmation remain unverified for this new branch.
-Native GPU/CUDA, real scans and hands-on GUI parity remain outstanding.
-The historical recovery log continues below.
+Architecture, preprocessing, crop and OCR batches are merged through
+#646 (main `2848f6f8`); #646 exact-head six-platform CI and risk gate
+all passed. The next candidate branch
+`refactor/562-gui-preprocess-workflow-ownership` migrates the **entire
+24-method GUI preprocessing workflow** out of oversized `app.py` into
+`ui/preprocess_workflow.py`. Scope: preprocess settings/mode locks,
+manual perspective quad editor, analysis worker/actions, diagnostics,
+review navigation, preprocessed working-page promotion, batch preview
+and processed image exports, corrected display-photo caching. All 24
+historical Tk instance/static entrypoints and signatures remain in
+the app, delegating with **43 original live global references** bound
+per call. All moved algorithms verified byte-for-byte identical after
+removing only new dependency aliases. `app.py` normalized source
+**784697→733009 bytes** (−51688, 6.59%), additional strict ceiling
+**733025**, historical oversize baseline unchanged, **15 root modules**.
+Added direct Tk signature/static/patch/isolation tests and AST ownership
+guard. Six-system exact-head CI, GUI smoke, legacy compatibility,
+CodeQL/reviews and postmerge main acceptance are not established yet
+for this GUI branch. Real images, manual GUI and GPU/CUDA validation
+remain separate. Historical phase status continues below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

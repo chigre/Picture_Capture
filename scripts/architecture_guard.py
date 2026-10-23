@@ -1163,6 +1163,61 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: all 24 Tk page preprocessing methods are now owned by a
+    # single leaf module, while app.py preserves the same callback signatures
+    # and live module-global patch seams for long-lived user sessions.
+    gui_preprocess_owner = PACKAGE_ROOT / "ui/preprocess_workflow.py"
+    gui_app = PACKAGE_ROOT / "app.py"
+    gui_preprocess_names = {
+        "_preprocess_mode_active", "_preprocess_config",
+        "_preprocess_export_config", "_preprocess_export_settings_changed",
+        "_preprocess_settings_changed", "_set_workspace_preprocess_locked",
+        "_preprocess_blocking_window_name", "toggle_preprocess_mode",
+        "_set_preprocess_mode", "_default_preprocess_corner_quad",
+        "edit_preprocess_corners", "reset_preprocess_corners",
+        "_preprocess_result_for_page", "_set_current_preprocess_status",
+        "analyze_preprocess_current", "analyze_preprocess_selected",
+        "show_preprocess_diagnostics", "promote_preprocessed_working_images",
+        "jump_preprocess_review", "_preprocess_analysis_for_export",
+        "export_preprocess_previews", "export_preprocess_images",
+        "_get_preprocess_display_photo", "_redraw_preprocess_preview",
+    }
+    if not gui_preprocess_owner.is_file():
+        violations.append("GUI preprocess settings/editor/export workflow owner missing")
+    else:
+        preprocess_tree = ast.parse(gui_preprocess_owner.read_text(encoding="utf-8"))
+        physical = {
+            node.name for node in preprocess_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        }
+        if not (gui_preprocess_names | {"PreprocessUiDeps"}) <= physical:
+            violations.append("GUI preprocess owner lacks complete 24-method lifecycle")
+        if any(isinstance(node, ast.ImportFrom) and node.module in {
+            "app", "paddle_headwords_core", "processing",
+        } for node in preprocess_tree.body):
+            violations.append("GUI preprocess workflow owner imports heavyweight app/core")
+    if gui_app.is_file():
+        app_tree = ast.parse(gui_app.read_text(encoding="utf-8"))
+        app_cls = next((node for node in app_tree.body
+                        if isinstance(node, ast.ClassDef)
+                        and node.name == "PictureCaptureApp"), None)
+        methods = {} if app_cls is None else {
+            node.name: node for node in app_cls.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for name in gui_preprocess_names:
+            callback = methods.get(name)
+            if callback is None or not any(
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_preprocess_ui"
+                and node.func.attr == name
+                for node in ast.walk(callback)
+            ):
+                violations.append(f"original GUI preprocess callback not delegated: {name}")
+        if _normalized_source_size(gui_app) > 733_025:
+            violations.append("app.py exceeded 733025-byte GUI preprocess ratchet")
+
     # #562: full multi-engine OCR page orchestration, review, and compact
     # cache persistence is canonical in the leaf; legacy core only dispatches.
     page_detection_owner = PACKAGE_ROOT / "ocr/page_detection.py"
