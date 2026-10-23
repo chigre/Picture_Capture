@@ -87,7 +87,7 @@ def test_wrapped_pos_repair_anchors_text_to_first_physical_line():
 
 def test_multiline_state_machine_does_not_shift_anchor_y():
     first = make_line("agroalimentacion (", (5, 10, 90, 20))
-    next_line = make_line("s.f.)", (5, 25, 50, 35))
+    next_line = make_line("s.f.)", (15, 25, 50, 35))
     out = line_structure_repairs.repair_multiline_headword_state_machine(
         [first, next_line], settings(), 12, patterns(),
         parse_fn=parsed, find_pos_fn=find_pos,
