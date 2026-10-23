@@ -934,7 +934,7 @@ gates remain required. Real scanned pages and manual/native UI acceptance
 remain unverified. The inherited #562 oversized app and OCR cores remain open.
 
 
-## Issue #562 — OCR Paddle/Tesseract/Lens pairing and arbitration (2026-10-23; candidate)
+## Issue #562 — OCR Paddle/Tesseract/Lens pairing and arbitration (2026-10-23; merged #642)
 
 After #640/#641 were merged (latest OCR review-finalization checkpoint
 `main@38c2b800`), move the **entire 16-function** multi-engine pairing
@@ -973,3 +973,38 @@ CodeQL, unresolved review checks, and independent postmerge main CI.
 Actual scanned-page, manual GUI and native Paddle GPU/CUDA validation
 remain separate unverified gates. `app.py` and additional OCR detection
 and image-feature orchestration remain future #562 work.
+
+
+## Issue #562 — OCR image-first visual marker and CJK evidence (2026-10-23; candidate)
+
+On merged `main@76d5c32e` (#642), extract the **complete 17-function**
+visual-image evidence block to the canonical import-light
+`ocr/visual_evidence.py` owner. The pipeline includes binary 8-connected
+RLE components and geometric shape measurement; configured symbol-family
+recognition; trusted entry-marker lanes and pixel-first detection; image/OCR
+line correspondence and CJK/bracketed marker parser entrypoints; large
+single-CJK visual run projection; whole-run and candidate-local right-side
+sparse-ink context; and visually localized CJK lemma candidate selection.
+No algorithm is redesigned; current visual safety gates, OCR fallback ranking,
+Unicode character handling, source-image coordinates, Project Profile controls,
+manual GUI, native engine or serialized report/cache structure are changed.
+
+All 17 historical core signatures/docstrings and patchable references remain
+as lightweight wrappers. A frozen `VisualEvidenceDeps` receives **29 live
+callbacks and symbol-policy mappings** from the core at each invocation,
+so tests and settings still see current behavior without an importer global
+installer. The new implementation leaf does not import the large core, GUI or
+native Paddle. `paddle_headwords_core.py` normalized bytes
+**313040→278675** (−34365, 11.0%) with new strict cap **278685**, while
+historical oversize baseline remains locked; root Python file count **15**.
+Tests cover isolated import, connected components, visual symbol classification,
+Unicode leading-Han constraints, live patched glyph/symbol rules, projection
+empty-image semantics, context feature JSON keys and missing OCR visual rows.
+Architecture guard requires all seventeen canonical functions and the
+retained public entrypoint delegation.
+
+Exact-head six-system Python3.10/3.13 CI, architecture/change guard, full
+pytest, GUI smoke, legacy compatibility, wheel, CodeQL/review state and
+independent main-push acceptance remain mandatory before closing PR.
+Native GPU/CUDA, scanned-page and hands-on GUI parity are still outstanding,
+as are the remaining image/OCR orchestration core and massive `app.py`.

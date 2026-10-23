@@ -8,25 +8,21 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification, preprocessing and crop/OCR batches are merged through
-#641 (latest main OCR commit `38c2b800`); exact-head CI on #640/#641
-passed prior to merge. This candidate migrates the **complete**
-Paddle/Tesseract/Lens candidate sequence matching and vote arbitration
-chain (16 functions) to `ocr/pairing_arbitration.py`. The OCR core retains
-the original names, signatures and public monkeypatch boundary, supplying
-all 16 peer callbacks and two coordinate/row helpers through a frozen
-call-time `OcrPairingDeps` structure. The canonical owner handles text
-similarity, sequence matching, third-engine attachment, engine quality,
-accepted/review votes, source/coarse/anchor coordinate placement, issue
-labels and page agreement stats with unchanged cache/pickle fields.
-`paddle_headwords_core.py` normalized source **351535→313040** bytes
-(−38495); new strict cap **313050** with historical baseline unchanged,
-root Python file count **15**. New isolated import and synthetic voting/
-coordinate/fallback tests are added. The current branch
-`refactor/562-ocr-pairing-arbitration` requires exact-head six-platform
-CI, GUI/compat/wheel, CodeQL and reviews before merge, and independent
-merged-main validation. Actual scan/manual UI and native Paddle GPU/CUDA
-parity remain unverified. Historical phase log continues below.
+Root classification, preprocessing, crop and OCR refactors are merged
+through #642 (main merge `76d5c32e`). After exact-head #642 CI success,
+the current `refactor/562-ocr-visual-cjk-evidence` branch migrates the
+**complete 17-function visual OCR marker and CJK projection/right-context
+evidence chain** to `ocr/visual_evidence.py`, preserving 17 patchable
+legacy call signatures/docstrings and injecting 29 current callbacks and
+symbol-policy mappings per invocation. OCR core normalized bytes
+**313040→278675** (−34365), strict additional cap **278685**,
+unchanged historical oversize baseline and **15** classified root
+Python modules. Tests include marker components, CJK glyph/Unicode,
+context report keys, call-time patches and import isolation. Exact-head
+six-matrix CI, GUI/compatibility/wheel, CodeQL, reviews and independent
+postmerge main check have not yet been established. Native GPU/CUDA,
+hands-on GUI and real scanned pages remain outstanding. Historical
+phase and recovery log follows below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
