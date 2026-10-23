@@ -6,6 +6,13 @@ mutable GUI/preprocessing globals at call time. No circular app import.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from PIL import Image, ImageTk
+    from ..models import AppSettings, ProjectState
+    from ..image_preprocessing import PreprocessAnalysis
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,7 @@ class PreprocessUiDeps:
     ocr_cache_root: object
     ppp_read_path_for_image: object
     settings_path: object
+    AUTO_FONT_FAMILY: object
 
 
 def _preprocess_mode_active(self, deps: PreprocessUiDeps) -> bool:
@@ -367,6 +375,7 @@ def _default_preprocess_corner_quad(deps: PreprocessUiDeps, image: Image.Image) 
 
 
 def edit_preprocess_corners(self, deps: PreprocessUiDeps) -> None:
+    AUTO_FONT_FAMILY = deps.AUTO_FONT_FAMILY
     tk = deps.tk
     font = deps.font
     messagebox = deps.messagebox
