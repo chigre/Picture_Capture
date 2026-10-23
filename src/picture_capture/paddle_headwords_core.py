@@ -7577,6 +7577,7 @@ def _review_candidate_box_height(item: dict[str, Any]) -> int:
 
 
 def _review_candidates_same_cjk_glyph(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Return True when two selected rows are duplicate detections of one Han glyph."""
     return _review_finalization._review_candidates_same_cjk_glyph(_review_finalization_deps(), left, right)
 
 
@@ -7585,6 +7586,7 @@ def _review_candidate_priority(item: dict[str, Any]) -> tuple[float, float, floa
 
 
 def _normalize_cjk_review_word(word: str) -> str:
+    """Return a Unicode-safe normalized review word for CJK duplicate checks."""
     return _review_finalization._normalize_cjk_review_word(_review_finalization_deps(), word)
 
 
@@ -7593,10 +7595,24 @@ def _looks_like_multi_cjk_headword(word: str) -> bool:
 
 
 def _review_candidates_same_cjk_compound(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Return True when two selected rows are duplicate detections of one CJK compound headword.
+
+    This handles ordinary-size Chinese bracketed compounds such as 【並肩】 that
+    can be emitted twice by slightly different OCR pairings.  To avoid merging
+    neighbouring real entries, require the normalized lemma to match exactly and
+    the physical boxes to overlap strongly or have almost identical centres.
+    """
     return _review_finalization._review_candidates_same_cjk_compound(_review_finalization_deps(), left, right)
 
 
 def _candidate_has_single_cjk_identity(item: dict[str, Any]) -> bool:
+    """Return True when review metadata identifies a large single-Han headword.
+
+    Do not rely only on the final OCR word: the two OCR engines can disagree on
+    the glyph while still pointing at the same oversized dictionary headword.
+    Parser traces and each engine's lemma/raw/corrected forms are therefore also
+    inspected.
+    """
     return _review_finalization._candidate_has_single_cjk_identity(_review_finalization_deps(), item)
 
 
@@ -7605,14 +7621,35 @@ def _candidate_line_height(item: dict[str, Any]) -> float:
 
 
 def _boxes_same_large_cjk_region(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Check whether two candidates plausibly cover the same oversized glyph."""
     return _review_finalization._boxes_same_large_cjk_region(_review_finalization_deps(), left, right)
 
 
 def _single_cjk_duplicate_pair(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Use a wider Y tolerance for duplicate large single-character entries.
+
+    OCR and visual-projection channels can refine the separator independently,
+    leaving two lines farther apart than the ordinary 0.22-line threshold.  A
+    single-character pair may therefore use 0.55 of a normal text line, but only
+    when geometry still says both candidates belong to the same large glyph.
+    """
     return _review_finalization._single_cjk_duplicate_pair(_review_finalization_deps(), left, right)
 
 
 def _deduplicate_selected_cjk_review_candidates(review_candidates: list[dict[str, Any]]) -> int:
+    """Suppress duplicate final separator lines with type-aware Y tolerances.
+
+    Ordinary/bracketed entries keep the strict ~0.22-normal-line rule.  Large
+    single-character CJK heads first get a dedicated OCR+visual-channel check
+    with a wider ~0.55-normal-line allowance, because their two refinement paths
+    can legitimately land farther apart while still describing one glyph.
+
+    For ordinary/bracketed duplicates the final separator keeps the *lower*
+    safe Y.  For oversized single-CJK duplicates we keep the *upper* boundary:
+    the lower visual/OCR duplicate can fall inside the same entry around
+    pronunciation/radical metadata (e.g. between 播 ba and Bộ:), while the upper
+    line is the true entry-start separator.
+    """
     return _review_finalization._deduplicate_selected_cjk_review_candidates(_review_finalization_deps(), review_candidates)
 
 
