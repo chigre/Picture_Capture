@@ -903,7 +903,7 @@ postmerge independent main checks remain mandatory. Native UVDoc/CUDA, real
 scan/manual GUI acceptance still cannot be inferred from these synthetic tests.
 
 
-## Issue #562 — whole-entry crop planning, illustration pairing and export transaction (2026-10-23; candidate)
+## Issue #562 — whole-entry crop planning, illustration pairing and export transaction (2026-10-23; merged #640)
 
 Starting from merged `main@f3619e3e` (#639), extract the **complete**
 whole-entry crop page workflow from the large legacy
@@ -932,3 +932,44 @@ width-file integration and staged-failure rollback tests. Exact-head full
 OS/Python 3.10/3.13 CI, GUI smoke, wheel, compatibility, CodeQL and review
 gates remain required. Real scanned pages and manual/native UI acceptance
 remain unverified. The inherited #562 oversized app and OCR cores remain open.
+
+
+## Issue #562 — OCR Paddle/Tesseract/Lens pairing and arbitration (2026-10-23; candidate)
+
+After #640/#641 were merged (latest OCR review-finalization checkpoint
+`main@38c2b800`), move the **entire 16-function** multi-engine pairing
+and decision chain from `paddle_headwords_core.py` to
+`ocr/pairing_arbitration.py`: Unicode normalization and lemma similarity;
+stable sequence+Y matching of Paddle/Tesseract rows without downstream
+cascade; third-opinion Lens candidate attachment; feature/confidence
+engine-quality comparisons; three-way agreement, strict parser and
+visual-boundary negative/positive vote arbitration; stable candidate IDs;
+selected-engine source/coarse/anchor coordinate reconstruction; review
+issue codes and agreement/quality reporting.
+
+Retain all public/private core function names, signatures, historical
+docstrings, settings/profile handling and monkeypatch seams. The frozen
+`OcrPairingDeps` captures all **16 existing function callbacks plus the
+two external row/coordinate helpers** live on every call. This maintains
+public facade assignment mirroring without adding a new global installer,
+native engine init, circular runtime import or a new root shim.
+Preserve `paddle_lens_mode=diagnostic` nonvoting, local consensus versus
+Lens discrepancy, evidence-family rescue thresholds, Unicode CJK pairing,
+original/coarse/anchor positional atomicity, candidate ID quantization and
+the diagnostic vs actual selection distinction. Saved `Entry` and OCR
+cache/report schema are unchanged.
+
+OCR core `351535→313040` normalized bytes (−38495, **10.95%**),
+strict cap `351540→313050`, historical oversize baseline remains
+unchanged. Physical root count stays **15**. New direct tests target
+import isolation, Unicode matching, mid-sequence skipped rows,
+third-vote attachment, diagnostic-only Lens, live monkeypatch
+seams, agreed-pair voting, source coordinate application and original-Y
+fallback exclusion from agreement summaries.
+
+Before acceptance require exact-head Windows/macOS/Ubuntu Python3.10/3.13
+CI, architecture/change guard, full regression, compat, GUI smoke, wheel,
+CodeQL, unresolved review checks, and independent postmerge main CI.
+Actual scanned-page, manual GUI and native Paddle GPU/CUDA validation
+remain separate unverified gates. `app.py` and additional OCR detection
+and image-feature orchestration remain future #562 work.
