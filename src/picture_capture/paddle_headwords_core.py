@@ -31,6 +31,7 @@ from .ocr import line_grouping as _line_grouping
 from .ocr import alphabetical_warnings as _alphabetical_warnings
 from .ocr import band_preprocessing as _band_preprocessing
 from .ocr import band_coordinates as _band_coordinates
+from .ocr import boundary_measurements as _boundary_measurements
 from .ocr import language_resolution as _language_resolution
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
@@ -1875,37 +1876,16 @@ def _looks_like_marker_noise_lemma(parsed: HeadwordParse | None) -> bool:
     return compact in {"ml", "ll", "il", "ii", "l"}
 
 def _ink_ratio(gray: np.ndarray, box: tuple[int, int, int, int]) -> float:
-    x0, y0, x1, y1 = box
-    y0, y1 = max(0, y0), min(gray.shape[0], y1)
-    x0, x1 = max(0, x0), min(gray.shape[1], x1)
-    if x1 <= x0 or y1 <= y0:
-        return 0.0
-    return float((gray[y0:y1, x0:x1] < 180).mean())
+    return _boundary_measurements.ink_ratio(gray, box)
 
 
 def _leading_box(line: OCRLine, matched_chars: int) -> tuple[int, int, int, int]:
-    """Approximate the lemma's visual box for a local ink/boldness estimate."""
-    x0, y0, x1, y1 = line.box
-    if not line.text or x1 <= x0:
-        return line.box
-    fraction = min(1.0, max(0.16, matched_chars / max(1, len(line.text))))
-    right = min(x1, x0 + max(3, round((x1 - x0) * fraction * 1.12)))
-    return x0, y0, right, y1
+    """Keep the historical lemma box helper and its callable origin."""
+    return _boundary_measurements.leading_box(line, matched_chars)
 
 
 def _true_runs(values: np.ndarray) -> list[tuple[int, int]]:
-    runs: list[tuple[int, int]] = []
-    start: int | None = None
-    for index, value in enumerate(values):
-        if value and start is None:
-            start = index
-        elif not value and start is not None:
-            runs.append((start, index))
-            start = None
-    if start is not None:
-        runs.append((start, len(values)))
-    return runs
-
+    return _boundary_measurements.true_runs(values)
 
 def _otsu_threshold(gray: np.ndarray) -> int:
     """Historical black/white threshold; implementation owned by OCR band leaf."""
@@ -1916,24 +1896,10 @@ def _separator_analysis_x_bounds(
     settings: AppSettings,
     pixel_scale: float = 1.0,
 ) -> tuple[int, int]:
-    """Return the left-local X ROI used for separator/boundary analysis.
-
-    Dictionary headwords usually live at the left of a column while definitions
-    can run across its full width.  Analysing the whole column lets long text on
-    the preceding definition line contaminate a local Y boundary.  The user can
-    therefore limit refinement to a percentage of the left side of the column.
-    """
-    width = max(1, int(width))
-    margin = max(0, round(max(0, settings.paddle_separator_column_margin) * pixel_scale))
-    margin = min(margin, max(0, width // 4))
-    ratio = max(10.0, min(100.0, float(getattr(settings, "paddle_separator_roi_width_ratio", 60.0)))) / 100.0
-    usable = max(1, width - margin * 2)
-    x0 = margin
-    x1 = min(width - margin, x0 + max(16, round(usable * ratio)))
-    if x1 - x0 < 16:
-        x0, x1 = 0, width
-    return int(x0), int(x1)
-
+    """Historical local-column OCR separator ROI policy."""
+    return _boundary_measurements.separator_analysis_x_bounds(
+        width, settings, pixel_scale,
+    )
 
 def detect_image_separator_candidates(
     gray: np.ndarray,
@@ -2519,24 +2485,10 @@ def refine_first_content_y(
 
 
 def _header_cutoff(gray: np.ndarray, settings: AppSettings, ratio: float) -> int:
-    """Return band Y below a strong running-header separator, or zero."""
-    if not settings.paddle_auto_header_rule or gray.size == 0:
-        return 0
-    search_height = min(gray.shape[0], max(1, round(settings.paddle_header_search_height * ratio)))
-    if search_height <= 1:
-        return 0
-    dark = gray[:search_height] < 180
-    row_ink = dark.mean(axis=1)
-    active = row_ink >= min(0.98, max(0.05, settings.paddle_header_rule_ink_ratio))
-    runs = _true_runs(active)
-    if not runs:
-        return 0
-    # A real horizontal rule should survive on at least one full scan row.
-    # Use the last qualifying rule in the top search zone; this handles a
-    # double rule without treating the running-header text itself as a rule.
-    _, end = runs[-1]
-    return min(gray.shape[0], end + max(0, round(settings.paddle_header_rule_margin * ratio)))
-
+    """Historical running-header cut-off with live contiguous-run hook."""
+    return _boundary_measurements.header_cutoff(
+        gray, settings, ratio, true_runs_fn=_true_runs,
+    )
 
 def _accepted_cjk_row_for_visual_run(
     diagnostics: list[dict[str, Any]],
