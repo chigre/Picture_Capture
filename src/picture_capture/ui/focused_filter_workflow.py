@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
     from PIL import Image
-    from ..models import AppSettings, WordEntry
+    from ..models import AppSettings, Entry as WordEntry
 
 
 @dataclass(frozen=True)
