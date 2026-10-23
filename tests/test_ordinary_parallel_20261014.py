@@ -149,12 +149,13 @@ def test_parallel_batch_manual_claim_prevents_submitting_or_overwriting_pending_
 
 
 def test_parallel_progress_events_carry_page_identity_for_safe_foreground_reload():
-    source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    ).read_text(encoding="utf-8")
-    start = source.index("    def _start_parallel_batch_task(")
-    end = source.index("    def _finish_batch_task(", start)
-    block = source[start:end]
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    owner = (root / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_parallel_batch_task(" in source
+    start = owner.index("def _start_parallel_batch_task(")
+    end = owner.index("def _finish_batch_task(", start)
+    block = owner[start:end]
     assert 'self._batch_page_states[item_index] = "processing"' in block
     assert 'self._batch_page_states[item_index] = "done"' in block
     assert 'if state == "manual_locked":' in block
