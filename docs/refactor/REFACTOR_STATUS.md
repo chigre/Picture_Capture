@@ -16,11 +16,11 @@ passed). This candidate large refactor branch
 image evidence, structure/visual scoring, forced rules, acceptance and
 diagnostic lifecycle** into canonical `ocr/candidate_filter.py`.
 Original core retains one live, signature-compatible wrapper and binds
-**41 original functions/policy values** per invocation; no new root
+**42 original functions/policy values** per invocation; no new root
 file or patchpoint installer. Model/pickle, raw caches, output
 diagnostics and user decision semantics stay unchanged. Core normalized
-UTF-8 source **246682→197587 bytes**, reduction **49095**,
-strict additional guard **197600**, unchanged historical oversized
+UTF-8 source **246682→197668 bytes**, reduction **49014**,
+strict additional guard **197680**, unchanged historical oversized
 baseline and 15 root modules. New isolation, monkeypatch,
 interface and empty-data regression tests plus AST ownership guard.
 Exact-head full six-platform CI, GUI/compatibility/wheel, CodeQL/reviews
