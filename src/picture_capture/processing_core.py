@@ -17,6 +17,7 @@ from .crop.auxiliary_lines import read_auxiliary_lines
 from .crop import page_workflow as _page_workflow
 from .crop import polygon_geometry as _polygon_geometry
 from .crop import worker_policy as _crop_worker_policy
+from .crop import entry_column_bounds as _entry_column_bounds
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
@@ -2845,46 +2846,12 @@ def _entry_crop_box_for_column(
     image: Image.Image, settings: AppSettings, geometry: Geometry, col: int, y0: int, y1: int,
     *, extra_left: int = 0, extra_right: int = 0,
 ) -> tuple[int, int, int, int]:
-    """Whole-entry crop box with gutters divided between neighboring columns."""
-    col = max(0, min(len(geometry.column_starts) - 1, int(col)))
-    canonical_width = geometry.transform.canonical_size(image.size)[0]
-    extra_left_px = max(
-        0, _source_px(int(extra_left)),
+    """Historical crop geometry hook: delegates without freezing patchable globals."""
+    return _entry_column_bounds.entry_crop_box_for_column(
+        image, settings, geometry, col, y0, y1,
+        extra_left=extra_left, extra_right=extra_right,
+        source_px_fn=_source_px, clamp_fn=clamp_box, np_module=np,
     )
-    extra_right_px = max(
-        0, _source_px(int(extra_right)),
-    )
-
-    # Use the robust width of the ordinary columns. derive_geometry intentionally
-    # lets the final column extend to the page edge for detection, which is not
-    # the correct width for dictionary-entry cropping.
-    widths = list(geometry.column_widths[:-1]) if len(geometry.column_widths) > 1 else list(geometry.column_widths)
-    nominal_width = max(1, round(float(np.median(widths or geometry.column_widths or [image.width]))))
-    gutter_px = max(
-        0,
-        _source_px(settings.gutter),
-    )
-    half_gutter = gutter_px // 2
-    outer_margin = max(0, geometry.column_starts[0] // 2)
-
-    left_margin = outer_margin if col == 0 else half_gutter
-    right_margin = outer_margin if col == len(geometry.column_starts) - 1 else gutter_px - half_gutter
-    path_left, path_right = geometry.x_bounds(col, y0, y1)
-    canonical_size = geometry.transform.canonical_size(image.size)
-    canonical_box = (
-        path_left - left_margin - extra_left_px,
-        y0,
-        path_right + nominal_width + right_margin + extra_right_px,
-        y1,
-    )
-    canonical_box = (
-        max(0, canonical_box[0]),
-        max(0, canonical_box[1]),
-        min(canonical_size[0], canonical_box[2]),
-        min(canonical_size[1], canonical_box[3]),
-    )
-    return clamp_box(geometry.transform.canonical_box_to_source(canonical_box, image.size), image)
-
 
 def entry_crop_column_boxes(
     image: Image.Image, settings: AppSettings, *, top_y: int | None = None, bottom_y: int | None = None,
