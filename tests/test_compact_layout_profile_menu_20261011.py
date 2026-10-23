@@ -136,14 +136,15 @@ def test_crop_width_lives_in_postproduction_and_reuses_live_float_setting():
 
 def test_review_right_panel_opens_only_reference_list_by_default():
     source = (BASE / "app.py").read_text(encoding="utf-8")
+    review_source = (BASE / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     start = source.index("self.review_right_section_expanded = {")
     end = source.index("self._review_right_sections:", start)
     initial = source[start:end]
     assert 'value=(key == "reference")' in initial
     assert '("display", "digit", "accent", "ocr", "network", "reference")' in initial
     assert 'value=(key not in {"digit", "accent"})' not in initial
-    assert 'right, "reference", "参考词表",' in source
-    assert 'fill="both", expand=True, pady=(0, 0)' in source
+    assert 'right, "reference", "参考词表",' in review_source
+    assert 'fill="both", expand=True, pady=(0, 0)' in review_source
     assert 'def _toggle_review_right_section(self, key: str)' in source
     assert 'body.pack_forget()' in source
     assert 'body.pack(fill="both", expand=True)' in source

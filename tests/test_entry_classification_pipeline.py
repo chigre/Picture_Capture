@@ -275,9 +275,10 @@ def test_gui_composition_uses_static_pdic_io_and_review_classification():
     assert "install_review_entry_classification(app_module)" not in source
 
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
-    assert "self.active_crop_host = ttk.Frame(editor_area" in app_source
-    assert app_source.count("sync_review_entry_classification(self)") >= 2
-    assert '"大字头切图高："' in app_source
+    review_source = (Path(app_module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+    assert "self.active_crop_host = ttk.Frame(editor_area" in review_source
+    assert app_source.count("sync_review_entry_classification(self)") + review_source.count("sync_review_entry_classification(self)") >= 2
+    assert '"大字头切图高："' in review_source
 
 
 def test_gui_baseline_capture_wraps_core_classification_without_reinstall(tmp_path: Path):

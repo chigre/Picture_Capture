@@ -154,9 +154,11 @@ def test_render_and_delete_bindings_stay_in_existing_review_window():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "app.py"
     ).read_text("utf-8")
-    render = source.split("    def render_rows(", 1)[1].split(
-        "\n    def _candidate_for_entry(", 1,
-    )[0]
+    owner = (
+        Path(__file__).resolve().parents[1]
+        / "src/picture_capture/ui/review_workspace_workflow.py"
+    ).read_text("utf-8")
+    render = owner.split("def render_rows(", 1)[1]
     remove = source.split("    def delete_review_entry(", 1)[1].split(
         "\n    def _save_digit_map(", 1,
     )[0]

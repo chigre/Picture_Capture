@@ -214,7 +214,7 @@ def test_main_and_review_index_are_fixed_auto_font_without_zoom_scaling():
     main = (root / "ui" / "entry_overlay_builder.py").read_text("utf-8")
     review = (root / "ui" / "review_crop_sequence.py").read_text("utf-8")
     x_button = (root / "ui" / "overlay_delete_button.py").read_text("utf-8")
-    review_shell = (root / "app.py").read_text("utf-8")
+    review_shell = (root / "ui/review_workspace_workflow.py").read_text("utf-8")
     assert 'fixed_overlay_control_font(\n            self.canvas, self.settings.ocr_language,' in main
     assert 'font=_main_sequence_font(review)' in review
     assert 'return fixed_overlay_control_font(' in review

@@ -144,6 +144,7 @@ def test_native_titlebar_helper_is_safe_off_windows(monkeypatch) -> None:
 def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> None:
     app_source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
     project_session = (ROOT / "src/picture_capture/ui/project_session_workflow.py").read_text(encoding="utf-8")
+    review_source = (ROOT / "src/picture_capture/ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     session_source = (
         ROOT / "src/picture_capture/ui/controllers/session.py"
     ).read_text(encoding="utf-8")
@@ -180,7 +181,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'self.parent_app._apply_current_appearance(self)' in guide_source
     assert 'word_list_default_fg = palette["input_fg"]' in app_source
     assert 'background="#d9d9d9", foreground="#111827"' in app_source
-    assert 'editor_frame._pc_skip_classic_appearance = True' in app_source
+    assert 'editor_frame._pc_skip_classic_appearance = True' in review_source
     assert 'editor._pc_skip_classic_appearance = True' in app_source
     assert 'palette["review_present_bg"]' in app_source
     assert 'palette["review_absent_bg"]' in app_source
