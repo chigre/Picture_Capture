@@ -36,6 +36,7 @@ class PageIndexDeps:
     pdic_path: object
     read_ppp: object
     visible_page_iids: object
+    _natural_text_key: object
 
 
 def _resize_sidebar_content(self, deps: PageIndexDeps, event: tk.Event | None = None) -> None:
@@ -470,6 +471,7 @@ def _bookmark_stems(self, deps: PageIndexDeps) -> set[str]:
 def _page_list_bookmark_click(self, deps: PageIndexDeps, event: tk.Event) -> str | None:
     """Toggle only the bookmark cell; never swallow ordinary page clicks."""
     settings_path = deps.settings_path
+    _natural_text_key = deps._natural_text_key
     # This handler is bound to every left click on the Treeview. Determine
     # whether the click actually targets the bookmark column *before*
     # applying the preprocess read-only guard. Otherwise returning "break"

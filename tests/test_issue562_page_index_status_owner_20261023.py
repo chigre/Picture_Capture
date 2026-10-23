@@ -104,9 +104,11 @@ def test_live_original_module_helpers_bound_each_event(monkeypatch):
     monkeypatch.setattr(shell, "_sorted_page_list_rows", marker)
     monkeypatch.setattr(shell, "read_page_sections", marker)
     monkeypatch.setattr(shell, "word_fill_status_path", marker)
+    monkeypatch.setattr(shell, "_natural_text_key", marker)
     assert shell._page_index_deps()._sorted_page_list_rows is marker
     assert shell._page_index_deps().read_page_sections is marker
     assert shell._word_fill_status_deps().word_fill_status_path is marker
+    assert shell._page_index_deps()._natural_text_key is marker
 
 
 def test_word_fill_status_roundtrip_and_v1_legacy_state(tmp_path):
