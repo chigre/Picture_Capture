@@ -8,20 +8,25 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are merged through #639
-(`f3619e3e`) after user-confirmed CI green. A new large crop workflow batch
-moves whole-entry SECTION-aware piece planning, illustration pairing, plan
-staging/publication, white-fill/union crop and atomic whole-page export to
-`crop/page_workflow.py`. Legacy models/pickle identities and public function
-signatures remain in `processing_core.py`, delegated with 41 live operation
-and constructor references at call time. Core shrinks **158531→144295**
-normalized UTF-8 bytes; new guard ceiling **144300** while historic
-oversized baseline stays immutable. Root count **15**. New direct unit and
-synthetic PNG/staging integration tests added. Current branch
-`refactor/562-page-crop-workflow` requires exact-head six-platform CI,
-CodeQL, GUI smoke, compatibility, wheel and review before merge, then an
-independent postmerge main check. Big GUI and OCR cores and native/manual
-scanned-page checks remain future work. Older log below is historical.
+Root classification, preprocessing and crop/OCR batches are merged through
+#641 (latest main OCR commit `38c2b800`); exact-head CI on #640/#641
+passed prior to merge. This candidate migrates the **complete**
+Paddle/Tesseract/Lens candidate sequence matching and vote arbitration
+chain (16 functions) to `ocr/pairing_arbitration.py`. The OCR core retains
+the original names, signatures and public monkeypatch boundary, supplying
+all 16 peer callbacks and two coordinate/row helpers through a frozen
+call-time `OcrPairingDeps` structure. The canonical owner handles text
+similarity, sequence matching, third-engine attachment, engine quality,
+accepted/review votes, source/coarse/anchor coordinate placement, issue
+labels and page agreement stats with unchanged cache/pickle fields.
+`paddle_headwords_core.py` normalized source **351535→313040** bytes
+(−38495); new strict cap **313050** with historical baseline unchanged,
+root Python file count **15**. New isolated import and synthetic voting/
+coordinate/fallback tests are added. The current branch
+`refactor/562-ocr-pairing-arbitration` requires exact-head six-platform
+CI, GUI/compat/wheel, CodeQL and reviews before merge, and independent
+merged-main validation. Actual scan/manual UI and native Paddle GPU/CUDA
+parity remain unverified. Historical phase log continues below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
