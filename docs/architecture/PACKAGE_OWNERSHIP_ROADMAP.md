@@ -1347,3 +1347,17 @@ OCR comparison, crop boxes and fonts, editor keyboard focus and staged saves.
 4.92%); new strict size cap 551209.
 Require exact-head 6-platform CI/pytest/GUI smoke/F821/wheel, CodeQL,
 independent review and real-page GUI proofread validation prior to merge.
+
+## Issue #562 — focused edit and exact-coordinate save ownership (2026-10-23)
+
+Following merged #653, move 10 focused filter setting, edit, focus, OCR fill,
+commit, debounce and asynchronous-save implementations to the existing
+`ui/focused_filter_workflow.py` owner with unchanged `ReviewWindow` callable
+signatures. New `proofreading/focused_pdic_updates.py` owns the identical
+exact-image-coordinate PDIC read/atomic-write/verify/rollback transaction.
+The app writer API is retained as a call-time dependency adapter, and the
+background worker uses a live writer binding rather than importing `app`.
+Do not alter the 160ms delay, serial-write ordering, pending edits during a
+write, conflict reporting, failed-save retry, closure wait, or settings
+clamping. Ratchet limits are unchanged. Acceptance requires exact-head
+full-matrix CI, CodeQL, review and real scanned-page GUI save/reopen checks.
