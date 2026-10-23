@@ -37,9 +37,9 @@ TSV field order/format, page-sorted replacement, atomic-write hook, and process
 lock remain unchanged. No new root file, installer, GPU initialization,
 namespace copy, GUI dependency or disk-format revision is introduced.
 
-The core shrinks **363854 → 349358 normalized UTF-8 bytes** (−14496);
+The core shrinks **363854 → 351535 normalized UTF-8 bytes** (−12319);
 the historical oversized baseline remains unchanged, with an additional
-strict **349365-byte** ceiling. Physical root count remains **15**.
+strict **351540-byte** ceiling. Physical root count remains **15**.
 
 New direct tests cover import isolation; call-time monkeypatch hooks;
 single-CJK, ordinary and compound duplicate semantics; selected Entry
