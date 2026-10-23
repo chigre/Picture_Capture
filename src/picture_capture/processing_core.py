@@ -24,6 +24,7 @@ from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
 from .geometry import reading_order as _reading_order
 from .preprocess.page_pixels import normalize_page_rgb
+from .preprocess import core_analysis_pixels as _analysis_pixels
 from .geometry.layout_transform import LayoutTransform
 from .persistence.page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
@@ -238,12 +239,10 @@ class IllustrationSplitResult:
 
 
 def _analysis_image(image: Image.Image, max_width: int = _ANALYSIS_MAX_WIDTH) -> tuple[Image.Image, float]:
-    source = normalize_page_rgb(image)
-    if source.width <= max_width:
-        return source.copy(), 1.0
-    scale = max_width / source.width
-    return source.resize((max_width, max(1, round(source.height * scale))), Image.Resampling.LANCZOS), scale
-
+    """Original image-analysis preview hook; retain RGB/resize patch points."""
+    return _analysis_pixels.analysis_image(
+        image, max_width, normalize_rgb_fn=normalize_page_rgb, image_cls=Image,
+    )
 
 def parameter_scale(image: Image.Image, settings: AppSettings) -> float:
     """Settings are already literal original-image pixels."""
@@ -255,15 +254,10 @@ def _source_px(value: int | float) -> int:
 
 
 def _adaptive_dark_mask(gray_image: Image.Image, block_size: int, c_value: int) -> np.ndarray:
-    """Create an adaptive dark-ink mask without requiring OpenCV."""
-    block_size = max(3, int(block_size))
-    if block_size % 2 == 0:
-        block_size += 1
-    radius = max(1, block_size // 2)
-    gray = np.asarray(gray_image, dtype=np.int16)
-    local_mean = np.asarray(gray_image.filter(ImageFilter.BoxBlur(radius)), dtype=np.int16)
-    return gray < (local_mean - max(0, int(c_value)))
-
+    """Original adaptive threshold hook; preserve live NumPy and Pillow patches."""
+    return _analysis_pixels.adaptive_dark_mask(
+        gray_image, block_size, c_value, np_module=np, image_filter=ImageFilter,
+    )
 
 def _smooth_track(
     values: list[int], max_step: int, *, nominal_x: int | None = None,

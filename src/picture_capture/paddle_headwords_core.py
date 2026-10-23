@@ -30,6 +30,7 @@ from .ocr import lemma_repairs as _lemma_repairs
 from .ocr import line_grouping as _line_grouping
 from .ocr import alphabetical_warnings as _alphabetical_warnings
 from .ocr import band_preprocessing as _band_preprocessing
+from .ocr import band_coordinates as _band_coordinates
 from .ocr import language_resolution as _language_resolution
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
@@ -951,29 +952,12 @@ def prepare_ocr_band(
 def _records_to_canonical_band(
     records: list[OCRRecord], source_band_size: tuple[int, int], transform_kind: str
 ) -> list[OCRRecord]:
-    """Map OCR boxes to analysis space without transforming OCR input pixels."""
+    """Historical source-to-canonical OCR box bridge, preserving record identity."""
     from .geometry.layout_transform import LayoutTransform
-
-    transform = LayoutTransform(transform_kind)
-    return [
-        OCRRecord(
-            record.text,
-            record.confidence,
-            transform.source_box_to_canonical(
-                record.box, source_band_size
-            ),
-            recovery=record.recovery,
-            recovery_source_text=record.recovery_source_text,
-            parent_box=(
-                transform.source_box_to_canonical(
-                    record.parent_box, source_band_size
-                )
-                if record.parent_box is not None else None
-            ),
-        )
-        for record in records
-    ]
-
+    return _band_coordinates.records_to_canonical_band(
+        records, source_band_size, transform_kind,
+        transform_cls=LayoutTransform, record_cls=OCRRecord,
+    )
 
 def recognize_paddle_text(
     image: Image.Image,
