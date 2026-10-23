@@ -1163,6 +1163,47 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: full multi-engine OCR page orchestration, review, and compact
+    # cache persistence is canonical in the leaf; legacy core only dispatches.
+    page_detection_owner = PACKAGE_ROOT / "ocr/page_detection.py"
+    page_detection_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    if not page_detection_owner.is_file():
+        violations.append("canonical page-wide OCR orchestration owner missing")
+    else:
+        detection_tree = ast.parse(page_detection_owner.read_text(encoding="utf-8"))
+        declarations = {
+            node.name for node in detection_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        }
+        if not {"PageDetectionDeps", "detect_paddle_headwords"} <= declarations:
+            violations.append("canonical page detection owner or dependency schema missing")
+        if any(isinstance(node, ast.ImportFrom) and node.module in {
+            "paddle_headwords_core", "processing", "app",
+        } for node in detection_tree.body):
+            violations.append("page detection owner imports heavyweight root facade")
+        implementations = [
+            node for node in detection_tree.body if isinstance(node, ast.FunctionDef)
+            and node.name == "detect_paddle_headwords"
+        ]
+        if len(implementations) != 1 or len(implementations[0].body) < 30:
+            violations.append("complete page OCR detection pipeline must stay in leaf")
+    if page_detection_core.is_file():
+        core_tree = ast.parse(page_detection_core.read_text(encoding="utf-8"))
+        delegates = [
+            node for node in core_tree.body if isinstance(node, ast.FunctionDef)
+            and node.name == "detect_paddle_headwords"
+        ]
+        if len(delegates) != 1 or not any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_page_detection"
+            and node.func.attr == "detect_paddle_headwords"
+            for node in ast.walk(delegates[0])
+        ):
+            violations.append("original page OCR public detection wrapper not delegated")
+        if _normalized_source_size(page_detection_core) > 174_710:
+            violations.append("paddle_headwords_core exceeds 174710-byte page detection ratchet")
+
     # #562: single physical OCR candidate scoring, reject/accept decision,
     # CJK visual fallback and diagnostic report owner. Keep live core patch
     # seams and avoid a hidden second implementation or heavyweight import.
