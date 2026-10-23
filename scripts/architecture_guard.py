@@ -20,6 +20,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
 MAX_PREPROCESS_FACADE_BYTES = 55_320
+MAX_PROCESSING_CORE_FACADE_BYTES = 144_300
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -1272,6 +1273,45 @@ def collect_violations() -> list[str]:
         violations.append("retired root OCR-channel bridge owner returned")
     if not (PACKAGE_ROOT / "ocr/channel_legacy.py").is_file():
         violations.append("canonical OCR-channel bridge owner missing")
+
+    # #562: complete whole-entry plan/link/export/atomic-publication workflow
+    # belongs to the import-light crop owner. Keep historical model identities
+    # and root public function adapters, not algorithm copies.
+    crop_workflow = PACKAGE_ROOT / "crop/page_workflow.py"
+    crop_core = PACKAGE_ROOT / "processing_core.py"
+    if not crop_workflow.is_file():
+        violations.append("canonical whole-entry crop workflow owner missing")
+    else:
+        owner_tree = ast.parse(crop_workflow.read_text(encoding="utf-8"))
+        expected = {
+            "_base_entry_crop_pieces", "build_page_crop_plan", "_stage_page_crop_plan",
+            "write_page_crop_plan", "_whitefill_polygons", "_save_union_crop",
+            "split_whole_entries", "CropWorkflowDeps",
+        }
+        actual = {node.name for node in owner_tree.body
+                  if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        if not expected <= actual:
+            violations.append("complete canonical page-crop workflow missing")
+        if any(isinstance(node, ast.ImportFrom) and
+               node.module == "processing_core" for node in owner_tree.body):
+            violations.append("crop workflow must not import the processing core at runtime")
+    if crop_core.is_file():
+        core_tree = ast.parse(crop_core.read_text(encoding="utf-8"))
+        for name in ("build_page_crop_plan", "split_whole_entries",
+                     "_base_entry_crop_pieces", "write_page_crop_plan"):
+            adapters = [node for node in core_tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == name]
+            if len(adapters) != 1 or not any(
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_page_workflow"
+                and node.func.attr == name for node in ast.walk(adapters[0])
+            ):
+                violations.append(f"public core crop adapter not delegated: {name}")
+        if _normalized_source_size(crop_core) > MAX_PROCESSING_CORE_FACADE_BYTES:
+            violations.append(
+                f"processing_core grew past extracted crop owner ({MAX_PROCESSING_CORE_FACADE_BYTES} bytes)"
+            )
 
     # Issue #562: crop publication transaction has one physical Crop owner.
     # Keep the root path absent; its legacy tests now import the canonical owner.
