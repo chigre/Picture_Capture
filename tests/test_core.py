@@ -107,6 +107,9 @@ REVIEW_APPEARANCE_SOURCE = (
     / "src/picture_capture/ui/review_appearance_workflow.py"
 ).read_text(encoding="utf-8")
 
+PAGE_INDEX_SOURCE = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/page_index_workflow.py").read_text(encoding="utf-8")
+WORD_FILL_STATUS_SOURCE = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/word_fill_status_workflow.py").read_text(encoding="utf-8")
+
 REVIEW_CROP_SOURCE = (
     Path(__file__).resolve().parents[1]
     / "src/picture_capture/ui/review_crop_actions.py"
@@ -4157,7 +4160,7 @@ def test_v2910_page_list_has_persistent_fill_status_column():
     for col,label in (("bookmark","●"),("page","页面"),("section","域"),("lined","线"),("fill_status","填充状态"),("illustrations","图")):
         assert f'self.page_list.heading("{col}", text="{label}", anchor="center")' in text
         assert f'self.page_list.column("{col}",' in text
-    assert "self._word_fill_status_text(index)" in text
+    assert "self._word_fill_status_text(index)" in PAGE_INDEX_SOURCE
     assert 'displaycolumns=("page", "lined", "illustrations")' in workspace
 
 def test_v2910_fill_status_text_reports_match_and_signed_difference(tmp_path):
@@ -4268,9 +4271,7 @@ def test_v2912_fill_status_cell_semantic_colors():
 def test_v2912_fill_status_overlay_targets_third_cell_and_keeps_legacy_warning():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _refresh_lined_cell_overlays(")
-    end = text.index("    def _word_fill_status_path(", start)
-    block = text[start:end]
+    block = PAGE_INDEX_SOURCE.split("def _refresh_lined_cell_overlays(", 1)[1].split("\ndef _page_metadata(", 1)[0]
     assert 'bbox(iid, "fill_status")' in block
     assert 'self.page_list.set(iid, "fill_status")' in block
     assert '_fill_status_cell_style(status_text)' in block
@@ -4304,9 +4305,7 @@ def test_v2913_page_overlay_refresh_is_coalesced():
 def test_v2913_overlay_repaint_only_walks_visible_rows():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _refresh_lined_cell_overlays(")
-    end = text.index("    def _word_fill_status_path(", start)
-    block = text[start:end]
+    block = PAGE_INDEX_SOURCE.split("def _refresh_lined_cell_overlays(", 1)[1].split("\ndef _page_metadata(", 1)[0]
     assert "visible_iids = self._visible_page_list_iids()" in block
     assert "for iid in visible_iids:" in block
     assert "range(len(self.project.images))" not in block
@@ -4716,7 +4715,7 @@ def test_v2110_page_list_heading_context_menu_has_optional_columns_and_permanent
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    block=text.split("    def _page_list_right_click(",1)[1].split("    def _schedule_page_cell_overlay_refresh(",1)[0]
+    block=PAGE_INDEX_SOURCE.split("def _page_list_right_click(",1)[1].split("\ndef _schedule_page_cell_overlay_refresh(",1)[0]
     for label in ("●","页面","区块","画线","插图","填充状态"):
         assert f'label="{label}"' in block
     assert 'menu.add_checkbutton(label="页面", variable=page_var, state="disabled")' in block
@@ -4728,7 +4727,7 @@ def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_s
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    block=text.split("    def _apply_page_list_display_columns(",1)[1].split("    def _page_list_configured(",1)[0]
+    block=PAGE_INDEX_SOURCE.split("def _apply_page_list_display_columns(",1)[1].split("\ndef _page_list_configured(",1)[0]
     assert 'columns = ["bookmark", "page", "lined"]' in block
     assert block.index('columns.append("illustrations")') < block.index('columns.append("section")')
     assert block.index('columns.append("section")') < block.index('columns.append("fill_status")')
@@ -4928,7 +4927,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     assert 'app.jump_to_bookmark(-1)' in compact
     assert 'app.jump_to_bookmark(1)' in compact
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
-    assert '"●" if page_stem in self._bookmark_stems() else ""' in text
+    assert '"●" if page_stem in self._bookmark_stems() else ""' in PAGE_INDEX_SOURCE
     block=project_session.split("def _load_project(",1)[1].split("def on_page_select",1)[0]
     for rule in ("self.after_cancel(pending_quick_job)","self._quick_trace_ready = False","self._display_geometry_cache = None"):
         assert rule in block
@@ -6162,7 +6161,7 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert "self.sidebar_canvas = tk.Canvas(" in text
     assert 'orient="vertical", command=self.sidebar_canvas.yview' in text
     assert "def _sidebar_mousewheel(" in text
-    assert "height=max(viewport_height, requested_height)" in text
+    assert "height=max(viewport_height, requested_height)" in PAGE_INDEX_SOURCE
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
@@ -8121,7 +8120,7 @@ def test_page_list_context_menu_matches_visible_column_order():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    block=text.split("    def _page_list_right_click(",1)[1].split("    def _schedule_page_cell_overlay_refresh(",1)[0]
+    block=PAGE_INDEX_SOURCE.split("def _page_list_right_click(",1)[1].split("\ndef _schedule_page_cell_overlay_refresh(",1)[0]
     order=['label="●"','label="页面"','label="区块"','label="画线"','label="插图"','label="填充状态"']
     offsets=[block.index(item) for item in order]
     assert offsets==sorted(offsets)
@@ -8133,7 +8132,7 @@ def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default()
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     models=(root / "models.py").read_text(encoding="utf-8")
-    block=text.split("    def _fit_page_list_columns(",1)[1].split("    def _hide_page_list_section_heading_hint(",1)[0]
+    block=PAGE_INDEX_SOURCE.split("def _fit_page_list_columns(",1)[1].split("\ndef _hide_page_list_section_heading_hint(",1)[0]
     assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
     assert 'self.page_list.winfo_width()' in block
     assert 'header_font.measure(label)' in block
@@ -8164,16 +8163,16 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
     assert 'self.page_list.heading("section", text="域", anchor="center")' in text
     assert 'self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")' in text
-    assert "minvalue=0, maxvalue=10" in text
+    assert "minvalue=0, maxvalue=10" in PAGE_INDEX_SOURCE
     assert "def _drag_page_section_boundary_to" in text
     assert "该位置位于 SECTION 间空白区，不添加词条。" in pointer_source
     assert "page_sections=list(self.page_sections)" in text
     assert 'self.canvas.configure(cursor="hand2" if self._section_editing else "")' in pointer_source
     assert 'if app.image is None or app._section_editing:' in canvas
     assert 'app.canvas.delete("cursor-guide")' in canvas
-    assert 'text="双击进入Section编辑模式"' in text
+    assert 'text="双击进入Section编辑模式"' in PAGE_INDEX_SOURCE
     assert "def canvas_left_double_click" in text
-    assert "self._finish_section_editing()" in text
+    assert "self._finish_section_editing()" in PAGE_INDEX_SOURCE
 
 def test_focused_review_filter_helpers_parse_ranges_tokens_and_single_characters():
     assert _focused_review_character_tokens("傅, 裹，傅,鳥") == ("傅", "裹", "鳥")

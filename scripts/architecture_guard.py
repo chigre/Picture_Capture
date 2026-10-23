@@ -1605,6 +1605,93 @@ def collect_violations() -> list[str]:
             ):
                 violations.append(f"review lifecycle callback delegate missing: {method}")
 
+    # Issue #562 — page-index and persisted fill-status are single-source owners.
+    page_index_owners = {
+        "page_index_workflow.py": [
+            "_resize_sidebar_content",
+            "_apply_page_list_display_columns",
+            "_page_list_configured",
+            "_fit_page_list_columns",
+            "_hide_page_list_section_heading_hint",
+            "_page_list_section_heading_motion",
+            "_page_list_right_click",
+            "_schedule_page_cell_overlay_refresh",
+            "_page_list_scroll",
+            "_page_list_hscroll",
+            "_page_list_yscroll",
+            "_update_page_list_sort_headings",
+            "_apply_page_list_sort",
+            "_schedule_page_list_resort",
+            "_sort_page_list",
+            "_page_list_column_at",
+            "_page_section_count_text",
+            "_set_page_section_count",
+            "_edit_page_section_index",
+            "toggle_current_page_section_editing",
+            "_page_list_section_double_click",
+            "_bookmark_stems",
+            "_page_list_bookmark_click",
+            "jump_to_bookmark",
+            "_center_page_list_iid",
+            "_set_page_list_selection",
+            "_clear_lined_cell_overlays",
+            "_visible_page_list_iids",
+            "_refresh_lined_cell_overlays",
+            "_page_metadata",
+            "_page_illustration_count_text",
+            "_update_page_row",
+            "_refresh_page_metadata_step",
+            "_refresh_page_quality_colors"
+        ],
+        "word_fill_status_workflow.py": [
+            "_word_fill_status_path",
+            "_load_word_fill_status",
+            "_persist_word_fill_status",
+            "_word_fill_status_text",
+            "_record_word_fill_check",
+            "_refresh_word_fill_check_from_line_count",
+            "_clear_word_fill_checks_for_indices"
+        ]
+    }
+    page_index_app_ast = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+    page_index_app_cls = next(
+        (node for node in page_index_app_ast.body
+         if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"), None
+    )
+    page_index_adapters = (
+        {node.name: node for node in page_index_app_cls.body
+         if isinstance(node, ast.FunctionDef)} if page_index_app_cls else {}
+    )
+    for filename, method_names in page_index_owners.items():
+        owner_path = PACKAGE_ROOT / "ui" / filename
+        if not owner_path.is_file():
+            violations.append(f"page index owner missing: {filename}")
+            continue
+        module_ast = ast.parse(owner_path.read_text(encoding="utf-8"))
+        implementations = {node.name: node for node in module_ast.body
+                           if isinstance(node, ast.FunctionDef)}
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"app", "picture_capture.app"}
+               for node in ast.walk(module_ast)):
+            violations.append(f"page index owner imports app: {filename}")
+        target_symbol = (
+            "_page_index" if filename == "page_index_workflow.py"
+            else "_word_fill_status"
+        )
+        for method in method_names:
+            if method not in implementations:
+                violations.append(f"page index physical implementation missing: {method}")
+            adapter = page_index_adapters.get(method)
+            if adapter is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == target_symbol
+                and node.func.attr == method
+                for node in ast.walk(adapter)
+            ):
+                violations.append(f"page index native callback delegate missing: {method}")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

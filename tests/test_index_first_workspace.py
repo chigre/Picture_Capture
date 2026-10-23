@@ -4,6 +4,7 @@ from picture_capture.ui import workspace_tools
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 REVIEW_WORKSPACE_SOURCE = (ROOT / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+PAGE_INDEX_SOURCE = (ROOT / "ui/page_index_workflow.py").read_text(encoding="utf-8")
 REVIEW_CROP_SOURCE = (ROOT / "ui/review_crop_actions.py").read_text(encoding="utf-8")
 REVIEW_ENTRY_SOURCE = (ROOT / "ui/review_entry_actions.py").read_text(encoding="utf-8")
 
@@ -22,7 +23,7 @@ def test_index_page_controls_and_extension_free_display():
     assert '("至末页", "to_end")' in app
     assert 'text="指定:"' not in app
     assert 'page.stem, self._page_section_count_text(index)' in project_session
-    assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in app
+    assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in PAGE_INDEX_SOURCE
     assert 'if mode == "to_specified":' in app
     assert 'len(indices) != 1' in app
 
@@ -88,26 +89,23 @@ def test_index_width_and_treeview_columns_fit_available_space():
     app, tools = sources()
     assert 'self.page_range_controls_row = range_row' in app
     assert 'min(preferred_sidebar_width(app), width - 160)' in tools
-    assert 'font.nametofont("TkHeadingFont")' in app
+    assert 'font.nametofont("TkHeadingFont")' in PAGE_INDEX_SOURCE
     assert 'orient="horizontal", command=self._page_list_hscroll' in app
-    horizontal_handler = app[
-        app.index('    def _page_list_hscroll('):
-        app.index('    def _page_list_yscroll(', app.index('    def _page_list_hscroll('))
-    ]
+    horizontal_handler = PAGE_INDEX_SOURCE.split("def _page_list_hscroll(", 1)[1].split("\ndef _page_list_yscroll(", 1)[0]
     assert 'self.page_list.xview(*args)' in horizontal_handler
     assert 'self._schedule_page_cell_overlay_refresh()' in horizontal_handler
-    assert 'body_font.measure(name) for name in page_names' in app
-    assert '"page": max(52, page_width)' in app
-    assert 'self.page_list.column(column, width=width, anchor="center", stretch=False)' in app
+    assert 'body_font.measure(name) for name in page_names' in PAGE_INDEX_SOURCE
+    assert '"page": max(52, page_width)' in PAGE_INDEX_SOURCE
+    assert 'self.page_list.column(column, width=width, anchor="center", stretch=False)' in PAGE_INDEX_SOURCE
     assert '("上页", lambda: self.change_page(-1)' in app
     assert '("下页", lambda: self.change_page(1)' in app
 
 
 def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
     app, _ = sources()
-    assert 'weights = {' not in app[app.index('    def _fit_page_list_columns'):app.index('    def _hide_page_list_section_heading_hint')]
-    assert 'page.stem for page in getattr(self.project, "images", ())' in app
-    assert 'header_font.measure(label) + 6' in app
+    assert 'weights = {' not in PAGE_INDEX_SOURCE.split('def _fit_page_list_columns(', 1)[1].split('\ndef _hide_page_list_section_heading_hint(', 1)[0]
+    assert 'page.stem for page in getattr(self.project, "images", ())' in PAGE_INDEX_SOURCE
+    assert 'header_font.measure(label) + 6' in PAGE_INDEX_SOURCE
 
 
 def test_borderless_index_and_vector_rail_icon_art():
@@ -183,13 +181,13 @@ def test_page_columns_order_and_mandatory_visibility():
     app, _ = sources()
     assert '"bookmark": "●"' in app
     assert '"section": "域"' in app
-    assert 'columns = ["bookmark", "page", "lined"]' in app
-    assert 'columns.append("illustrations")' in app
-    assert 'columns.append("section")' in app
-    assert 'columns.append("fill_status")' in app
-    assert 'menu.add_checkbutton(label="画线", state="disabled")' in app
-    assert 'label="区块", variable=section_var, state="disabled"' in app
-    assert '"bookmark": 25' in app
+    assert 'columns = ["bookmark", "page", "lined"]' in PAGE_INDEX_SOURCE
+    assert 'columns.append("illustrations")' in PAGE_INDEX_SOURCE
+    assert 'columns.append("section")' in PAGE_INDEX_SOURCE
+    assert 'columns.append("fill_status")' in PAGE_INDEX_SOURCE
+    assert 'menu.add_checkbutton(label="画线", state="disabled")' in PAGE_INDEX_SOURCE
+    assert 'label="区块", variable=section_var, state="disabled"' in PAGE_INDEX_SOURCE
+    assert '"bookmark": 25' in PAGE_INDEX_SOURCE
     assert 'borderwidth=1' in app
 
 
@@ -206,7 +204,7 @@ def test_mini_page_list_below_task_icons():
     assert 'mini.insert("", "end", iid=iid, values=values)' in tools
     assert 'mini.bind("<<TreeviewSelect>>", choose_mini_page)' in tools
     assert 'app.after_idle(lambda: app.page_list.bind(' in tools
-    assert 'mini.item(iid, values=new_values)' in app
+    assert 'mini.item(iid, values=new_values)' in PAGE_INDEX_SOURCE
 
 
 def test_rail_styles_are_compact_in_both_themes():
