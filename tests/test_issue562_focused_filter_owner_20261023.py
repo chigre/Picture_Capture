@@ -52,4 +52,4 @@ def test_focused_live_module_patchpoints(monkeypatch):
     assert gui._focused_filter_deps().messagebox is token
     monkeypatch.setattr(gui, "review_auto_fit_zoom", token)
     assert gui._focused_filter_deps().review_auto_fit_zoom is token
-    assert len(owner.FocusedFilterDeps.__dataclass_fields__) == 28
+    assert len(owner.FocusedFilterDeps.__dataclass_fields__) == 29

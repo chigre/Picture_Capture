@@ -45,6 +45,7 @@ class FocusedFilterDeps:
     _review_editor_font_size: object
     _entry_font_spec: object
     themed_display_image: object
+    _apply_focused_review_page_updates: object
 
 
 def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
@@ -797,4 +798,262 @@ def _render_filter_batch(
     self.filter_active_local_index = 0
     if self.filter_editors:
         self.filter_editors[0].focus_set()
+
+
+def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
+    settings = self.parent.settings
+    settings.focused_review_include_ocr_mismatch = bool(
+        self.focused_include_mismatch_var.get()
+    )
+    settings.focused_review_include_characters = bool(
+        self.focused_include_characters_var.get()
+    )
+    settings.focused_review_exclude_single_character = bool(
+        self.focused_exclude_single_var.get()
+    )
+    settings.focused_review_exclude_reference_words = bool(
+        self.focused_exclude_reference_var.get()
+    )
+    settings.focused_review_characters = self.focused_characters_var.get().strip()
+    try:
+        batch_size = int(self.focused_batch_size_var.get().strip())
+    except ValueError as exc:
+        raise ValueError("单批显示数量必须是整数。") from exc
+    settings.focused_review_batch_size = max(1, min(500, batch_size))
+    self.focused_batch_size_var.set(str(settings.focused_review_batch_size))
+    self.parent.save_settings()
+
+
+def _set_filter_active(self, deps: FocusedFilterDeps, index: int) -> None:
+    # Keep the active row stable while batch widgets are repainted.
+    # A stale row index must never become the active selection.
+    if 0 <= int(index) < len(getattr(self, "filter_editors", [])):
+        self.filter_active_local_index = int(index)
+
+
+def _focus_filter_index(self, deps: FocusedFilterDeps, index: int) -> str:
+    tk = deps.tk
+    editors = getattr(self, "filter_editors", [])
+    if editors:
+        target = max(0, min(len(editors) - 1, int(index)))
+        self.filter_active_local_index = target
+        editors[target].focus_set()
+        editors[target].icursor("end")
+        try:
+            self.canvas.yview_moveto(
+                max(0.0, min(1.0, target / max(1, len(editors) - 1)))
+            )
+        except tk.TclError:
+            pass
+    return "break"
+
+
+def _filter_ocr_word(self, deps: FocusedFilterDeps, target: dict) -> str:
+    key = self.OCR_COMPARE_LABEL_TO_KEY.get(
+        self.review_ocr_compare_var.get(), "fusion"
+    )
+    words = target.get("ocr_words") or {}
+    if not isinstance(words, dict):
+        return ""
+    return str(words.get(key) or "").strip()
+
+
+def _fill_filter_ocr_result(self, deps: FocusedFilterDeps, index: int) -> None:
+    if not (0 <= index < len(getattr(self, "filter_vars", []))):
+        return
+    target = self._filter_current_batch_targets[index]
+    ocr_word = self._filter_ocr_word(target)
+    if not ocr_word:
+        source = self.review_ocr_compare_var.get()
+        self.parent.status_var.set(f"当前词条没有 {source} 结果可填充")
+        return
+    self.filter_vars[index].set(ocr_word)
+    self.filter_editors[index].focus_set()
+    self.filter_editors[index].icursor("end")
+    self._commit_filter_editor_value(index)
+
+
+def _commit_filter_editor_value(self, deps: FocusedFilterDeps, index: int) -> None:
+    tk = deps.tk
+    if not (0 <= index < len(getattr(self, "filter_vars", []))):
+        return
+    target = self._filter_current_batch_targets[index]
+    editor = self.filter_editors[index]
+    value = self.filter_vars[index].get().strip()
+    target["current_word"] = value
+    in_reference = value in set(self.parent._project_words)
+    color = "#b3fddd" if in_reference else "#fce5e8"
+    try:
+        editor.configure(
+            bg=color, foreground="#111827", insertbackground="#111827",
+            highlightbackground=color, highlightcolor=color,
+        )
+    except tk.TclError:
+        pass
+    self._queue_focused_change(target, value)
+
+
+def _on_filter_key(self, deps: FocusedFilterDeps, event: tk.Event, index: int) -> None:
+    tk = deps.tk
+    if not (0 <= index < len(getattr(self, "filter_vars", []))):
+        return
+    self._set_filter_active(index)
+    char = getattr(event, "char", "")
+    editor = self.filter_editors[index]
+    if self.replace_digits.get() and char in self.DIGIT_KEYS:
+        replacement = self.digit_map_vars[self.DIGIT_KEYS.index(char)].get()
+        if replacement:
+            pos = editor.index("insert")
+            text = editor.get()
+            start = max(0, pos - 1)
+            editor.delete(0, "end")
+            editor.insert(0, text[:start] + replacement + text[pos:])
+            editor.icursor(start + len(replacement))
+    self._commit_filter_editor_value(index)
+
+
+def _queue_focused_change(self, deps: FocusedFilterDeps, target: dict, value: str) -> None:
+    tk = deps.tk
+    page_index = int(target["page_index"])
+    key = (int(target["x"]), int(target["y"]))
+    original = str(target.get("original_word") or "")
+    clean = (
+        str(value or "").replace("\r", " ").replace("\n", " ")
+        .replace("#", "＃").strip()
+    )
+    target["current_word"] = clean
+    if clean == original:
+        page_changes = self._filter_pending_changes.get(page_index)
+        if page_changes is not None:
+            page_changes.pop(key, None)
+            if not page_changes:
+                self._filter_pending_changes.pop(page_index, None)
+    else:
+        self._filter_pending_changes.setdefault(page_index, {})[key] = {
+            "page_index": page_index,
+            "x": key[0], "y": key[1],
+            "original_word": original,
+            "new_word": clean,
+        }
+    if self._filter_save_job is not None:
+        try:
+            self.after_cancel(self._filter_save_job)
+        except tk.TclError:
+            pass
+    self._filter_save_job = self.after(160, self._flush_focused_changes)
+
+
+def _flush_focused_changes_now(self, deps: FocusedFilterDeps) -> None:
+    tk = deps.tk
+    if self._filter_save_job is not None:
+        try:
+            self.after_cancel(self._filter_save_job)
+        except tk.TclError:
+            pass
+        self._filter_save_job = None
+    self._flush_focused_changes()
+
+
+def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
+    messagebox = deps.messagebox
+    _apply_focused_review_page_updates = deps._apply_focused_review_page_updates
+    self._filter_save_job = None
+    if self._filter_save_running or not self._filter_pending_changes:
+        return
+    project = self.parent.project
+    if project is None:
+        return
+    snapshot = {
+        page_index: list(changes.values())
+        for page_index, changes in self._filter_pending_changes.items()
+        if changes
+    }
+    if not snapshot:
+        return
+    self._filter_pending_changes.clear()
+    self._filter_save_running = True
+    pages = list(project.images)
+
+    def worker():
+        saved: list[tuple[int, int, int, str]] = []
+        conflicts: list[str] = []
+        for page_index, changes in sorted(snapshot.items()):
+            page_saved, page_conflicts = _apply_focused_review_page_updates(
+                pages[page_index], pages, page_index, changes
+            )
+            saved.extend(page_saved)
+            conflicts.extend(page_conflicts)
+        return saved, conflicts
+
+    def done(payload) -> None:
+        self._filter_save_running = False
+        saved, conflicts = payload
+        saved_map = {
+            (int(page_index), int(x), int(y)): str(word)
+            for page_index, x, y, word in saved
+        }
+        for target in self.filtered_targets:
+            key = (
+                int(target["page_index"]), int(target["x"]), int(target["y"])
+            )
+            if key in saved_map:
+                target["original_word"] = saved_map[key]
+        # Pending edits made while this worker was running must use the new
+        # on-disk word as their ambiguity guard on the next serialized write.
+        for page_index, changes in self._filter_pending_changes.items():
+            for key, change in changes.items():
+                saved_word = saved_map.get((int(page_index), int(key[0]), int(key[1])))
+                if saved_word is not None:
+                    change["original_word"] = saved_word
+
+        current_index = int(self.parent.current_index)
+        current_saved = {
+            (x, y): word
+            for page_index, x, y, word in saved
+            if int(page_index) == current_index
+        }
+        if current_saved:
+            for entry in self.parent.entries:
+                value = current_saved.get((int(entry.x), int(entry.y)))
+                if value is not None:
+                    entry.word = value
+                    entry.confidence = None
+                    entry.ocr_source = "manual"
+                    entry.final_engine = "manual"
+                    entry.manually_selected = True
+
+        if conflicts:
+            messagebox.showwarning(
+                "部分筛选词条未保存",
+                "以下词条的 PDIC 坐标已变化或存在歧义，因此未写入：\n\n"
+                + "\n".join(conflicts[:20])
+                + ("\n…" if len(conflicts) > 20 else ""),
+                parent=self,
+            )
+        self.parent.status_var.set(
+            f"筛选校对已保存 {len(saved)} 条修改"
+            + (f"；{len(conflicts)} 条冲突" if conflicts else "")
+        )
+        if self._filter_pending_changes:
+            self._filter_save_job = self.after(1, self._flush_focused_changes)
+        elif self._filter_close_after_save:
+            self._filter_close_after_save = False
+            self._finish_close_review()
+
+    def failed(exc, detail) -> None:
+        self._filter_save_running = False
+        # Put the snapshot back so a later explicit save can retry.
+        for page_index, changes in snapshot.items():
+            target = self._filter_pending_changes.setdefault(page_index, {})
+            for change in changes:
+                target[(int(change["x"]), int(change["y"]))] = change
+        if detail:
+            print(detail)
+        self.parent.status_var.set(f"筛选校对保存失败：{exc}")
+        messagebox.showerror("筛选校对保存失败", str(exc), parent=self)
+
+    self.parent._start_ui_worker(
+        f"focused-filter-save-{id(self)}",
+        worker, done, failed, wait_on_close=True,
+    )
 

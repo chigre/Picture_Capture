@@ -1382,7 +1382,7 @@ def collect_violations() -> list[str]:
         owner_ast = ast.parse(focused_owner.read_text(encoding="utf-8"))
         owner_funcs = {node.name: node for node in owner_ast.body
                        if isinstance(node, ast.FunctionDef)}
-        for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch"]:
+        for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch","_persist_focused_filter_settings","_set_filter_active","_focus_filter_index","_filter_ocr_word","_fill_filter_ocr_result","_commit_filter_editor_value","_on_filter_key","_queue_focused_change","_flush_focused_changes_now","_flush_focused_changes"]:
             fn = owner_funcs.get(name)
             if fn is None or fn.end_lineno - fn.lineno < 4 or fn.decorator_list:
                 violations.append(f"focused filter implementation missing: {name}")
@@ -1401,7 +1401,7 @@ def collect_violations() -> list[str]:
         else:
             adapter_funcs = {node.name: node for node in rev.body
                              if isinstance(node, ast.FunctionDef)}
-            for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch"]:
+            for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch","_persist_focused_filter_settings","_set_filter_active","_focus_filter_index","_filter_ocr_word","_fill_filter_ocr_result","_commit_filter_editor_value","_on_filter_key","_queue_focused_change","_flush_focused_changes_now","_flush_focused_changes"]:
                 fn = adapter_funcs.get(name)
                 if fn is None or not any(
                     isinstance(node, ast.Call)
