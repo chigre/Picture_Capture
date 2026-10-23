@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import tkinter as tk
     from pathlib import Path
     from PIL import Image
     from ..models import AppSettings, Entry as WordEntry
