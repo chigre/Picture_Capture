@@ -1257,3 +1257,26 @@ Exact-head six OS/Python matrix, GUI smoke, compatibility, wheel,
 static lint, reviews/CodeQL and independent postmerge main verification
 are required. Manual GUI on real projects, native GPU/CUDA and scanned
 page acceptance remain unverified. Keep Issue #562 open.
+
+
+## Issue #562 — review workspace construction and row painting (2026-10-23; candidate)
+
+Following merged PR #649, extract the three longest cohesive review-window
+rendering callbacks to `ui/review_workspace_workflow.py`:
+`ReviewWindow._build`, `_request_render_rows` and `render_rows`.
+Retain every historical method and original signature on the actual Tk
+class. A frozen `ReviewWorkspaceDeps` captures 18 original app symbols
+at call time rather than importing `app`, preserving existing mock/monkeypatch
+behavior. Three lazy relative imports are adjusted from `.ui.` to `.`
+because their physical owner moved under `ui/`.
+
+The legacy `app.py` normalized source shrinks **665254→620139** bytes
+(−45115 bytes, 6.78%). New
+strict source-size ratchet **620155** bytes, with the historical oversized
+root-module baseline unchanged. No changes to crop geometry, page image
+ownership, Tk `after` ordering, row editing and autosave, selection,
+PDIC/PPP formats or persisted settings are intended. Review-only
+root-context regression tests and AST guard pin owner methods and adapters.
+Require exact-head 6-platform CI/GUI smoke/compatibility/F821/wheel plus
+review/security checks before merging; actual scanned-page GUI testing
+remains a manual gate. The main-canvas `redraw` remains a separate batch.
