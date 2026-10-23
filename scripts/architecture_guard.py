@@ -1384,7 +1384,7 @@ def collect_violations() -> list[str]:
                        if isinstance(node, ast.FunctionDef)}
         for name in ["run_focused_filter","_focused_batch_size","_filter_available_target_count","_update_filter_batch_indicator","_filter_batch_snapshot","_prepare_filter_batch_payload","_cache_filter_batch_payload","_apply_filter_batch_payload","_schedule_filter_next_batch_preload","change_filter_batch","_request_filter_batch_render","_render_filter_batch"]:
             fn = owner_funcs.get(name)
-            if fn is None or len(fn.body) < 3 or fn.decorator_list:
+            if fn is None or fn.end_lineno - fn.lineno < 4 or fn.decorator_list:
                 violations.append(f"focused filter implementation missing: {name}")
         if not any(isinstance(node, ast.ClassDef) and node.name == "FocusedFilterDeps"
                    for node in owner_ast.body):

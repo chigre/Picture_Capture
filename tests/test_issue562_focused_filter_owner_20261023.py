@@ -14,7 +14,7 @@ def test_focused_filter_physical_ownership_and_no_heavy_import():
     tree = ast.parse((ROOT / "ui/focused_filter_workflow.py").read_text("utf-8"))
     functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
     for name in NAMES:
-        assert len(functions[name].body) > 2
+        assert functions[name].end_lineno - functions[name].lineno >= 4
         assert functions[name].decorator_list == []
     assert not any(isinstance(n, ast.ImportFrom) and n.module in {"app", "processing"}
                    for n in ast.walk(tree))
