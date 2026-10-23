@@ -3985,9 +3985,8 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     # The UI-only renderer delegates PhotoImage materialization to a method,
     # keeping all PIL decoding and resizing in the background request worker.
     assert "self._ordinary_review_photo(index)" in render
-    photo_start = review.index("    def _ordinary_review_photo(")
-    photo_end = review.index("\n    def set_active(", photo_start)
-    photo = review[photo_start:photo_end]
+    crop_owner = (root / "src/picture_capture/ui/review_crop_actions.py").read_text(encoding="utf-8")
+    photo = crop_owner.split("def _ordinary_review_photo(", 1)[1]
     assert "ImageTk.PhotoImage(" in photo
     assert "self._review_display_crops[index]" in photo
     assert "themed_display_image(crop, self.parent.appearance_mode)" in photo
@@ -4117,9 +4116,8 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     done_start = controller_fill.index("        def done(", worker_start)
     assert "app._word_fill_source_mapping = mapping" in controller_fill[done_start:]
 
-    prefetch_start = review.index("    def _schedule_adjacent_preload(")
-    prefetch_end = review.index("\n    def change_page(", prefetch_start)
-    prefetch = review[prefetch_start:prefetch_end]
+    page_owner = (root / "src/picture_capture/ui/review_page_lifecycle.py").read_text(encoding="utf-8")
+    prefetch = page_owner.split("def _schedule_adjacent_preload(", 1)[1].split("\ndef change_page(", 1)[0]
     worker_start = prefetch.index("            def worker(")
     worker = prefetch[worker_start:]
     assert "local_anchor_index=anchor_index" in worker

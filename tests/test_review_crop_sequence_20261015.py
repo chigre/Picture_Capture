@@ -159,8 +159,9 @@ def test_render_and_delete_bindings_stay_in_existing_review_window():
         / "src/picture_capture/ui/review_workspace_workflow.py"
     ).read_text("utf-8")
     render = owner.split("def render_rows(", 1)[1]
-    remove = source.split("    def delete_review_entry(", 1)[1].split(
-        "\n    def _save_digit_map(", 1,
+    entry_owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_entry_actions.py").read_text("utf-8")
+    remove = entry_owner.split("def delete_review_entry(", 1)[1].split(
+        "\ndef _save_digit_map(", 1,
     )[0]
     assert "create_review_crop_with_index(" in render
     assert "picture, sequence_label, crop_row =" in render

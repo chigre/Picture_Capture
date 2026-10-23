@@ -69,21 +69,22 @@ def test_pinned_and_inline_review_crops_follow_editor_character_count():
     worker = render_request.split("    def worker():", 1)[1].split(
         "    def done(payload)", 1
     )[0]
-    pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
-        "    def _ordinary_review_photo(", 1
+    crop_owner = (Path(app.__file__).parent / "ui/review_crop_actions.py").read_text(encoding="utf-8")
+    pinned = crop_owner.split("def _update_active_crop_preview(", 1)[1].split(
+        "\ndef _schedule_review_crop_height_update(", 1
     )[0]
     assert "ordinary_height_only=True" not in worker
     assert "ordinary_height_only=True" not in pinned
     assert "editor_text=editor_texts[index]" in worker
     assert "editor_text=self.vars[index].get()" in pinned
     assert "var.trace_add(\"write\"" in review_source
-    assert "self._refresh_review_row_crop(i)" in source
+    assert "self._refresh_review_row_crop(i)" in crop_owner
     assert 'extended_review_crop_box(' in pinned
     assert 'ordinary_box = _review_line_box(' in pinned
     assert 'round(multiplier * crop.height)' in pinned
     assert 'center_y - half_height' not in pinned
     assert '_review_crop_context(' in pinned
-    assert 'themed_display_image(crop, self.parent.appearance_mode)' in source
+    assert 'themed_display_image(crop, self.parent.appearance_mode)' in crop_owner
 
 
 def test_review_activity_uses_its_rendered_entry_not_a_resorted_main_index(monkeypatch):
@@ -125,14 +126,17 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
     source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = (Path(app_module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     ocr_source = (Path(app_module.__file__).parent / "ui/review_ocr_compare_workflow.py").read_text(encoding="utf-8")
+    crop_source = (Path(app_module.__file__).parent / "ui/review_crop_actions.py").read_text(encoding="utf-8")
+    entry_source = (Path(app_module.__file__).parent / "ui/review_entry_actions.py").read_text(encoding="utf-8")
     for before, after in (
         ("def _refresh_editor_ocr_compare(", "def _show_ocr_options("),
         ("def _update_active_crop_preview(", "def _ordinary_review_photo("),
         ("def set_active(", "def _scroll_editor_into_view("),
     ):
-        owner_source = ocr_source if before == "def _refresh_editor_ocr_compare(" else source
-        prefix = "" if owner_source is ocr_source else "    "
-        segment = owner_source.split(prefix + before, 1)[1].split(prefix + after, 1)[0]
+        owner_source = (ocr_source if before == "def _refresh_editor_ocr_compare("
+                        else crop_source if before == "def _update_active_crop_preview("
+                        else entry_source)
+        segment = owner_source.split(before, 1)[1].split("\n" + after, 1)[0]
         assert "self._bound_row_entries()" in segment
         assert "self.parent._ordered_entries_reading_order()" not in segment
     assert "return _review_ocr._refresh_editor_ocr_compare(" in source
