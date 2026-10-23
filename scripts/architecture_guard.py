@@ -18,6 +18,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
+MAX_PREPROCESS_FACADE_BYTES = 128_050
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -847,8 +848,26 @@ def collect_violations() -> list[str]:
             if owner == "deskew.py" or routine == "_smooth_1d":
                 if f"def {routine}(" in preprocess_source:
                     violations.append(f"preprocessing primitive duplicated at root: {routine}")
-    if _normalized_source_size(preprocess_facade) > 137_300:
-        violations.append("preprocessing facade regressed beyond deskew/content extraction (137300 bytes)")
+    # Orthogonal acceptance and saved-transform replay have domain owners too.
+    for owner, routines in {
+        "orthogonal_policy.py": ("_absolute_horizontal_quality", "_separator_vertical_span",
+                                 "_orthogonal_safe_gain_cap", "_choose_orthogonal_candidate",
+                                 "_orthogonal_step_payload", "_orthogonal_estimate_from_step"),
+        "replay.py": ("geometry_corrected_image",),
+    }.items():
+        path = PACKAGE_ROOT / "preprocess" / owner
+        if not path.is_file():
+            violations.append(f"canonical orthogonal preprocessing owner missing: {owner}")
+            continue
+        source = path.read_text(encoding="utf-8")
+        for routine in routines:
+            if f"def {routine}(" not in source:
+                violations.append(f"preprocessing routine missing from {owner}: {routine}")
+            if routine not in {"_choose_orthogonal_candidate", "geometry_corrected_image"}:
+                if f"def {routine}(" in preprocess_source:
+                    violations.append(f"orthogonal primitive duplicated at root: {routine}")
+    if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
+        violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 
     # Issue #562: canonical REF package owns box storage/detection/OCR.
     migrated_ref = {

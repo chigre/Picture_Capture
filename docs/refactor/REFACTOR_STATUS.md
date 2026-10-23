@@ -8,16 +8,16 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and verified OCR resume ownership merged through #629 at
-`6871cea5`: 15 remaining roots, with exact-head and postmerge six-platform CI
-and CodeQL passed. All retained roots have explicit ownership and retention
-reasons. The next implementation batch extracts deskew/rotation/content-frame
-logic into `preprocess/deskew.py` and `preprocess/content_bounds.py`, reducing
-`image_preprocessing.py` from 150797 to 137295 bytes while retaining its API,
-pickle identities and call-time detector adapters. This batch's CI/review
-acceptance is pending. Oversized-module extraction and real-scan/native GPU
-validation remain open. The phase log below is historical and does not describe
-current physical file locations.
+Root classification and the first preprocessing extraction are accepted through
+#630 at `03976b1c`, with exact-head and postmerge six-platform CI and CodeQL
+passed. Root count remains 15, all explicitly classified. The current candidate
+extracts orthogonal policy/step payloads and saved geometry replay into
+`preprocess/orthogonal_policy.py` and `preprocess/replay.py`, shrinking the
+preprocessing API from 137295 to 128042 bytes. Public import/pickle contracts and
+call-time audit/transform replacement seams remain. Exact-head CI/review and
+postmerge acceptance for this candidate are pending. Oversized analysis/app/core
+extraction and real-scan/native GPU validation remain open. The phase log below
+is historical and does not describe current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
