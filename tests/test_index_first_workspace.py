@@ -26,7 +26,7 @@ def test_index_page_controls_and_extension_free_display():
     assert 'page.stem, self._page_section_count_text(index)' in project_session
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in PAGE_INDEX_SOURCE
     assert 'if mode == "to_specified":' in PAGE_SCOPE_SOURCE
-    assert 'len(indices) != 1' in app
+    assert 'len(indices) != 1' in PAGE_SCOPE_SOURCE
 
 
 def test_fixed_width_icon_cells_and_compact_nav_toggle():
