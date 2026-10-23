@@ -24,6 +24,7 @@ from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_langua
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .geometry import column_tracking_math as _column_tracking_math
 from .geometry import reading_order as _reading_order
+from .geometry import column_offsets as _column_offsets
 from .preprocess.page_pixels import normalize_page_rgb
 from .preprocess import core_analysis_pixels as _analysis_pixels
 from .geometry.layout_transform import LayoutTransform
@@ -54,6 +55,7 @@ from .ordinary import ink_threshold as _ink_threshold
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
+from .ordinary import review_signals as _review_signals
 from .ocr import ordinary_marker_crop as _ordinary_marker_crop
 from .illustration.candidate_size import illustration_candidate_min_dimensions
 
@@ -370,44 +372,19 @@ def _estimate_column_paths(
 def _column_start_offsets_canonical(
     settings: AppSettings, count: int, canonical_width: int,
 ) -> list[int]:
-    """Resolve persisted per-column nudges into current-page canonical pixels."""
-    raw = list(getattr(settings, "column_start_offsets", []) or [])
-    resolved: list[int] = []
-    for index in range(max(0, int(count))):
-        try:
-            value = float(raw[index]) if index < len(raw) else 0.0
-        except (TypeError, ValueError):
-            value = 0.0
-        resolved.append(
-            _source_px(value)
-        )
-    return resolved
+    """Historical persisted per-column offsets; preserve current pixel conversion."""
+    return _column_offsets.column_start_offsets_canonical(
+        settings, count, canonical_width, source_px_fn=_source_px,
+    )
 
 
 def apply_column_start_offsets(
     base_starts: list[int], offsets: list[int], *, gutter: int, max_x: int,
 ) -> list[int]:
-    """Apply independent column-left nudges while preserving usable column order."""
-    if not base_starts:
-        return []
-    limit = max(0, int(max_x))
-    starts = [
-        max(0, min(limit, int(base) + (int(offsets[i]) if i < len(offsets) else 0)))
-        for i, base in enumerate(base_starts)
-    ]
-    # Keep enough room for the configured gutter plus a minimal usable body band.
-    # Normal small corrections are unchanged; only pathological/corrupt offsets
-    # are clipped so columns can never cross each other.
-    min_step = max(11, max(0, int(gutter)) + 10)
-    for _ in range(2):
-        for index in range(1, len(starts)):
-            starts[index] = max(starts[index], starts[index - 1] + min_step)
-        starts[-1] = min(limit, starts[-1])
-        for index in range(len(starts) - 2, -1, -1):
-            starts[index] = min(starts[index], starts[index + 1] - min_step)
-        starts[0] = max(0, starts[0])
-    return [max(0, min(limit, int(value))) for value in starts]
-
+    """Historical column ordering policy, delegated to pure geometry."""
+    return _column_offsets.apply_column_start_offsets(
+        base_starts, offsets, gutter=gutter, max_x=max_x,
+    )
 
 def _derive_nominal_geometry_canonical(
     image_width: int, image_height: int, settings: AppSettings,
@@ -1395,101 +1372,32 @@ _COMBINED_HARD_NEGATIVE_REASONS = {
 
 
 def _review_candidate_has_strong_positive_visual(candidate: dict) -> bool:
-    for engine in ("paddle", "tesseract", "lens"):
-        side = candidate.get(engine, {}) or {}
-        if not isinstance(side, dict):
-            continue
-        features = side.get("features", {}) or {}
-        if not isinstance(features, dict):
-            continue
-        if any(bool(features.get(key)) for key in (
-            "visual_entry_marker",
-            "configured_marker_evidence",
-            "numbered_prefix_evidence",
-            "cjk_single_strong_visual",
-            "cjk_visual_projection_rescue",
-            "cjk_visual_projection_confirmed",
-            "strong_visual_fallback",
-        )):
-            return True
-    return False
+    return _review_signals.has_strong_positive_visual(candidate)
 
 
 def _review_candidate_hard_negative_level(candidate: dict) -> str:
-    """Return '', 'single', or 'dual' for specific negative OCR evidence.
-
-    A dual verdict means both local OCR engines independently agree on the same
-    internal/continuation class. A single verdict is allowed only for an
-    exceptionally confident engine with a matching semantic feature.
-    """
-    if candidate.get("selected") or candidate.get("manual_override"):
-        return ""
-    if str(candidate.get("position_variant", "refined")) != "refined":
-        return ""
-    if _review_candidate_has_strong_positive_visual(candidate):
-        return ""
-
-    votes = 0
-    strong_single = False
-    for engine in ("paddle", "tesseract"):
-        side = candidate.get(engine, {}) or {}
-        if not isinstance(side, dict) or side.get("y") is None:
-            continue
-        reason = str(side.get("reason") or "")
-        if reason not in _COMBINED_HARD_NEGATIVE_REASONS:
-            continue
-        try:
-            confidence = float(side.get("confidence") or 0.0)
-        except (TypeError, ValueError):
-            confidence = 0.0
-        if confidence < 0.84:
-            continue
-        votes += 1
-        features = side.get("features", {}) or {}
-        if not isinstance(features, dict):
-            features = {}
-        matching_feature = bool(
-            (reason == "continuation_fragment" and features.get("looks_like_continuation"))
-            or (reason == "internal_article_symbol" and features.get("internal_article_symbol"))
-            or (reason == "internal_relation_label" and features.get("internal_relation_label"))
-            or (reason == "internal_locution" and features.get("internal_locution"))
-        )
-        if confidence >= 0.94 and matching_feature:
-            strong_single = True
-    if votes >= 2:
-        return "dual"
-    if strong_single:
-        return "single"
-    return ""
+    """Historical consensus semantics: distinct single/dual hard negatives."""
+    return _review_signals.hard_negative_level(
+        candidate,
+        positive_fn=_review_candidate_has_strong_positive_visual,
+        hard_reasons=_COMBINED_HARD_NEGATIVE_REASONS,
+    )
 
 
 def _review_candidate_hard_negative_consensus(candidate: dict) -> bool:
-    return bool(_review_candidate_hard_negative_level(candidate))
+    return _review_signals.hard_negative_consensus(
+        candidate, level_fn=_review_candidate_hard_negative_level,
+    )
+
 
 def _latent_review_rows(
     review_candidates: list[dict] | None,
     geometry: Geometry,
 ) -> list[tuple[dict, int, int]]:
-    rows: list[tuple[dict, int, int]] = []
-    for candidate in review_candidates or []:
-        if not isinstance(candidate, dict):
-            continue
-        if candidate.get("selected") or candidate.get("manual_override"):
-            continue
-        if str(candidate.get("position_variant", "refined")) != "refined":
-            continue
-        try:
-            x = int(candidate.get("source_x"))
-            y = int(candidate.get("source_y"))
-        except (TypeError, ValueError):
-            continue
-        if y <= 0:
-            continue
-        _u, v = geometry.source_to_canonical(x, y)
-        col = int(candidate.get("column", column_index_for_click(x, geometry, y)))
-        rows.append((candidate, col, int(v)))
-    return rows
-
+    """Historical latent review row projection in canonical reading coordinates."""
+    return _review_signals.latent_review_rows(
+        review_candidates, geometry, column_fn=column_index_for_click,
+    )
 
 def _fuse_detection_entries(
     ordinary_entries: list[Entry],

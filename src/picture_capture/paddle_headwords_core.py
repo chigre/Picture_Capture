@@ -34,6 +34,8 @@ from .ocr import band_coordinates as _band_coordinates
 from .ocr import boundary_measurements as _boundary_measurements
 from .ocr import image_separator_geometry as _image_separator_geometry
 from .ocr import line_structure_repairs as _line_structure_repairs
+from .ocr import visual_rescue_policy as _visual_rescue_policy
+from .ocr import peer_typography as _peer_typography
 from .ocr import language_resolution as _language_resolution
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
@@ -2194,51 +2196,11 @@ def _accepted_cjk_row_for_visual_run(
     run_end: int,
     word: str,
 ) -> dict[str, Any] | None:
-    """Find an already accepted CJK row that belongs to the same visual glyph.
-
-    The OCR/grammar path stores the *refined separator Y* as the entry marker,
-    while visual projection starts from the glyph's ink run.  Comparing those
-    two marker Y values directly is therefore unreliable.  Compare the original
-    OCR box against the visual run instead; this is the physical evidence that
-    both candidates describe the same printed character.
-    """
-    run_h = max(1, run_end - run_start)
-    run_center = (run_start + run_end) / 2.0
-    for row in diagnostics:
-        if "meta" in row or not row.get("accepted"):
-            continue
-        lemma = str(row.get("normalized_headword", ""))
-        features = row.get("features", {}) or {}
-        if not (_is_single_cjk_ideograph(lemma) or features.get("cjk_single_visual")):
-            continue
-        box = row.get("box") or []
-        if not isinstance(box, list) or len(box) != 4:
-            continue
-        y0, y1 = int(box[1]), int(box[3])
-        box_h = max(1, y1 - y0)
-        overlap = max(0, min(y1, run_end) - max(y0, run_start))
-        center_distance = abs(((y0 + y1) / 2.0) - run_center)
-        same_word = bool(word and lemma and word == lemma)
-        same_physical_row = (
-            overlap >= min(box_h, run_h) * 0.22
-            or center_distance <= max(box_h, run_h) * 0.62
-        )
-        # OCR sometimes places the accepted single-Han box on the pinyin/baseline
-        # rather than around the full display glyph.  If the normalized lemma is
-        # the same, allow a wider vertical association so the later visual rescue
-        # confirms the existing candidate instead of creating a second separator
-        # inside the same entry.  Nearby repeated homographs remain distinct
-        # because this relaxed window is still bounded to roughly one glyph.
-        same_word_shifted_box = bool(
-            same_word
-            and center_distance <= max(run_h * 1.45, box_h * 1.6)
-        )
-        if (
-            (same_physical_row and (same_word or features.get("cjk_single_visual")))
-            or same_word_shifted_box
-        ):
-            return row
-    return None
+    """Historical CJK glyph physical-row association with active script classifier."""
+    return _visual_rescue_policy.accepted_cjk_row_for_visual_run(
+        diagnostics, run_start, run_end, word,
+        single_cjk_fn=_is_single_cjk_ideograph,
+    )
 
 
 def _selected_tail_structure_evidence(
@@ -2247,98 +2209,16 @@ def _selected_tail_structure_evidence(
     *,
     pos_allowed_by_rules: bool = True,
 ) -> tuple[tuple[str, ...], dict[str, bool]]:
-    """Return only the post-lemma evidence families selected by the user.
-
-    Version 0 mirrors the historical hidden gate (POS / inflection /
-    descriptor). Version 1 makes each family explicit in Project Profile.
-    """
-    pronunciation = bool(
-        parsed
-        and any(
-            str(item).startswith("pronunciation:")
-            for item in parsed.parser_trace
-        )
+    """Historical selected tail-evidence policy; Profile switches unchanged."""
+    return _visual_rescue_policy.selected_tail_structure_evidence(
+        settings, parsed, pos_allowed_by_rules=pos_allowed_by_rules,
     )
-    available = {
-        "pos": bool(parsed and parsed.has_pos and pos_allowed_by_rules),
-        "inflection": bool(parsed and parsed.has_inflection),
-        "variant": bool(parsed and parsed.variants),
-        "pronunciation": pronunciation,
-        "descriptor": bool(parsed and parsed.has_descriptor),
-    }
-    if int(getattr(settings, "profile_tail_structure_version", 0) or 0) < 1:
-        selected = {
-            "pos": available["pos"],
-            "inflection": available["inflection"],
-            "variant": False,
-            "pronunciation": False,
-            "descriptor": available["descriptor"],
-        }
-    else:
-        selected = {
-            "pos": available["pos"] and bool(
-                getattr(settings, "profile_tail_allow_pos", True)
-            ),
-            "inflection": available["inflection"] and bool(
-                getattr(settings, "profile_tail_allow_inflection", True)
-            ),
-            "variant": available["variant"] and bool(
-                getattr(settings, "profile_tail_allow_variant", True)
-            ),
-            "pronunciation": available["pronunciation"] and bool(
-                getattr(settings, "profile_tail_allow_pronunciation", False)
-            ),
-            "descriptor": available["descriptor"] and bool(
-                getattr(settings, "profile_tail_allow_descriptor", True)
-            ),
-        }
-    names = tuple(name for name, present in selected.items() if present)
-    diagnostics = {
-        **{f"available_{name}": value for name, value in available.items()},
-        **{f"selected_{name}": value for name, value in selected.items()},
-    }
-    return names, diagnostics
 
 
 def _ordinary_visual_rescue_thresholds(
     settings: AppSettings,
 ) -> dict[str, float | str]:
-    """Resolve thresholds used by ordinary left-edge visual rescue.
-
-    Saved Project Profile tail controls (version >= 1) are fully explicit:
-    rescue uses the same visible boldness threshold shown in the headword
-    specificity panel. Left-edge tolerance and candidate-score thresholds are
-    already applied by the ordinary candidate gate. No extra hidden height,
-    boldness, or confidence threshold is added for saved explicit Profiles.
-
-    Version 0 keeps the historical thresholds only for backward compatibility
-    with projects that have not yet saved the new Profile controls.
-    """
-    explicit = int(
-        getattr(settings, "profile_tail_structure_version", 0) or 0
-    ) >= 1
-    if explicit:
-        return {
-            "source": "visible_profile_specificity",
-            "boldness": float(settings.paddle_boldness_ratio),
-            "height": 0.0,
-            "confidence": float(settings.paddle_rec_score_threshold),
-        }
-    return {
-        "source": "legacy_hidden_thresholds",
-        "boldness": max(
-            float(getattr(settings, "paddle_strong_edge_visual_boldness_ratio", 1.22) or 1.22),
-            float(settings.paddle_boldness_ratio) * 1.03,
-        ),
-        "height": max(
-            0.75,
-            float(getattr(settings, "paddle_strong_edge_visual_height_ratio", 0.90) or 0.90),
-        ),
-        "confidence": max(
-            float(settings.paddle_rec_score_threshold),
-            float(getattr(settings, "paddle_strong_edge_visual_min_confidence", 0.55) or 0.55),
-        ),
-    }
+    return _visual_rescue_policy.ordinary_visual_rescue_thresholds(settings)
 
 
 def _ordinary_strong_edge_visual_rescue(
@@ -2353,41 +2233,13 @@ def _ordinary_strong_edge_visual_rescue(
     looks_like_continuation: bool,
     marker_noise: bool,
 ) -> bool:
-    """Recover a left-edge head when selected post-lemma OCR evidence fails.
-
-    For saved explicit Profiles this path obeys the user-visible specificity
-    controls instead of layering another hidden strong-edge threshold on top.
-    Semantic guards remain: parsed lemma, strict left edge, body region, and
-    no continuation/noise signal.
-    """
-    tail_controls_active = int(
-        getattr(settings, "profile_tail_structure_version", 0) or 0
-    ) >= 1
-    rescue_enabled = (
-        bool(getattr(settings, "profile_tail_allow_visual_rescue", False))
-        if tail_controls_active
-        else bool(getattr(settings, "paddle_allow_strong_edge_visual_rescue", False))
+    """Historical visual rescue with live Profile threshold helper."""
+    return _visual_rescue_policy.ordinary_strong_edge_visual_rescue(
+        settings, parsed, at_left=at_left, below_header=below_header,
+        boldness_ratio=boldness_ratio, height_ratio=height_ratio,
+        confidence=confidence, looks_like_continuation=looks_like_continuation,
+        marker_noise=marker_noise, thresholds_fn=_ordinary_visual_rescue_thresholds,
     )
-    if not rescue_enabled:
-        return False
-    if (
-        parsed is None
-        or not parsed.normalized
-        or len(parsed.normalized.strip("-")) < 3
-        or not at_left
-        or not below_header
-        or looks_like_continuation
-        or marker_noise
-    ):
-        return False
-
-    thresholds = _ordinary_visual_rescue_thresholds(settings)
-    return bool(
-        boldness_ratio >= float(thresholds["boldness"])
-        and height_ratio >= float(thresholds["height"])
-        and confidence >= float(thresholds["confidence"])
-    )
-
 
 def _headword_filter_deps() -> _headword_filter.HeadwordFilterDeps:
     """Resolve original OCR filter patch seams and dictionaries at call time."""
@@ -2472,161 +2324,17 @@ def filter_headword_records(
 
 
 def _median_and_mad(values: list[float]) -> tuple[float, float]:
-    """Return robust center/spread for page-local typography evidence."""
-    if not values:
-        return 0.0, 0.0
-    array = np.asarray(values, dtype=float)
-    median = float(np.median(array))
-    mad = float(np.median(np.abs(array - median)))
-    return median, mad
+    """Historical robust page-local typography center/spread."""
+    return _peer_typography.median_and_mad(values, np_module=np)
 
 
 def _annotate_peer_typography_matches(
     diagnostics: list[dict[str, Any]],
 ) -> int:
-    """Mark soft rejects that match the page's accepted headword typography.
-
-    This is deliberately an annotation pass, not a direct acceptance pass.
-    High-confidence accepted rows establish a page-local visual prototype.
-    Borderline rows can then contribute this *independent* typography evidence
-    to later multi-engine arbitration, which still requires an image boundary
-    and the usual semantic safety guards before rescue.
-    """
-    anchors: list[dict[str, Any]] = []
-    for row in diagnostics:
-        if "meta" in row or not row.get("accepted"):
-            continue
-        features = row.get("features", {}) or {}
-        if not isinstance(features, dict):
-            continue
-        try:
-            confidence = float(row.get("confidence") or 0.0)
-        except (TypeError, ValueError):
-            confidence = 0.0
-        if confidence < 0.88:
-            continue
-        if features.get("forced_accept") or features.get("marker_noise"):
-            continue
-        if features.get("looks_like_continuation"):
-            continue
-        if not features.get("at_left", True):
-            continue
-        anchors.append(row)
-
-    if len(anchors) < 4:
-        return 0
-
-    def feature_values(name: str) -> list[float]:
-        values: list[float] = []
-        for row in anchors:
-            features = row.get("features", {}) or {}
-            try:
-                values.append(float(features.get(name)))
-            except (TypeError, ValueError):
-                pass
-        return values
-
-    height_center, height_mad = _median_and_mad(feature_values("height_ratio"))
-    bold_center, bold_mad = _median_and_mad(feature_values("boldness_ratio"))
-    gap_center, gap_mad = _median_and_mad(feature_values("preceding_gap"))
-
-    soft_reasons = {
-        "missing_pos_inflection_descriptor_or_symbol",
-        "missing_selected_tail_structure",
-        "score_below_threshold",
-        "missing_structure_or_visual_cue",
-        "candidate_rejected",
-        "cjk_single_needs_stronger_visual_evidence",
-        "cjk_single_not_visually_prominent",
-        "cjk_bracket_needs_visual_evidence",
-    }
-    hard_flags = {
-        "forced_reject",
-        "marker_noise",
-        "looks_like_continuation",
-        "internal_article_symbol",
-        "internal_relation_label",
-        "internal_locution",
-    }
-
-    matched = 0
-    for row in diagnostics:
-        if "meta" in row or row.get("accepted"):
-            continue
-        reason = str(row.get("reject_reason", "") or "")
-        if reason not in soft_reasons:
-            continue
-        if not str(row.get("normalized_headword", "") or "").strip():
-            continue
-        try:
-            confidence = float(row.get("confidence") or 0.0)
-        except (TypeError, ValueError):
-            confidence = 0.0
-        if confidence < 0.68:
-            continue
-        features = row.get("features", {}) or {}
-        if not isinstance(features, dict):
-            continue
-        if any(bool(features.get(name)) for name in hard_flags):
-            continue
-        if not features.get("at_left", False) or not features.get("below_header", True):
-            continue
-        if not features.get("image_boundary_supported", False):
-            continue
-
-        votes = 0
-        details: dict[str, float | int] = {}
-
-        def close_vote(
-            name: str,
-            center: float,
-            mad: float,
-            absolute_floor: float,
-            *,
-            lower_ratio: float | None = None,
-        ) -> None:
-            nonlocal votes
-            try:
-                value = float(features.get(name))
-            except (TypeError, ValueError):
-                return
-            tolerance = max(float(absolute_floor), 3.5 * float(mad))
-            if lower_ratio is not None and center > 0 and value < center * lower_ratio:
-                details[f"peer_{name}_delta"] = round(value - center, 4)
-                return
-            if abs(value - center) <= tolerance:
-                votes += 1
-            details[f"peer_{name}_delta"] = round(value - center, 4)
-            details[f"peer_{name}_tolerance"] = round(tolerance, 4)
-
-        close_vote("height_ratio", height_center, height_mad, 0.14, lower_ratio=0.78)
-        close_vote("boldness_ratio", bold_center, bold_mad, 0.12, lower_ratio=0.72)
-
-        # Gap is useful only when the accepted typography has a stable rhythm.
-        # On heterogeneous pages a large MAD automatically makes this cue weak.
-        if gap_center > 0:
-            gap_floor = max(2.0, gap_center * 0.20)
-            close_vote("preceding_gap", gap_center, gap_mad, gap_floor)
-
-        if votes < 2:
-            continue
-
-        features["peer_typography_match"] = True
-        features["peer_typography_votes"] = int(votes)
-        features["peer_typography_anchor_count"] = int(len(anchors))
-        features["peer_typography_height_center"] = round(height_center, 4)
-        features["peer_typography_boldness_center"] = round(bold_center, 4)
-        features["peer_typography_gap_center"] = round(gap_center, 3)
-        features.update(details)
-        trace = row.setdefault("parser_trace", [])
-        if "peer_typography_match" not in trace:
-            trace.append("peer_typography_match")
-        bugs = row.setdefault("bug_types", [])
-        if "PEER_TYPOGRAPHY_MATCH" not in bugs:
-            bugs.append("PEER_TYPOGRAPHY_MATCH")
-        matched += 1
-    return matched
-
+    """Historical peer-typography annotation (not direct candidate acceptance)."""
+    return _peer_typography.annotate_peer_typography_matches(
+        diagnostics, median_mad_fn=_median_and_mad,
+    )
 
 def _attach_source_candidate_coordinates(
     diagnostics: list[dict[str, Any]],
