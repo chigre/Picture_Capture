@@ -4276,8 +4276,11 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
     assert 'self._ui_worker_key_active("profile-validation")' in project
     assert 'wait_on_close=True' in project
 
-    sequential = app[app.index("    def _start_batch_task("):app.index("    def _start_parallel_batch_task(")]
-    parallel = app[app.index("    def _start_parallel_batch_task("):app.index("    def _poll_batch_queue(")]
+    batch = (root / "src" / "picture_capture" / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_batch_task(" in app
+    assert "return _batch_workflow._start_parallel_batch_task(" in app
+    sequential = batch[batch.index("def _start_batch_task("):batch.index("def _start_parallel_batch_task(")]
+    parallel = batch[batch.index("def _start_parallel_batch_task("):batch.index("def _poll_batch_queue(")]
     for block in (sequential, parallel):
         assert 'self._ui_worker_key_active("project-load")' in block
         assert 'self._ui_worker_key_active("profile-validation")' in block
@@ -4559,11 +4562,14 @@ def test_headword_order_finalizer_blocks_new_batches_until_snapshot_report_finis
     root = Path(__file__).resolve().parents[1]
     text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
-    sequential_start = text.index("    def _start_batch_task(")
-    parallel_start = text.index("    def _start_parallel_batch_task(", sequential_start)
-    sequential = text[sequential_start:parallel_start]
-    parallel_end = text.index("\n    def _poll_batch_queue", parallel_start)
-    parallel = text[parallel_start:parallel_end]
+    batch = (root / "src" / "picture_capture" / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_batch_task(" in text
+    assert "return _batch_workflow._start_parallel_batch_task(" in text
+    sequential_start = batch.index("def _start_batch_task(")
+    parallel_start = batch.index("def _start_parallel_batch_task(", sequential_start)
+    sequential = batch[sequential_start:parallel_start]
+    parallel_end = batch.index("\ndef _poll_batch_queue", parallel_start)
+    parallel = batch[parallel_start:parallel_end]
     expected = 'self._ui_worker_key_active("headword-order-finalize")'
     assert expected in sequential
     assert expected in parallel
