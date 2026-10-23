@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 115_070
+MAX_PREPROCESS_FACADE_BYTES = 105_240
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -915,6 +915,21 @@ def collect_violations() -> list[str]:
                and isinstance(node.func.value, ast.Name) and node.func.value.id == "_finalization"
                and node.func.attr == "finalize_preprocess_page" for node in ast.walk(analysis_adapter)):
         violations.append("preprocessing analysis must compose the finalization owner")
+    selection_owner = PACKAGE_ROOT / "preprocess/projective_selection.py"
+    if not selection_owner.is_file():
+        violations.append("canonical projective selection owner missing")
+    else:
+        owner_tree = ast.parse(selection_owner.read_text(encoding="utf-8"))
+        if not any(isinstance(node, ast.FunctionDef) and node.name == "select_projective_candidate"
+                   for node in owner_tree.body):
+            violations.append("projective candidate selection routine missing")
+    if any(isinstance(node, ast.FunctionDef) and node.name == "distortion_audit"
+           for node in ast.walk(analysis_adapter)):
+        violations.append("projective distortion/selection implementation must remain in its owner")
+    if not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+               and isinstance(node.func.value, ast.Name) and node.func.value.id == "_projective_selection"
+               and node.func.attr == "select_projective_candidate" for node in ast.walk(analysis_adapter)):
+        violations.append("preprocessing analysis must compose the projective selection owner")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 

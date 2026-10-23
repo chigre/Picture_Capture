@@ -153,6 +153,7 @@ from .preprocess.orthogonal_policy import (
 
 
 
+from .preprocess import projective_selection as _projective_selection
 from .preprocess import finalization as _finalization
 from .preprocess import source_evidence as _source_evidence
 from .preprocess import rendering as _rendering
@@ -523,296 +524,43 @@ def analyze_preprocess_page(
         and working_polygons
         and requested_geometry_mode in {"auto", "perspective"}
     ):
-        original_projective_polygons = list(working_polygons)
-        perspective_threshold = max(5.0, width * 0.002)
-        line_supports_perspective = bool(
-            line_geometry.recommendation == "perspective"
-            and line_geometry.confidence >= 0.35
-            and not line_geometry.separator_curve_reliable
+        selection = _projective_selection.select_projective_candidate(
+            working_polygons, working.size, settings,
+            source_width=width, line_geometry=line_geometry,
+            requested_geometry_mode=requested_geometry_mode,
+            polygon_transformer=transform_polygons_homography,
+            jacobian_auditor=audit_homography_distortion,
+            scale_auditor=audit_text_scale_stability,
+            row_auditor=audit_horizontal_alignment,
+            structural_estimator=estimate_perspective_from_polygons,
+            horizontal_estimator=estimate_horizontal_perspective_from_polygons,
+            strength_optimizer=optimize_horizontal_perspective_strength,
+            perspective_composer=compose_perspective_estimates,
+            horizontal_scale_span_max=AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
+            vertical_scale_span_max=AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX,
+            area_scale_span_max=AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
+            anisotropy_p95_max=AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
+            horizontal_min_rows=HORIZONTAL_VP_MIN_ROWS,
+            horizontal_min_trend_deg=HORIZONTAL_VP_MIN_TREND_DEG,
+            horizontal_column_spread_max_deg=HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG,
         )
-
-        def distortion_audit(candidate, *, row_before_polygons=None) -> dict:
-            mapped_polygons = transform_polygons_homography(
-                original_projective_polygons, candidate.matrix,
-            )
-            jacobian = audit_homography_distortion(
-                candidate.matrix,
-                working.size,
-                polygons=original_projective_polygons,
-            )
-            text_scale = audit_text_scale_stability(
-                original_projective_polygons,
-                mapped_polygons,
-                working.size,
-                writing_mode=settings.layout_writing_mode,
-            )
-            row_source = (
-                original_projective_polygons
-                if row_before_polygons is None
-                else row_before_polygons
-            )
-            row_alignment = audit_horizontal_alignment(
-                row_source,
-                mapped_polygons,
-                size=working.size,
-                settings=settings,
-            )
-            jacobian_safe = bool(
-                jacobian.valid
-                and (
-                    jacobian.horizontal_scale_span_ratio
-                    <= AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX
-                )
-                and (
-                    jacobian.vertical_scale_span_ratio
-                    <= AUTO_HOMOGRAPHY_VERTICAL_SCALE_SPAN_MAX
-                )
-                and (
-                    jacobian.area_scale_span_ratio
-                    <= AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX
-                )
-                and (
-                    jacobian.anisotropy_p95_ratio
-                    <= AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX
-                )
-            )
-            text_scale_safe = text_scale.verdict in {"stable", "insufficient"}
-            distortion_cost = (
-                jacobian.anisotropy_p95_ratio
-                + 0.35 * jacobian.horizontal_scale_span_ratio
-                + 0.35 * jacobian.vertical_scale_span_ratio
-                + 0.20 * text_scale.anisotropy_p95_ratio
-            )
-            return {
-                "candidate": candidate,
-                "polygons": mapped_polygons,
-                "jacobian": jacobian,
-                "text_scale": text_scale,
-                "row": row_alignment,
-                "jacobian_safe": jacobian_safe,
-                "text_scale_safe": text_scale_safe,
-                "distortion_safe": bool(jacobian_safe and text_scale_safe),
-                "distortion_cost": float(distortion_cost),
-            }
-
-        structural_candidate = None
-        structural_entry = None
-        try:
-            structural_candidate = estimate_perspective_from_polygons(
-                original_projective_polygons, working.size, settings,
-            )
-            structural_entry = distortion_audit(structural_candidate)
-        except Exception:
-            structural_candidate = None
-            structural_entry = None
-
-        structural_evidence_safe = bool(
-            structural_candidate is not None
-            and float(getattr(structural_candidate, "strength_px", 0.0))
-            >= perspective_threshold
-            and line_supports_perspective
-            and str(
-                getattr(structural_candidate, "classification", "unknown")
-            )
-            == "keystone"
-        )
-        structural_auto_safe = bool(
-            structural_entry is not None
-            and structural_evidence_safe
-            and structural_entry["distortion_safe"]
-        )
-        perspective_structural_safe = structural_auto_safe
-
-        # Stage A: in auto mode only a structurally justified + distortion-safe
-        # keystone becomes the base. Explicit perspective mode remains an
-        # intentional user override and can keep the structural candidate even
-        # when the automatic safety gate rejects it.
-        base_candidate = None
-        base_polygons = original_projective_polygons
-        if requested_geometry_mode == "auto":
-            if structural_auto_safe:
-                base_candidate = structural_candidate
-                base_polygons = structural_entry["polygons"]
-                perspective_structural_applied = True
-        elif structural_candidate is not None:
-            if float(getattr(structural_candidate, "strength_px", 0.0)) >= 0.75:
-                base_candidate = structural_candidate
-                base_polygons = structural_entry["polygons"]
-                perspective_structural_applied = True
-
-        # Stage B: estimate the residual horizontal projective direction on the
-        # current base, then optimize only its strength. The optimizer transforms
-        # polygons only, so evaluating ~10-20 strengths is inexpensive.
-        horizontal_full = None
-        horizontal_partial = None
-        horizontal_row_audit = None
-        horizontal_strength = 0.0
-        horizontal_total_candidate = None
-        horizontal_total_entry = None
-        horizontal_evidence_safe = False
-        try:
-            horizontal_full = estimate_horizontal_perspective_from_polygons(
-                base_polygons, working.size, settings,
-            )
-            (
-                horizontal_partial,
-                horizontal_row_audit,
-                horizontal_strength,
-            ) = optimize_horizontal_perspective_strength(
-                base_polygons,
-                working.size,
-                horizontal_full,
-                settings,
-            )
-            if base_candidate is not None:
-                horizontal_total_candidate = compose_perspective_estimates(
-                    base_candidate,
-                    horizontal_partial,
-                    working.size,
-                )
-            else:
-                horizontal_total_candidate = horizontal_partial
-
-            horizontal_total_entry = distortion_audit(
-                horizontal_total_candidate,
-                row_before_polygons=base_polygons,
-            )
-            # Use the optimizer's row audit here because it measures exactly the
-            # residual horizontal stage (base→partial VP), not source→combined.
-            horizontal_total_entry["row"] = horizontal_row_audit
-            before_column_trend = max(
-                (
-                    abs(float(value))
-                    for value in getattr(
-                        horizontal_row_audit,
-                        "before_column_trends_deg",
-                        (),
-                    )
-                ),
-                default=0.0,
-            )
-            horizontal_driver_trend = max(
-                abs(float(horizontal_row_audit.before_trend_deg)),
-                before_column_trend,
-                abs(
-                    float(
-                        getattr(
-                            horizontal_row_audit,
-                            "before_worst_region_span_deg",
-                            0.0,
-                        )
-                    )
-                ),
-            )
-            vp_column_spread = float(
-                getattr(
-                    horizontal_full,
-                    "horizontal_vp_column_spread_deg",
-                    0.0,
-                )
-            )
-            # A reliable nonlinear separator curve is a reason to keep the
-            # UVDoc review recommendation, but it must not veto a *separate*
-            # low-distortion global horizontal correction. Pages such as 0010
-            # and 0014 can have both: ~1° residual projective row drift that a
-            # safe homography removes, plus smaller nonlinear curvature that
-            # still deserves optional UVDoc review.
-            horizontal_evidence_safe = bool(
-                int(getattr(horizontal_full, "horizontal_row_count", 0))
-                >= HORIZONTAL_VP_MIN_ROWS
-                and line_geometry.confidence >= 0.35
-                and not line_geometry.separator_curve_reliable
-                and horizontal_driver_trend >= HORIZONTAL_VP_MIN_TREND_DEG
-                and (
-                    vp_column_spread <= HORIZONTAL_VP_COLUMN_SPREAD_MAX_DEG
-                    or vp_column_spread <= 0.0
-                )
-                and horizontal_row_audit.verdict == "improved"
-            )
-        except Exception:
-            horizontal_full = None
-            horizontal_partial = None
-            horizontal_row_audit = None
-            horizontal_strength = 0.0
-            horizontal_total_candidate = None
-            horizontal_total_entry = None
-            horizontal_evidence_safe = False
-
-        horizontal_auto_safe = bool(
-            horizontal_total_entry is not None
-            and horizontal_evidence_safe
-            and horizontal_total_entry["distortion_safe"]
-        )
-
-        selected_entry = None
-        selected_candidate = None
-        selected_horizontal_strength = 0.0
-
-        if requested_geometry_mode == "auto":
-            if horizontal_auto_safe:
-                selected_entry = horizontal_total_entry
-                selected_candidate = horizontal_total_candidate
-                selected_horizontal_strength = horizontal_strength
-            elif structural_auto_safe:
-                selected_entry = structural_entry
-                selected_candidate = structural_candidate
-        else:
-            # Explicit perspective is still an override, but prefer the optimized
-            # residual-horizontal version when it actually improves row geometry.
-            if (
-                horizontal_total_entry is not None
-                and horizontal_row_audit is not None
-                and horizontal_row_audit.after_metric_deg
-                < horizontal_row_audit.before_metric_deg
-            ):
-                selected_entry = horizontal_total_entry
-                selected_candidate = horizontal_total_candidate
-                selected_horizontal_strength = horizontal_strength
-            elif structural_entry is not None:
-                selected_entry = structural_entry
-                selected_candidate = structural_candidate
-            elif horizontal_total_entry is not None:
-                selected_entry = horizontal_total_entry
-                selected_candidate = horizontal_total_candidate
-                selected_horizontal_strength = horizontal_strength
-
-        # If auto mode applied no candidate, retain the most informative rejected
-        # candidate in diagnostics without applying it.
-        diagnostic_entry = selected_entry
-        diagnostic_candidate = selected_candidate
-        diagnostic_horizontal_strength = selected_horizontal_strength
-        if diagnostic_entry is None:
-            rejected_options: list[tuple[float, dict, object, float]] = []
-            if structural_entry is not None and structural_candidate is not None:
-                rejected_options.append(
-                    (
-                        float(structural_entry["distortion_cost"]),
-                        structural_entry,
-                        structural_candidate,
-                        0.0,
-                    )
-                )
-            if (
-                horizontal_total_entry is not None
-                and horizontal_total_candidate is not None
-            ):
-                row_metric = (
-                    float(horizontal_row_audit.after_metric_deg)
-                    if horizontal_row_audit is not None
-                    else 999.0
-                )
-                rejected_options.append(
-                    (
-                        row_metric + float(horizontal_total_entry["distortion_cost"]),
-                        horizontal_total_entry,
-                        horizontal_total_candidate,
-                        horizontal_strength,
-                    )
-                )
-            if rejected_options:
-                _score, diagnostic_entry, diagnostic_candidate, diagnostic_horizontal_strength = min(
-                    rejected_options, key=lambda item: item[0]
-                )
+        selected_entry = selection.selected_entry
+        selected_candidate = selection.selected_candidate
+        selected_horizontal_strength = selection.selected_horizontal_strength
+        diagnostic_entry = selection.diagnostic_entry
+        diagnostic_candidate = selection.diagnostic_candidate
+        diagnostic_horizontal_strength = selection.diagnostic_horizontal_strength
+        perspective_structural_applied = selection.perspective_structural_applied
+        perspective_structural_safe = selection.perspective_structural_safe
+        structural_auto_safe = selection.structural_auto_safe
+        horizontal_auto_safe = selection.horizontal_auto_safe
+        structural_candidate = selection.structural_candidate
+        structural_entry = selection.structural_entry
+        line_supports_perspective = selection.line_supports_perspective
+        horizontal_total_candidate = selection.horizontal_total_candidate
+        horizontal_full = selection.horizontal_full
+        horizontal_row_audit = selection.horizontal_row_audit
+        horizontal_strength = selection.horizontal_strength
 
         if diagnostic_entry is not None and diagnostic_candidate is not None:
             perspective = diagnostic_candidate

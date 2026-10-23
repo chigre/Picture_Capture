@@ -694,7 +694,7 @@ to the analysis root. No historical baseline is loosened. Real scanned-page/manu
 GUI/native CUDA and large later-stage analysis/app/core acceptance remain open.
 
 
-## Issue #562 — final page audit, retained bounds and confidence (2026-10-23; pending acceptance)
+## Issue #562 — final page audit, retained bounds and confidence (2026-10-23; accepted #634)
 
 On accepted `main@6356509a` (#633; exact-head and independent main six-platform
 CI/CodeQL green), extract the final measurement stage of `analyze_preprocess_page`
@@ -728,3 +728,41 @@ composition, prohibit final crop calls returning to the analysis root. Historica
 baselines remain untouched. Remaining central perspective/orthogonal algorithm stages,
 oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
 acceptance are still open work.
+
+
+## Issue #562 — projective candidate generation and selection (2026-10-23; pending acceptance)
+
+On accepted `main@5477b184` (#634; exact-head and independent main six-platform
+CI/CodeQL green), move structural/residual-horizontal projective candidate generation,
+shared Jacobian/text-scale/row audits, automatic safety gates, explicit override
+selection and rejected diagnostic ranking into `preprocess/projective_selection.py`.
+The frozen 17-field result retains original candidate/audit dictionary identities;
+source image pixels are never transformed by this owner. Eight current operations
+and seven current policy values are passed explicitly at call time. Root count
+remains15; facade shrinks **115065→105233 bytes** (−9832).
+
+Preserve source-width threshold max(5px,width×0.002), structural-keystone and line
+support gates, Jacobian inclusivity, stable/insufficient text scale, base→partial
+VP optimization, composed candidate row-audit replacement, row-count/trend/spread
+thresholds, auto-vs-explicit priority, diagnostic cost weights and stable tie order.
+Carry the horizontal total candidate itself back to existing identity-based safety
+checks. Manual/UVDoc processing, diagnostics-to-model conversions, transform execution,
+warning order and public signatures/formats/settings/coordinates remain unchanged.
+No facade/GUI import, global hooks/installers, namespace copies or model clone.
+
+52 new tests cover inclusive thresholds, low/curved/missing evidence, unknown VP
+spread, column/region drivers, explicit override and 0.75px base threshold, failure
+reset, structural fallback, diagnostic ranking/ties, operation ordering/identity,
+input immutability and public live-operation/policy save/reopen. Existing42 focused
+preprocessing/diagnostic cases pass; local full3342 passed/3 skipped; compatibility93.
+Frozen #634: normalized candidate algorithm AST, public signature and persisted-model
+constructor unchanged;1080 selection comparisons and96 complete public analysis
+payload/crop-pixel comparisons passed (UVDoc stubbed). F821/compile/wheel, architecture/
+change guards and exact-head six-platform CI/GUI smoke/CodeQL/review plus independent
+main checks gate acceptance.
+
+Tighten normalized facade ceiling115070→105240; require canonical selection owner
+and composition, reject returning the nested distortion/selection implementation to
+root. Historical baselines stay unchanged. Remaining manual/UVDoc/orthogonal stages,
+diagnostic mapping, oversized app/processing/OCR cores and real scanned-page/manual
+GUI/native CUDA acceptance remain open work.
