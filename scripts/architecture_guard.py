@@ -1421,6 +1421,47 @@ def collect_violations() -> list[str]:
         if _normalized_source_size(gui_project_app) > 551_209:
             violations.append("app.py exceeds 551209-byte focused filter ratchet")
 
+    # #562: 55 native review UI method owners, with original Tk ABI retained.
+    review_extended_owners = {
+        "review_workspace_workflow.py": ["_change_review_mode","_set_filter_navigation","_clear_review_workspace","copy_char","_review_membership_colors","_configure_word_list_appearance","_clear_word_list_rows","_render_word_list_rows","_set_word_list_highlight","_word_list_local_index_from_event","_toggle_review_panel","_sync_autosave_label","_toggle_shared_autosave","open_sort_rules","run_order_check","_update_title"],
+        "review_reference_workflow.py": ["_effective_wordslist_locator_mode","_change_wordslist_locator_mode","_wordslist_lookup_key","refresh_wordslist_display","_show_wordslist_window","shift_wordslist_window","choose_wordslist_file","_exact_reference_position","_previous_page_reference_target","_current_wordslist_global_target","_sorted_reference_position","_infer_sorted_reference_target","_infer_reference_target","locate_reference_word"],
+        "review_appearance_workflow.py": ["_schedule_review_font_apply","_apply_review_font_settings","_schedule_review_simplified_font_apply","_apply_review_simplified_font_settings","_schedule_review_padding_apply","_apply_review_padding_setting","_schedule_review_vertical_padding_apply","_apply_review_vertical_padding_setting","_review_height_pixels_from_percent_var","_review_height_pixels_from_pixel_var","_sync_review_height_vars","_schedule_review_line_height_apply","_apply_review_line_height_setting","_schedule_review_row_padding_apply","_apply_review_row_padding_setting","_schedule_review_regular_crop_height_apply","_apply_review_regular_crop_height_setting","_schedule_review_single_cjk_height_apply","_apply_review_single_cjk_height_setting","_schedule_review_extended_crop_multiplier_apply","_apply_review_extended_crop_multiplier_setting","_apply_review_main_ocr_display_options","change_review_zoom","apply_review_zoom_text","reset_review_zoom"],
+    }
+    review_ast = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+    review_cls = next((node for node in review_ast.body
+                       if isinstance(node, ast.ClassDef) and node.name == "ReviewWindow"), None)
+    review_adapters = {node.name: node for node in review_cls.body
+                       if isinstance(node, ast.FunctionDef)} if review_cls else {}
+    for filename, method_names in review_extended_owners.items():
+        owner_path = PACKAGE_ROOT / "ui" / filename
+        if not owner_path.is_file():
+            violations.append(f"review expanded owner missing: {filename}")
+            continue
+        owner_ast = ast.parse(owner_path.read_text(encoding="utf-8"))
+        owner_methods = {node.name: node for node in owner_ast.body
+                         if isinstance(node, ast.FunctionDef)}
+        if any(isinstance(node, ast.ImportFrom) and node.module == "app"
+               for node in ast.walk(owner_ast)):
+            violations.append(f"review expanded owner imports heavyweight app: {filename}")
+        owner_symbol = {
+            "review_workspace_workflow.py": "_review_workspace",
+            "review_reference_workflow.py": "_review_reference",
+            "review_appearance_workflow.py": "_review_appearance",
+        }[filename]
+        for name in method_names:
+            method = owner_methods.get(name)
+            if method is None or method.end_lineno - method.lineno < 3:
+                violations.append(f"review expanded physical implementation missing: {name}")
+            adapter = review_adapters.get(name)
+            if adapter is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == owner_symbol
+                and node.func.attr == name for node in ast.walk(adapter)
+            ):
+                violations.append(f"review expanded Tk delegate missing: {name}")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

@@ -97,6 +97,16 @@ FOCUSED_FILTER_SOURCE = (
     / "src/picture_capture/ui/focused_filter_workflow.py"
 ).read_text(encoding="utf-8")
 
+REVIEW_REFERENCE_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_reference_workflow.py"
+).read_text(encoding="utf-8")
+
+REVIEW_APPEARANCE_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_appearance_workflow.py"
+).read_text(encoding="utf-8")
+
 class FormatTests(unittest.TestCase):
 
     def test_layout_transform_points_boxes_images_and_markers_round_trip(self) -> None:
@@ -4598,8 +4608,8 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     review = text[start:end]
     assert "self.word_window_radius = 250" in review
     assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
-    assert "step = 100" in review
-    assert "def _show_wordslist_window" in review
+    assert "step = 100" in REVIEW_REFERENCE_SOURCE
+    assert "def _show_wordslist_window" in REVIEW_REFERENCE_SOURCE
     assert "words = self.parent._project_words if self.parent.project else set()" in review
     assert "set(self.parent.project.words if self.parent.project else [])" not in review
 
@@ -5526,7 +5536,7 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
         Path(__file__).parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
     assert "AUTO_FONT_FAMILY" in app_text
-    assert "resolve_content_font_family(" in app_text
+    assert "resolve_content_font_family(" in REVIEW_APPEARANCE_SOURCE
     overlay = (Path(__file__).parents[1] / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     assert "self.settings.main_entry_font_family,\n        self.settings.ocr_language" in overlay
     render_text = (Path(__file__).parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
@@ -5658,13 +5668,13 @@ def test_v21115_review_window_exposes_persisted_font_controls():
     text = Path(app_module.__file__).read_text(encoding="utf-8")
     body=text.split("class ReviewWindow",1)[1].split("class PictureCaptureApp",1)[0]
     for name in ("review_font_family_var","review_font_size_var","review_entry_font_family = family","review_entry_font_size = size","self.parent.save_settings()"):
-        assert name in body or name in REVIEW_WORKSPACE_SOURCE
+        assert name in body or name in REVIEW_WORKSPACE_SOURCE or name in REVIEW_APPEARANCE_SOURCE
     # The compact review toolbar uses the abbreviated labels 粗 / 斜,
     # while keeping the same persistent settings bindings.
     assert 'text="粗", variable=self.review_font_bold_var' in REVIEW_WORKSPACE_SOURCE
     assert 'text="斜", variable=self.review_font_italic_var' in REVIEW_WORKSPACE_SOURCE
-    assert 'settings.review_entry_font_bold = bold' in body
-    assert 'settings.review_entry_font_italic = italic' in body
+    assert 'settings.review_entry_font_bold = bold' in REVIEW_APPEARANCE_SOURCE
+    assert 'settings.review_entry_font_italic = italic' in REVIEW_APPEARANCE_SOURCE
 
 def test_v21115_review_font_apply_does_not_change_review_zoom():
     from pathlib import Path
@@ -5928,7 +5938,8 @@ def test_v21117_review_title_contains_page_and_progress():
     start = text.index("    def _update_title", text.index("class ReviewWindow"))
     end = text.index("    def _close_review", start)
     body = text[start:end]
-    assert '词条校对 — {page} — 当前: {current} 剩余: {remaining} 合计: {total}' in body
+    assert "return _review_workspace._update_title(self, _review_workspace_deps())" in body
+    assert '词条校对 — {page} — 当前: {current} 剩余: {remaining} 合计: {total}' in REVIEW_WORKSPACE_SOURCE
 
 
 def test_v21117_reference_position_prefers_neighbor_anchors_over_current_word():
@@ -5981,7 +5992,7 @@ def test_v21117_review_autosave_reuses_main_autosave_variable_and_tick():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'variable=self.parent.autosave_var' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.parent.toggle_autosave()' in review
+    assert 'self.parent.toggle_autosave()' in REVIEW_WORKSPACE_SOURCE
     tick_start = text.index("    def autosave_tick", text.index("class PictureCaptureApp"))
     tick_end = text.index("    def open_settings", tick_start)
     tick = text[tick_start:tick_end]
@@ -6066,7 +6077,7 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     assert 'textvariable=self.review_left_padding_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self._refresh_ocr_similarity_colors()' in review
     assert 'bg=bg, activebackground=bg' in review
-    assert 'editor.pack_configure(padx=(padding, 0))' in review
+    assert 'editor.pack_configure(padx=(padding, 0))' in REVIEW_APPEARANCE_SOURCE
 
 
 def test_review_single_character_text_uses_configured_height_regardless_of_classification():
@@ -6269,7 +6280,7 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     assert 'text="上下边距："' in REVIEW_WORKSPACE_SOURCE
     assert 'textvariable=self.review_vertical_padding_var' in REVIEW_WORKSPACE_SOURCE
     assert 'ipady=max(0, int(self.parent.settings.review_entry_vertical_padding))' in FOCUSED_FILTER_SOURCE
-    assert 'editor.pack_configure(ipady=padding)' in review
+    assert 'editor.pack_configure(ipady=padding)' in REVIEW_APPEARANCE_SOURCE
 
 
 def test_review_height_controls_use_percent_of_source_image_height():
@@ -6320,14 +6331,14 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert '"大字头切图高："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in REVIEW_WORKSPACE_SOURCE
     assert '"行间空：",' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.review_row_padding_var,' in review
-    assert 'self.review_row_padding_px_var,' in review
+    assert 'self.review_row_padding_var,' in REVIEW_APPEARANCE_SOURCE
+    assert 'self.review_row_padding_px_var,' in REVIEW_APPEARANCE_SOURCE
     assert '"普通词条行切图高：",' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.review_regular_crop_height_var,' in review
-    assert 'self.review_regular_crop_height_px_var,' in review
+    assert 'self.review_regular_crop_height_var,' in REVIEW_APPEARANCE_SOURCE
+    assert 'self.review_regular_crop_height_px_var,' in REVIEW_APPEARANCE_SOURCE
     assert '"大字头切图高：",' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.review_single_cjk_line_height_var,' in review
-    assert 'self.review_single_cjk_line_height_px_var,' in review
+    assert 'self.review_single_cjk_line_height_var,' in REVIEW_APPEARANCE_SOURCE
+    assert 'self.review_single_cjk_line_height_px_var,' in REVIEW_APPEARANCE_SOURCE
     height_controls = REVIEW_WORKSPACE_SOURCE[
         REVIEW_WORKSPACE_SOURCE.index("    def add_review_height_control("):
         REVIEW_WORKSPACE_SOURCE.index("    zoom_row = ttk.Frame(")
@@ -6337,7 +6348,7 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert "_review_height_pixels_from_percent_var" in review
     assert "_review_height_pixels_from_pixel_var" in review
     assert "_sync_review_height_vars" in review
-    assert "self._sync_review_height_vars()" in review
+    assert "self._sync_review_height_vars()" in REVIEW_APPEARANCE_SOURCE
     assert 'self._schedule_review_line_height_apply("pixel")' in review
     assert 'self._schedule_review_row_padding_apply("pixel")' in review
     assert 'self._schedule_review_regular_crop_height_apply("pixel")' in review
@@ -6346,8 +6357,8 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert 'text="显示 OCR 底色"' not in review
     assert 'self.settings.review_main_show_ocr_choices = False' in text
     assert 'self.settings.review_main_show_ocr_background = False' in text
-    assert 'self.parent.settings.character_height = line_height' in review
-    assert 'self.parent.settings.review_single_cjk_line_height = line_height' in review
+    assert 'self.parent.settings.character_height = line_height' in REVIEW_APPEARANCE_SOURCE
+    assert 'self.parent.settings.review_single_cjk_line_height = line_height' in REVIEW_APPEARANCE_SOURCE
 
 
 def test_v21122_hotfix2_main_canvas_ocr_aids_follow_their_switches():
@@ -7017,7 +7028,7 @@ def test_review_network_status_uses_single_line_result_block():
 
     assert "self.wordslist_label_var" not in review
     assert 'self.word_window_var = tk.StringVar(value="wordslist.txt | 0-0 / 0")' in REVIEW_WORKSPACE_SOURCE
-    assert 'f"{path.name} | {start + 1}-{end} / {len(words)}"' in review
+    assert 'f"{path.name} | {start + 1}-{end} / {len(words)}"' in REVIEW_REFERENCE_SOURCE
     assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "词表（" not in review
     assert "| 显示 " not in review
@@ -7034,8 +7045,8 @@ def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
     review = text[start:end]
     assert "self.word_list = tk.Text(" in REVIEW_WORKSPACE_SOURCE
     assert '"wordslist_number", font=(number_family, 10)' in REVIEW_WORKSPACE_SOURCE
-    assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in review
-    assert 'f"  {words[global_index]}", ("wordslist_word",)' in review
+    assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in REVIEW_WORKSPACE_SOURCE
+    assert 'f"  {words[global_index]}", ("wordslist_word",)' in REVIEW_WORKSPACE_SOURCE
     assert "def _word_list_local_index_from_event" in review
     assert "self.word_selected_local_index" in review
 
@@ -7077,8 +7088,8 @@ def test_v2129_review_window_has_independent_simplified_font_controls():
     assert 'self.review_simplified_font_size_var' in body
     assert 'self.review_simplified_font_bold_var' in body
     assert 'self.review_simplified_font_italic_var' in body
-    assert 'settings.review_simplified_font_family = family' in body
-    assert 'settings.review_simplified_font_size = size' in body
+    assert 'settings.review_simplified_font_family = family' in REVIEW_APPEARANCE_SOURCE
+    assert 'settings.review_simplified_font_size = size' in REVIEW_APPEARANCE_SOURCE
 
 
 def test_v2129_existing_project_inherits_headword_font_for_simplified(tmp_path):
@@ -8220,8 +8231,8 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'text="排除参考词表"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="单批显示数量："' in REVIEW_WORKSPACE_SOURCE
     assert "filter_batch_top" not in text and "filter_batch_bottom" not in text
-    assert 'text=("上\\n一\\n批" if active else "上\\n一\\n页")' in text
-    assert 'text=("下\\n一\\n批" if active else "下\\n一\\n页")' in text
+    assert 'text=("上\\n一\\n批" if active else "上\\n一\\n页")' in REVIEW_WORKSPACE_SOURCE
+    assert 'text=("下\\n一\\n批" if active else "下\\n一\\n页")' in REVIEW_WORKSPACE_SOURCE
     assert "self.change_filter_batch(delta)" in text
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE

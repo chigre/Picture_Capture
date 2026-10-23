@@ -4048,8 +4048,9 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
-    assert "self.parent._request_wordslist_reload(" in review
-    assert "reload_wordslist_reference(Path(chosen)" not in review
+    reference = (root / "src/picture_capture/ui/review_reference_workflow.py").read_text(encoding="utf-8")
+    assert "self.parent._request_wordslist_reload(" in reference
+    assert "reload_wordslist_reference(Path(chosen)" not in reference
 
     order_start = text.index("    def check_headword_order(", app_start)
     order_end = text.index("\n    def _show_text_report", order_start)

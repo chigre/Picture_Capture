@@ -62,7 +62,7 @@ def test_review_deps_capture_live_module_patchpoints(monkeypatch):
     patched = object()
     monkeypatch.setattr(app_module, "review_auto_fit_zoom", patched)
     assert app_module._review_workspace_deps().review_auto_fit_zoom is patched
-    assert len(leaf.ReviewWorkspaceDeps.__dataclass_fields__) == 18
+    assert len(leaf.ReviewWorkspaceDeps.__dataclass_fields__) == 19
     font_token = object()
     monkeypatch.setattr(app_module, "AUTO_FONT_FAMILY", font_token)
     assert app_module._review_workspace_deps().AUTO_FONT_FAMILY is font_token

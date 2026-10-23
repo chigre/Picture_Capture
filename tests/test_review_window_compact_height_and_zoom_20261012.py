@@ -126,8 +126,9 @@ def test_zoom_command_paths_still_render_both_inline_and_fixed_crops():
     import picture_capture.app as module
 
     source = Path(module.__file__).read_text(encoding="utf-8")
+    appearance_source = (Path(module.__file__).parent / "ui/review_appearance_workflow.py").read_text(encoding="utf-8")
     for method in ("change_review_zoom", "apply_review_zoom_text", "reset_review_zoom"):
-        method_body = source.split(f"    def {method}(", 1)[1].split("\n    def ", 1)[0]
+        method_body = appearance_source.split(f"def {method}(", 1)[1].split("\n\ndef ", 1)[0]
         assert "self._request_render_rows(focus_index=active)" in method_body
     pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
         "    def _schedule_review_crop_height_update(", 1

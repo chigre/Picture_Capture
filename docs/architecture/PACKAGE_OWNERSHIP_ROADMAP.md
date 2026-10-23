@@ -1361,3 +1361,20 @@ Do not alter the 160ms delay, serial-write ordering, pending edits during a
 write, conflict reporting, failed-save retry, closure wait, or settings
 clamping. Ratchet limits are unchanged. Acceptance requires exact-head
 full-matrix CI, CodeQL, review and real scanned-page GUI save/reopen checks.
+
+## Issue #562 — expanded proofreading ReviewWindow migration (2026-10-23)
+
+Following merged #654, move **55 cohesive methods in one PR** rather than a series of tiny reviews.
+The existing `ui/review_workspace_workflow.py` now physically owns 16 more chrome,
+filter navigation, word-list paint, title and autosave-label callbacks.
+New `ui/review_reference_workflow.py` owns 14 methods for reference-word indexing,
+Chinese collation and 190k-entry virtual list positioning, manual list selection and
+page-neighbor inference. New `ui/review_appearance_workflow.py` owns 25 methods for
+font choices, padding, pixel/percent-linked crop height, zoom and OCR display flags.
+Every original `ReviewWindow` callable signature, `@staticmethod`, Tk callback,
+delayed update interval, crop refresh and settings persistence route is retained.
+All 3 leafs receive frozen live callback dependencies, with no heavy-app import.
+Add AST owner/adapter tests and behavioral focus, virtual-list, dedupe, debounce
+and zoom regression. No architecture guard baseline relaxed. Require exact-head
+Ubuntu/macOS/Windows × Python 3.10/3.13 CI, security scans, independent review
+and real project/manual GUI checks; keep PR Draft pending those human checks.
