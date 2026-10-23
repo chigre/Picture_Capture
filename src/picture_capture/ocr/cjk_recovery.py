@@ -56,7 +56,6 @@ def _robust_record_line_height(
     settings: AppSettings,
 ) -> float:
     """Estimate ordinary OCR-line height while ignoring giant merged boxes."""
-
     heights = sorted(
         max(1, int(record.box[3]) - int(record.box[1]))
         for record in records
@@ -84,7 +83,6 @@ def _single_cjk_from_local_records(
     parse_headword_text = deps.parse_headword_text
     _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
     _leading_cjk_ideograph = deps._leading_cjk_ideograph
-
     ranked: list[tuple[int, int, float, str, str]] = []
     for record in records:
         if max_left_x is not None and int(record.box[0]) > int(max_left_x):
@@ -142,7 +140,6 @@ def _recover_oversized_cjk_ocr_records(
     get_paddle_engine = deps.get_paddle_engine
     run_paddle_band = deps.run_paddle_band
     normalize_page_rgb = deps.normalize_page_rgb
-
     if (
         not records
         or not _is_chinese_ocr(settings)
@@ -337,7 +334,6 @@ def _record_already_represents_oversized_run(
     parse_headword_text = deps.parse_headword_text
     _is_single_cjk_ideograph = deps._is_single_cjk_ideograph
     _VERIFIED_OVERSIZED_CJK_RECOVERIES = deps._VERIFIED_OVERSIZED_CJK_RECOVERIES
-
     x0, y0, _x1, y1 = (int(value) for value in record.box)
     run_start, run_end = (int(run[0]), int(run[1]))
     run_height = max(1, run_end - run_start)
@@ -382,7 +378,6 @@ def _recover_image_first_oversized_cjk_records(
     get_paddle_engine = deps.get_paddle_engine
     run_paddle_band = deps.run_paddle_band
     normalize_page_rgb = deps.normalize_page_rgb
-
     if (
         not _is_chinese_ocr(settings)
         or str(
@@ -546,7 +541,6 @@ def _suppress_raw_records_shadowed_by_verified_cjk_recovery(
     """
     _leading_cjk_ideograph = deps._leading_cjk_ideograph
     _VERIFIED_OVERSIZED_CJK_RECOVERIES = deps._VERIFIED_OVERSIZED_CJK_RECOVERIES
-
     verified = [
         record for record in records
         if str(record.recovery or "") in _VERIFIED_OVERSIZED_CJK_RECOVERIES
@@ -652,7 +646,6 @@ def refine_separator_y(
     _separator_analysis_x_bounds = deps._separator_analysis_x_bounds
     _otsu_threshold = deps._otsu_threshold
     _true_runs = deps._true_runs
-
     if not settings.paddle_refine_separator_y or gray.size == 0:
         return int(coarse_y), {"enabled": False, "reason": "disabled"}
 
@@ -773,7 +766,6 @@ def refine_separator_y_adaptive(
     _separator_analysis_x_bounds = deps._separator_analysis_x_bounds
     _otsu_threshold = deps._otsu_threshold
     _true_runs = deps._true_runs
-
     if not settings.paddle_refine_separator_y or gray.size == 0:
         return int(coarse_y), {"enabled": False, "reason": "disabled", "adaptive_mode": "off"}
     height, width = gray.shape[:2]
@@ -1025,7 +1017,6 @@ def refine_first_content_y(
     _separator_analysis_x_bounds = deps._separator_analysis_x_bounds
     _otsu_threshold = deps._otsu_threshold
     _true_runs = deps._true_runs
-
     if not settings.paddle_refine_separator_y or gray.size == 0:
         return int(coarse_y), {"enabled": False, "reason": "disabled"}
     height, width = gray.shape[:2]
