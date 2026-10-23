@@ -16,9 +16,10 @@ def test_review_has_exactly_one_pinned_preview_owner():
     import picture_capture.proofreading.entry_classification_ui as classification_ui
 
     app_source = Path(app.__file__).read_text(encoding="utf-8")
+    review_source = (Path(app.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     classification_source = Path(classification_ui.__file__).read_text(encoding="utf-8")
-    assert app_source.count("self.active_crop_host = ttk.Frame(editor_area") == 1
-    assert app_source.count("self.active_crop_label = tk.Label(self.active_crop_frame") == 1
+    assert review_source.count("self.active_crop_host = ttk.Frame(editor_area") == 1
+    assert review_source.count("self.active_crop_label = tk.Label(self.active_crop_frame") == 1
     assert "initialize_review_entry_classification" not in app_source
     assert "initialize_pinned_entry_preview" not in classification_source
     assert "refresh_pinned_entry_preview" not in classification_source
@@ -61,11 +62,12 @@ def test_pinned_and_inline_review_crops_follow_editor_character_count():
     import picture_capture.app as app
 
     source = Path(app.__file__).read_text(encoding="utf-8")
-    render_request = source.split("    def _request_render_rows(", 1)[1].split(
-        "    def render_rows(", 1
+    review_source = (Path(app.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+    render_request = review_source.split("def _request_render_rows(", 1)[1].split(
+        "\ndef render_rows(", 1
     )[0]
-    worker = render_request.split("        def worker():", 1)[1].split(
-        "        def done(payload)", 1
+    worker = render_request.split("    def worker():", 1)[1].split(
+        "    def done(payload)", 1
     )[0]
     pinned = source.split("    def _update_active_crop_preview(", 1)[1].split(
         "    def _ordinary_review_photo(", 1
@@ -74,7 +76,7 @@ def test_pinned_and_inline_review_crops_follow_editor_character_count():
     assert "ordinary_height_only=True" not in pinned
     assert "editor_text=editor_texts[index]" in worker
     assert "editor_text=self.vars[index].get()" in pinned
-    assert "var.trace_add(\"write\"" in source
+    assert "var.trace_add(\"write\"" in review_source
     assert "self._refresh_review_row_crop(i)" in source
     assert 'extended_review_crop_box(' in pinned
     assert 'ordinary_box = _review_line_box(' in pinned
@@ -121,6 +123,7 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
     import picture_capture.app as app_module
 
     source = Path(app_module.__file__).read_text(encoding="utf-8")
+    review_source = (Path(app_module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
     for before, after in (
         ("def _refresh_editor_ocr_compare(", "def _show_ocr_options("),
         ("def _update_active_crop_preview(", "def _ordinary_review_photo("),
@@ -129,8 +132,8 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
         segment = source.split("    " + before, 1)[1].split("    " + after, 1)[0]
         assert "self._bound_row_entries()" in segment
         assert "self.parent._ordered_entries_reading_order()" not in segment
-    assert "(id(source), int(entry.x), int(entry.y), str(entry.word))" in source
-    assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in source
+    assert "(id(source), int(entry.x), int(entry.y), str(entry.word))" in review_source
+    assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in review_source
 
 
 def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_only():
@@ -140,7 +143,8 @@ def test_review_extended_multiplier_first_row_is_persisted_and_updates_pinned_on
 
     assert AppSettings().review_extended_crop_height_multiplier == 2.5
     source = Path(module.__file__).read_text(encoding="utf-8")
-    ui = source.split(
+    review_source = (Path(module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+    ui = review_source.split(
         'review_info = self._review_collapsible_section(', 1
     )[1].split('def add_review_height_control(', 1)[0]
     assert 'text="切片更大高度范围倍数:"' in ui

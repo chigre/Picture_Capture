@@ -1238,6 +1238,56 @@ def collect_violations() -> list[str]:
         if _normalized_source_size(gui_project_app) > 665_270:
             violations.append("app.py exceeds 665270-byte project session ownership ratchet")
 
+    # #562: review window construction and asynchronous crop-to-Tk row
+    # materialization share a leaf owner; original ReviewWindow ABI remains.
+    review_owner = PACKAGE_ROOT / "ui/review_workspace_workflow.py"
+    if not review_owner.is_file():
+        violations.append("review workspace UI owner missing")
+    else:
+        review_tree = ast.parse(review_owner.read_text(encoding="utf-8"))
+        review_functions = {
+            node.name: node for node in review_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        for name in ("_build", "_request_render_rows", "render_rows"):
+            owner = review_functions.get(name)
+            if owner is None or len(owner.body) < 10:
+                violations.append(f"review workspace owner incomplete: {name}")
+        if not any(
+            isinstance(node, ast.ClassDef) and node.name == "ReviewWorkspaceDeps"
+            for node in review_tree.body
+        ):
+            violations.append("review workspace live dependencies missing")
+        if any(
+            isinstance(node, ast.ImportFrom) and node.module in {"app", "processing"}
+            for node in ast.walk(review_tree)
+        ):
+            violations.append("review workspace imports heavyweight app/processing")
+    if gui_project_app.is_file():
+        review_app_tree = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+        review_class = next((
+            node for node in review_app_tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "ReviewWindow"
+        ), None)
+        if review_class is None:
+            violations.append("legacy ReviewWindow class missing")
+        else:
+            adapters = {node.name: node for node in review_class.body
+                        if isinstance(node, ast.FunctionDef)}
+            for name in ("_build", "_request_render_rows", "render_rows"):
+                adapter = adapters.get(name)
+                if adapter is None or not any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "_review_workspace"
+                    and node.func.attr == name
+                    for node in ast.walk(adapter)
+                ):
+                    violations.append(f"ReviewWindow callback not delegated: {name}")
+        if _normalized_source_size(gui_project_app) > 620_155:
+            violations.append("app.py exceeds 620155-byte review workspace ratchet")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

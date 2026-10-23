@@ -208,8 +208,9 @@ def test_single_unlinked_deleted_row_is_undoable(tmp_path):
 def test_ui_wiring_exposes_explicit_review_save_undo_redo():
     from picture_capture import app as gui
     source = Path(gui.__file__).read_text("utf-8")
-    assert 'self._review_flat_button(row1, "撤销保存"' in source
-    assert 'self._review_flat_button(row1, "重做保存"' in source
+    review_source = (Path(gui.__file__).parent / "ui/review_workspace_workflow.py").read_text("utf-8")
+    assert 'self._review_flat_button(row1, "撤销保存"' in review_source
+    assert 'self._review_flat_button(row1, "重做保存"' in review_source
     assert "record_review_after(self, transaction_before)" in source
     assert "record_review_after(self, transaction_before, allow_unbound=True)" in source
 

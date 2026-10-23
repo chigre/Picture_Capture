@@ -3,6 +3,7 @@ from pathlib import Path
 from picture_capture.ui import workspace_tools
 
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+REVIEW_WORKSPACE_SOURCE = (ROOT / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
 
 
 def sources():
@@ -289,9 +290,9 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
 
 def test_current_review_crop_is_fixed_width_double_height_and_framed():
     app, _ = sources()
-    assert 'self.active_crop_frame = tk.Frame(self.active_crop_host, bd=2, relief="solid"' in app
-    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
-    assert 'self._review_display_crops = list(preloaded_crops)' in app
+    assert 'self.active_crop_frame = tk.Frame(self.active_crop_host, bd=2, relief="solid"' in REVIEW_WORKSPACE_SOURCE
+    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in REVIEW_WORKSPACE_SOURCE
+    assert 'self._review_display_crops = list(preloaded_crops)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _update_active_crop_preview(self, index: int)' in app
     assert 'crop.width, max(1, round(multiplier * crop.height))' in app
     assert 'extended_review_crop_box(' in app
@@ -303,7 +304,7 @@ def test_current_review_crop_is_fixed_width_double_height_and_framed():
 def test_current_review_entry_keeps_ordinary_row_and_pinned_crop():
     app, _ = sources()
     assert 'photo = self._ordinary_review_photo(index)' in app
-    assert 'self._review_row_pictures.append(picture)' in app
+    assert 'self._review_row_pictures.append(picture)' in REVIEW_WORKSPACE_SOURCE
     assert 'self._update_active_crop_preview(index)' in app
     active = app[app.index('    def set_active(self, index: int)'):]
     active = active[:active.index('    def _scroll_editor_into_view')]
@@ -313,18 +314,18 @@ def test_current_review_entry_keeps_ordinary_row_and_pinned_crop():
 
 def test_review_preview_is_position_and_size_invariant_on_window_resize():
     app, _ = sources()
-    assert 'self.active_crop_host.pack_propagate(False)' in app
-    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in app
-    assert 'self._active_crop_fixed_size: tuple[int, int] | None = None' in app
+    assert 'self.active_crop_host.pack_propagate(False)' in REVIEW_WORKSPACE_SOURCE
+    assert 'self.active_crop_frame.place(x=6, y=4, anchor="nw")' in REVIEW_WORKSPACE_SOURCE
+    assert 'self._active_crop_fixed_size: tuple[int, int] | None = None' in REVIEW_WORKSPACE_SOURCE
     assert 'if self._active_crop_fixed_size is None:' in app
     assert 'self.active_crop_host.configure(height=self._active_crop_fixed_size[1] + 14)' in app
 
 
 def test_next_page_button_is_packed_before_expandable_editor_area():
     app, _ = sources()
-    left = app.index('self.prev_page_button.pack(side="left", fill="y"')
-    right = app.index('self.next_page_button.pack(side="right", fill="y"')
-    editor = app.index('editor_area.pack(side="left", fill="both", expand=True)', left)
+    left = REVIEW_WORKSPACE_SOURCE.index('self.prev_page_button.pack(side="left", fill="y"')
+    right = REVIEW_WORKSPACE_SOURCE.index('self.next_page_button.pack(side="right", fill="y"')
+    editor = REVIEW_WORKSPACE_SOURCE.index('editor_area.pack(side="left", fill="both", expand=True)', left)
     assert left < right < editor
 
 
@@ -340,8 +341,8 @@ def test_inline_review_slice_uses_text_based_height_without_classification():
     app, _ = sources()
     assert '_focused_review_is_single_character(displayed_text)' in app
     assert 'classified_entry_crop_height(' not in app
-    assert 'entry, geometry, image, review_settings, next_entry,' in app
-    assert 'editor_text=editor_texts[index]' in app
+    assert 'entry, geometry, image, review_settings, next_entry,' in REVIEW_WORKSPACE_SOURCE
+    assert 'editor_text=editor_texts[index]' in REVIEW_WORKSPACE_SOURCE
     assert 'ordinary_height_only=True' not in app
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in app
     assert 'self._update_active_crop_preview(index)' in app
@@ -362,9 +363,7 @@ def test_workspace_mode_is_restored_from_last_session():
 
 def test_pinned_preview_and_every_inline_crop_coexist():
     app, _ = sources()
-    start = app.index('    def render_rows(self, preloaded_crops:')
-    end = app.index('    def _ordinary_review_photo(', start)
-    render = app[start:end]
+    render = REVIEW_WORKSPACE_SOURCE.split("def render_rows(", 1)[1]
     assert 'photo = self._ordinary_review_photo(index)' in render
     # Every inline crop is still resident; its child label now shares one
     # disposable row with the lower-aligned main-style sequence badge.
@@ -556,9 +555,9 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
     assert "center_y - half_height" not in pinned
     assert 'editor_text=self.vars[index].get()' in pinned
 
-    start = app.index("        font_row = ttk.Frame(review_info, style=")
-    end = app.index("        digit_box = self._review_collapsible_section(", start)
-    review_font_controls = app[start:end]
+    start = REVIEW_WORKSPACE_SOURCE.index("    font_row = ttk.Frame(review_info, style=")
+    end = REVIEW_WORKSPACE_SOURCE.index("    digit_box = self._review_collapsible_section(", start)
+    review_font_controls = REVIEW_WORKSPACE_SOURCE[start:end]
     assert 'text="字号："' not in review_font_controls
     assert 'text="粗体"' not in review_font_controls
     assert 'text="斜体"' not in review_font_controls
