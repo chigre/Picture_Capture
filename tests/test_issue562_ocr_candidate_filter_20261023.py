@@ -26,7 +26,7 @@ assert 'paddle' not in sys.modules
 
 def test_all_41_old_matching_and_filter_policies_are_live_bound():
     fields_now = {field.name for field in fields(owner.HeadwordFilterDeps)}
-    assert len(fields_now) == 41
+    assert len(fields_now) == 42
     assert {
         "group_ocr_records", "_repair_split_headword_lines",
         "_repair_wrapped_headword_structure",
@@ -37,7 +37,8 @@ def test_all_41_old_matching_and_filter_policies_are_live_bound():
         "_recover_oversized_cjk_ocr_records", "_cjk_visual_projection_runs",
         "_cjk_candidate_right_context_metrics", "Entry",
         "_VERIFIED_OVERSIZED_CJK_RECOVERIES", "_BUNDLED_PROFILE",
-        "load_dictionary_profile", "_annotate_peer_typography_matches",
+        "load_dictionary_profile", "starts_with_internal_article_symbol",
+        "_annotate_peer_typography_matches",
     } <= fields_now
     live = core._headword_filter_deps()
     assert live.Entry is Entry
