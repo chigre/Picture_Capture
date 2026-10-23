@@ -58,7 +58,6 @@ def open_recent_project(self, deps: ProjectSessionDeps) -> None:
     remove_recent_project = deps.remove_recent_project
     set_recent_project_pinned = deps.set_recent_project_pinned
     themed_display_image = deps.themed_display_image
-
     dialog = tk.Toplevel(self)
     dialog.title("项目中心")
     dialog.transient(self)
@@ -464,7 +463,6 @@ def _attach_tooltip(
     """Attach a lightweight native Tk tooltip without external dependencies."""
     tk = deps.tk
     ttk = deps.ttk
-
     popup: list[tk.Toplevel | None] = [None]
 
     def show(_event=None) -> None:
@@ -532,7 +530,6 @@ def _load_project(
     read_ppp = deps.read_ppp
     normalize_page_rgb = deps.normalize_page_rgb
     themed_display_image = deps.themed_display_image
-
     if self._batch_active:
         self.status_var.set("批量任务运行中，结束或停止后再切换项目。")
         return
