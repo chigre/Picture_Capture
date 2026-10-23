@@ -287,8 +287,8 @@ def apply_selected_perspective(
     diagnostic_entry = selection.diagnostic_entry
     diagnostic_candidate = selection.diagnostic_candidate
     diagnostic_horizontal_strength = selection.diagnostic_horizontal_strength
-    state.perspective_structural_applied = selection.state.perspective_structural_applied
-    state.perspective_structural_safe = selection.state.perspective_structural_safe
+    state.perspective_structural_applied = selection.perspective_structural_applied
+    state.perspective_structural_safe = selection.perspective_structural_safe
     structural_auto_safe = selection.structural_auto_safe
     horizontal_auto_safe = selection.horizontal_auto_safe
     structural_candidate = selection.structural_candidate
