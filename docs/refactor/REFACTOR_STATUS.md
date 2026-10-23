@@ -8,18 +8,20 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are accepted through #635 at
-`88156923`, with exact-head and independent main six-platform CI/CodeQL passed.
-Root count remains 15, all explicitly classified. The current candidate moves
-candidate body/tail pixel acceptance and final retained-image re-audit into
-`preprocess/pixel_row_policy.py`. Separate gates and explicit per-page results
-preserve retention vs convergence and partial diagnostics on measurement failure.
-Facade shrinks 105233→98305 bytes, below the normal 100000-byte module threshold;
-its normalized ceiling tightens to98310 without changing historical baselines.
-Exact-head CI/review and independent main acceptance remain pending. Remaining
-manual/UVDoc/orthogonal orchestration, diagnostic mapping, oversized app/core and
-real-scan/manual/native GPU acceptance remain open. The phase log below is
-historical and does not describe current physical file locations.
+Root classification and preprocessing extractions are merged through #636
+(`fb59bb1c`); independent merged-main acceptance remains to be checked.
+Root count stays 15, all explicitly classified. The current candidate moves
+explicit user-selected UVDoc fallback and post-perspective re-detection into
+`preprocess/geometry_stages.py`. Current native unwarper/detector callbacks and
+minimum-box policy are injected at call time; warnings and method order,
+failed-stage box identity, image transforms and saved analysis are unchanged.
+Facade shrinks 98305→97436 bytes; normalized size ceiling tightens to 97440.
+Exact-head six-platform CI, GUI smoke, wheel, CodeQL, review and independent
+merged-main acceptance remain pending for this candidate. Manual quadrilateral,
+projective diagnostic mapping and orthogonal orchestration remain, alongside
+oversized app/processing/OCR cores. Native CUDA/UVDoc, real scanned-page
+and manual GUI verification remain outstanding. The historical phase log below
+does not describe current physical file locations.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
