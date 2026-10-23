@@ -56,8 +56,11 @@ def test_legacy_polygon_runtime_patch_is_read_on_each_call(monkeypatch):
     points = [(100, 100), (110, 100), (105, 110)]
     box = (0, 0, 10, 10)
     assert not processing_core.polygon_intersects_box(points, box)
+    original_intersect = processing_core._segments_intersect
     monkeypatch.setattr(processing_public, "_segments_intersect", lambda *args: True)
     assert processing_core.polygon_intersects_box(points, box)
+    # The next check needs the real legacy function, not the first test hook.
+    monkeypatch.setattr(processing_public, "_segments_intersect", original_intersect)
 
     seen = []
     original = processing_core._orientation

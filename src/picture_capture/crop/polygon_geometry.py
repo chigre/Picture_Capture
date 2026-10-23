@@ -6,9 +6,6 @@ Optional call-time callbacks preserve monkeypatch behavior of the historical
 processing/processing_core public modules without sharing mutable globals.
 """
 
-from collections.abc import Callable
-
-
 def point_in_rect(point: tuple[int, int], box: tuple[int, int, int, int]) -> bool:
     x, y = point
     return box[0] <= x <= box[2] and box[1] <= y <= box[3]
