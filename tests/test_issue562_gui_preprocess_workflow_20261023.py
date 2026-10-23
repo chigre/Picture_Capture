@@ -70,14 +70,14 @@ def test_exact_24_instance_and_static_preprocess_methods_still_on_app():
 
 def test_preprocess_gui_globals_resolve_original_live_patch_points(monkeypatch):
     names = {f.name for f in fields(owner.PreprocessUiDeps)}
-    assert len(names) == 42
+    assert len(names) == 43
     assert {
         "analyze_preprocess_path", "load_preprocess_analysis",
         "save_preprocess_analysis", "save_processed_page",
         "promote_processed_pages", "save_manual_perspective_quad",
         "load_manual_perspective_quad", "geometry_corrected_image",
         "preprocess_result_summary", "overlay_excluded_regions",
-        "messagebox", "tk", "ttk", "ImageTk",
+        "messagebox", "tk", "ttk", "ImageTk", "AUTO_FONT_FAMILY",
     } <= names
     func = lambda *args: None
     monkeypatch.setattr(app_module, "analyze_preprocess_path", func)
