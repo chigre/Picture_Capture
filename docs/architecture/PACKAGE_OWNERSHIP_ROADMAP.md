@@ -869,7 +869,7 @@ reviews are mandatory gates before merging. Real scanned-page, manual UI,
 UVDoc/CUDA and actual GPU resource validation remain pending.
 
 
-## Issue #562 — complete orthogonal closed-loop execution and retained audit (2026-10-23; candidate)
+## Issue #562 — complete orthogonal closed-loop execution and retained audit (2026-10-23; merged #639)
 
 On merged `main@efb3a7f3` (#638), move the whole orthogonal residual-correction
 pipeline from `analyze_preprocess_page` to `preprocess/orthogonal_pipeline.py`.
@@ -901,3 +901,34 @@ warning order, identity and source isolation. Complete cross-platform
 Python3.10/3.13, GUI smoke, compatibility, wheel, CodeQL, reviews, and
 postmerge independent main checks remain mandatory. Native UVDoc/CUDA, real
 scan/manual GUI acceptance still cannot be inferred from these synthetic tests.
+
+
+## Issue #562 — whole-entry crop planning, illustration pairing and export transaction (2026-10-23; candidate)
+
+Starting from merged `main@f3619e3e` (#639), extract the **complete**
+whole-entry crop page workflow from the large legacy
+`processing_core.py` into `crop/page_workflow.py`: 7 original algorithm
+routines spanning SECTION-aware entry piece planning; standalone, contained
+and partial PPP/entry association; staged plan JSON; public plan publishing;
+polygon white-fill and union cropping; and whole-entry PNG, manifest, natural
+width and page-plan atomic transaction, with partial-stage cleanup on failure.
+The original public core functions remain as light adapters and
+`CropRecord`, `EntryCropPiecePlan`, `IllustrationCropPlan`,
+`PageCropPlan` retain their original module/pickle identities.
+
+A frozen `CropWorkflowDeps` contains **41 live callbacks and historical
+constructors** supplied at call time, avoiding circular runtime imports,
+global installers, namespace mirroring changes, serialized model changes,
+duplicate crop transaction implementations or startup GPU/GUI side effects.
+Preserve page SECTION lane boundaries, previous-page WW_000 association, strict
+named PPP linking and partial-overlay merge, original-source crop pixel
+coordinates and normalizations, transparent PNG behavior, filename ordering,
+manifest fields and old on-disk formats. The core module changes
+**158531→144295 bytes** (−14236), with a new strict **144300-byte** normalized
+ceiling and unchanged historical oversized baseline; root count stays **15**.
+Add direct import isolation, model identities, containment/partial/standalone
+association, live transaction calls, white-fill preservation, PNG/manifest/
+width-file integration and staged-failure rollback tests. Exact-head full
+OS/Python 3.10/3.13 CI, GUI smoke, wheel, compatibility, CodeQL and review
+gates remain required. Real scanned pages and manual/native UI acceptance
+remain unverified. The inherited #562 oversized app and OCR cores remain open.
