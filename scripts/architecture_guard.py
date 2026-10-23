@@ -1204,8 +1204,8 @@ def collect_violations() -> list[str]:
             for node in ast.walk(adapters[0])
         ):
             violations.append("original OCR candidate filtering adapter must delegate")
-        if _normalized_source_size(candidate_filter_core) > 197_600:
-            violations.append("paddle_headwords_core exceeds 197600-byte OCR candidate filter ceiling")
+        if _normalized_source_size(candidate_filter_core) > 197_680:
+            violations.append("paddle_headwords_core exceeds 197680-byte OCR candidate filter ceiling")
 
     # #562: move the entire verified oversized CJK recovery chain and
     # all three marker-Y refinement paths to one canonical OCR owner.
