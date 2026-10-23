@@ -8,16 +8,17 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Root classification and preprocessing extractions are accepted through #633 at
-`6356509a`, with exact-head and independent main six-platform CI/CodeQL passed.
+Root classification and preprocessing extractions are accepted through #634 at
+`5477b184`, with exact-head and independent main six-platform CI/CodeQL passed.
 Root count remains 15, all explicitly classified. The current candidate extracts
-final re-detection, horizontal audit, crop bounds, warnings and confidence/status
-from `analyze_preprocess_page` into `preprocess/finalization.py`. Seven current
-operations are supplied at call time; an explicit 22-field per-page result feeds
-the unchanged persisted-model constructor. Facade shrinks 121552→115065 bytes.
-Exact-head CI/review and independent main acceptance remain pending. Central
-perspective/orthogonal stages, oversized app/core and real-scan/manual/native GPU
-acceptance remain open. The phase log below is historical and does not describe
+structural/residual-horizontal projective candidate generation, distortion audits,
+safety gates, automatic/explicit selection and rejected-candidate diagnostics into
+`preprocess/projective_selection.py`. Eight current operations and seven current
+policy values feed a 17-field per-page selection. Facade shrinks 115065→105233 bytes.
+Manual/UVDoc transforms, selected-candidate diagnostic mapping and pixel application
+remain in their original positions. Exact-head CI/review and independent main
+acceptance remain pending. Remaining analysis/app/core and real-scan/manual/native
+GPU acceptance are open. The phase log below is historical and does not describe
 current physical file locations.
 
 ## Current phase
