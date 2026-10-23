@@ -132,6 +132,8 @@ from .ui import review_ocr_compare_workflow as _review_ocr
 from .ui import review_crop_actions as _review_crop
 from .ui import review_entry_actions as _review_entry
 from .ui import review_page_lifecycle as _review_page
+from .ui import page_index_workflow as _page_index
+from .ui import word_fill_status_workflow as _word_fill_status
 from .ui import review_appearance_workflow as _review_appearance
 from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
@@ -3275,6 +3277,41 @@ def _review_page_deps() -> _review_page.ReviewPageDeps:
     )
 
 
+def _page_index_deps() -> _page_index.PageIndexDeps:
+    """Snapshot original module bindings for a page index callback."""
+    return _page_index.PageIndexDeps(
+        tk=tk,
+        ttk=ttk,
+        font=font,
+        simpledialog=simpledialog,
+        Image=Image,
+        Path=Path,
+        _sorted_page_list_rows=_sorted_page_list_rows,
+        _fill_status_cell_style=_fill_status_cell_style,
+        settings_path=settings_path,
+        read_page_sections=read_page_sections,
+        write_page_sections=write_page_sections,
+        PageSection=PageSection,
+        LayoutTransform=LayoutTransform,
+        normalize_page_rgb=normalize_page_rgb,
+        page_template_analysis_image=page_template_analysis_image,
+        derive_geometry=derive_geometry,
+        effective_page_settings=effective_page_settings,
+        read_pdic=read_pdic,
+        pdic_path=pdic_path,
+        read_ppp=read_ppp,
+    )
+
+
+def _word_fill_status_deps() -> _word_fill_status.WordFillStatusDeps:
+    """Snapshot original module bindings for a page index callback."""
+    return _word_fill_status.WordFillStatusDeps(
+        Path=Path,
+        json=json,
+        os=os,
+    )
+
+
 def _main_canvas_render_deps() -> _main_canvas_render.MainCanvasRenderDeps:
     """Resolve live original Tk/geometry helpers for main-canvas drawing."""
     return _main_canvas_render.MainCanvasRenderDeps(
@@ -4822,24 +4859,7 @@ class PictureCaptureApp(tk.Tk):
             return False
 
     def _resize_sidebar_content(self, event: tk.Event | None = None) -> None:
-        """Fill unused sidebar height while retaining scrolling when necessary."""
-        canvas = self.__dict__.get("sidebar_canvas")
-        sidebar = self.__dict__.get("sidebar")
-        window = self.__dict__.get("_sidebar_window")
-        if canvas is None or sidebar is None or window is None:
-            return
-        try:
-            viewport_width = max(1, canvas.winfo_width())
-            viewport_height = max(1, canvas.winfo_height())
-            requested_height = max(1, sidebar.winfo_reqheight())
-            canvas.itemconfigure(
-                window,
-                width=viewport_width,
-                height=max(viewport_height, requested_height),
-            )
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        except tk.TclError:
-            return
+        return _page_index._resize_sidebar_content(self, _page_index_deps(), event)
 
     def _sidebar_mousewheel(self, event: tk.Event) -> str | None:
         if not self._pointer_over_sidebar():
@@ -4857,148 +4877,25 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def _apply_page_list_display_columns(self, *, save: bool = True) -> None:
-        """Apply optional Treeview columns while keeping 页面 permanently visible."""
-        if not hasattr(self, "page_list"):
-            return
-        columns = ["bookmark", "page", "lined"]
-
-        if getattr(self, "_page_column_vars", {}).get("illustrations") is None or self._page_column_vars["illustrations"].get():
-            columns.append("illustrations")
-        columns.append("section")
-        if getattr(self, "_page_column_vars", {}).get("fill_status") is None or self._page_column_vars["fill_status"].get():
-            columns.append("fill_status")
-        self.page_list.configure(displaycolumns=tuple(columns))
-        self.after_idle(self._fit_page_list_columns)
-        if hasattr(self, "settings"):
-            self.settings.page_list_show_lined = True
-            self.settings.page_list_show_fill_status = "fill_status" in columns
-            self.settings.page_list_show_illustrations = "illustrations" in columns
-            if save and self.project is not None:
-                try:
-                    self.settings.to_json(settings_path(self.project.root))
-                except Exception:
-                    pass
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._apply_page_list_display_columns(self, _page_index_deps(), save=save)
 
     def _page_list_configured(self, _event=None) -> None:
-        """Keep visible page-list columns filling the full Treeview width."""
-        self._fit_page_list_columns()
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._page_list_configured(self, _page_index_deps(), _event)
 
     def _fit_page_list_columns(self) -> None:
-        if not hasattr(self, "page_list"):
-            return
-        try:
-            raw = self.page_list.cget("displaycolumns")
-            visible = tuple(self.tk.splitlist(raw))
-            if not visible or visible == ("#all",):
-                visible = tuple(self.tk.splitlist(self.page_list.cget("columns")))
-            if not visible:
-                return
-            available = max(1, int(self.page_list.winfo_width()) - 2)
-        except (tk.TclError, ValueError):
-            return
-
-        header_font = font.nametofont("TkHeadingFont")
-        body_font = font.nametofont("TkDefaultFont")
-        # Preserve content-sized page columns and horizontal scrolling.
-        page_names = (
-            page.stem for page in getattr(self.project, "images", ())
-        ) if self.project else ()
-        page_width = max(
-            (body_font.measure(name) for name in page_names), default=0
-        ) + 10
-        base = {
-            "bookmark": 25, "page": max(52, page_width),
-            "section": 36, "lined": 36,
-            "illustrations": 36, "fill_status": 68,
-        }
-        for column in visible:
-            label = self._page_list_heading_labels.get(column, column)
-            width = max(base.get(column, 60), header_font.measure(label) + 6)
-            self.page_list.column(column, width=width, anchor="center", stretch=False)
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._fit_page_list_columns(self, _page_index_deps())
 
     def _hide_page_list_section_heading_hint(self, _event=None) -> None:
-        popup = getattr(self, "_page_list_section_heading_hint", None)
-        if popup is not None:
-            try:
-                popup.destroy()
-            except tk.TclError:
-                pass
-        self._page_list_section_heading_hint = None
+        return _page_index._hide_page_list_section_heading_hint(self, _page_index_deps())
 
     def _page_list_section_heading_motion(self, event: tk.Event) -> None:
-        """Show the SECTION edit hint only while the pointer is over its heading."""
-        try:
-            over_section = (
-                self.page_list.identify_region(event.x, event.y) == "heading"
-                and self._page_list_column_at(event.x) == "section"
-            )
-        except tk.TclError:
-            over_section = False
-        if not over_section:
-            self._hide_page_list_section_heading_hint()
-            return
-        if getattr(self, "_page_list_section_heading_hint", None) is not None:
-            return
-        tip = tk.Toplevel(self.page_list)
-        tip.wm_overrideredirect(True)
-        tip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 18}")
-        ttk.Label(
-            tip,
-            text="双击进入Section编辑模式",
-            padding=(7, 4),
-            relief="solid",
-        ).pack()
-        self._page_list_section_heading_hint = tip
+        return _page_index._page_list_section_heading_motion(self, _page_index_deps(), event)
 
     def _page_list_right_click(self, event: tk.Event) -> str | None:
-        """Right-click a heading to choose which optional list columns are visible."""
-        if not hasattr(self, "page_list") or self.page_list.identify_region(event.x, event.y) != "heading":
-            return None
-        menu = tk.Menu(self, tearoff=False)
-        self._apply_current_appearance(menu)
-        bookmark_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="●", variable=bookmark_var, state="disabled")
-        page_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="页面", variable=page_var, state="disabled")
-        section_var = tk.BooleanVar(value=True)
-        menu.add_checkbutton(label="区块", variable=section_var, state="disabled")
-        menu.add_checkbutton(label="画线", state="disabled")
-        menu.add_checkbutton(
-            label="插图", variable=self._page_column_vars["illustrations"],
-            command=lambda: self._apply_page_list_display_columns(save=True),
-        )
-        menu.add_checkbutton(
-            label="填充状态", variable=self._page_column_vars["fill_status"],
-            command=lambda: self._apply_page_list_display_columns(save=True),
-        )
-        try:
-            menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            try: menu.grab_release()
-            except tk.TclError: pass
-        return "break"
+        return _page_index._page_list_right_click(self, _page_index_deps(), event)
 
     def _schedule_page_cell_overlay_refresh(self) -> None:
-        """Coalesce visible table colors, cell borders and thumbnails on idle."""
-        if not hasattr(self, "page_list"):
-            return
-        if self._page_overlay_refresh_job is not None:
-            return
-
-        def run() -> None:
-            self._page_overlay_refresh_job = None
-            self._refresh_lined_cell_overlays()
-            grid = self.__dict__.get("_page_index_grid")
-            if grid is not None:
-                grid.repaint(dark="dark" in str(getattr(self, "appearance_mode", "")).lower())
-            previews = self.__dict__.get("_page_thumbnails")
-            if previews is not None:
-                previews.request_visible()
-
-        self._page_overlay_refresh_job = self.after_idle(run)
+        return _page_index._schedule_page_cell_overlay_refresh(self, _page_index_deps())
 
     def _list_mousewheel(self, event: tk.Event) -> str:
         self.page_list.yview_scroll((-1 if event.delta > 0 else 1) * 3, "units")
@@ -5006,320 +4903,58 @@ class PictureCaptureApp(tk.Tk):
         return "break"
 
     def _page_list_scroll(self, *args) -> None:
-        self.page_list.yview(*args)
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._page_list_scroll(self, _page_index_deps(), *args)
 
     def _page_list_hscroll(self, *args) -> None:
-        self.page_list.xview(*args)
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._page_list_hscroll(self, _page_index_deps(), *args)
 
     def _page_list_yscroll(self, first: str, last: str) -> None:
-        if hasattr(self, "page_scroll"):
-            self.page_scroll.set(first, last)
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._page_list_yscroll(self, _page_index_deps(), first, last)
 
     def _update_page_list_sort_headings(self) -> None:
-        if not hasattr(self, "page_list"):
-            return
-        labels = getattr(self, "_page_list_heading_labels", {
-            "bookmark": "🔖", "page": "页面", "section": "区块",
-            "lined": "画线", "fill_status": "填充状态", "illustrations": "插图",
-        })
-        active = self._page_list_sort_column
-        arrow = " ▼" if self._page_list_sort_descending else " ▲"
-        for column, label in labels.items():
-            self.page_list.heading(column, text=label + (arrow if column == active else ""))
+        return _page_index._update_page_list_sort_headings(self, _page_index_deps())
 
     def _apply_page_list_sort(self, *, ensure_current_visible: bool = False) -> None:
-        if not hasattr(self, "page_list") or not self._page_list_sort_column:
-            return
-        rows = [(iid, tuple(self.page_list.item(iid, "values"))) for iid in self.page_list.get_children("")]
-        ordered = _sorted_page_list_rows(
-            rows, self._page_list_sort_column, self._page_list_sort_descending
-        )
-        for position, (iid, _values) in enumerate(ordered):
-            self.page_list.move(iid, "", position)
-        self._update_page_list_sort_headings()
-        self._schedule_page_cell_overlay_refresh()
-        # Background metadata refreshes may re-sort the list many times.  Never
-        # force the viewport back to the selected row in that path: doing so
-        # makes mouse-wheel browsing snap back to the page the user clicked.
-        # Only an explicit header sort asks to reveal the current page again.
-        if ensure_current_visible and self.current_index >= 0:
-            iid = str(self.current_index)
-            if self.page_list.exists(iid):
-                self.page_list.see(iid)
-                self._center_page_list_iid(iid)
+        return _page_index._apply_page_list_sort(self, _page_index_deps(), ensure_current_visible=ensure_current_visible)
 
     def _schedule_page_list_resort(self) -> None:
-        if not self._page_list_sort_column or not hasattr(self, "page_list"):
-            return
-        if self._page_list_sort_job is not None:
-            return
-        def run() -> None:
-            self._page_list_sort_job = None
-            self._apply_page_list_sort(ensure_current_visible=False)
-        self._page_list_sort_job = self.after(80, run)
+        return _page_index._schedule_page_list_resort(self, _page_index_deps())
 
     def _sort_page_list(self, column: str) -> None:
-        if column not in {"bookmark", "page", "section", "lined", "fill_status", "illustrations"}:
-            return
-        if self._page_list_sort_column == column:
-            self._page_list_sort_descending = not self._page_list_sort_descending
-        else:
-            self._page_list_sort_column = column
-            self._page_list_sort_descending = False
-        if self._page_list_sort_job is not None:
-            try:
-                self.after_cancel(self._page_list_sort_job)
-            except tk.TclError:
-                pass
-            self._page_list_sort_job = None
-        self._apply_page_list_sort(ensure_current_visible=True)
+        return _page_index._sort_page_list(self, _page_index_deps(), column)
 
     def _page_list_column_at(self, x: int) -> str | None:
-        """Return the logical Treeview column under a display-space X coordinate."""
-        token = str(self.page_list.identify_column(x) or "")
-        try:
-            display_index = int(token.lstrip("#")) - 1
-        except ValueError:
-            return None
-        raw = self.page_list.cget("displaycolumns")
-        display = tuple(self.tk.splitlist(raw))
-        if not display or display == ("#all",):
-            display = tuple(self.tk.splitlist(self.page_list.cget("columns")))
-        return str(display[display_index]) if 0 <= display_index < len(display) else None
+        return _page_index._page_list_column_at(self, _page_index_deps(), x)
 
     def _page_section_count_text(self, index: int) -> str:
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return "0"
-        try:
-            return str(len(read_page_sections(self.project.images[index])))
-        except (TypeError, ValueError, OSError, AttributeError):
-            return "0"
+        return _page_index._page_section_count_text(self, _page_index_deps(), index)
 
     def _set_page_section_count(self, index: int, count: int) -> None:
-        """Set a page's explicit SECTION count, preserving bounds when count is unchanged."""
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return
-        count = max(0, min(10, int(count)))
-        page = self.project.images[index]
-        existing = read_page_sections(page)
-
-        if index == self.current_index and self.current_page == page and self.image is not None:
-            image = self.image
-            geometry = self._get_cached_display_geometry()
-            effective_settings = effective_page_settings(self.settings, image.size, index)
-        else:
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            effective_settings = effective_page_settings(self.settings, image.size, index)
-            analysis_image = page_template_analysis_image(image, effective_settings, index)
-            geometry = derive_geometry(analysis_image, effective_settings)
-
-        if count == 0:
-            sections: list[PageSection] = []
-        elif len(existing) == count:
-            sections = existing
-        else:
-            span = max(1, int(geometry.bottom) - int(geometry.top))
-            bounds = [
-                round(int(geometry.top) + span * item / count)
-                for item in range(count + 1)
-            ]
-            sections = [
-                PageSection(bounds[item], max(bounds[item] + 1, bounds[item + 1]))
-                for item in range(count)
-            ]
-
-        transform = LayoutTransform(
-            str(getattr(effective_settings, "layout_transform", "identity") or "identity")
-        )
-        canonical_width, canonical_height = transform.canonical_size(image.size)
-        write_page_sections(
-            page, sections,
-            canonical_width=canonical_width,
-            canonical_height=canonical_height,
-            layout_transform=transform.kind,
-        )
-        iid = str(index)
-        if hasattr(self, "page_list") and self.page_list.exists(iid):
-            self.page_list.set(iid, "section", str(count))
-            if self._page_list_sort_column == "section":
-                self._schedule_page_list_resort()
-
-        if index == self.current_index and self.current_page == page:
-            self.page_sections = list(sections)
-            self._sort_entries_reading_order()
-            self._set_section_editing(count > 0)
-            self.redraw()
-            if count > 0:
-                self.status_var.set(
-                    f"SECTION 编辑：当前页 {count} 个；拖动虚线定位Section，双击左键确认并退出编辑。"
-                )
-            else:
-                self.status_var.set("当前页 SECTION 已关闭（Section = 0）")
-            return
-
-        self._pending_section_editor_index = index if count > 0 else None
-        self._request_page_load(index, force=True)
+        return _page_index._set_page_section_count(self, _page_index_deps(), index, count)
 
     def _edit_page_section_index(self, index: int) -> None:
-        """Shared SECTION entry path for the 域 double-click and 区 shortcut."""
-        if self._preprocess_mode_active():
-            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
-            return
-        if not self.project or not (0 <= index < len(self.project.images)):
-            self.status_var.set("请先打开词典页面，再编辑 Section 区域")
-            return
-        if index == self.current_index and self._section_editing:
-            self._finish_section_editing()
-            return
-        page = self.project.images[index]
-        current_count = len(read_page_sections(page))
-        count = simpledialog.askinteger(
-            "Section",
-            f"{page.name}\nSection 数量（0 = 关闭；1–10 = 启用）：\n\n"
-            "确认后：拖动虚线定位Section，双击左键确认并退出编辑。",
-            parent=self, initialvalue=current_count, minvalue=0, maxvalue=10,
-        )
-        if count is None:
-            return
-        if count > 0 and index == self.current_index:
-            # SECTION drag, polygon edit and auxiliary-line edit are separate
-            # pointer modes. Do not leave an old edit mode intercepting drags.
-            if self.polygon_draw_var.get():
-                self.toggle_polygon_drawing()
-            if self.auxiliary_mode_var.get():
-                self.auxiliary_mode_var.set(False)
-                self.toggle_auxiliary_mode()
-        self._set_page_section_count(index, count)
+        return _page_index._edit_page_section_index(self, _page_index_deps(), index)
 
     def toggle_current_page_section_editing(self) -> None:
-        """Toggle the same current-page editor as double-clicking 域."""
-        self._edit_page_section_index(self.current_index)
+        return _page_index.toggle_current_page_section_editing(self, _page_index_deps())
 
     def _page_list_section_double_click(self, event: tk.Event) -> str | None:
-        """Edit the page-level Section count directly from the page list."""
-        if self._preprocess_mode_active():
-            self.status_var.set("预处理模式中：SECTION 编辑已锁定。")
-            return "break"
-        if self.page_list.identify_region(event.x, event.y) != "cell":
-            return None
-        if self._page_list_column_at(event.x) != "section":
-            return None
-        iid = self.page_list.identify_row(event.y)
-        if not iid or not self.project:
-            return "break"
-        try:
-            index = int(iid)
-        except (TypeError, ValueError):
-            return "break"
-        self._edit_page_section_index(index)
-        return "break"
+        return _page_index._page_list_section_double_click(self, _page_index_deps(), event)
 
     def _bookmark_stems(self) -> set[str]:
-        settings = self.__dict__.get("settings")
-        return {
-            str(stem) for stem in getattr(settings, "page_bookmarks", [])
-            if str(stem).strip()
-        }
+        return _page_index._bookmark_stems(self, _page_index_deps())
 
     def _page_list_bookmark_click(self, event: tk.Event) -> str | None:
-        """Toggle only the bookmark cell; never swallow ordinary page clicks."""
-        # This handler is bound to every left click on the Treeview. Determine
-        # whether the click actually targets the bookmark column *before*
-        # applying the preprocess read-only guard. Otherwise returning "break"
-        # in preprocess mode suppresses Treeview selection on the 页面 column and
-        # makes the page list appear frozen while analysis is running.
-        if self.page_list.identify_region(event.x, event.y) != "cell":
-            return None
-        if self.page_list.identify_column(event.x) != "#1":
-            return None
-        if self._preprocess_mode_active():
-            self.status_var.set("预处理模式中：仅保留页面浏览，不修改书签或其他项目数据。")
-            return "break"
-        iid = self.page_list.identify_row(event.y)
-        if not iid or not self.project:
-            return "break"
-        try:
-            index = int(iid)
-            stem = self.project.images[index].stem
-        except (TypeError, ValueError, IndexError):
-            return "break"
-        bookmarks = self._bookmark_stems()
-        if stem in bookmarks:
-            bookmarks.remove(stem)
-        else:
-            bookmarks.add(stem)
-        self.settings.page_bookmarks = sorted(bookmarks, key=_natural_text_key)
-        self.project.settings.page_bookmarks = list(self.settings.page_bookmarks)
-        self.settings.to_json(settings_path(self.project.root))
-        self._update_page_row(index)
-        return "break"
+        return _page_index._page_list_bookmark_click(self, _page_index_deps(), event)
 
     def jump_to_bookmark(self, direction: int) -> None:
-        """Jump to the nearest bookmarked page before or after this page."""
-        if not self.project or self.current_index < 0:
-            return
-        bookmarks = self._bookmark_stems()
-        bookmarked = [
-            index for index, page in enumerate(self.project.images)
-            if page.stem in bookmarks
-        ]
-        candidates = (
-            [index for index in bookmarked if index < self.current_index]
-            if direction < 0 else
-            [index for index in bookmarked if index > self.current_index]
-        )
-        if not candidates:
-            self.status_var.set("当前页之前没有书签" if direction < 0 else "当前页之后没有书签")
-            return
-        self._request_page_load(max(candidates) if direction < 0 else min(candidates))
+        return _page_index.jump_to_bookmark(self, _page_index_deps(), direction)
 
     def _center_page_list_iid(self, iid: str) -> None:
-        """Place one page row as close as possible to the vertical viewport center."""
-        try:
-            children = tuple(self.page_list.get_children(""))
-            if not children or iid not in children:
-                return
-            self.page_list.update_idletasks()
-            first, last = self.page_list.yview()
-            visible_fraction = max(0.0, min(1.0, float(last) - float(first)))
-            if visible_fraction <= 0.0:
-                return
-            position = children.index(iid)
-            row_center = (position + 0.5) / len(children)
-            target = row_center - visible_fraction / 2.0
-            max_start = max(0.0, 1.0 - visible_fraction)
-            self.page_list.yview_moveto(max(0.0, min(max_start, target)))
-            self._schedule_page_cell_overlay_refresh()
-        except (AttributeError, ValueError, tk.TclError):
-            return
+        return _page_index._center_page_list_iid(self, _page_index_deps(), iid)
 
     def _set_page_list_selection(self, index: int, *, ensure_visible: bool = True) -> None:
-        """Synchronize the Treeview to exactly one page iid.
-
-        Programmatic page changes must replace, not accumulate, Treeview
-        selection.  A stale first selected iid can otherwise be replayed by a
-        later ``<<TreeviewSelect>>`` callback after sorting.
-        """
-        if not hasattr(self, "page_list"):
-            return
-        iid = str(index)
-        if not self.page_list.exists(iid):
-            return
-        selected = tuple(self.page_list.selection())
-        stale = tuple(value for value in selected if value != iid)
-        if stale:
-            self.page_list.selection_remove(*stale)
-        if iid not in selected:
-            self.page_list.selection_set(iid)
-        if self.page_list.focus() != iid:
-            self.page_list.focus(iid)
-        if ensure_visible:
-            self.page_list.see(iid)
-            self._center_page_list_iid(iid)
+        return _page_index._set_page_list_selection(self, _page_index_deps(), index, ensure_visible=ensure_visible)
 
     def _select_page_from_lined_overlay(self, index: int) -> None:
         if not self.project or not (0 <= index < len(self.project.images)):
@@ -5332,277 +4967,40 @@ class PictureCaptureApp(tk.Tk):
             self._set_page_list_selection(index, ensure_visible=True)
 
     def _clear_lined_cell_overlays(self) -> None:
-        for mapping_name in ("_page_lined_overlays", "_page_fill_status_overlays"):
-            mapping = self.__dict__.get(mapping_name, {})
-            for widget in mapping.values():
-                try:
-                    widget.destroy()
-                except tk.TclError:
-                    pass
-            mapping.clear()
+        return _page_index._clear_lined_cell_overlays(self, _page_index_deps())
 
     def _visible_page_list_iids(self) -> list[str]:
-        """Shared viewport scanner for semantic cell overlays and thumbnails."""
-        return visible_page_iids(self.page_list) if hasattr(self, "page_list") else []
+        return _page_index._visible_page_list_iids(self, _page_index_deps())
 
     def _refresh_lined_cell_overlays(self) -> None:
-        """Paint status-cell labels for visible rows; grid paints afterwards."""
-        if not hasattr(self, "page_list"):
-            return
-        self._clear_lined_cell_overlays()
-        visible_iids = self._visible_page_list_iids()
-        if not visible_iids:
-            return
-
-        # Legacy quick warning: only mismatched line-count cells are pale red.
-        for iid in visible_iids:
-            try:
-                index = int(iid)
-            except (TypeError, ValueError):
-                continue
-            if index not in self._word_fill_mismatch_pages:
-                continue
-            bbox = self.page_list.bbox(iid, "lined")
-            if not bbox:
-                continue
-            x, y, width, height = bbox
-            text = str(self.page_list.set(iid, "lined"))
-            label = tk.Label(
-                self.page_list, text=text, bg="#f8d7da", fg="#6b1f25",
-                bd=0, highlightthickness=0, anchor="w", padx=4, pady=0,
-            )
-            label.place(x=x, y=y, width=width, height=height)
-            label.bind("<Button-1>", lambda _e, i=index: self._select_page_from_lined_overlay(i))
-            label.bind("<MouseWheel>", self._list_mousewheel)
-            self._page_lined_overlays[index] = label
-
-        # The fill-status cell itself carries the semantic status color.
-        if "_page_fill_status_overlays" not in self.__dict__:
-            self._page_fill_status_overlays = {}
-        if not self.project:
-            return
-        for iid in visible_iids:
-            try:
-                index = int(iid)
-            except (TypeError, ValueError):
-                continue
-            status_text = str(self.page_list.set(iid, "fill_status") or "")
-            style = _fill_status_cell_style(status_text)
-            if style is None:
-                continue
-            bbox = self.page_list.bbox(iid, "fill_status")
-            if not bbox:
-                continue
-            x, y, width, height = bbox
-            bg, fg = style
-            label = tk.Label(
-                self.page_list, text=status_text, bg=bg, fg=fg,
-                bd=0, highlightthickness=0, anchor="w", padx=4, pady=0,
-            )
-            label.place(x=x, y=y, width=width, height=height)
-            label.bind("<Button-1>", lambda _e, i=index: self._select_page_from_lined_overlay(i))
-            label.bind("<MouseWheel>", self._list_mousewheel)
-            self._page_fill_status_overlays[index] = label
-        self._apply_current_appearance(self.page_list)
+        return _page_index._refresh_lined_cell_overlays(self, _page_index_deps())
 
     def _word_fill_status_path(self) -> Path | None:
-        if not self.project:
-            return None
-        return word_fill_status_path(self.project.root)
+        return _word_fill_status._word_fill_status_path(self, _word_fill_status_deps())
 
     def _load_word_fill_status(self) -> None:
-        """Restore persisted TXT-vs-line count checks for the current project."""
-        self._word_fill_check_status = {}
-        self._word_fill_mismatch_pages.clear()
-        path = self._word_fill_status_path()
-        if path is None or not path.exists() or not self.project:
-            return
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            raw_pages = payload.get("pages", {}) if isinstance(payload, dict) else {}
-            if not isinstance(raw_pages, dict):
-                return
-            known = {page.stem: i for i, page in enumerate(self.project.images)}
-            for stem, raw in raw_pages.items():
-                if stem not in known or not isinstance(raw, dict):
-                    continue
-                try:
-                    line_count = max(0, int(raw.get("line_count", 0)))
-                    word_count = max(0, int(raw.get("word_count", 0)))
-                except (TypeError, ValueError):
-                    continue
-                # v1 sidecars had only mismatch. Infer their state so old projects
-                # open cleanly, while v2 sidecars retain stale/no-data states.
-                state = str(raw.get("state", "")).strip().lower()
-                if state not in {"match", "mismatch", "stale", "no_data"}:
-                    state = "mismatch" if bool(raw.get("mismatch", line_count != word_count)) else "match"
-                mismatch = state == "mismatch"
-                item = {
-                    "line_count": line_count,
-                    "word_count": word_count,
-                    "mismatch": mismatch,
-                    "state": state,
-                    "source": str(raw.get("source", "")),
-                }
-                self._word_fill_check_status[stem] = item
-                if mismatch:
-                    self._word_fill_mismatch_pages.add(known[stem])
-        except Exception:
-            # A damaged optional UI-status sidecar must never block opening the
-            # dictionary itself. The next successful fill rewrites it.
-            self._word_fill_check_status = {}
-            self._word_fill_mismatch_pages.clear()
+        return _word_fill_status._load_word_fill_status(self, _word_fill_status_deps())
 
     def _persist_word_fill_status(self) -> None:
-        """Atomically save persistent line-count comparison results."""
-        path = self._word_fill_status_path()
-        if path is None:
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"version": 2, "pages": self._word_fill_check_status}
-        temp = path.with_name(f".{path.name}.tmp")
-        try:
-            with temp.open("w", encoding="utf-8") as handle:
-                json.dump(payload, handle, ensure_ascii=False, indent=2)
-            os.replace(temp, path)
-        finally:
-            try:
-                if temp.exists():
-                    temp.unlink()
-            except OSError:
-                pass
+        return _word_fill_status._persist_word_fill_status(self, _word_fill_status_deps())
 
     def _word_fill_status_text(self, index: int) -> str:
-        """Return the compact per-page text shown in the new fill-status column."""
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return "未核对"
-        stem = self.project.images[index].stem
-        item = self.__dict__.get("_word_fill_check_status", {}).get(stem)
-        if not item:
-            return "未核对"
-        state = str(item.get("state", "")).lower()
-        if state == "no_data":
-            return "无资料"
-        if state == "stale":
-            return "待重新核对"
-        line_count = max(0, int(item.get("line_count", 0) or 0))
-        word_count = max(0, int(item.get("word_count", 0) or 0))
-        diff = line_count - word_count
-        if diff == 0 and state != "mismatch":
-            return "一致"
-        if diff < 0:
-            return f"少 {abs(diff)}"
-        if diff > 0:
-            return f"多 {diff}"
-        return "一致"
+        return _word_fill_status._word_fill_status_text(self, _word_fill_status_deps(), index)
 
     def _record_word_fill_check(
         self, index: int, line_count: int, word_count: int, *, source: str = "",
         has_data: bool = True, persist: bool = False, refresh_overlay: bool = True,
         refresh_row: bool = True,
     ) -> None:
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return
-        stem = self.project.images[index].stem
-        line_count = max(0, int(line_count))
-        word_count = max(0, int(word_count))
-        state = "no_data" if not has_data else ("match" if line_count == word_count else "mismatch")
-        mismatch = state == "mismatch"
-        if "_word_fill_check_status" not in self.__dict__:
-            self._word_fill_check_status = {}
-        if "_word_fill_mismatch_pages" not in self.__dict__:
-            self._word_fill_mismatch_pages = set()
-        previous = self._word_fill_check_status.get(stem, {})
-        self._word_fill_check_status[stem] = {
-            "line_count": line_count,
-            "word_count": word_count,
-            "mismatch": mismatch,
-            "state": state,
-            "source": str(source or previous.get("source", "")),
-        }
-        if mismatch:
-            self._word_fill_mismatch_pages.add(index)
-        else:
-            self._word_fill_mismatch_pages.discard(index)
-        if persist:
-            self._persist_word_fill_status()
-        if refresh_row and "page_list" in self.__dict__:
-            self._update_page_row(index)
-        if refresh_overlay and "page_list" in self.__dict__:
-            self._schedule_page_cell_overlay_refresh()
+        return _word_fill_status._record_word_fill_check(self, _word_fill_status_deps(), index, line_count, word_count, source=source, has_data=has_data, persist=persist, refresh_overlay=refresh_overlay, refresh_row=refresh_row)
 
     def _refresh_word_fill_check_from_line_count(
         self, index: int, line_count: int, *, persist: bool = False,
     ) -> None:
-        """Mark a prior fill check stale only when the number of lines changed.
-
-        Editing OCR/headword text does not invalidate a count check. Adding or
-        deleting a line does: the page then shows ``待重新核对`` until the user
-        runs “填充词条” again.
-        """
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return
-        stem = self.project.images[index].stem
-        previous = self.__dict__.get("_word_fill_check_status", {}).get(stem)
-        if not previous:
-            return
-        line_count = max(0, int(line_count))
-        old_line_count = max(0, int(previous.get("line_count", 0) or 0))
-        state = str(previous.get("state", "")).lower()
-        # No source data remains no source data; changing PDIC lines cannot make
-        # a page suddenly appear in the selected TXT.
-        if state == "no_data":
-            if line_count != old_line_count:
-                previous["line_count"] = line_count
-                if persist:
-                    self._persist_word_fill_status()
-                if "page_list" in self.__dict__:
-                    self._update_page_row(index)
-            return
-        if line_count == old_line_count:
-            return
-        previous = dict(previous)
-        previous["line_count"] = line_count
-        previous["state"] = "stale"
-        previous["mismatch"] = False
-        self._word_fill_check_status[stem] = previous
-        self._word_fill_mismatch_pages.discard(index)
-        if persist:
-            self._persist_word_fill_status()
-        if "page_list" in self.__dict__:
-            self._update_page_row(index)
-        if "page_list" in self.__dict__:
-            self._schedule_page_cell_overlay_refresh()
+        return _word_fill_status._refresh_word_fill_check_from_line_count(self, _word_fill_status_deps(), index, line_count, persist=persist)
 
     def _clear_word_fill_checks_for_indices(self, indices, *, persist: bool = False) -> None:
-        if not self.project:
-            return
-        if "_word_fill_check_status" not in self.__dict__:
-            self._word_fill_check_status = {}
-        if "_word_fill_mismatch_pages" not in self.__dict__:
-            self._word_fill_mismatch_pages = set()
-        changed = False
-        changed_indices: list[int] = []
-        for index in indices:
-            if not (0 <= int(index) < len(self.project.images)):
-                continue
-            i = int(index)
-            stem = self.project.images[i].stem
-            if stem in self._word_fill_check_status:
-                self._word_fill_check_status.pop(stem, None)
-                changed = True
-                changed_indices.append(i)
-            if i in self._word_fill_mismatch_pages:
-                self._word_fill_mismatch_pages.discard(i)
-                changed = True
-                if i not in changed_indices:
-                    changed_indices.append(i)
-        if changed and persist:
-            self._persist_word_fill_status()
-        if changed and "page_list" in self.__dict__:
-            for i in changed_indices:
-                self._update_page_row(i)
-            self._schedule_page_cell_overlay_refresh()
+        return _word_fill_status._clear_word_fill_checks_for_indices(self, _word_fill_status_deps(), indices, persist=persist)
 
     def _preprocess_mode_active(self) -> bool:
         return _preprocess_ui._preprocess_mode_active(self, _preprocess_ui_deps())
@@ -7813,101 +7211,19 @@ class PictureCaptureApp(tk.Tk):
             return ""
 
     def _page_metadata(self, index: int) -> str:
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return ""
-        page = self.project.images[index]
-        if index == self.current_index and self.current_page is not None:
-            return str(len(self.entries))
-        try:
-            return str(len(read_pdic(pdic_path(page))))
-        except (OSError, ValueError):
-            return "0"
+        return _page_index._page_metadata(self, _page_index_deps(), index)
 
     def _page_illustration_count_text(self, index: int) -> str:
-        """Return the effective PPP region count for one page, blank for zero.
-
-        The current page uses the in-memory polygon list so manual additions and
-        deletions are reflected immediately without disk I/O. Other pages are
-        read lazily during the existing metadata refresh; no page image pixels
-        are opened or decoded for this column.
-        """
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return ""
-        current_index = self.__dict__.get("current_index", -1)
-        current_page = self.__dict__.get("current_page")
-        if index == current_index and current_page is not None:
-            count = len(self.__dict__.get("polygons", []))
-        else:
-            try:
-                count = len(read_ppp(self._ppp_read_path(self.project.images[index])))
-            except (AttributeError, OSError, TypeError, ValueError):
-                count = 0
-        return str(count) if count > 0 else ""
+        return _page_index._page_illustration_count_text(self, _page_index_deps(), index)
 
     def _update_page_row(self, index: int) -> None:
-        if not self.project or not hasattr(self, "page_list") or not (0 <= index < len(self.project.images)):
-            return
-        iid = str(index)
-        if not self.page_list.exists(iid):
-            return
-        old_values = tuple(self.page_list.item(iid, "values"))
-        section = self._page_section_count_text(index)
-        lined = self._page_metadata(index)
-        fill_status = self._word_fill_status_text(index)
-        illustrations = self._page_illustration_count_text(index)
-        page = self.project.images[index]
-        page_stem = str(getattr(page, "stem", Path(str(page.name)).stem))
-        bookmark = "●" if page_stem in self._bookmark_stems() else ""
-        new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)
-        self.page_list.item(iid, values=new_values)
-        # Avoid Tk's __getattr__ when the shell is not initialized.
-        mini = self.__dict__.get("workspace_mini_page_list")
-        if mini is not None and mini.exists(iid):
-            mini.item(iid, values=new_values)
-        active_column = self._page_list_sort_column
-        if active_column:
-            new_index = {
-                "bookmark": 0, "page": 1, "section": 2, "lined": 3,
-                "fill_status": 4, "illustrations": 5,
-            }.get(active_column, 1)
-            if len(old_values) >= 6:
-                old_mapping = {
-                    "bookmark": 0, "page": 1, "section": 2, "lined": 3,
-                    "fill_status": 4, "illustrations": 5,
-                }
-            elif len(old_values) >= 5:
-                old_mapping = {"bookmark": 0, "page": 1, "lined": 2, "fill_status": 3, "illustrations": 4}
-            else:
-                old_mapping = {"page": 0, "lined": 1, "fill_status": 2, "illustrations": 3}
-            old_index = old_mapping.get(active_column, 0)
-            old_value = old_values[old_index] if old_index < len(old_values) else ""
-            new_value = new_values[new_index]
-            if str(old_value) != str(new_value):
-                self._schedule_page_list_resort()
-        self._schedule_page_cell_overlay_refresh()
+        return _page_index._update_page_row(self, _page_index_deps(), index)
 
     def _refresh_page_metadata_step(self, generation: int, start: int) -> None:
-        if generation != self._page_meta_generation or not self.project:
-            return
-        batch = 8
-        stop = min(len(self.project.images), start + batch)
-        for index in range(start, stop):
-            self._update_page_row(index)
-        if stop < len(self.project.images):
-            self._page_meta_job = self.after(1, lambda g=generation, s=stop: self._refresh_page_metadata_step(g, s))
-        else:
-            self._page_meta_job = None
+        return _page_index._refresh_page_metadata_step(self, _page_index_deps(), generation, start)
 
     def _refresh_page_quality_colors(self) -> None:
-        """Refresh the lightweight '画线' state without reading OCR confidence caches."""
-        if not self.project:
-            return
-        self._page_meta_generation += 1
-        generation = self._page_meta_generation
-        if self._page_meta_job:
-            try: self.after_cancel(self._page_meta_job)
-            except tk.TclError: pass
-        self._page_meta_job = self.after_idle(lambda g=generation: self._refresh_page_metadata_step(g, 0))
+        return _page_index._refresh_page_quality_colors(self, _page_index_deps())
 
     def _restore_entry_ocr_metadata(self, payload: dict | None = None) -> None:
         """Restore runtime confidence/source/warnings from the Paddle JSON sidecar."""
