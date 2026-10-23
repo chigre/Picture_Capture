@@ -20,7 +20,7 @@ import contract while extracting implementation separately when justified.
 | --- | --- | --- |
 | `__init__.py` | package | Version metadata and side-effect-free package import. |
 | `__main__.py` | bootstrap | `python -m picture_capture` and `freeze_support()` entry. |
-| `app.py` | bootstrap / ui | Retained Tk app entrypoint and all callback signatures. Complete 24-method preprocessing mode, perspective edit, analysis, diagnostic, preview and batch export workflow now physically resides in `ui/preprocess_workflow.py`; other sizeable GUI responsibilities remain for staged extraction. |
+| `app.py` | bootstrap / ui | Retained Tk app entrypoint and all callback signatures. Complete 24-method preprocessing mode, perspective edit, analysis, diagnostic, preview and batch export workflow now physically resides in `ui/preprocess_workflow.py`; 12-method foreground batch scheduling and task progress now reside in `ui/batch_workflow.py`, and nine-method recent-project launcher, project restore and page reload now reside in `ui/project_session_workflow.py`; other sizeable GUI responsibilities remain for staged extraction. |
 | `cli.py` | bootstrap | Installed `picture-capture-cli` entry and explicit core-service composition before I/O capture. |
 | `launcher.py` | bootstrap | Documented backward-compatible `main` / `prepare_app_module` facade. |
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
