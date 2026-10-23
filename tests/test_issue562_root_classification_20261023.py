@@ -15,7 +15,7 @@ ROOT = REPO / "src" / "picture_capture"
 def test_current_inventory_classifies_every_physical_root_once():
     doc = (REPO / "docs/architecture/ROOT_MODULE_CLASSIFICATION_20261023.md").read_text(encoding="utf-8")
     rows = re.findall(r"^\| `([^`]+\.py)` \|", doc, re.MULTILINE)
-    assert len(rows) == len(set(rows)) == 15
+    assert len(rows) == len(set(rows)) == 14
     assert set(rows) == {p.name for p in ROOT.glob("*.py")}
 
 

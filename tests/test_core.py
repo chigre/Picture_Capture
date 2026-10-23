@@ -3667,7 +3667,7 @@ def test_v292_paddle_engine_cache_is_bounded_without_invalidating_local_refs():
 
 def test_v293_rgba_transparency_is_composited_onto_white_before_ocr():
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     image = Image.new("RGBA", (3, 1), (255, 0, 0, 0))
     image.putpixel((1, 0), (0, 0, 0, 255))
@@ -3684,7 +3684,7 @@ def test_v293_rgba_transparency_is_composited_onto_white_before_ocr():
 
 def test_v293_palette_transparency_is_composited_onto_white():
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     image = Image.new("P", (2, 1))
     image.putpalette([255, 0, 0, 0, 0, 0] + [0, 0, 0] * 254)
@@ -3701,7 +3701,7 @@ def test_v293_palette_transparency_is_composited_onto_white():
 def test_v293_opaque_rgb_pixels_are_bit_exact_after_normalization():
     import numpy as np
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     rng = np.random.default_rng(293)
     pixels = rng.integers(0, 256, size=(19, 23, 3), dtype=np.uint8)
