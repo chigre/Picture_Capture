@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from .preprocess.document_unwarping import unwarp_document_image
-from .preprocess.analysis_image import normalize_page_rgb
+from .preprocess.page_pixels import normalize_page_rgb
 from .layout.detection import (
     LayoutEstimate,
     analysis_ink_mask,
@@ -322,7 +322,7 @@ def analyze_preprocess_page(
     #      distortion safety; it is NOT required to improve row horizontality.
     #   B) any residual top-to-bottom row-angle trend is then corrected by a
     #      horizontal-VP homography whose strength is optimized in [0, 1].
-    # This avoids the v12 failure mode where a useful 0004-style structural
+    # Avoids v12 rejection of useful 0004-style structural
     # correction was rejected by the horizontal gate, while a full-strength VP
     # correction over-shot the near-zero row trend on 0002/0004/0011.
     if (

@@ -52,7 +52,7 @@ from .quality.paddle_diagnostic_formatting import (
     tsv_clean_impl as _diag_tsv_clean_impl,
 )
 from .runtime.environment import resolve_paddle_device
-from .preprocess.analysis_image import normalize_page_rgb
+from .preprocess.page_pixels import normalize_page_rgb
 from .persistence.page_sections import PageSection, normalize_page_sections, section_index_for_v
 from .profile.dictionary import (
     PROFILE_FILENAME,

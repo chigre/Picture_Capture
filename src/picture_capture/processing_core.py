@@ -17,7 +17,7 @@ from .crop.auxiliary_lines import read_auxiliary_lines
 from .crop import page_workflow as _page_workflow
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
-from .preprocess.analysis_image import normalize_page_rgb
+from .preprocess.page_pixels import normalize_page_rgb
 from .geometry.layout_transform import LayoutTransform
 from .persistence.page_sections import (
     PageSection, build_reading_lanes, normalize_page_sections, read_page_sections,
@@ -79,7 +79,7 @@ def ordinary_page_layout_settings(
 
     detector_settings = replace(current)
     if bool(getattr(current, "ordinary_auto_columns", True)):
-        # "Auto columns" must actually detect the page's column count even when
+        # "Auto columns" detects page column count even when
         # the project Profile normally fixes it.
         detector_settings.layout_columns_policy = "detect"
     estimate = detect_layout_parameters(image, detector_settings)
