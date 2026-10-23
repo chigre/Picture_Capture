@@ -1462,6 +1462,81 @@ def collect_violations() -> list[str]:
             ):
                 violations.append(f"review expanded Tk delegate missing: {name}")
 
+    # #562: canonical lookup, simplified saved records and OCR comparison.
+    review_lexical_owners = {
+        "review_lookup_workflow.py": [
+            "_refresh_cc_cedict_button_idle",
+            "_set_lookup_source_states",
+            "manage_cc_cedict",
+            "_cc_simplified_comparison_details",
+            "_refresh_cc_simplified_comparison",
+            "show_cc_simplified_comparison",
+            "open_lookup_source",
+            "_toggle_network_lookup",
+            "_active_review_word",
+            "_schedule_network_lookup",
+            "_start_network_lookup",
+            "_poll_network_lookup_results",
+            "_apply_network_lookup_result",
+            "open_network_web_search"
+        ],
+        "review_simplified_workflow.py": [
+            "_bound_row_entries",
+            "_simplified_page_records",
+            "_simplified_display_from_value",
+            "_auto_simplified_value",
+            "_capture_simplified_edits",
+            "_persist_simplified_page",
+            "_simplified_query_for_index",
+            "lookup_simplified_online",
+            "_focus_simplified_editor",
+            "_claim_simplified_clipboard_edit",
+            "on_simplified_key",
+            "_refresh_simplified_for_index",
+            "_refresh_all_simplified",
+            "regenerate_simplified_current_page",
+            "_apply_simplified_visibility",
+            "_toggle_review_simplified"
+        ],
+        "review_ocr_compare_workflow.py": [
+            "_change_review_ocr_compare_source",
+            "_ocr_compare_word",
+            "_refresh_editor_ocr_compare",
+            "_show_ocr_options",
+            "_refresh_ocr_similarity_colors",
+            "use_ocr_word"
+        ]
+    }
+    review_lexical_symbols = {
+        "review_lookup_workflow.py": "_review_lookup",
+        "review_simplified_workflow.py": "_review_simplified",
+        "review_ocr_compare_workflow.py": "_review_ocr",
+    }
+    for filename, methods in review_lexical_owners.items():
+        canonical = PACKAGE_ROOT / "ui" / filename
+        if not canonical.is_file():
+            violations.append(f"review lexical owner missing: {filename}")
+            continue
+        syntax = ast.parse(canonical.read_text(encoding="utf-8"))
+        physical = {node.name for node in syntax.body
+                    if isinstance(node, ast.FunctionDef)}
+        if any(isinstance(node, ast.ImportFrom) and node.module == "app"
+               for node in ast.walk(syntax)):
+            violations.append(f"review lexical owner imports app.py: {filename}")
+        owner_symbol = review_lexical_symbols[filename]
+        for method in methods:
+            if method not in physical:
+                violations.append(f"review lexical implementation missing: {filename}.{method}")
+            adapter = review_adapters.get(method)
+            if adapter is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == owner_symbol
+                and node.func.attr == method for node in ast.walk(adapter)
+            ):
+                violations.append(f"review lexical callback delegate missing: {method}")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

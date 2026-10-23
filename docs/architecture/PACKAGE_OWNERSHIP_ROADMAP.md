@@ -1378,3 +1378,19 @@ Add AST owner/adapter tests and behavioral focus, virtual-list, dedupe, debounce
 and zoom regression. No architecture guard baseline relaxed. Require exact-head
 Ubuntu/macOS/Windows × Python 3.10/3.13 CI, security scans, independent review
 and real project/manual GUI checks; keep PR Draft pending those human checks.
+
+## #562: single larger lexical/simplified/OCR review PR (2026-10-23)
+
+After merged #655, extract **36** cohesive ReviewWindow callback implementations
+in one change: 14 online/CC-CEDICT source badges and asynchronous lookup methods
+to `ui/review_lookup_workflow.py`; 16 saved simplified-value, coordinate-identity,
+OpenCC regeneration and editor callbacks to `ui/review_simplified_workflow.py`;
+and 6 OCR result/compare/visual feedback callbacks to
+`ui/review_ocr_compare_workflow.py`.
+
+Retain original ReviewWindow method/staticmethod signatures, UI/debounce/cancellation
+behavior, serial-based stale-network-result protection, row binding by source
+coordinate (never list offset), manual-simplified overwrite guard, shared settings
+and original project formats. Fresh explicit collaborators are passed from app.py;
+leaf owners cannot import the GUI shell. CI and independent manual GUI verification
+remain necessary; no architecture baseline/allowlist is changed.
