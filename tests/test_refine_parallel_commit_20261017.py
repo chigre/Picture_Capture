@@ -75,8 +75,13 @@ def test_auto_layout_refinement_uses_547_multiworker_spawn_dispatcher():
     assert "single_process_model" not in scope
     assert "_start_parallel_batch_task(" in scope
 
-    dispatcher = source.split("    def _start_parallel_batch_task(", 1)[1].split(
-        "    def _poll_batch_queue(", 1
+    batch_owner = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+        / "ui" / "batch_workflow.py"
+    ).read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_parallel_batch_task(" in source
+    dispatcher = batch_owner.split("def _start_parallel_batch_task(", 1)[1].split(
+        "def _poll_batch_queue(", 1
     )[0]
     assert "and not single_process_model" not in dispatcher
     assert "if respect_cpu_workers and int(max_workers) > 0" in dispatcher
