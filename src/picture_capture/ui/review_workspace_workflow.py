@@ -21,6 +21,7 @@ class ReviewWorkspaceDeps:
     Image: object
     font: object
     preferred_font_family: object
+    AUTO_FONT_FAMILY: object
     _format_layout_percent: object
     _review_crop_context: object
     _review_line_box: object
@@ -41,6 +42,7 @@ def _build(self, deps: ReviewWorkspaceDeps) -> None:
     Image = deps.Image
     font = deps.font
     preferred_font_family = deps.preferred_font_family
+    AUTO_FONT_FAMILY = deps.AUTO_FONT_FAMILY
     panes = ttk.Panedwindow(self, orient="horizontal")
     panes.pack(fill="both", expand=True)
     self.review_panes = panes

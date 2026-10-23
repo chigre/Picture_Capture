@@ -6192,6 +6192,7 @@ def _review_workspace_deps() -> _review_workspace.ReviewWorkspaceDeps:
         Image=Image,
         font=font,
         preferred_font_family=preferred_font_family,
+        AUTO_FONT_FAMILY=AUTO_FONT_FAMILY,
         _format_layout_percent=_format_layout_percent,
         _review_crop_context=_review_crop_context,
         _review_line_box=_review_line_box,
