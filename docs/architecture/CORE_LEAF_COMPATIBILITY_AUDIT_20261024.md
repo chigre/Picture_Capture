@@ -24,6 +24,33 @@ compatibility behavior: setting a known symbol on a public facade mirrors
 the value into the corresponding core module. Do not replace those two
 facades with plain re-exports as part of this extraction.
 
+## Second extraction batch — commit a9fe8ec4
+
+- `geometry/column_tracking_math.py` owns `_smooth_track` and
+  `_column_tracking_dimensions`; the historical `processing_core`
+  functions remain call-time forwards for older tooling.
+- `ocr/paddle_results.py` owns PaddleOCR JSON-v3 result unpacking and
+  conversion to OCRRecord. The core injects its current JSON parser,
+  model constructor, and NumPy module so public monkeypatch paths work.
+- `tests/test_issue562_core_leaf_round2_20261024.py` covers both paths,
+  polygon fallback and historical object identities.
+
+## Third extraction batch — subsequent commit
+
+- `ordinary/ink_threshold.py` owns legacy Otsu thresholding and
+  ordinary foreground-mask selection; the core injects the live Otsu
+  callback to retain the legacy public patch point.
+- `ocr/headword_script.py` owns OCR-language/script guards; core
+  delegates with live script-family and language-parts callbacks,
+  preserving East Asian script compatibility rules and monkeypatches.
+- `tests/test_issue562_core_leaf_round3_20261024.py` adds threshold,
+  Unicode script-family and facade callback tests.
+
+These changes do not rename or relocate the public `processing_core`,
+`paddle_headwords_core`, `processing` or `paddle_headwords` modules.
+The root count stays at ten. OCRRecord and HeadwordParse remain the
+existing classes with unchanged pickle identities.
+
 ## Explicit no-move boundaries
 
 - The core and model data classes (including `ColumnPath`, `Geometry`,

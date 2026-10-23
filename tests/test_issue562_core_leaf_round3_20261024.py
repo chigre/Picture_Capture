@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+from typing import get_type_hints
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +32,7 @@ def test_real_package_owners_and_historical_core_definitions():
         func = getattr(module, name)
         assert func.__module__ == "picture_capture." + path
     assert list(inspect.signature(processing_core._left_edge_ink_mask).parameters) == ["gray", "settings"]
+    assert get_type_hints(ink_threshold.ink_mask)["return"] is np.ndarray
 
 
 def test_otsu_and_fixed_adaptive_masks_match_new_owner():

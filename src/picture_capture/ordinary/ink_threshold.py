@@ -27,14 +27,14 @@ def otsu_threshold(gray: np.ndarray, *, np_module: Any = np) -> int:
 
 
 def ink_mask(
-    gray: np_module.ndarray,
+    gray: np.ndarray,
     settings: AppSettings,
     *,
-    otsu_fn: Callable[[np_module.ndarray], int] = otsu_threshold,
+    otsu_fn: Callable[[np.ndarray], int] = otsu_threshold,
     np_module: Any = np,
     image_class: Any = Image,
     image_filter: Any = ImageFilter,
-) -> np_module.ndarray:
+) -> np.ndarray:
     """Compatibility foreground mask for layout-analysis regressions.
 
     Restored VB ordinary drawing no longer uses this Otsu/adaptive path for its
