@@ -13,14 +13,14 @@ from typing import Any
 
 def prepare_app_module() -> Any:
     """Return the fully prepared GUI application module."""
-    from .bootstrap.application import build_application
+    from .application import build_application
 
     return build_application()
 
 
 def main() -> int:
     """Run Picture Capture through the explicit application bootstrap."""
-    from .bootstrap.application import main as bootstrap_main
+    from .application import main as bootstrap_main
 
     return bootstrap_main()
 

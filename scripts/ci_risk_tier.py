@@ -12,7 +12,7 @@ FULL, FAST, DOCS = "full", "fast", "docs"
 # ABI, data, image coordinate, GPU and worker lifetimes stay six-platform gates.
 ALWAYS_FULL = {
     "src/picture_capture/__init__.py", "src/picture_capture/__main__.py",
-    "src/picture_capture/app.py", "src/picture_capture/cli.py",
+    "src/picture_capture/app.py", "src/picture_capture/bootstrap/cli.py",
     "src/picture_capture/models.py", "src/picture_capture/formats.py",
     "src/picture_capture/io/formats.py", "src/picture_capture/io/picdic.py",
     "src/picture_capture/io/gui_io.py",

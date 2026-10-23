@@ -716,8 +716,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 12:
-        violations.append(f"root Python module count regressed: {root_py_count} > 12")
+    if root_py_count > 10:
+        violations.append(f"root Python module count regressed: {root_py_count} > 10")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -2478,6 +2478,22 @@ def collect_violations() -> list[str]:
                         violations.append(f"retired package import: {scan_path}")
                     if node.module in {"entry_classification", "image_preprocessing"} and node.level:
                         violations.append(f"retired relative import: {scan_path}")
+
+    # Native GUI and console entry wrappers belong to the bootstrap package.
+    for former, owner, signature in (
+        ("launcher.py", "bootstrap/launcher.py", "def prepare_app_module("),
+        ("cli.py", "bootstrap/cli.py", "def main("),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root entry returned: {former}")
+        owner_file = PACKAGE_ROOT / owner
+        if not owner_file.is_file():
+            violations.append(f"canonical bootstrap owner missing: {owner}")
+        elif signature not in owner_file.read_text(encoding="utf-8"):
+            violations.append(f"canonical bootstrap entrypoint missing: {signature}")
+    pyproject = PACKAGE_ROOT.parents[1] / "pyproject.toml"
+    if pyproject.is_file() and 'picture-capture-cli = "picture_capture.bootstrap.cli:main"' not in pyproject.read_text(encoding="utf-8"):
+        violations.append("installed CLI script must route to canonical bootstrap entry")
 
     # Issue #562: relocate both public functional owners without root shims.
     for old, new in (

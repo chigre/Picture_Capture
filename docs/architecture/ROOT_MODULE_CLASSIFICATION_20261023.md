@@ -11,7 +11,7 @@ in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. Th
 owner migration reduced 15 → 14 without root shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
 claim that Issue #562 or the oversized-module refactor is complete.
 
-## Remaining root contracts (12/12 classified)
+## Remaining root contracts (10/10 classified)
 
 Each row names an existing physical root file. Retention means keep its current
 import contract while extracting implementation separately when justified.
@@ -21,8 +21,6 @@ import contract while extracting implementation separately when justified.
 | `__init__.py` | package | Version metadata and side-effect-free package import. |
 | `__main__.py` | bootstrap | `python -m picture_capture` and `freeze_support()` entry. |
 | `app.py` | bootstrap / ui | Retained Tk app entrypoint and all callback signatures. Complete 24-method preprocessing mode, perspective edit, analysis, diagnostic, preview and batch export workflow now physically resides in `ui/preprocess_workflow.py`; 12-method foreground batch scheduling and task progress now reside in `ui/batch_workflow.py`, and nine-method recent-project launcher, project restore and page reload now reside in `ui/project_session_workflow.py`; other sizeable GUI responsibilities remain for staged extraction. |
-| `cli.py` | bootstrap | Installed `picture-capture-cli` entry and explicit core-service composition before I/O capture. |
-| `launcher.py` | bootstrap | Documented backward-compatible `main` / `prepare_app_module` facade. |
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
@@ -58,7 +56,7 @@ coordinates, or dataclass identities change.
 The inventory regression compares this table with the actual root files. The
 architecture guard prohibits the retired resume root, requires its canonical
 owner and the whole-package fingerprint anchor, and ratchets the root count to
-12. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
+10. Existing dataclass/pickle, pixel, spawn, persistence and GUI gates stay in
 force. Native CUDA and real scanned-page/manual GUI parity are not established
 by automated CI. No root shim, new runtime installer or proxy is introduced.
 
@@ -75,3 +73,16 @@ format is unchanged. `training_export.py` is **retained**: both
 `TrainingExportCancelled` and `make_training_zip` explicitly retain
 `picture_capture.training_export` pickle identities, so dropping this module
 without a migration mechanism would break unpickling.
+
+
+## 2026-10-24 bootstrap CLI/launcher ownership (12 → 10)
+
+`cli.py` is now physically `bootstrap/cli.py`, with the installed
+`picture-capture-cli` console-script target updated. The same commands,
+arguments, synchronous core-service bootstrap, PDIC/PPP and image processing
+are preserved. `launcher.py` is physically `bootstrap/launcher.py`; actual
+GUI and `python -m picture_capture` entrypoints were already routed through
+`bootstrap/application.py` and are unchanged. No root wrappers remain.
+External Python imports `picture_capture.cli` and `picture_capture.launcher`
+are deliberately retired; use their `picture_capture.bootstrap.*` owners.
+The installer command names remain unchanged. Root inventory is **10** files.

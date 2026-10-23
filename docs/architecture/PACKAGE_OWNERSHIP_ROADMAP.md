@@ -1533,3 +1533,16 @@ falls 14→12, no root shims; in-repository callers/tests use canonical imports.
 External Python imports need migration. `training_export.py` remains as the
 verified pickle identity of ZIP functions/exceptions; do not retire it without
 checking older archives or creating an explicit compatibility solution.
+
+
+## #562 PR #663 continuation — bootstrap executable owners (12 → 10)
+
+Migrate the entire real non-GUI CLI to `bootstrap/cli.py`, point the
+unchanged installed `picture-capture-cli` command at that function, and
+physically move the legacy launcher helpers into `bootstrap/launcher.py`.
+Do not add any root import shims. Existing `run.py`, `python -m picture_capture`
+and GUI installer entry continue to call `bootstrap/application.py` unchanged.
+Retire the two Python import paths for external direct callers; use canonical
+`picture_capture.bootstrap.cli` / `picture_capture.bootstrap.launcher`.
+The root count is ratcheted to 10. Retain root modules with historical
+pickle identities, core-mirroring, and main Tk app ABI for later explicit audit.

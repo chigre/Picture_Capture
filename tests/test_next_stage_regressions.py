@@ -423,7 +423,7 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
 
 def test_cli_combined_autodraw_also_fills_blank_rescue_text():
     import inspect
-    import picture_capture.cli as cli_module
+    import picture_capture.bootstrap.cli as cli_module
 
     source = Path(inspect.getsourcefile(cli_module)).read_text(encoding="utf-8")
     assert 'if project.settings.detection_method == "combined":' in source
