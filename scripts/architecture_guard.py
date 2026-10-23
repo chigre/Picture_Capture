@@ -19,7 +19,7 @@ PACKAGE_ROOT = ROOT / "src" / "picture_capture"
 # exceptions are recorded at the exact PR #161 merge baseline; each may shrink,
 # but may not grow past its baseline and no new exception may appear.
 MAX_NORMAL_MODULE_BYTES = 100_000
-MAX_PREPROCESS_FACADE_BYTES = 98_310
+MAX_PREPROCESS_FACADE_BYTES = 97_440
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
@@ -946,6 +946,25 @@ def collect_violations() -> list[str]:
              and isinstance(node.func.value, ast.Name) and node.func.value.id == "_pixel_row_policy"}
     if not {"assess_candidate_pixels", "reaudit_retained_pixels"} <= calls:
         violations.append("preprocessing analysis must compose candidate/retained pixel policy")
+    geometry_stage_owner = PACKAGE_ROOT / "preprocess/geometry_stages.py"
+    if not geometry_stage_owner.is_file():
+        violations.append("canonical optional geometry stage owner missing")
+    else:
+        stage_tree = ast.parse(geometry_stage_owner.read_text(encoding="utf-8"))
+        stage_functions = {node.name for node in stage_tree.body
+                           if isinstance(node, ast.FunctionDef)}
+        if not {"apply_explicit_uvdoc", "redetect_after_perspective"} <= stage_functions:
+            violations.append("optional geometry stage owner routines missing")
+    if any(isinstance(node, ast.Name) and node.id == "post_perspective_polygons"
+           for node in ast.walk(analysis_adapter)):
+        violations.append("post-perspective redetection implementation returned to analysis root")
+    stage_calls = {node.func.attr for node in ast.walk(analysis_adapter)
+                   if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Attribute)
+                   and isinstance(node.func.value, ast.Name)
+                   and node.func.value.id == "_geometry_stages"}
+    if not {"apply_explicit_uvdoc", "redetect_after_perspective"} <= stage_calls:
+        violations.append("preprocessing analysis must compose explicit geometry stages")
     if _normalized_source_size(preprocess_facade) > MAX_PREPROCESS_FACADE_BYTES:
         violations.append(f"preprocessing facade regressed beyond extracted owners ({MAX_PREPROCESS_FACADE_BYTES} bytes)")
 
