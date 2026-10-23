@@ -603,7 +603,7 @@ def _load_project(
             _project_templates.apply_parameters_to_project(project, parameter_template_root)
         if not project.images:
             raise ValueError("目录中没有 tif/tiff/png/jpg/jpeg/bmp 图片")
-        suffix = PictureCaptureApp._normalize_suffix(requested_suffix) if requested_suffix else PictureCaptureApp._normalize_suffix(project.settings.image_suffix)
+        suffix = self._normalize_suffix(requested_suffix) if requested_suffix else self._normalize_suffix(project.settings.image_suffix)
         matching = [page for page in project.images if page.suffix.lower() == suffix]
         if matching:
             project.images = matching
