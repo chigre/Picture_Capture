@@ -153,6 +153,7 @@ from .preprocess.orthogonal_policy import (
 
 
 
+from .preprocess import source_evidence as _source_evidence
 from .preprocess import rendering as _rendering
 from .preprocess.rendering import PREVIEW_YELLOW, PREVIEW_OUTLINE
 
@@ -241,134 +242,36 @@ def analyze_preprocess_page(
         if manual_perspective_quad is not None and len(manual_perspective_quad) == 8
         else None
     )
-    warnings: list[str] = []
-    polygons: list[np.ndarray] = []
-    method_parts = ["paddle_layout_roi"]
-    layout_source_boxes = 0
-
-    try:
-        polygons = detect_text_polygons(source, settings)
-        if len(polygons) < 4:
-            raise RuntimeError("Paddle文本框过少")
-    except Exception as exc:
-        polygons = []
-        method_parts = ["projection_fallback"]
-        warnings.append(f"版面结构检测不可用，裁边已使用投影回退：{exc}")
-
-    line_geometry = TextLineGeometryAnalysis()
-    if polygons:
-        try:
-            line_geometry = analyze_text_line_geometry(
-                source, polygons, settings,
-            )
-            method_parts.append("line_geometry")
-            if (
-                line_geometry.recommendation == "uvdoc_review"
-                and requested_geometry_mode not in {"auto", "uvdoc"}
-            ):
-                warnings.append(
-                    "检测到可靠的平滑非线性弯曲；当前模式不会自动执行"
-                    "正交网格展平，可改用自动模式或手动UVDoc复核。"
-                )
-            elif line_geometry.recommendation == "manual_review":
-                if (
-                    line_geometry.separator_found
-                    and line_geometry.separator_residual_px
-                    < max(3.0, width * 0.0015)
-                ):
-                    warnings.append(
-                        "文本行方向存在局部不一致，但长直分隔线保持笔直；"
-                        "更可能是版式/OCR波动，不自动做非线性矫正。"
-                    )
-                else:
-                    warnings.append(
-                        "文本行方向存在不一致，当前证据不足以支持非线性矫正。"
-                    )
-            separator_curve_threshold = max(
-                3.0, width * SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD
-            )
-            if (
-                line_geometry.separator_found
-                and line_geometry.separator_residual_px
-                >= separator_curve_threshold * 1.5
-                and not line_geometry.separator_curve_reliable
-            ):
-                warnings.append(
-                    "实体长线候选残差较大，但轨迹连续性或曲率一致性不足；"
-                    "该候选不作为 UVDoc 非线性形变证据。"
-                )
-        except Exception as exc:
-            warnings.append(f"文本行几何分析不可用：{exc}")
-
-    ocr_correction, angle_samples, angle_mad = estimate_skew_from_polygons(
-        polygons, writing_mode=settings.layout_writing_mode,
+    evidence = _source_evidence.collect_source_geometry_evidence(
+        source, settings,
+        requested_geometry_mode=requested_geometry_mode,
+        auto_deskew=auto_deskew,
+        text_detector=detect_text_polygons,
+        line_analyzer=analyze_text_line_geometry,
+        line_geometry_factory=TextLineGeometryAnalysis,
+        skew_estimator=estimate_skew_from_polygons,
+        projection_estimator=_projection_skew_fallback,
+        rule_metrics=horizontal_rule_metrics,
+        separator_curve_width_ratio=SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD,
+        header_residual_min_px=HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
+        header_residual_width_ratio=HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
+        max_auto_deskew_deg=DEFAULT_MAX_AUTO_DESKEW_DEG,
+        deskew_dead_zone_deg=DEFAULT_DESKEW_DEAD_ZONE_DEG,
     )
-    if angle_samples < 4:
-        if method_parts[0] != "projection_fallback":
-            method_parts.append("projection_angle")
-        try:
-            ocr_correction = _projection_skew_fallback(
-                source, settings, writing_mode=settings.layout_writing_mode,
-            )
-            warnings.append("文本框角度样本较少，倾斜角由投影法补充估计。")
-        except Exception as exc:
-            ocr_correction = 0.0
-            warnings.append(f"倾斜角回退估计失败：{exc}")
-
-    correction = float(ocr_correction)
-    deskew_anchor_source = "ocr"
-    source_header_rule_point_count = 0
-    source_header_rule_angle_deg = 0.0
-    source_header_rule_residual_px = 0.0
-    if (
-        polygons
-        and not str(settings.layout_writing_mode or "horizontal-tb").startswith(
-            "vertical"
-        )
-    ):
-        try:
-            (
-                source_header_rule_point_count,
-                source_header_rule_angle_deg,
-                source_header_rule_residual_px,
-                _source_header_rule_y,
-            ) = horizontal_rule_metrics(source, polygons, settings)
-            header_residual_limit = max(
-                HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
-                width * HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
-            )
-            header_anchor_reliable = bool(
-                source_header_rule_point_count >= 7
-                and abs(float(source_header_rule_angle_deg))
-                <= DEFAULT_MAX_AUTO_DESKEW_DEG
-                and float(source_header_rule_residual_px)
-                <= header_residual_limit
-            )
-            if header_anchor_reliable:
-                correction = float(source_header_rule_angle_deg)
-                deskew_anchor_source = "header_rule"
-                method_parts.append("header_rule_deskew")
-                if abs(float(ocr_correction) - correction) >= 0.12:
-                    warnings.append(
-                        "正文OCR平均倾角与页眉实体横线不一致："
-                        f"OCR {float(ocr_correction):+.2f}°，"
-                        f"页眉 {correction:+.2f}°；"
-                        "全局旋转采用实体横线，正文残差交由局部像素场矫正。"
-                    )
-        except Exception as exc:
-            warnings.append(f"页眉实体横线全局锚定不可用：{exc}")
-
-    if abs(correction) < DEFAULT_DESKEW_DEAD_ZONE_DEG:
-        applied = 0.0
-    elif abs(correction) <= DEFAULT_MAX_AUTO_DESKEW_DEG and auto_deskew:
-        applied = float(correction)
-    else:
-        applied = 0.0
-        if auto_deskew and abs(correction) > DEFAULT_MAX_AUTO_DESKEW_DEG:
-            warnings.append(
-                f"检测倾斜 {correction:+.2f}° 超过自动纠偏上限 "
-                f"{DEFAULT_MAX_AUTO_DESKEW_DEG:.1f}°，未自动旋转。"
-            )
+    warnings = evidence.warnings
+    polygons = evidence.polygons
+    method_parts = evidence.method_parts
+    line_geometry = evidence.line_geometry
+    ocr_correction = evidence.ocr_correction
+    angle_samples = evidence.angle_samples
+    angle_mad = evidence.angle_mad
+    correction = evidence.correction
+    deskew_anchor_source = evidence.deskew_anchor_source
+    source_header_rule_point_count = evidence.source_header_rule_point_count
+    source_header_rule_angle_deg = evidence.source_header_rule_angle_deg
+    source_header_rule_residual_px = evidence.source_header_rule_residual_px
+    applied = evidence.applied
+    layout_source_boxes = 0
 
     working = deskew_image(source, applied)
     working_polygons = (
