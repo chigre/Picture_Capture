@@ -24,11 +24,11 @@ def test_stub_details_are_registry_only(monkeypatch, tmp_path):
 
 def test_first_paint_precedes_metadata_and_cover_workers():
     source = (Path(__file__).resolve().parents[1] / "src" /
-              "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = source.index("    def open_recent_project(self)")
-    block = source[start:source.index("\n    @staticmethod", start)]
+              "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def open_recent_project(")
+    block = source[start:source.index("\ndef _attach_tooltip(", start)]
     staged = block.index('state["details"] = [recent_project_stub_details(row) for row in rows]')
-    first_paint = block.index("                rebuild()", staged)
+    first_paint = block.index("            rebuild()", staged)
     detail_worker = block.index('f"{key}-details",', first_paint)
     preview_worker = block.index('f"{key}-previews",')
     assert staged < first_paint < detail_worker
@@ -38,9 +38,9 @@ def test_first_paint_precedes_metadata_and_cover_workers():
 
 def test_project_detail_worker_still_reads_full_metadata():
     source = (Path(__file__).resolve().parents[1] / "src" /
-              "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = source.index("    def open_recent_project(self)")
-    block = source[start:source.index("\n    @staticmethod", start)]
+              "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def open_recent_project(")
+    block = source[start:source.index("\ndef _attach_tooltip(", start)]
     assert 'lambda: details_with_cache(rows)' in block
     assert 'state["details"] = details' in block
     assert "load_project_center_previews(details)" in block

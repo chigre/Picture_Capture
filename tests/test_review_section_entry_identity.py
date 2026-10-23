@@ -150,9 +150,9 @@ def test_preloaded_page_section_snapshot_is_rechecked_before_sorting():
     from pathlib import Path
     import picture_capture.app as app_module
 
-    source = Path(app_module.__file__).read_text(encoding="utf-8")
-    start = source.index("    def load_page(")
-    end = source.index("    def change_page(", start)
+    source = (Path(app_module.__file__).parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    start = source.index("def load_page(")
+    end = len(source)
     block = source[start:end]
     assert 'self.page_sections = list(preloaded.get("page_sections") or [])' in block
     assert "latest_sections = read_page_sections(self.current_page)" in block

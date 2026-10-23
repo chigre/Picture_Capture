@@ -1166,6 +1166,78 @@ def collect_violations() -> list[str]:
     # #562: the full Tk batch dispatch/foreground ownership/pause-stop
     # lifecycle has one physical owner; original Tk entrypoint methods stay
     # signature-compatible delegate surfaces for GUI callbacks and tests.
+    # #562: one complete recent-project launcher, project restore and
+    # per-page load lifecycle owner; the original Tk class only dispatches.
+    gui_project_owner = PACKAGE_ROOT / "ui/project_session_workflow.py"
+    gui_project_app = PACKAGE_ROOT / "app.py"
+    if not gui_project_owner.is_file():
+        violations.append("project session UI owner missing")
+    else:
+        project_tree = ast.parse(gui_project_owner.read_text(encoding="utf-8"))
+        expected_project = {
+            "open_recent_project", "_attach_tooltip",
+            "_project_controller_for_call", "_choose_new_project_image_suffix",
+            "open_project", "_load_project", "on_page_select",
+            "_request_page_load", "load_page",
+        }
+        owner_functions = {
+            node.name: node for node in project_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        if not expected_project <= owner_functions.keys():
+            violations.append("complete project session nine-method owner incomplete")
+        if not any(
+            isinstance(node, ast.ClassDef) and node.name == "ProjectSessionDeps"
+            for node in project_tree.body
+        ):
+            violations.append("project session owner lacks live dependencies")
+        if any(
+            isinstance(node, ast.ImportFrom) and node.module in {"app", "processing"}
+            for node in project_tree.body
+        ):
+            violations.append("GUI project session owner imports heavyweight app/processing")
+        for name in ("open_recent_project", "_load_project", "load_page"):
+            body = owner_functions.get(name)
+            if body is None or len(body.body) < 10:
+                violations.append(f"canonical project session missing full method: {name}")
+    if gui_project_app.is_file():
+        project_app_tree = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+        project_app_class = next((
+            node for node in project_app_tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"
+        ), None)
+        if project_app_class is None:
+            violations.append("legacy Tk PictureCaptureApp class missing")
+        else:
+            original_methods = {
+                node.name: node for node in project_app_class.body
+                if isinstance(node, ast.FunctionDef)
+            }
+            for name in (
+                "open_recent_project", "_attach_tooltip",
+                "_project_controller_for_call", "_choose_new_project_image_suffix",
+                "open_project", "_load_project", "on_page_select",
+                "_request_page_load", "load_page",
+            ):
+                wrapper = original_methods.get(name)
+                if wrapper is None or not any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "_project_session"
+                    and node.func.attr == name
+                    for node in ast.walk(wrapper)
+                ):
+                    violations.append(f"Tk project session adapter not delegated: {name}")
+            tooltip = original_methods.get("_attach_tooltip")
+            if tooltip is not None and not any(
+                isinstance(decorator, ast.Name) and decorator.id == "staticmethod"
+                for decorator in tooltip.decorator_list
+            ):
+                violations.append("original tooltip staticmethod behavior lost")
+        if _normalized_source_size(gui_project_app) > 665_270:
+            violations.append("app.py exceeds 665270-byte project session ownership ratchet")
+
     gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
     gui_batch_app = PACKAGE_ROOT / "app.py"
     gui_batch_methods = {

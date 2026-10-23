@@ -47,9 +47,9 @@ def test_pin_unpin_changes_recent_order_and_survives_reload(tmp_path):
 
 def test_project_center_ui_exposes_pin_context_action():
     src = (Path(__file__).resolve().parents[1]
-           / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = src.index("    def open_recent_project(self)")
-    end = src.index("\n    @staticmethod", start)
+           / "src" / "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    start = src.index("def open_recent_project(")
+    end = src.index("\ndef _attach_tooltip(", start)
     part = src[start:end]
     assert 'label="取消置顶" if pinned else "置顶项目"' in part
     assert "set_recent_project_pinned(root, not pinned)" in part

@@ -1221,3 +1221,39 @@ acceptance. Independently checking main after merge, native GPU/CUDA
 preflight, actual user projects and hands-on GUI remain outstanding.
 Issue #562 stays open for remaining large GUI `app.py` and root
 facade consolidation.
+
+
+## Issue #562 — complete recent-project and page session GUI lifecycle (2026-10-23; candidate)
+
+Starting from merged `#648` (`main@a53d8611`), move the **nine-method,
+965-line contiguous GUI project session responsibility** into canonical
+`ui/project_session_workflow.py`: modern recent-project card/preview/search/
+pin/cleanup dialog; tooltip behavior; project controller dispatch; new/open
+project launch; profile/settings and project-metadata restoration; cross-page
+review-safe load and associated page file synchronization.
+
+All nine `PictureCaptureApp` original method names, signatures,
+defaults, docstrings and Tk binding locations remain in `app.py`
+as lightweight dispatchers, including the original `@staticmethod`
+tooltip behavior. `ProjectSessionDeps` injects **30 original live module
+bindings** for Tk widgets, project and storage helpers, cache and
+preprocessing, preserving patched symbols at call time without importing
+the large app in the new leaf. Seven imports internal to moved methods
+only have their package-relative path adjusted; after undoing those
+path changes and removing explicit dependency aliases the **nine
+original method bodies are identical**. Project settings and Profile
+behavior, recent-project metadata, async handoff, reading-order
+coordinates, PDIC/PPP semantics and review synchronization are unchanged.
+
+`app.py` normalized bytes **706512→665254** (−41258, **5.84%**)
+and line count falls accordingly; new strict cap **665270**.
+Existing oversized baseline unchanged, physical root Python module
+count remains **15**. New targeted regression tests protect leaf
+import isolation, all nine original signatures and tooltip decorator,
+30 call-time patch seams, project restoration parameter forwarding
+and page/preloaded navigation options. AST architecture guard pins
+unique project lifecycle ownership and every original wrapper.
+Exact-head six OS/Python matrix, GUI smoke, compatibility, wheel,
+static lint, reviews/CodeQL and independent postmerge main verification
+are required. Manual GUI on real projects, native GPU/CUDA and scanned
+page acceptance remain unverified. Keep Issue #562 open.

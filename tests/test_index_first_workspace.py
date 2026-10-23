@@ -12,12 +12,13 @@ def sources():
 
 def test_index_page_controls_and_extension_free_display():
     app, tools = sources()
+    project_session = (ROOT / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     assert "install_workspace_tools(self, sidebar, sidebar_host)" in app
     assert 'page_panel.grid(row=0, column=0, rowspan=2' in app
     assert '("至指定", "to_specified")' in app
     assert '("至末页", "to_end")' in app
     assert 'text="指定:"' not in app
-    assert 'page.stem, self._page_section_count_text(index)' in app
+    assert 'page.stem, self._page_section_count_text(index)' in project_session
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in app
     assert 'if mode == "to_specified":' in app
     assert 'len(indices) != 1' in app
@@ -348,11 +349,12 @@ def test_inline_review_slice_uses_text_based_height_without_classification():
 
 def test_workspace_mode_is_restored_from_last_session():
     app, tools = sources()
+    project_session = (ROOT / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     session = (ROOT / "ui" / "controllers" / "session.py").read_text(encoding="utf-8")
     assert '"workspace_mode": getattr(app, "workspace_mode", "最大")' in session
     assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in app
     assert 'self._restore_workspace_mode_pending = True' in app
-    assert 'self._restore_workspace_layout()' in app
+    assert 'self._restore_workspace_layout()' in project_session
     assert 'set_sidebar_mode(self, self.workspace_mode)' in app
     assert 'app.workspace_mode = mode' in tools
     assert 'app._restore_workspace_layout()' in session

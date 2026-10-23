@@ -134,7 +134,8 @@ def test_all_page_navigation_enters_same_shared_load_page_commit_path():
     import picture_capture.app as module
 
     path = Path(module.__file__).read_text(encoding="utf-8")
-    load_page = path.split("    def load_page(", 1)[1].split("    def change_page(", 1)[0]
+    project_session = (Path(module.__file__).parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    load_page = project_session.split("def load_page(", 1)[1]
     assert "save_review_before_page_change(self, index" in load_page
     assert "self._save_current_page_by_mode(sync_editors=not review_saved)" in load_page
     assert "refresh_review_after_page_change(self, preloaded if use_preloaded else None)" in load_page

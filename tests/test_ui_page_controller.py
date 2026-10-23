@@ -140,6 +140,7 @@ def test_change_page_uses_controller_async_request_before_core_load() -> None:
 
 def test_page_controller_wiring_keeps_picture_capture_app_compatibility_methods() -> None:
     app = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    project_session = (ROOT / "src/picture_capture/ui/project_session_workflow.py").read_text(encoding="utf-8")
     controller = (
         ROOT / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
     ).read_text(encoding="utf-8")
@@ -156,12 +157,15 @@ def test_page_controller_wiring_keeps_picture_capture_app_compatibility_methods(
     change_start = app.index("    def change_page(", load_start)
     after_change = app.index("\n    def ", change_start + 10)
 
-    assert "self.page_controller.on_page_select" in app[select_start:request_start]
-    assert "self.page_controller.request_page_load" in app[request_start:load_start]
+    assert "self.page_controller.on_page_select" in project_session[project_session.index("def on_page_select("):project_session.index("def _request_page_load(")]
+    assert "_project_session.on_page_select(" in app[select_start:request_start]
+    assert "self.page_controller.request_page_load" in project_session[project_session.index("def _request_page_load("):project_session.index("def load_page(")]
+    assert "_project_session._request_page_load(" in app[request_start:load_start]
     assert "self.page_controller.change_page" in app[change_start:after_change]
 
-    # Page-state commit remains intentionally owned by PictureCaptureApp in 4A.
-    load_block = app[load_start:change_start]
+    # The page-state transaction now has one physical project-session owner.
+    assert "_project_session.load_page(" in app[load_start:change_start]
+    load_block = project_session[project_session.index("def load_page("):]
     assert "self.current_index = index" in load_block
     assert "self.redraw()" in load_block
 

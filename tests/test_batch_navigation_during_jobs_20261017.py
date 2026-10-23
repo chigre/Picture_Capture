@@ -92,12 +92,12 @@ def test_read_only_batch_blocks_manual_save_and_unsafe_entry_typing():
 
 def test_core_page_commit_skips_stale_foreground_autosave_in_background_jobs():
     source = (ROOT / "src/picture_capture/app.py").read_text(encoding="utf-8")
-    load = source.split("    def load_page(", 1)[1].split("    def change_page(", 1)[0]
+    load = (ROOT / "src/picture_capture/ui/project_session_workflow.py").read_text(encoding="utf-8").split("def load_page(", 1)[1]
     assert load.index("skip_current_save = True") < load.index(
         "save_review_before_page_change(self, index"
     )
     assert "if self._can_save_current_during_batch_navigation():" in load
-    assert "skip_current_save=True" in source
+    assert "skip_current_save=True" in (source + load)
 
 
 def test_refinement_and_lined_exports_inherit_navigable_batch_runner_defaults():

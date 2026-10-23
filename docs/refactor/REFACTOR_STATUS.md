@@ -8,29 +8,26 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Architecture and OCR refactors and the 24-method GUI preprocessing
-extraction are merged through #647 (`main@d83ad3c0`), with no
-other active PRs at branch creation. The current
-`refactor/562-gui-batch-workflow-lifecycle` moves the
-**complete 12-method Tk batch-processing lifecycle** out of giant
-`app.py` into `ui/batch_workflow.py`: foreground page
-ownership/manual edit locking, serial and parallel task startup,
-single-GPU preflight plus CPU worker jobs, backpressure-aware
-queue polling and completion/error refresh, delayed progress UI
-cleanup and safe pause/stop. Public Tk class methods preserve
-signatures/defaults and callable patch seams with **11 original
-app-level dependencies captured each call**; source bodies match
-the original except explicit aliases and two package-relative
-lazy imports. Normalized `app.py` UTF-8 bytes
-**733009→706512** (−26497), new strict cap **706530**,
-unchanged historical oversized baseline, **15 physical root
-modules**. Added direct isolated import, signature, parallel
-forwarding, worker ownership, stop and manual editing tests,
-and full AST ownership/delegation guard.
-Exact-head six-platform CI, GUI smoke, compatibility runner,
-CodeQL/reviews and postmerge main check are not yet verified
-for this branch. Native GPU/CUDA and hands-on GUI projects
-also remain unverified. Historical checkpoint log follows.
+Architecture/OCR and the 24-method preprocessing plus
+12-method batch-workflow GUI extractions are merged through #648
+(`main@a53d8611`, full previous CI success). Current branch
+`refactor/562-gui-project-session-lifecycle` relocates **nine related
+project center, open/restore project, and page navigation/load methods**
+to `ui/project_session_workflow.py`, retaining the native Tk method
+signatures/defaults/docstrings, the static tooltip and original
+callback dispatch. A frozen `ProjectSessionDeps` captures **30 current
+app module helpers** per call and seven owner-local relative imports
+are updated solely for package placement. All nine function bodies
+match merged main after reversing dependency aliases and relative
+imports. Source `app.py` **706512→665254 normalized bytes**,
+net reduction **41258**, strict additional cap **665270**,
+unchanged historical oversized baseline and 15 root modules.
+Targeted Tk adapter, Project loader/page handoff and import isolation
+tests plus architecture AST guard were added. Exact-head complete
+six-platform CI, CodeQL/reviews and independent postmerge main
+CI still require confirmation. Native GPU/CUDA, real project GUI
+and scanned-page manual parity also remain outstanding.
+Historical recovery log continues below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**
