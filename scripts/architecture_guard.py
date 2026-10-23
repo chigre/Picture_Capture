@@ -1772,6 +1772,43 @@ def collect_violations() -> list[str]:
         ):
             violations.append(f"main-entry native delegate missing: {name}")
 
+    # Issue #562 — preserve native selected-page OCR and refinement owners.
+    selected_owner_path = PACKAGE_ROOT / "ui/selected_marker_actions.py"
+    selected_names = {"refine_lines_selected_scope", "ocr_ordinary_lines_text_selected_scope"}
+    if not selected_owner_path.is_file():
+        violations.append("selected-marker GUI owner missing")
+    else:
+        selected_code = selected_owner_path.read_text(encoding="utf-8")
+        selected_tree = ast.parse(selected_code)
+        leaf_methods = {node.name for node in selected_tree.body
+                        if isinstance(node, ast.FunctionDef)}
+        if not selected_names <= leaf_methods:
+            violations.append("selected-marker GUI methods are incomplete")
+        if "from ..refinement.parallel import (" not in selected_code:
+            violations.append("Y refinement must use canonical parallel owner")
+        if "from .marker_refinement_parallel import" in selected_code:
+            violations.append("retired refinement parallel import returned")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"app", "picture_capture.app"}
+               for node in ast.walk(selected_tree)):
+            violations.append("selected-marker owner imports app")
+    for selected_name in selected_names:
+        adapter = selection_adapters.get(selected_name)
+        if adapter is None or not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_selected_marker_actions"
+            and node.func.attr == selected_name
+            for node in ast.walk(adapter)
+        ) or not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_selected_marker_actions_deps"
+            for node in ast.walk(adapter)
+        ):
+            violations.append(f"selected-marker Tk adapter missing: {selected_name}")
+
     # Issue #562 — page-index and persisted fill-status are single-source owners.
     page_index_owners = {
         "page_index_workflow.py": [
