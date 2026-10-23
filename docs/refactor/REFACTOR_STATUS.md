@@ -8,25 +8,26 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Architecture classification, preprocessing, crop and OCR extractions
-are merged through #644 (main merge `01a279d7`, six-platform CI
-passed). This candidate large refactor branch
-`refactor/562-ocr-candidate-filter-pipeline` moves the **complete
-`filter_headword_records` 1,135-line dictionary-headword filtering,
-image evidence, structure/visual scoring, forced rules, acceptance and
-diagnostic lifecycle** into canonical `ocr/candidate_filter.py`.
-Original core retains one live, signature-compatible wrapper and binds
-**42 original functions/policy values** per invocation; no new root
-file or patchpoint installer. Model/pickle, raw caches, output
-diagnostics and user decision semantics stay unchanged. Core normalized
-UTF-8 source **246682→197668 bytes**, reduction **49014**,
-strict additional guard **197680**, unchanged historical oversized
-baseline and 15 root modules. New isolation, monkeypatch,
-interface and empty-data regression tests plus AST ownership guard.
-Exact-head full six-platform CI, GUI/compatibility/wheel, CodeQL/reviews
-and independent merged-main validation are outstanding for this branch.
-Native real scanned-page, GUI manual and GPU/CUDA parity are not yet
-established. Historical status continues below.
+Architecture classification, preprocessing, crop and OCR migrations are
+merged through #645 (main `ff274e7a`, latest six-platform CI success).
+Current candidate branch `refactor/562-ocr-page-detection-orchestration`
+moves the **complete 530-line page-wide `detect_paddle_headwords`
+execution/review/cache workflow** to `ocr/page_detection.py`.
+It covers policy, image/band transforms, Paddle/Tesseract/Lens,
+local CJK recovery, candidate arbitration, manual override and compact
+v3 persistent JSON without changing output keys, coordinate domains,
+raw source records or sidecar cleanup. The old public method retains
+the original 9-parameter signature/docstring and binds **45 live
+old OCR operations/policies** per call; two internal relative imports
+are updated to account for the leaf's package location. Core shrinks
+**197668→174754 normalized UTF-8 bytes** (−22914), additional strict
+size cap **174765**, historical oversize baseline unchanged and 15
+physical root Python files. Direct import/patch/API/safety tests plus
+full original regression suite remain configured. Exact-head CI,
+compatibility, GUI smoke, wheel, CodeQL, reviews and independent
+merged-main confirmation remain unverified for this new branch.
+Native GPU/CUDA, real scans and hands-on GUI parity remain outstanding.
+The historical recovery log continues below.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

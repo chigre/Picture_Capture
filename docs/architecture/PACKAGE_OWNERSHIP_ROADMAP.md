@@ -1049,7 +1049,7 @@ Further large `filter_headword_records`, `detect_paddle_headwords` and
 `app.py` flow extraction remain open in Issue #562.
 
 
-## Issue #562 — complete OCR candidate filtering and diagnosis (2026-10-23; candidate)
+## Issue #562 — complete OCR candidate filtering and diagnosis (2026-10-23; merged #645)
 
 On merged #644 (`main@01a279d7`, exact-head six-platform CI passed),
 extract the **entire 1,135-line `filter_headword_records` orchestration
@@ -1088,3 +1088,43 @@ fixture/benchmark provenance, CodeQL and reviews/unresolved threads.
 Independent merged-main CI plus native scanned-page/manual GUI/GPU-CUDA
 acceptance remain separate. Issue #562 remains open for the remaining
 large `detect_paddle_headwords` orchestration and huge `app.py`.
+
+
+## Issue #562 — full multi-engine OCR page detection, review, and caching (2026-10-23; candidate)
+
+After successful merged #645 (`main@ff274e7a`), transfer the
+**entire remaining 530-line page-level `detect_paddle_headwords` workflow**
+to canonical `ocr/page_detection.py`: enabled-engine policy; Project
+Profile and filter-rule resolution; v3 cache-signature match and reuse;
+full-resolution RGB extraction and canonical coordinate mapping for
+each column; Paddle local CJK recovery; optional Tesseract per-PSM lazy
+diagnostics/raw cache; optional Lens third opinion; per-engine candidates,
+alignment and arbitration; manual review/variant exclusivity; warning
+propagation; page quality; and compact, atomically published v3 JSON cache,
+with regenerable diagnostics sidecar cleanup and optional Tesseract cache
+failure remaining nonfatal.
+
+The public `paddle_headwords_core.detect_paddle_headwords` retains its
+nine argument names, defaults, typing shape and docstring, delegating
+to the owner using a frozen `PageDetectionDeps` that captures **45
+current original callbacks/models/policy functions per call**.
+No install-time callback registration, circular heavyweight core import,
+new physical root Python shim, GUI import, or native OCR import on module
+load. Two function-internal lazy imports change only their relative path
+(`ocr/tesseract_raw_cache.py`, `ocr/lazy_secondary.py`), because the
+code now physically resides in `ocr/`; all other algorithm text remains
+identical after eliminating the new dependency aliases.
+
+The OCR core normalized byte size shrinks **197668→174754**
+(−22914, ~11.6%), with new strict guard **174765** and unchanged prior
+oversized baselines and **15 root Python modules**. Direct tests verify
+owner isolation, 45 live monkeypatch hooks, exact original entrypoint
+signature/docstring, complete explicit optional-argument forwarding,
+and engine-disable error policy. Full existing multi-OCR, cache,
+CJK/local, review, coordinate and quality regression tests remain active.
+Before accepting this PR require exact-head six OS/Python matrix CI,
+architecture/change guards, full pytest, legacy compatibility, GUI
+smoke, F821, wheel, CodeQL, review threads, independent postmerge main
+CI. Native real scanned pages, GUI/manual parity and GPU/CUDA driver
+behavior remain unverified. Issue #562 remains open for the large
+`app.py` and any remaining OCR core extraction.
