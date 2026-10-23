@@ -4233,9 +4233,10 @@ def test_focused_filter_streams_complete_batches_and_prefetches_next_batch():
     review_end = app.index("class PictureCaptureApp", review_start)
     review = app[review_start:review_end]
 
-    focused_start = review.index("    def run_focused_filter(")
-    focused_end = review.index("\n    def _render_filter_batch(", focused_start)
-    focused = review[focused_start:focused_end]
+    focused = (
+        root / "src/picture_capture/ui/focused_filter_workflow.py"
+    ).read_text(encoding="utf-8")
+    assert "return _focused_filter.run_focused_filter(self, _focused_filter_deps())" in review
     assert "needed_for_next" in focused
     assert "if len(additions) >= needed_for_next:" in focused
     assert "start_remaining_scan(" in focused
