@@ -6458,9 +6458,9 @@ def test_v21122_hotfix3_compare_uses_selected_scope_and_page_aware_wordslist():
     import inspect
     import picture_capture.app as app_module
 
-    text = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    start = text.index("    def compare_old_new_selected_scope(")
-    end = text.index("\n    def open_review", start)
+    text = (Path(inspect.getsourcefile(app_module)).parent / "ui" / "lexicon_compare_workflow.py").read_text(encoding="utf-8")
+    start = text.index("def compare_old_new_selected_scope(")
+    end = len(text)
     block = text[start:end]
     assert "indices = self.selected_page_indices()" in block
     assert "_parse_words_of_pages_text" in block

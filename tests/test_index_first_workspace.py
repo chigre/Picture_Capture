@@ -5,6 +5,7 @@ from picture_capture.ui import workspace_tools
 ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 REVIEW_WORKSPACE_SOURCE = (ROOT / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
 PAGE_INDEX_SOURCE = (ROOT / "ui/page_index_workflow.py").read_text(encoding="utf-8")
+PAGE_SCOPE_SOURCE = (ROOT / "ui/page_scope_workflow.py").read_text(encoding="utf-8")
 REVIEW_CROP_SOURCE = (ROOT / "ui/review_crop_actions.py").read_text(encoding="utf-8")
 REVIEW_ENTRY_SOURCE = (ROOT / "ui/review_entry_actions.py").read_text(encoding="utf-8")
 
@@ -24,8 +25,8 @@ def test_index_page_controls_and_extension_free_display():
     assert 'text="指定:"' not in app
     assert 'page.stem, self._page_section_count_text(index)' in project_session
     assert 'new_values = (bookmark, page_stem, section, lined, fill_status, illustrations)' in PAGE_INDEX_SOURCE
-    assert 'if mode == "to_specified":' in app
-    assert 'len(indices) != 1' in app
+    assert 'if mode == "to_specified":' in PAGE_SCOPE_SOURCE
+    assert 'len(indices) != 1' in PAGE_SCOPE_SOURCE
 
 
 def test_fixed_width_icon_cells_and_compact_nav_toggle():

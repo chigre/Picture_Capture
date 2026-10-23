@@ -4033,9 +4033,10 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
 
     app_start = text.index("class PictureCaptureApp")
 
-    reload_start = text.index("    def _request_wordslist_reload(", app_start)
-    reload_end = text.index("\n    def open_recent_project", reload_start)
-    reload_block = text[reload_start:reload_end]
+    lexicon_owner = (root / "src/picture_capture/ui/lexicon_compare_workflow.py").read_text(encoding="utf-8")
+    reload_start = lexicon_owner.index("def _request_wordslist_reload(")
+    reload_end = lexicon_owner.index("\ndef import_legacy_words(", reload_start)
+    reload_block = lexicon_owner[reload_start:reload_end]
     assert "read_noncomment_lines(path)" in reload_block
     assert 'self._start_ui_worker("wordslist-reload"' in reload_block
 
@@ -4087,13 +4088,14 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     current_block = detection_text[current_start:current_end]
     assert "app._start_batch_task(" in current_block
 
-    for name, next_name in (
-        ("ocr_current", "export_text"),
-        ("import_legacy_words", "_default_old_new_compare_source"),
+    for source, name, next_name in (
+        (text, "ocr_current", "export_text"),
+        (lexicon_owner, "import_legacy_words", "_default_old_new_compare_source"),
     ):
-        start = text.index(f"    def {name}(", app_start)
-        end = text.index(f"\n    def {next_name}(", start)
-        block = text[start:end]
+        prefix = "    " if source is text else ""
+        start = source.index(f"{prefix}def {name}(")
+        end = source.index(f"\n{prefix}def {next_name}(", start)
+        block = source[start:end]
         assert "self._start_batch_task(" in block
 
     fill_start = text.index("    def fill_existing_headwords(", app_start)
@@ -5511,10 +5513,10 @@ def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
 
 
 def test_selected_paddle_cache_compaction_is_scoped_and_preserves_reusable_ocr():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "page_scope_workflow.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def cleanup_paddleocr_temp_selected_scope(self) -> None:")
-    end = text.index("    def jump_to_page_spec", start)
+    start = text.index("def cleanup_paddleocr_temp_selected_scope(")
+    end = text.index("def jump_to_page_spec(", start)
     block = text[start:end]
     assert "indices = self.selected_page_indices()" in block
     assert "cache_root = ocr_cache_root(self.project.root)" in block

@@ -1453,3 +1453,24 @@ cross-page pending override flushing, duplicate/ambiguous evidence rejection,
 entry-editor synchronization and GUI cancellation remain behavioral invariants.
 Human real-page OCR toggle/save/reopen and position-switch parity is required
 beyond automated Linux/Windows/macOS test passes.
+
+
+## Issue #562 — page range, OCR cache cleanup and wordslist comparison owner (2026-10-24)
+
+Following merged #659, extract 12 related PictureCaptureApp methods to two
+explicit owners: `ui/page_scope_workflow.py` handles numeric/filename page
+range parsing, bookmarked/current-to-end selections, safe scoped OCR cache
+compaction and page-spec navigation; `ui/lexicon_compare_workflow.py` handles
+foreground/background wordslist reference reload, legacy WordOfPages import,
+page-aware comparison source recognition and selected-page PDIC-vs-wordslist
+comparisons. Public call signatures and staticmethod descriptors stay on Tk
+app, with frozen live collaborators captured per event. No new root module,
+installer, persisted sidecar schema or import from app shell.
+Retain distinctions between purely numbered images and auxiliary suffixed
+scans, missing-page fail-closed checks, `manual_selection` sidecar preservation,
+non-destructive OCR compression, original editor save-before-diff, ordered
+page-aware comparison, worker cancel behavior, and project identity checks in
+async callbacks. CI and CodeQL cannot substitute for scanned-page GUI validation.
+The 15-root-module classification remains intentional; these two owners
+further reduce the oversized Tk GUI entry implementation without weakening
+public root facades.
