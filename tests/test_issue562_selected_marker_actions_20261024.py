@@ -76,9 +76,14 @@ def test_refine_started_from_existing_page_keeps_parent_commit_guard(monkeypatch
 
 
 def test_ocr_guard_is_evaluated_before_current_editor_mutations():
+    from dataclasses import replace as dataclass_replace
     reached=[]
     fake=SimpleNamespace(guard=lambda:reached.append("edit"))
-    owner.ocr_ordinary_lines_text_selected_scope(
-        fake,SimpleNamespace(guard_ocr_action_selection=lambda _:False)
+    # Exercise the full public dependency snapshot, overriding only the static
+    # OCR guard. Missing deps must not cause failures before that guard runs.
+    deps=dataclass_replace(
+        shell._selected_marker_actions_deps(),
+        guard_ocr_action_selection=lambda _:False,
     )
+    owner.ocr_ordinary_lines_text_selected_scope(fake,deps)
     assert reached==[]

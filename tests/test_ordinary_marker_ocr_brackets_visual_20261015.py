@@ -318,9 +318,11 @@ def test_explicit_only_ocr_button_uses_overwrite_not_combined_blank_fill():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "app.py"
     ).read_text("utf-8")
-    body = source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1].split(
-        "\n    def run_combined_draw_action(", 1,
-    )[0]
+    marker_source = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "selected_marker_actions.py"
+    ).read_text("utf-8")
+    body = marker_source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     assert "only_blank=False," in body
     assert "only_blank=True," not in body
     assert "if bool(entry.manually_selected)" in body
