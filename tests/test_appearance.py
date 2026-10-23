@@ -164,7 +164,7 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in app_source
     assert 'display = themed_display_image(display, self.appearance_mode)' in app_source
     assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in project_session
-    assert 'appearance_mode = self.appearance_mode' in app_source
+    assert 'appearance_mode = self.appearance_mode' in project_session
     assert 'self._recent_projects_rebuild = rebuild' in project_session
     assert 'getattr(event, "widget", None) is not dialog' in project_session
     assert '"*TCombobox*Listbox.background"' in app_source
