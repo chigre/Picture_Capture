@@ -809,7 +809,7 @@ oversized app/processing/OCR cores and real scanned-page/manual GUI/native CUDA
 acceptance remain open work.
 
 
-## Issue #562 — explicit UVDoc and post-perspective redetection stages (2026-10-23; candidate)
+## Issue #562 — explicit UVDoc and post-perspective redetection stages (2026-10-23; merged #637)
 
 After #636, retain the current public analysis facade, but move explicit user-selected
 UVDoc fallback and auto-perspective pixel re-detection into
@@ -835,3 +835,35 @@ identity, warning/method order, threshold inclusivity and polygon conversion.
 Cross-platform CI/GUI/wheel/CodeQL, exact-head review and independent merged-main
 validation remain required before acceptance. Native UVDoc/CUDA, real scanned-page
 and manual GUI testing are still outstanding.
+
+
+## Issue #562 — full manual/selected projective execution chain (2026-10-23; candidate)
+
+Starting from merged `main@e5696d72` (#637), move the manual four-point
+perspective application and the downstream selected automatic/explicit perspective
+application, complete diagnostic field mapping and warning construction to
+`preprocess/perspective_stages.py`. Keep the already-extracted candidate
+generation and safety selection in `preprocess/projective_selection.py`;
+the public facade composes them with current callbacks and thresholds at call time.
+
+An explicit 72-field mutable `PerspectiveState` carries the original per-page
+diagnostic defaults and assignments; mutation inside a failed manual callback
+intentionally preserves partially assigned diagnostics before the original warning
+is appended. Both image-stage routines return working pixels/polygons, effective mode
+and strength, never a persisted model or dynamically injected namespace.
+Manual source quadrilateral rotation stays before rectification. The UVDoc stage
+still occurs between manual and selected auto/explicit perspective as before.
+The selected stage preserves candidate identity checks, inclusive 0.75px
+application threshold, original distortion review reasons, warning priority,
+conversion/clamping, method parts and safety/selection consequences.
+The complete `PreprocessAnalysis` constructor remains unchanged.
+
+Facade `image_preprocessing.py`: **97436→75841 normalized bytes** (−21595);
+15 retained root files still explicitly classified. Normalize-size policy is
+tightened 97440→75850 without relaxing any historical baseline. New tests target
+no-manual skips, source-coordinate rotation, failed/manual partial updates,
+selected-candidate 0.75 boundary, explicit unsafe warning, object identities,
+call-time operations and leaf imports. Existing full regression, cross-platform
+Python3.10/3.13 and OS matrix, GUI smoke, compatibility, wheel, CodeQL and
+reviews are mandatory gates before merging. Real scanned-page, manual UI,
+UVDoc/CUDA and actual GPU resource validation remain pending.
