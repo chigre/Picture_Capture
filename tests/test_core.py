@@ -1741,10 +1741,10 @@ def test_review_crop_settings_ignores_stale_main_zoom_reference():
 
 def test_load_page_resets_scroll_position_without_resetting_zoom():
     from pathlib import Path
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui/project_session_workflow.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def load_page(")
-    end = text.index("    def change_page(", start)
+    start = text.index("def load_page(")
+    end = len(text)
     block = text[start:end]
     assert "self.canvas.xview_moveto(0.0)" in block
     assert "self.canvas.yview_moveto(0.0)" in block
@@ -1818,13 +1818,13 @@ def test_v275_main_ocr_button_has_fixed_compact_label():
 
 def test_v275_page_switch_saves_current_editing_mode_before_loading_new_page():
     root = Path(__file__).resolve().parents[1]
-    text = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
+    text = (root / "src" / "picture_capture" / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     controller = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "page.py"
     ).read_text(encoding="utf-8")
 
-    load_start = text.index("    def load_page(")
-    load_end = text.index("    def change_page(", load_start)
+    load_start = text.index("def load_page(")
+    load_end = len(text)
     load_block = text[load_start:load_end]
     assert "save_review_before_page_change(self, index" in load_block
     assert "self._save_current_page_by_mode(sync_editors=not review_saved)" in load_block
@@ -3570,9 +3570,10 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
 
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    load_start = text.index("    def load_page(")
-    load_end = text.index("    def change_page(", load_start)
-    load_block = text[load_start:load_end]
+    project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
+    load_start = project_session.index("def load_page(")
+    load_end = len(project_session)
+    load_block = project_session[load_start:load_end]
     assert 'normalize_page_rgb(opened)' in load_block
     assert 'convert("RGBA")' not in load_block
 
@@ -3667,12 +3668,13 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
 
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app_text = (package / "app.py").read_text(encoding="utf-8")
+    project_session = (package / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     training_text = (package / "training_export.py").read_text(encoding="utf-8")
     layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
     paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
 
-    assert "self.image = normalize_page_rgb(opened)" in app_text
-    assert "image = normalize_page_rgb(opened)" in app_text
+    assert "self.image = normalize_page_rgb(opened)" in project_session
+    assert "image = normalize_page_rgb(opened)" in (app_text + project_session)
     assert "image = normalize_page_rgb(opened)" in training_text
     assert "source = normalize_page_rgb(image)" in layout_text
     assert "oriented = normalize_page_rgb(image)" in paddle_text
@@ -4091,10 +4093,10 @@ def test_v2910_manual_line_count_change_marks_status_stale_and_persists(tmp_path
 
 
 def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui/project_session_workflow.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _load_project(")
-    end = text.index("    def on_page_select(", start)
+    start = text.index("def _load_project(")
+    end = text.index("def on_page_select(", start)
     block = text[start:end]
     assert "self._load_word_fill_status()" in block
     assert block.index("self._load_word_fill_status()") < block.index("self.page_list.insert(")
@@ -4873,13 +4875,14 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
+    project_session = (root / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
     assert '"⨇"' in compact and '"⨈"' in compact
     assert 'app.jump_to_bookmark(-1)' in compact
     assert 'app.jump_to_bookmark(1)' in compact
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
     assert '"●" if page_stem in self._bookmark_stems() else ""' in text
-    block=text.split("    def _load_project(",1)[1].split("    def on_page_select",1)[0]
+    block=project_session.split("def _load_project(",1)[1].split("def on_page_select",1)[0]
     for rule in ("self.after_cancel(pending_quick_job)","self._quick_trace_ready = False","self._display_geometry_cache = None"):
         assert rule in block
     processing=(root / "processing.py").read_text(encoding="utf-8")
