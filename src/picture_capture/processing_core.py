@@ -15,6 +15,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from .crop.auxiliary_lines import read_auxiliary_lines
 from .crop import page_workflow as _page_workflow
+from .crop import polygon_geometry as _polygon_geometry
+from .crop import worker_policy as _crop_worker_policy
 from .models import AppSettings, Entry, PolygonRegion, resolved_tesseract_language
 from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE
 from .preprocess.page_pixels import normalize_page_rgb
@@ -2987,69 +2989,44 @@ def entry_crop_column_boxes(
     ]
 
 def _point_in_rect(point: tuple[int, int], box: tuple[int, int, int, int]) -> bool:
-    x, y = point
-    return box[0] <= x <= box[2] and box[1] <= y <= box[3]
+    return _polygon_geometry.point_in_rect(point, box)
 
 
 def _point_in_polygon(point: tuple[int, int], points: list[tuple[int, int]]) -> bool:
-    x, y = point
-    inside = False
-    n = len(points)
-    if n < 3:
-        return False
-    j = n - 1
-    for i in range(n):
-        xi, yi = points[i]; xj, yj = points[j]
-        if ((yi > y) != (yj > y)):
-            denom = (yj - yi) or 1e-12
-            cross_x = (xj - xi) * (y - yi) / denom + xi
-            if x <= cross_x:
-                inside = not inside
-        j = i
-    return inside
+    return _polygon_geometry.point_in_polygon(point, points)
 
 
 def _orientation(a, b, c) -> int:
-    v = (b[1]-a[1])*(c[0]-b[0]) - (b[0]-a[0])*(c[1]-b[1])
-    if abs(v) < 1e-9: return 0
-    return 1 if v > 0 else 2
+    return _polygon_geometry.orientation(a, b, c)
 
 
 def _on_segment(a, b, c) -> bool:
-    return min(a[0], c[0]) <= b[0] <= max(a[0], c[0]) and min(a[1], c[1]) <= b[1] <= max(a[1], c[1])
+    return _polygon_geometry.on_segment(a, b, c)
 
 
 def _segments_intersect(p1, q1, p2, q2) -> bool:
-    o1, o2, o3, o4 = _orientation(p1,q1,p2), _orientation(p1,q1,q2), _orientation(p2,q2,p1), _orientation(p2,q2,q1)
-    if o1 != o2 and o3 != o4: return True
-    if o1 == 0 and _on_segment(p1,p2,q1): return True
-    if o2 == 0 and _on_segment(p1,q2,q1): return True
-    if o3 == 0 and _on_segment(p2,p1,q2): return True
-    if o4 == 0 and _on_segment(p2,q1,q2): return True
-    return False
+    return _polygon_geometry.segments_intersect(
+        p1, q1, p2, q2, orientation_fn=_orientation, on_segment_fn=_on_segment,
+    )
 
 
 def polygon_intersects_box(points: list[tuple[int, int]], box: tuple[int, int, int, int]) -> bool:
-    if len(points) < 3:
-        return False
-    if any(_point_in_rect(p, box) for p in points):
-        return True
-    corners = [(box[0],box[1]),(box[2],box[1]),(box[2],box[3]),(box[0],box[3])]
-    if any(_point_in_polygon(c, points) for c in corners):
-        return True
-    rect_edges = list(zip(corners, corners[1:]+corners[:1]))
-    poly_edges = list(zip(points, points[1:]+points[:1]))
-    return any(_segments_intersect(a,b,c,d) for a,b in poly_edges for c,d in rect_edges)
+    return _polygon_geometry.polygon_intersects_box(
+        points, box,
+        point_in_rect_fn=_point_in_rect,
+        point_in_polygon_fn=_point_in_polygon,
+        segments_intersect_fn=_segments_intersect,
+    )
 
 
 def polygon_fully_inside_boxes(points: list[tuple[int, int]], boxes: list[tuple[int,int,int,int]]) -> bool:
-    return bool(points) and all(any(_point_in_rect(point, box) for box in boxes) for point in points)
+    return _polygon_geometry.polygon_fully_inside_boxes(
+        points, boxes, point_in_rect_fn=_point_in_rect,
+    )
 
 
 def _box_intersection_area(a: tuple[int,int,int,int], b: tuple[int,int,int,int]) -> int:
-    x0,y0=max(a[0],b[0]),max(a[1],b[1]); x1,y1=min(a[2],b[2]),min(a[3],b[3])
-    return max(0,x1-x0)*max(0,y1-y0)
-
+    return _polygon_geometry.box_intersection_area(a, b)
 
 def _crop_workflow_deps() -> _page_workflow.CropWorkflowDeps:
     """Capture compatibility constructors/callbacks at call time for patchability."""
@@ -3497,24 +3474,10 @@ def split_illustrations(
 
 
 def resolve_crop_worker_count(configured: int = 0, cpu_count: int | None = None) -> int:
-    """Resolve a conservative process count for page-level crop jobs.
-
-    Cropping large dictionary scans can be memory hungry because every worker
-    holds one full source image.  Automatic mode therefore uses at most four
-    workers even on large machines; users may explicitly request up to eight.
-    Setting the value to 1 preserves serial behaviour.
-    """
-    cpus = max(1, int(cpu_count if cpu_count is not None else (os.cpu_count() or 1)))
-    try:
-        requested = int(configured)
-    except (TypeError, ValueError):
-        requested = 0
-    if requested > 0:
-        return max(1, min(requested, cpus, 8))
-    if cpus <= 2:
-        return 1
-    return min(4, max(2, cpus // 2))
-
+    """Historical core entrypoint; obtain patched dependencies at call time."""
+    return _crop_worker_policy.resolve_crop_worker_count(
+        configured, cpu_count, cpu_count_provider=os.cpu_count,
+    )
 
 def split_whole_entries_job(
     image_path: str | Path,
