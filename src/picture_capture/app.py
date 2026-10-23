@@ -126,6 +126,9 @@ from .ui.controllers import (
 from .ui import project_session_workflow as _project_session
 from .ui import review_workspace_workflow as _review_workspace
 from .ui import review_reference_workflow as _review_reference
+from .ui import review_lookup_workflow as _review_lookup
+from .ui import review_simplified_workflow as _review_simplified
+from .ui import review_ocr_compare_workflow as _review_ocr
 from .ui import review_appearance_workflow as _review_appearance
 from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
@@ -2733,371 +2736,48 @@ class ReviewWindow(tk.Toplevel):
         return _review_reference._change_wordslist_locator_mode(self, _review_reference_deps(), _event)
 
     def _refresh_cc_cedict_button_idle(self) -> None:
-        try:
-            state = cc_cedict_status()
-        except Exception:
-            state = None
-        if state is not None and state.installed:
-            self.cc_cedict_lookup_var.set("CC-CEDICT(?)")
-            self.cc_simplified_compare_var.set("CC简(?)")
-        else:
-            self.cc_cedict_lookup_var.set("CC-CEDICT(未装)")
-            self.cc_simplified_compare_var.set("CC简(未装)")
+        return _review_lookup._refresh_cc_cedict_button_idle(self, _review_lookup_deps())
 
     def _set_lookup_source_states(self, *, pending: bool = False, empty: bool = False) -> None:
-        """Reset the compact source badges shown in the review toolbar."""
-        cjk = contains_cjk(self._network_lookup_word)
-        try:
-            cedict_installed = cc_cedict_status().installed
-        except Exception:
-            cedict_installed = False
-        if empty:
-            self.cc_cedict_lookup_var.set("CC-CEDICT(未装)" if not cedict_installed else "CC-CEDICT(?)")
-            self.moedict_lookup_var.set("萌(?)")
-            self.wiktionary_lookup_var.set("Wiki(?)")
-            return
-        if pending:
-            if cjk:
-                self.cc_cedict_lookup_var.set("CC-CEDICT(…)" if cedict_installed else "CC-CEDICT(未装)")
-                self.moedict_lookup_var.set("萌(…)")
-            else:
-                self.cc_cedict_lookup_var.set("CC-CEDICT(—)")
-                self.moedict_lookup_var.set("萌(—)")
-            self.wiktionary_lookup_var.set("Wiki(…)")
+        return _review_lookup._set_lookup_source_states(self, _review_lookup_deps(), pending=pending, empty=empty)
 
     def manage_cc_cedict(self) -> None:
-        """Install/update a user-downloaded CC-CEDICT archive.
-
-        MDBG's website disallows scripted access, so Picture Capture never
-        scrapes or silently downloads it. The user downloads the official
-        archive in a browser, then selects that local file here.
-        """
-        try:
-            state = cc_cedict_status()
-        except Exception:
-            state = None
-        installed_text = ""
-        if state is not None and state.installed:
-            installed_text = f"\n\n当前已安装：{state.entry_count:,} 条\n{state.path}"
-        choose_local = messagebox.askyesno(
-            "CC-CEDICT 安装 / 更新",
-            "是否已经从 CC-CEDICT 官方下载页取得数据文件？\n\n"
-            "【是】选择本地 ZIP / GZ / TXT / U8 文件并安装\n"
-            "【否】打开官方下载页" + installed_text,
-            parent=self,
-        )
-        if not choose_local:
-            try:
-                webbrowser.open(CC_CEDICT_DOWNLOAD_PAGE_URL)
-            except Exception as exc:
-                messagebox.showerror("无法打开下载页", str(exc), parent=self)
-            return
-        source = filedialog.askopenfilename(
-            parent=self,
-            title="选择已下载的 CC-CEDICT 数据文件",
-            filetypes=[
-                ("CC-CEDICT 数据", "*.zip *.gz *.txt *.u8"),
-                ("ZIP", "*.zip"),
-                ("GZip", "*.gz"),
-                ("文本", "*.txt *.u8"),
-                ("所有文件", "*.*"),
-            ],
-        )
-        if not source:
-            return
-        try:
-            installed = install_cc_cedict_from_file(source)
-        except Exception as exc:
-            messagebox.showerror("CC-CEDICT 安装失败", str(exc), parent=self)
-            return
-        self._network_lookup_cache.clear()
-        self.cc_cedict_lookup_var.set("CC-CEDICT(?)")
-        self.cc_simplified_compare_var.set("CC简(?)")
-        messagebox.showinfo(
-            "CC-CEDICT 已安装",
-            f"已安装 {installed.entry_count:,} 条。\n\n位置：\n{installed.path}\n\n"
-            "该词典为所有 Picture Capture 项目共用，无需每个项目重复安装。",
-            parent=self,
-        )
-        if self._active_review_word():
-            self._refresh_cc_simplified_comparison(self.active_index)
-            self._schedule_network_lookup(force=True)
+        return _review_lookup.manage_cc_cedict(self, _review_lookup_deps())
 
     def _cc_simplified_comparison_details(self, index: int | None = None) -> dict[str, object]:
-        """Compare OpenCC output with CC-CEDICT's Simplified field.
-
-        CC-CEDICT is evidence, not an authoritative converter: a missing entry
-        is reported as missing rather than treated as an OpenCC error.
-        """
-        i = self.active_index if index is None else int(index)
-        if not (0 <= i < len(self.vars)):
-            return {"state": "empty", "original": "", "opencc": "", "current": "", "candidates": tuple()}
-        original = self.vars[i].get().strip()
-        if not original or not contains_cjk(original):
-            return {"state": "na", "original": original, "opencc": "", "current": "", "candidates": tuple()}
-        mapping = cc_cedict_simplified_candidates(original)
-        opencc_value = simplify_text(original)
-        current_value = self._simplified_query_for_index(i) if i < len(self.simplified_vars) else (opencc_value or "")
-        candidates = tuple(mapping.candidates)
-        if mapping.found is None:
-            state = "uninstalled" if "未安装" in (mapping.detail or "") else "unavailable"
-        elif not candidates:
-            state = "missing"
-        elif opencc_value is None:
-            state = "opencc_unavailable"
-        elif opencc_value in candidates:
-            state = "match"
-        else:
-            state = "mismatch"
-        return {
-            "state": state, "original": original, "opencc": opencc_value or "",
-            "current": current_value or "", "candidates": candidates,
-            "matched_as": mapping.matched_as, "detail": mapping.detail,
-        }
+        return _review_lookup._cc_simplified_comparison_details(self, _review_lookup_deps(), index)
 
     def _refresh_cc_simplified_comparison(self, index: int | None = None) -> None:
-        try:
-            info = self._cc_simplified_comparison_details(index)
-        except Exception:
-            self.cc_simplified_compare_var.set("CC简(?)")
-            return
-        state = str(info.get("state", ""))
-        candidates = tuple(info.get("candidates", ()))
-        if state == "match":
-            text = "CC简(√)"
-        elif state == "mismatch":
-            if len(candidates) == 1:
-                candidate = str(candidates[0])
-                text = f"CC简:{candidate}"
-                if len(text) > 14:
-                    text = "CC简(1候选)"
-            else:
-                text = f"CC简({len(candidates)}候选)"
-        elif state == "missing":
-            text = "CC简(×)"
-        elif state == "uninstalled":
-            text = "CC简(未装)"
-        elif state == "na":
-            text = "CC简(—)"
-        else:
-            text = "CC简(?)"
-        self.cc_simplified_compare_var.set(text)
+        return _review_lookup._refresh_cc_simplified_comparison(self, _review_lookup_deps(), index)
 
     def show_cc_simplified_comparison(self) -> None:
-        try:
-            info = self._cc_simplified_comparison_details(self.active_index)
-        except Exception as exc:
-            messagebox.showerror("CC-CEDICT 简体比较", str(exc), parent=self)
-            return
-        state = str(info.get("state", ""))
-        if state == "uninstalled":
-            self.manage_cc_cedict()
-            return
-        original = str(info.get("original", ""))
-        opencc_value = str(info.get("opencc", "")) or "（不可用）"
-        current_value = str(info.get("current", "")) or "（空）"
-        candidates = tuple(str(v) for v in info.get("candidates", ()))
-        candidate_text = "、".join(candidates) if candidates else "（未找到繁→简映射）"
-        if state == "match":
-            verdict = "OpenCC 与 CC-CEDICT 的简体词形一致。"
-        elif state == "mismatch":
-            verdict = "OpenCC 与 CC-CEDICT 的简体词形不一致，建议人工复核。"
-        elif state == "missing":
-            verdict = "CC-CEDICT 未提供该词的繁→简映射；这不代表 OpenCC 转换错误。"
-        elif state == "na":
-            verdict = "当前词条不适用中文繁简比较。"
-        else:
-            verdict = "暂时无法完成 CC-CEDICT 与 OpenCC 比较。"
-        current_note = ""
-        if candidates and current_value not in {"（空）", "（不可用）"}:
-            current_note = (
-                "\n当前简体与 CC-CEDICT：" +
-                ("一致" if current_value in candidates else "不一致")
-            )
-        messagebox.showinfo(
-            "CC-CEDICT 简体比较",
-            f"原词条：{original}\nOpenCC：{opencc_value}\n当前简体：{current_value}\n"
-            f"CC-CEDICT 简体：{candidate_text}\n\n{verdict}{current_note}",
-            parent=self,
-        )
+        return _review_lookup.show_cc_simplified_comparison(self, _review_lookup_deps())
 
     def open_lookup_source(self, name: str) -> None:
-        url = self._network_source_urls.get(name, "")
-        if not url:
-            if self._active_review_word():
-                self._schedule_network_lookup(force=True)
-            return
-        try:
-            webbrowser.open(url)
-        except Exception as exc:
-            messagebox.showerror("无法打开词典页面", str(exc), parent=self)
+        return _review_lookup.open_lookup_source(self, _review_lookup_deps(), name)
 
     def _toggle_network_lookup(self) -> None:
-        enabled = bool(self.network_lookup_enabled_var.get())
-        self.parent.settings.review_network_lookup_enabled = enabled
-        self.parent.save_settings()
-        if enabled:
-            self._schedule_network_lookup(force=True)
-        else:
-            self._network_lookup_serial += 1
-            if self._network_lookup_job is not None:
-                try:
-                    self.after_cancel(self._network_lookup_job)
-                except tk.TclError:
-                    pass
-                self._network_lookup_job = None
-            self.network_lookup_status_var.set("网络词汇核验：自动检查已关闭")
-            try:
-                self.network_status_label.configure(fg="#666666")
-            except tk.TclError:
-                pass
-            self._set_lookup_source_states(empty=True)
+        return _review_lookup._toggle_network_lookup(self, _review_lookup_deps())
 
     def _active_review_word(self) -> str:
-        if 0 <= self.active_index < len(self.vars):
-            return self.vars[self.active_index].get().strip()
-        return ""
+        return _review_lookup._active_review_word(self, _review_lookup_deps())
 
     def _schedule_network_lookup(self, word: str | None = None, *, force: bool = False) -> None:
-        if not force and not bool(self.network_lookup_enabled_var.get()):
-            return
-        value = (self._active_review_word() if word is None else str(word)).strip()
-        self._network_lookup_word = value
-        self._network_lookup_serial += 1
-        serial = self._network_lookup_serial
-        if self._network_lookup_job is not None:
-            try:
-                self.after_cancel(self._network_lookup_job)
-            except tk.TclError:
-                pass
-            self._network_lookup_job = None
-        if not value:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
-            try:
-                self.network_status_label.configure(fg="#666666")
-            except tk.TclError:
-                pass
-            self._network_source_urls.clear()
-            self._set_lookup_source_states(empty=True)
-            return
-        cached = self._network_lookup_cache.get(value)
-        if cached is not None:
-            self._apply_network_lookup_result(serial, value, cached)
-            return
-        self.network_lookup_status_var.set(f"网络词汇核验：正在查询“{value}”…")
-        self._network_source_urls.clear()
-        self._set_lookup_source_states(pending=True)
-        try:
-            self.network_status_label.configure(fg="#555555")
-        except tk.TclError:
-            pass
-        delay = 0 if force else 550
-        self._network_lookup_job = self.after(delay, lambda: self._start_network_lookup(serial, value))
+        return _review_lookup._schedule_network_lookup(self, _review_lookup_deps(), word, force=force)
 
     def _start_network_lookup(self, serial: int, word: str) -> None:
-        self._network_lookup_job = None
-        if serial != self._network_lookup_serial or not word:
-            return
-        self._network_pending_serials.add(serial)
-        if self._network_poll_job is None:
-            self._network_poll_job = self.after(100, self._poll_network_lookup_results)
-
-        def worker() -> None:
-            try:
-                result: LexicalLookupResult | None = lookup_word_free(word)
-            except Exception:
-                result = None
-            self._network_result_queue.put((serial, word, result))
-
-        threading.Thread(target=worker, name="picture-capture-network-lookup", daemon=True).start()
+        return _review_lookup._start_network_lookup(self, _review_lookup_deps(), serial, word)
 
     def _poll_network_lookup_results(self) -> None:
-        self._network_poll_job = None
-        while True:
-            try:
-                serial, word, result = self._network_result_queue.get_nowait()
-            except queue.Empty:
-                break
-            self._network_pending_serials.discard(serial)
-            if result is not None:
-                self._network_lookup_cache[word] = result
-            if serial == self._network_lookup_serial and word == self._network_lookup_word:
-                self._apply_network_lookup_result(serial, word, result)
-        if self._network_pending_serials:
-            self._network_poll_job = self.after(100, self._poll_network_lookup_results)
+        return _review_lookup._poll_network_lookup_results(self, _review_lookup_deps())
 
     def _apply_network_lookup_result(
         self, serial: int, word: str, result: LexicalLookupResult | None,
     ) -> None:
-        if serial != self._network_lookup_serial or word != self._network_lookup_word:
-            return
-        if result is None:
-            self.network_lookup_status_var.set(
-                "⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"
-            )
-            try:
-                self.network_status_label.configure(fg="#9a6700")
-            except tk.TclError:
-                pass
-            self._set_lookup_source_states(empty=True)
-            return
-
-        self._network_source_urls = {item.name: item.url for item in result.sources if item.url}
-        by_name = {item.name: item for item in result.sources}
-
-        def marker(item_name: str) -> str:
-            item = by_name.get(item_name)
-            if item is None:
-                return "—"
-            if item.found is True:
-                return "√"
-            if item.found is False:
-                return "×"
-            if item_name == "CC-CEDICT" and "未安装" in (item.detail or ""):
-                return "未装"
-            return "?"
-
-        if contains_cjk(word):
-            self.cc_cedict_lookup_var.set(f"CC-CEDICT({marker('CC-CEDICT')})")
-            self.moedict_lookup_var.set(f"萌({marker('萌典')})")
-        else:
-            self.cc_cedict_lookup_var.set("CC-CEDICT(—)")
-            self.moedict_lookup_var.set("萌(—)")
-        self.wiktionary_lookup_var.set(f"Wiki({marker('维基词典')})")
-
-        found_names = [item.name for item in result.sources if item.found is True]
-        if result.found is True:
-            self.network_lookup_status_var.set(
-                "✓ 有词典收录：" + "、".join(found_names)
-            )
-            status_color = "#1b7f3a"
-        elif result.found is False:
-            self.network_lookup_status_var.set(
-                "○ 各可用词典均未检出精确词条（不代表该词不存在）"
-            )
-            status_color = "#8a5a00"
-        else:
-            self.network_lookup_status_var.set(
-                "⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"
-            )
-            status_color = "#9a6700"
-        try:
-            self.network_status_label.configure(fg=status_color)
-        except tk.TclError:
-            pass
+        return _review_lookup._apply_network_lookup_result(self, _review_lookup_deps(), serial, word, result)
 
     def open_network_web_search(self) -> None:
-        # Keep the manual browser search aligned with the most recent lookup.
-        # This matters when a row-level “网查” button queried the editable
-        # simplified companion rather than the original headword.
-        word = (self._network_lookup_word or self._active_review_word()).strip()
-        if not word:
-            self.network_lookup_status_var.set("网络词汇核验：当前词条为空")
-            return
-        try:
-            webbrowser.open(web_search_url(word))
-        except Exception as exc:
-            messagebox.showerror("无法打开网页搜索", str(exc), parent=self)
+        return _review_lookup.open_network_web_search(self, _review_lookup_deps())
 
     @staticmethod
     def _wordslist_lookup_key(word: str) -> str:
@@ -3180,176 +2860,38 @@ class ReviewWindow(tk.Toplevel):
             )
 
     def _bound_row_entries(self) -> list[WordEntry]:
-        """Return stable rendered-row bindings, with compatibility fallback."""
-        bound = getattr(self, "row_entries", None)
-        return list(bound) if bound is not None else self.parent._ordered_entries_reading_order()
+        return _review_simplified._bound_row_entries(self, _review_simplified_deps())
 
     def _simplified_page_records(self, page_stem: str | None = None) -> dict[str, dict]:
-        stem = str(page_stem or (self.parent.current_page.stem if self.parent.current_page else ""))
-        if not stem:
-            return {}
-        if stem not in self._simplified_page_cache:
-            page = None
-            if self.parent.project:
-                for candidate in self.parent.project.images:
-                    if candidate.stem == stem:
-                        page = candidate
-                        break
-            if page is None and self.parent.current_page and self.parent.current_page.stem == stem:
-                page = self.parent.current_page
-            records = read_simplified_records(simplified_review_path_for_image(page)) if page else {}
-            self._simplified_page_cache[stem] = records
-        return self._simplified_page_cache[stem]
+        return _review_simplified._simplified_page_records(self, _review_simplified_deps(), page_stem)
 
     @staticmethod
     def _simplified_display_from_value(original: str, value: str | None, manual: bool) -> str:
-        if value is None:
-            return "OpenCC不可用"
-        if not manual and value == original:
-            return "√"
-        return value
+        return _review_simplified._simplified_display_from_value(_review_simplified_deps(), original, value, manual)
 
     def _auto_simplified_value(self, original: str, fallback: str | None = None) -> str | None:
-        converted = simplify_text(original)
-        if converted is None:
-            return fallback
-        return converted
+        return _review_simplified._auto_simplified_value(self, _review_simplified_deps(), original, fallback=fallback)
 
     def _capture_simplified_edits(self, page_stem: str | None = None) -> None:
-        stem = str(page_stem or "")
-        if (not stem or not getattr(self, "simplified_vars", [])
-                or self.__dict__.get("_r3_simplified_capture_blocked", False)):
-            return
-        records = self._simplified_page_records(stem)
-        # Preserve rendered row identities across section-order changes.
-        rendered_entries = self._bound_row_entries()
-        # Only capture against the currently rendered page.  During navigation
-        # parent.current_page may already refer to the next page while the old
-        # widgets are still being destroyed.
-        if self.parent.current_page and self.parent.current_page.stem != stem:
-            return
-        for i, entry in enumerate(rendered_entries[:len(self.simplified_vars)]):
-            key = simplified_entry_key(entry.x, entry.y)
-            manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
-            actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
-            display = self.simplified_vars[i].get().strip()
-            expected = self._simplified_display_from_value(entry.word, actual, False)
-            if not manual and display != expected:
-                manual = True
-                if i < len(self.simplified_manual_flags):
-                    self.simplified_manual_flags[i] = True
-                self._simplified_dirty_pages.add(stem)
-            if manual:
-                actual = entry.word if display == "√" else display
-                if i < len(self.simplified_actual_values):
-                    self.simplified_actual_values[i] = actual
-            records[key] = {
-                "x": int(entry.x), "y": int(entry.y),
-                "source_word": entry.word, "text": "" if actual is None else str(actual),
-                "manual": manual,
-            }
+        return _review_simplified._capture_simplified_edits(self, _review_simplified_deps(), page_stem)
 
     def _persist_simplified_page(self, page_stem: str | None = None) -> None:
-        stem = str(page_stem or (self.parent.current_page.stem if self.parent.current_page else ""))
-        if not stem or not self.parent.project:
-            return
-        page = next((item for item in self.parent.project.images if item.stem == stem), None)
-        if page is None:
-            return
-        records = self._simplified_page_records(stem)
-        write_simplified_records(simplified_review_path_for_image(page), stem, records)
-        self._simplified_dirty_pages.discard(stem)
+        return _review_simplified._persist_simplified_page(self, _review_simplified_deps(), page_stem)
 
     def _simplified_query_for_index(self, index: int) -> str:
-        if not (0 <= index < len(self.vars)):
-            return ""
-        if index < len(self.simplified_actual_values):
-            value = self.simplified_actual_values[index]
-            if value is not None and str(value).strip():
-                return str(value).strip()
-        shown = self.simplified_vars[index].get().strip() if index < len(self.simplified_vars) else ""
-        if shown == "√":
-            return self.vars[index].get().strip()
-        if shown and shown != "OpenCC不可用":
-            return shown
-        return ""
+        return _review_simplified._simplified_query_for_index(self, _review_simplified_deps(), index)
 
     def lookup_simplified_online(self, index: int) -> None:
-        if not (0 <= index < len(self.vars)):
-            return
-        self.set_active(index)
-        word = self._simplified_query_for_index(index)
-        if not word:
-            self.network_lookup_status_var.set("网络词汇核验：简化词条为空")
-            return
-        self._schedule_network_lookup(word, force=True)
+        return _review_simplified.lookup_simplified_online(self, _review_simplified_deps(), index)
 
     def _focus_simplified_editor(self, index: int) -> None:
-        self.set_active(index)
-        if not (0 <= index < len(self.simplified_editors)):
-            return
-        # Auto placeholders are scan-friendly but awkward to type over. Select
-        # them on focus so the first keystroke replaces √/OpenCC提示 directly.
-        if self.simplified_vars[index].get() in {"√", "OpenCC不可用"}:
-            try:
-                self.simplified_editors[index].selection_range(0, "end")
-            except tk.TclError:
-                pass
-
+        return _review_simplified._focus_simplified_editor(self, _review_simplified_deps(), index)
 
     def _claim_simplified_clipboard_edit(self, index: int) -> str | None:
-        if not self.parent._claim_page_for_manual_edit():
-            return "break"
-        self.after_idle(lambda i=index: self.on_simplified_key(type("_Event", (), {})(), i))
-        return None
+        return _review_simplified._claim_simplified_clipboard_edit(self, _review_simplified_deps(), index)
 
     def on_simplified_key(self, _event: tk.Event, index: int) -> None:
-        if not (0 <= index < len(self.simplified_vars)):
-            return
-        value = self.simplified_vars[index].get().strip()
-        already_manual = bool(self.simplified_manual_flags[index]) if index < len(self.simplified_manual_flags) else False
-        if not already_manual:
-            original = self.vars[index].get().strip() if index < len(self.vars) else ""
-            auto_refresh = (
-                bool(self.simplified_auto_refresh_flags[index])
-                if index < len(self.simplified_auto_refresh_flags) else True
-            )
-            if auto_refresh:
-                expected_actual = self._auto_simplified_value(
-                    original,
-                    fallback=(self.simplified_actual_values[index] if index < len(self.simplified_actual_values) else None),
-                )
-            else:
-                expected_actual = (
-                    self.simplified_actual_values[index]
-                    if index < len(self.simplified_actual_values) else None
-                )
-            expected = self._simplified_display_from_value(original, expected_actual, False)
-            # Arrow/Home/End/etc. do not turn an untouched saved/OpenCC value
-            # into a manual override merely because a KeyRelease event occurred.
-            if value == expected:
-                return
-        if not self.parent._claim_page_for_manual_edit():
-            return
-        actual = self.vars[index].get().strip() if value == "√" else value
-        if index < len(self.simplified_actual_values):
-            self.simplified_actual_values[index] = actual
-        if index < len(self.simplified_manual_flags):
-            self.simplified_manual_flags[index] = True
-        stem = self._rendered_page_stem
-        if stem:
-            ordered = self.parent._ordered_entries_reading_order()
-            if index < len(ordered):
-                entry = ordered[index]
-                records = self._simplified_page_records(stem)
-                records[simplified_entry_key(entry.x, entry.y)] = {
-                    "x": int(entry.x), "y": int(entry.y),
-                    "source_word": self.vars[index].get().strip(),
-                    "text": actual, "manual": True,
-                }
-                self._simplified_dirty_pages.add(stem)
-        if index == self.active_index:
-            self._refresh_cc_simplified_comparison(index)
+        return _review_simplified.on_simplified_key(self, _review_simplified_deps(), _event, index)
 
     def _schedule_review_font_apply(self) -> None:
         return _review_appearance._schedule_review_font_apply(self, _review_appearance_deps())
@@ -3482,221 +3024,37 @@ class ReviewWindow(tk.Toplevel):
         return self.parent._candidate_for_entry(entry)
 
     def _refresh_simplified_for_index(self, index: int) -> None:
-        if not (0 <= index < len(self.vars) and index < len(self.simplified_vars)):
-            return
-        # Any simplified value already persisted before this page was opened
-        # is independent data, even when it was originally generated by OpenCC.
-        # Only never-saved rows are allowed to follow original-headword edits
-        # automatically during the current session.
-        manual = bool(self.simplified_manual_flags[index]) if index < len(self.simplified_manual_flags) else False
-        refresh_flags = getattr(self, "simplified_auto_refresh_flags", [])
-        auto_refresh = bool(refresh_flags[index]) if index < len(refresh_flags) else True
-        if manual or not auto_refresh:
-            if index == getattr(self, "active_index", -1):
-                self._refresh_cc_simplified_comparison(index)
-            return
-        original = self.vars[index].get().strip()
-        fallback = self.simplified_actual_values[index] if index < len(self.simplified_actual_values) else None
-        actual = self._auto_simplified_value(original, fallback=fallback)
-        if index < len(self.simplified_actual_values):
-            self.simplified_actual_values[index] = actual
-        self.simplified_vars[index].set(self._simplified_display_from_value(original, actual, False))
-        stem = self._rendered_page_stem
-        row_entries = self._bound_row_entries()
-        if stem and index < len(row_entries):
-            entry = row_entries[index]
-            self._simplified_page_records(stem)[simplified_entry_key(entry.x, entry.y)] = {
-                "x": int(entry.x), "y": int(entry.y),
-                "source_word": original, "text": "" if actual is None else str(actual),
-                "manual": False,
-            }
-            self._simplified_dirty_pages.add(stem)
-        if index == getattr(self, "active_index", -1):
-            self._refresh_cc_simplified_comparison(index)
+        return _review_simplified._refresh_simplified_for_index(self, _review_simplified_deps(), index)
 
     def _refresh_all_simplified(self) -> None:
-        for index in range(min(len(self.vars), len(self.simplified_vars))):
-            self._refresh_simplified_for_index(index)
+        return _review_simplified._refresh_all_simplified(self, _review_simplified_deps())
 
     def regenerate_simplified_current_page(self) -> None:
-        """Force OpenCC regeneration for every simplified headword on the current page."""
-        if not self.parent.current_page or not self.vars:
-            return
-        row_entries = self._bound_row_entries()
-        count = min(len(self.vars), len(self.simplified_vars), len(row_entries))
-        if count <= 0:
-            return
-        originals = [self.vars[index].get().strip() for index in range(count)]
-        regenerated = [simplify_text(original) for original in originals]
-        if any(value is None for value in regenerated):
-            messagebox.showerror(
-                "重新简体化",
-                "OpenCC不可用，未覆盖本页已有的简体化结果。",
-                parent=self,
-            )
-            return
-        if not self.parent._claim_page_for_manual_edit():
-            return
-
-        stem = self._rendered_page_stem or self.parent.current_page.stem
-        records = self._simplified_page_records(stem)
-        for index, (entry, original, actual) in enumerate(
-            zip(row_entries[:count], originals, regenerated)
-        ):
-            if index < len(self.simplified_actual_values):
-                self.simplified_actual_values[index] = actual
-            if index < len(self.simplified_manual_flags):
-                self.simplified_manual_flags[index] = False
-            if index < len(self.simplified_auto_refresh_flags):
-                self.simplified_auto_refresh_flags[index] = False
-            self.simplified_vars[index].set(
-                self._simplified_display_from_value(original, actual, False)
-            )
-            records[simplified_entry_key(entry.x, entry.y)] = {
-                "x": int(entry.x),
-                "y": int(entry.y),
-                "source_word": original,
-                "text": str(actual),
-                "manual": False,
-            }
-
-        self._simplified_dirty_pages.add(stem)
-        self._persist_simplified_page(stem)
-        self._refresh_cc_simplified_comparison(self.active_index)
-        self.parent.status_var.set(
-            f"已重新简体化当前页：{self.parent.current_page.name}｜覆盖 {count} 条简体结果"
-        )
+        return _review_simplified.regenerate_simplified_current_page(self, _review_simplified_deps())
 
     def _apply_simplified_visibility(self) -> None:
-        show = bool(self.review_show_simplified_var.get())
-        for index, (frame, widget) in enumerate(zip(self.editor_frames, self.simplified_editors)):
-            button = self.simplified_search_buttons[index] if index < len(self.simplified_search_buttons) else None
-            try:
-                if show:
-                    self._refresh_simplified_for_index(index)
-                    frame.columnconfigure(1, weight=1, uniform=f"review_pair_{index}")
-                    frame.columnconfigure(2, weight=1, uniform=f"review_pair_{index}")
-                    widget.grid()
-                    if button is not None:
-                        button.grid()
-                else:
-                    widget.grid_remove()
-                    if button is not None:
-                        button.grid_remove()
-                    frame.columnconfigure(1, weight=1, uniform="")
-                    frame.columnconfigure(2, weight=0, uniform="")
-            except tk.TclError:
-                pass
+        return _review_simplified._apply_simplified_visibility(self, _review_simplified_deps())
 
     def _toggle_review_simplified(self) -> None:
-        self.parent.settings.review_show_simplified = bool(self.review_show_simplified_var.get())
-        self.parent.save_settings()
-        self._apply_simplified_visibility()
+        return _review_simplified._toggle_review_simplified(self, _review_simplified_deps())
 
     def _change_review_ocr_compare_source(self, _event: tk.Event | None = None) -> None:
-        key = self.OCR_COMPARE_LABEL_TO_KEY.get(self.review_ocr_compare_var.get(), "fusion")
-        self.parent.settings.review_ocr_compare_source = key
-        self.parent.save_settings()
-        self._refresh_editor_ocr_compare()
-        if getattr(self, "_filter_rows_active", False):
-            self.parent.status_var.set(
-                "已切换筛选 OCR 比较来源；点击【筛选】可按新来源重新筛选 OCR 不匹配。"
-            )
+        return _review_ocr._change_review_ocr_compare_source(self, _review_ocr_deps(), _event)
 
     def _ocr_compare_word(self, candidate: dict | None) -> str:
-        key = self.OCR_COMPARE_LABEL_TO_KEY.get(self.review_ocr_compare_var.get(), "fusion")
-        return _candidate_word_for_ocr_source(candidate, key)
+        return _review_ocr._ocr_compare_word(self, _review_ocr_deps(), candidate)
 
     def _refresh_editor_ocr_compare(self, index: int | None = None) -> None:
-        """Outline review editors in red when they differ from the selected OCR source.
-
-        A missing result for the selected OCR engine is neutral: no mismatch
-        outline is shown. Comparison uses the same normalized text key as the
-        coloured OCR-result buttons, so spacing/full-width/punctuation noise
-        does not create a false red border.
-        """
-        if not self.editor_frames or not self.vars:
-            return
-        row_entries = self._bound_row_entries()
-        indices = [index] if index is not None else list(range(min(len(self.vars), len(row_entries))))
-        for i in indices:
-            if i is None or not (0 <= i < len(self.editor_frames)) or i >= len(row_entries):
-                continue
-            candidate = self._candidate_for_entry(row_entries[i])
-            ocr_word = self._ocr_compare_word(candidate)
-            editor_word = self.vars[i].get()
-            mismatch = bool(ocr_word) and _review_similarity_key(editor_word) != _review_similarity_key(ocr_word)
-            frame = self.editor_frames[i]
-            normal_bg = str(frame.cget("bg"))
-            border = "#d32f2f" if mismatch else normal_bg
-            try:
-                frame.configure(
-                    highlightthickness=(2 if mismatch else 1),
-                    highlightbackground=border,
-                    highlightcolor=border,
-                )
-            except tk.TclError:
-                pass
+        return _review_ocr._refresh_editor_ocr_compare(self, _review_ocr_deps(), index)
 
     def _show_ocr_options(self, candidate: dict | None) -> None:
-        """Render Paddle/Tesseract/Lens/fused OCR results on one compact line."""
-        for child in self.ocr_options.winfo_children():
-            child.destroy()
-        self.ocr_result_buttons = []
-        self.active_candidate = candidate
-
-        current_word = self.vars[self.active_index].get() if 0 <= self.active_index < len(self.vars) else ""
-        values: dict[str, str] = {"paddle": "", "tesseract": "", "lens": "", "fusion": ""}
-        if candidate:
-            for engine, _label, word, _confidence, is_final in _candidate_choice_rows(candidate):
-                if is_final:
-                    values["fusion"] = word
-                elif engine in values:
-                    values[engine] = word
-
-        slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))
-        for slot_index, (short_label, key) in enumerate(slots):
-            word = values.get(key, "")
-            if word:
-                bg = _review_similarity_color(_review_text_similarity(current_word, word))
-                button = tk.Button(
-                    self.ocr_options, text=f"{short_label}: {word}",
-                    command=lambda value=word: self.use_ocr_word(value),
-                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
-                    bg=bg, activebackground=bg, foreground="#202020",
-                    highlightthickness=1, highlightbackground=bg,
-                )
-                button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
-                self.ocr_result_buttons.append((button, word))
-            else:
-                button = tk.Button(
-                    self.ocr_options, text=f"{short_label}: -", state="disabled",
-                    anchor="w", justify="left", relief="flat", bd=0, padx=5, pady=2,
-                    bg="#f1f2f4", activebackground="#f1f2f4",
-                    disabledforeground="#777777", highlightthickness=1,
-                    highlightbackground="#e1e4e8",
-                )
-                button.grid(row=0, column=slot_index, sticky="ew", padx=((0 if slot_index == 0 else 3), 0))
-            self.ocr_options.columnconfigure(slot_index, weight=1)
+        return _review_ocr._show_ocr_options(self, _review_ocr_deps(), candidate)
 
     def _refresh_ocr_similarity_colors(self) -> None:
-        """Recolour OCR choices against the currently edited headword."""
-        if not self.ocr_result_buttons:
-            return
-        current_word = self.vars[self.active_index].get() if 0 <= self.active_index < len(self.vars) else ""
-        for button, candidate_word in self.ocr_result_buttons:
-            color = _review_similarity_color(_review_text_similarity(current_word, candidate_word))
-            try:
-                button.configure(bg=color, activebackground=color)
-            except tk.TclError:
-                pass
+        return _review_ocr._refresh_ocr_similarity_colors(self, _review_ocr_deps())
 
     def use_ocr_word(self, word: str) -> None:
-        if not self.editors or not self.parent._claim_page_for_manual_edit():
-            return
-        self.vars[self.active_index].set(word)
-        self.editors[self.active_index].icursor("end")
-        self.on_key(type("_Event", (), {"char": ""})(), self.active_index)
+        return _review_ocr.use_ocr_word(self, _review_ocr_deps(), word)
 
     def _update_active_crop_preview(self, index: int) -> None:
         """Expand the active preview downward from its ordinary crop's top Y."""
@@ -4526,6 +3884,51 @@ def _review_appearance_deps() -> _review_appearance.ReviewAppearanceDeps:
         _effective_review_single_cjk_line_height=_effective_review_single_cjk_line_height,
         parse_review_crop_multiplier=parse_review_crop_multiplier,
         _format_layout_percent=_format_layout_percent,
+    )
+
+
+def _review_lookup_deps() -> _review_lookup.ReviewLookupDeps:
+    """Resolve original collaborators at the moment of callback invocation."""
+    return _review_lookup.ReviewLookupDeps(
+        tk=tk,
+        messagebox=messagebox,
+        webbrowser=webbrowser,
+        filedialog=filedialog,
+        CC_CEDICT_DOWNLOAD_PAGE_URL=CC_CEDICT_DOWNLOAD_PAGE_URL,
+        cc_cedict_status=cc_cedict_status,
+        contains_cjk=contains_cjk,
+        install_cc_cedict_from_file=install_cc_cedict_from_file,
+        cc_cedict_simplified_candidates=cc_cedict_simplified_candidates,
+        simplify_text=simplify_text,
+        lookup_word_free=lookup_word_free,
+        threading=threading,
+        queue=queue,
+        web_search_url=web_search_url,
+    )
+
+
+def _review_simplified_deps() -> _review_simplified.ReviewSimplifiedDeps:
+    """Resolve original collaborators at the moment of callback invocation."""
+    return _review_simplified.ReviewSimplifiedDeps(
+        tk=tk,
+        messagebox=messagebox,
+        read_simplified_records=read_simplified_records,
+        simplified_review_path_for_image=simplified_review_path_for_image,
+        write_simplified_records=write_simplified_records,
+        simplified_entry_key=simplified_entry_key,
+        simplify_text=simplify_text,
+    )
+
+
+def _review_ocr_deps() -> _review_ocr.ReviewOcrDeps:
+    """Resolve original collaborators at the moment of callback invocation."""
+    return _review_ocr.ReviewOcrDeps(
+        tk=tk,
+        _candidate_word_for_ocr_source=_candidate_word_for_ocr_source,
+        _review_similarity_key=_review_similarity_key,
+        _candidate_choice_rows=_candidate_choice_rows,
+        _review_similarity_color=_review_similarity_color,
+        _review_text_similarity=_review_text_similarity,
     )
 
 

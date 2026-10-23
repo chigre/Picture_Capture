@@ -106,6 +106,19 @@ REVIEW_APPEARANCE_SOURCE = (
     Path(__file__).resolve().parents[1]
     / "src/picture_capture/ui/review_appearance_workflow.py"
 ).read_text(encoding="utf-8")
+REVIEW_LOOKUP_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_lookup_workflow.py"
+).read_text(encoding="utf-8")
+REVIEW_SIMPLIFIED_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_simplified_workflow.py"
+).read_text(encoding="utf-8")
+REVIEW_OCR_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "src/picture_capture/ui/review_ocr_compare_workflow.py"
+).read_text(encoding="utf-8")
+
 
 class FormatTests(unittest.TestCase):
 
@@ -6076,7 +6089,7 @@ def test_v21119_review_ui_exposes_text_left_padding_and_live_ocr_similarity():
     assert 'text="文本左边距："' in REVIEW_WORKSPACE_SOURCE
     assert 'textvariable=self.review_left_padding_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self._refresh_ocr_similarity_colors()' in review
-    assert 'bg=bg, activebackground=bg' in review
+    assert 'bg=bg, activebackground=bg' in REVIEW_OCR_SOURCE
     assert 'editor.pack_configure(padx=(padding, 0))' in REVIEW_APPEARANCE_SOURCE
 
 
@@ -6816,7 +6829,7 @@ def test_v2124_review_simplified_is_editable_saved_and_has_network_button():
     assert 'text="网查"' in REVIEW_WORKSPACE_SOURCE
     assert 'command=lambda i=index: self.lookup_simplified_online(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _persist_simplified_page' in review
-    assert 'write_simplified_records(' in review
+    assert 'write_simplified_records(' in REVIEW_SIMPLIFIED_SOURCE
     assert 'def on_simplified_key' in review
 
 
@@ -7015,10 +7028,10 @@ def test_review_network_status_uses_single_line_result_block():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'value="网络词汇核验：等待选择词条"' in review
-    assert '"✓ 有词典收录：" + "、".join(found_names)' in review
-    assert '"○ 各可用词典均未检出精确词条（不代表该词不存在）"' in review
-    assert '"⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"' in review
-    assert '"⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"' in review
+    assert '"✓ 有词典收录：" + "、".join(found_names)' in REVIEW_LOOKUP_SOURCE
+    assert '"○ 各可用词典均未检出精确词条（不代表该词不存在）"' in REVIEW_LOOKUP_SOURCE
+    assert '"⚠ 部分词典未安装或网络来源暂不可用；可继续网络搜索。"' in REVIEW_LOOKUP_SOURCE
+    assert '"⚠ 网络词汇核验暂时失败；可点“网络搜索”手工确认。"' in REVIEW_LOOKUP_SOURCE
 
     label_start = REVIEW_WORKSPACE_SOURCE.index("    self.network_status_label = tk.Label(")
     label_end = REVIEW_WORKSPACE_SOURCE.index("    self._refresh_cc_cedict_button_idle()", label_start)
@@ -7071,7 +7084,7 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     assert "network_actions_more, textvariable=self.wiktionary_lookup_var" in REVIEW_WORKSPACE_SOURCE
     assert 'network_actions_more, text="网络搜索"' in REVIEW_WORKSPACE_SOURCE
     assert "def manage_cc_cedict" in review
-    assert "install_cc_cedict_from_file(source)" in review
+    assert "install_cc_cedict_from_file(source)" in REVIEW_LOOKUP_SOURCE
 
 
 def test_v2129_review_window_has_independent_simplified_font_controls():
@@ -7143,8 +7156,8 @@ def test_v2129_ocr_results_are_compact_single_row():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
     assert 'right, "ocr", "OCR结果"' in REVIEW_WORKSPACE_SOURCE
-    assert 'slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))' in review
-    assert 'grid(row=0, column=slot_index' in review
+    assert 'slots = (("P", "paddle"), ("T", "tesseract"), ("L", "lens"), ("融", "fusion"))' in REVIEW_OCR_SOURCE
+    assert 'grid(row=0, column=slot_index' in REVIEW_OCR_SOURCE
     assert 'text="当前OCR结果"' not in review
 
 
@@ -7195,8 +7208,8 @@ def test_v21210_review_toolbar_has_cc_simplified_comparison():
     assert 'textvariable=self.cc_simplified_compare_var' in REVIEW_WORKSPACE_SOURCE
     assert 'command=self.show_cc_simplified_comparison' in REVIEW_WORKSPACE_SOURCE
     assert 'def _cc_simplified_comparison_details' in review
-    assert 'cc_cedict_simplified_candidates(original)' in review
-    assert 'opencc_value = simplify_text(original)' in review
+    assert 'cc_cedict_simplified_candidates(original)' in REVIEW_LOOKUP_SOURCE
+    assert 'opencc_value = simplify_text(original)' in REVIEW_LOOKUP_SOURCE
 
 
 def test_v21210_cc_simplified_comparison_detects_match_and_mismatch(monkeypatch):

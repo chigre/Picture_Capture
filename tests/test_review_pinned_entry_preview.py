@@ -124,14 +124,18 @@ def test_preview_ocr_and_async_crops_share_stable_review_entry_identity():
 
     source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = (Path(app_module.__file__).parent / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
+    ocr_source = (Path(app_module.__file__).parent / "ui/review_ocr_compare_workflow.py").read_text(encoding="utf-8")
     for before, after in (
         ("def _refresh_editor_ocr_compare(", "def _show_ocr_options("),
         ("def _update_active_crop_preview(", "def _ordinary_review_photo("),
         ("def set_active(", "def _scroll_editor_into_view("),
     ):
-        segment = source.split("    " + before, 1)[1].split("    " + after, 1)[0]
+        owner_source = ocr_source if before == "def _refresh_editor_ocr_compare(" else source
+        prefix = "" if owner_source is ocr_source else "    "
+        segment = owner_source.split(prefix + before, 1)[1].split(prefix + after, 1)[0]
         assert "self._bound_row_entries()" in segment
         assert "self.parent._ordered_entries_reading_order()" not in segment
+    assert "return _review_ocr._refresh_editor_ocr_compare(" in source
     assert "(id(source), int(entry.x), int(entry.y), str(entry.word))" in review_source
     assert "(id(entry), int(entry.x), int(entry.y), str(entry.word))" in review_source
 
