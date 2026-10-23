@@ -749,7 +749,7 @@ def test_manual_recovery_never_trusts_ambiguous_path(tmp_path):
 
 def test_application_page_reopen_supplies_trusted_candidate_override_path():
     from picture_capture import app as gui
-    code = Path(gui.__file__).read_text(encoding="utf-8")
+    code = (Path(gui.__file__).parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     assert "recover_pending_for_page(target_page, manual_path=trusted_manual_path)" in code
 
 
