@@ -1605,6 +1605,74 @@ def collect_violations() -> list[str]:
             ):
                 violations.append(f"review lifecycle callback delegate missing: {method}")
 
+    # Issue #562 — one physical owner for app OCR review selections, evidence
+    # snapshots, manual-selection JSON and pending page persistence.
+    selection_names = {
+        "_paddle_cache_path",
+        "_manual_selection_path",
+        "_read_manual_overrides",
+        "_flush_pending_manual_override",
+        "_write_manual_override",
+        "_queue_proofreading_add_evidence",
+        "_flush_proofreading_add_evidence",
+        "_queue_proofreading_candidate_evidence",
+        "_flush_proofreading_candidate_evidence",
+        "_schedule_deferred_page_save",
+        "set_candidate_selected",
+        "apply_candidate_choice",
+        "candidate_checkbox_changed",
+        "_scroll_review_entry_into_view",
+        "open_ocr_conflict_review",
+        "_current_page_quality_text",
+        "_restore_entry_ocr_metadata",
+    }
+    selection_path = PACKAGE_ROOT / "ui" / "review_selection_workflow.py"
+    if not selection_path.is_file():
+        violations.append("review selection physical owner missing")
+    else:
+        selection_tree = ast.parse(selection_path.read_text(encoding="utf-8"))
+        selection_defs = {
+            node.name for node in selection_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        if not selection_names <= selection_defs or not any(
+            isinstance(node, ast.ClassDef) and node.name == "ReviewSelectionDeps"
+            for node in selection_tree.body
+        ):
+            violations.append("review selection implementation/deps incomplete")
+        if any(
+            isinstance(node, ast.ImportFrom)
+            and node.module in {"app", "picture_capture.app"}
+            for node in ast.walk(selection_tree)
+        ):
+            violations.append("review selection owner imports GUI shell")
+    selection_app_tree = ast.parse(gui_project_app.read_text(encoding="utf-8"))
+    selection_cls = next(
+        (node for node in selection_app_tree.body
+         if isinstance(node, ast.ClassDef) and node.name == "PictureCaptureApp"),
+        None,
+    )
+    selection_adapters = (
+        {node.name: node for node in selection_cls.body
+         if isinstance(node, ast.FunctionDef)} if selection_cls else {}
+    )
+    for method in selection_names:
+        adapter = selection_adapters.get(method)
+        if adapter is None or not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_review_selection"
+            and node.func.attr == method
+            for node in ast.walk(adapter)
+        ) or not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_review_selection_deps"
+            for node in ast.walk(adapter)
+        ):
+            violations.append(f"review selection native delegate missing: {method}")
+
     # Issue #562 — page-index and persisted fill-status are single-source owners.
     page_index_owners = {
         "page_index_workflow.py": [
