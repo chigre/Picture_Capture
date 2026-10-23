@@ -1130,7 +1130,7 @@ behavior remain unverified. Issue #562 remains open for the large
 `app.py` and any remaining OCR core extraction.
 
 
-## Issue #562 — full 24-method GUI preprocessing workstream (2026-10-23; candidate)
+## Issue #562 — full 24-method GUI preprocessing workstream (2026-10-23; merged #647)
 
 After merged #646 (`main@2848f6f8`, exact-head six OS/Python
 jobs and risk tier success), migrate all **24 contiguous
@@ -1173,3 +1173,51 @@ architecture/change guard, undefined-name check and wheel, CodeQL and
 review-thread check. Postmerge main CI, native scanned-page and
 manual GUI/GPU testing remain separately unverified. Keep Issue #562
 open for further substantial `app.py` extraction and root consolidation.
+
+
+## Issue #562 — complete GUI batch dispatch and foreground edit lifecycle (2026-10-23; candidate)
+
+After merged #647 (`main@d83ad3c0`), migrate all **12 contiguous
+`PictureCaptureApp` batch-lifecycle methods** to their canonical
+`ui/batch_workflow.py` implementation. This scope owns the complete
+state transition chain: foreground batch page ownership/state and safe
+manual edit claiming, preserving pending/processing-page save guards
+and keypress exclusions; serial and process-pool parallel dispatch,
+including optional single-GPU-preflight-to-CPU pipeline and bounded
+submission under pause/stop; queue progress polling, GUI progress
+labels/page refresh, completion and error propagation, delayed batch
+bar teardown, and active/cancelled pause/stop states.
+
+The original 12 Tk instance methods remain physical, unchanged
+signatures, defaults and docstrings, dispatching into the leaf with
+the same self object. The frozen `BatchWorkflowDeps` receives **11
+live original app module bindings** per invocation for concurrency,
+Tk, message boxes, CPU worker policy and tracebacks, preserving
+monkeypatch seams without globally modifying class attributes or
+introducing a circular `app` import. The two original lazy imports
+from `ui.batch_progress_budget` and `refinement.progress` are
+rewritten only for their new package location; the rest of all
+**12 original method bodies are byte-identical after removing dependency
+aliases and undoing these relative import adaptations**. No process
+pool lifecycle, page ownership, lock, Tk `after`, queue tuple
+schema, status text, persisted setting, saved file or geometry
+algorithm was deliberately modified.
+
+`app.py` normalized UTF-8 shrinks **733009→706512 bytes**
+(−26497, 3.61%), strict new source cap **706530** with the previous
+historical oversized baseline unchanged and **15 physical root
+Python modules**. Eight new direct regression tests protect import
+isolation, all historical Tk signatures, 11 live dependency
+bindings, 16-option parallel argument forwarding, pending-page
+manual lock, stale-page save guard, safe stop unpausing a worker,
+and nonediting keyboard navigation. AST architecture guard verifies
+unique ownership of the full 12-method lifecycle and complete
+delegation from the original app class.
+
+The exact-head Windows/macOS/Ubuntu × Python3.10/3.13 matrix
+including full pytest, legacy compatibility, Tk GUI smoke, wheel,
+Ruff F821, change policy, and review status is required before
+acceptance. Independently checking main after merge, native GPU/CUDA
+preflight, actual user projects and hands-on GUI remain outstanding.
+Issue #562 stays open for remaining large GUI `app.py` and root
+facade consolidation.

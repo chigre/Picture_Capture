@@ -21,8 +21,11 @@ def test_poll_budget_yields_on_expensive_gui_events_before_count_limit():
 
 
 def test_batch_poll_wires_budget_without_blocking_pause_stop():
-    src = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text("utf-8")
-    poll = src[src.index("    def _poll_batch_queue("):src.index("    def _finish_batch_task(", src.index("    def _poll_batch_queue("))]
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    src = (root / "app.py").read_text("utf-8")
+    owner = (root / "ui" / "batch_workflow.py").read_text("utf-8")
+    assert "return _batch_workflow._poll_batch_queue(" in src
+    poll = owner[owner.index("def _poll_batch_queue("):owner.index("def _finish_batch_task(", owner.index("def _poll_batch_queue("))]
     assert "batch_poll_should_yield(processed_events, poll_started)" in poll
     assert "SATURATED_BATCH_POLL_DELAY_MS if yielded else 80" in poll
     assert "thread.join(" not in poll

@@ -3778,10 +3778,12 @@ def test_v294_explicit_save_cancels_debounce_and_writes_latest_live_state(tmp_pa
 
 
 def test_v294_batch_runner_force_flushes_pending_foreground_checkbox_edits_before_start():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _start_batch_task(")
-    end = text.index("    def _start_parallel_batch_task(", start)
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    text = (root / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_batch_task(" in app
+    start = text.index("def _start_batch_task(")
+    end = text.index("def _start_parallel_batch_task(", start)
     block = text[start:end]
     assert "self._flush_deferred_page_save()" in block
     assert block.index("self._flush_deferred_page_save()") < block.index("self._batch_active = True")
@@ -3990,10 +3992,12 @@ def test_v298_action_row_exposes_select_then_fill_buttons():
 
 
 def test_v296_batch_queue_polling_yields_between_large_progress_bursts():
-    source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
-    start = text.index("    def _poll_batch_queue(self) -> None:")
-    end = text.index("    def _finish_batch_task(", start)
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    app = (root / "app.py").read_text(encoding="utf-8")
+    text = (root / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._poll_batch_queue(" in app
+    start = text.index("def _poll_batch_queue(")
+    end = text.index("def _finish_batch_task(", start)
     block = text[start:end]
     assert "batch_poll_should_yield(processed_events, poll_started)" in block
     assert "SATURATED_BATCH_POLL_DELAY_MS if yielded else 80" in block
@@ -5267,9 +5271,12 @@ def test_v21110_backup_pdic_does_not_touch_page_images():
 def test_v21110_backup_skips_unrelated_full_page_metadata_refresh():
     app_text, _wrapper, body = _phase4r_backup_source_blocks()
     assert "refresh_page_quality=False" in body
-    finish_start = app_text.index("    def _finish_batch_task")
-    finish_end = app_text.index("    def _hide_batch_bar_if_idle", finish_start)
-    finish = app_text[finish_start:finish_end]
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    batch = (root / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._finish_batch_task(" in app_text
+    finish_start = batch.index("def _finish_batch_task(")
+    finish_end = batch.index("def _hide_batch_bar_if_idle(", finish_start)
+    finish = batch[finish_start:finish_end]
     assert 'getattr(self, "_batch_refresh_page_quality", True)' in finish
 
 

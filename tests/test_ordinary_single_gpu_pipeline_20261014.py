@@ -114,13 +114,13 @@ def test_real_paddle_detector_entrypoint_refuses_cpu_stage_before_import():
 
 
 def test_gui_pipeline_displays_per_page_gpu_and_cpu_stage_markers():
-    source = (
-        Path(__file__).resolve().parents[1] / "src"
-        / "picture_capture" / "app.py"
-    ).read_text(encoding="utf-8")
-    start = source.index("    def _start_parallel_batch_task(")
-    end = source.index("    def _finish_batch_task(", start)
-    part = source[start:end]
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    source = (root / "app.py").read_text(encoding="utf-8")
+    owner = (root / "ui" / "batch_workflow.py").read_text(encoding="utf-8")
+    assert "return _batch_workflow._start_parallel_batch_task(" in source
+    start = owner.index("def _start_parallel_batch_task(")
+    end = owner.index("def _finish_batch_task(", start)
+    part = owner[start:end]
     assert 'ProcessPoolExecutor(max_workers=1, mp_context=context)' in part
     assert '"pipeline_stage", position, total, label, "GPU版面预检"' in part
     assert '"pipeline_stage", position, total, label, "CPU画线与保存"' in part

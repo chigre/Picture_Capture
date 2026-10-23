@@ -8,26 +8,29 @@ For the current physical module classification, use
 [`ROOT_MODULE_CLASSIFICATION_20261023.md`](../architecture/ROOT_MODULE_CLASSIFICATION_20261023.md)
 and the latest entries in
 [`PACKAGE_OWNERSHIP_ROADMAP.md`](../architecture/PACKAGE_OWNERSHIP_ROADMAP.md).
-Architecture, preprocessing, crop and OCR batches are merged through
-#646 (main `2848f6f8`); #646 exact-head six-platform CI and risk gate
-all passed. The next candidate branch
-`refactor/562-gui-preprocess-workflow-ownership` migrates the **entire
-24-method GUI preprocessing workflow** out of oversized `app.py` into
-`ui/preprocess_workflow.py`. Scope: preprocess settings/mode locks,
-manual perspective quad editor, analysis worker/actions, diagnostics,
-review navigation, preprocessed working-page promotion, batch preview
-and processed image exports, corrected display-photo caching. All 24
-historical Tk instance/static entrypoints and signatures remain in
-the app, delegating with **43 original live global references** bound
-per call. All moved algorithms verified byte-for-byte identical after
-removing only new dependency aliases. `app.py` normalized source
-**784697→733009 bytes** (−51688, 6.59%), additional strict ceiling
-**733025**, historical oversize baseline unchanged, **15 root modules**.
-Added direct Tk signature/static/patch/isolation tests and AST ownership
-guard. Six-system exact-head CI, GUI smoke, legacy compatibility,
-CodeQL/reviews and postmerge main acceptance are not established yet
-for this GUI branch. Real images, manual GUI and GPU/CUDA validation
-remain separate. Historical phase status continues below.
+Architecture and OCR refactors and the 24-method GUI preprocessing
+extraction are merged through #647 (`main@d83ad3c0`), with no
+other active PRs at branch creation. The current
+`refactor/562-gui-batch-workflow-lifecycle` moves the
+**complete 12-method Tk batch-processing lifecycle** out of giant
+`app.py` into `ui/batch_workflow.py`: foreground page
+ownership/manual edit locking, serial and parallel task startup,
+single-GPU preflight plus CPU worker jobs, backpressure-aware
+queue polling and completion/error refresh, delayed progress UI
+cleanup and safe pause/stop. Public Tk class methods preserve
+signatures/defaults and callable patch seams with **11 original
+app-level dependencies captured each call**; source bodies match
+the original except explicit aliases and two package-relative
+lazy imports. Normalized `app.py` UTF-8 bytes
+**733009→706512** (−26497), new strict cap **706530**,
+unchanged historical oversized baseline, **15 physical root
+modules**. Added direct isolated import, signature, parallel
+forwarding, worker ownership, stop and manual editing tests,
+and full AST ownership/delegation guard.
+Exact-head six-platform CI, GUI smoke, compatibility runner,
+CodeQL/reviews and postmerge main check are not yet verified
+for this branch. Native GPU/CUDA and hands-on GUI projects
+also remain unverified. Historical checkpoint log follows.
 
 ## Current phase
 **Phase 13 — explicit Layout composition migration is underway. Phase 13A design is complete, and Phase 13B1 immutable primitive-ops foundation is complete. Remaining Phase 13B dependency propagation has not yet been implemented.**

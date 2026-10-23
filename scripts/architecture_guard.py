@@ -1163,6 +1163,56 @@ def collect_violations() -> list[str]:
         if not (PACKAGE_ROOT / owner).is_file():
             violations.append(f"canonical OCR module missing: {owner}")
 
+    # #562: the full Tk batch dispatch/foreground ownership/pause-stop
+    # lifecycle has one physical owner; original Tk entrypoint methods stay
+    # signature-compatible delegate surfaces for GUI callbacks and tests.
+    gui_batch_owner = PACKAGE_ROOT / "ui/batch_workflow.py"
+    gui_batch_app = PACKAGE_ROOT / "app.py"
+    gui_batch_methods = {
+        "_foreground_batch_state", "_set_foreground_batch_state",
+        "_claim_page_for_manual_edit", "_can_save_current_during_batch_navigation",
+        "_entry_keypress_batch_guard", "_start_batch_task",
+        "_start_parallel_batch_task", "_poll_batch_queue",
+        "_finish_batch_task", "_hide_batch_bar_if_idle",
+        "_toggle_batch_pause", "_request_batch_stop",
+    }
+    if not gui_batch_owner.is_file():
+        violations.append("canonical GUI batch lifecycle owner missing")
+    else:
+        batch_tree = ast.parse(gui_batch_owner.read_text(encoding="utf-8"))
+        present = {
+            node.name for node in batch_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        }
+        if not gui_batch_methods <= present or "BatchWorkflowDeps" not in present:
+            violations.append("complete batch GUI owner methods or dependency model missing")
+        if any(isinstance(node, ast.ImportFrom)
+               and node.module in {"app", "paddle_headwords_core", "processing"}
+               for node in batch_tree.body):
+            violations.append("GUI batch implementation imports heavyweight app/core")
+    if gui_batch_app.is_file():
+        app_tree = ast.parse(gui_batch_app.read_text(encoding="utf-8"))
+        app_classes = [node for node in app_tree.body
+                       if isinstance(node, ast.ClassDef)
+                       and node.name == "PictureCaptureApp"]
+        class_defs = {
+            node.name: node for node in app_classes[0].body
+            if isinstance(node, ast.FunctionDef)
+        } if app_classes else {}
+        for name in sorted(gui_batch_methods):
+            func = class_defs.get(name)
+            if func is None or not any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_batch_workflow"
+                and node.func.attr == name
+                for node in ast.walk(func)
+            ):
+                violations.append(f"Tk batch method must dispatch to canonical leaf: {name}")
+        if _normalized_source_size(gui_batch_app) > 706_530:
+            violations.append("app.py exceeds 706530-byte GUI batch lifecycle ratchet")
+
     # #562: all 24 Tk page preprocessing methods are now owned by a
     # single leaf module, while app.py preserves the same callback signatures
     # and live module-global patch seams for long-lived user sessions.

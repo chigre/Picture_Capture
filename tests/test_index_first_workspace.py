@@ -136,8 +136,10 @@ def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
 def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
     app, _ = sources()
     assert 'self.batch_bar = ttk.Frame(status_bar, padding=(4, 1)' in app
-    assert 'self.batch_bar.pack(side="right", fill="x")' in app
-    assert 'self.batch_bar.pack_forget()' in app
+    batch = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "batch_workflow.py").read_text("utf-8")
+    assert 'self.batch_bar.pack(side="right", fill="x")' in batch
+    assert 'self.batch_bar.pack_forget()' in batch
+    assert "return _batch_workflow._hide_batch_bar_if_idle(" in app
     assert 'self.batch_pause_button = ttk.Button(' in app
     assert 'self.batch_stop_button = ttk.Button(' in app
     assert 'maximum=100.0, length=160' in app
