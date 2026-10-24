@@ -2500,7 +2500,10 @@ class PictureCaptureApp(tk.Tk):
     def _build_ui(self) -> None:
         """Historical main workspace construction with current Tk bindings."""
         return _main_workspace_build.build_ui(
-            self, deps={"tk": tk, "ttk": ttk},
+            self, deps={"tk": tk, "ttk": ttk,
+                        "PageListGrid": PageListGrid,
+                        "PageThumbnailController": PageThumbnailController,
+                        "bind_context_menu": bind_context_menu},
         )
 
 

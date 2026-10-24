@@ -29,6 +29,12 @@ def test_original_startup_owner_and_live_dependencies():
                   "attach_nonbmp_unicode_input(self)"):
         assert token in init
     assert "self._build_ui()" not in ast.get_source_segment(app, constructor)
+    workspace = (BASE / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert '"PageListGrid": PageListGrid' in app
+    assert '"PageThumbnailController": PageThumbnailController' in app
+    assert '"bind_context_menu": bind_context_menu' in app
+    for dep in ("PageListGrid", "PageThumbnailController", "bind_context_menu"):
+        assert f'{dep} = deps["{dep}"]' in workspace
 
 
 def test_tk_super_before_startup_delegate_and_live_globals(monkeypatch):

@@ -10,6 +10,9 @@ from typing import Any
 def build_ui(self, *, deps: dict[str, Any]) -> None:
     ttk = deps["ttk"]
     tk = deps["tk"]
+    PageListGrid = deps["PageListGrid"]
+    PageThumbnailController = deps["PageThumbnailController"]
+    bind_context_menu = deps["bind_context_menu"]
     # Keep the legacy information bar permanently visible.  Pack it before
     # the expanding body so Windows DPI/window-size changes cannot push it
     # below the visible client area.  General messages and mouse coordinates
