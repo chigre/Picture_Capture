@@ -111,8 +111,10 @@ def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
 
 def test_borderless_index_and_vector_rail_icon_art():
     app, tools = sources()
-    assert 'page_panel = ttk.Frame(sidebar, padding=' in app
-    assert '"六、页面列表"' not in app[app.index('def _build_ui'):app.index('def _build_ui') + 26000]
+    workspace = (Path(__file__).resolve().parents[1] / 'src/picture_capture/ui/main_workspace_build.py').read_text(encoding='utf-8')
+    assert '_main_workspace_build.build_ui(' in app
+    assert 'page_panel = ttk.Frame(sidebar, padding=' in workspace
+    assert '"六、页面列表"' not in workspace
     assert '_draw_rail_icon(icon, symbol)' in tools
     assert 'canvas.create_line(' in tools
     assert 'canvas.create_rectangle(' in tools
