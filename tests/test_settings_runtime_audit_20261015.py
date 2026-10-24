@@ -37,7 +37,9 @@ def test_shared_y_shift_limit_persists_and_is_in_dedicated_tab(tmp_path):
 
 def test_help_panel_has_initial_wraplength():
     source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    label = source[source.index("help_body = ttk.Label("):]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in source
+    owner = (ROOT / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    label = owner[owner.index("help_body = ttk.Label("):]
     assert "wraplength=300" in label[:300]
 
 
