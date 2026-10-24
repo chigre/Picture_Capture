@@ -18,8 +18,8 @@ def detect_entries_job_impl(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
     *,
-    prepared_layout: Any | None = None,,
-    *, deps: dict[str, Any],
+    prepared_layout: Any | None = None,
+    deps: dict[str, Any],
 ) -> int:
     Path = deps["Path"]
     Image = deps["Image"]

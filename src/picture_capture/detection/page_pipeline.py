@@ -22,7 +22,7 @@ def detect_entries_impl(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
     debug_trace: dict[str, Any] | None = None,
-    source_image_path: Path | None = None,,
+    source_image_path: Path | None = None,
     *, deps: dict[str, Any],
 ) -> tuple[list[Entry], Any]:
     _core = deps["_core"]
