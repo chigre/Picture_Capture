@@ -78,6 +78,9 @@ from . import wizard_sample_analysis as _wizard_sample_analysis
 from . import wizard_shell_builder as _wizard_shell_builder
 from . import wizard_reading_controls as _wizard_reading_controls
 from . import wizard_headword_explanations as _wizard_headword_explanations
+from . import wizard_persistence as _wizard_persistence
+from . import wizard_profile_events as _wizard_profile_events
+from . import wizard_visual_markers as _wizard_visual_markers
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -749,238 +752,98 @@ class ProjectProfileWizard(tk.Toplevel):
         return self.profile_label_to_key.get(self.headword_profile_var.get(), "custom")
 
     def _mark_validation_stale(self) -> None:
-        """A saved validation result is meaningful only for the exact current settings."""
-        if getattr(self.working, "profile_last_validated_pages", None):
-            self.working.profile_last_validated_pages = []
-        if hasattr(self, "validation_status_var") and not self._validation_running:
-            self.validation_status_var.set("设置已修改，需要重新测试")
-        if hasattr(self, "feedback_too_many_button"):
-            for button in (
-                self.feedback_too_many_button,
-                self.feedback_good_button,
-                self.feedback_too_few_button,
-            ):
-                button.configure(state="disabled")
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.mark_validation_stale(self)
 
     def _profile_input_changed(self, *, refresh_preview: bool = True) -> None:
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_summary()
-        self._refresh_column_adjust_status()
-        if refresh_preview and hasattr(self, "template_preview_frame"):
-            self.after_idle(self._refresh_template_preview)
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.profile_input_changed(self, refresh_preview=refresh_preview)
 
     def _reading_changed(self) -> None:
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        if hasattr(self, "analysis_suggestion_var") and self._analysis_suggestion:
-            self._analysis_suggestion = {}
-            self.analysis_suggestion_var.set("阅读方向已改变，请重新分析代表页。")
-            self.apply_analysis_button.configure(state="disabled")
-        self._refresh_language_summary()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.reading_changed(self)
 
     def _set_structure_defaults_for_profile(self, key: str) -> None:
-        defaults = recommended_headword_structures(key)
-        self.ordinary_left_edge_var.set(defaults["ordinary_left_edge"])
-        self.cjk_allow_bracketed_var.set(defaults["cjk_bracketed"])
-        self.cjk_allow_single_var.set(defaults["cjk_single_visual"])
-        self.marker_prefix_var.set(defaults["marker_prefix"])
-        self.numbered_prefix_var.set(defaults["numbered_prefix"])
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.set_structure_defaults_for_profile(self, key, deps={
+            "recommended_headword_structures": recommended_headword_structures,
+        })
 
     def _set_tail_defaults_for_profile(self, key: str) -> None:
-        defaults = profile_tail_structure_defaults(key)
-        self.tail_allow_pos_var.set(bool(defaults["allow_pos"]))
-        self.tail_allow_inflection_var.set(bool(defaults["allow_inflection"]))
-        self.tail_allow_variant_var.set(bool(defaults["allow_variant"]))
-        self.tail_allow_pronunciation_var.set(bool(defaults["allow_pronunciation"]))
-        self.tail_allow_descriptor_var.set(bool(defaults["allow_descriptor"]))
-        self.tail_require_selected_var.set(bool(defaults["require_selected"]))
-        self.tail_allow_visual_rescue_var.set(bool(defaults["allow_visual_rescue"]))
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.set_tail_defaults_for_profile(self, key, deps={
+            "profile_tail_structure_defaults": profile_tail_structure_defaults,
+        })
 
     def _set_symbol_defaults_for_profile(self, key: str) -> None:
-        defaults = profile_symbol_inventory_defaults(key)
-        self.symbol_inventory_enabled_var.set(bool(defaults["enabled"]))
-        self.entry_marker_symbols_var.set(" ".join(defaults["entry_markers"]))
-        self.bracket_open_symbols_var.set(" ".join(defaults["bracket_openers"]))
-        self.symbol_visual_rescue_var.set(bool(defaults["visual_rescue"]))
-        self.symbol_lane_required_var.set(bool(defaults["lane_required"]))
-        self.symbol_lane_tolerance_var.set(int(defaults["lane_tolerance_percent"]))
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.set_symbol_defaults_for_profile(self, key, deps={
+            "profile_symbol_inventory_defaults": profile_symbol_inventory_defaults,
+        })
 
     def _specificity_defaults_for_profile(self, key: str) -> tuple[int, float, float, float]:
-        temp = replace(self.working)
-        temp.ocr_language = _ocr_language_code(self.ocr_language_var.get())
-        apply_headword_profile(temp, key)
-        for name, value in language_effective_settings(
-            temp.ocr_language, temp.layout_writing_mode
-        ).items():
-            if hasattr(temp, name):
-                setattr(temp, name, value)
-        column_width = max(1, int(getattr(temp, "column_width", 700) or 700))
-        left_percent = (
-            float(getattr(temp, "paddle_left_tolerance", 34) or 34)
-            * 100.0 / column_width
-        )
-        return (
-            left_percent,
-            float(getattr(temp, "paddle_height_ratio", 1.08)),
-            float(getattr(temp, "paddle_boldness_ratio", 1.12)),
-            float(getattr(temp, "paddle_min_candidate_score", 1.0)),
-        )
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.specificity_defaults_for_profile(self, key, deps={
+            "replace": replace,
+            "_ocr_language_code": _ocr_language_code,
+            "apply_headword_profile": apply_headword_profile,
+            "language_effective_settings": language_effective_settings,
+        })
 
     def _reset_specificity_for_profile(self, key: str) -> None:
-        left, height, bold, score = self._specificity_defaults_for_profile(key)
-        self.headword_left_tolerance_var.set(left)
-        self.headword_height_ratio_var.set(round(height, 2))
-        self.headword_boldness_ratio_var.set(round(bold, 2))
-        self.headword_min_score_var.set(round(score, 2))
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.reset_specificity_for_profile(self, key)
 
     def _headword_changed(self) -> None:
-        # Selecting a structure preset seeds human-readable parser checkboxes;
-        # users may then customize them without opening advanced parameters.
-        self.headword_tuning_level_var.set(0)
-        key = self._current_profile_key()
-        self._set_structure_defaults_for_profile(key)
-        self._set_tail_defaults_for_profile(key)
-        self._set_symbol_defaults_for_profile(key)
-        if key == "cjk_visual":
-            (
-                normalized_entry,
-                normalized_bracket,
-                normalized_samples,
-            ) = _normalize_cjk_visual_symbol_roles(
-                self.entry_marker_symbols_var.get(),
-                self.bracket_open_symbols_var.get(),
-                list(getattr(self, "visual_marker_samples", []) or []),
-            )
-            self.entry_marker_symbols_var.set(normalized_entry)
-            self.bracket_open_symbols_var.set(normalized_bracket)
-            self.visual_marker_samples = normalized_samples
-            self._refresh_symbol_template_summary()
-        self._reset_specificity_for_profile(key)
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_headword_description()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.headword_changed(self, deps={
+            "_normalize_cjk_visual_symbol_roles": _normalize_cjk_visual_symbol_roles,
+        })
 
     def _headword_structure_changed(self) -> None:
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_headword_structure_summary()
-        self._refresh_headword_specificity_visibility()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.headword_structure_changed(self)
 
     def _headword_specificity_changed(self) -> None:
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_headword_tuning_status()
-        self._refresh_symbol_template_summary()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.headword_specificity_changed(self)
 
     def _refresh_symbol_template_summary(self) -> None:
-        if not hasattr(self, "effective_entry_markers_var"):
-            return
-        entry = split_configured_symbols(self.entry_marker_symbols_var.get())
-        bracket = split_configured_symbols(self.bracket_open_symbols_var.get())
-        self.effective_entry_markers_var.set(
-            "有效入口标记：" + (" ".join(entry) if entry else "无")
-        )
-        self.effective_bracket_markers_var.set(
-            "有效括号起始：" + (" ".join(bracket) if bracket else "无")
-        )
-        samples = list(getattr(self, "visual_marker_samples", []) or [])
-        entry_count = sum(
-            1 for sample in samples
-            if str(sample.get("role") or "") == "entry_marker"
-        )
-        bracket_count = sum(
-            1 for sample in samples
-            if str(sample.get("role") or "") == "bracket_open"
-        )
-        self.visual_marker_sample_count_var.set(
-            f"入口标记样本：{entry_count} ｜ 括号起始样本：{bracket_count}"
-        )
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.refresh_symbol_template_summary(self, deps={
+            "split_configured_symbols": split_configured_symbols,
+        })
 
     def _capture_visual_marker_sample(self) -> None:
-        if not self.project.images:
-            messagebox.showinfo(
-                "无法采样", "项目中没有可用页面。", parent=self,
-            )
-            return
-        initial_index = 0
-        if self._validation_results:
-            try:
-                initial_index = int(
-                    self._validation_results[
-                        self.validation_preview_slot % len(self._validation_results)
-                    ][0]
-                )
-            except (TypeError, ValueError, IndexError):
-                initial_index = 0
-        elif self.sample_indices:
-            initial_index = int(self.sample_indices[0])
-        initial_role, initial_literal = _visual_marker_capture_defaults(
-            marker_prefix_enabled=bool(self.marker_prefix_var.get()),
-            bracket_enabled=bool(self.cjk_allow_bracketed_var.get()),
-            entry_text=self.entry_marker_symbols_var.get(),
-            bracket_text=self.bracket_open_symbols_var.get(),
-        )
-        VisualMarkerCaptureDialog(
-            self,
-            self.project.images,
-            initial_index=initial_index,
-            initial_role=initial_role,
-            initial_literal=initial_literal,
-            on_saved=self._visual_marker_sample_saved,
-        )
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.capture_visual_marker_sample(self, deps={
+            "messagebox": messagebox,
+            "_visual_marker_capture_defaults": _visual_marker_capture_defaults,
+            "VisualMarkerCaptureDialog": VisualMarkerCaptureDialog,
+        })
 
     def _visual_marker_sample_saved(self, sample: dict) -> None:
-        samples = [
-            dict(item) for item in getattr(self, "visual_marker_samples", []) or []
-        ]
-        sample_id = str(sample.get("id") or "")
-        if sample_id:
-            samples = [
-                item for item in samples
-                if str(item.get("id") or "") != sample_id
-            ]
-        samples.append(dict(sample))
-        self._replace_visual_marker_samples(samples)
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.visual_marker_sample_saved(self, sample)
 
     def _replace_visual_marker_samples(self, samples: list[dict]) -> None:
-        self.visual_marker_samples = [dict(sample) for sample in samples]
-        self.working.profile_symbol_template_version = 1
-        self.working.profile_symbol_templates_json = (
-            serialize_visual_marker_samples(self.visual_marker_samples)
-        )
-        self._refresh_symbol_template_summary()
-        self._headword_specificity_changed()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.replace_visual_marker_samples(self, samples, deps={
+            "serialize_visual_marker_samples": serialize_visual_marker_samples,
+        })
 
     def _show_visual_marker_samples(self) -> None:
-        if not getattr(self, "visual_marker_samples", None):
-            messagebox.showinfo(
-                "本词典视觉标记样本",
-                "尚未保存视觉标记样本。请先点击【从页面采样…】。",
-                parent=self,
-            )
-            return
-        VisualMarkerSamplesDialog(
-            self,
-            [dict(sample) for sample in self.visual_marker_samples],
-            on_changed=self._replace_visual_marker_samples,
-        )
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.show_visual_marker_samples(self, deps={
+            "messagebox": messagebox,
+            "VisualMarkerSamplesDialog": VisualMarkerSamplesDialog,
+        })
 
     def _clear_visual_marker_samples(self) -> None:
-        if not getattr(self, "visual_marker_samples", None):
-            return
-        if not messagebox.askyesno(
-            "清空视觉标记样本",
-            "确定清空当前项目保存的全部视觉标记样本吗？\n"
-            "原始扫描页不会被修改。",
-            parent=self,
-        ):
-            return
-        self._replace_visual_marker_samples([])
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_visual_markers.clear_visual_marker_samples(self, deps={
+            "messagebox": messagebox,
+        })
 
     def _refresh_headword_structure_summary(self) -> None:
         """Historical Wizard method; delegate to canonical UI owner."""
@@ -991,28 +854,14 @@ class ProjectProfileWizard(tk.Toplevel):
         return _wizard_headword_explanations.refresh_headword_specificity_visibility(self)
 
     def _refresh_headword_tuning_status(self) -> None:
-        if not hasattr(self, "headword_tuning_status_var"):
-            return
-        level = max(-2, min(2, int(self.headword_tuning_level_var.get())))
-        labels = {
-            -2: "当前自动调节：明显放宽（-2）",
-            -1: "当前自动调节：轻度放宽（-1）",
-            0: "当前自动调节：标准（0）",
-            1: "当前自动调节：轻度收紧（+1）",
-            2: "当前自动调节：明显收紧（+2）",
-        }
-        self.headword_tuning_status_var.set(labels[level])
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.refresh_headword_tuning_status(self)
 
     def _custom_name_changed(self) -> None:
-        # Renaming the custom structure is presentation metadata; recognition
-        # settings are unchanged, so a completed Profile test remains valid.
-        current = self._current_profile_key()
-        self.profile_choices = ordered_headword_profiles(self.custom_name_var.get())
-        self.profile_label_to_key = dict(self.profile_choices)
-        self.headword_combo.configure(values=tuple(label for label, _key in self.profile_choices))
-        self.headword_profile_var.set(self._profile_label_for_key(current))
-        self._refresh_headword_description()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.custom_name_changed(self, deps={
+            "ordered_headword_profiles": ordered_headword_profiles,
+        })
 
     def _headword_example_asset(self, profile_key: str) -> Path | None:
         filename = HEADWORD_EXAMPLE_FILES.get(profile_key)
@@ -1047,12 +896,11 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _ocr_language_changed(self) -> None:
-        language = _ocr_language_code(self.ocr_language_var.get())
-        auto_index = OCR_TO_INDEX_LANGUAGE.get(language)
-        if auto_index:
-            self.index_language_var.set(auto_index)
-        self._refresh_language_summary()
-        self._refresh_summary()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_profile_events.ocr_language_changed(self, deps={
+            "_ocr_language_code": _ocr_language_code,
+            "OCR_TO_INDEX_LANGUAGE": OCR_TO_INDEX_LANGUAGE,
+        })
 
     def _refresh_language_summary(self) -> None:
         """Historical Wizard method; delegate to canonical UI owner."""
@@ -1160,57 +1008,27 @@ class ProjectProfileWizard(tk.Toplevel):
     def _persist_current_profile(
         self, *, finalize: bool = False, apply_runtime: bool = False,
     ) -> AppSettings:
-        """Write current Wizard fields so navigation/closing cannot lose work."""
-        settings = self._settings_from_ui()
-        if not finalize:
-            # A partial Wizard save is a recoverable draft, not proof that a
-            # new-project Profile has completed the full setup workflow.
-            settings.profile_setup_version = int(
-                getattr(self.working, "profile_setup_version", 0) or 0
-            )
-        settings.profile_last_validated_pages = list(
-            getattr(self.working, "profile_last_validated_pages", []) or []
-        )
-        copy_settings(self.parent.settings, settings)
-        self.parent.settings.to_json(settings_path(self.project.root))
-        write_project_profile(
-            project_profile_path(self.project.root),
-            self.parent.settings,
-            self.parent.settings.dictionary_profile_id,
-            force=True,
-        )
-        self.working = replace(settings)
-        self.parent.sync_quick_settings()
-        if apply_runtime:
-            self.parent.redraw()
-        return settings
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_persistence.persist_current_profile(self, finalize=finalize, apply_runtime=apply_runtime, deps={
+            "replace": replace,
+            "copy_settings": copy_settings,
+            "settings_path": settings_path,
+            "write_project_profile": write_project_profile,
+            "project_profile_path": project_profile_path,
+        })
 
     def _save_profile_progress(
         self, *, finalize: bool = False, apply_runtime: bool = False,
         status: str = "Project Profile 当前内容已保存",
     ) -> bool:
-        try:
-            self._persist_current_profile(
-                finalize=finalize, apply_runtime=apply_runtime,
-            )
-            self.parent.status_var.set(status)
-            return True
-        except Exception as exc:
-            messagebox.showerror(
-                "Project Profile 保存失败", str(exc), parent=self,
-            )
-            return False
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_persistence.save_profile_progress(self, finalize=finalize, apply_runtime=apply_runtime, status=status, deps={
+            "messagebox": messagebox,
+        })
 
     def _move_step(self, delta: int) -> None:
-        # 上一步 / 下一步 are explicit save points.
-        if not self._save_profile_progress():
-            return
-        current = self.notebook.index(self.notebook.select())
-        target = max(0, min(len(self.tabs) - 1, current + int(delta)))
-        self.notebook.select(self.tabs[target])
-        if (current == 0 and target == 1 and self.working.dictionary_layout_kind != "illustrated"
-                and not self._analysis_suggestion and not self._analysis_running):
-            self.analyze_representative_pages(auto_apply=True)
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_persistence.move_step(self, delta)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:
         """Retained compatibility method; implementation in representative-page owner."""
@@ -1338,62 +1156,14 @@ class ProjectProfileWizard(tk.Toplevel):
         return _wizard_validation_visuals.finish_validation(self, results)
 
     def save_and_close(self) -> None:
-        # The confirmation button saves immediately, even if the user chooses
-        # to go back to validation instead of closing the Wizard.
-        if not self._save_profile_progress(
-            finalize=False,
-            status="Project Profile 当前内容已保存",
-        ):
-            return
-        try:
-            if not self.working.profile_last_validated_pages:
-                if not messagebox.askyesno(
-                    "Profile 尚未完整验证",
-                    "当前设置尚未通过全部代表页测试，或测试后又修改了设置。\n\n"
-                    "建议先到【4 测试与确认】运行“测试当前 Profile”。"
-                    "是否仍然保存并使用当前设置？",
-                    parent=self,
-                ):
-                    self.notebook.select(self.tabs[3])
-                    return
-            if not self._save_profile_progress(
-                finalize=True,
-                apply_runtime=True,
-                status="Project Profile 已保存并应用",
-            ):
-                return
-            self._closing = True
-            if self._validation_running:
-                self._validation_close_requested = True
-                self._validation_stop_event.set()
-                self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
-                return
-            self.destroy()
-        except Exception as exc:
-            messagebox.showerror("Project Profile 保存失败", str(exc), parent=self)
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_persistence.save_and_close(self, deps={
+            "messagebox": messagebox,
+        })
 
     def _close_without_save(self) -> None:
-        # 关闭也先保存当前页；因此误关窗口不会丢掉尚未切页的输入。
-        if not self._save_profile_progress(
-            finalize=False,
-            apply_runtime=True,
-            status="Project Profile 当前内容已保存",
-        ):
-            return
-        if self.new_project and int(
-            getattr(self.parent.settings, "profile_setup_version", 0) or 0
-        ) < PROFILE_SETUP_VERSION:
-            if not messagebox.askyesno(
-                "尚未完成 Project Profile",
-                "当前内容已经保存。项目 Profile 尚未完整确认，确定先关闭吗？"
-                "以后可从【项目Profile】继续。",
-                parent=self,
-            ):
-                return
-        self._closing = True
-        if self._validation_running:
-            self._validation_close_requested = True
-            self._validation_stop_event.set()
-            self.validation_status_var.set("正在安全结束当前测试页，完成后关闭…")
-            return
-        self.destroy()
+        """Preserve original Wizard call path and live globals."""
+        return _wizard_persistence.close_without_save(self, deps={
+            "messagebox": messagebox,
+            "PROFILE_SETUP_VERSION": PROFILE_SETUP_VERSION,
+        })
