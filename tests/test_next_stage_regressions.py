@@ -1446,7 +1446,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     assert "theme_use(" not in styles
     for token in ('"PC.Section.TLabelframe"','"PC.Treeview"','"PC.Footer.TFrame"','"PC.EditActive.TButton"'):
         assert token in styles
-    ui=app.split("    def _build_ui(self) -> None:",1)[1].split("    def _pointer_over_sidebar(",1)[0]
+    assert "_main_workspace_build.build_ui(" in app
+    ui=(root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert 'style="PC.Treeview"' in ui
     assert 'install_workspace_tools(self, sidebar, sidebar_host)' in ui
     assert '"一、版面参数"' in tools and '"二、显示设置"' in tools
@@ -3446,9 +3447,8 @@ def test_ordinary_backup_checkbox_defaults_and_two_row_auto_layout_grid():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    start = source.index("    def _add_check_group(")
-    end = source.index("\n    def _add_collapsible_settings(", start)
-    check_group = source[start:end]
+    assert "_interactive_settings_panels.add_check_group(" in source
+    check_group = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert 'child_row = 0 if index < 3 else 1' in check_group
     assert 'child_col = index if index < 3 else index - 3' in check_group
     ordered = (
