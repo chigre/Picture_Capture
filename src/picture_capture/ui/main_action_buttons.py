@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 def sidebar_action_button_impl(
-    self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
+    self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
     deps: dict[str, Any],
 ) -> tk.Widget:
     ttk = deps["ttk"]
@@ -65,7 +65,7 @@ def sidebar_action_button_impl(
 
 
 def footer_action_button_impl(
-    self, parent: tk.Misc, text: str, command, *, role: str
+    self, parent: tk.Misc, text: str, command, *, role: str,
     deps: dict[str, Any],
 ) -> tk.Button:
     tk = deps["tk"]
