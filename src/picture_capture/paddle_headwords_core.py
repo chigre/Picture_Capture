@@ -696,16 +696,8 @@ def parse_headword_text(
 
 
 def _looks_like_marker_noise_lemma(parsed: HeadwordParse | None) -> bool:
-    """Reject only very narrow square/bullet OCR artifacts used as fake lemmas.
-
-    Examples observed on these pages include ``Ml adj./s.`` where the printed
-    square marker was OCRed as two letters.  Real short acronym entries normally
-    carry a descriptor such as ``Sigla de`` and therefore are not covered here.
-    """
-    if not parsed or parsed.has_descriptor or parsed.has_inflection:
-        return False
-    compact = re.sub(r"[^A-Za-z]", "", parsed.raw).casefold()
-    return compact in {"ml", "ll", "il", "ii", "l"}
+    """Historical OCR marker-noise gate with current regexp module."""
+    return _lemma_parser.looks_like_marker_noise_lemma(parsed, regex_module=re)
 
 def _ink_ratio(gray: np.ndarray, box: tuple[int, int, int, int]) -> float:
     return _boundary_measurements.ink_ratio(gray, box)
@@ -1359,14 +1351,8 @@ def _attach_source_candidate_coordinates(
     )
 
 def _candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
-    if not candidate:
-        return None
-    value = candidate.get("_axis_v", candidate.get("source_y"))
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
+    """Historical transient reading-axis candidate coordinate lookup."""
+    return _source_candidate_coordinates.candidate_axis_v(candidate)
 
 def _source_only_persistence(value: Any) -> Any:
     """Historical source-coordinate persistence, preserving callable origin."""
