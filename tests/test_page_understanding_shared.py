@@ -255,10 +255,16 @@ def test_processing_builds_shared_understanding_before_all_detector_modes():
 
 
 def test_reliable_page_uses_one_geometry_for_ocr_and_combined_generation():
-    source = inspect.getsource(processing._shared_detector_observations)
-    assert "_geometry_from_page_understanding(understanding)" in source
+    from picture_capture.detection import shared_observations
+
+    facade = inspect.getsource(processing._shared_detector_observations)
+    source = inspect.getsource(shared_observations.shared_detector_observations)
+    # Keep both the live historical hook and the actual shared geometry owner.
+    assert "_geometry_from_page_understanding" in facade
+    assert "_core._fuse_detection_entries" in facade
+    assert "geometry_from_page_understanding(understanding)" in source
     assert "detect_paddle_headwords(" in source
-    assert "_fuse_detection_entries(" in source
+    assert "fuse_detection_entries(" in source
     assert "derive_geometry(" not in source
 
 
