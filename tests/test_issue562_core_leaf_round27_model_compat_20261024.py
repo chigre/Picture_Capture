@@ -60,14 +60,14 @@ def test_all_model_classes_keep_historical_module_and_same_identity():
 def test_geometry_preserves_source_coordinate_transforms_and_dataclass_pickles():
     path = core.ColumnPath([(0, 10), (20, 30), (40, 20)])
     assert [path.x_at(y) for y in [-5, 0, 10, 25, 40, 100]] == [10, 10, 20, 28, 20, 20]
-    assert path.x_bounds(12, 28) == (22, 28)
+    assert path.x_bounds(12, 28) == (22, 30)
     geometry = core.Geometry(
         column_starts=[10], column_widths=[80], top=0, bottom=40,
         column_paths=[path], source_size=(100, 80),
         transform=LayoutTransform("mirror_x"),
     )
     assert geometry.x_at(0, 10) == 20
-    assert geometry.x_bounds(0, 12, 28) == (22, 28)
+    assert geometry.x_bounds(0, 12, 28) == (22, 30)
     assert geometry.source_to_canonical(20, 12) == (79, 12)
     restored = pickle.loads(pickle.dumps(geometry))
     assert type(restored) is core.Geometry
