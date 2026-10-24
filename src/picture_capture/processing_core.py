@@ -66,6 +66,10 @@ from .ocr import legacy_entry_text_reading as _legacy_entry_text_reading
 from .crop import illustration_export as _illustration_export
 from .crop import illustration_source_bounds as _illustration_source_bounds
 from .crop import single_line_export as _single_line_export
+from .ocr import tesseract_subprocess as _tesseract_subprocess
+from .refinement import existing_entry_workflow as _existing_entry_workflow
+from .illustration import ppp_detection_update as _ppp_detection_update
+from .illustration import crop_box_policy as _illustration_crop_box_policy
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -682,31 +686,16 @@ def refine_existing_entries(
     source_image_path: Path | None = None,
     fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine saved Y while preserving entry identity and text."""
-    if source_image_path is None:
-        source, effective, analysis_source, geometry = _page_geometry_context(
-            image, settings, profile_page_index,
-        )
-        return _refine_existing_entries_with_geometry(
-            entries, effective, analysis_source, geometry,
-        )
-
-    from .refinement.analysis import prepare_refinement_analysis
-
-    prep_kwargs = {"fixed_half_gutter": True} if fixed_half_gutter else {}
-    source, effective, analysis_source = prepare_refinement_analysis(
-        image, settings, profile_page_index, source_image_path=source_image_path,
-        **prep_kwargs,
+    """Historical Y refinement with original analysis disposal and call hooks."""
+    return _existing_entry_workflow.refine_existing_entries_impl(
+        image, entries, settings, profile_page_index=profile_page_index,
+        source_image_path=source_image_path, fixed_half_gutter=fixed_half_gutter,
+        deps={
+            "_page_geometry_context": _page_geometry_context,
+            "_refine_existing_entries_with_geometry": _refine_existing_entries_with_geometry,
+            "derive_geometry": derive_geometry,
+        },
     )
-    try:
-        geometry = derive_geometry(analysis_source, effective)
-        return _refine_existing_entries_with_geometry(
-            entries, effective, analysis_source, geometry,
-            align_to_ink_top=True, fixed_half_gutter=fixed_half_gutter,
-        )
-    finally:
-        analysis_source.close()
-        source.close()
 
 
 def _refine_existing_entries_with_geometry(
@@ -755,25 +744,15 @@ def detect_entries_job(
 
 
 def run_tesseract(image: Image.Image, language: str, executable: str = "tesseract", psm: int = 7) -> str:
-    resolved = find_tesseract(executable)
-    if not resolved:
-        raise RuntimeError(
-            "未找到 Tesseract OCR。请在环境中心安装/选择 Tesseract 可执行程序，并检查当前项目所需语言包。"
-        )
-    payload = BytesIO()
-    normalize_page_rgb(image).save(payload, format="PNG")
-    command = [str(resolved), "stdin", "stdout", "-l", language, "--psm", str(psm)]
-    try:
-        result = subprocess.run(
-            command, input=payload.getvalue(), stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, timeout=120,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Tesseract OCR 超时（120 秒）；已终止本次识别。") from exc
-    if result.returncode:
-        detail = result.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"Tesseract OCR 失败：{detail}")
-    return result.stdout.decode("utf-8", errors="replace")
+    """Historical Tesseract subprocess with live discovery and pixel hooks."""
+    return _tesseract_subprocess.run_tesseract_impl(
+        image, language, executable, psm, deps={
+            "find_tesseract": find_tesseract,
+            "BytesIO": BytesIO,
+            "normalize_page_rgb": normalize_page_rgb,
+            "subprocess": subprocess,
+        },
+    )
 
 
 def column_index(x: int, geometry: Geometry, y: int = 0) -> int:
@@ -1252,34 +1231,20 @@ def detect_illustrations_to_ppp(
     image_path: Path, settings: AppSettings, *, profile_page_index: int = 0,
     detected_regions: list[PolygonRegion] | None = None,
 ) -> dict[str, int]:
-    """Detect illustrations and safely update one page's PPP file.
-
-    Manual polygons are never overwritten.  Re-running detection replaces only
-    previous AUTO polygons, making the operation idempotent and safe to tune.
-    """
-    image_path = Path(image_path)
-    read_path = ppp_read_path_for_image(image_path)
-    write_path = ppp_write_path_for_image(image_path)
-    existing = read_ppp(read_path)
-    manual = [r for r in existing if not is_auto_illustration_region(r)]
-    detected = (
-        list(detected_regions) if detected_regions is not None else
-        detect_illustration_regions(
-            image_path, settings, profile_page_index=profile_page_index,
-        )
+    """Historical PPP persistence: manual entries survive auto-redetection."""
+    return _ppp_detection_update.detect_illustrations_to_ppp_impl(
+        image_path, settings, profile_page_index=profile_page_index,
+        detected_regions=detected_regions, deps={
+            "Path": Path,
+            "ppp_read_path_for_image": ppp_read_path_for_image,
+            "ppp_write_path_for_image": ppp_write_path_for_image,
+            "read_ppp": read_ppp,
+            "is_auto_illustration_region": is_auto_illustration_region,
+            "detect_illustration_regions": detect_illustration_regions,
+            "_polygon_bbox": _polygon_bbox,
+            "_overlap_fraction": _overlap_fraction,
+        },
     )
-    manual_boxes = [b for r in manual if (b := _polygon_bbox(r)) is not None]
-    accepted: list[PolygonRegion] = []
-    for region in detected:
-        box = _polygon_bbox(region)
-        if box is None:
-            continue
-        if any(_overlap_fraction(box, mb) >= 0.25 for mb in manual_boxes):
-            continue
-        accepted.append(region)
-    from .illustration.labels import write_ordered_auto_ppp
-    write_ordered_auto_ppp(write_path, manual, accepted, image_path, settings, profile_page_index)
-    return {"manual": len(manual), "auto": len(accepted), "total": len(manual) + len(accepted)}
 
 
 def detect_illustrations_job(
@@ -1319,23 +1284,13 @@ def illustration_polygon_box(
     bottom: int | None = None,
     margin_px: int = 0,
 ) -> tuple[int, int, int, int] | None:
-    """Return the effective illustration crop box after page-boundary clipping."""
-    if len(region.points) < 3:
-        return None
-    bottom = image.height if bottom is None else max(1, min(image.height, int(bottom)))
-    xs = [point[0] for point in region.points]
-    ys = [point[1] for point in region.points]
-    raw = (
-        min(xs) - margin_px,
-        min(ys) - margin_px,
-        max(xs) + 1 + margin_px,
-        max(ys) + 1 + margin_px,
+    """Historical illustration source-image polygon crop bounds."""
+    return _illustration_crop_box_policy.illustration_polygon_box_impl(
+        image, region, top=top, bottom=bottom, margin_px=margin_px,
+        deps={
+            "clamp_box": clamp_box,
+        },
     )
-    box = clamp_box(raw, image)
-    clipped = (box[0], max(box[1], int(top)), box[2], min(box[3], int(bottom)))
-    if clipped[2] - clipped[0] <= 1 or clipped[3] - clipped[1] <= 1:
-        return None
-    return clipped
 
 
 def split_illustrations(
