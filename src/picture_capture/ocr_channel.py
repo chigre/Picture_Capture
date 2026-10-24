@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
 from .ocr.engines import find_tesseract, run_google_lens
 from .quality.inference_performance import resolve_inference_policy, paddle_constructor_variants

@@ -17,7 +17,7 @@ import threading
 import weakref
 from collections import OrderedDict
 
-from .models import AppSettings, Entry
+from ..models import AppSettings, Entry
 
 ENTRY_SOURCES = {"indent", "symbol_sample", "large_head", "ocr", "manual", "unknown"}
 ENTRY_SCALES = {"regular", "oversized"}

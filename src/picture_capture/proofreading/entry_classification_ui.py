@@ -3,7 +3,7 @@ from __future__ import annotations
 """Static proofreading UI helpers for entry regular/oversized classification."""
 
 from typing import Any
-from ..entry_classification import (
+from ..proofreading.classification import (
     get_entry_classification,
     set_entry_scale_manual,
 )

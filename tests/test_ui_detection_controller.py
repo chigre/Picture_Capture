@@ -506,8 +506,10 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "DetectionController" in imports
-    assert "self.detection_controller = DetectionController(self)" in app
-    assert app.index("self.detection_controller = DetectionController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.detection_controller = DetectionController(self)" in startup
+    assert startup.index("self.detection_controller = DetectionController(self)") < startup.index("self._build_ui()")
     assert "def _detection_controller_for_call(" in app
     assert 'self.__dict__.get("detection_controller")' in app
 

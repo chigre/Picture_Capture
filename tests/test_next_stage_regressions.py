@@ -397,9 +397,8 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
     import picture_capture.app as app_module
 
     source = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    detect_start = source.index("    def _detect_pages(")
-    detect_end = source.index("    def clear_entries(", detect_start)
-    batch = source[detect_start:detect_end]
+    assert "_detection_batch_execution.detect_pages(" in source
+    batch = (Path(inspect.getsourcefile(app_module)).parent / "ui" / "detection_batch_execution.py").read_text(encoding="utf-8")
     assert 'if method == "combined":' in batch
     assert "ocr_existing_entry_words_from_markers(" in batch
     assert "only_blank=True" in batch
@@ -423,7 +422,7 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
 
 def test_cli_combined_autodraw_also_fills_blank_rescue_text():
     import inspect
-    import picture_capture.cli as cli_module
+    import picture_capture.bootstrap.cli as cli_module
 
     source = Path(inspect.getsourcefile(cli_module)).read_text(encoding="utf-8")
     assert 'if project.settings.detection_method == "combined":' in source
@@ -1083,6 +1082,8 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     settings_start = source.index("class SettingsDialog")
     settings_end = source.index("class ReviewWindow", settings_start)
     settings = source[settings_start:settings_end]
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     assert '_build_modern_dialog_heading(' in settings
     assert '"设置中心"' in settings
     assert 'text="校验当前设置"' in settings
@@ -1134,6 +1135,12 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     start = text.index("class SettingsDialog")
     end = text.index("class ReviewWindow", start)
     settings = text[start:end]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in settings
+    settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in settings
+    settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     schema = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
@@ -1278,6 +1285,12 @@ def test_settings_center_uses_native_compact_right_pane_help():
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
     settings = text[settings_start:settings_end]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in settings
+    settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in settings
+    settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
 
     assert "inline_help = ttk.Label" not in settings
     assert "check_help = ttk.Label" not in settings
@@ -1321,7 +1334,9 @@ def test_common_layout_settings_show_packaged_context_diagrams():
         "gutter", "character_height", "row_padding",
     ):
         assert f'"{field}": "layout_settings.png"' in schema
-    assert "help_images=True" in settings
+    dialog_init = (root / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    assert "help_images=True" in dialog_init
     assert "show_layout_image: bool = False" in settings
     assert '/ "data"' in help_source
     assert '/ "layout_example"' in help_source
@@ -1362,8 +1377,10 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     app = (root / "app.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'def _footer_action_button(' in app
-    assert 'border = colors["button_border"]' in app
-    assert 'highlightthickness=1' in app
+    buttons_owner = (root / "ui/main_action_buttons.py").read_text(encoding="utf-8")
+    assert "_main_action_buttons.footer_action_button_impl(" in app
+    assert 'border = colors["button_border"]' in buttons_owner
+    assert 'highlightthickness=1' in buttons_owner
     assert 'app.workspace_quick_action_buttons.append(button)' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
     for label,method in (("项目","open_recent_project"),("Profile","open_project_profile"),("设置","open_settings"),("帮助","show_help_dialog")):
@@ -1442,11 +1459,14 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    styles=app.split("    def _configure_main_workspace_styles(",1)[1].split("    def _sidebar_action_button(",1)[0]
-    assert "theme_use(" not in styles
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    styles=(root / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    scoped = styles.split("def configure_main_workspace_styles(", 1)[1]
+    assert "theme_use(" not in scoped
     for token in ('"PC.Section.TLabelframe"','"PC.Treeview"','"PC.Footer.TFrame"','"PC.EditActive.TButton"'):
         assert token in styles
-    ui=app.split("    def _build_ui(self) -> None:",1)[1].split("    def _pointer_over_sidebar(",1)[0]
+    assert "_main_workspace_build.build_ui(" in app
+    ui=(root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert 'style="PC.Treeview"' in ui
     assert 'install_workspace_tools(self, sidebar, sidebar_host)' in ui
     assert '"一、版面参数"' in tools and '"二、显示设置"' in tools
@@ -1454,8 +1474,10 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     for method in ("run_normal_draw_action","ocr_ordinary_lines_text_selected_scope","run_combined_draw_action","run_ocr_draw_action","backup_pdic","restore_from_pdic_backup"):
         assert method in drawing
     assert 'button = _button(row, caption, getattr(app, method))' in drawing
-    assert 'relief="flat"' in app
-    assert 'highlightthickness=1' in app
+    assert 'relief="flat"' in (app + ui + scoped)
+    buttons_owner = (root / "ui/main_action_buttons.py").read_text(encoding="utf-8")
+    assert "_main_action_buttons.sidebar_action_button_impl(" in app
+    assert 'highlightthickness=1' in (app + ui + scoped + buttons_owner)
     assert '"primary": "#4F7CAC"' in styles
     assert '"success": "#69A875"' in styles
 
@@ -1464,9 +1486,11 @@ def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferen
     text = source.read_text(encoding="utf-8")
     project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
-    startup = text[
-        text.index("        self.section_expanded = {"):
-        text.index("        self._collapsible_sections:", text.index("        self.section_expanded = {"))
+    startup_owner = (source.parent / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in text
+    startup = startup_owner[
+        startup_owner.index("    self.section_expanded = {"):
+        startup_owner.index("    self._collapsible_sections:", startup_owner.index("    self.section_expanded = {"))
     ]
     assert "sidebar_section_defaults_version" not in startup
     assert "SIDEBAR_SECTION_DEFAULTS_VERSION" not in text
@@ -2044,12 +2068,16 @@ def test_decimal_percentage_ui_paths_do_not_integer_cast_values():
     text = source.read_text(encoding="utf-8")
     state = (source.parent / "ui/quick_state.py").read_text(encoding="utf-8")
     assert '"paddle_band_width_ratio": float' in state
-    assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in text
-    assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in text
+    settings_owner = (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.save_settings(" in text
+    assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in settings_owner
+    review_init = (source.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in text
+    assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in review_init
     assert "def _stored_review_zoom_percent(self) -> float:" in text
     assert "round(self.review_zoom * 100.0, 2)" in text
-    assert "int(self.parent.settings.paddle_band_width_ratio)" not in text
-    assert "int(self.parent.settings.paddle_separator_roi_width_ratio)" not in text
+    assert "int(self.parent.settings.paddle_band_width_ratio)" not in settings_owner
+    assert "int(self.parent.settings.paddle_separator_roi_width_ratio)" not in settings_owner
 
 
 def test_project_profile_samples_front_middle_back_and_keeps_pairs():
@@ -2232,8 +2260,9 @@ def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():
     assert "for value in range(5, 100, 5):" in canvas_controller
     assert 'label_x = x - label_gap if ruler_id == "left" else x + label_gap' in canvas_controller
     assert 'anchor = "e" if ruler_id == "left" else "w"' in canvas_controller
-    assert '"ruler_margin": "#f1f3f6"' in app
-    assert '"ruler_margin": "#20252b"' in app
+    theme = (root / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert '"ruler_margin": "#f1f3f6"' in theme
+    assert '"ruler_margin": "#20252b"' in theme
     assert 'tags=("ruler-margin",)' in canvas_controller
     assert 'fill=margin_color, outline=""' in canvas_controller
     assert "标尺可以帮助版面参数的手动填写。" in canvas_controller
@@ -2299,7 +2328,9 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert "def _quick_percent_parameter_changed(self, name: str)" in text
     assert "def _quick_pixel_parameter_changed(self, name: str)" in text
     assert 'self._quick_geometry_edit_source[name] = "pixel"' in text
-    assert 'geometry_source == "pixel"' in text
+    quick_apply = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/quick_settings_apply.py").read_text(encoding="utf-8")
+    assert "_quick_settings_apply.apply_quick_settings(" in text
+    assert 'geometry_source == "pixel"' in quick_apply
 
 
 def test_page_template_auto_footer_uses_full_page_height_not_legacy_bottom_y():
@@ -2441,7 +2472,44 @@ def test_project_profile_headword_examples_are_packaged():
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
-    text = source.read_text(encoding="utf-8")
+    legacy = source.read_text(encoding="utf-8")
+    tab_owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    state_owner = (source.parent / "wizard_state_initialization.py").read_text(encoding="utf-8")
+    preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
+    config_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
+    workspace_owner = (source.parent / "wizard_workspace_builder.py").read_text(encoding="utf-8")
+    diagnostic_owner = (source.parent / "wizard_validation_diagnostics.py").read_text(encoding="utf-8")
+    execution_owner = (source.parent / "wizard_validation_execution.py").read_text(encoding="utf-8")
+    controls_owner = (source.parent / "wizard_validation_controls.py").read_text(encoding="utf-8")
+    visuals_owner = (source.parent / "wizard_validation_visuals.py").read_text(encoding="utf-8")
+    thumbnails_owner = (source.parent / "wizard_sample_thumbnails.py").read_text(encoding="utf-8")
+    analysis_owner = (source.parent / "wizard_sample_analysis.py").read_text(encoding="utf-8")
+    shell_owner = (source.parent / "wizard_shell_builder.py").read_text(encoding="utf-8")
+    reading_owner = (source.parent / "wizard_reading_controls.py").read_text(encoding="utf-8")
+    headword_help_owner = (source.parent / "wizard_headword_explanations.py").read_text(encoding="utf-8")
+    persistence_owner = (source.parent / "wizard_persistence.py").read_text(encoding="utf-8")
+    profile_events_owner = (source.parent / "wizard_profile_events.py").read_text(encoding="utf-8")
+    marker_owner = (source.parent / "wizard_visual_markers.py").read_text(encoding="utf-8")
+    assert "_wizard_persistence.persist_current_profile(" in legacy
+    assert "_wizard_profile_events.headword_changed(" in legacy
+    assert "_wizard_visual_markers.capture_visual_marker_sample(" in legacy
+    assert "_wizard_shell_builder.build_ui(" in legacy
+    assert "_wizard_reading_controls.build_reading_tab(" in legacy
+    assert "_wizard_headword_explanations.refresh_headword_description(" in legacy
+    assert "_wizard_sample_thumbnails.choose_sample_page(" in legacy
+    assert "_wizard_sample_analysis.analyze_representative_pages(" in legacy
+    assert "_wizard_validation_execution.validate_profile(" in legacy
+    assert "_wizard_validation_controls.build_validation_tab(" in legacy
+    assert "_wizard_validation_visuals.marker_preview(" in legacy
+    assert "_wizard_validation_diagnostics.validation_coverage_summary(" in legacy
+    assert "_wizard_template_preview.refresh_template_preview(" in legacy
+    assert "_wizard_settings_assembly.settings_from_ui(" in legacy
+    assert "_wizard_workspace_builder.build_right_image_workspace(" in legacy
+    assert "_wizard_wizard_tab_builders.build_template_tab(" in legacy
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
+    assert "_wizard_wizard_state_initialization.build_vars(" in legacy
+    # Inspect the original compatibility class and physically relocated implementations.
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner, persistence_owner, profile_events_owner, marker_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -2484,9 +2552,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 'child.configure(wraplength=wrap, justify="left")' in text
     assert "ProfileYellow.TLabelframe" not in text
     assert "fill=(255, 215, 0, 105)" in text
-    marker_start = text.index("    def _marker_preview(")
-    marker_end = text.index("    def _set_validation_fit(", marker_start)
-    assert "fill=(255, 215, 0, 105)" in text[marker_start:marker_end]
+    marker_start = legacy.index("    def _marker_preview(")
+    marker_end = legacy.index("    def _set_validation_fit(", marker_start)
+    assert "_wizard_validation_visuals.marker_preview(" in legacy[marker_start:marker_end]
+    assert "fill=(255, 215, 0, 105)" in visuals_owner
     assert 'text="A 页排除宽度%"' in text
     assert 'text="B 页排除宽度%"' in text
     assert "s.profile_side_percent_a" in text
@@ -2516,9 +2585,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     # rebuild/re-decode all six thumbnails or refresh a hidden template preview.
     assert "def _start_sample_thumbnail_slot_load" in text
     assert "def _render_sample_thumbnail_slot" in text
-    choose_start = text.index("    def _choose_sample_page(")
-    choose_end = text.index("    def _persist_current_profile(", choose_start)
-    choose_text = text[choose_start:choose_end]
+    choose_start = thumbnails_owner.index("def choose_sample_page(")
+    choose_text = thumbnails_owner[choose_start:]
     assert "self._start_sample_thumbnail_slot_load(slot)" in choose_text
     assert "self._start_sample_thumbnail_load()" not in choose_text
     assert "preview_uses_slot = self.template_preview_slot == slot" in choose_text
@@ -2623,9 +2691,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "settings.profile_setup_version = int(" in text
     assert 'header_mode == "auto" and geometry.top > 0' in text
     assert 'elif header_mode == "present"' in text
-    validate_start = text.index("    def validate_profile(")
-    validate_end = text.index("    def _poll_validation_queue(", validate_start)
-    validate_text = text[validate_start:validate_end]
+    validate_start = execution_owner.index("def validate_profile(")
+    validate_text = execution_owner[validate_start:]
     assert 'settings.detection_method = "paddleocr"' in validate_text
     assert "settings.paddle_use_paddleocr = True" in validate_text
     assert "force_paddle_refresh=True" in validate_text
@@ -2834,7 +2901,12 @@ def test_profile_setup_exposes_complete_headword_structure_controls():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "profile/setup.py"
     )
-    text = source.read_text(encoding="utf-8")
+    legacy = source.read_text(encoding="utf-8")
+    owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
+    settings_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
+    assert "_wizard_settings_assembly.settings_from_ui(" in legacy
+    text = "\n".join((legacy, owner, settings_owner))
     assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
     assert "按 OCR 语言排除不兼容的词头首字符（推荐）" in text
     assert "日语允许汉字/假名，中文允许汉字" in text
@@ -3174,20 +3246,27 @@ def test_source_pixel_settings_never_scale_against_page_width():
 def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="栏左线微调"' in text
-    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
-    assert "每次移动约 0.1% 单栏宽" in text
-    assert 'text="← 左移 0.1%"' in text
-    assert 'text="右移 0.1% →"' in text
+    tab_owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_template_tab(" in text
+    assert 'text="栏左线微调"' in tab_owner
+    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in tab_owner
+    assert "每次移动约 0.1% 单栏宽" in tab_owner
+    assert 'text="← 左移 0.1%"' in tab_owner
+    assert 'text="右移 0.1% →"' in tab_owner
     assert "人工偏移 {percent:+.2f}% 单栏宽" in text
-    assert 'text="重置当前"' in text
-    assert 'text="重置全部"' in text
+    assert 'text="重置当前"' in tab_owner
+    assert 'text="重置全部"' in tab_owner
     assert "def _shift_selected_column" in text
     assert "self.working.column_start_offsets = offsets" in text
-    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
-    assert 'canvas.bind(\n                "<Button-1>"' in text
-    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in text
-    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
+    settings_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
+    assert "_wizard_settings_assembly.settings_from_ui(" in text
+    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in settings_owner
+    preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
+    assert 'canvas.bind(\n            "<Button-1>"' in preview_owner
+    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in preview_owner
+    analysis_owner = (source.parent / "wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.apply_analysis_suggestion(" in text
+    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in analysis_owner
     assert "def _nudge_template_column_preview" in text
     assert "canvas.move(items[index], dx, dy)" in text
     assert "self._profile_input_changed(refresh_preview=False)" in text
@@ -3195,7 +3274,9 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     select_end = text.index("\n\n    def _refresh_template_controls", select_start)
     assert "_refresh_template_preview" not in text[select_start:select_end]
     assert "self._update_template_column_highlight()" in text[select_start:select_end]
-    assert "canvas.create_image(0, 0, image=photo, anchor=\"nw\")" in text
+    preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
+    assert "_wizard_template_preview.refresh_template_preview(" in text
+    assert "canvas.create_image(0, 0, image=photo, anchor=\"nw\")" in preview_owner
 
 
 def test_project_profile_validation_masks_remain_translucent():
@@ -3239,15 +3320,17 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     wizard_init = profile_source[wizard_start:wizard_end]
     assert "x = work_x + max(0, (work_w - width) // 2)" in wizard_init
     assert "y = work_y + max(0, (work_h - height) // 2)" in wizard_init
-    assert '(common_tab, "常用")' in text
-    assert '(ocr_tab, "OCR画线")' in text
-    assert '(normal_tab, "普通画线")' in text
-    assert text.index('(ocr_tab, "OCR画线")') < text.index('(normal_tab, "普通画线")')
-    assert '(display_tab, "显示/校对")' in text
-    assert '(project_tab, "项目/批量")' in text
-    assert '(crop_tab, "切图")' in text
-    assert '(advanced_tab, "高级")' in text
-    assert '"profile": advanced_tab' in text
+    dialog_init = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    assert '(common_tab, "常用")' in dialog_init
+    assert '(ocr_tab, "OCR画线")' in dialog_init
+    assert '(normal_tab, "普通画线")' in dialog_init
+    assert dialog_init.index('(ocr_tab, "OCR画线")') < dialog_init.index('(normal_tab, "普通画线")')
+    assert '(display_tab, "显示/校对")' in dialog_init
+    assert '(project_tab, "项目/批量")' in dialog_init
+    assert '(crop_tab, "切图")' in dialog_init
+    assert '(advanced_tab, "高级")' in dialog_init
+    assert '"profile": advanced_tab' in dialog_init
     start = text.index("    def open_project_profile(")
     end = text.index("    def open_project_details(", start)
     assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
@@ -3288,9 +3371,11 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     assert "horizontal_tolerance_was_auto" in layout_actions
     assert 'if "character_height" in values:' in layout_actions
     assert 'return _run_detect_layout_current(self)' in app_text
-    assert "body_indent_was_auto" in profile_text
-    assert "horizontal_tolerance_was_auto" in profile_text
-    assert 'if "character_height" in self._analysis_suggestion:' in profile_text
+    analysis_owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.apply_analysis_suggestion(" in profile_text
+    assert "body_indent_was_auto" in analysis_owner
+    assert "horizontal_tolerance_was_auto" in analysis_owner
+    assert 'if "character_height" in self._analysis_suggestion:' in analysis_owner
     assert settings.ordinary_right_divisor == 1.0
     assert settings.white_threshold_high == 999
     assert settings.white_threshold_low == 700
@@ -3443,9 +3528,8 @@ def test_ordinary_backup_checkbox_defaults_and_two_row_auto_layout_grid():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    start = source.index("    def _add_check_group(")
-    end = source.index("\n    def _add_collapsible_settings(", start)
-    check_group = source[start:end]
+    assert "_interactive_settings_panels.add_check_group(" in source
+    check_group = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert 'child_row = 0 if index < 3 else 1' in check_group
     assert 'child_col = index if index < 3 else index - 3' in check_group
     ordered = (
@@ -3830,7 +3914,9 @@ def test_round1_blocking_ui_paths_use_background_workers():
     project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     assert "def _start_ui_worker(" in text
-    assert "self._ui_worker_queue.put(event)" in text
+    worker_owner = (source.parent / "ui/background_job_runtime.py").read_text(encoding="utf-8")
+    assert "_background_job_runtime.start_ui_worker(" in text
+    assert "self._ui_worker_queue.put(event)" in worker_owner
     assert "def _poll_ui_worker_queue(" in text
 
     settings_start = text.index("class SettingsDialog")
@@ -3993,14 +4079,14 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "Image.Resampling.LANCZOS" not in photo
     assert "self.render_rows()" not in review
 
-    preview_start = profile_text.index("    def _refresh_template_preview(")
-    preview_end = profile_text.index("\n    @staticmethod\n    def _mode_row", preview_start)
-    preview = profile_text[preview_start:preview_end]
+    preview_owner = (root / "src/picture_capture/profile/wizard_template_preview.py").read_text(encoding="utf-8")
+    assert "_wizard_template_preview.refresh_template_preview(" in profile_text
+    preview = preview_owner[preview_owner.index("def refresh_template_preview("):]
     assert "with Image.open(path) as opened:" in preview
     assert "derive_geometry(" in preview
     assert "self.parent._start_ui_worker(" in preview
-    worker_start = preview.index("        def worker():")
-    done_start = preview.index("        def done(", worker_start)
+    worker_start = preview.index("    def worker():")
+    done_start = preview.index("    def done(", worker_start)
     worker = preview[worker_start:done_start]
     assert "ImageTk.PhotoImage" not in worker
     assert "themed_display_image(" in preview[done_start:]
@@ -4043,7 +4129,9 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ReviewWindow", settings_start)
     settings = text[settings_start:settings_end]
-    assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings
+    settings_owner = (root / "src/picture_capture/ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.save_settings(" in settings
+    assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings_owner
 
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
@@ -4257,6 +4345,10 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
     worker_start = app.index("    def _ui_worker_key_active(")
     worker_end = app.index("\n    def _configure_main_workspace_styles", worker_start)
     workers = app[worker_start:worker_end]
+    assert "_background_job_runtime.start_ui_worker(" in workers
+    assert "_background_job_runtime.poll_ui_worker_queue(" in workers
+    worker_owner = (root / "src/picture_capture/ui/background_job_runtime.py").read_text(encoding="utf-8")
+    workers += "\n" + worker_owner
     assert "_ui_worker_active" in workers
     assert "_ui_worker_close_wait" in workers
     assert "generation == self._ui_worker_generations.get(key)" in workers
@@ -4289,16 +4381,18 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
         assert 'self._ui_worker_key_active("profile-validation")' in block
         assert "self._ui_close_requested" in block
 
-    validate_start = profile.index("    def validate_profile(")
-    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
-    validate = profile[validate_start:validate_end]
+    validation_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_execution.validate_profile(" in profile
+    validate = validation_owner[validation_owner.index("def validate_profile("):]
     assert 'self.parent._start_ui_worker(' in validate
     assert '"profile-validation"' in validate
     assert "wait_on_close=True" in validate
     assert "stop_event.is_set()" in validate
-    assert "self.project.images[index]" not in validate[validate.index("        def worker():"):]
+    assert "self.project.images[index]" not in validate[validate.index("    def worker():"):]
 
-    close_profile = profile[profile.index("    def _close_without_save("):]
+    save_owner = (root / "src/picture_capture/profile/wizard_persistence.py").read_text(encoding="utf-8")
+    close_profile = save_owner[save_owner.index("def close_without_save("):]
+    assert "_wizard_persistence.close_without_save(" in profile
     assert "self._validation_close_requested = True" in close_profile
     assert "self._validation_stop_event.set()" in close_profile
     assert "正在安全结束当前测试页" in close_profile
@@ -4364,17 +4458,17 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     assert "app.settings" not in worker
     assert "derive_nominal_geometry(width, height, settings_snapshot)" in worker
 
-    preview_start = profile.index("    def _refresh_template_preview(")
-    preview_end = profile.index("\n    @staticmethod\n    def _mode_row", preview_start)
-    preview = profile[preview_start:preview_end]
-    worker = preview[preview.index("        def worker():"):preview.index("        def done(", preview.index("        def worker():"))]
+    preview_owner = (root / "src/picture_capture/profile/wizard_template_preview.py").read_text(encoding="utf-8")
+    assert "_wizard_template_preview.refresh_template_preview(" in profile
+    preview = preview_owner[preview_owner.index("def refresh_template_preview("):]
+    worker = preview[preview.index("    def worker():"):preview.index("    def done(", preview.index("    def worker():"))]
     assert "len(self.sample_indices)" not in worker
     assert "sample_count" in worker
 
-    analysis_start = profile.index("    def analyze_representative_pages(")
-    analysis_end = profile.index("\n    def _poll_analysis_queue", analysis_start)
-    analysis = profile[analysis_start:analysis_end]
-    worker = analysis[analysis.index("        def worker()"):analysis.index("        threading.Thread", analysis.index("        def worker()"))]
+    analysis_owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.analyze_representative_pages(" in profile
+    analysis = analysis_owner[analysis_owner.index("def analyze_representative_pages("):]
+    worker = analysis[analysis.index("    def worker()"):analysis.index("    threading.Thread", analysis.index("    def worker()"))]
     assert "self.project" not in worker
     assert "self._analysis_queue" not in worker
     assert "result_queue.put" in worker
@@ -4396,7 +4490,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
 
     poll_start = app.index("    def _poll_ui_worker_queue(")
     poll_end = app.index("\n    def _configure_main_workspace_styles", poll_start)
-    assert "_ui_worker_active" in app[poll_start:poll_end]
+    owner = (root / "src/picture_capture/ui/background_job_runtime.py").read_text(encoding="utf-8")
+    assert "_background_job_runtime.poll_ui_worker_queue(" in app[poll_start:poll_end]
+    assert "_ui_worker_active" in owner
 
     load_start = project_session.index("def _load_project(")
     load_end = project_session.index("\ndef on_page_select", load_start)
@@ -4408,9 +4504,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     profile_open_end = app.index("\n    def open_project_details", profile_open_start)
     assert "if self._batch_active:" in app[profile_open_start:profile_open_end]
 
-    validate_start = profile.index("    def validate_profile(")
-    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
-    assert "if self.parent._batch_active:" in profile[validate_start:validate_end]
+    validation_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_execution.validate_profile(" in profile
+    assert "if self.parent._batch_active:" in validation_owner
 
     wrapper_start = app.index("    def export_training_package(")
     wrapper_end = app.index("\n    def show_help_dialog", wrapper_start)
@@ -4443,7 +4539,16 @@ def test_project_profile_legacy_workers_drop_results_while_closing():
         start = text.index(f"    def {name}(")
         next_def = text.find("\n    def ", start + 8)
         block = text[start: next_def if next_def >= 0 else len(text)]
-        assert "_closing" in block
+        if name == "validate_profile":
+            owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+            assert "_wizard_validation_execution.validate_profile(" in block
+        elif name in {"analyze_representative_pages", "_poll_analysis_queue"}:
+            owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+            assert "_wizard_sample_analysis." in block
+        else:
+            owner = (root / "src/picture_capture/profile/wizard_sample_thumbnails.py").read_text(encoding="utf-8")
+            assert "_wizard_sample_thumbnails." in block
+        assert "_closing" in owner
 
 
 
@@ -4588,10 +4693,12 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     assert '"data/*.png"' in pyproject
 
     app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert "self.iconphoto(True, self._app_icon_photo)" in app_source
-    assert "self.iconphoto(False, self._app_icon_photo)" in app_source
-    assert "self._app_icon_registered = True" in app_source
-    assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in app_source
+    startup = (root / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app_source
+    assert "self.iconphoto(True, self._app_icon_photo)" in startup
+    assert "self.iconphoto(False, self._app_icon_photo)" in startup
+    assert "self._app_icon_registered = True" in startup
+    assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in startup
     handler_start = app_source.index("    def _app_icon_toplevel_mapped(")
     handler_end = app_source.index("\n    def ", handler_start + 10)
     handler = app_source[handler_start:handler_end]
@@ -5507,9 +5614,12 @@ def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "profile/setup.py"
     ).read_text(encoding="utf-8")
-    assert "不包括【括号】" in source
-    assert "【不要填这里】" in source
-    assert "采【时按“括号起始”保存" in source
+    setup_source = source
+    tab_owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/profile/wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in setup_source
+    assert "不包括【括号】" in tab_owner
+    assert "【不要填这里】" in tab_owner
+    assert "采【时按“括号起始”保存" in tab_owner
 
 
 def test_selected_paddle_cache_compaction_is_scoped_and_preserves_reusable_ocr():
@@ -5623,19 +5733,20 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "help.py"
     ).read_text(encoding="utf-8")
-    start = text.index('    def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:')
-    end = text.index("    @staticmethod\n    def _crop_nonnegative_int", start)
-    block = text[start:end]
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    block = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     # The early update_idletasks() used only to obtain screen/window geometry is
     # allowed.  The old trailing all-tab layout flush after autosave binding was
     # the Windows/Tk hang and must not return.
-    tail = block[block.index("        self._autosave_ready = True"):]
+    tail = block[block.index("    self._autosave_ready = True"):]
     assert "self.update_idletasks()" not in tail
     assert "for _canvas in self._settings_canvases.values():" not in tail
-    assert "content.bind(" in text
-    assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
-    assert "左侧只保留参数、单位和必要状态" in text
-    assert "每个参数下方已直接显示详细说明" not in text
+    panel = (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_interactive_settings_panels.scrollable_settings_page(" in text
+    assert "content.bind(" in panel
+    assert 'cv.configure(scrollregion=cv.bbox("all"))' in panel
+    assert "左侧只保留参数、单位和必要状态" in (text + panel)
+    assert "每个参数下方已直接显示详细说明" not in (text + panel)
     assert 'pending["job"] = dialog.after(80, refresh)' in help_source
     assert 'pending["job"] = dialog.after_idle(refresh)' not in help_source
 

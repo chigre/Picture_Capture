@@ -6,8 +6,8 @@ import os
 import numpy as np
 from PIL import Image, ImageOps
 
-from .preprocess.adaptive_denoise import adaptive_speck_remove_mask, resolve_denoise_strength
-from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink
+from .adaptive_denoise import adaptive_speck_remove_mask, resolve_denoise_strength
+from .page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink
 
 
 def build_analysis_image(

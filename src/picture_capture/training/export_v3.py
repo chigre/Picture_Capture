@@ -31,7 +31,7 @@ from ..design.page_design_refined import (
     layout_diagnostics,
 )
 from ..layout.physical_indent import explicit_physical_layout_ops
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..models import AppSettings, Entry
 from ..persistence.page_sections import read_page_sections
 from ..processing import column_index, derive_geometry, detect_entries

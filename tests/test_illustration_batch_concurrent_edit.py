@@ -48,7 +48,9 @@ def test_other_batch_tasks_allow_read_only_navigation_by_default():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
     assert "allow_page_navigation: bool = True" in source
     assert "allow_pdic_edits: bool = False" in source
-    assert "self._batch_allow_pdic_edits = False" in source
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in source
+    assert "self._batch_allow_pdic_edits = False" in startup
     assert "return bool(self._batch_allow_pdic_edits)" in (
         ROOT / "ui" / "batch_workflow.py"
     ).read_text(encoding="utf-8")

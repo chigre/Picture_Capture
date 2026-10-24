@@ -8,14 +8,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture import (
-    image_preprocessing,
-)
+from picture_capture.preprocess import pipeline as image_preprocessing
 from picture_capture.preprocess import models as image_preprocessing_models
 from picture_capture.preprocess import persistence as image_preprocessing_persistence
 from picture_capture.preprocess import reporting as image_preprocessing_reporting
 from picture_capture.preprocess import storage as image_preprocessing_storage
-from picture_capture.image_preprocessing import (
+from picture_capture.preprocess.pipeline import (
     PreprocessAnalysis,
     analysis_is_current,
     analyze_preprocess_page,
@@ -2098,7 +2096,7 @@ def test_phase7m_preprocess_models_keep_historical_public_class_path() -> None:
         image_preprocessing.PreprocessAnalysis,
         image_preprocessing.OutputCanvasInfo,
     ):
-        assert cls.__module__ == "picture_capture.image_preprocessing"
+        assert cls.__module__ == "picture_capture.preprocess.pipeline"
         assert pickle.loads(pickle.dumps(cls)) is cls
 
 

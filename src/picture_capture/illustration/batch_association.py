@@ -20,7 +20,7 @@ from ..persistence.page_sections import read_page_sections
 from ..processing_core import derive_geometry
 from ..profile.semantics import effective_page_settings, page_template_analysis_image
 from ..persistence.project_storage import ppp_read_path_for_image
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 
 
 def _file_ticket(path: Path) -> tuple[int, int, str]:

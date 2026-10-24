@@ -20,7 +20,7 @@ from typing import Any
 from PIL import Image
 
 from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
-from .image_utils import build_analysis_image
+from .preprocess.analysis_image import build_analysis_image
 from .models import AppSettings, Entry
 from .persistence.page_sections import PageSection
 from . import processing_core as _core
@@ -323,7 +323,7 @@ def _ordinary_entries_from_layout_roles(
     diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
     """Materialize final Layout entry rows with canonical classification."""
-    from .entry_classification import copy_layout_line_classification
+    from .proofreading.classification import copy_layout_line_classification
 
     layout = understanding.layout
     refined_y_by_line = (

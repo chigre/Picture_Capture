@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 
 
 def _normalize_half_turn(angle: float) -> float:
@@ -244,14 +244,14 @@ def _rotate_box_same_canvas(
 
 
 # Preserve historical callable pickle paths, as with preprocess.canvas.
-_normalize_half_turn.__module__ = "picture_capture.image_preprocessing"
-_weighted_median.__module__ = "picture_capture.image_preprocessing"
-estimate_skew_from_polygons.__module__ = "picture_capture.image_preprocessing"
-_paper_fill.__module__ = "picture_capture.image_preprocessing"
-deskew_image.__module__ = "picture_capture.image_preprocessing"
-_rotate_point_same_canvas.__module__ = "picture_capture.image_preprocessing"
-_rotate_polygons_same_canvas.__module__ = "picture_capture.image_preprocessing"
-_rotated_text_box.__module__ = "picture_capture.image_preprocessing"
-_polygon_boxes.__module__ = "picture_capture.image_preprocessing"
-_expand_box_px.__module__ = "picture_capture.image_preprocessing"
-_rotate_box_same_canvas.__module__ = "picture_capture.image_preprocessing"
+_normalize_half_turn.__module__ = "picture_capture.preprocess.pipeline"
+_weighted_median.__module__ = "picture_capture.preprocess.pipeline"
+estimate_skew_from_polygons.__module__ = "picture_capture.preprocess.pipeline"
+_paper_fill.__module__ = "picture_capture.preprocess.pipeline"
+deskew_image.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_point_same_canvas.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_polygons_same_canvas.__module__ = "picture_capture.preprocess.pipeline"
+_rotated_text_box.__module__ = "picture_capture.preprocess.pipeline"
+_polygon_boxes.__module__ = "picture_capture.preprocess.pipeline"
+_expand_box_px.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_box_same_canvas.__module__ = "picture_capture.preprocess.pipeline"

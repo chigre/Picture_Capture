@@ -168,8 +168,10 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'appearance_mode = self.appearance_mode' in project_session
     assert 'self._recent_projects_rebuild = rebuild' in project_session
     assert 'getattr(event, "widget", None) is not dialog' in project_session
-    assert '"*TCombobox*Listbox.background"' in app_source
-    assert '"*TCombobox*Listbox.selectBackground"' in app_source
+    theme_owner = (ROOT / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_global_appearance(" in app_source
+    assert '"*TCombobox*Listbox.background"' in theme_owner
+    assert '"*TCombobox*Listbox.selectBackground"' in theme_owner
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'if isinstance(widget, tk.Toplevel)' in app_source
     overlay = (ROOT / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
@@ -191,9 +193,16 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     review_crop = (ROOT / "src/picture_capture/ui/review_crop_actions.py").read_text(encoding="utf-8")
     assert 'themed_display_image(crop, self.parent.appearance_mode)' in review_crop
     assert 'themed_display_image(rendered, dialog.parent.appearance_mode)' in settings_help_source
-    assert "themed_display_image(" in profile_source
-    assert 'preview, getattr(self.parent, "appearance_mode", "light")' in profile_source
-    assert 'display, getattr(self.parent, "appearance_mode", "light")' in profile_source
+    # The preview and thumbnail rendering implementations now live in canonical UI owners.
+    thumbnail_owner = (ROOT / "src/picture_capture/profile/wizard_sample_thumbnails.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_thumbnails.render_sample_thumbnail_slot(" in profile_source
+    assert "themed_display_image(" in thumbnail_owner
+    preview_owner = (ROOT / "src/picture_capture/profile/wizard_template_preview.py").read_text(encoding="utf-8")
+    assert "_wizard_template_preview.refresh_template_preview(" in profile_source
+    assert 'preview, getattr(self.parent, "appearance_mode", "light")' in preview_owner
+    validation_visuals = (ROOT / "src/picture_capture/profile/wizard_validation_visuals.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_visuals.render_validation_result(" in profile_source
+    assert 'display, getattr(self.parent, "appearance_mode", "light")' in validation_visuals
 
 
 def test_destroyed_toplevel_is_ignored_by_delayed_appearance_callback(monkeypatch) -> None:

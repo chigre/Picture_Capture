@@ -20,7 +20,7 @@ from ..illustration.export import export_illustrated_index
 from ..illustration.ocr import (
     ocr_one_group, proposal_overlaps, propose_page_entries,
 )
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..ref.text_label_layout import ref_text_label_rect
 from .illustrated_entry_dialog import edit_illustrated_group
 

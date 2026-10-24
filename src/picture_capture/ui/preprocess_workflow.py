@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from PIL import Image, ImageTk
     from ..models import AppSettings, ProjectState
-    from ..image_preprocessing import PreprocessAnalysis
+    from ..preprocess.pipeline import PreprocessAnalysis
 
 
 @dataclass(frozen=True)

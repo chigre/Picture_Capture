@@ -6,25 +6,25 @@ import sys
 
 from PIL import Image, ImageOps
 
-from .bootstrap.core import build_core_services
+from .core import build_core_services
 
 
 # CLI is a real application entrypoint. Prepare the same non-GUI runtime contract
 # as GUI and spawn workers before importing formats/processing callables by value.
 build_core_services()
 
-from .io.formats import pdic_path, read_pdic, read_ppp, write_pdic
-from .image_utils import normalize_page_rgb
-from .models import ProjectState
-from .paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
-from .crop.settings import load_crop_settings
-from .crop.export_output import normalize_project_crop_widths
-from .persistence.project_storage import (
+from ..io.formats import pdic_path, read_pdic, read_ppp, write_pdic
+from ..preprocess.analysis_image import normalize_page_rgb
+from ..models import ProjectState
+from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
+from ..crop.settings import load_crop_settings
+from ..crop.export_output import normalize_project_crop_widths
+from ..persistence.project_storage import (
     ppp_read_path_for_image, headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
     qt_root, replace_rules_path,
 )
-from .persistence.page_sections import read_page_sections
-from .processing import (
+from ..persistence.page_sections import read_page_sections
+from ..processing import (
     append_crop_log,
     detect_entries,
     export_ocred,

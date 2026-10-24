@@ -1502,3 +1502,47 @@ PDIC publication, and edit locks; existing-marker OCR keeps original X/Y
 and count, retains manual text, and saves the foreground editor before
 dispatch. Physical owner/test ratchets and real scan GUI acceptance remain
 separate from synthetic CI.
+
+
+## Issue #562 — remove root shared image-analysis facade (2026-10-24)
+
+The **15 → 14** root Python count reduction moves the implementation from
+`image_utils.py` into `preprocess/analysis_image.py`; it deletes the former
+module instead of adding a root compatibility shim. Internal Layout/OCR/UI/
+training/tests and scripts use the canonical import path. The single EXIF,
+alpha-white-backed and signed-ink predicate owner remains
+`preprocess/page_pixels.py` and is re-exported by function-object identity
+from analysis_image. The adaptive speck removal policy/metadata and
+source-pixel coordinate contract remain unchanged. No class/pickle model
+identity is relocated. The obsolete Python import
+`picture_capture.image_utils` is intentionally retired; external source
+importers must use `picture_capture.preprocess.analysis_image`. Architecture
+ratchets verify deletion, canonical owner, no duplicated pixel implementations,
+and root-file count <=14. Full six-platform CI/CodeQL and real scanned-page
+comparison are separate release gates.
+
+
+## #562 PR #663 continuation — two physical module relocations
+
+Following 15→14 for image analysis, `entry_classification.py` is moved into
+`proofreading/classification.py` with the complete registry, manual override
+sidecar lock and JSON-v1 transaction. `image_preprocessing.py` moves to
+`preprocess/pipeline.py` with patchable whole-page preprocessing methods
+intact; persisted model types remain in `preprocess/models.py`. Root count
+falls 14→12, no root shims; in-repository callers/tests use canonical imports.
+External Python imports need migration. `training_export.py` remains as the
+verified pickle identity of ZIP functions/exceptions; do not retire it without
+checking older archives or creating an explicit compatibility solution.
+
+
+## #562 PR #663 continuation — bootstrap executable owners (12 → 10)
+
+Migrate the entire real non-GUI CLI to `bootstrap/cli.py`, point the
+unchanged installed `picture-capture-cli` command at that function, and
+physically move the legacy launcher helpers into `bootstrap/launcher.py`.
+Do not add any root import shims. Existing `run.py`, `python -m picture_capture`
+and GUI installer entry continue to call `bootstrap/application.py` unchanged.
+Retire the two Python import paths for external direct callers; use canonical
+`picture_capture.bootstrap.cli` / `picture_capture.bootstrap.launcher`.
+The root count is ratcheted to 10. Retain root modules with historical
+pickle identities, core-mirroring, and main Tk app ABI for later explicit audit.

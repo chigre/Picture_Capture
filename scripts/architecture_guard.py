@@ -24,7 +24,6 @@ MAX_PROCESSING_CORE_FACADE_BYTES = 144_300
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
-    "image_preprocessing.py": 150_818,
     "profile/setup.py": 174_009,
     "processing_core.py": 158_561,
 }
@@ -717,8 +716,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 15:
-        violations.append(f"root Python module count regressed: {root_py_count} > 15")
+    if root_py_count > 10:
+        violations.append(f"root Python module count regressed: {root_py_count} > 10")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -829,7 +828,7 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical preprocessing owner missing: {canonical}")
 
     # Deskew primitives/content frames have one physical owner, not root copies.
-    preprocess_facade = PACKAGE_ROOT / "image_preprocessing.py"
+    preprocess_facade = PACKAGE_ROOT / "preprocess/pipeline.py"
     preprocess_source = preprocess_facade.read_text(encoding="utf-8")
     for owner, routines in {
         "deskew.py": ("_normalize_half_turn", "_weighted_median", "estimate_skew_from_polygons",
@@ -2448,22 +2447,101 @@ def collect_violations() -> list[str]:
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
 
-    # Issue #562: keep EXIF/alpha/source-space ink predicates in one
-    # preprocess owner, with unchanged function-object exports from image_utils.
+    # Enforce retired root imports across code/tests, including strings the
+    # GitHub code-search index may not surface. Only executable AST imports.
+    retired_imports = {
+        "picture_capture.entry_classification",
+        "picture_capture.image_preprocessing",
+    }
+    for scan_root in (PACKAGE_ROOT, PACKAGE_ROOT.parents[1] / "tests",
+                      PACKAGE_ROOT.parents[1] / "scripts"):
+        if not scan_root.is_dir():
+            continue
+        for scan_path in scan_root.rglob("*.py"):
+            if scan_path == Path(__file__):
+                continue
+            try:
+                imported_tree = ast.parse(scan_path.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue  # independent compilation check reports syntax errors
+            for node in ast.walk(imported_tree):
+                if isinstance(node, ast.Import):
+                    if any(alias.name in retired_imports for alias in node.names):
+                        violations.append(f"retired module import: {scan_path}")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in retired_imports:
+                        violations.append(f"retired from-import: {scan_path}")
+                    if node.module == "picture_capture" and any(
+                        alias.name in {"entry_classification", "image_preprocessing"}
+                        for alias in node.names
+                    ):
+                        violations.append(f"retired package import: {scan_path}")
+                    if node.module in {"entry_classification", "image_preprocessing"} and node.level:
+                        violations.append(f"retired relative import: {scan_path}")
+
+    # Native GUI and console entry wrappers belong to the bootstrap package.
+    for former, owner, signature in (
+        ("launcher.py", "bootstrap/launcher.py", "def prepare_app_module("),
+        ("cli.py", "bootstrap/cli.py", "def main("),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root entry returned: {former}")
+        owner_file = PACKAGE_ROOT / owner
+        if not owner_file.is_file():
+            violations.append(f"canonical bootstrap owner missing: {owner}")
+        elif signature not in owner_file.read_text(encoding="utf-8"):
+            violations.append(f"canonical bootstrap entrypoint missing: {signature}")
+    pyproject = PACKAGE_ROOT.parents[1] / "pyproject.toml"
+    if pyproject.is_file() and 'picture-capture-cli = "picture_capture.bootstrap.cli:main"' not in pyproject.read_text(encoding="utf-8"):
+        violations.append("installed CLI script must route to canonical bootstrap entry")
+
+    # Issue #562: relocate both public functional owners without root shims.
+    for old, new in (
+        ("entry_classification.py", "proofreading/classification.py"),
+        ("image_preprocessing.py", "preprocess/pipeline.py"),
+    ):
+        if (PACKAGE_ROOT / old).exists():
+            violations.append(f"retired root owner returned: {old}")
+        if not (PACKAGE_ROOT / new).is_file():
+            violations.append(f"canonical owner missing: {new}")
+    classification = PACKAGE_ROOT / "proofreading/classification.py"
+    if classification.is_file():
+        code = classification.read_text(encoding="utf-8")
+        for required in ("class EntryClassification:", "def install_pdic_classification(",
+                         "def write_classification_sidecar(", "_SIDECAR_TRANSACTION_LOCK"):
+            if required not in code:
+                violations.append(f"classification transaction owner missing: {required}")
+    # Same patchable public preprocessing functions; only physical location changed.
+    canonical_preprocess = PACKAGE_ROOT / "preprocess/pipeline.py"
+    if canonical_preprocess.is_file() and "def analyze_preprocess_page(" not in canonical_preprocess.read_text(encoding="utf-8"):
+        violations.append("canonical preprocess pipeline entrypoint missing")
+
+    # Issue #562: root image_utils retired; EXIF/alpha ink has exactly one leaf
+    # and shared denoise analysis belongs to the canonical preprocess package.
     pixel_owner = PACKAGE_ROOT / "preprocess/page_pixels.py"
-    image_facade = PACKAGE_ROOT / "image_utils.py"
-    if not pixel_owner.is_file():
-        violations.append("preprocess page pixel primitives owner missing")
+    analysis_owner = PACKAGE_ROOT / "preprocess/analysis_image.py"
+    if (PACKAGE_ROOT / "image_utils.py").exists():
+        violations.append("retired root image_utils.py returned")
+    if not pixel_owner.is_file() or not analysis_owner.is_file():
+        violations.append("canonical preprocessing page pixel/analysis owner missing")
     else:
-        owner_source = pixel_owner.read_text(encoding="utf-8")
-        facade_source = image_facade.read_text(encoding="utf-8")
+        pixel_source = pixel_owner.read_text(encoding="utf-8")
+        analysis_source = analysis_owner.read_text(encoding="utf-8")
         for pixel_fn in ("normalize_page_rgb", "_box_sum", "_generic_analysis_ink"):
-            if f"def {pixel_fn}(" not in owner_source:
+            if f"def {pixel_fn}(" not in pixel_source:
                 violations.append(f"page pixel owner missing {pixel_fn}")
-            if f"def {pixel_fn}(" in facade_source:
+            if f"def {pixel_fn}(" in analysis_source:
                 violations.append(f"duplicate page pixel implementation: {pixel_fn}")
-        if "from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in facade_source:
-            violations.append("image_utils lost stable page pixel re-exports")
+        if "from .page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in analysis_source:
+            violations.append("analysis image owner lost canonical pixel function identity")
+        if "def build_analysis_image(" not in analysis_source:
+            violations.append("shared image analysis function missing")
+        for source_path in PACKAGE_ROOT.rglob("*.py"):
+            if source_path == analysis_owner:
+                continue
+            source_text = source_path.read_text(encoding="utf-8")
+            if re.search(r"(?m)^\s*(?:from\s+(?:picture_capture\.|\.+)|import\s+picture_capture\.)image_utils\b|^\s*from\s+picture_capture\s+import\s+image_utils\b", source_text):
+                violations.append(f"retired image_utils import remains: {source_path.relative_to(PACKAGE_ROOT)}")
 
     # Issue #562: training candidate/PDIC linkage is source-space aware and
     # has one physical owner; keep its historic root import for consumers.

@@ -6,7 +6,7 @@ from typing import Callable, Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import LayoutEstimate
 from ..models import AppSettings
 from .deskew import _polygon_boxes
@@ -187,4 +187,4 @@ def _projection_skew_fallback(
 
 
 # Root API exports this helper too; preserve its callable identity.
-_smooth_1d.__module__ = "picture_capture.image_preprocessing"
+_smooth_1d.__module__ = "picture_capture.preprocess.pipeline"

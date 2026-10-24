@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import analysis_ink_mask
 from ..models import AppSettings
 from .geometry import horizontal_column_rows

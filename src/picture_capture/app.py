@@ -144,6 +144,21 @@ from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
 from .ui import main_canvas_render_workflow as _main_canvas_render
 from .ui import canvas_pointer_workflow as _canvas_pointer
+from .ui import main_appearance_policy as _main_appearance_policy
+from .ui import quick_settings_apply as _quick_settings_apply
+from .ui import detection_batch_execution as _detection_batch_execution
+from .ui import main_workspace_build as _main_workspace_build
+from .ui.settings import interactive_panels as _interactive_settings_panels
+from .ui.settings import field_form_runtime as _settings_field_form
+from .ui import review_style_policy as _review_style_policy
+from .ui import background_job_runtime as _background_job_runtime
+from .ui import quick_settings_sync as _quick_settings_sync
+from .ui import paddle_environment_report as _paddle_environment_report
+from .ui import main_action_buttons as _main_action_buttons
+from .ui.settings import dialog_initialization as _settings_dialog_initialization
+from .ui import review_window_initialization as _review_window_initialization
+from .ui import main_app_initialization as _main_app_initialization
+from .ui import appearance_resolution as _appearance_resolution
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.page_list_grid import PageListGrid
 from .ui.text_wrap import (
@@ -180,10 +195,10 @@ from .profile.wizard import ProjectProfileWizard, _screen_work_area
 from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
-from .image_utils import normalize_page_rgb
+from .preprocess.analysis_image import normalize_page_rgb
 from .ui import preprocess_workflow as _preprocess_ui
 from .ui import batch_workflow as _batch_workflow
-from .image_preprocessing import (
+from .preprocess.pipeline import (
     PreprocessAnalysis,
     analysis_is_current as preprocess_analysis_is_current,
     analyze_preprocess_path,
@@ -544,153 +559,35 @@ class SettingsDialog(tk.Toplevel):
         return var
 
     def _setting_widget(self, parent: ttk.Frame, name: str) -> tk.Widget:
-        var = self._setting_var(name)
-        choices = self.SETTING_CHOICES.get(name)
-        if choices:
-            return ttk.Combobox(
-                parent, textvariable=var, values=tuple(choices.keys()),
-                state="readonly", width=26,
-            )
-        if name in {"dictionary_index_language", "dictionary_content_language"}:
-            return ttk.Combobox(
-                parent, textvariable=var, values=PROJECT_LANGUAGE_CODES,
-                state="readonly", width=26,
-            )
-        if name == "ocr_language":
-            widget = ttk.Combobox(
-                parent, textvariable=var, values=self.OCR_LANGUAGES,
-                state="normal", width=26,
-            )
-            widget.bind("<<ComboboxSelected>>", lambda _e: self._refresh_sort_choices())
-            widget.bind("<FocusOut>", lambda _e: self._refresh_sort_choices())
-            return widget
-        if name in {"main_entry_font_family", "review_entry_font_family", "ref_box_font_family"}:
-            families = (
-                AUTO_FONT_FAMILY,
-                *tuple(sorted((f for f in font.families() if not f.startswith("@")), key=str.casefold)),
-            )
-            return ttk.Combobox(
-                parent, textvariable=var, values=families, state="normal", width=26,
-            )
-        if name == "wordslist_path":
-            box = ttk.Frame(parent)
-            box.columnconfigure(0, weight=1)
-            ttk.Entry(box, textvariable=var, width=28).grid(row=0, column=0, sticky="ew")
-            ttk.Button(
-                box, text="浏览…", command=lambda v=var: self._browse_wordslist_setting(v)
-            ).grid(row=0, column=1, padx=(5, 0))
-            return box
-        if name in self.SETTING_SPIN:
-            lower, upper, increment = self.SETTING_SPIN[name]
-            return ttk.Spinbox(
-                parent,
-                textvariable=var,
-                from_=lower,
-                to=upper,
-                increment=increment,
-                width=18,
-                justify="left",
-            )
-        if name == "layout_writing_mode":
-            return ttk.Combobox(
-                parent, textvariable=var,
-                values=("horizontal-tb", "vertical-rl", "vertical-lr"),
-                state="readonly", width=26,
-            )
-        if name == "layout_text_direction":
-            return ttk.Combobox(
-                parent, textvariable=var, values=("ltr", "rtl"),
-                state="readonly", width=26,
-            )
-        if name == "layout_columns_policy":
-            return ttk.Combobox(
-                parent, textvariable=var, values=("detect", "fixed"),
-                state="readonly", width=26,
-            )
-        if name == "layout_column_separator_mode":
-            return ttk.Combobox(
-                parent, textvariable=var, values=("auto", "present", "absent"),
-                state="readonly", width=26,
-            )
-        if name == "layout_transform":
-            return ttk.Entry(parent, textvariable=var, width=28, state="readonly")
-        return (_settings_color_ui.make_color_widget(parent, var)
-                if name.endswith("_color") else ttk.Entry(parent, textvariable=var, width=28))
+        """Historical setting field widget factory."""
+        return _settings_field_form.setting_widget(
+            self, parent, name, deps={
+                "ttk": ttk,
+                "tk": tk,
+                "font": font,
+                "PROJECT_LANGUAGE_CODES": PROJECT_LANGUAGE_CODES,
+                "AUTO_FONT_FAMILY": AUTO_FONT_FAMILY,
+                "_settings_color_ui": _settings_color_ui,
+            },
+        )
+
 
     def _add_setting_group(
-        self,
-        parent: ttk.Frame,
-        title: str,
-        names: tuple[str, ...] | list[str],
-        *,
-        intro: str = "",
-        help_images: bool = False,
+        self, parent: ttk.Frame, title: str,
+        names: tuple[str, ...] | list[str], *,
+        intro: str = "", help_images: bool = False,
         single_line_labels: bool = False,
     ) -> ttk.LabelFrame:
-        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
-        group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(1, weight=1)
-        if single_line_labels and names:
-            label_font = font.nametofont("TkDefaultFont")
-            longest_label_width = max(
-                label_font.measure(
-                    f"{self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])}："
-                )
-                for name in names
-            )
-            group.columnconfigure(0, minsize=longest_label_width + 4)
-        row = 0
-        if intro:
-            intro_label = ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left",
-            )
-            intro_label.grid(
-                row=row, column=0, columnspan=3, sticky="ew", pady=(0, 8)
-            )
-            self._bind_responsive_labels(
-                group, intro_label, horizontal_padding=24, min_wrap=150
-            )
-            row += 1
-        for name in names:
-            label = self.SETTING_LABELS.get(name, self._field_meta.get(name, (name, str))[0])
-            label_widget = ttk.Label(
-                group,
-                text=f"{label}：",
-                justify="right",
-                anchor="e",
-                wraplength=0 if single_line_labels else 180,
-            )
-            label_widget.grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+        """Historical responsive parameter group construction."""
+        return _settings_field_form.add_setting_group(
+            self, parent, title, names, intro=intro,
+            help_images=help_images,
+            single_line_labels=single_line_labels, deps={
+                "ttk": ttk,
+                "font": font,
+            },
+        )
 
-            control = ttk.Frame(group)
-            control.grid(row=row, column=1, sticky="ew", pady=4)
-            control.columnconfigure(0, weight=1)
-            widget = self._setting_widget(control, name)
-            widget.grid(row=0, column=0, sticky="ew")
-            unit = self.SETTING_UNITS.get(name, "")
-            if unit:
-                ttk.Label(control, text=unit, foreground="#70757d").grid(
-                    row=0, column=1, sticky="w", padx=(6, 0)
-                )
-
-            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
-            info.grid(row=row, column=2, sticky="w", padx=(8, 0))
-            callback = lambda n=name, hi=help_images: self._show_setting_help(
-                n, show_layout_image=hi
-            )
-            self._bind_help_widget(label_widget, callback)
-            self._bind_help_widget(control, callback)
-            self._bind_help_widget(info, callback)
-            info.bind(
-                "<Button-1>",
-                lambda _event, n=name, hi=help_images: self._show_setting_help(
-                    n, show_layout_image=hi
-                ),
-                add="+",
-            )
-
-            row += 1
-        return group
 
     def _add_check_group(
         self,
@@ -700,93 +597,12 @@ class SettingsDialog(tk.Toplevel):
         *,
         intro: str = "",
     ) -> ttk.LabelFrame:
-        group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
-        group.pack(fill="x", pady=(0, 10))
-        group.columnconfigure(0, weight=1)
-        row = 0
-        if intro:
-            intro_label = ttk.Label(
-                group, text=intro, foreground="#5f6670", justify="left",
-            )
-            intro_label.grid(
-                row=row, column=0, columnspan=2, sticky="ew", pady=(0, 8)
-            )
-            self._bind_responsive_labels(
-                group, intro_label, horizontal_padding=24, min_wrap=150
-            )
-            row += 1
-
-        auto_child_names = (
-            "ordinary_auto_columns",
-            "ordinary_auto_start_y",
-            "ordinary_auto_manual_x",
-            "ordinary_auto_column_width",
-            "ordinary_auto_gutter",
-            "ordinary_auto_character_height",
-            "ordinary_auto_row_padding",
+        """Historical settings check group with contextual help callbacks."""
+        return _interactive_settings_panels.add_check_group(
+            self, parent, title, checks, intro=intro,
+            deps={"ttk": ttk, "tk": tk},
         )
-        auto_child_set = set(auto_child_names)
-        auto_children = [
-            (label, name) for label, name in checks if name in auto_child_set
-        ]
 
-        for label, name in checks:
-            if name in auto_child_set:
-                continue
-            if name not in self.vars:
-                self.vars[name] = tk.BooleanVar(
-                    value=bool(getattr(self.parent.settings, name))
-                )
-            check = ttk.Checkbutton(group, text=label, variable=self.vars[name])
-            check.grid(row=row, column=0, sticky="w", pady=4)
-            if name == "layout_mask_illustrations_use_existing":
-                parent_mask = self.vars.get("layout_mask_illustrations")
-                if parent_mask is not None:
-                    def _sync_illustration_reuse_state(*_ignored, master=parent_mask, child=check):
-                        child.configure(state="normal" if master.get() else "disabled")
-                    parent_mask.trace_add("write", _sync_illustration_reuse_state)
-                    _sync_illustration_reuse_state()
-            info = ttk.Label(group, text="ⓘ", foreground="#6b7280", cursor="hand2")
-            info.grid(row=row, column=1, sticky="w", padx=(8, 0))
-            callback = lambda l=label, n=name: self._show_check_help(l, n)
-            self._bind_help_widget(check, callback)
-            self._bind_help_widget(info, callback)
-            info.bind(
-                "<Button-1>",
-                lambda _e, l=label, n=name: self._show_check_help(l, n),
-                add="+",
-            )
-            row += 1
-
-            if name == "ordinary_auto_layout" and auto_children:
-                child_grid = ttk.Frame(group)
-                child_grid.grid(
-                    row=row, column=0, columnspan=2,
-                    sticky="w", padx=(22, 0), pady=(0, 4),
-                )
-                for index, (child_label, child_name) in enumerate(auto_children):
-                    if child_name not in self.vars:
-                        self.vars[child_name] = tk.BooleanVar(
-                            value=bool(getattr(self.parent.settings, child_name))
-                        )
-                    child_row = 0 if index < 3 else 1
-                    child_col = index if index < 3 else index - 3
-                    child = ttk.Checkbutton(
-                        child_grid,
-                        text=child_label,
-                        variable=self.vars[child_name],
-                    )
-                    child.grid(
-                        row=child_row, column=child_col,
-                        sticky="w", padx=(0, 16), pady=4,
-                    )
-                    child_callback = (
-                        lambda l=child_label, n=child_name:
-                        self._show_check_help(l, n)
-                    )
-                    self._bind_help_widget(child, child_callback)
-                row += 1
-        return group
 
     def _add_collapsible_settings(
         self,
@@ -818,138 +634,11 @@ class SettingsDialog(tk.Toplevel):
             self._add_check_group(body, "行为", checks)
 
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
-        host = ttk.Frame(tab)
-        host.pack(fill="both", expand=True)
-
-        panes = ttk.Panedwindow(host, orient="horizontal")
-        panes.pack(fill="both", expand=True)
-
-        left = ttk.Frame(panes)
-        left.rowconfigure(0, weight=1)
-        left.columnconfigure(0, weight=1)
-        canvas = tk.Canvas(left, highlightthickness=0, borderwidth=0)
-        scrollbar = ttk.Scrollbar(left, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-
-        content = ttk.Frame(canvas, padding=(14, 12, 10, 18))
-        window = canvas.create_window((0, 0), window=content, anchor="nw")
-        content.bind(
-            "<Configure>",
-            lambda _e, cv=canvas: cv.configure(scrollregion=cv.bbox("all")),
-        )
-        canvas.bind(
-            "<Configure>",
-            lambda e, cv=canvas, item=window: cv.itemconfigure(item, width=e.width),
-        )
-        self._settings_canvases[str(tab)] = canvas
-
-        right = ttk.Frame(panes, padding=(6, 8, 8, 8))
-        panes.add(left, weight=3)
-        panes.add(right, weight=2)
-
-        split_initialized = {"done": False}
-
-        def initialize_split(_event=None) -> None:
-            if split_initialized["done"]:
-                return
-            try:
-                width = int(panes.winfo_width())
-                if width <= 200:
-                    return
-                panes.sashpos(0, int(width * 0.60))
-                split_initialized["done"] = True
-            except tk.TclError:
-                return
-
-        panes.bind("<Map>", initialize_split, add="+")
-        panes.bind("<Configure>", initialize_split, add="+")
-        self.after_idle(initialize_split)
-
-        help_box = ttk.LabelFrame(right, text="设置说明", padding=(14, 12))
-        help_box.pack(fill="both", expand=True)
-        help_title = ttk.Label(
-            help_box,
-            textvariable=self._settings_help_title_var,
-            font=("TkDefaultFont", 10, "bold"),
-            justify="left",
-        )
-        help_title.pack(anchor="w", fill="x", padx=(0, 6))
-        # Each tab owns a vertically scrollable help pane. The old Label
-        # wrapped long explanations but clipped their bottom beyond the window.
-        help_view = ttk.Frame(help_box)
-        help_view.pack(fill="both", expand=True, pady=(7, 0))
-        help_canvas = tk.Canvas(help_view, borderwidth=0, highlightthickness=0)
-        help_scroll = ttk.Scrollbar(help_view, orient="vertical", command=help_canvas.yview)
-        help_canvas.configure(yscrollcommand=help_scroll.set)
-        help_canvas.pack(side="left", fill="both", expand=True)
-        help_scroll.pack(side="right", fill="y")
-        help_content = ttk.Frame(help_canvas)
-        help_window = help_canvas.create_window((0, 0), window=help_content, anchor="nw")
-        help_content.bind(
-            "<Configure>",
-            lambda _e, cv=help_canvas: cv.configure(scrollregion=cv.bbox("all")),
-            add="+",
-        )
-        help_canvas.bind(
-            "<Configure>",
-            lambda e, cv=help_canvas, item=help_window: cv.itemconfigure(
-                item, width=max(1, e.width)
-            ),
-            add="+",
-        )
-        self._settings_help_scroll_canvases.append(help_canvas)
-        # Bind the live variable in every tab rather than taking a snapshot.
-        help_body = ttk.Label(
-            help_content,
-            textvariable=self._settings_help_body_var,
-            foreground="#555b63",
-            justify="left",
-            anchor="nw",
-            wraplength=300,
-        )
-        help_body.pack(anchor="w", fill="x", padx=(0, 8))
-        help_image = ttk.Label(help_content, anchor="center")
-        help_separator = ttk.Separator(help_content, orient="horizontal")
-        help_separator.pack(fill="x", pady=(14, 10))
-        self._settings_help_image_widgets.append(
-            (help_image, help_separator, help_content)
-        )
-        help_hint = ttk.Label(
-            help_content,
-            text="把鼠标停在设置项上、点击 ⓘ，或用 Tab/鼠标进入输入框时，"
-                 "右侧会显示完整说明与版面图解；左侧只保留参数、单位和必要状态。",
-            foreground="#7a8088",
-            justify="left",
-        )
-        help_hint.pack(anchor="w", fill="x", padx=(0, 6))
-        self._bind_responsive_labels(
-            help_content,
-            help_body,
-            help_hint,
-            horizontal_padding=18,
-            min_wrap=120,
+        """Historical responsive settings page with nested help and scrolling."""
+        return _interactive_settings_panels.scrollable_settings_page(
+            self, tab, deps={"ttk": ttk, "tk": tk},
         )
 
-        def scroll_help(event) -> str:
-            direction = (
-                (-1 if event.num == 4 else 1)
-                if getattr(event, "num", None) in (4, 5)
-                else (-1 if getattr(event, "delta", 0) > 0 else 1)
-            )
-            help_canvas.yview_scroll(3 * direction, "units")
-            return "break"
-
-        for wheel_widget in (help_canvas, help_content, help_body, help_hint, help_image):
-            for event_name in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-                wheel_widget.bind(event_name, scroll_help, add="+")
-        help_box.bind(
-            "<Configure>",
-            lambda _e: self._schedule_settings_help_image_render(),
-            add="+",
-        )
-        return content
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
         title_label = ttk.Label(
@@ -969,643 +658,31 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
+        """Stable SettingsDialog constructor; preserve Tk's original super() semantics."""
         super().__init__(parent)
-        self.parent = parent
-        self.title("设置中心")
-        self.update_idletasks()
-        screen_w = max(900, self.winfo_screenwidth())
-        screen_h = max(650, self.winfo_screenheight())
-        fit_window_to_work_area(
-            self,
-            min(1120, max(840, int(screen_w * 0.80))),
-            max(560, int(screen_h * 0.75)),
-            min_width=840,
-            min_height=560,
+        return _settings_dialog_initialization.initialize_settings_dialog(
+            self, parent, initial_tab, deps={
+                "tk": tk,
+                "ttk": ttk,
+                "Image": Image,
+                "fit_window_to_work_area": fit_window_to_work_area,
+                "_build_modern_dialog_heading": _build_modern_dialog_heading,
+                "effective_project_profile_id": effective_project_profile_id,
+                "project_profile_path": project_profile_path,
+                "LATIN_ORDER": LATIN_ORDER,
+                "preferred_font_family": preferred_font_family,
+                "_settings_illustration_ui": _settings_illustration_ui,
+                "_settings_ref_box_ui": _settings_ref_box_ui,
+                "_settings_inference_ui": _settings_inference_ui,
+                "DETECTION_LABELS": DETECTION_LABELS,
+                "LENS_MODE_LABELS": LENS_MODE_LABELS,
+                "LENS_MODE_VALUES": LENS_MODE_VALUES,
+                "APPEARANCE_MODE_VALUES": APPEARANCE_MODE_VALUES,
+                "OCR_ENGINE_LABELS": OCR_ENGINE_LABELS,
+                "OCR_ENGINE_VALUES": OCR_ENGINE_VALUES,
+                "_project_templates": _project_templates,
+            },
         )
-        self.resizable(True, True)
-        self.vars: dict[str, tk.Variable] = {}
-        self.crop_vars: dict[str, tk.Variable] = {}
-        self._crop_specials: dict[str, dict] = {}
-        self._casts = {name: cast for _, name, cast in self.FIELDS}
-        self._field_meta = {name: (label, cast) for label, name, cast in self.FIELDS}
-        self._sort_label_to_value: dict[str, str] = {}
-        self._settings_help_title_var = tk.StringVar(value="这里会解释当前设置")
-        self._settings_help_body_var = tk.StringVar(
-            value="把鼠标停在任一设置项上，或进入输入框，即可看到它控制什么、"
-                  "什么时候需要调整，以及调大/调小可能带来的影响。"
-        )
-        self._settings_save_status_var = tk.StringVar(value="✓ 自动保存已开启")
-        self._settings_help_current_image: str | None = None
-        self._settings_help_original_images: dict[str, Image.Image] = {}
-        self._settings_help_image_widgets: list[
-            tuple[ttk.Label, ttk.Separator, ttk.LabelFrame]
-        ] = []
-        self._settings_help_image_job: str | None = None
-        self._settings_help_scroll_canvases: list[tk.Canvas] = []
-
-        outer = ttk.Frame(self, padding=(18, 14, 18, 12))
-        outer.pack(fill="both", expand=True)
-        _build_modern_dialog_heading(
-            outer,
-            "设置中心",
-            "按工作任务整理：第一次使用优先看“常用 / OCR画线”；"
-            "普通画线是备用方案，底层阈值、正则和后端参数集中在高级区，不确定时无需修改。",
-        )
-        self._configure_settings_appearance_styles()
-        notebook = ttk.Notebook(outer, style="PC.Settings.TNotebook")
-        self.notebook = notebook
-        notebook.pack(fill="both", expand=True)
-        self._settings_canvases: dict[str, tk.Canvas] = {}
-
-        common_tab = ttk.Frame(notebook)
-        normal_tab = ttk.Frame(notebook)
-        illustration_tab = ttk.Frame(notebook)
-        ref_box_tab = ttk.Frame(notebook)
-        performance_tab = ttk.Frame(notebook)
-        separator_y_tab = ttk.Frame(notebook)
-        ocr_tab = ttk.Frame(notebook)
-        display_tab = ttk.Frame(notebook)
-        project_tab = ttk.Frame(notebook)
-        crop_tab = ttk.Frame(notebook)
-        advanced_tab = ttk.Frame(notebook)
-        sort_tab = ttk.Frame(notebook)
-        rules_tab = ttk.Frame(notebook)
-        for tab, label in (
-            (common_tab, "常用"),
-            (ocr_tab, "OCR画线"),
-            (normal_tab, "普通画线"),
-            (separator_y_tab, "横线 Y 精修"),
-            (illustration_tab, "插图"),
-            (ref_box_tab, "REF框"),
-            (performance_tab, "性能测试与诊断"),
-            (display_tab, "显示/校对"),
-            (project_tab, "项目/批量"),
-            (crop_tab, "切图"),
-            (advanced_tab, "高级"),
-            (sort_tab, "排序"),
-            (rules_tab, "过滤规则"),
-        ):
-            notebook.add(tab, text=label)
-
-        self._settings_tabs = {
-            "common": common_tab,
-            "normal": normal_tab,
-            "separator_y": separator_y_tab,
-            "illustration": illustration_tab,
-            "ref_box": ref_box_tab,
-            "performance": performance_tab,
-            "ocr": ocr_tab,
-            "display": display_tab,
-            "project": project_tab,
-            "crop": crop_tab,
-            "advanced": advanced_tab,
-            "profile": advanced_tab,
-            "params": common_tab,
-            "sort": sort_tab,
-            "rules": rules_tab,
-        }
-        self.select_tab(initial_tab)
-        notebook.bind(
-            "<<NotebookTabChanged>>",
-            lambda _e: self._show_settings_help(
-                "设置说明",
-                "把鼠标停在任一设置项上，或进入输入框，即可看到它控制什么、"
-                "什么时候需要调整，以及调大/调小可能带来的影响。",
-            ),
-            add="+",
-        )
-
-        # Reuse the project profile.
-        self._active_profile_key = effective_project_profile_id(
-            parent.settings,
-            project_profile_path(parent.project.root) if parent.project else None,
-        )
-        self._profile_selection_changed = False
-        self._profile_label_to_key: dict[str, str] = {}
-
-        common = self._scrollable_settings_page(common_tab)
-        self._settings_intro(
-            common,
-            "先确认版面，再用 OCR 画线完成代表页验证",
-            "推荐流程：项目Profile → 检测版面参数 → 代表页运行 OCR 画线 → "
-            "确认无明显漏线/误线后再批量。OCR画线是默认推荐路径，会同时利用文字、位置和结构证据；"
-            "普通画线保留为备用方案，主要用于左缘极稳定的简单版式或 OCR 暂不可用时。",
-        )
-        workflow = ttk.Frame(common)
-        workflow.pack(fill="x", pady=(0, 10))
-        profile_button = ttk.Button(
-            workflow, text="打开项目Profile…", command=parent.open_project_profile
-        )
-        profile_button.pack(side="left")
-        parent._attach_tooltip(
-            profile_button,
-            "配置词典信息、阅读方向、页面模板和词头结构，并用代表页测试。",
-        )
-        layout_button = ttk.Button(
-            workflow, text="检测版面参数", command=parent.detect_layout_current
-        )
-        layout_button.pack(side="left", padx=(6, 0))
-        parent._attach_tooltip(
-            layout_button,
-            "按主界面当前页面范围检测；若页面数量≥2，数值参数取稳健中位数。",
-        )
-        environment_button = ttk.Button(
-            workflow, text="环境中心", command=self.check_ocr_engines
-        )
-        environment_button.pack(side="left", padx=(6, 0))
-        parent._attach_tooltip(
-            environment_button,
-            "检查 OCR、Tesseract、Lens、OpenCC 等运行环境。",
-        )
-
-        mode_group = ttk.LabelFrame(common, text="默认画线方式", padding=(12, 9))
-        mode_group.pack(fill="x", pady=(0, 10))
-        mode_group.columnconfigure(1, weight=1)
-        method_var = tk.StringVar(
-            value=DETECTION_LABELS.get(
-                parent.settings.detection_method, DETECTION_LABELS["paddleocr"]
-            )
-        )
-        self.vars["detection_method"] = method_var
-
-        combined_mode = ttk.Radiobutton(
-            mode_group,
-            text="融合画线+OCR",
-            variable=method_var,
-            value=DETECTION_LABELS["combined"],
-        )
-        combined_mode.grid(row=0, column=0, sticky="w", pady=3)
-        combined_mode_help = ttk.Label(
-            mode_group,
-            text="普通几何负责稳定定位，OCR负责语义确认与独立救漏；最终统一配对去重。",
-            foreground="#666666",
-            justify="left",
-        )
-        combined_mode_help.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=3)
-        self._bind_responsive_labels(
-            combined_mode_help, combined_mode_help, horizontal_padding=4, min_wrap=100
-        )
-
-        ocr_mode = ttk.Radiobutton(
-            mode_group,
-            text="OCR画线（默认）",
-            variable=method_var,
-            value=DETECTION_LABELS["paddleocr"],
-        )
-        ocr_mode.grid(row=1, column=0, sticky="w", pady=3)
-        ocr_mode_help = ttk.Label(
-            mode_group,
-            text="只运行 OCR / parser / 视觉候选链，便于定位 OCR 侧问题。",
-            foreground="#666666",
-            justify="left",
-        )
-        ocr_mode_help.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=3)
-        self._bind_responsive_labels(
-            ocr_mode_help, ocr_mode_help, horizontal_padding=4, min_wrap=100
-        )
-
-        normal_mode = ttk.Radiobutton(
-            mode_group,
-            text="普通画线（单独诊断）",
-            variable=method_var,
-            value=DETECTION_LABELS["left_edge"],
-        )
-        normal_mode.grid(row=2, column=0, sticky="w", pady=3)
-        normal_mode_help = ttk.Label(
-            mode_group,
-            text="只运行 VB 左缘几何/墨迹链；速度最快，适合检查缩进型版式的几何基线。",
-            foreground="#666666",
-            justify="left",
-        )
-        normal_mode_help.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=3)
-        self._bind_responsive_labels(
-            normal_mode_help, normal_mode_help, horizontal_padding=4, min_wrap=100
-        )
-
-        for widget, title, body in (
-            (
-                combined_mode,
-                "融合画线+OCR",
-                "两条成熟路径各自完整运行后再融合：普通模式提供高速、稳定的几何词条边界；"
-                "OCR 模式提供词头文字、结构证据和普通模式之外的独立救漏。程序只在同栏、Y位置足够接近时一对一配对；"
-                "匹配项输出唯一横线并继承 OCR 文字，未匹配项保留各自救漏能力，最后再用更严格阈值去重。"
-                "普通/括号词优先保留 VB 分隔线位置；单个大汉字保留 OCR 的专用自适应精修位置。",
-            ),
-            (
-                ocr_mode,
-                "OCR画线（默认）",
-                "单独运行现有 OCR 候选链，用于排查 OCR、词头 parser、符号/字高/粗体等结构证据。"
-                "原始 OCR 缓存仍可复用。",
-            ),
-            (
-                normal_mode,
-                "普通画线（单独诊断）",
-                "单独运行恢复的 VB.NET 左缘规则链，只看版面几何、墨迹和正文缩进。"
-                "适合验证普通模式本身的定位效果和速度。",
-            ),
-        ):
-            self._bind_help_widget(
-                widget,
-                lambda t=title, b=body: self._show_settings_help(t, b),
-            )
-        self._add_setting_group(
-            common,
-            "常用版面参数",
-            self.COMMON_FIELDS,
-            intro="这些值同时影响普通画线、OCR画线和后续切图。能自动检测时，优先使用检测结果。",
-            help_images=True,
-        )
-
-        normal = self._scrollable_settings_page(normal_tab)
-        self._settings_intro(
-            normal,
-            "普通画线（备用）：只使用几何和栏左墨迹",
-            "这是二线方案，适合词头基本贴近栏左缘、释义正文有稳定缩进的简单版式，"
-            "或 OCR 环境暂不可用时临时使用。若 OCR 可用，仍建议优先从 OCR画线开始。",
-        )
-        self._add_setting_group(
-            normal,
-            "常用设置",
-            self.NORMAL_COMMON_FIELDS,
-            intro="第一次使用通常只需要确认这四项。墨迹判断方式建议保持“自动（推荐）”。",
-        )
-        self._add_check_group(
-            normal,
-            "版面行为",
-            self.NORMAL_CHECKS,
-            intro="【使用自动版面参数】下面的七项决定每页检测后临时更新哪些版面字段；【跟随栏左缘倾斜/弯曲】及其三个百分比参数用于页面局部几何跟踪。",
-        )
-        self._add_collapsible_settings(
-            normal,
-            "高级设置（普通画线异常时再展开）",
-            self.NORMAL_ADVANCED_FIELDS,
-        )
-
-        # Cross-cutting feature, not an OCR-only or ordinary-only option.
-        separator_y_page = self._scrollable_settings_page(separator_y_tab)
-        self._settings_intro(
-            separator_y_page, "横线 Y 精修（所有画线共用）",
-            "集中控制 OCR 与普通画线共享的局部墨迹谷精修。"
-            "横向分析范围对新项目默认 100%；老项目已保存的取值保持不变。",
-        )
-        self._add_check_group(
-            separator_y_page, "启用与安全检查", self.SEPARATOR_Y_CHECKS,
-            intro="白缝安全核验为实验性功能，默认关闭。",
-        )
-        self._add_setting_group(
-            separator_y_page, "精修参数", self.SEPARATOR_Y_FIELDS,
-            intro="横向范围 100% 表示在扣除栏边余量后的整栏可用宽度内寻找空白带；"
-            "并非保证每条线均不穿字。",
-        )
-
-        _settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)
-        _settings_ref_box_ui.build_ref_box_settings_tab(self, ref_box_tab)
-        performance_page = self._scrollable_settings_page(performance_tab)
-        self._settings_intro(
-            performance_page, "性能测试与诊断",
-            "本页管理运行时测试开关和性能报告；项目设置会自动保存，"
-            "新启动的普通画线子进程继承对应选项。",
-        )
-        self._add_check_group(
-            performance_page, "分析图与性能日志",
-            (
-                ("启用普通画线性能诊断（导出 Markdown/CSV）", "draw_performance_profile"),
-                ("复用已处理的分析图（实验）", "reuse_prepared_analysis"),
-            ),
-            intro="复用功能可能改变重复去噪语义，务必先比较完整 PDIC。",
-        )
-        _settings_inference_ui.build_inference_performance_group(self, performance_page)
-
-        ocr_page = self._scrollable_settings_page(ocr_tab)
-        self._settings_intro(
-            ocr_page,
-            "OCR画线（推荐默认）：用文字 + 版式 + 视觉证据判断真正词头",
-            "优先使用这一模式。PaddleOCR 负责主识别；可选 Tesseract 作为第二意见，"
-            "Google Lens 作为冲突时的第三意见。OCR 原始结果有缓存：参数只改变候选判断时无需重新跑 OCR。",
-        )
-        self._add_setting_group(
-            ocr_page,
-            "常用设置",
-            self.OCR_COMMON_FIELDS,
-            intro="先调识别范围与左缘容差；候选分数、合并阈值等放在高级区。",
-        )
-        self._add_check_group(
-            ocr_page,
-            "识别策略",
-            self.OCR_COMMON_CHECKS,
-            intro="结构/视觉提示用于减少正文误检；双 OCR 会更稳，但会增加运行时间。",
-        )
-        lens_group = ttk.LabelFrame(ocr_page, text="Google Lens（可选）", padding=(12, 9))
-        lens_group.pack(fill="x", pady=(0, 10))
-        if "paddle_enable_lens" not in self.vars:
-            self.vars["paddle_enable_lens"] = tk.BooleanVar(
-                value=bool(parent.settings.paddle_enable_lens)
-            )
-        lens_enable_check = ttk.Checkbutton(
-            lens_group, text="启用 Lens 第三意见",
-            variable=self.vars["paddle_enable_lens"],
-        )
-        lens_enable_check.pack(anchor="w")
-        self._bind_help_widget(
-            lens_enable_check,
-            lambda: self._show_check_help("启用 Lens 第三意见", "paddle_enable_lens"),
-        )
-        lens_help = ttk.Label(
-            lens_group,
-            text="建议只在 Paddle/Tesseract 冲突时使用，避免不必要的网络等待。",
-            foreground="#666666",
-            justify="left",
-        )
-        lens_help.pack(anchor="w", fill="x", pady=(2, 5))
-        self._bind_responsive_labels(
-            lens_group, lens_help, horizontal_padding=12, min_wrap=120
-        )
-        lens_mode_var = tk.StringVar(
-            value=LENS_MODE_LABELS.get(
-                parent.settings.paddle_lens_mode, LENS_MODE_LABELS["conflict"]
-            )
-        )
-        self.vars["paddle_lens_mode"] = lens_mode_var
-        lens_row = ttk.Frame(lens_group)
-        lens_row.pack(fill="x")
-        ttk.Label(lens_row, text="运行模式：").pack(side="left")
-        lens_mode_combo = ttk.Combobox(
-            lens_row, textvariable=lens_mode_var, values=tuple(LENS_MODE_VALUES),
-            state="readonly", width=34,
-        )
-        lens_mode_combo.pack(side="left")
-        self._bind_help_widget(
-            lens_row,
-            lambda: self._show_setting_help("paddle_lens_mode"),
-        )
-        self._add_collapsible_settings(
-            ocr_page,
-            "高级设置（漏检/误检有明确模式时再展开）",
-            self.OCR_ADVANCED_FIELDS,
-            self.OCR_ADVANCED_CHECKS,
-        )
-
-        display = self._scrollable_settings_page(display_tab)
-        self._settings_intro(
-            display,
-            "显示与校对只改变工作体验，不应该被误认为识别阈值",
-            "字体、词框宽度、校对缩放和参考词表都集中在这里。"
-            "修改这些项目不会改变普通画线/OCR画线的词头判断。",
-        )
-        appearance_group = ttk.LabelFrame(display, text="应用外观", padding=(12, 9))
-        appearance_group.pack(fill="x", pady=(0, 10))
-        appearance_row = ttk.Frame(appearance_group)
-        appearance_row.pack(anchor="w", fill="x")
-        ttk.Label(appearance_row, text="颜色模式：").pack(side="left")
-        appearance_combo = ttk.Combobox(
-            appearance_row, textvariable=self.parent.appearance_mode_var,
-            values=tuple(APPEARANCE_MODE_VALUES), state="readonly", width=10,
-        )
-        appearance_combo.pack(side="left", padx=(4, 0))
-        appearance_combo.bind("<<ComboboxSelected>>", self.parent._appearance_mode_selected)
-        appearance_help = ttk.Label(
-            appearance_group,
-            text="浅色使用正常界面；深色同步主界面、校对/Profile/设置窗口及扫描图夜间预览；"
-                 "跟随系统会自动响应 Windows、macOS 与 Linux 的系统颜色模式。"
-                 "仅改变显示，不修改原图、OCR 输入、PDIC/PPP、切图或导出文件。",
-            justify="left",
-        )
-        appearance_help.pack(anchor="w", fill="x", pady=(4, 0))
-        self._bind_responsive_labels(
-            appearance_group, appearance_help, horizontal_padding=24, min_wrap=160
-        )
-        self._add_setting_group(
-            display,
-            "界面与校对",
-            self.DISPLAY_FIELDS,
-        )
-        self._add_check_group(
-            display,
-            "显示行为",
-            self.DISPLAY_STYLE_CHECKS + self.DISPLAY_CHECKS,
-        )
-
-        project_page = self._scrollable_settings_page(project_tab)
-        self._settings_intro(
-            project_page,
-            "项目资料与运行环境",
-            "项目名称/语言等资料用于导出和词典制作；运行环境参数只在相应功能启用时生效。",
-        )
-        self._add_setting_group(
-            project_page,
-            "项目资料",
-            (
-                "dictionary_full_name", "dictionary_abbreviation", "dictionary_isbn",
-                "dictionary_index_language", "dictionary_content_language",
-                "dictionary_body_page_range",
-            ),
-        )
-        self._add_setting_group(
-            project_page,
-            "运行与性能",
-            self.PROJECT_RUNTIME_FIELDS,
-            intro="OCR 模型和 Tesseract 路径稳定后不要频繁修改；模型/语言发生变化时应重新 OCR。",
-        )
-        text_ocr_group = ttk.LabelFrame(
-            project_page, text="普通文本 OCR（不是 OCR画线）", padding=(12, 9)
-        )
-        text_ocr_group.pack(fill="x", pady=(0, 10))
-        text_ocr_group.columnconfigure(2, weight=1)
-        ocr_engine_var = tk.StringVar(
-            value=OCR_ENGINE_LABELS.get(
-                parent.settings.ocr_engine, OCR_ENGINE_LABELS["tesseract"]
-            )
-        )
-        self.vars["ocr_engine"] = ocr_engine_var
-        ttk.Label(text_ocr_group, text="OCR 引擎：").grid(
-            row=0, column=0, sticky="e", padx=(0, 10), pady=4
-        )
-        ocr_engine_combo = ttk.Combobox(
-            text_ocr_group, textvariable=ocr_engine_var,
-            values=tuple(OCR_ENGINE_VALUES), state="readonly", width=28,
-        )
-        ocr_engine_combo.grid(row=0, column=1, sticky="w", pady=4)
-        self._bind_help_widget(
-            ocr_engine_combo,
-            lambda: self._show_setting_help("ocr_engine"),
-        )
-        text_ocr_help = ttk.Label(
-            text_ocr_group,
-            text="用于“已有横线后再识别整行文本”的普通 OCR 功能；"
-                 "OCR画线使用上一个页签中的多引擎流程，两者不要混淆。",
-            foreground="#666666",
-            justify="left",
-        )
-        text_ocr_help.grid(row=0, column=2, sticky="ew", padx=(12, 0), pady=4)
-        self._bind_responsive_labels(
-            text_ocr_help, text_ocr_help, horizontal_padding=4, min_wrap=120
-        )
-        project_checks = (
-            ("OCR 后执行替换规则", "ocr_replace"),
-            ("普通 OCR 文本转小写", "lowercase_ocr"),
-        )
-        self._add_check_group(project_page, "普通 OCR 文本处理", project_checks)
-
-        self._build_crop_settings_tab(crop_tab)
-
-        advanced = self._scrollable_settings_page(advanced_tab)
-        self._settings_intro(
-            advanced,
-            "高级 / 专家参数",
-            "这里保留版面语义、OCR 后端和正则规则等底层控制。"
-            "如果只是想提高某本词典的识别率，请优先回到“OCR画线”页或【项目Profile】；"
-            "只有左缘高度规则的简单版式才优先考虑“普通画线（备用）”。",
-        )
-        ttk.Button(
-            advanced, text="打开项目Profile（推荐）…", command=parent.open_project_profile
-        ).pack(anchor="w", pady=(0, 10))
-        self._add_setting_group(advanced, "版面与后端", self.EXPERT_FIELDS)
-
-        def _wheel(event) -> str | None:
-            selected = notebook.select()
-            target = self._settings_canvases.get(str(selected))
-            if target is None:
-                return None
-            if getattr(event, "num", None) == 4:
-                target.yview_scroll(-3, "units")
-            elif getattr(event, "num", None) == 5:
-                target.yview_scroll(3, "units")
-            else:
-                delta = getattr(event, "delta", 0)
-                if delta:
-                    target.yview_scroll(
-                        (-1 if delta > 0 else 1)
-                        * max(1, abs(int(delta / 120))) * 3,
-                        "units",
-                    )
-            return "break"
-
-        self.bind("<MouseWheel>", _wheel)
-        self.bind("<Button-4>", _wheel)
-        self.bind("<Button-5>", _wheel)
-
-        # Language-aware collation tab.
-        sort_frame = self._scrollable_settings_page(sort_tab)
-        sort_frame.columnconfigure(1, weight=1)
-        self.sort_language_var = tk.StringVar(value="")
-        ttk.Label(sort_frame, text="OCR 语言：").grid(row=0, column=0, sticky="e", pady=4)
-        ttk.Label(sort_frame, textvariable=self.sort_language_var).grid(row=0, column=1, sticky="w", pady=4)
-        ttk.Label(sort_frame, text="排序预设：").grid(row=1, column=0, sticky="e", pady=4)
-        self.sort_mode_var = tk.StringVar(value="")
-        self.vars["headword_sort_mode"] = self.sort_mode_var
-        self.sort_combo = ttk.Combobox(sort_frame, textvariable=self.sort_mode_var, state="readonly", width=48)
-        self.sort_combo.grid(row=1, column=1, sticky="ew", pady=4)
-        self.sort_combo.bind("<<ComboboxSelected>>", lambda _e: self._toggle_custom_sort_state())
-        self._bind_help_widget(
-            self.sort_combo,
-            lambda: self._show_setting_help("headword_sort_mode"),
-        )
-
-        ttk.Label(sort_frame, text="自定义排序单元：").grid(row=2, column=0, sticky="ne", pady=(10, 4))
-        custom_box = ttk.Frame(sort_frame)
-        custom_box.grid(row=2, column=1, sticky="ew", pady=(10, 4))
-        custom_box.columnconfigure(0, weight=1)
-        self.custom_order_var = tk.StringVar(value=getattr(parent.settings, "headword_custom_order", LATIN_ORDER))
-        self.vars["headword_custom_order"] = self.custom_order_var
-        self.custom_order_entry = ttk.Entry(custom_box, textvariable=self.custom_order_var)
-        self.custom_order_entry.grid(row=0, column=0, sticky="ew")
-        self._bind_help_widget(
-            self.custom_order_entry,
-            lambda: self._show_setting_help("headword_custom_order"),
-        )
-        ttk.Label(custom_box, text="空格分隔；允许多字符单元，如 ch / ll / dz").grid(row=1, column=0, sticky="w", pady=(3, 0))
-        self.custom_fold_var = tk.BooleanVar(value=bool(getattr(parent.settings, "headword_custom_fold_accents", True)))
-        self.vars["headword_custom_fold_accents"] = self.custom_fold_var
-        self.custom_fold_check = ttk.Checkbutton(sort_frame, text="自定义规则中，未单列的重音字母按基础字母排序", variable=self.custom_fold_var)
-        self.custom_fold_check.grid(row=3, column=1, sticky="w", pady=4)
-        self._bind_help_widget(
-            self.custom_fold_check,
-            lambda: self._show_setting_help("headword_custom_fold_accents"),
-        )
-        help_text = (
-            "排序只控制词头的比较/索引顺序，不会重排扫描图片，也不会改 PDIC 坐标。\n"
-            "预设会随 OCR 语言变化；语言专用预设用于符合对应词典的字母序，始终还可选择通用 Unicode 或自定义。\n"
-            "自定义顺序用空格分隔排序单元，可写 ch / ll / dz 等多字符单位；例如旧式西班牙语："
-            "a b c ch d e f g h i j k l ll m n ñ o p q r s t u v w x y z。\n"
-            "如果重音字母有独立排序地位，应显式列入自定义顺序；否则可用“按基础字母排序”折叠。"
-        )
-        sort_help = ttk.Label(sort_frame, text=help_text, justify="left")
-        sort_help.grid(
-            row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0)
-        )
-        self._bind_responsive_labels(
-            sort_frame, sort_help, horizontal_padding=24, min_wrap=180
-        )
-        self._refresh_sort_choices(initial=True)
-
-        # User-editable OCR headword filter rules.
-        rules_tab.columnconfigure(0, weight=1)
-        rules_tab.rowconfigure(1, weight=1)
-        rules_help = (
-            "这是项目级候选覆盖层：用于处理某一本词典反复出现、但不值得改全局 parser/Profile 的例外。每行一条；# 开头为注释。\n"
-            "拒绝规则优先于强制接受：reject_lemma_exact / reject_lemma_regex 针对 lemma；"
-            "reject_line_contains / reject_line_regex 针对整行。accept_* 可救回已成功解析且位于合法栏左区域的候选，"
-            "但不能把任意页眉/噪声变成词头。pos_exclude_exact / pos_exclude_regex 用于排除容易被误当 POS 的固定标签。\n"
-            "修改过滤规则通常只需要重新跑候选解析，不必强制重做 PaddleOCR；若问题属于整类词典结构，应优先写入 Project Profile。"
-        )
-        rules_help_label = ttk.Label(
-            rules_tab, text=rules_help, justify="left", padding=(12, 10, 12, 6)
-        )
-        rules_help_label.grid(row=0, column=0, sticky="ew")
-        self._bind_responsive_labels(
-            rules_tab, rules_help_label, horizontal_padding=24, min_wrap=180
-        )
-        rules_editor_frame = ttk.Frame(rules_tab, padding=(12, 0, 12, 6))
-        rules_editor_frame.grid(row=1, column=0, sticky="nsew")
-        rules_editor_frame.columnconfigure(0, weight=1); rules_editor_frame.rowconfigure(0, weight=1)
-        self.rules_text = tk.Text(rules_editor_frame, wrap="none", undo=True, font=(preferred_font_family(self, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 10), padx=8, pady=8, height=18)
-        rules_ybar = ttk.Scrollbar(rules_editor_frame, orient="vertical", command=self.rules_text.yview)
-        rules_xbar = ttk.Scrollbar(rules_editor_frame, orient="horizontal", command=self.rules_text.xview)
-        self.rules_text.configure(yscrollcommand=rules_ybar.set, xscrollcommand=rules_xbar.set)
-        self.rules_text.grid(row=0, column=0, sticky="nsew"); rules_ybar.grid(row=0, column=1, sticky="ns"); rules_xbar.grid(row=1, column=0, sticky="ew")
-        rules_buttons = ttk.Frame(rules_tab, padding=(12, 0, 12, 10))
-        rules_buttons.grid(row=2, column=0, sticky="ew")
-        ttk.Button(rules_buttons, text="恢复默认规则", command=self.restore_default_rules).pack(side="left")
-        ttk.Button(rules_buttons, text="导入规则…", command=self.import_rules).pack(side="left", padx=(8, 0))
-        ttk.Button(rules_buttons, text="导出规则…", command=self.export_rules).pack(side="left", padx=(8, 0))
-        self.rules_status_var = tk.StringVar(value="")
-        ttk.Label(rules_buttons, textvariable=self.rules_status_var).pack(side="right")
-        self.load_rules_editor()
-
-        ttk.Separator(outer, orient="horizontal").pack(fill="x")
-        footer = ttk.Frame(outer, padding=(0, 10, 0, 0))
-        footer.pack(fill="x")
-        ttk.Label(
-            footer,
-            textvariable=self._settings_save_status_var,
-            foreground="#666666",
-        ).pack(side="left")
-        ttk.Button(
-            footer, text="关闭", command=self._close_validated
-        ).pack(side="right")
-        ttk.Button(
-            footer, text="校验当前设置",
-            command=lambda: self._validate_settings_now(),
-        ).pack(side="right", padx=(0, 8))
-        _project_templates.add_default_button(footer, self)
-        self.bind("<Control-s>", lambda _event: self._validate_settings_now())
-        self.bind("<Escape>", lambda _event: self._close_validated())
-        self.protocol("WM_DELETE_WINDOW", self._close_validated)
-        self._autosave_job: str | None = None
-        self._autosave_ready = True
-        for _name, _var in self.vars.items():
-            try:
-                _var.trace_add("write", lambda *_args: self._schedule_autosave())
-            except Exception:
-                pass
-        for _name, _var in self.crop_vars.items():
-            try:
-                _var.trace_add("write", lambda *_args: self._schedule_autosave())
-            except Exception:
-                pass
-        # Keep the dialog modeless.
-        # Do not use transient()/grab_set(), which would keep this window in
-        # front and block interaction with the main workspace.
 
     @staticmethod
     def _crop_nonnegative_int(value: object, label: str) -> int:
@@ -1730,169 +807,31 @@ class SettingsDialog(tk.Toplevel):
         _settings_lifecycle_ui.close_validated(self)
 
     def save(self, *, close: bool = True, show_errors: bool = True) -> bool:
-        try:
-            _settings_lifecycle_ui.validate_projection_width(self.vars)
-            _settings_lifecycle_ui.validate_separator_gap_controls(self.vars)
-            _settings_lifecycle_ui.validate_ref_box_controls(self.vars)
-            _settings_color_ui.validate_color_controls(self.vars)
-            previous_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
-            previous_backend = {
-                name: getattr(self.parent.settings, name, None)
-                for name in (
-                    "paddle_language", "tesseract_language",
-                    "paddle_tesseract_psm", "paddle_use_textline_orientation",
-                )
-            }
-            for name, var in self.vars.items():
-                value = var.get()
-                if name in self.SETTING_CHOICES:
-                    raw_value = self.SETTING_CHOICES[name].get(str(value), str(value))
-                    cast = self._casts.get(name, str)
-                    setattr(self.parent.settings, name, cast(raw_value))
-                elif name in self._casts:
-                    if name == "paddle_left_tolerance":
-                        percent = float(value)
-                        if not 0.0 <= percent <= 100.0:
-                            raise ValueError("词头左缘容差必须在 0–100% 单栏宽之间。")
-                        setattr(
-                            self.parent.settings,
-                            name,
-                            _column_percent_to_pixels(self.parent.settings, percent),
-                        )
-                    elif name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
-                        percent = float(value)
-                        if not 0.0 <= percent <= 100.0:
-                            raise ValueError(f"{self.SETTING_LABELS.get(name, name)} 必须在 0–100% 之间。")
-                        pixel_value = _layout_percent_to_pixels(
-                            self.parent.image, name, percent
-                        )
-                        setattr(self.parent.settings, name, int(pixel_value))
-                    else:
-                        setattr(self.parent.settings, name, self._casts[name](value))
-                elif name == "detection_method":
-                    self.parent.settings.detection_method = DETECTION_VALUES[str(value)]
-                elif name == "ocr_engine":
-                    self.parent.settings.ocr_engine = OCR_ENGINE_VALUES[str(value)]
-                elif name == "paddle_lens_mode":
-                    self.parent.settings.paddle_lens_mode = LENS_MODE_VALUES[str(value)]
-                elif name == "headword_sort_mode":
-                    self.parent.settings.headword_sort_mode = self._sort_label_to_value.get(str(value), "auto")
-                elif name == "headword_custom_order":
-                    self.parent.settings.headword_custom_order = str(value).strip()
-                elif name == "headword_custom_fold_accents":
-                    self.parent.settings.headword_custom_fold_accents = bool(value)
-                else:
-                    setattr(self.parent.settings, name, bool(value))
-            if self.parent.image is not None and not str(
-                getattr(self.parent.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
-            ).startswith("vertical"):
-                if (
-                    "start_y" in self.vars
-                    and str(getattr(self.parent.settings, "profile_header_mode", "auto") or "auto")
-                    == "present"
-                ):
-                    source_y = int(self.parent.settings.start_y)
-                    source_y = max(0, min(self.parent.image.height, source_y))
-                    percent = source_y * 100.0 / max(1, self.parent.image.height)
-                    if percent > 35.0:
-                        raise ValueError("页眉不能超过原图高度的 35%。")
-                    self.parent.settings.profile_header_percent = round(percent, 6)
-                if (
-                    "bottom_y" in self.vars
-                    and str(getattr(self.parent.settings, "profile_footer_mode", "auto") or "auto")
-                    == "present"
-                ):
-                    source_y = int(self.parent.settings.bottom_y)
-                    source_y = max(0, min(self.parent.image.height, source_y))
-                    percent = (
-                        (self.parent.image.height - source_y)
-                        * 100.0
-                        / max(1, self.parent.image.height)
-                    )
-                    if not 0.0 <= percent <= 35.0:
-                        raise ValueError("页尾必须位于原图底部 35% 范围内。")
-                    self.parent.settings.profile_footer_percent = round(percent, 6)
+        """Historical validated settings save with Profile, rules and redraw."""
+        return _settings_field_form.save_settings(
+            self, close=close, show_errors=show_errors,
+            deps={
+                "_settings_lifecycle_ui": _settings_lifecycle_ui,
+                "_settings_color_ui": _settings_color_ui,
+                "_column_percent_to_pixels": _column_percent_to_pixels,
+                "LAYOUT_PERCENT_AXES": LAYOUT_PERCENT_AXES,
+                "_layout_percent_to_pixels": _layout_percent_to_pixels,
+                "DETECTION_VALUES": DETECTION_VALUES,
+                "OCR_ENGINE_VALUES": OCR_ENGINE_VALUES,
+                "LENS_MODE_VALUES": LENS_MODE_VALUES,
+                "language_effective_settings": language_effective_settings,
+                "normalize_content_font_setting": normalize_content_font_setting,
+                "parse_custom_order": parse_custom_order,
+                "parse_headword_filter_rules": parse_headword_filter_rules,
+                "settings_path": settings_path,
+                "write_project_profile": write_project_profile,
+                "project_profile_path": project_profile_path,
+                "headword_filter_rules_path": headword_filter_rules_path,
+                "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+                "messagebox": messagebox,
+            },
+        )
 
-            current_language = str(getattr(self.parent.settings, "ocr_language", "") or "")
-            if current_language != previous_language:
-                derived = language_effective_settings(
-                    current_language, self.parent.settings.layout_writing_mode,
-                )
-                for name, value in derived.items():
-                    if not hasattr(self.parent.settings, name):
-                        continue
-                    # Keep overrides, replacing only old language defaults.
-                    if name not in previous_backend or getattr(self.parent.settings, name) == previous_backend[name]:
-                        setattr(self.parent.settings, name, value)
-            self.parent.settings.paddle_lens_language = str(
-                getattr(self.parent.settings, "ocr_language", "") or ""
-            )
-            self.parent.settings.main_entry_font_family = normalize_content_font_setting(
-                self.parent.settings.main_entry_font_family
-            )
-            self.parent.settings.illustration_label_font_family = normalize_content_font_setting(
-                self.parent.settings.illustration_label_font_family
-            )
-            self.parent.settings.ref_box_font_family = normalize_content_font_setting(
-                self.parent.settings.ref_box_font_family
-            )
-            self.parent.settings.main_entry_font_size = max(5, int(self.parent.settings.main_entry_font_size))
-            self.parent.settings.main_entry_width_chars = max(4, int(self.parent.settings.main_entry_width_chars))
-            self.parent.settings.main_entry_x_ratio = min(1.25, max(0.0, float(self.parent.settings.main_entry_x_ratio)))
-            self.parent.settings.review_entry_font_family = normalize_content_font_setting(
-                self.parent.settings.review_entry_font_family
-            )
-            self.parent.settings.review_simplified_font_family = normalize_content_font_setting(
-                self.parent.settings.review_simplified_font_family
-            )
-            self.parent.settings.review_entry_font_size = max(6, int(self.parent.settings.review_entry_font_size))
-            self.parent.settings.review_entry_vertical_padding = min(30, max(0, int(self.parent.settings.review_entry_vertical_padding)))
-            self.parent.settings.review_single_cjk_line_height = min(500, max(0, int(self.parent.settings.review_single_cjk_line_height)))
-            review_zoom_percent = float(self.parent.settings.review_zoom_percent)
-            self.parent.settings.review_zoom_percent = (
-                0.0 if review_zoom_percent <= 0 else min(250.0, max(20.0, review_zoom_percent))
-            )
-            if not 0 <= int(self.parent.settings.crop_parallel_workers) <= 8:
-                raise ValueError("切图并行进程数必须为 0–8；0 表示自动，1 表示串行。")
-            if not 1.0 <= float(self.parent.settings.paddle_band_width_ratio) <= 100.0:
-                raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
-            if int(self.parent.settings.paddle_max_input_side) < 256:
-                raise ValueError("OCR输入最大长边必须至少为 256 px。")
-            if str(self.parent.settings.paddle_preprocessing) not in {
-                "original", "grayscale", "auto_contrast", "binary",
-            }:
-                raise ValueError("OCR图像预处理必须为 original/grayscale/auto_contrast/binary 之一。")
-            if not 10.0 <= float(self.parent.settings.paddle_separator_roi_width_ratio) <= 100.0:
-                raise ValueError("Y精修横向分析范围必须在 10–100% 之间。")
-            if not 1 <= float(self.parent.settings.right_ratio) <= 100:
-                raise ValueError("向右比例必须在 1–100% 之间。")
-            if self.parent.settings.headword_sort_mode == "custom":
-                parse_custom_order(self.parent.settings.headword_custom_order)
-            self._save_integrated_crop_settings()
-            self.parent.settings.dictionary_profile_id = self._current_profile_key()
-            rules_text = self.rules_text.get("1.0", "end-1c")
-            parse_headword_filter_rules(rules_text, "规则编辑框")
-            if self.parent.project:
-                self.parent.settings.to_json(settings_path(self.parent.project.root))
-                write_project_profile(
-                    project_profile_path(self.parent.project.root),
-                    self.parent.settings,
-                    self.parent.settings.dictionary_profile_id,
-                    force=bool(getattr(self, "_profile_selection_changed", False)),
-                )
-                rules_path = headword_filter_rules_path(self.parent.project.root, HEADWORD_FILTER_RULES_FILENAME)
-                rules_path.parent.mkdir(parents=True, exist_ok=True)
-                rules_path.write_text(rules_text.rstrip() + "\n", encoding="utf-8")
-                self.parent._request_wordslist_reload(persist=False, redraw=False)
-            self.parent.sync_quick_settings(); self.parent.redraw()
-            if close:
-                self.destroy()
-            return True
-        except Exception as exc:
-            self._last_settings_error = str(exc)
-            if show_errors:
-                messagebox.showerror("参数无效", str(exc), parent=self)
-            return False
 
     def check_ocr_engines(self) -> None:
         """Open the shared environment center instead of a transient status dialog."""
@@ -1967,396 +906,37 @@ class ReviewWindow(tk.Toplevel):
     WORDSLIST_LOCATOR_KEY_TO_LABEL = {value: key for key, value in WORDSLIST_LOCATOR_LABEL_TO_KEY.items()}
 
     def __init__(self, parent: "PictureCaptureApp") -> None:
+        """Stable ReviewWindow constructor; preserve Tk's original super() semantics."""
         super().__init__(parent)
-        self.parent = parent
-        self.title(f"词条校对 — {parent.current_page.name if parent.current_page else ''}")
-        self.update_idletasks()
-        screen_w = max(1, self.winfo_screenwidth())
-        screen_h = max(1, self.winfo_screenheight())
-        width, height = _review_window_dimensions(screen_w, screen_h)
-        x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
-        # Only the compact index preset places proofreading beside the image.
-        mini = getattr(parent, "workspace_mini_page_host", None)
-        compact_workspace = (
-            getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}
-            or (mini is not None and mini.winfo_manager() == "grid")
+        return _review_window_initialization.initialize_review_window(
+            self, parent, deps={
+                "tk": tk,
+                "font": font,
+                "ImageTk": ImageTk,
+                "_review_window_dimensions": _review_window_dimensions,
+                "_format_layout_percent": _format_layout_percent,
+                "normalize_content_font_setting": normalize_content_font_setting,
+                "_review_editor_font_size": _review_editor_font_size,
+                "_format_review_height_percent": _format_review_height_percent,
+                "_effective_review_regular_crop_height": _effective_review_regular_crop_height,
+                "_effective_review_single_cjk_line_height": _effective_review_single_cjk_line_height,
+                "OCR_COMPARE_KEY_TO_LABEL": self.OCR_COMPARE_KEY_TO_LABEL,
+                "WORDSLIST_LOCATOR_KEY_TO_LABEL": self.WORDSLIST_LOCATOR_KEY_TO_LABEL,
+                "LexicalLookupResult": LexicalLookupResult,
+                "threading": threading,
+                "queue": queue,
+            },
         )
-        if compact_workspace:
-            parent.update_idletasks()
-            x = max(0, parent.winfo_rootx() + parent.winfo_width())
-            y = max(0, parent.winfo_rooty())
-            # Tk client height must exclude window decorations.
-            from .ui.workspace_tools import _preset_work_geometry
-            work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)
-            work_right = work_x + work_w
-            x = min(max(x, work_x), work_right - 1)
-            y = work_y  # Align compact proofreading to the usable desktop top.
-            width = max(1, work_right - x)
-            height = max(1, safe_client_height)
-        self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(300 if compact_workspace else 560, width),
-                     min(420, height))
-        self.active_index = 0
-        # A stored 0 means automatic fit-to-left-pane. Positive values retain
-        # the historical explicit/manual percentage mode.
-        stored_review_zoom = float(getattr(parent.settings, "review_zoom_percent", 0.0) or 0.0)
-        self.review_zoom_auto = stored_review_zoom <= 0
-        self.review_zoom = (
-            1.0 if self.review_zoom_auto
-            else max(0.20, min(2.5, float(stored_review_zoom) / 100.0))
-        )
-        self.review_zoom_var = tk.StringVar(
-            value="自动" if self.review_zoom_auto else f"{_format_layout_percent(self.review_zoom * 100.0)}%"
-        )
-        # Review typography is deliberately independent from the image zoom.
-        # Expose the same persisted font settings directly in the review window
-        # so users do not need to return to the detailed-settings dialog.
-        self.review_font_family_var = tk.StringVar(
-            value=normalize_content_font_setting(parent.settings.review_entry_font_family)
-        )
-        self.review_font_size_var = tk.StringVar(value=str(_review_editor_font_size(parent.settings)))
-        self.review_font_bold_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_bold))
-        self.review_font_italic_var = tk.BooleanVar(value=bool(parent.settings.review_entry_font_italic))
-        self.review_simplified_font_family_var = tk.StringVar(
-            value=normalize_content_font_setting(
-                getattr(parent.settings, "review_simplified_font_family", parent.settings.review_entry_font_family)
-            )
-        )
-        self.review_simplified_font_size_var = tk.StringVar(
-            value=str(max(6, int(getattr(parent.settings, "review_simplified_font_size", _review_editor_font_size(parent.settings)))))
-        )
-        self.review_simplified_font_bold_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_simplified_font_bold", parent.settings.review_entry_font_bold))
-        )
-        self.review_simplified_font_italic_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_simplified_font_italic", parent.settings.review_entry_font_italic))
-        )
-        self.review_left_padding_var = tk.StringVar(value=str(max(0, int(parent.settings.review_entry_left_padding))))
-        self.review_vertical_padding_var = tk.StringVar(
-            value=str(max(0, min(30, int(parent.settings.review_entry_vertical_padding))))
-        )
-        self.review_line_height_var = tk.StringVar(
-            value=_format_review_height_percent(
-                parent.image, max(1, int(parent.settings.character_height))
-            )
-        )
-        self.review_row_padding_var = tk.StringVar(
-            value=_format_review_height_percent(
-                parent.image, max(0, int(parent.settings.row_padding))
-            )
-        )
-        self.review_regular_crop_height_var = tk.StringVar(
-            value=_format_review_height_percent(
-                parent.image, _effective_review_regular_crop_height(parent.settings)
-            )
-        )
-        self.review_single_cjk_line_height_var = tk.StringVar(
-            value=_format_review_height_percent(
-                parent.image, _effective_review_single_cjk_line_height(parent.settings)
-            )
-        )
-        self.review_line_height_px_var = tk.StringVar(
-            value=str(max(1, int(parent.settings.character_height)))
-        )
-        self.review_row_padding_px_var = tk.StringVar(
-            value=str(max(0, int(parent.settings.row_padding)))
-        )
-        self.review_regular_crop_height_px_var = tk.StringVar(
-            value=str(_effective_review_regular_crop_height(parent.settings))
-        )
-        self.review_single_cjk_line_height_px_var = tk.StringVar(
-            value=str(_effective_review_single_cjk_line_height(parent.settings))
-        )
-        self.review_extended_crop_multiplier_var = tk.StringVar(
-            value=f"{float(getattr(parent.settings, 'review_extended_crop_height_multiplier', 2.5)):g}"
-        )
-        self.review_main_ocr_choices_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_main_show_ocr_choices", False))
-        )
-        self.review_main_ocr_background_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_main_show_ocr_background", False))
-        )
-        compare_key = str(getattr(parent.settings, "review_ocr_compare_source", "fusion") or "fusion").lower()
-        if compare_key not in self.OCR_COMPARE_KEY_TO_LABEL:
-            compare_key = "fusion"
-        self.review_ocr_compare_var = tk.StringVar(value=self.OCR_COMPARE_KEY_TO_LABEL[compare_key])
-        self.review_show_simplified_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_show_simplified", False))
-        )
-        locator_key = str(getattr(parent.settings, "wordslist_locator_mode", "auto") or "auto").lower()
-        if locator_key not in self.WORDSLIST_LOCATOR_KEY_TO_LABEL:
-            locator_key = "auto"
-        self.wordslist_locator_var = tk.StringVar(value=self.WORDSLIST_LOCATOR_KEY_TO_LABEL[locator_key])
-        self.network_lookup_enabled_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "review_network_lookup_enabled", True))
-        )
-        self.network_lookup_status_var = tk.StringVar(value="网络词汇核验：等待选择词条")
-        self.cc_cedict_lookup_var = tk.StringVar(value="CC-CEDICT(?)")
-        self.cc_simplified_compare_var = tk.StringVar(value="CC简(?)")
-        self.moedict_lookup_var = tk.StringVar(value="萌(?)")
-        self.wiktionary_lookup_var = tk.StringVar(value="Wiki(?)")
-        self._network_source_urls: dict[str, str] = {}
-        self._network_lookup_job: str | None = None
-        self._network_lookup_serial = 0
-        self._network_lookup_cache: dict[str, LexicalLookupResult] = {}
-        self._network_lookup_word = ""
-        self._network_result_queue: queue.Queue[tuple[int, str, LexicalLookupResult | None]] = queue.Queue()
-        self._network_pending_serials: set[int] = set()
-        self._network_poll_job: str | None = None
-        self._review_font_apply_job: str | None = None
-        self._review_simplified_font_apply_job: str | None = None
-        self._review_padding_apply_job: str | None = None
-        self._review_vertical_padding_apply_job: str | None = None
-        self._review_line_height_apply_job: str | None = None
-        self._review_row_padding_apply_job: str | None = None
-        self._review_regular_crop_height_apply_job: str | None = None
-        self._review_single_cjk_height_apply_job: str | None = None
-        self._review_extended_crop_multiplier_job: str | None = None
-        self._syncing_review_height_vars = False
-        self._review_height_edit_source: dict[str, str] = {}
-        self.word_highlight_index: int | None = None
-        self.word_selected_local_index: int | None = None
-        self.word_list_default_bg = "white"
-        self.word_list_default_fg = "#111827"
-        # The reference words may exceed 100k rows.  Keep the full data/index in
-        # Python, but only render a small contiguous window in the Tk Listbox.
-        self.word_window_radius = 250
-        self.word_window_start = 0
-        self.word_window_indices: list[int] = []
-        self.word_keys: list[str] = []
-        self.word_exact_index: dict[str, int] = {}
-        self.word_exact_indices: dict[str, list[int]] = {}
-        self._previous_reference_base_cache: tuple[int, int | None] | None = None
-        self.sorted_word_keys: list[str] = []
-        self.sorted_word_indices: list[int] = []
-        self.word_sort_key_cache: dict[int, tuple[str, str]] = {}
-        self.vars: list[tk.StringVar] = []
-        # Stable Entry identities corresponding to ``vars``. Main-canvas line
-        # insertion can reorder parent.entries while this window remains open.
-        self.row_entries: list[WordEntry] = []
-        self.editors: list[tk.Entry] = []
-        self.editor_frames: list[tk.Frame] = []
-        self.simplified_vars: list[tk.StringVar] = []
-        self.simplified_editors: list[tk.Entry] = []
-        self.simplified_search_buttons: list[tk.Button] = []
-        self.simplified_actual_values: list[str | None] = []
-        self.simplified_manual_flags: list[bool] = []
-        # True only for rows that had no persisted simplified record when the page was opened.
-        # Existing sidecar text is authoritative and must never be silently regenerated.
-        self.simplified_auto_refresh_flags: list[bool] = []
-        self._simplified_page_cache: dict[str, dict[str, dict]] = {}
-        self._simplified_dirty_pages: set[str] = set()
-        self._rendered_page_stem: str = ""
-        self.editor_crop_widths: list[int] = []
-        self.ocr_result_buttons: list[tuple[tk.Button, str]] = []
-        self.thumbnails: list[ImageTk.PhotoImage] = []
-        self.replace_digits = tk.BooleanVar(value=False)
-        self.order_scope_var = tk.StringVar(value="current")
-        self.review_mode_var = tk.StringVar(value="single")
-        # Reuse the main-window 【指定】 text directly so proofreading and
-        # every other batch action see the exact same page-range string.
-        self.focused_page_range_var = parent.page_range_spec_var
-        self.focused_include_mismatch_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "focused_review_include_ocr_mismatch", True))
-        )
-        self.focused_include_characters_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "focused_review_include_characters", False))
-        )
-        self.focused_exclude_single_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "focused_review_exclude_single_character", False))
-        )
-        self.focused_exclude_reference_var = tk.BooleanVar(
-            value=bool(getattr(parent.settings, "focused_review_exclude_reference_words", False))
-        )
-        self.focused_characters_var = tk.StringVar(
-            value=str(
-                getattr(parent.settings, "focused_review_characters", "")
-                or "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
-            )
-        )
-        self.focused_batch_size_var = tk.StringVar(
-            value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 20) or 20)))
-        )
-        self.filtered_targets: list[dict] = []
-        self.filtered_batch_index = 0
-        self._filter_rows_active = False
-        self.filter_batch_var = tk.StringVar(value="")
-        self._filter_scan_serial = 0
-        self._filter_render_serial = 0
-        self._filter_scan_complete = True
-        # Filter-mode render cache stores PIL crops only. Tk/ImageTk objects are
-        # still created on the UI thread when a batch becomes visible.
-        self._filter_batch_render_cache: dict[tuple[int, tuple], tuple] = {}
-        self._filter_prefetch_key: tuple[int, tuple] | None = None
-        self._filter_current_batch_targets: list[dict] = []
-        self._filter_pending_changes: dict[int, dict[tuple[int, int], dict]] = {}
-        self._filter_save_job: str | None = None
-        self._filter_save_running = False
-        self._filter_close_after_save = False
-        self.focused_panel_expanded = tk.BooleanVar(value=False)
-        self.digit_map_expanded = tk.BooleanVar(value=False)
-        self.accent_panel_expanded = tk.BooleanVar(value=False)
-        # Open only the reference word list by default; every other right-side
-        # helper stays available behind its collapsible title on demand.
-        self.review_right_section_expanded = {
-            key: tk.BooleanVar(value=(key == "reference"))
-            for key in ("display", "digit", "accent", "ocr", "network", "reference")
-        }
-        self._review_right_sections: dict[str, dict[str, object]] = {}
-        self.autosave_label_var = tk.StringVar(value="")
-        saved_digit_map = list(getattr(parent.settings, "review_digit_map", []) or [])
-        defaults = list("áéíóúãçñõü")
-        saved_digit_map = (saved_digit_map + defaults)[:10]
-        self.digit_map_vars = [tk.StringVar(value=str(saved_digit_map[i])) for i in range(10)]
-        self.active_candidate: dict | None = None
-        # Adjacent-page proofreading prefetch. PIL/image/file parsing runs in a
-        # daemon worker; Tk/ImageTk objects are still created only on the UI
-        # thread.  This keeps previous/next navigation responsive without
-        # changing saved page data or OCR semantics.
-        self._prefetch_lock = threading.Lock()
-        self._prefetched_pages: dict[int, dict] = {}
-        self._prefetch_inflight: set[int] = set()
-        self._prefetch_closed = False
-        self._review_render_worker_key = f"review-render-{id(self)}"
-        self._review_render_focus_index = 0
-        self._review_auto_zoom_job: str | None = None
-        self._review_auto_zoom_width = 0
-        self.review_section_title_font = font.nametofont("TkDefaultFont").copy()
-        self.review_section_title_font.configure(weight="bold")
-        self._configure_review_styles()
-        self._build()
-        self.after_idle(self._initialize_review_layout_and_rows)
-        self.protocol("WM_DELETE_WINDOW", self._close_review)
-        self._update_title()
-        # Traces are installed after the widgets are built so construction does
-        # not trigger an unnecessary project-settings write.
-        for _var in (self.review_font_family_var, self.review_font_size_var,
-                     self.review_font_bold_var, self.review_font_italic_var):
-            _var.trace_add("write", lambda *_args: self._schedule_review_font_apply())
-        for _var in (self.review_simplified_font_family_var, self.review_simplified_font_size_var,
-                     self.review_simplified_font_bold_var, self.review_simplified_font_italic_var):
-            _var.trace_add("write", lambda *_args: self._schedule_review_simplified_font_apply())
-        self.review_left_padding_var.trace_add("write", lambda *_args: self._schedule_review_padding_apply())
-        self.review_vertical_padding_var.trace_add("write", lambda *_args: self._schedule_review_vertical_padding_apply())
-        self.review_line_height_var.trace_add(
-            "write", lambda *_args: self._schedule_review_line_height_apply("percent")
-        )
-        self.review_line_height_px_var.trace_add(
-            "write", lambda *_args: self._schedule_review_line_height_apply("pixel")
-        )
-        self.review_row_padding_var.trace_add(
-            "write", lambda *_args: self._schedule_review_row_padding_apply("percent")
-        )
-        self.review_row_padding_px_var.trace_add(
-            "write", lambda *_args: self._schedule_review_row_padding_apply("pixel")
-        )
-        self.review_regular_crop_height_var.trace_add(
-            "write", lambda *_args: self._schedule_review_regular_crop_height_apply("percent")
-        )
-        self.review_regular_crop_height_px_var.trace_add(
-            "write", lambda *_args: self._schedule_review_regular_crop_height_apply("pixel")
-        )
-        self.review_single_cjk_line_height_var.trace_add(
-            "write", lambda *_args: self._schedule_review_single_cjk_height_apply("percent")
-        )
-        self.review_single_cjk_line_height_px_var.trace_add(
-            "write", lambda *_args: self._schedule_review_single_cjk_height_apply("pixel")
-        )
-        self.review_extended_crop_multiplier_var.trace_add(
-            "write", lambda *_args: self._schedule_review_extended_crop_multiplier_apply()
-        )
-        for _var in self.digit_map_vars:
-            _var.trace_add("write", lambda *_args: self._save_digit_map())
 
     def _configure_review_styles(self) -> None:
-        """Configure dense, opt-in styles for the proofreading workspace only."""
-        style = ttk.Style(self)
-        base = appearance_palette(self.parent.appearance_mode)
-        if self.parent.appearance_mode == "dark":
-            colors = {
-                "surface": base["surface"],
-                "toolbar": base["surface_alt"],
-                "panel": base["panel"],
-                "border": base["border"],
-                "text": base["text"],
-                "muted": base["muted"],
-                "button": base["button"],
-                "button_hover": base["button_hover"],
-                "primary": base["success"],
-                "primary_hover": base["success_hover"],
-                "danger": base["danger"],
-                "danger_hover": "#4a2b30",
-                "selection": base["selection"],
-                "neutral_entry": base["input_bg"],
-            }
-        else:
-            native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
-            colors = {
-                "surface": native_background,
-                "toolbar": "#f3f4f6",
-                "panel": "#f7f8fa",
-                "border": "#d8dde5",
-                "text": "#30343b",
-                "muted": "#68707b",
-                "button": "#eceff3",
-                "button_hover": "#e1e5ea",
-                "primary": "#5e9f69",
-                "primary_hover": "#4f8e5c",
-                "danger": "#9b3a3a",
-                "danger_hover": "#f4d9d9",
-                "selection": "#dce8f7",
-                "neutral_entry": "#f4f4f4",
-            }
-        self._review_ui_colors = colors
+        """Historical dense proofreading styles with live theme globals."""
+        return _review_style_policy.configure_review_styles(
+            self, deps={
+                "ttk": ttk,
+                "appearance_palette": appearance_palette,
+            },
+        )
 
-        style.configure("PCR.Surface.TFrame", background=colors["surface"])
-        style.configure("PCR.Toolbar.TFrame", background=colors["toolbar"])
-        style.configure("PCR.Panel.TFrame", background=colors["panel"])
-        style.configure(
-            "PCR.SectionTitle.TLabel",
-            background=colors["surface"],
-            foreground=colors["text"],
-            font=self.review_section_title_font,
-            padding=(0, 2, 0, 1),
-        )
-        style.configure(
-            "PCR.Toolbar.TLabel",
-            background=colors["toolbar"],
-            foreground=colors["text"],
-        )
-        style.configure(
-            "PCR.Body.TLabel",
-            background=colors["surface"],
-            foreground=colors["text"],
-        )
-        style.configure(
-            "PCR.Black.TLabel",
-            background=colors["surface"],
-            foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"],
-        )
-        style.configure(
-            "PCR.Body.TCheckbutton",
-            background=colors["surface"],
-            foreground=colors["text"],
-        )
-        style.configure(
-            "PCR.Muted.TLabel",
-            background=colors["surface"],
-            foreground=colors["muted"],
-        )
-        style.configure(
-            "PCR.Header.TLabel",
-            background=colors["surface"],
-            foreground=colors["text"],
-            font=self.review_section_title_font,
-        )
-        style.configure("PCR.Compact.TButton", padding=(7, 3))
-        style.configure("PCR.Tool.TButton", padding=(4, 2))
-        style.configure("PCR.Compact.TEntry", padding=(4, 2))
-        style.configure("PCR.Compact.TSpinbox", padding=(3, 2))
-        style.configure("PCR.Compact.TCombobox", padding=(3, 2))
-        style.configure("PCR.Crop.TLabel", background=colors["surface"])
 
     def _review_flat_button(
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
@@ -3459,324 +2039,41 @@ def _canvas_pointer_deps() -> _canvas_pointer.CanvasPointerDeps:
 
 class PictureCaptureApp(tk.Tk):
     def __init__(self) -> None:
+        """Keep original Tk constructor and dynamic global-patching contract."""
         super().__init__()
-        self._app_icon_photo: ImageTk.PhotoImage | None = None
-        self._app_icon_registered = False
-        self._app_icon_error: str | None = None
-        icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"
-        try:
-            if not icon_path.exists():
-                self._app_icon_error = f"icon asset not found: {icon_path}"
-            else:
-                with Image.open(icon_path) as icon_image:
-                    self._app_icon_photo = ImageTk.PhotoImage(icon_image.convert("RGBA"))
-        except (tk.TclError, OSError) as exc:
-            self._app_icon_photo = None
-            self._app_icon_error = f"{type(exc).__name__}: {exc} (path={icon_path})"
-        if self._app_icon_photo is not None:
-            # Prefer Tk's default icon so future Toplevels inherit it. Some
-            # window-manager/headless combinations reject the default flag, so
-            # fall back to explicitly setting the root icon instead.
-            try:
-                self.iconphoto(True, self._app_icon_photo)
-                self._app_icon_registered = True
-            except tk.TclError:
-                try:
-                    self.iconphoto(False, self._app_icon_photo)
-                    self._app_icon_registered = True
-                except tk.TclError:
-                    pass
-        # Reapply icon to mapped secondary windows.
-        self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")
-        self.title("Picture Capture")
-        fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)
-        self.project: ProjectState | None = None
-        self._project_words: set[str] = set()
-        self.settings = AppSettings()
-        self.current_index = -1
-        self.current_page: Path | None = None
-        self.image: Image.Image | None = None
-        self.photo: ImageTk.PhotoImage | None = None
-        self.view_scale = 1.0
-        self.entries: list[WordEntry] = []
-        self.polygons: list[PolygonRegion] = []
-        self.page_sections: list[PageSection] = []
-        self._section_editing = False
-        self._drag_section_boundary: tuple[int, str] | None = None
-        self._ruler_hint: tk.Toplevel | None = None
-        self._pending_section_editor_index: int | None = None
-        self.new_polygon: list[tuple[int, int]] = []
-        self.overlay_widgets: list[tk.Widget] = []
-        self.entry_editor_bindings: list[tuple[tk.Entry, WordEntry]] = []
-        self.status_var = tk.StringVar(value="请选择一个词典扫描项目目录")
-        self.cursor_status_var = tk.StringVar(value="坐标：—｜缩放 100%｜词条 0")
-        self.image_metadata_status_var = tk.StringVar(value="—×— px")
-        self.hide_var = tk.BooleanVar(value=False)
-        # polygon_var controls visibility of saved illustration polygons.
-        # polygon_draw_var is a separate, explicit editing mode.
-        self.polygon_var = tk.BooleanVar(value=False)
-        self.polygon_draw_var = tk.BooleanVar(value=False)
-        self.auxiliary_mode_var = tk.BooleanVar(value=False)
-        self._auxiliary_edits = AuxiliaryLineEdits()
-        self._auxiliary_drag = None
-        self.crop_preview_var = tk.BooleanVar(value=False)
-        self.binary_preview_var = tk.BooleanVar(value=False)
-        self.display_mode_var = tk.StringVar(value="原图+标注")
-        self._display_mode_syncing = False
-        # Non-destructive scan preprocessing reuses the main canvas and page list.
-        self.preprocess_mode_var = tk.BooleanVar(value=False)
-        self.preprocess_auto_deskew_var = tk.BooleanVar(
-            value=bool(self.settings.preprocess_auto_deskew)
+        return _main_app_initialization.initialize_main_app(
+            self, deps={
+                "ImageTk": ImageTk,
+                "Path": Path,
+                "Image": Image,
+                "tk": tk,
+                "fit_window_to_work_area": fit_window_to_work_area,
+                "AppSettings": AppSettings,
+                "AuxiliaryLineEdits": AuxiliaryLineEdits,
+                "queue": queue,
+                "threading": threading,
+                "SessionController": SessionController,
+                "normalize_appearance_preference": normalize_appearance_preference,
+                "APPEARANCE_MODE_LABELS": APPEARANCE_MODE_LABELS,
+                "ttk": ttk,
+                "font": font,
+                "AuxiliaryLineController": AuxiliaryLineController,
+                "CanvasController": CanvasController,
+                "CropController": CropController,
+                "DetectionController": DetectionController,
+                "ExportController": ExportController,
+                "HeadwordController": HeadwordController,
+                "_parse_words_of_pages_text": _parse_words_of_pages_text,
+                "_fill_page_entries": _fill_page_entries,
+                "IllustrationController": IllustrationController,
+                "RefBoxController": RefBoxController,
+                "ProjectController": ProjectController,
+                "PageController": PageController,
+                "ReviewController": ReviewController,
+                "attach_nonbmp_unicode_input": attach_nonbmp_unicode_input,
+                "app_module_file": __file__,
+            },
         )
-        self.preprocess_safety_var = tk.StringVar(
-            value=str(int(self.settings.preprocess_safety_margin_px))
-        )
-        self.preprocess_geometry_var = tk.StringVar(
-            value={
-                "deskew": "轻量：旋转+裁边",
-                "perspective": "自动透视",
-                "dewarp": "UVDoc展平（Paddle高级）",
-                "uvdoc": "UVDoc展平（Paddle高级）",
-                "auto": "自动几何（推荐）",
-            }.get(
-                str(getattr(self.settings, "preprocess_geometry_mode", "auto") or "auto"),
-                "自动几何（推荐）",
-            )
-        )
-        self.preprocess_export_canvas_var = tk.BooleanVar(
-            value=bool(getattr(self.settings, "preprocess_export_canvas_enabled", False))
-        )
-        self.preprocess_export_canvas_mode_var = tk.StringVar(
-            value={
-                "batch_max": "本批最大裁剪尺寸",
-                "custom": "自定义尺寸",
-            }.get(
-                str(getattr(self.settings, "preprocess_export_canvas_mode", "batch_max") or "batch_max"),
-                "本批最大裁剪尺寸",
-            )
-        )
-        self.preprocess_export_canvas_width_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_canvas_width", 0) or 0))
-        )
-        self.preprocess_export_canvas_height_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_canvas_height", 0) or 0))
-        )
-        self.preprocess_export_margin_top_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_margin_top", 0) or 0))
-        )
-        self.preprocess_export_margin_bottom_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_margin_bottom", 0) or 0))
-        )
-        self.preprocess_export_margin_left_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_margin_left", 0) or 0))
-        )
-        self.preprocess_export_margin_right_var = tk.StringVar(
-            value=str(int(getattr(self.settings, "preprocess_export_margin_right", 0) or 0))
-        )
-        self.preprocess_export_align_x_var = tk.StringVar(
-            value={
-                "left": "左对齐", "center": "居中", "right": "右对齐",
-            }.get(
-                str(getattr(self.settings, "preprocess_export_align_x", "center") or "center"),
-                "居中",
-            )
-        )
-        self.preprocess_export_align_y_var = tk.StringVar(
-            value={
-                "top": "顶端对齐", "center": "居中", "bottom": "底部对齐",
-            }.get(
-                str(getattr(self.settings, "preprocess_export_align_y", "top") or "top"),
-                "顶端对齐",
-            )
-        )
-        self.preprocess_status_var = tk.StringVar(value="未分析")
-        self._preprocess_results: dict[str, PreprocessAnalysis] = {}
-        self._preprocess_photo: ImageTk.PhotoImage | None = None
-        self._preprocess_photo_cache_key: tuple | None = None
-        self._preprocess_corrected_image: Image.Image | None = None
-        self._preprocess_corrected_image_key: tuple[int, int] | None = None
-        self._preprocess_locked_widgets: list[tuple[tk.Misc, object]] = []
-        self.preprocess_mode_button: ttk.Button | None = None
-        self.polygon_draw_button: ttk.Button | None = None
-        # PPP label editors and vertex-drag state are rebuilt with each canvas redraw.
-        self.polygon_label_bindings: list[tuple[tk.Entry, PolygonRegion]] = []
-        self._polygon_canvas_items: dict[int, dict] = {}
-        self._drag_polygon_vertex: tuple[int, int] | None = None
-        self._drag_polygon_edge: tuple[int, str] | None = None
-        self._quick_autosave_job: str | None = None
-        self._quick_trace_ready = False
-        self.autosave_var = tk.BooleanVar(value=True)
-        self.autosave_job: str | None = None
-        self.cursor_canvas_xy: tuple[float, float] | None = None
-        self.ocr_review_candidates: list[dict] = []
-        self.candidate_check_vars: dict[str, tk.BooleanVar] = {}
-        # v2.9.4: keep page pixels and foreground edit widgets on separate
-        # lifecycles. Candidate checkbox edits only touch the corresponding
-        # entry overlay; the expensive resized background PhotoImage is reused
-        # until either the page object or view scale changes.
-        self._display_photo_cache_key: tuple | None = None
-        self._display_geometry_cache_key: tuple | None = None
-        self._display_geometry_cache = None
-        self._entry_visuals: dict[int, dict] = {}
-        # Checkbox edits are immediately committed to the in-memory page model,
-        # then PDIC/manual-selection disk writes are coalesced for a few hundred
-        # milliseconds. Every page/project/batch boundary force-flushes them.
-        self._deferred_save_job: str | None = None
-        self._deferred_save_page: Path | None = None
-        self._deferred_save_snapshot = None
-        self._deferred_save_delay_ms = 300
-        self._pending_manual_override_path: Path | None = None
-        self._pending_manual_override_payload: dict | None = None
-        self.ocr_review_window: OCRConflictReviewDialog | None = None
-        self.review_window: ReviewWindow | None = None
-        # (page_index, x, y) of the proofreading row mirrored on the main canvas.
-        self._review_entry_highlight_target: tuple[int, int, int] | None = None
-        # Keep the RGBA PhotoImage alive while the translucent review marker is shown.
-        self._review_entry_highlight_photo: ImageTk.PhotoImage | None = None
-        self.old_new_compare_window: OldNewComparisonWindow | None = None
-        # Session-only source for 【新旧比较】.  The first comparison asks the
-        # user to choose a page-aware wordslist TXT, then reuses it until changed.
-        self._old_new_compare_source_path: Path | None = None
-        self._usage_guide_window: UsageGuideWindow | None = None
-        self._page_meta_generation = 0
-        self._page_meta_job: str | None = None
-        # v2.9.11: page-list headings are clickable. Sorting only changes the
-        # Treeview display order; stable iids remain project page indices, so
-        # selection/navigation always resolves to the original page.
-        self._page_list_sort_column: str | None = None
-        self._page_list_sort_descending = False
-        self._page_list_sort_job: str | None = None
-        # Pages whose line count disagreed with the last page-aware TXT fill.
-        # Only the ``画线`` cell is overlaid in pale red; the page-name cell
-        # remains untouched so the warning is visually scoped to the count issue.
-        self._word_fill_mismatch_pages: set[int] = set()
-        # v2.9.9: persist the last page-aware fill count check so pale-red
-        # mismatch cells survive application/project reopen. Matching pages are
-        # stored too, allowing later manual line-count edits to recompute the
-        # warning against the remembered TXT count.
-        self._word_fill_check_status: dict[str, dict] = {}
-        # v2.9.8: selecting a large page-aware TXT and actually filling PDICs
-        # are separate actions.  The parsed page->words mapping is cached after
-        # the first fill so correcting a mismatch range never requires choosing
-        # or reparsing the same 190k-word source again.
-        self._word_fill_source_path: Path | None = None
-        self._word_fill_source_signature: tuple[str, int, int] | None = None
-        self._word_fill_source_mapping: dict[str, list[str]] | None = None
-        # v2.9.10: remember which project pages were explicitly represented in
-        # the selected TXT. An empty list and a completely absent page are not
-        # the same thing for the visible fill-status column.
-        self._word_fill_source_present_pages: set[str] | None = None
-        self._page_lined_overlays: dict[int, tk.Label] = {}
-        # v2.9.12: the visible fill-status cell carries its own semantic color
-        # (match/mismatch/stale/no-data), while the legacy mismatch warning in
-        # the 画线 cell is retained for compatibility and quick scanning.
-        self._page_fill_status_overlays: dict[int, tk.Label] = {}
-        # v2.9.13: cell-overlay repaints are coalesced.  Older builds queued an
-        # after_idle repaint for every row metadata update/scroll callback; on
-        # large dictionaries that turned startup into thousands of redundant
-        # full-list scans.  Keep at most one pending repaint instead.
-        self._page_overlay_refresh_job: str | None = None
-        # Batch work runs off Tk; pause/stop at page boundaries.
-        self._batch_queue: queue.Queue = queue.Queue()
-        self._batch_thread: threading.Thread | None = None
-        self._batch_pause_event = threading.Event()
-        self._batch_pause_event.set()
-        self._batch_stop_event = threading.Event()
-        self._batch_active = False
-        self._batch_parallel = False
-        # Foreground edits are page-state locked to protect background PDIC.
-        self._batch_foreground_pages = False
-        # Navigation is independent from the task write lock.
-        self._batch_allow_page_navigation = False
-        self._batch_allow_pdic_edits = False
-        self._batch_page_states: dict[int, str] = {}
-        self._batch_state_lock = threading.Lock()
-        self._batch_skipped_count = 0
-        self._batch_poll_job: str | None = None
-        self._batch_close_after_stop = False
-        self._batch_on_done = None
-        self._batch_title = ""
-        # One-shot background jobs use a separate queue from multi-page batch
-        # work. Workers never call Tk; per-key generations discard stale results.
-        self._ui_worker_queue: queue.Queue = queue.Queue()
-        self._ui_worker_poll_job: str | None = None
-        self._ui_worker_generations: dict[str, int] = {}
-        self._ui_worker_handlers: dict[tuple[str, int], tuple] = {}
-        self._ui_worker_active: set[tuple[str, int]] = set()
-        self._ui_worker_close_wait: set[tuple[str, int]] = set()
-        self._ui_worker_shutdown = False
-        self._ui_close_requested = False
-        self._pending_page_index: int | None = None
-        self.session_controller = SessionController(self)
-        self._session_path = self._default_session_state_path()
-        self._last_session = self._read_session_state()
-        stored_mode = self._last_session.get("workspace_mode", "最大")
-        self.workspace_mode = (
-            "紧凑" if stored_mode in {"最简", "简单"} else stored_mode
-            if stored_mode in {"极简", "紧凑", "正常", "最大"} else "最大"
-        )
-        self._restore_workspace_mode_pending = True
-        requested_appearance = normalize_appearance_preference(
-            self._last_session.get("appearance_mode")
-        )
-        self.appearance_preference = requested_appearance
-        self.appearance_mode = "light"
-        self.appearance_mode_var = tk.StringVar(
-            value=APPEARANCE_MODE_LABELS[requested_appearance]
-        )
-        self._system_appearance_job: str | None = None
-        self._light_ttk_theme = str(ttk.Style(self).theme_use())
-        self._configure_global_appearance()
-        self.section_expanded = {
-            "preprocess": False,
-            "normal": True,
-            "aux": False,
-            "ocr": False,
-            "actions": False,
-            "postproduction": False,
-            "pages": True,
-        }
-        stored_sections = self._last_session.get("section_expanded", {})
-        if isinstance(stored_sections, dict):
-            for key in tuple(self.section_expanded):
-                if key in stored_sections:
-                    self.section_expanded[key] = bool(stored_sections[key])
-        self._collapsible_sections: dict[str, ttk.LabelFrame] = {}
-        self.section_title_font = font.nametofont("TkDefaultFont").copy()
-        self.section_title_font.configure(weight="bold")
-        # Keep miniature page rows at 90%, with separate 80% range controls.
-        default_page_font = font.nametofont("TkDefaultFont")
-        self.compact_page_font = default_page_font.copy()
-        base_size = int(default_page_font.cget("size"))
-        compact_size = max(7, round(base_size * 0.9)) if base_size > 0 else min(-7, round(base_size * 0.9))
-        self.compact_page_font.configure(size=compact_size)
-        self._configure_main_workspace_styles()
-        self._auxiliary_controller = AuxiliaryLineController(self)
-        self.canvas_controller = CanvasController(self)
-        self.crop_controller = CropController(self)
-        self.detection_controller = DetectionController(self)
-        self.export_controller = ExportController(self)
-        self.headword_controller = HeadwordController(
-            self,
-            parse_words_of_pages_text=_parse_words_of_pages_text,
-            fill_page_entries=_fill_page_entries,
-        )
-        self.illustration_controller = IllustrationController(self)
-        self.ref_box_controller = RefBoxController(self)
-        self.project_controller = ProjectController(self)
-        self.page_controller = PageController(self)
-        self.review_controller = ReviewController(self)
-        self._build_ui()
-        self.bind_class("Toplevel", "<Map>", self._appearance_toplevel_mapped, add="+")
-        self.set_appearance_mode(requested_appearance, persist=False)
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.toggle_autosave()
-        # Avoid maximize -> restore-to-compact flicker during session startup.
-        if self.workspace_mode == "最大":
-            self.after_idle(self._maximize_main_window)
-        self.after_idle(self._ensure_sidebar_navigation_width)
-        self.after_idle(self.restore_last_session)
-        attach_nonbmp_unicode_input(self)
 
     def destroy(self) -> None:
         close_nonbmp_unicode_input(self)
@@ -3837,39 +2134,12 @@ class PictureCaptureApp(tk.Tk):
     def _start_ui_worker(
         self, key: str, worker, on_done, on_error=None, *, wait_on_close: bool = False,
     ) -> int:
-        """Run one replaceable blocking operation without letting its worker touch Tk.
+        """Historical nonblocking generation-safe Tk worker entrypoint."""
+        return _background_job_runtime.start_ui_worker(
+            self, key, worker, on_done, on_error, wait_on_close=wait_on_close,
+            deps={"threading": threading, "traceback": traceback},
+        )
 
-        wait_on_close is reserved for workers that may mutate durable files.
-        A close request suppresses their UI callback but defers destroy() until
-        the worker has reached its own success/error cleanup boundary.
-        """
-        if self._ui_worker_shutdown or self._ui_close_requested:
-            return -1
-        stale = [token for token in self._ui_worker_handlers if token[0] == key]
-        for token in stale:
-            self._ui_worker_handlers.pop(token, None)
-        generation = int(self._ui_worker_generations.get(key, 0)) + 1
-        self._ui_worker_generations[key] = generation
-        token = (key, generation)
-        self._ui_worker_handlers[token] = (on_done, on_error)
-        self._ui_worker_active.add(token)
-        if wait_on_close:
-            self._ui_worker_close_wait.add(token)
-
-        def runner() -> None:
-            try:
-                result = worker()
-                event = ("done", key, generation, result, None, None)
-            except Exception as exc:
-                event = ("error", key, generation, None, exc, traceback.format_exc())
-            self._ui_worker_queue.put(event)
-
-        threading.Thread(
-            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
-        ).start()
-        if self._ui_worker_poll_job is None:
-            self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
-        return generation
 
     def _invalidate_ui_worker(self, key: str) -> None:
         self._ui_worker_generations[key] = int(self._ui_worker_generations.get(key, 0)) + 1
@@ -3878,183 +2148,21 @@ class PictureCaptureApp(tk.Tk):
             self._ui_worker_handlers.pop(token, None)
 
     def _poll_ui_worker_queue(self) -> None:
-        self._ui_worker_poll_job = None
-        if self._ui_worker_shutdown:
-            return
-        processed = 0
-        while processed < 48:
-            try:
-                kind, key, generation, result, exc, detail = self._ui_worker_queue.get_nowait()
-            except queue.Empty:
-                break
-            processed += 1
-            token = (key, generation)
-            self._ui_worker_active.discard(token)
-            self._ui_worker_close_wait.discard(token)
-            handler = self._ui_worker_handlers.pop(token, None)
-            if (
-                not self._ui_close_requested
-                and generation == self._ui_worker_generations.get(key)
-                and handler is not None
-            ):
-                on_done, on_error = handler
-                try:
-                    if kind == "done":
-                        on_done(result)
-                    elif on_error is not None:
-                        on_error(exc, detail)
-                    else:
-                        if detail:
-                            print(detail)
-                        self.show_error(f"{key}失败", exc)
-                except tk.TclError:
-                    pass
-                except Exception as callback_exc:
-                    traceback.print_exc()
-                    try:
-                        self.show_error(f"{key}完成处理失败", callback_exc)
-                    except tk.TclError:
-                        pass
+        """Historical Tk-thread result queue polling with deferred close."""
+        return _background_job_runtime.poll_ui_worker_queue(
+            self, deps={"tk": tk, "queue": queue, "traceback": traceback},
+        )
 
-        if self._ui_close_requested and not self._ui_worker_close_wait:
-            self.after_idle(self.on_close)
-            return
-        if (
-            (self._ui_worker_handlers or self._ui_worker_close_wait or self._ui_worker_active)
-            and not self._ui_worker_shutdown
-        ):
-            self._ui_worker_poll_job = self.after(
-                8 if processed >= 48 else 60, self._poll_ui_worker_queue
-            )
 
     def _configure_global_appearance(self) -> None:
-        """Configure the active ttk theme for the global light/dark appearance."""
-        style = ttk.Style(self)
-        mode = normalize_appearance_mode(self.appearance_mode)
-        palette = appearance_palette(mode)
-
-        # ttk.Combobox popdowns are classic Tk Listboxes on common Tk builds;
-        # style.configure("TCombobox", ...) does not recolor that popup.
-        for pattern, value in (
-            ("*TCombobox*Listbox.background", palette["input_bg"]),
-            ("*TCombobox*Listbox.foreground", palette["input_fg"]),
-            ("*TCombobox*Listbox.selectBackground", palette["selection"]),
-            ("*TCombobox*Listbox.selectForeground", palette["selection_fg"]),
-        ):
-            try:
-                self.option_add(pattern, value)
-            except tk.TclError:
-                pass
-
-        if mode == "light":
-            try:
-                if self._light_ttk_theme in style.theme_names():
-                    style.theme_use(self._light_ttk_theme)
-            except tk.TclError:
-                pass
-            self.configure(bg=palette["bg"])
-            return
-
-        try:
-            if "PCDark" not in style.theme_names():
-                parent_theme = "clam" if "clam" in style.theme_names() else self._light_ttk_theme
-                style.theme_create("PCDark", parent=parent_theme)
-            style.theme_use("PCDark")
-        except tk.TclError:
-            pass
-
-        style.configure(".", background=palette["surface"], foreground=palette["text"])
-        style.configure("TFrame", background=palette["surface"])
-        style.configure("TLabel", background=palette["surface"], foreground=palette["text"])
-        style.configure("TLabelframe", background=palette["surface"], foreground=palette["text"])
-        style.configure("TLabelframe.Label", background=palette["surface"], foreground=palette["text"])
-        style.configure(
-            "TButton", background=palette["button"], foreground=palette["text"],
-            anchor="center", justify="center",
-            bordercolor=palette["border"], lightcolor=palette["button"], darkcolor=palette["button"],
+        """Historical main-window theme installer with current patched UI providers."""
+        return _main_appearance_policy.configure_global_appearance(
+            self, deps={
+                "ttk": ttk, "tk": tk,
+                "normalize_appearance_mode": normalize_appearance_mode,
+                "appearance_palette": appearance_palette,
+            },
         )
-        style.map(
-            "TButton",
-            background=[("active", palette["button_hover"]), ("pressed", palette["selection"])],
-            foreground=[("disabled", palette["muted"]), ("!disabled", palette["text"])],
-        )
-        for style_name in ("TCheckbutton", "TRadiobutton"):
-            style.configure(style_name, background=palette["surface"], foreground=palette["text"])
-            style.map(
-                style_name,
-                background=[("active", palette["surface_alt"])],
-                foreground=[("disabled", palette["muted"]), ("!disabled", palette["text"])],
-            )
-        for style_name in ("TEntry", "TSpinbox", "TCombobox"):
-            style.configure(
-                style_name,
-                fieldbackground=palette["input_bg"],
-                foreground=palette["input_fg"],
-                background=palette["button"],
-                bordercolor=palette["border"],
-                insertcolor=palette["input_fg"],
-                arrowcolor=palette["text"],
-            )
-            style.map(
-                style_name,
-                fieldbackground=[("readonly", palette["surface_alt"]), ("disabled", palette["surface_alt"])],
-                foreground=[("readonly", palette["text"]), ("disabled", palette["muted"])],
-            )
-        style.configure("TNotebook", background=palette["bg"], bordercolor=palette["border"])
-        style.configure(
-            "TNotebook.Tab", background=palette["surface_alt"], foreground=palette["muted"],
-            padding=(10, 5),
-        )
-        style.map(
-            "TNotebook.Tab",
-            background=[("selected", palette["surface"]), ("active", palette["button_hover"])],
-            foreground=[("selected", palette["text"]), ("active", palette["text"])],
-        )
-        style.configure(
-            "Treeview",
-            background=palette["surface"],
-            fieldbackground=palette["surface"],
-            foreground=palette["text"],
-            bordercolor=palette["border"],
-        )
-        style.map(
-            "Treeview",
-            background=[("selected", palette["selection"])],
-            foreground=[("selected", palette["selection_fg"])],
-        )
-        style.configure(
-            "Treeview.Heading",
-            background=palette["surface_alt"], foreground=palette["text"],
-            bordercolor=palette["border"], relief="flat",
-        )
-        style.map("Treeview.Heading", background=[("active", palette["button_hover"])])
-        style.configure("TSeparator", background=palette["border"])
-        style.configure("TPanedwindow", background=palette["border"])
-        style.configure(
-            "TScrollbar",
-            background=palette["button"],
-            troughcolor=palette["surface_alt"],
-            bordercolor=palette["border"],
-            arrowcolor=palette["text"],
-            lightcolor=palette["button"],
-            darkcolor=palette["button"],
-        )
-        style.map("TScrollbar", background=[("active", palette["button_hover"])])
-        style.configure(
-            "TMenubutton",
-            background=palette["button"], foreground=palette["text"],
-            bordercolor=palette["border"], arrowcolor=palette["text"],
-        )
-        style.configure(
-            "TScale",
-            background=palette["surface"], troughcolor=palette["surface_alt"],
-            bordercolor=palette["border"],
-        )
-        style.configure(
-            "TProgressbar", background=palette["accent"], troughcolor=palette["surface_alt"],
-            bordercolor=palette["border"],
-        )
-        self.configure(bg=palette["bg"])
 
     def _apply_current_appearance(self, root: tk.Misc) -> None:
         try:
@@ -4176,326 +2284,37 @@ class PictureCaptureApp(tk.Tk):
             self._save_session_state()
 
     def _apply_resolved_appearance(self, mode: object) -> None:
-        normalized = normalize_appearance_mode(mode)
-        self.appearance_mode = normalized
-        self._configure_global_appearance()
-        self._configure_main_workspace_styles()
-        previews = self.__dict__.get("_page_thumbnails")
-        if previews is not None:
-            previews.apply()  # Theme reconfiguration resets the Treeview rowheight.
-        self._apply_current_appearance(self)
-        from .ui.workspace_tools import (
-            refresh_compact_header_buttons, refresh_macaron_action_buttons,
+        """Historical public appearance entrypoint with live UI dependencies."""
+        return _appearance_resolution.apply_resolved_appearance(
+            self, mode, deps={
+                "normalize_appearance_mode": normalize_appearance_mode,
+                "appearance_palette": appearance_palette,
+                "tk": tk,
+            },
         )
-        from .ui.simple_page_controls import refresh_compact_range_appearance
-        refresh_macaron_action_buttons(self)
-        refresh_compact_header_buttons(self)
-        refresh_compact_range_appearance(self)
-        palette = appearance_palette(normalized)
-        for name, color_key in (("sidebar_canvas", "bg"), ("canvas", "canvas")):
-            widget = self.__dict__.get(name)
-            if widget is not None:
-                try:
-                    widget.configure(bg=(self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]))
-                except tk.TclError:
-                    pass
-
-        review = self.__dict__.get("review_window")
-        if review is not None:
-            try:
-                if review.winfo_exists():
-                    review._configure_word_list_appearance()
-                    review._configure_review_styles()
-                    if getattr(review, "_filter_rows_active", False):
-                        review._request_filter_batch_render()
-                    else:
-                        review._request_render_rows(focus_index=review.active_index)
-            except tk.TclError:
-                pass
-
-        settings_dialog = self.__dict__.get("_settings_dialog")
-        if settings_dialog is not None:
-            try:
-                if settings_dialog.winfo_exists():
-                    settings_dialog.refresh_appearance()
-            except tk.TclError:
-                pass
-        guide = self.__dict__.get("_usage_guide_window")
-        if guide is not None:
-            try:
-                if guide.winfo_exists():
-                    guide.refresh_appearance()
-            except tk.TclError:
-                pass
-        comparison = self.__dict__.get("old_new_compare_window")
-        if comparison is not None:
-            try:
-                if comparison.winfo_exists():
-                    comparison.refresh_appearance()
-            except tk.TclError:
-                pass
-        recent_dialog = self.__dict__.get("_recent_projects_dialog")
-        recent_rebuild = self.__dict__.get("_recent_projects_rebuild")
-        if recent_dialog is not None and callable(recent_rebuild):
-            try:
-                if recent_dialog.winfo_exists():
-                    recent_rebuild()
-            except tk.TclError:
-                pass
-
-        self.photo = None
-        self._display_photo_cache_key = None
-        self._preprocess_photo = None
-        self._preprocess_photo_cache_key = None
-        self._schedule_page_cell_overlay_refresh()
-        if self.image is not None:
-            self.redraw()
-
 
     def _configure_main_workspace_styles(self) -> None:
-        """Configure a scoped, dense visual system for the main workspace only.
-
-        Do not switch the global ttk theme here. Secondary windows, especially
-        proofreading, intentionally keep their existing appearance; every style
-        below is opt-in through a PC.* style name.
-        """
-        style = ttk.Style(self)
-        base = appearance_palette(self.appearance_mode)
-        if self.appearance_mode == "dark":
-            colors = {
-                "sidebar": base["bg"],
-                "footer": base["surface"],
-                "status": base["bg"],
-                "batch": base["surface_alt"],
-                "border": base["border"],
-                "text": base["text"],
-                "muted": base["muted"],
-                "button": base["button"],
-                "button_hover": base["button_hover"],
-                "button_border": base["border"],
-                "primary": base["accent"],
-                "primary_hover": base["accent_hover"],
-                "success": base["success"],
-                "success_hover": base["success_hover"],
-                "tree_selected": base["selection"],
-                "canvas": base["canvas"],
-                "ruler_margin": "#20252b",
-            }
-        else:
-            native_background = str(style.lookup("TFrame", "background") or "#f6f7f9")
-            colors = {
-                "sidebar": native_background,
-                "footer": "#f1f3f6",
-                "status": "#f6f7f9",
-                "batch": "#eef2f6",
-                "border": "#d8dde5",
-                "text": "#000000",
-                "muted": "#68707b",
-                "button": "#f4f5f7",
-                "button_hover": "#e7eaee",
-                "button_border": "#d3d8df",
-                "primary": "#4F7CAC",
-                "primary_hover": "#416A94",
-                "success": "#69A875",
-                "success_hover": "#588F64",
-                "tree_selected": "#dce8f7",
-                "canvas": "#e9edf2",
-                "ruler_margin": "#f1f3f6",
-            }
-        self._main_ui_colors = colors
-
-        style.configure("PC.Sidebar.TFrame", background=colors["sidebar"])
-        style.configure("PC.Footer.TFrame", background=colors["footer"])
-        style.configure("PC.Status.TFrame", background=colors["status"])
-        style.configure("PC.Batch.TFrame", background=colors["batch"])
-        style.configure("PC.SectionBody.TFrame", background=colors["sidebar"])
-
-        style.configure(
-            "PC.Section.TLabelframe",
-            background=colors["sidebar"],
-            borderwidth=0,
-            relief="flat",
-        )
-        style.configure(
-            "PC.SectionTitle.TLabel",
-            background=colors["sidebar"],
-            foreground=colors["text"],
-            font=self.section_title_font,
-            padding=(0, 2, 0, 1),
-        )
-        style.configure(
-            "PC.FieldLabel.TLabel",
-            background=colors["sidebar"],
-            foreground=colors["text"],
-        )
-        style.configure(
-            "PC.Footer.TLabel",
-            background=colors["footer"],
-            foreground=colors["muted"],
-        )
-        style.configure(
-            "PC.Status.TLabel",
-            background=colors["status"],
-            foreground=colors["muted"],
-        )
-        style.configure(
-            "PC.Batch.TLabel",
-            background=colors["batch"],
-            foreground=colors["text"],
-        )
-
-        # Keep rail controls the same font and compact geometry in both themes.
-        style.configure("PC.Rail.TButton", font="TkDefaultFont",
-                        padding=(0, 0), relief="flat", borderwidth=0,
-                        anchor="center", justify="center")
-        style.configure("PC.QuickRail.TButton", font="TkDefaultFont",
-                        padding=(0, 0), relief="flat", borderwidth=0,
-                        anchor="center", justify="center")
-        # Different ttk themes inherit different caption alignment defaults.
-        for button_style in (
-            "PC.Compact.TButton", "PC.Tool.TButton", "PC.Footer.TButton",
-            "PC.PageNav.TButton", "PC.SimplePage.TButton",
-            "PC.WindowMode.TButton", "PC.WindowProject.TButton",
-            "PC.WindowQuick.TButton", "PC.Workspace80.TButton",
-        ):
-            style.configure(button_style, anchor="center", justify="center")
-        style.configure("PC.CompactPage.Treeview", rowheight=22,
-                        font=self.compact_page_font, background=base["surface"],
-                        fieldbackground=base["surface"], foreground=colors["text"])
-        style.configure("PC.CompactPage.Treeview.Heading",
-                        font=self.compact_page_font, padding=(3, 3))
-        style.configure("PC.Compact.TButton", padding=(7, 3))
-        style.configure(
-            "PC.EditActive.TButton",
-            padding=(7, 3),
-            background="#ffd166",
-            foreground=colors["text"],
-        )
-        style.map(
-            "PC.EditActive.TButton",
-            background=[("active", "#f3c451"), ("pressed", "#eab843")],
-        )
-        style.configure("PC.Tool.TButton", padding=(4, 2))
-        style.configure("PC.PageNav.TButton", padding=(0, 0))
-        style.configure("PC.SimplePage.TButton", padding=(0, 0))
-        style.configure("PC.Footer.TButton", padding=(7, 3))
-        style.configure(
-            "PC.Footer.TCheckbutton",
-            background=colors["footer"],
-            foreground=colors["text"],
-            padding=(5, 2),
-        )
-        style.map(
-            "PC.Footer.TCheckbutton",
-            background=[("active", colors["footer"])],
-            foreground=[("disabled", colors["muted"]), ("!disabled", colors["text"])],
-        )
-        style.configure("PC.Compact.TEntry", padding=(4, 2))
-        style.configure("PC.Footer.TEntry", padding=(4, 2))
-
-        style.configure(
-            "PC.Treeview",
-            rowheight=26,
-            borderwidth=0,
-            relief="flat",
-            background=base["surface"],
-            fieldbackground=base["surface"],
-            foreground=colors["text"],
-        )
-        style.configure(
-            "PC.Treeview.Heading",
-            padding=(3, 4),
-            relief="solid",
-            borderwidth=1,
-            font=self.section_title_font,
-        )
-        style.map(
-            "PC.Treeview",
-            background=[("selected", colors["tree_selected"])],
-            foreground=[("selected", colors["text"])],
+        """Historical scoped PC.* workspace style installer."""
+        return _main_appearance_policy.configure_main_workspace_styles(
+            self, deps={"ttk": ttk, "appearance_palette": appearance_palette},
         )
 
     def _sidebar_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
     ) -> tk.Widget:
-        """Return one dense action button for the main sidebar.
-
-        Neutral actions intentionally use the exact same ttk style as
-        `检测版面参数`, so sections 四/五 share one native button chrome.
-        Only the three explicitly emphasized actions use custom colors.
-        """
-        if role == "neutral":
-            return ttk.Button(
-                parent,
-                text=text,
-                command=command,
-                style="PC.Compact.TButton",
-            )
-
-        colors = self._main_ui_colors
-        palette = {
-            "primary": (
-                colors["primary"], colors["primary_hover"], "#ffffff",
-            ),
-            "success": (
-                colors["success"], colors["success_hover"], "#ffffff",
-            ),
-        }
-        background, active_background, foreground = palette.get(
-            role, palette["primary"]
+        """Historical compact sidebar action button with live ttk/tk providers."""
+        return _main_action_buttons.sidebar_action_button_impl(
+            self, parent, text, command, role=role,
+            deps={"ttk": ttk, "tk": tk},
         )
-        border = colors["button_border"]
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=background,
-            fg=foreground,
-            activebackground=active_background,
-            activeforeground=foreground,
-            relief="flat",
-            bd=0,
-            anchor="center",
-            justify="center",
-            highlightthickness=1,
-            highlightbackground=border,
-            highlightcolor=border,
-            padx=7,
-            pady=3,
-            cursor="hand2",
-        )
+
 
     def _footer_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str
     ) -> tk.Button:
-        """Create one emphasized bottom-bar action with a functional color."""
-        colors = self._main_ui_colors
-        palette = {
-            # Scheme A: project/config entry points share the same green
-            # treatment as `保存当前页`.
-            "project": (colors["success"], colors["success_hover"], "#ffffff"),
-            "config": (colors["success"], colors["success_hover"], "#ffffff"),
-        }
-        background, active_background, foreground = palette[role]
-        border = colors["button_border"]
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=background,
-            fg=foreground,
-            activebackground=active_background,
-            activeforeground=foreground,
-            relief="flat",
-            bd=0,
-            anchor="center",
-            justify="center",
-            highlightthickness=1,
-            highlightbackground=border,
-            highlightcolor=border,
-            padx=7,
-            pady=3,
-            cursor="hand2",
+        """Historical emphasized footer button with live Tk provider."""
+        return _main_action_buttons.footer_action_button_impl(
+            self, parent, text, command, role=role, deps={"tk": tk},
         )
 
 
@@ -4680,275 +2499,14 @@ class PictureCaptureApp(tk.Tk):
             self.destroy()
 
     def _build_ui(self) -> None:
-        # Keep the legacy information bar permanently visible.  Pack it before
-        # the expanding body so Windows DPI/window-size changes cannot push it
-        # below the visible client area.  General messages and mouse coordinates
-        # use separate variables so moving the mouse no longer overwrites an
-        # operation result/error message.
-        self.bottom_stack = ttk.Frame(self, style="PC.Status.TFrame")
-        self.bottom_stack.pack(side="bottom", fill="x")
-
-        # Batch task bar is normally hidden. It appears above the permanent
-        # status bar while a multi-page operation is running.
-        self.status_bar = ttk.Frame(self.bottom_stack, style="PC.Status.TFrame")
-        self.status_bar.pack(side="bottom", fill="x")
-        status_bar = self.status_bar
-        ttk.Separator(status_bar, orient="horizontal").pack(side="top", fill="x")
-        self.batch_bar = ttk.Frame(status_bar, padding=(4, 1), style="PC.Status.TFrame")
-        self.batch_text_var = tk.StringVar(value="")
-        self.batch_progress_var = tk.DoubleVar(value=0.0)
-        ttk.Label(
-            self.batch_bar, textvariable=self.batch_text_var, anchor="w", style="PC.Batch.TLabel"
-        ).pack(side="left", padx=(0, 8))
-        self.batch_progress = ttk.Progressbar(
-            self.batch_bar, variable=self.batch_progress_var, maximum=100.0, length=160, mode="determinate"
-        )
-        self.batch_progress.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.batch_pause_button = ttk.Button(
-            self.batch_bar, text="暂停", width=8, command=self._toggle_batch_pause,
-            style="PC.Compact.TButton",
-        )
-        self.batch_pause_button.pack(side="left", padx=(0, 5))
-        self._attach_tooltip(
-            self.batch_pause_button,
-            "暂停或继续当前批量任务；已完成页面不会回滚。",
-        )
-        self.batch_stop_button = ttk.Button(
-            self.batch_bar, text="停止", width=8, command=self._request_batch_stop,
-            style="PC.Compact.TButton",
-        )
-        self.batch_stop_button.pack(side="left")
-        self._attach_tooltip(
-            self.batch_stop_button,
-            "请求停止当前批量任务；正在处理的页面完成后安全停止。",
+        """Historical main workspace construction with current Tk bindings."""
+        return _main_workspace_build.build_ui(
+            self, deps={"tk": tk, "ttk": ttk,
+                        "PageListGrid": PageListGrid,
+                        "PageThumbnailController": PageThumbnailController,
+                        "bind_context_menu": bind_context_menu},
         )
 
-        ttk.Label(
-            status_bar,
-            textvariable=self.status_var,
-            anchor="w",
-            padding=(8, 4),
-            style="PC.Status.TLabel",
-        ).pack(side="left", fill="x", expand=True)
-        ttk.Label(
-            status_bar, textvariable=self.image_metadata_status_var,
-            anchor="e", padding=(8, 4), style="PC.Status.TLabel",
-        ).pack(side="right")
-        ttk.Label(
-            status_bar,
-            textvariable=self.cursor_status_var,
-            anchor="e",
-            padding=(8, 4),
-            style="PC.Status.TLabel",
-        ).pack(side="right")
-        ttk.Separator(status_bar, orient="vertical").pack(side="right", fill="y", padx=2)
-
-        # v2.3 intentionally has no menu bar or separate top toolbar.
-        body = ttk.Panedwindow(self, orient="horizontal")
-        self.main_paned = body
-        body.pack(fill="both", expand=True)
-        sidebar_host = ttk.Frame(body, style="PC.Sidebar.TFrame")
-        self.sidebar_canvas = tk.Canvas(
-            sidebar_host,
-            highlightthickness=0,
-            borderwidth=0,
-            bg=self._main_ui_colors["sidebar"],
-        )
-        # This outer scrollbar duplicated the functional page-list scrollbar
-        # and appeared inert beside the normal-mode list. Keep a reference for
-        # compatibility but do not display it. The Treeview owns scrolling.
-        self.sidebar_scrollbar = ttk.Scrollbar(
-            sidebar_host, orient="vertical", command=self.sidebar_canvas.yview
-        )
-        self.sidebar_canvas.pack(side="left", fill="both", expand=True)
-        sidebar = ttk.Frame(
-            self.sidebar_canvas, padding=(7, 0, 6, 5), style="PC.Sidebar.TFrame"
-        )
-        self._sidebar_window = self.sidebar_canvas.create_window((0, 0), window=sidebar, anchor="nw")
-        sidebar.bind("<Configure>", self._resize_sidebar_content)
-        self.sidebar_canvas.bind("<Configure>", self._resize_sidebar_content)
-        self.bind_all("<MouseWheel>", self._sidebar_mousewheel, add="+")
-        self.bind_all("<Button-4>", lambda event: self._sidebar_linux_mousewheel(event, -1), add="+")
-        self.bind_all("<Button-5>", lambda event: self._sidebar_linux_mousewheel(event, 1), add="+")
-        self.sidebar = sidebar
-        viewer = ttk.Frame(body)
-        body.add(sidebar_host, weight=0)
-        body.add(viewer, weight=1)
-        sidebar.columnconfigure(0, weight=1)
-        sidebar.rowconfigure(1, weight=1)
-
-        from .ui.workspace_tools import install_workspace_tools
-        install_workspace_tools(self, sidebar, sidebar_host)
-
-        page_panel = ttk.Frame(sidebar, padding=(2, 0, 2, 0), style="PC.Sidebar.TFrame")
-        self.page_panel = page_panel
-        page_panel.grid(row=0, column=0, rowspan=2, sticky="nsew")
-        page_panel.columnconfigure(0, weight=1)
-        page_panel.rowconfigure(2, weight=1)
-
-        self.page_range_var = tk.StringVar(value="current")
-        self.page_range_spec_var = tk.StringVar()
-        self.view_zoom_var = tk.StringVar(value="100%")
-
-        nav_area = ttk.Frame(page_panel, style="PC.SectionBody.TFrame")
-        nav_area.grid(row=0, column=0, sticky="ew", pady=(0, 5))
-        range_row = ttk.Frame(nav_area)
-        self.page_range_controls_row = range_row
-        range_row.pack(fill="x", pady=(0, 3))
-        for label, mode in (("当前", "current"), ("至末页", "to_end"),
-                            ("至指定", "to_specified"), ("书签", "bookmarks")):
-            ttk.Radiobutton(range_row, text=label, variable=self.page_range_var,
-                            value=mode).pack(side="left", padx=(0, 1))
-        spec_row = ttk.Frame(nav_area)
-        spec_row.pack(fill="x", pady=(0, 4))
-        ttk.Radiobutton(spec_row, text="", variable=self.page_range_var,
-                        value="specified").pack(side="left")
-        page_range_entry = ttk.Entry(spec_row, textvariable=self.page_range_spec_var, width=12)
-        page_range_entry.pack(side="left", fill="x", expand=True, padx=(3, 4))
-        page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())
-        jump_button = ttk.Button(spec_row, text="跳", width=2,
-                                 command=self.jump_to_page_spec, style="PC.PageNav.TButton")
-        jump_button.pack(side="left")
-        self._attach_tooltip(jump_button, "跳转到指定页面的第一个有效页面；ENTER为快捷键")
-
-        nav_row = ttk.Frame(nav_area)
-        nav_row.pack(fill="x")
-        for symbol, command, tip in (
-            ("⨇", lambda: self.jump_to_bookmark(-1), "跳转到上一书签"),
-            ("⨈", lambda: self.jump_to_bookmark(1), "跳转到下一书签"),
-            ("上页", lambda: self.change_page(-1), "切换到上页（Shift + 鼠标右键）"),
-            ("下页", lambda: self.change_page(1), "切换到下页（鼠标右键）"),
-        ):
-            button = ttk.Button(nav_row, text=symbol, width=4 if len(symbol) == 1 else 5,
-                                command=command, style="PC.PageNav.TButton")
-            button.pack(side="left", padx=(0, 4))
-            self._attach_tooltip(button, tip)
-        # First-column previews are controlled directly below the 下页 row,
-        # not by Settings Center.  The original table remains authoritative.
-        thumbnail_controls_host = ttk.Frame(nav_area, style="PC.Sidebar.TFrame")
-        thumbnail_controls_host.pack(fill="x")
-        list_frame = ttk.Frame(page_panel)
-        list_frame.grid(row=2, column=0, sticky="nsew")
-        list_frame.columnconfigure(0, weight=1); list_frame.rowconfigure(0, weight=1)
-        columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")
-        self.page_list = ttk.Treeview(
-            list_frame,
-            columns=columns,
-            show="headings",
-            selectmode="browse",
-            height=12,
-            style="PC.Treeview",
-        )
-        self._page_list_heading_labels = {
-            "bookmark": "●", "page": "页面", "section": "域",
-            "lined": "线", "fill_status": "填充状态", "illustrations": "图",
-        }
-        self.page_list.heading("bookmark", text="●", anchor="center")
-        self.page_list.heading("page", text="页面", anchor="center")
-        self.page_list.heading("section", text="域", anchor="center")
-        self.page_list.heading("lined", text="线", anchor="center")
-        self.page_list.heading("fill_status", text="填充状态", anchor="center")
-        self.page_list.heading("illustrations", text="图", anchor="center")
-        self.page_list.heading("bookmark", command=lambda: self._sort_page_list("bookmark"))
-        self.page_list.heading("page", command=lambda: self._sort_page_list("page"))
-        self.page_list.heading("section", command=lambda: self._sort_page_list("section"))
-        self.page_list.heading("lined", command=lambda: self._sort_page_list("lined"))
-        self.page_list.heading("fill_status", command=lambda: self._sort_page_list("fill_status"))
-        self.page_list.heading("illustrations", command=lambda: self._sort_page_list("illustrations"))
-        self.page_list.column("bookmark", width=44, anchor="center", stretch=False)
-        self.page_list.column("page", width=180, anchor="center", stretch=False)
-        self.page_list.column("section", width=64, anchor="center", stretch=False)
-        self.page_list.column("lined", width=68, anchor="center", stretch=False)
-        self.page_list.column("fill_status", width=110, anchor="center", stretch=False)
-        self.page_list.column("illustrations", width=58, anchor="center", stretch=False)
-        self.page_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self._page_list_scroll)
-        page_hscroll = ttk.Scrollbar(list_frame, orient="horizontal", command=self._page_list_hscroll)
-        self.page_list.configure(yscrollcommand=self._page_list_yscroll,
-                                 xscrollcommand=page_hscroll.set)
-        self.page_list.grid(row=0, column=0, sticky="nsew")
-        self._page_index_grid = PageListGrid(self.page_list)
-        page_hscroll.grid(row=1, column=0, sticky="ew")
-        self.page_scroll.grid(row=0, column=1, sticky="ns")
-        self.page_list.bind("<<TreeviewSelect>>", self.on_page_select)
-        self.page_list.bind("<Button-1>", self._page_list_bookmark_click, add="+")
-        self.page_list.bind("<Double-1>", self._page_list_section_double_click, add="+")
-        self.page_list.bind("<MouseWheel>", self._list_mousewheel)
-        bind_context_menu(self.page_list, self._page_list_right_click)
-        self.page_list.bind("<Configure>", self._page_list_configured)
-        self.page_list.bind("<Motion>", self._page_list_section_heading_motion, add="+")
-        self.page_list.bind("<Leave>", self._hide_page_list_section_heading_hint, add="+")
-        self._page_column_vars = {
-            "lined": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_lined", True))),
-            "fill_status": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_fill_status", False))),
-            "illustrations": tk.BooleanVar(value=bool(getattr(self.settings, "page_list_show_illustrations", True))),
-        }
-        self._apply_page_list_display_columns(save=False)
-        self._page_thumbnails = PageThumbnailController(
-            self, self.page_list, thumbnail_controls_host,
-        )
-
-        self.canvas = tk.Canvas(
-            viewer, bg=self._main_ui_colors["canvas"], highlightthickness=0
-        )
-        hbar = ttk.Scrollbar(viewer, orient="horizontal", command=self.canvas.xview)
-        vbar = ttk.Scrollbar(viewer, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
-        # The ≣ launcher now lives beside 普/O/校 in the workspace rail.
-        # Keep the actual zoom tools on the image canvas as an on-demand
-        # overlay, rather than showing a second permanent/hover-only icon.
-        size_row = ttk.Frame(self.canvas, padding=(3, 2), style="PC.Sidebar.TFrame")
-        self.page_size_row = size_row
-        zoom_tools = ttk.Frame(size_row, style="PC.Sidebar.TFrame")
-        self.page_zoom_tools = zoom_tools
-        zoom_tools.pack(side="left")
-        for symbol, command, tip in (
-            ("−", lambda: self.zoom(0.87), "缩小显示"),
-            ("+", lambda: self.zoom(1.15), "放大显示"),
-            ("⇔", self.fit_page_width, "占满宽度"),
-            ("◧", self.fit_single_column_width, "单栏占满宽度"),
-            ("⇕", self.fit_page_height, "占满高度"),
-        ):
-            if symbol == "+":
-                view_zoom_entry = ttk.Entry(
-                    zoom_tools, textvariable=self.view_zoom_var, width=6,
-                    justify="center", style="PC.Compact.TEntry",
-                )
-                view_zoom_entry.pack(side="left", padx=2)
-                view_zoom_entry.bind("<Return>", self.apply_view_zoom_text)
-                view_zoom_entry.bind("<FocusOut>", self.apply_view_zoom_text)
-            button = ttk.Button(
-                zoom_tools, text=symbol, width=3, command=command,
-                style="PC.Tool.TButton",
-            )
-            button.pack(side="left", padx=(0, 3))
-            self._attach_tooltip(button, tip)
-
-        self.canvas.grid(row=0, column=0, sticky="nsew")
-        vbar.grid(row=0, column=1, sticky="ns"); hbar.grid(row=1, column=0, sticky="ew")
-        viewer.rowconfigure(0, weight=1); viewer.columnconfigure(0, weight=1)
-        self.canvas.bind("<Button-1>", self.canvas_left_click)
-        # Explicit modifier binding keeps the new auxiliary gesture discoverable;
-        # section and PPP editing retain their existing Shift-click behavior.
-        self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)
-        self.canvas.bind("<Control-z>", lambda e: self.ref_box_controller.undo(e) if self.ref_box_controller.editing else self._auxiliary_controller.undo(e))
-        self.canvas.bind("<Control-y>", lambda e: self.ref_box_controller.redo(e) if self.ref_box_controller.editing else None)
-        self.canvas.bind("<F2>", lambda e: self.ref_box_controller.edit_properties() if self.ref_box_controller.editing else None)
-        self.canvas.bind("<Escape>", self.ref_box_controller.cancel_capture)
-        self.canvas.bind("<Double-Button-1>", self.canvas_left_double_click)
-        self.canvas.bind("<B1-Motion>", self.canvas_left_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.canvas_left_release)
-        bind_context_menu(self.canvas, self.canvas_right_click)
-        self.canvas.bind("<Shift-Button-3>", lambda event: self._canvas_shift_right_click(event))
-        self.canvas.bind("<Motion>", self.canvas_motion)
-        self.canvas.bind("<Leave>", self.canvas_leave)
-        self.canvas.bind("<MouseWheel>", self.canvas_mousewheel)
-        self.canvas.bind("<Shift-MouseWheel>", self.canvas_shift_mousewheel)
-        self.canvas.bind("<Control-MouseWheel>", self.canvas_ctrl_mousewheel)
-        self.canvas.bind("<Button-4>", lambda e: self.canvas_linux_mousewheel(e, -1))
-        self.canvas.bind("<Button-5>", lambda e: self.canvas_linux_mousewheel(e, 1))
-
-        # Apply persisted collapse states only after all section children exist.
-        self._apply_initial_section_states()
 
     def _pointer_over_sidebar(self) -> bool:
         canvas = self.__dict__.get("sidebar_canvas")
@@ -5317,190 +2875,30 @@ class PictureCaptureApp(tk.Tk):
                 widget.configure(text=label)
 
     def sync_quick_settings(self) -> None:
-        if not hasattr(self, "quick_vars"):
-            return
-        self._quick_syncing = True
-        try:
-            self._refresh_quick_coordinate_labels()
-            for name, var in self.quick_vars.items():
-                if hasattr(self.settings, name):
-                    value = getattr(self.settings, name)
-                    if name in LAYOUT_PERCENT_AXES:
-                        source_value = self._quick_geometry_value(name)
-                        if self.image is not None:
-                            value = _format_layout_percent(
-                                _layout_pixels_to_percent(self.image, name, source_value)
-                            )
-                        else:
-                            value = source_value
-                        pixel_var = getattr(self, "quick_pixel_vars", {}).get(name)
-                        if pixel_var is not None:
-                            pixel_var.set(str(int(round(source_value))))
-                    if name == "main_entry_x_ratio":
-                        value = round(float(value) * 100)
-                    elif name in {
-                        "batch_interval", "guide_opacity", "headword_marker_opacity",
-                        "illustration_fill_opacity",
-                    }:
-                        value = round(float(value))
-                    if name in {
-                        "main_entry_font_family",
-                        "illustration_label_font_family",
-                        "review_entry_font_family",
-                        "review_simplified_font_family",
-                    }:
-                        value = normalize_content_font_setting(value)
-                    var.set(str(value))
-            for name, var in getattr(self, "quick_bool_vars", {}).items():
-                if hasattr(self.settings, name):
-                    var.set(bool(getattr(self.settings, name)))
-            for name, var in getattr(self, "quick_color_vars", {}).items():
-                if hasattr(self.settings, name):
-                    value = str(getattr(self.settings, name))
-                    var.set(value)
-                    button = getattr(self, "quick_color_buttons", {}).get(name)
-                    if button is not None:
-                        self._style_color_button(button, value)
-            if hasattr(self, "lens_mode_var"):
-                self.lens_mode_var.set(
-                    LENS_MODE_LABELS.get(
-                        self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"]
-                    )
-                )
-            self._quick_geometry_edit_source.clear()
-        finally:
-            self._quick_syncing = False
+        """Historical quick-control sync in original page-pixel coordinates."""
+        return _quick_settings_sync.sync_quick_settings_impl(
+            self, deps={
+                "LAYOUT_PERCENT_AXES": LAYOUT_PERCENT_AXES,
+                "_format_layout_percent": _format_layout_percent,
+                "_layout_pixels_to_percent": _layout_pixels_to_percent,
+                "normalize_content_font_setting": normalize_content_font_setting,
+                "LENS_MODE_LABELS": LENS_MODE_LABELS,
+            },
+        )
+
 
     def apply_quick_settings(self, show_status: bool = True, persist: bool = False, silent_errors: bool = False) -> bool:
-        if getattr(self, "_batch_active", False):
-            self.status_var.set("批量任务运行中，参数修改将在任务结束后再进行。")
-            return False
-        try:
-            previous_ocr_language = str(getattr(self.settings, "ocr_language", "") or "")
-            original_geometry = {
-                name: self._quick_geometry_value(name)
-                for name in LAYOUT_PERCENT_AXES
-                if name in self.quick_vars
-            }
-            for name, var in self.quick_vars.items():
-                geometry_source = self._quick_geometry_edit_source.get(name, "percent")
-                if (
-                    name in original_geometry
-                    and geometry_source == "pixel"
-                    and name in getattr(self, "quick_pixel_vars", {})
-                ):
-                    value = int(round(float(self.quick_pixel_vars[name].get().strip())))
-                else:
-                    value = self.quick_field_casts[name](var.get())
-                if name in original_geometry:
-                    if (
-                        geometry_source != "pixel"
-                        and self.image is not None
-                        and name in LAYOUT_PERCENT_AXES
-                    ):
-                        percent = float(value)
-                        if not 0.0 <= percent <= 100.0:
-                            raise ValueError(f"{name} 必须在 0–100% 之间。")
-                        value = _layout_percent_to_pixels(self.image, name, percent)
-                    else:
-                        value = int(value)
-                    if value < 0:
-                        raise ValueError(f"{name} 不能小于 0。")
-                    changed = value != original_geometry[name]
-                    horizontal = not str(
-                        getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
-                    ).startswith("vertical")
-                    if self.image is not None and horizontal and name == "start_y" and str(
-                        getattr(self.settings, "profile_header_mode", "auto") or "auto"
-                    ) == "present":
-                        if value > self.image.height:
-                            raise ValueError(f"页眉Y必须在原图 0–{self.image.height} 之间。")
-                        if changed:
-                            percent = value * 100.0 / max(1, self.image.height)
-                            if percent > 35.0:
-                                raise ValueError("页眉不能超过原图高度的 35%。")
-                            self.settings.profile_header_percent = round(percent, 6)
-                    elif self.image is not None and horizontal and name == "bottom_y" and str(
-                        getattr(self.settings, "profile_footer_mode", "auto") or "auto"
-                    ) == "present":
-                        if value > self.image.height:
-                            raise ValueError(f"页尾Y必须在原图 0–{self.image.height} 之间。")
-                        if changed:
-                            percent = (
-                                (self.image.height - value)
-                                * 100.0
-                                / max(1, self.image.height)
-                            )
-                            if not 0.0 <= percent <= 35.0:
-                                raise ValueError("页尾必须位于原图底部 35% 范围内。")
-                            self.settings.profile_footer_percent = round(percent, 6)
-                    value = int(value)
-                if name == "paddle_band_width_ratio" and not 1.0 <= float(value) <= 100.0:
-                    raise ValueError("候选带宽比例必须在 1–100 之间；100 即原候选带宽。")
-                if name == "paddle_separator_safety_px" and not 0 <= int(value) <= 50:
-                    raise ValueError("Y精修安全空间必须在 0–50 px 之间。")
-                if name == "paddle_separator_roi_width_ratio" and not 10.0 <= float(value) <= 100.0:
-                    raise ValueError("Y精修横向分析范围必须在 10–100% 之间。")
-                if name == "right_ratio" and not 1 <= float(value) <= 100:
-                    raise ValueError("向右比例必须在 1–100% 之间。")
-                if name == "main_entry_x_ratio":
-                    if not 0 <= float(value) <= 125:
-                        raise ValueError("词条文本框偏移必须在 0–125% 之间。")
-                    value = float(value) / 100.0
-                if name in {"illustration_outline_width", "illustration_label_border_width", "page_section_width"} and not 1 <= int(value) <= 20:
-                    raise ValueError("线条/外框粗细必须在 1–20 之间。")
-                if name == "illustration_label_font_size" and not 5 <= int(value) <= 200:
-                    raise ValueError("插图标签字号必须在 5–200 之间。")
-                if name == "crop_preview_font_size" and not 5 <= int(value) <= 200:
-                    raise ValueError("切图预览标签字号必须在 5–200 之间。")
-                setattr(self.settings, name, value)
-            for font_setting_name in (
-                "main_entry_font_family",
-                "illustration_label_font_family",
-                "crop_preview_font_family",
-                "review_entry_font_family",
-                "review_simplified_font_family",
-            ):
-                setattr(
-                    self.settings,
-                    font_setting_name,
-                    normalize_content_font_setting(getattr(self.settings, font_setting_name, "")),
-                )
-            current_ocr_language = str(getattr(self.settings, "ocr_language", "") or "")
-            if current_ocr_language != previous_ocr_language:
-                for setting_name, setting_value in language_effective_settings(
-                    current_ocr_language, self.settings.layout_writing_mode,
-                ).items():
-                    if hasattr(self.settings, setting_name):
-                        setattr(self.settings, setting_name, setting_value)
-            # Lens always follows the active headword OCR language, including
-            # old projects that still carry a historical independent value.
-            self.settings.paddle_lens_language = current_ocr_language
-            # Diagnostic view flags live only in the UI; never attempt to
-            # persist an ad-hoc BooleanVar onto the slotted AppSettings model.
-            for name, var in self.quick_bool_vars.items():
-                if hasattr(self.settings, name):
-                    setattr(self.settings, name, bool(var.get()))
-            for name, var in getattr(self, "quick_color_vars", {}).items():
-                value = str(var.get()).strip()
-                if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                    raise ValueError(f"{name} 不是有效的 #RRGGBB 颜色")
-                setattr(self.settings, name, value.lower())
-            if not (self.settings.paddle_use_paddleocr or self.settings.paddle_compare_tesseract or self.settings.paddle_enable_lens):
-                raise ValueError("OCR引擎至少需要勾选一个。")
-            self.settings.paddle_lens_mode = LENS_MODE_VALUES.get(self.lens_mode_var.get(), self.settings.paddle_lens_mode)
-            self.settings.hide_overlays = bool(self.hide_var.get())
-            self.settings.polygon_mode = bool(self.polygon_var.get())
-            if persist: self.save_settings()
-            self.sync_quick_settings()
-            self.redraw()
-            if self.autosave_var.get(): self.toggle_autosave()
-            if show_status: self.status_var.set("主界面参数已应用" + ("并保存" if persist else ""))
-            return True
-        except Exception as exc:
-            if not silent_errors:
-                self.show_error("参数无效", exc)
-            return False
+        """Historical quick-settings conversion and side-effect API."""
+        return _quick_settings_apply.apply_quick_settings(
+            self, show_status, persist, silent_errors,
+            deps={
+                "LAYOUT_PERCENT_AXES": LAYOUT_PERCENT_AXES,
+                "_layout_percent_to_pixels": _layout_percent_to_pixels,
+                "normalize_content_font_setting": normalize_content_font_setting,
+                "language_effective_settings": language_effective_settings,
+                "LENS_MODE_VALUES": LENS_MODE_VALUES, "re": re,
+            },
+        )
 
     def save_main_parameters(self) -> None:
         self.apply_quick_settings(persist=True)
@@ -5592,60 +2990,15 @@ class PictureCaptureApp(tk.Tk):
         return tuple(parts + [0] * (width - len(parts))) >= tuple(minimum) + (0,) * (width - len(minimum))
 
     def _paddle_environment_text(self, settings: AppSettings | None = None) -> str:
-        settings = settings or self.settings
-        paddleocr_version = self._distribution_version("paddleocr")
-        paddlex_version = self._distribution_version("paddlex")
-        paddle_gpu_version = self._distribution_version("paddlepaddle-gpu")
-        paddle_cpu_version = self._distribution_version("paddlepaddle")
-        paddle_available = importlib_util.find_spec("paddleocr") is not None
+        """Historical PP-OCR environment diagnostic and runtime status text."""
+        return _paddle_environment_report.paddle_environment_text_impl(
+            self, settings,
+            deps={
+                "importlib_util": importlib_util,
+                "resolve_paddle_device": resolve_paddle_device,
+            },
+        )
 
-        if paddleocr_version:
-            lines = [f"✓ PaddleOCR {paddleocr_version}"]
-        elif paddle_available:
-            lines = ["✓ PaddleOCR：已安装（版本未知）"]
-        else:
-            return "✗ PaddleOCR：未安装\nPP-OCRv6：不可用（需要 PaddleOCR >= 3.7）\nWindows 推荐运行 install_ocr_windows.bat 安装 CPU/GPU OCR 套件。"
-
-        if paddlex_version:
-            lines.append(f"✓ PaddleX {paddlex_version}")
-
-        if paddle_gpu_version and paddle_cpu_version:
-            lines.append(f"⚠ PaddlePaddle GPU {paddle_gpu_version} + CPU {paddle_cpu_version} 同时安装")
-            lines.append("建议仅保留实际使用的一个 PaddlePaddle runtime，避免 CPU/GPU 包冲突。")
-        elif paddle_gpu_version:
-            lines.append(f"✓ PaddlePaddle GPU {paddle_gpu_version}")
-        elif paddle_cpu_version:
-            lines.append(f"✓ PaddlePaddle CPU {paddle_cpu_version}")
-        else:
-            lines.append("✗ PaddlePaddle runtime：未检测到")
-
-        if self._version_at_least(paddleocr_version, (3, 7)):
-            lines.append(f"✓ PP-OCRv6：支持（配置：{settings.paddle_ocr_version or 'PP-OCRv6'}）")
-        else:
-            lines.append(
-                f"✗ PP-OCRv6：当前 PaddleOCR {paddleocr_version or '未知'} 不支持；请升级到 >= 3.7"
-            )
-
-        runtime_device = resolve_paddle_device()
-        lines.append(f"本机运行设备：{runtime_device}（自动；项目不再固定 CPU/GPU）")
-        if str(getattr(settings, "paddle_device", "auto") or "auto").lower() not in {"", "auto"}:
-            lines.append("提示：项目中的旧 paddle_device 值仅保留兼容读取，当前运行已忽略该项目级设备设置。")
-        try:
-            import paddle  # type: ignore
-            compiled_cuda = bool(paddle.device.is_compiled_with_cuda())
-            if compiled_cuda:
-                try:
-                    gpu_count = int(paddle.device.cuda.device_count())
-                except Exception:
-                    gpu_count = 0
-                lines.append(f"CUDA：可用（检测到 {gpu_count} 个 GPU）")
-            elif paddle_gpu_version:
-                lines.append("CUDA：GPU 版 runtime 已安装，但当前进程未检测到可用 CUDA。")
-            else:
-                lines.append("CUDA：未启用（CPU runtime）")
-        except Exception as exc:
-            lines.append(f"Paddle runtime 检查失败：{exc}")
-        return "\n".join(lines)
 
     def show_environment_center(self) -> None:
         existing = self.__dict__.get("_environment_center_window")
@@ -6541,445 +3894,32 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _detect_pages(self, indices: list[int], *, method: str, force_refresh: bool) -> None:
-        if method == "left_edge":
-            # One physical page must never be submitted to multiple writer
-            # processes in the same batch, even through an unusual API caller.
-            indices = list(dict.fromkeys(indices))
-        if not self.project or not indices:
-            self.status_var.set("没有需要处理的页面"); return
-        if not self._guard_transformed_geometry("批量画线"):
-            return
-        label = {
-            "combined": "融合画线",
-            "paddleocr": "OCR画线",
-            "left_edge": "普通画线",
-        }.get(method, "画线")
-        if len(indices) > 1 and not messagebox.askyesno(
-            label,
-            f"将对 {len(indices)} 页执行{label}并重写这些页面的 PDIC 画线。\n\n"
-            "处理期间会显示进度，可暂停或停止；暂停/停止会在当前页完成后安全生效。继续？",
-            parent=self,
-        ):
-            return
-        from .layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
-        missing_ppp = missing_saved_illustrations(
-            (self.project.images[i] for i in indices), self.settings,
+        """Historical multi-page ordinary/OCR/combined batch API."""
+        return _detection_batch_execution.detect_pages(
+            self, indices, method=method, force_refresh=force_refresh,
+            deps={
+                "messagebox": messagebox,
+                "replace": replace,
+                "os": os,
+                "headword_filter_rules_path": headword_filter_rules_path,
+                "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+                "ProcessPoolExecutor": ProcessPoolExecutor,
+                "multiprocessing": multiprocessing,
+                "project_profile_path": project_profile_path,
+                "replace_rules_path": replace_rules_path,
+                "pdic_path": pdic_path,
+                "ocr_cache_root": ocr_cache_root,
+                "normalize_page_rgb": normalize_page_rgb,
+                "read_page_sections": read_page_sections,
+                "detect_entries": detect_entries,
+                "ocr_existing_entry_words_from_markers": ocr_existing_entry_words_from_markers,
+                "load_replace_rules": load_replace_rules,
+                "write_pdic": write_pdic,
+                "detect_entries_job": detect_entries_job,
+                "statistics": statistics,
+                "Image": Image,
+            },
         )
-        if missing_ppp:
-            names = "、".join(page.name for page in missing_ppp[:4])
-            suffix = f" 等 {len(missing_ppp)} 页" if len(missing_ppp) > 4 else ""
-            message = (f"这些页面缺少已保存的 PPP 插图数据：{names}{suffix}。\n"
-                       "请先运行插图识别，或在设置中心→插图关闭‘使用已有的插图数据’。\n"
-                       "本次画线未开始，其他页面的 PDIC 不会被部分覆盖。")
-            self.status_var.set(message)
-            messagebox.showerror("Layout 插图复用检查失败", message, parent=self)
-            return
-        import time
-        batch_started_at = time.time()
-        self.save_pdic(silent=True)
-        # Auto illustration detection persists PPP in workers. Flush any
-        # foreground manual edits first so the worker's AUTO merge preserves
-        # them. PPP-reuse mode is read-only and must never fabricate a missing
-        # PPP file.
-        if (
-            method == "left_edge"
-            and bool(getattr(self.settings, "layout_mask_illustrations", False))
-            and not bool(getattr(self.settings, "layout_mask_illustrations_use_existing", False))
-            and self.current_page is not None
-        ):
-            from .io.formats import write_ppp
-            self._sync_polygon_label_texts()
-            self._save_normalized_ppp()
-        self.settings.detection_method = method
-        settings = replace(self.settings)
-        # Set the process environment *before* spawning workers. Snapshot the
-        # values at the start of this batch to keep child processes consistent.
-        os.environ["PICTURE_CAPTURE_DRAW_PROFILE"] = (
-            "1" if bool(getattr(settings, "draw_performance_profile", False)) else "0"
-        )
-        os.environ["PICTURE_CAPTURE_REUSE_PREPARED_ANALYSIS"] = (
-            "1" if bool(getattr(settings, "reuse_prepared_analysis", False)) else "0"
-        )
-        project = self.project
-        pages_info = {i: self.pages_tuple(i) for i in indices}
-        filter_path = headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
-        from .ordinary.parallel import ordinary_draw_workers
-        ordinary_workers = (
-            ordinary_draw_workers(len(indices)) if method == "left_edge" else 1
-        )
-        from .ordinary.gpu_pipeline import staged_pipeline_enabled
-        from .ordinary.cpu_pool import cpu_pool_enabled, cpu_pool_config
-        cpu_pool = bool(
-            method == "left_edge"
-            and cpu_pool_enabled(settings, len(indices))
-        )
-        cpu_pool_workers, cpu_inference_threads = (
-            cpu_pool_config(len(indices)) if cpu_pool else (1, 1)
-        )
-        # CPU-only takes priority over staged GPU mode.
-        gpu_staged = bool(
-            method == "left_edge" and not cpu_pool
-            and staged_pipeline_enabled(settings, len(indices))
-        )
-        if cpu_pool:
-            ordinary_workers = cpu_pool_workers
-        elif gpu_staged:
-            # Never duplicate CUDA models across workers.
-            ordinary_workers = 2
-        normal_executor = (
-            ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn"))
-            if method == "left_edge" and ordinary_workers <= 1 else None
-        )
-
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            from .quality.draw_performance_profile import enabled as profile_enabled, record_page
-            tracing = profile_enabled() and method in {"paddleocr", "combined"}
-            stages = {}
-            trace_tick = time.perf_counter()
-            resume_dependencies = ()
-            if (
-                method in {"paddleocr", "combined"}
-                and settings.ocr_resume_completed_pages
-                and not force_refresh
-            ):
-                from .persistence.project_storage import page_sections_read_path_for_image
-                from .ocr.page_resume import validated_resume
-                resume_dependencies = (
-                    filter_path,
-                    project_profile_path(project.root),
-                    page_sections_read_path_for_image(page),
-                    *( (replace_rules_path(project.root),) if method == "combined" else () ),
-                )
-                saved = pdic_path(page)
-                previous_count = validated_resume(
-                    ocr_cache_root(project.root), page, saved,
-                    page_index=index, method=method, settings=settings,
-                    dependencies=resume_dependencies,
-                )
-                if previous_count is not None:
-                    return {"index": int(index), "count": previous_count, "resumed": True}
-            if normal_executor is not None:
-                if cpu_pool:
-                    from .ordinary.cpu_pool import cpu_ordinary_page_job
-                    count = normal_executor.submit(
-                        cpu_ordinary_page_job, str(page), settings,
-                        pages_info[index], index, cpu_inference_threads,
-                    ).result()
-                else:
-                    count = normal_executor.submit(
-                        detect_entries_job, str(page), settings, pages_info[index], index
-                    ).result()
-                return {"index": int(index), "count": int(count)}
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            if tracing:
-                stages["ocr_image_load"] = time.perf_counter() - trace_tick
-                trace_tick = time.perf_counter()
-            cache_path = ocr_cache_root(project.root) / f"{page.stem}.json" if method in {"paddleocr", "combined"} else None
-            sections = read_page_sections(page)
-            entries, _geometry = detect_entries(
-                image, settings, paddle_cache_path=cache_path,
-                force_paddle_refresh=force_refresh,
-                paddle_filter_rules_path=filter_path,
-                profile_page_index=index,
-                page_sections=sections,
-                source_image_path=detection_mask_source_path(
-                    page, settings, ordinary=method == "left_edge",
-                ),
-            )
-            if tracing:
-                stages["ocr_detect_entries"] = time.perf_counter() - trace_tick
-                trace_tick = time.perf_counter()
-            text_stats = None
-            if method == "combined":
-                original_coords = [
-                    (int(entry.x), int(entry.y)) for entry in entries
-                ]
-                entries, text_stats = ocr_existing_entry_words_from_markers(
-                    image,
-                    entries,
-                    settings,
-                    load_replace_rules(replace_rules_path(project.root)),
-                    profile_page_index=index,
-                    page_sections=sections,
-                    profile_path=project_profile_path(project.root),
-                    only_blank=True,
-                )
-                if [
-                    (int(entry.x), int(entry.y)) for entry in entries
-                ] != original_coords:
-                    raise RuntimeError(
-                        f"{page.name} 融合画线自动补字意外修改了画线坐标"
-                    )
-            if tracing:
-                stages["ocr_marker_text_fill"] = time.perf_counter() - trace_tick
-                trace_tick = time.perf_counter()
-            saved_pdic = pdic_path(page)
-            if method in {"paddleocr", "combined"}:
-                # Preserve manual PDIC before automated OCR overwrites it.
-                from .ocr.pdic_preservation import preserve_prior_pdic
-                preserve_prior_pdic(project.root, page, saved_pdic)
-            write_pdic(saved_pdic, entries, image.width, pages_info[index])
-            if tracing:
-                stages["ocr_preserve_and_pdic"] = time.perf_counter() - trace_tick
-                trace_tick = time.perf_counter()
-            result = {"index": int(index), "count": len(entries)}
-            if method in {"paddleocr", "combined"} and cache_path is not None:
-                # The OCR cache is pre-Layout. Read the *actual saved PDIC*
-                # and record final moves/removals/rescues separately. This
-                # audit never modifies PDIC and failure must not lose a page.
-                try:
-                    from .ocr.final_decisions import record_final_decisions
-                    result["final_audit"] = record_final_decisions(
-                        cache_path, saved_pdic, entries,
-                        tolerance=max(5, round(settings.character_height * 0.45)),
-                    )
-                except (OSError, ValueError, TypeError) as exc:
-                    result["final_audit_error"] = f"{type(exc).__name__}: {exc}"
-            if method in {"paddleocr", "combined"} and settings.ocr_resume_completed_pages:
-                if not resume_dependencies:
-                    # A forced OCR rerun bypasses prior checkpoints but still
-                    # writes a *new* completed checkpoint for later resumption.
-                    from .persistence.project_storage import page_sections_read_path_for_image
-                    resume_dependencies = (
-                        filter_path,
-                        project_profile_path(project.root),
-                        page_sections_read_path_for_image(page),
-                        *((replace_rules_path(project.root),) if method == "combined" else ()),
-                    )
-                from .ocr.page_resume import write_page_resume
-                try:
-                    write_page_resume(
-                        ocr_cache_root(project.root), page, pdic_path(page),
-                        page_index=index, method=method, settings=settings,
-                        marker_count=len(entries), dependencies=resume_dependencies,
-                    )
-                except (OSError, ValueError, TypeError) as exc:
-                    result["resume_checkpoint_error"] = f"{type(exc).__name__}: {exc}"
-            if text_stats:
-                result.update({
-                    "text_filled": int(text_stats.get("filled", 0)),
-                    "text_regular": int(text_stats.get("regular", 0)),
-                    "text_large": int(text_stats.get("large", 0)),
-                    "text_failed": int(text_stats.get("failed", 0)),
-                })
-            if tracing:
-                stages["ocr_audit_resume"] = time.perf_counter() - trace_tick
-                record_page(page, index, stages, mode=method)
-            return result
-
-        def done(completed, total, stopped, results, error):
-            if normal_executor is not None:
-                normal_executor.shutdown(wait=False, cancel_futures=True)
-            if error is not None:
-                return
-            self.load_page(self.current_index)
-            quality_text = ""
-            if method in {"paddleocr", "combined"}:
-                self._refresh_page_quality_colors()
-                quality_text = "；页面列表已按 OCR 一致性/质量状态更新"
-                resumed = sum(
-                    1 for row in results if isinstance(row, dict) and row.get("resumed")
-                )
-                if resumed:
-                    quality_text += f"；经完整校验断点跳过 {resumed} 页"
-                checkpoint_failures = sum(
-                    1 for row in results
-                    if isinstance(row, dict) and row.get("resume_checkpoint_error")
-                )
-                if checkpoint_failures:
-                    quality_text += f"；{checkpoint_failures} 页无法记录恢复点"
-                final_stats = [
-                    row.get("final_audit")
-                    for row in results
-                    if isinstance(row, dict) and isinstance(row.get("final_audit"), dict)
-                ]
-                if final_stats:
-                    quality_text += (
-                        f"；最终PDIC对齐 {sum(int(v.get('linked', 0)) for v in final_stats)} 条"
-                        f"，Layout等独立候选 {sum(int(v.get('unmatched_final', 0)) for v in final_stats)} 条"
-                    )
-                audit_errors = sum(
-                    1 for row in results
-                    if isinstance(row, dict) and row.get("final_audit_error")
-                )
-                if audit_errors:
-                    quality_text += f"；{audit_errors} 页最终决策记录未能保存（PDIC已保存）"
-                if method == "combined":
-                    filled = sum(
-                        int((row or {}).get("text_filled", 0))
-                        for row in results
-                    )
-                    regular = sum(
-                        int((row or {}).get("text_regular", 0))
-                        for row in results
-                    )
-                    large = sum(
-                        int((row or {}).get("text_large", 0))
-                        for row in results
-                    )
-                    failed = sum(
-                        int((row or {}).get("text_failed", 0))
-                        for row in results
-                    )
-                    quality_text += (
-                        f"；普通救漏自动补字 {filled} 条"
-                        f"（普通框 {regular}，大字框 {large}，未识别 {failed}）"
-                    )
-            else:
-                rows = [
-                    value for value in results
-                    if isinstance(value, dict)
-                    and isinstance(value.get("count"), (int, float))
-                    and int(value.get("count", -1)) >= 0
-                ]
-                counts = [int(row["count"]) for row in rows]
-                median_count = float(statistics.median(counts)) if counts else 0.0
-                suspect_rows: list[dict] = []
-                for row in rows:
-                    count = int(row["count"])
-                    if count == 0:
-                        suspect_rows.append(row)
-                    elif len(counts) >= 5 and median_count >= 8:
-                        if count < median_count * 0.45 or count > median_count * 1.80:
-                            suspect_rows.append(row)
-                if counts:
-                    quality_text = f"；每页画线数中位数 {median_count:g}"
-                if suspect_rows:
-                    names = [
-                        project.images[int(row["index"])].name
-                        for row in suspect_rows[:3]
-                        if 0 <= int(row.get("index", -1)) < len(project.images)
-                    ]
-                    more = "…" if len(suspect_rows) > 3 else ""
-                    quality_text += (
-                        f"；{len(suspect_rows)} 页画线数异常，建议优先复核"
-                        + (f"（{', '.join(names)}{more}）" if names else "")
-                    )
-            from .quality.inference_monitor import recent_model_events
-            elapsed_seconds = max(0.001, time.time() - batch_started_at)
-            observed_events = recent_model_events(batch_started_at)
-            observed_devices = sorted({str(row["device"]) for row in observed_events})
-            observed_pids = {int(row["pid"]) for row in observed_events}
-            inferred = "/".join(observed_devices) if observed_devices else "未记录（可能命中缓存）"
-            monitor_text = (
-                f"；耗时 {elapsed_seconds:.1f}s"
-                f"；速度 {completed / elapsed_seconds:.2f} 页/s"
-                f"；模型设备 {inferred}"
-                f"；模型实例进程 {len(observed_pids)}"
-            )
-            if cpu_pool:
-                monitor_text += f"；CPU 工作进程配置 {cpu_pool_workers}"
-            elif gpu_staged:
-                monitor_text += "；GPU 推理生产者 1 / CPU 消费者最多 2"
-            elif method in {"paddleocr", "combined"}:
-                monitor_text += "；OCR 页面串行调度"
-            if observed_events:
-                observed_dnn = sorted({
-                    str(row["mkldnn"]) for row in observed_events
-                    if row.get("device") == "cpu"
-                })
-                if observed_dnn:
-                    monitor_text += f"；oneDNN 配置 {'/'.join(observed_dnn)}"
-            quality_text += monitor_text
-            from .quality.draw_performance_profile import (
-                enabled as profiling_enabled, recent_profiles, export_batch_report,
-            )
-            if profiling_enabled():
-                page_names = {str(project.images[i]) for i in indices}
-                stage_rows = recent_profiles(batch_started_at, pages=page_names)
-                try:
-                    report_path = export_batch_report(
-                        stage_rows, label=label, elapsed_seconds=elapsed_seconds,
-                        completed=completed, settings=settings,
-                    )
-                except Exception as exc:
-                    quality_text += f"；性能报告导出失败：{exc}"
-                else:
-                    quality_text += (
-                        f"；性能报告已保存：{report_path}"
-                        if stage_rows else
-                        f"；性能报告已保存（没有匹配到逐页计时数据）：{report_path}"
-                    )
-            suffix = "（强制重新识别）" if method in {"paddleocr", "combined"} and force_refresh else ""
-            skipped = int(getattr(self, "_batch_skipped_count", 0))
-            skip_text = f"，人工锁定跳过 {skipped} 页" if skipped else ""
-            if stopped:
-                self.status_var.set(
-                    f"{label}{suffix}已停止：处理进度 {completed}/{total}{skip_text}；"
-                    f"结果已保留{quality_text}"
-                )
-            else:
-                self.status_var.set(
-                    f"{label}{suffix}完成：{completed}/{total}{skip_text}{quality_text}"
-                )
-
-        if gpu_staged:
-            from .ordinary.gpu_pipeline import (
-                prepare_gpu_layout_job, detect_entries_staged_job,
-            )
-            started = self._start_parallel_batch_task(
-                label, indices, detect_entries_staged_job,
-                lambda index, _position, _total: (
-                    str(project.images[index]), settings, pages_info[index], index,
-                ),
-                result_consumer=lambda index, count: {
-                    "index": int(index), "count": int(count),
-                },
-                on_done=done,
-                item_label=lambda index: project.images[index].name,
-                max_workers=ordinary_workers,
-                foreground_page_edit=True,
-                page_indexer=lambda index: int(index),
-                gpu_preflight_func=prepare_gpu_layout_job,
-                gpu_job_builder=lambda index, _position, _total: (
-                    str(project.images[index]), settings, index,
-                ),
-            )
-        elif cpu_pool and cpu_pool_workers > 1:
-            from .ordinary.cpu_pool import cpu_ordinary_page_job
-            started = self._start_parallel_batch_task(
-                label, indices, cpu_ordinary_page_job,
-                lambda index, _position, _total: (
-                    str(project.images[index]), settings,
-                    pages_info[index], index, cpu_inference_threads,
-                ),
-                result_consumer=lambda index, count: {
-                    "index": int(index), "count": int(count),
-                },
-                on_done=done,
-                item_label=lambda index: project.images[index].name,
-                max_workers=cpu_pool_workers,
-                foreground_page_edit=True,
-                page_indexer=lambda index: int(index),
-            )
-        elif method == "left_edge" and ordinary_workers > 1:
-            # Dormant legacy parallel path: the ordinary_draw_workers safety
-            # policy always returns 1 unless a separately validated design
-            # deliberately changes it. No duplicate GPU inference permitted.
-            started = self._start_parallel_batch_task(
-                label, indices, detect_entries_job,
-                lambda index, _position, _total: (
-                    str(project.images[index]), settings, pages_info[index], index,
-                ),
-                result_consumer=lambda index, count: {
-                    "index": int(index), "count": int(count),
-                },
-                on_done=done,
-                item_label=lambda index: project.images[index].name,
-                max_workers=ordinary_workers,
-                foreground_page_edit=True,
-                page_indexer=lambda index: int(index),
-            )
-        else:
-            started = self._start_batch_task(
-                label, indices, worker, done,
-                item_label=lambda index: project.images[index].name,
-                foreground_page_edit=True, page_indexer=lambda index: int(index),
-            )
-        if not started and normal_executor is not None:
-            normal_executor.shutdown(wait=False, cancel_futures=True)
 
     def clear_entries(self) -> None:
         if self.guard() and messagebox.askyesno("清除画线", "清除当前页全部词条标记？", parent=self):

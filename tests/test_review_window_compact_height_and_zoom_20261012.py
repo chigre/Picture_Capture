@@ -14,9 +14,8 @@ def test_compact_review_reuses_taskbar_and_titlebar_safe_main_window_height():
     import picture_capture.app as app_module
 
     source = Path(app_module.__file__).read_text(encoding="utf-8")
-    review_init = source.split('class ReviewWindow(', 1)[1].split(
-        '    def _review_image_area_width(', 1
-    )[0]
+    assert '_review_window_initialization.initialize_review_window(' in source
+    review_init = (Path(app_module.__file__).parent / 'ui/review_window_initialization.py').read_text(encoding='utf-8')
     assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in review_init
     assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in review_init
     assert 'height = max(1, safe_client_height)' in review_init
@@ -40,7 +39,8 @@ def test_normal_compact_and_extreme_page_tooltips_are_identical():
     compact = Path(simple_page_controls.__file__).read_text(encoding="utf-8")
     extreme = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     for tip in ("切换到上页（Shift + 鼠标右键）", "切换到下页（鼠标右键）"):
-        assert tip in source
+        owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_workspace_build.py").read_text(encoding="utf-8")
+        assert tip in owner
         assert tip in compact
         assert tip in extreme
     assert 'app._attach_tooltip(\n            button,' in extreme

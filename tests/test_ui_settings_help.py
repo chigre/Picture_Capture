@@ -76,9 +76,8 @@ def test_help_body_is_live_bound_in_every_tab_not_snapshotted_at_construction():
     source = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py").read_text(
         encoding="utf-8"
     )
-    panel_start = source.index("    def _scrollable_settings_page(", source.index("class SettingsDialog"))
-    panel_end = source.index("    def _settings_intro(", panel_start)
-    panel = source[panel_start:panel_end]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in source
+    panel = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert "textvariable=self._settings_help_title_var" in panel
     assert "textvariable=self._settings_help_body_var" in panel
     assert "text=self._settings_help_body_var.get()" not in panel

@@ -1,1 +1,1 @@
-"""Internal image preprocessing owners; public facade remains at root."""
+"""Internal image preprocessing owners; pipeline module owns the former root public functions."""

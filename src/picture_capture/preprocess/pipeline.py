@@ -7,16 +7,16 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from .preprocess.document_unwarping import unwarp_document_image
-from .image_utils import normalize_page_rgb
-from .layout.detection import (
+from .document_unwarping import unwarp_document_image
+from .page_pixels import normalize_page_rgb
+from ..layout.detection import (
     LayoutEstimate,
     analysis_ink_mask,
     detect_text_polygons,
     infer_layout_from_boxes,
 )
-from .models import AppSettings
-from .preprocess.orthogonal_dewarp import (
+from ..models import AppSettings
+from .orthogonal_dewarp import (
     HORIZONTAL_RULE_MAX_ANGLE_DEG,
     HORIZONTAL_RULE_MAX_RESIDUAL_MIN_PX,
     HORIZONTAL_RULE_MAX_RESIDUAL_WIDTH_RATIO,
@@ -32,7 +32,7 @@ from .preprocess.orthogonal_dewarp import (
     horizontal_rule_metrics,
     transform_polygons_orthogonal,
 )
-from .preprocess.geometry import (
+from .geometry import (
     HORIZONTAL_ALIGNMENT_MAX_AFTER_EDGE_DEG,
     HORIZONTAL_ALIGNMENT_MAX_AFTER_TREND_DEG,
     HORIZONTAL_ALIGNMENT_MAX_EDGE_PAIR_DELTA_DEG,
@@ -60,7 +60,7 @@ from .preprocess.geometry import (
     perspective_from_quad,
     transform_polygons_homography,
 )
-from .preprocess.text_line_geometry import (
+from .text_line_geometry import (
     SEPARATOR_CURVATURE_SCORE_MIN,
     SEPARATOR_CURVE_SPAN_MIN,
     SEPARATOR_CURVE_WIDTH_RATIO_THRESHOLD,
@@ -71,15 +71,15 @@ from .preprocess.text_line_geometry import (
     analyze_text_line_geometry,
     separator_track_points,
 )
-from .persistence.project_storage import image_preprocess_output_root
-from .preprocess.models import (
+from ..persistence.project_storage import image_preprocess_output_root
+from .models import (
     DEFAULT_SAFETY_MARGIN_PX,
     PREPROCESS_FORMAT,
     PREPROCESS_FORMAT_VERSION,
     OutputCanvasInfo,
     PreprocessAnalysis,
 )
-from .preprocess.constants import (
+from .constants import (
     AUTO_HOMOGRAPHY_ANISOTROPY_P95_MAX,
     AUTO_HOMOGRAPHY_AREA_SCALE_SPAN_MAX,
     AUTO_HOMOGRAPHY_HORIZONTAL_SCALE_SPAN_MAX,
@@ -98,11 +98,11 @@ from .preprocess.constants import (
     ORTHOGONAL_VERTICAL_MAX_SPAN_WIDTH_RATIO,
     POST_PERSPECTIVE_REDETECT_MIN_BOXES,
 )
-from .preprocess.canvas import (
+from .canvas import (
     _normalize_canvas_alignment,
     output_canvas_info,
 )
-from .preprocess.persistence import (
+from .persistence import (
     MANUAL_GEOMETRY_FORMAT,
     MANUAL_GEOMETRY_VERSION,
     clear_manual_perspective_quad,
@@ -113,20 +113,20 @@ from .preprocess.persistence import (
     save_analysis,
     save_manual_perspective_quad,
 )
-from .preprocess.storage import (
+from .storage import (
     preview_output_root,
     processed_output_root,
     promote_processed_pages,
 )
-from .preprocess.reporting import (
+from .reporting import (
     _export_diagnostic_json_impl,
     export_summary_csv,
     result_summary,
 )
 
-from .preprocess import content_bounds as _content_bounds
-from .preprocess.content_bounds import _smooth_1d
-from .preprocess.deskew import (
+from . import content_bounds as _content_bounds
+from .content_bounds import _smooth_1d
+from .deskew import (
     _normalize_half_turn,
     _weighted_median,
     estimate_skew_from_polygons,
@@ -141,9 +141,9 @@ from .preprocess.deskew import (
 )
 
 
-from .preprocess import orthogonal_policy as _orthogonal_policy
-from .preprocess import replay as _geometry_replay
-from .preprocess.orthogonal_policy import (
+from . import orthogonal_policy as _orthogonal_policy
+from . import replay as _geometry_replay
+from .orthogonal_policy import (
     _absolute_horizontal_quality,
     _separator_vertical_span,
     _orthogonal_safe_gain_cap,
@@ -153,15 +153,15 @@ from .preprocess.orthogonal_policy import (
 
 
 
-from .preprocess import geometry_stages as _geometry_stages
-from .preprocess import perspective_stages as _perspective_stages
-from .preprocess import orthogonal_pipeline as _orthogonal_pipeline
-from .preprocess import pixel_row_policy as _pixel_row_policy
-from .preprocess import projective_selection as _projective_selection
-from .preprocess import finalization as _finalization
-from .preprocess import source_evidence as _source_evidence
-from .preprocess import rendering as _rendering
-from .preprocess.rendering import PREVIEW_YELLOW, PREVIEW_OUTLINE
+from . import geometry_stages as _geometry_stages
+from . import perspective_stages as _perspective_stages
+from . import orthogonal_pipeline as _orthogonal_pipeline
+from . import pixel_row_policy as _pixel_row_policy
+from . import projective_selection as _projective_selection
+from . import finalization as _finalization
+from . import source_evidence as _source_evidence
+from . import rendering as _rendering
+from .rendering import PREVIEW_YELLOW, PREVIEW_OUTLINE
 
 
 def _projection_content_box(image: Image.Image, settings: AppSettings) -> tuple[int, int, int, int]:
@@ -322,7 +322,7 @@ def analyze_preprocess_page(
     #      distortion safety; it is NOT required to improve row horizontality.
     #   B) any residual top-to-bottom row-angle trend is then corrected by a
     #      horizontal-VP homography whose strength is optimized in [0, 1].
-    # This avoids the v12 failure mode where a useful 0004-style structural
+    # Avoids v12 rejection of useful 0004-style structural
     # correction was rejected by the horizontal gate, while a full-strength VP
     # correction over-shot the near-zero row trend on 0002/0004/0011.
     if (

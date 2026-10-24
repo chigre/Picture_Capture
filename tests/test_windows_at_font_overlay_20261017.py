@@ -52,7 +52,9 @@ def test_both_font_menus_hide_windows_at_faces():
     compact = (root / "ui" / "compact_display_menu.py").read_text(encoding="utf-8")
     settings = (root / "app.py").read_text(encoding="utf-8")
     assert 'if not f.startswith("@")' in compact
-    assert 'if not f.startswith("@")' in settings
+    form = (root / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.setting_widget(" in settings
+    assert 'if not f.startswith("@")' in form
 
 
 def test_horizontal_entry_widget_remains_selected_from_reading_mode():
