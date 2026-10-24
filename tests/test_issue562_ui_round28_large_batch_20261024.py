@@ -18,8 +18,17 @@ def test_exact_ui_algorithm_owners_and_retained_app_method_signatures():
     mapping = {
         "main_appearance_policy.py": {
             "configure_global_appearance", "configure_main_workspace_styles",
+            "_app_icon_toplevel_mapped", "_maximize_main_window",
+            "_apply_current_appearance", "_appearance_toplevel_mapped",
+            "_appearance_mode_selected", "_cancel_system_appearance_poll",
+            "_schedule_system_appearance_poll", "_poll_system_appearance",
+            "set_appearance_mode",
         },
-        "quick_settings_apply.py": {"apply_quick_settings"},
+        "quick_settings_apply.py": {
+            "apply_quick_settings", "_quick_percent_parameter_changed",
+            "_quick_pixel_parameter_changed", "_quick_parameter_changed",
+            "_quick_geometry_value",
+        },
         "detection_batch_execution.py": {"detect_pages"},
     }
     for file, names in mapping.items():

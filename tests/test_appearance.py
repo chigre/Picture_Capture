@@ -159,9 +159,10 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"appearance_mode": app.appearance_preference' in session_source
     assert '"system": "跟随系统"' in app_source
     assert "def _poll_system_appearance(" in app_source
-    assert '"system-appearance-detect"' in app_source
-    assert '"_pc_appearance_map_pending"' in app_source
-    assert "if getattr(widget, \"_pc_appearance_map_pending\", False):" in app_source
+    theme_owner = (ROOT / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert '"system-appearance-detect"' in theme_owner
+    assert '"_pc_appearance_map_pending"' in theme_owner
+    assert "if getattr(widget, \"_pc_appearance_map_pending\", False):" in theme_owner
     assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in app_source
     assert 'display = themed_display_image(display, self.appearance_mode)' in app_source
     assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in project_session
@@ -172,8 +173,8 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert "_main_appearance_policy.configure_global_appearance(" in app_source
     assert '"*TCombobox*Listbox.background"' in theme_owner
     assert '"*TCombobox*Listbox.selectBackground"' in theme_owner
-    assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
-    assert 'if isinstance(widget, tk.Toplevel)' in app_source
+    assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in theme_owner
+    assert 'if isinstance(widget, tk.Toplevel)' in theme_owner
     overlay = (ROOT / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
     shared = (ROOT / "src/picture_capture/ui/overlay_delete_button.py").read_text(encoding="utf-8")
     assert 'button._pc_skip_classic_appearance = True' in shared

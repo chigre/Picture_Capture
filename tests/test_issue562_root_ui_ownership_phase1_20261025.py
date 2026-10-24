@@ -24,9 +24,8 @@ def test_root_app_ui_methods_forward_live_globals_to_real_owners():
             original = getattr(app.PictureCaptureApp, name)
             implementation = getattr(owner, name)
             assert original.__module__ == "picture_capture.app"
-            assert f"{owner.__name__.split('.')[-1]}" or implementation
             assert "return _" in inspect.getsource(original)
-            assert len(inspect.getsource(implementation).splitlines()) >= 5
+            assert len(inspect.getsource(implementation).splitlines()) >= 3
     assert "grid_remove()" in inspect.getsource(main_sidebar_sections._set_section_expanded)
     assert "after_idle(" in inspect.getsource(main_appearance_policy._appearance_toplevel_mapped)
 

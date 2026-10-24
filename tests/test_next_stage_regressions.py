@@ -1498,7 +1498,11 @@ def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferen
 
     start = text.index("    def _apply_new_project_sidebar_defaults(self) -> None:")
     end = text.index("    @staticmethod\n    def _default_session_state_path", start)
-    method = text[start:end]
+    # The old method still exists, but actual default-state policy is owned
+    # by the sidebar module after the physical extraction.
+    assert "_sidebar_sections._apply_new_project_sidebar_defaults(" in text
+    method = (source.parent / "ui/main_sidebar_sections.py").read_text(encoding="utf-8")
+    method = method[method.index("def _apply_new_project_sidebar_defaults("):]
     for expected in (
         '"normal": True', '"aux": False', '"ocr": False',
         '"actions": False', '"postproduction": False', '"pages": True',
@@ -2327,7 +2331,8 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert '"manual_x": "% 图宽"' in schema
     assert "def _quick_percent_parameter_changed(self, name: str)" in text
     assert "def _quick_pixel_parameter_changed(self, name: str)" in text
-    assert 'self._quick_geometry_edit_source[name] = "pixel"' in text
+    quick_apply = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/quick_settings_apply.py").read_text(encoding="utf-8")
+    assert 'self._quick_geometry_edit_source[name] = "pixel"' in quick_apply
     quick_apply = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/quick_settings_apply.py").read_text(encoding="utf-8")
     assert "_quick_settings_apply.apply_quick_settings(" in text
     assert 'geometry_source == "pixel"' in quick_apply
@@ -4713,9 +4718,11 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     assert "self.iconphoto(False, self._app_icon_photo)" in startup
     assert "self._app_icon_registered = True" in startup
     assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in startup
-    handler_start = app_source.index("    def _app_icon_toplevel_mapped(")
-    handler_end = app_source.index("\n    def ", handler_start + 10)
-    handler = app_source[handler_start:handler_end]
+    owner_source = (root / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy._app_icon_toplevel_mapped(" in app_source
+    handler_start = owner_source.index("def _app_icon_toplevel_mapped(")
+    handler_end = owner_source.index("\ndef ", handler_start + 5)
+    handler = owner_source[handler_start:handler_end]
     assert "isinstance(widget, tk.Toplevel)" in handler
     assert 'getattr(widget, "_pc_app_icon_applied", False)' in handler
     assert "widget._pc_app_icon_applied = True" in handler
