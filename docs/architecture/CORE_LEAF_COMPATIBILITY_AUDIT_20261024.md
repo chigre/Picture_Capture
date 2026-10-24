@@ -499,3 +499,18 @@ No intended change to physical pixels, Profile, GUI menus, PDIC/PPP/SECTION side
 - Root physical Python files remain **10**; no root alias stubs. No intentional changes to settings JSON, Profile rules, PDIC/PPP/SECTION, source pixel geometry, OCR cache, canvas editing or crop export; existing behavioral regression suites remain required.
 
 **Acceptance:** require exact Round 30 HEAD full six-job CI and three-OS OCR Smoke, plus separate real dictionary GUI scan/manual correction/export/PDIC-PPP save-reopen parity. Keep PR #663 Draft, do not merge.
+
+
+## Round 30 CI source-owner correction and Round 31 runtime/UI extraction (2026-10-24)
+
+**Round 30 failure at exact HEAD `7f0609ef`:** six-platform CI reported 11 failures, all legacy assertions against physical `app.py` code that had moved to `ui/settings/field_form_runtime.py` or `ui/review_style_policy.py`; the three-OS OCR Platform Smoke was fully green. Corrections updated the existing `test_core`, `test_next_stage_regressions`, `test_page_range_enter_jump`, `test_settings_illustration_tab`, `test_ui_settings_crop` and `test_windows_at_font_overlay` suites to verify current canonical owners **and** original class entrypoints, preserving UI validation, normalized floats, cropping settings, Windows font exclusion, style palette and quick page navigation tests.
+
+**Round 31 six complete method bodies migrated into four real UI implementation owners:**
+- `ui/background_job_runtime.py`: original `_start_ui_worker` and `_poll_ui_worker_queue` generation-based, close-safe, nonblocking worker lifecycle. Core `PictureCaptureApp` methods keep old signatures, patched `threading`/`traceback`/`queue`/`tk` globals and main-thread Tk event scheduling. Preserve stale-job suppression, waiting for durable writes at close, GUI callback error handling and bounded 48-message drain.
+- `ui/quick_settings_sync.py`: full `sync_quick_settings` state reflection and source-image pixels ↔ Profile percentages, font normalization, bool/color choices and Lens state. Original method forwards live conversion helpers and current field constants. `_quick_syncing` is reset in a `finally` block.
+- `ui/paddle_environment_report.py`: full `_paddle_environment_text` OCR runtime report (PaddleOCR/PaddleX/PaddlePaddle, PP-OCRv6 threshold, CPU vs GPU, available CUDA). Original `PictureCaptureApp._paddle_environment_text` receives current `importlib_util` and device selection callback per call.
+- `ui/main_action_buttons.py`: full sidebar and footer action button construction with original emphasized/neutral style semantics, source widget references and live `ttk`/`tk` modules. Historical `_sidebar_action_button` and `_footer_action_button` signatures remain unchanged.
+
+Root `app.py` further decreased **9,058 bytes** to **251,847 bytes**; root physical modules still **10**, no compatibility stubs. Added `tests/test_issue562_ui_round31_runtime_20261024.py` verifying exact AST ownership and syntax, old signatures and module identity, patched call-time dependencies, worker generations without worker-thread Tk callbacks and `finally` quick-state restoration. Updated existing tests for original footer/worker facades plus canonical modules; older behavioral suites remain required.
+
+**Acceptance:** exact latest-head six-job CI and three-OS OCR Platform Smoke, plus independently executing genuine dictionary GUI ordinary/OCR/combined scans, text correction, pixel-aligned crops and PDIC/PPP save-reopen parity. Keep PR Draft, unmerged.
