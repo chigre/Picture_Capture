@@ -120,6 +120,8 @@ def test_original_signatures_and_live_single_visual_constructor(monkeypatch):
     monkeypatch.setattr(core, "_make_chinese_visual_headword", spy)
     assert core._parse_cjk_single_with_pinyin("案* ān", _settings()) is not None
     assert called and called[0][1]["stage"] == "cjk_single_with_pinyin"
+    # Restore the historical callable before asserting its persisted module identity.
+    monkeypatch.setattr(core, "_make_chinese_visual_headword", old)
     for name in (
         "_starts_with_unconfigured_headword_symbol",
         "_parse_cjk_marker_pinyin_headword",
