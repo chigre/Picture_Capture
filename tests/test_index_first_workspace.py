@@ -11,7 +11,10 @@ REVIEW_ENTRY_SOURCE = (ROOT / "ui/review_entry_actions.py").read_text(encoding="
 
 
 def sources():
-    return ((ROOT / "app.py").read_text(encoding="utf-8"),
+    app = (ROOT / "app.py").read_text(encoding="utf-8")
+    owner = (ROOT / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app
+    return (app + "\n" + owner,
             Path(workspace_tools.__file__).read_text(encoding="utf-8"))
 
 
