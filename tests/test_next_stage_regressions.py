@@ -1135,6 +1135,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings = text[start:end]
     assert "_interactive_settings_panels.scrollable_settings_page(" in settings
     settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in settings
+    settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
     schema = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
@@ -1281,6 +1283,8 @@ def test_settings_center_uses_native_compact_right_pane_help():
     settings = text[settings_start:settings_end]
     assert "_interactive_settings_panels.scrollable_settings_page(" in settings
     settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in settings
+    settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
 
     assert "inline_help = ttk.Label" not in settings
     assert "check_help = ttk.Label" not in settings
@@ -2050,12 +2054,14 @@ def test_decimal_percentage_ui_paths_do_not_integer_cast_values():
     text = source.read_text(encoding="utf-8")
     state = (source.parent / "ui/quick_state.py").read_text(encoding="utf-8")
     assert '"paddle_band_width_ratio": float' in state
-    assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in text
+    settings_owner = (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.save_settings(" in text
+    assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in settings_owner
     assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in text
     assert "def _stored_review_zoom_percent(self) -> float:" in text
     assert "round(self.review_zoom * 100.0, 2)" in text
-    assert "int(self.parent.settings.paddle_band_width_ratio)" not in text
-    assert "int(self.parent.settings.paddle_separator_roi_width_ratio)" not in text
+    assert "int(self.parent.settings.paddle_band_width_ratio)" not in settings_owner
+    assert "int(self.parent.settings.paddle_separator_roi_width_ratio)" not in settings_owner
 
 
 def test_project_profile_samples_front_middle_back_and_keeps_pairs():
@@ -4051,7 +4057,9 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ReviewWindow", settings_start)
     settings = text[settings_start:settings_end]
-    assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings
+    settings_owner = (root / "src/picture_capture/ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.save_settings(" in settings
+    assert "self.parent._request_wordslist_reload(persist=False, redraw=False)" in settings_owner
 
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
