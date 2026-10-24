@@ -1,5 +1,10 @@
 """Profile Wizard live headword structure summaries and visible help."""
 from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pathlib import Path
+    from PIL import Image
+
 
 
 def refresh_headword_description(self, *, deps) -> None:

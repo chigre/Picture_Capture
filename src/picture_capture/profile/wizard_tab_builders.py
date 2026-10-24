@@ -4,6 +4,10 @@ The historical ProjectProfileWizard method names and callbacks remain unchanged.
 All configurable globals are passed by the caller at call time.
 """
 from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import tkinter as tk
+
 
 
 def build_template_tab(self, tab, *, deps) -> None:
