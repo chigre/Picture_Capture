@@ -145,6 +145,7 @@ from .proofreading import focused_pdic_updates as _focused_pdic
 from .ui import main_canvas_render_workflow as _main_canvas_render
 from .ui import canvas_pointer_workflow as _canvas_pointer
 from .ui import main_appearance_policy as _main_appearance_policy
+from .ui import main_sidebar_sections as _sidebar_sections
 from .ui import quick_settings_apply as _quick_settings_apply
 from .ui import detection_batch_execution as _detection_batch_execution
 from .ui import main_workspace_build as _main_workspace_build
@@ -2081,52 +2082,16 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _app_icon_toplevel_mapped(self, event: tk.Event) -> None:
-        widget = getattr(event, "widget", None)
-        if not isinstance(widget, tk.Toplevel) or self._app_icon_photo is None:
-            return
-        if getattr(widget, "_pc_app_icon_applied", False):
-            return
-        # Mark before iconphoto(): on Windows, changing the window icon while a
-        # Toplevel is mapping may itself produce another Map notification.
-        # The guard keeps icon propagation idempotent and prevents a remap loop.
-        widget._pc_app_icon_applied = True
-        try:
-            widget.iconphoto(False, self._app_icon_photo)
-        except tk.TclError:
-            pass
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._app_icon_toplevel_mapped(self, event, deps={"tk": tk})
 
     def _maximize_main_window(self) -> None:
-        """Start the main window maximized, with cross-platform fallbacks."""
-        try:
-            self.state("zoomed")
-            return
-        except tk.TclError:
-            pass
-        try:
-            self.attributes("-zoomed", True)
-        except tk.TclError:
-            try:
-                work_x, work_y, work_w, work_h = _screen_work_area(self)
-                self.geometry(f"{work_w}x{work_h}+{work_x}+{work_y}")
-            except tk.TclError:
-                pass
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._maximize_main_window(self, deps={"tk": tk, "_screen_work_area": _screen_work_area})
 
     def _ensure_sidebar_navigation_width(self) -> None:
-        """Keep the sidebar at its mode-specific size, not the old 520px."""
-        paned = self.__dict__.get("main_paned")
-        if paned is None or not hasattr(self, "workspace_rail_width"):
-            return
-        try:
-            from .ui.workspace_tools import preferred_sidebar_width
-            self.update_idletasks()
-            target = preferred_sidebar_width(
-                self, extreme=self.workspace_mode == "极简",
-                compact=self.workspace_mode == "紧凑",
-            )
-            available = max(1, self.winfo_width() - 160)
-            paned.sashpos(0, min(target, available))
-        except (tk.TclError, ValueError):
-            return
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._ensure_sidebar_navigation_width(self, deps={"tk": tk})
 
     def _ui_worker_key_active(self, key: str) -> bool:
         return any(token[0] == key for token in self._ui_worker_active)
@@ -2165,123 +2130,32 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def _apply_current_appearance(self, root: tk.Misc) -> None:
-        try:
-            if not root.winfo_exists():
-                return
-            apply_classic_widget_appearance(root, self.appearance_mode)
-            if not isinstance(root, (tk.Tk, tk.Toplevel)):
-                return
-            apply_native_titlebar_appearance(root, self.appearance_mode)
-            # A transient Toplevel can disappear between the existence check
-            # and the first child traversal (e.g. a tooltip during startup).
-            stack = list(root.winfo_children())
-        except tk.TclError:
-            return
-        while stack:
-            widget = stack.pop()
-            if isinstance(widget, tk.Toplevel):
-                apply_native_titlebar_appearance(widget, self.appearance_mode)
-            try:
-                stack.extend(widget.winfo_children())
-            except tk.TclError:
-                pass
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._apply_current_appearance(self, root, deps={"tk": tk, "apply_classic_widget_appearance": apply_classic_widget_appearance, "apply_native_titlebar_appearance": apply_native_titlebar_appearance})
 
     def _appearance_toplevel_mapped(self, event: tk.Event) -> None:
-        widget = getattr(event, "widget", None)
-        if widget is None:
-            return
-        try:
-            if not widget.winfo_exists():
-                return
-        except tk.TclError:
-            return
-        # Applying a native title-bar appearance may itself trigger another
-        # <Map> event on Windows.  Keep only one pending idle callback per
-        # Toplevel so icon/titlebar refreshes cannot form a remap loop.
-        if getattr(widget, "_pc_appearance_map_pending", False):
-            return
-        widget._pc_appearance_map_pending = True
-
-        def apply_mapped_appearance(w=widget) -> None:
-            try:
-                self._apply_current_appearance(w)
-            finally:
-                try:
-                    w._pc_appearance_map_pending = False
-                except (AttributeError, tk.TclError):
-                    pass
-
-        try:
-            # The callback belongs to the mapped window: destroying a tooltip
-            # automatically removes its pending Tcl callback.
-            widget.after_idle(apply_mapped_appearance)
-        except tk.TclError:
-            widget._pc_appearance_map_pending = False
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._appearance_toplevel_mapped(self, event, deps={"tk": tk})
 
     def _appearance_mode_selected(self, _event: tk.Event | None = None) -> None:
-        self.set_appearance_mode(
-            APPEARANCE_MODE_VALUES.get(self.appearance_mode_var.get(), "light")
-        )
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._appearance_mode_selected(self, _event, deps={"APPEARANCE_MODE_VALUES": APPEARANCE_MODE_VALUES})
 
     def _cancel_system_appearance_poll(self) -> None:
-        if self._system_appearance_job is not None:
-            try:
-                self.after_cancel(self._system_appearance_job)
-            except tk.TclError:
-                pass
-            self._system_appearance_job = None
-        self._invalidate_ui_worker("system-appearance-detect")
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._cancel_system_appearance_poll(self, deps={"tk": tk})
 
     def _schedule_system_appearance_poll(self, delay_ms: int = 2500) -> None:
-        if self.appearance_preference != "system" or self._ui_worker_shutdown:
-            return
-        if self._system_appearance_job is not None:
-            try:
-                self.after_cancel(self._system_appearance_job)
-            except tk.TclError:
-                pass
-        self._system_appearance_job = self.after(
-            max(0, int(delay_ms)), self._poll_system_appearance
-        )
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._schedule_system_appearance_poll(self, delay_ms=delay_ms, deps={"tk": tk})
 
     def _poll_system_appearance(self) -> None:
-        self._system_appearance_job = None
-        if self.appearance_preference != "system" or self._ui_worker_shutdown:
-            return
-
-        def worker() -> str:
-            return detect_system_appearance_mode()
-
-        def done(mode: str) -> None:
-            if self.appearance_preference != "system":
-                return
-            resolved = normalize_appearance_mode(mode)
-            if resolved != self.appearance_mode:
-                self._apply_resolved_appearance(resolved)
-            self._schedule_system_appearance_poll()
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if self.appearance_preference == "system":
-                self._schedule_system_appearance_poll()
-
-        self._start_ui_worker("system-appearance-detect", worker, done, failed)
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy._poll_system_appearance(self, deps={"detect_system_appearance_mode": detect_system_appearance_mode, "normalize_appearance_mode": normalize_appearance_mode})
 
     def set_appearance_mode(self, mode: object, *, persist: bool = True) -> None:
-        """Set light/dark/system preference without changing project data."""
-        preference = normalize_appearance_preference(mode)
-        self.appearance_preference = preference
-        label = APPEARANCE_MODE_LABELS[preference]
-        if self.appearance_mode_var.get() != label:
-            self.appearance_mode_var.set(label)
-        self._cancel_system_appearance_poll()
-        if preference == "system":
-            self._schedule_system_appearance_poll(delay_ms=0)
-        else:
-            self._apply_resolved_appearance(preference)
-        if persist:
-            self._save_session_state()
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _main_appearance_policy.set_appearance_mode(self, mode,persist=persist, deps={"normalize_appearance_preference": normalize_appearance_preference, "APPEARANCE_MODE_LABELS": APPEARANCE_MODE_LABELS})
 
     def _apply_resolved_appearance(self, mode: object) -> None:
         """Historical public appearance entrypoint with live UI dependencies."""
@@ -2321,108 +2195,24 @@ class PictureCaptureApp(tk.Tk):
     def _section_frame(
         self, parent: tk.Misc, title: str, padding: int = 5, *, section_key: str | None = None
     ) -> ttk.LabelFrame:
-        """Create a clickable, collapsible left-sidebar section.
-
-        The content widgets keep their normal ``grid`` geometry.  Collapsing uses
-        ``grid_remove`` so all original row/column options are preserved and can
-        be restored losslessly.
-        """
-        key = section_key or title
-        expanded = bool(self.section_expanded.get(key, True))
-        title_var = tk.StringVar(value=("▾ " if expanded else "▸ ") + title)
-        label = ttk.Label(
-            parent,
-            textvariable=title_var,
-            style="PC.SectionTitle.TLabel",
-            cursor="hand2",
-        )
-        frame = ttk.LabelFrame(
-            parent,
-            labelwidget=label,
-            padding=(padding, max(3, padding - 1), padding, padding),
-            style="PC.Section.TLabelframe",
-        )
-        frame._collapse_key = key  # type: ignore[attr-defined]
-        frame._collapse_title = title  # type: ignore[attr-defined]
-        frame._collapse_title_var = title_var  # type: ignore[attr-defined]
-        frame._collapse_label = label  # type: ignore[attr-defined]
-        label.bind("<Button-1>", lambda _event, section=frame: self._toggle_section(section))
-        self._collapsible_sections[key] = frame
-        return frame
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._section_frame(self, parent,title,padding,section_key=section_key, deps={"tk": tk, "ttk": ttk})
 
     def _set_section_expanded(self, section: ttk.LabelFrame, expanded: bool, *, persist: bool = True) -> None:
-        key = str(getattr(section, "_collapse_key", ""))
-        title = str(getattr(section, "_collapse_title", key))
-        title_var = getattr(section, "_collapse_title_var", None)
-        if isinstance(title_var, tk.StringVar):
-            title_var.set(("▾ " if expanded else "▸ ") + title)
-
-        # Every direct content child in the five sidebar groups is grid-managed.
-        # Merely calling grid_remove() is not enough for a ttk.LabelFrame: Tk keeps
-        # the old requested grid size cached, which leaves a large blank rectangle.
-        # When collapsed we therefore disable grid propagation and pin the section
-        # to the title-row height.  Expanding restores propagation before putting
-        # the original grid slaves back, so their geometry options remain intact.
-        label = getattr(section, "_collapse_label", None)
-        if expanded:
-            try:
-                section.grid_propagate(True)
-                section.configure(height=1)
-            except tk.TclError:
-                pass
-            for child in section.winfo_children():
-                if child.winfo_manager() == "":
-                    try:
-                        child.grid()
-                    except tk.TclError:
-                        pass
-        else:
-            for child in section.winfo_children():
-                if child.winfo_manager() == "grid":
-                    child.grid_remove()
-            try:
-                section.update_idletasks()
-                title_height = int(label.winfo_reqheight()) if label is not None else 20
-                # A small allowance keeps the LabelFrame border/padding visible
-                # without retaining any of the former content height.
-                section.grid_propagate(False)
-                section.configure(height=max(26, title_height + 8))
-            except tk.TclError:
-                pass
-
-        self.section_expanded[key] = bool(expanded)
-        if key == "pages" and hasattr(self, "sidebar"):
-            self.sidebar.rowconfigure(1, weight=1 if expanded else 0)
-        if persist and hasattr(self, "page_range_var"):
-            self._save_session_state()
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._set_section_expanded(self, section,expanded,persist=persist, deps={"tk": tk})
 
     def _toggle_section(self, section: ttk.LabelFrame) -> None:
-        key = str(getattr(section, "_collapse_key", ""))
-        if self._preprocess_mode_active() and key not in {"preprocess", "pages"}:
-            self.status_var.set("预处理模式中：主界面仅保留图片预处理、页面浏览和缩放。")
-            return
-        self._set_section_expanded(section, not bool(self.section_expanded.get(key, True)))
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._toggle_section(self, section, deps={})
 
     def _apply_initial_section_states(self) -> None:
-        for key, section in self._collapsible_sections.items():
-            self._set_section_expanded(section, bool(self.section_expanded.get(key, True)), persist=False)
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._apply_initial_section_states(self, deps={})
 
     def _apply_new_project_sidebar_defaults(self) -> None:
-        """Apply the release workspace layout only to a newly created project."""
-        defaults = {
-            "preprocess": False,
-            "normal": True,
-            "aux": False,
-            "ocr": False,
-            "actions": False,
-            "postproduction": False,
-            "pages": True,
-        }
-        for key, expanded in defaults.items():
-            self.section_expanded[key] = expanded
-            section = self._collapsible_sections.get(key)
-            if section is not None:
-                self._set_section_expanded(section, expanded, persist=False)
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _sidebar_sections._apply_new_project_sidebar_defaults(self, deps={})
 
     @staticmethod
     def _default_session_state_path() -> Path:
@@ -2767,56 +2557,16 @@ class PictureCaptureApp(tk.Tk):
         self._quick_parameter_changed(immediate=True)
 
     def _quick_percent_parameter_changed(self, name: str) -> None:
-        if not getattr(self, "_quick_trace_ready", False):
-            return
-        if getattr(self, "_quick_syncing", False):
-            return
-        self._quick_geometry_edit_source[name] = "percent"
-        try:
-            percent = float(self.quick_vars[name].get().strip().rstrip("%"))
-            if self.image is not None and 0.0 <= percent <= 100.0:
-                pixels = _layout_percent_to_pixels(self.image, name, percent)
-                self._quick_syncing = True
-                try:
-                    self.quick_pixel_vars[name].set(str(int(pixels)))
-                finally:
-                    self._quick_syncing = False
-        except (KeyError, TypeError, ValueError):
-            pass
-        self._quick_parameter_changed()
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _quick_settings_apply._quick_percent_parameter_changed(self, name, deps={"_layout_percent_to_pixels": _layout_percent_to_pixels})
 
     def _quick_pixel_parameter_changed(self, name: str) -> None:
-        if not getattr(self, "_quick_trace_ready", False):
-            return
-        if getattr(self, "_quick_syncing", False):
-            return
-        self._quick_geometry_edit_source[name] = "pixel"
-        try:
-            pixels = int(round(float(self.quick_pixel_vars[name].get().strip())))
-            if pixels >= 0 and self.image is not None:
-                percent = _layout_pixels_to_percent(self.image, name, pixels)
-                self._quick_syncing = True
-                try:
-                    self.quick_vars[name].set(_format_layout_percent(percent))
-                finally:
-                    self._quick_syncing = False
-        except (KeyError, TypeError, ValueError):
-            pass
-        self._quick_parameter_changed()
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _quick_settings_apply._quick_pixel_parameter_changed(self, name, deps={"_layout_pixels_to_percent": _layout_pixels_to_percent, "_format_layout_percent": _format_layout_percent})
 
     def _quick_parameter_changed(self, *_args, immediate: bool = False) -> None:
-        if not getattr(self, "_quick_trace_ready", False):
-            return
-        if getattr(self, "_quick_syncing", False):
-            return
-        if self._quick_autosave_job is not None:
-            try:
-                self.after_cancel(self._quick_autosave_job)
-            except tk.TclError:
-                pass
-            self._quick_autosave_job = None
-        delay = 1 if immediate else 450
-        self._quick_autosave_job = self.after(delay, self._run_quick_autosave)
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _quick_settings_apply._quick_parameter_changed(self, *_args,immediate=immediate, deps={"tk": tk})
 
     def _apply_overlay_visibility_toggle(self, setting_name: str, variable: tk.BooleanVar) -> None:
         """ apply overlay visibility toggle."""
@@ -2834,33 +2584,8 @@ class PictureCaptureApp(tk.Tk):
         self.apply_quick_settings(show_status=False, persist=True, silent_errors=True)
 
     def _quick_geometry_value(self, name: str) -> int:
-        """Return one main-panel layout value in the public coordinate contract."""
-        raw = int(getattr(self.settings, name, 0) or 0)
-        if self.image is None:
-            return raw
-        horizontal = not str(
-            getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
-        ).startswith("vertical")
-        if horizontal and name == "start_y" and str(
-            getattr(self.settings, "profile_header_mode", "auto") or "auto"
-        ) == "present":
-            return round(
-                self.image.height
-                * float(getattr(self.settings, "profile_header_percent", 0.0) or 0.0)
-                / 100.0
-            )
-        if horizontal and name == "bottom_y" and str(
-            getattr(self.settings, "profile_footer_mode", "auto") or "auto"
-        ) == "present":
-            return round(
-                self.image.height
-                * (
-                    1.0
-                    - float(getattr(self.settings, "profile_footer_percent", 0.0) or 0.0)
-                    / 100.0
-                )
-            )
-        return raw
+        """Stable main-window Tk callback, physically implemented under ui/."""
+        return _quick_settings_apply._quick_geometry_value(self, name, deps={})
 
     def _refresh_quick_coordinate_labels(self) -> None:
         if not hasattr(self, "quick_field_labels"):

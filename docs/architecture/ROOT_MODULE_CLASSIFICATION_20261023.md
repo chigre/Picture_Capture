@@ -154,3 +154,8 @@ Root `ocr_channel.py` retains stable public models, session and hooks; seven alg
 ## Round 47 — PaddleOCR channel model lifecycle owner
 
 `ocr/paddle_engine_lifecycle.py` now owns lazy engine construction and clearing inactive caches. The original `ocr_channel._create_paddle_engine` and `clear_ocr_channel_paddle_engine_cache` functions inject current providers and preserve the historical API, worker/resource owner and GPU single-pipeline policy. Characterization regression: `tests/test_issue562_ocr_paddle_lifecycle_round47_20261025.py`. Root remains 10 Python modules with reduced bytes. Real scanned dictionary-page/OCR/combined, PDIC/PPP reopen and crop/export manual acceptance remain pending; Draft stays unmerged.
+
+
+## Main UI root-retirement Phase 1 (2026-10-25)
+
+Moved 19 concrete UI methods from root `app.py` into physical `ui/main_appearance_policy.py`, `ui/main_sidebar_sections.py`, and `ui/quick_settings_apply.py`. Public `PictureCaptureApp` signatures, patched Tk globals and event-loop dispatch stay unchanged. Focused suite: `tests/test_issue562_root_ui_ownership_phase1_20261025.py`. End state targets just `__init__.py` and `__main__.py` at package root, subject to compatibility gates and representative dictionary-page manual acceptance. No merge/Ready.

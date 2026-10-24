@@ -660,3 +660,11 @@ Round 41 first CI identified a source-location-only regression in the existing a
 
 
 Round 47 CI found the initial new owner accidentally replaced the pre-existing three-method core Paddle lifecycle owner (core raw band runner and cache). That was a genuine regression: 14 Ubuntu tests initially failed. Commit `cb20267a442067619b2eefd688c2fa84d36779a0` restored **all three** original core implementations and retained the **two** new shared-channel lifecycle implementations in a single cohesive five-function owner. Updated source-contract tests guard both origin sets and the moved lazy Paddle import without weakening any original raw OCR runtime checks. Exact-head full CI and OCR Smoke must be rechecked.
+
+
+### Root-retirement Phase 1 — Main Tk UI ownership (2026-10-25)
+
+- Physically moved **19 complete algorithms** out of `app.py`: nine main-window appearance/Toplevel/system-mode callbacks into existing `ui/main_appearance_policy.py`; six persistent sidebar section sizing/collapse/grid algorithms into `ui/main_sidebar_sections.py`; and four quick-settings percent↔pixel and delayed autosave routines into existing `ui/quick_settings_apply.py`.
+- The live public `PictureCaptureApp` and existing callback signatures are intact. Root functions inject patched Tk, style and geometry providers on invocation; owner code still executes synchronously on Tk's main thread. No OCR, PDIC/PPP, pickle classes or export changes.
+- New targeted regression `tests/test_issue562_root_ui_ownership_phase1_20261025.py` checks real implementation ownership, GUI method API, sidebar collapse geometry and header/footer percent changes. Do not describe this as complete retirement of `app.py`: the class/window remains in the root while actual UI logic is migrated incrementally.
+- Architectural destination: package root with only `__init__.py` and `__main__.py`, but only after proved monkeypatch/import/pickle/GUI/worker compatibility. Real scanned-page Profile/OCR/ordinary/combined and PDIC/PPP save/reopen/crop/export parity remain **manual acceptance pending**; PR stays Draft and unmerged.

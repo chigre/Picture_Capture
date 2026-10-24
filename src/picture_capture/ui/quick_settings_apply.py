@@ -5,6 +5,7 @@ seams and settings fields remain controlled by the owning GUI instance.
 """
 from __future__ import annotations
 from typing import Any
+import tkinter as tk
 
 
 def apply_quick_settings(self, show_status: bool = True, persist: bool = False, silent_errors: bool = False, *, deps: dict[str, Any]) -> bool:
@@ -143,3 +144,91 @@ def apply_quick_settings(self, show_status: bool = True, persist: bool = False, 
         if not silent_errors:
             self.show_error("参数无效", exc)
         return False
+
+
+# Physical quick-edit percent/pixel and autosave handlers.
+
+def _quick_percent_parameter_changed(self, name: str, *, deps: dict[str, Any]) -> None:
+    _layout_percent_to_pixels = deps["_layout_percent_to_pixels"]
+    if not getattr(self, "_quick_trace_ready", False):
+        return
+    if getattr(self, "_quick_syncing", False):
+        return
+    self._quick_geometry_edit_source[name] = "percent"
+    try:
+        percent = float(self.quick_vars[name].get().strip().rstrip("%"))
+        if self.image is not None and 0.0 <= percent <= 100.0:
+            pixels = _layout_percent_to_pixels(self.image, name, percent)
+            self._quick_syncing = True
+            try:
+                self.quick_pixel_vars[name].set(str(int(pixels)))
+            finally:
+                self._quick_syncing = False
+    except (KeyError, TypeError, ValueError):
+        pass
+    self._quick_parameter_changed()
+
+def _quick_pixel_parameter_changed(self, name: str, *, deps: dict[str, Any]) -> None:
+    _layout_pixels_to_percent = deps["_layout_pixels_to_percent"]
+    _format_layout_percent = deps["_format_layout_percent"]
+    if not getattr(self, "_quick_trace_ready", False):
+        return
+    if getattr(self, "_quick_syncing", False):
+        return
+    self._quick_geometry_edit_source[name] = "pixel"
+    try:
+        pixels = int(round(float(self.quick_pixel_vars[name].get().strip())))
+        if pixels >= 0 and self.image is not None:
+            percent = _layout_pixels_to_percent(self.image, name, pixels)
+            self._quick_syncing = True
+            try:
+                self.quick_vars[name].set(_format_layout_percent(percent))
+            finally:
+                self._quick_syncing = False
+    except (KeyError, TypeError, ValueError):
+        pass
+    self._quick_parameter_changed()
+
+def _quick_parameter_changed(self, *_args, immediate: bool = False, deps: dict[str, Any]) -> None:
+    tk = deps["tk"]
+    if not getattr(self, "_quick_trace_ready", False):
+        return
+    if getattr(self, "_quick_syncing", False):
+        return
+    if self._quick_autosave_job is not None:
+        try:
+            self.after_cancel(self._quick_autosave_job)
+        except tk.TclError:
+            pass
+        self._quick_autosave_job = None
+    delay = 1 if immediate else 450
+    self._quick_autosave_job = self.after(delay, self._run_quick_autosave)
+
+def _quick_geometry_value(self, name: str, *, deps: dict[str, Any]) -> int:
+    """Return one main-panel layout value in the public coordinate contract."""
+    raw = int(getattr(self.settings, name, 0) or 0)
+    if self.image is None:
+        return raw
+    horizontal = not str(
+        getattr(self.settings, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"
+    ).startswith("vertical")
+    if horizontal and name == "start_y" and str(
+        getattr(self.settings, "profile_header_mode", "auto") or "auto"
+    ) == "present":
+        return round(
+            self.image.height
+            * float(getattr(self.settings, "profile_header_percent", 0.0) or 0.0)
+            / 100.0
+        )
+    if horizontal and name == "bottom_y" and str(
+        getattr(self.settings, "profile_footer_mode", "auto") or "auto"
+    ) == "present":
+        return round(
+            self.image.height
+            * (
+                1.0
+                - float(getattr(self.settings, "profile_footer_percent", 0.0) or 0.0)
+                / 100.0
+            )
+        )
+    return raw
