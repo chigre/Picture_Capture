@@ -26,11 +26,10 @@ def test_ordinary_worker_policy_serializes_even_on_24_core_gpu_machine(monkeypat
 
 def test_parallel_path_remains_guarded_but_policy_cannot_activate_gpu_duplication():
     source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "detection_batch_execution.py"
     ).read_text(encoding="utf-8")
-    start = source.index("    def _detect_pages(")
-    end = source.index("\n    def clear_entries(", start)
-    handler = source[start:end]
+    start = source.index("def detect_pages(")
+    handler = source[start:]
     assert 'indices = list(dict.fromkeys(indices))' in handler
     assert ordinary_draw_workers(50, cpu_count=24, override="8") == 1
     assert 'if method == "left_edge" and ordinary_workers > 1:' in handler
