@@ -4193,15 +4193,17 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     current_block = detection_text[current_start:current_end]
     assert "app._start_batch_task(" in current_block
 
-    for source, name, next_name in (
-        (text, "ocr_current", "export_text"),
-        (lexicon_owner, "import_legacy_words", "_default_old_new_compare_source"),
-    ):
-        prefix = "    " if source is text else ""
-        start = source.index(f"{prefix}def {name}(")
-        end = source.index(f"\n{prefix}def {next_name}(", start)
-        block = source[start:end]
-        assert "self._start_batch_task(" in block
+    # Current-page OCR is now physically owned by the UI workflow module;
+    # the public app method still delegates with live patchable collaborators.
+    ocr_owner = (root / "src/picture_capture/ui/ocr_current_workflow.py").read_text(encoding="utf-8")
+    ocr_start = text.index("    def ocr_current(")
+    ocr_end = text.index("\n    def _export_controller_for_call(", ocr_start)
+    assert "_main_ocr_current.ocr_current(" in text[ocr_start:ocr_end]
+    assert "self._start_batch_task(" in ocr_owner
+
+    start = lexicon_owner.index("def import_legacy_words(")
+    end = lexicon_owner.index("\ndef _default_old_new_compare_source(", start)
+    assert "self._start_batch_task(" in lexicon_owner[start:end]
 
     fill_start = text.index("    def fill_existing_headwords(", app_start)
     fill_end = text.index("\n    def import_legacy_words", fill_start)
@@ -4376,7 +4378,8 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
 
     close_start = app.index("    def on_close(")
     close_end = app.index("\n    def _build_ui", close_start)
-    close = app[close_start:close_end]
+    assert "_main_app_lifecycle.on_close(" in app[close_start:close_end]
+    close = (root / "src/picture_capture/ui/main_app_lifecycle.py").read_text(encoding="utf-8")
     assert "if self._ui_worker_close_wait:" in close
     assert "self.withdraw()" in close
     assert "正在完成后台文件操作" in close

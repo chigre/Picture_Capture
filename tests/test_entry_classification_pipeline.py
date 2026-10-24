@@ -252,9 +252,11 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in marker_ocr_source
     assert "resolve_entry_ocr_row_metrics(" in marker_ocr_owner_source
     assert 'meta.entry_scale == "oversized"' in crop_owner_source
-    review_start = app_source.index("def _review_line_box(")
-    review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
-    review_line_box = app_source[review_start:review_end]
+    from picture_capture.ui import review_crop_geometry
+    assert "_review_crop_geometry._review_line_box(" in app_source
+    review_source_owner = Path(review_crop_geometry.__file__).read_text(encoding="utf-8")
+    review_start = review_source_owner.index("def _review_line_box(")
+    review_line_box = review_source_owner[review_start:]
     assert "classified_entry_crop_height(" not in review_line_box
     assert "_focused_review_is_single_character(displayed_text)" in review_line_box
     assert "entry_regular_crop_height" in review_line_box
