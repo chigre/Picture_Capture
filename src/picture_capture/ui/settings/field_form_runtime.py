@@ -100,7 +100,8 @@ def add_setting_group(
     intro: str = "",
     help_images: bool = False,
     single_line_labels: bool = False,
-, deps: dict[str, Any]) -> ttk.LabelFrame:
+    deps: dict[str, Any],
+) -> ttk.LabelFrame:
     ttk = deps["ttk"]
     font = deps["font"]
     group = ttk.LabelFrame(parent, text=title, padding=(12, 9))
