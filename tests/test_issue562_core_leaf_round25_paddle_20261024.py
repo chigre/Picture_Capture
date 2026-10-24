@@ -21,9 +21,13 @@ def test_exact_lifecycle_owner_and_original_core_signatures():
     assert path.is_file()
     assert not (pkg / path.name).exists()
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {
+    real = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    assert real == {
         "clear_paddle_engine_cache_impl", "get_paddle_engine_impl", "run_paddle_band_impl",
+        "clear_cached_engines", "create_paddle_engine_impl",
     }
+    # Original core owner functions remain intact; the same lifecycle domain
+    # now also owns the separate shared OCR-channel engine/cache entrypoints.
     assert not any(isinstance(n, (ast.Assign, ast.AnnAssign, ast.ClassDef)) for n in tree.body)
     assert list(inspect.signature(core.clear_paddle_engine_cache).parameters) == ["keep_key"]
     assert list(inspect.signature(core.get_paddle_engine).parameters) == ["settings"]

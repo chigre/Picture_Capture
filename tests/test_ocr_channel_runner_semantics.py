@@ -137,7 +137,6 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
     assert "src/picture_capture/runtime/windows_gpu.py" in install_doc
 
     cases = (
-        ("ocr_channel.py", "from paddleocr import PaddleOCR"),
         ("ocr/paddle_engine_lifecycle.py", "from paddleocr import PaddleOCR"),
         ("preprocess/document_unwarping.py", "from paddleocr import DocPreprocessor"),
         ("layout/detector_legacy.py", "from paddleocr import TextDetection"),
@@ -150,6 +149,12 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
         assert expected_import in text
         assert paddle_import in text
         assert text.index(expected_import) < text.index(helper_call) < text.index(paddle_import)
+    channel = (package / "ocr_channel.py").read_text(encoding="utf-8")
+    # Paddle import is lazy in the shared engine owner; public channel still
+    # dispatches through the live cache/constructor hook without eager import.
+    assert "from paddleocr import PaddleOCR" not in channel
+    assert "_paddle_engine_lifecycle.create_paddle_engine_impl(" in channel
+    assert "_paddle_engine_lifecycle.clear_cached_engines(" in channel
     core = (package / "paddle_headwords_core.py").read_text(encoding="utf-8")
     assert "_paddle_engine_lifecycle.get_paddle_engine_impl(" in core
 
