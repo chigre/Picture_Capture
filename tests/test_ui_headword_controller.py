@@ -250,8 +250,10 @@ def test_headword_controller_wiring_preserves_app_compatibility_methods() -> Non
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "HeadwordController" in imports
-    assert "self.headword_controller = HeadwordController(" in app
-    assert app.index("self.headword_controller = HeadwordController(") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.headword_controller = HeadwordController(" in startup
+    assert startup.index("self.headword_controller = HeadwordController(") < startup.index("self._build_ui()")
     assert "def _headword_controller_for_call(" in app
     assert 'self.__dict__.get("headword_controller")' in app
     assert "def select_existing_headwords_file(self)" in app

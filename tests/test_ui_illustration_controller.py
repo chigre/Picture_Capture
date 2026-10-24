@@ -351,8 +351,10 @@ def test_illustration_controller_wiring_preserves_app_compatibility_method() -> 
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "IllustrationController" in imports
-    assert "self.illustration_controller = IllustrationController(self)" in app
-    assert app.index("self.illustration_controller = IllustrationController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.illustration_controller = IllustrationController(self)" in startup
+    assert startup.index("self.illustration_controller = IllustrationController(self)") < startup.index("self._build_ui()")
     assert "def _illustration_controller_for_call(" in app
     assert 'self.__dict__.get("illustration_controller")' in app
     assert "def detect_illustrations_selected_scope(self)" in app

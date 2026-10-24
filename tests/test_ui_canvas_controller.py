@@ -319,10 +319,12 @@ def test_canvas_controller_wiring_keeps_picture_capture_app_compatibility_method
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "CanvasController" in imports
-    assert "self.canvas_controller = CanvasController(self)" in app
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.canvas_controller = CanvasController(self)" in startup
     assert "def _canvas_controller_for_call(" in app
     assert 'self.__dict__.get("canvas_controller")' in app
-    assert app.index("self.canvas_controller = CanvasController(self)") < app.index("self._build_ui()")
+    assert startup.index("self.canvas_controller = CanvasController(self)") < startup.index("self._build_ui()")
 
     expected = {
         "_display_mode_from_flags": "display_mode_from_flags",

@@ -185,10 +185,12 @@ def test_review_controller_wiring_keeps_picture_capture_app_compatibility_method
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "ReviewController" in imports
-    assert "self.review_controller = ReviewController(self)" in app
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.review_controller = ReviewController(self)" in startup
     assert "def _review_controller_for_call(" in app
     assert 'self.__dict__.get("review_controller")' in app
-    assert app.index("self.review_controller = ReviewController(self)") < app.index("self._build_ui()")
+    assert startup.index("self.review_controller = ReviewController(self)") < startup.index("self._build_ui()")
 
     expected = {
         "_load_ocr_review_candidates": "load_ocr_review_candidates",
