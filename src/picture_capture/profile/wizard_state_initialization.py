@@ -22,6 +22,7 @@ def build_vars(self, *, deps) -> None:
     profile_symbol_inventory_defaults = deps["profile_symbol_inventory_defaults"]
     profile_tail_structure_defaults = deps["profile_tail_structure_defaults"]
     ordered_headword_profiles = deps["ordered_headword_profiles"]
+    recommended_headword_structures = deps["recommended_headword_structures"]
     s = self.working
     self.dictionary_full_name_var = tk.StringVar(value=str(s.dictionary_full_name or ""))
     self.dictionary_abbreviation_var = tk.StringVar(value=str(s.dictionary_abbreviation or ""))

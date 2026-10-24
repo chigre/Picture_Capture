@@ -53,6 +53,7 @@ def test_wizard_live_binding_and_signatures(monkeypatch):
     assert calls[0][1] is obj and calls[1][1:3] == (obj, tab) and calls[2][1:3] == (obj, tab)
     assert calls[0][2]["tk"] is setup.tk
     assert calls[0][2]["parse_visual_marker_samples"] is setup.parse_visual_marker_samples
+    assert calls[0][2]["recommended_headword_structures"] is setup.recommended_headword_structures
     assert calls[1][3]["SEPARATOR_LABEL_TO_VALUE"] is setup.SEPARATOR_LABEL_TO_VALUE
     assert calls[2][3]["VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE"] is setup.VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE
 

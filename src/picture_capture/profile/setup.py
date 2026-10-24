@@ -357,6 +357,7 @@ class ProjectProfileWizard(tk.Toplevel):
             "profile_symbol_inventory_defaults": profile_symbol_inventory_defaults,
             "profile_tail_structure_defaults": profile_tail_structure_defaults,
             "ordered_headword_profiles": ordered_headword_profiles,
+            "recommended_headword_structures": recommended_headword_structures,
         })
 
     def _build_ui(self) -> None:
