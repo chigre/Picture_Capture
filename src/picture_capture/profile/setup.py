@@ -81,6 +81,8 @@ from . import wizard_headword_explanations as _wizard_headword_explanations
 from . import wizard_persistence as _wizard_persistence
 from . import wizard_profile_events as _wizard_profile_events
 from . import wizard_visual_markers as _wizard_visual_markers
+from . import wizard_bootstrap as _wizard_bootstrap
+from . import wizard_template_interactions as _wizard_template_interactions
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -270,88 +272,21 @@ class ProjectProfileWizard(tk.Toplevel):
     """
 
     def __init__(self, parent, *, new_project: bool = False) -> None:
+        # Preserve the actual Tk Toplevel superclass initializer on the class.
         super().__init__(parent)
-        self.parent = parent
-        self.project = parent.project
-        if self.project is None:
-            self.destroy()
-            return
-        self.new_project = bool(new_project)
-        self.working = replace(parent.settings)
-        self.title("建立项目Profile" if self.new_project else "项目Profile")
-        self.update_idletasks()
-        screen_w = max(800, int(self.winfo_screenwidth()))
-        work_x, work_y, work_w, work_h = _screen_work_area(self)
-        width = min(work_w, max(720, int(screen_w * 0.80)))
-        height = max(1, int(work_h * 0.90))
-        x = work_x + max(0, (work_w - width) // 2)
-        y = work_y + max(0, (work_h - height) // 2)
-        self._wizard_width = width
-        self._wizard_height = height
-        self._wizard_left_width = max(400, int(width * 0.40) - 36)
-        self._wizard_image_width = max(560, int(width * 0.60) - 36)
-        self._wizard_content_width = self._wizard_left_width
-        self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(960, width), min(640, height))
-        self.transient(parent)
-        self.grab_set()
-        self.protocol("WM_DELETE_WINDOW", self._close_without_save)
-        self._photos: list[ImageTk.PhotoImage] = []
-        self._sample_cells: dict[int, ttk.Frame] = {}
-        self._sample_photo_by_slot: dict[int, ImageTk.PhotoImage] = {}
-        self._thumbnail_slot_queue: queue.Queue = queue.Queue()
-        self._thumbnail_slot_generation: dict[int, int] = {}
-        self._thumbnail_slot_pending: set[tuple[int, int]] = set()
-        self._validation_photos: list[ImageTk.PhotoImage] = []
-        self._template_photos: list[ImageTk.PhotoImage] = []
-        self._template_preview_canvas: tk.Canvas | None = None
-        self._template_line_items: list[int] = []
-        self._template_line_paths: list[list[tuple[float, float]]] = []
-        self._template_nudge_vector: tuple[float, float] = (0.0, 0.0)
-        self._thumbnail_queue: queue.Queue | None = None
-        self._thumbnail_load_generation = 0
-        self._validation_results: list[tuple] = []
-        self.validation_preview_slot = 0
-        self._headword_example_photos: list[ImageTk.PhotoImage] = []
-        self._validation_running = False
-        self._analysis_running = False
-        self._profile_revision = 0
-        self._analysis_revision_started = -1
-        self._validation_revision_started = -1
-        self._analysis_suggestion: dict[str, object] = {}
-        self._analysis_auto_apply = False
-        self._analysis_queue: queue.Queue | None = None
-        self._validation_queue: queue.Queue | None = None
-        self._validation_stop_event = threading.Event()
-        self._validation_close_requested = False
-        self._closing = False
-        if not str(getattr(self.working, "dictionary_body_page_range", "") or "").strip():
-            self.working.dictionary_body_page_range = suggested_body_page_range(self.project.images)
-        configured_body = configured_body_page_indices(
-            len(self.project.images),
-            getattr(self.working, "dictionary_body_page_range", ""),
-        )
-        self.sample_candidates = probable_body_page_indices(
-            self.project.images,
-            configured_body or None,
-        )
-        self.sample_indices = representative_page_indices(
-            self.project.images,
-            6,
-            configured_body or None,
-        )
-        self.template_preview_slot = 0
-
-        self._build_vars()
-        self._build_ui()
-        self._show_sample_loading_state()
-        self._refresh_language_summary()
-        self._refresh_summary()
-        self.after(20, self._start_sample_thumbnail_load)
-
-        # Representative-page analysis starts after the user confirms reading
-        # direction and enters step 2. This avoids analyzing a vertical/RTL
-        # dictionary with an incorrect default transform.
+        return _wizard_bootstrap.initialize_wizard(self, parent, new_project=new_project, deps={
+            "replace": replace,
+            "_screen_work_area": _screen_work_area,
+            "ImageTk": ImageTk,
+            "ttk": ttk,
+            "tk": tk,
+            "queue": queue,
+            "threading": threading,
+            "suggested_body_page_range": suggested_body_page_range,
+            "configured_body_page_indices": configured_body_page_indices,
+            "probable_body_page_indices": probable_body_page_indices,
+            "representative_page_indices": representative_page_indices,
+        })
 
     def _build_vars(self) -> None:
         """Stable ProjectProfileWizard method; dynamic inputs reach the canonical owner."""
@@ -501,180 +436,66 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _selected_column_index(self) -> int:
-        count = max(1, int(self.columns_var.get()))
-        self.selected_column_index = max(
-            0, min(count - 1, int(getattr(self, "selected_column_index", 0)))
-        )
-        return self.selected_column_index
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.selected_column_index(self)
 
     def _column_offsets_for_count(self, count: int | None = None) -> list[int]:
-        count = max(1, int(self.columns_var.get() if count is None else count))
-        raw = list(getattr(self.working, "column_start_offsets", []) or [])
-        offsets: list[int] = []
-        for index in range(count):
-            try:
-                offsets.append(int(round(float(raw[index]))) if index < len(raw) else 0)
-            except (TypeError, ValueError):
-                offsets.append(0)
-        return offsets
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.column_offsets_for_count(self, count)
 
     def _refresh_column_adjust_status(self) -> None:
-        if not hasattr(self, "column_adjust_status_var"):
-            return
-        index = self._selected_column_index()
-        offsets = self._column_offsets_for_count()
-        column_width = max(1, int(getattr(self.working, "column_width", 1) or 1))
-        percent = float(offsets[index]) * 100.0 / column_width
-        self.column_adjust_status_var.set(
-            f"当前：第 {index + 1} 栏｜人工偏移 {percent:+.2f}% 单栏宽"
-        )
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.refresh_column_adjust_status(self)
 
     def _update_template_column_highlight(self) -> None:
-        canvas = getattr(self, "_template_preview_canvas", None)
-        if canvas is None:
-            return
-        selected = self._selected_column_index()
-        for index, item in enumerate(getattr(self, "_template_line_items", [])):
-            if item < 0:
-                continue
-            try:
-                canvas.itemconfigure(
-                    item,
-                    fill="#ee7c00" if index == selected else "#1e78d2",
-                    width=4 if index == selected else 2,
-                )
-            except tk.TclError:
-                return
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.update_template_column_highlight(self, deps={
+            "tk": tk,
+        })
 
     def _nudge_template_column_preview(self, index: int, delta: int) -> None:
-        """Move only the cached overlay line; do not reload/re-render the page image."""
-        if not delta:
-            return
-        canvas = getattr(self, "_template_preview_canvas", None)
-        items = getattr(self, "_template_line_items", [])
-        paths = getattr(self, "_template_line_paths", [])
-        if canvas is None or index >= len(items) or index >= len(paths) or items[index] < 0:
-            return
-        dx = float(self._template_nudge_vector[0]) * int(delta)
-        dy = float(self._template_nudge_vector[1]) * int(delta)
-        try:
-            canvas.move(items[index], dx, dy)
-        except tk.TclError:
-            return
-        paths[index] = [(x + dx, y + dy) for x, y in paths[index]]
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.nudge_template_column_preview(self, index, delta, deps={
+            "tk": tk,
+        })
 
     def _shift_selected_column(self, delta: int) -> None:
-        index = self._selected_column_index()
-        offsets = self._column_offsets_for_count()
-        old_value = offsets[index]
-        column_width = max(1, int(getattr(self.working, "column_width", 1) or 1))
-        step_px = max(1, int(round(column_width * 0.001)))
-        max_offset = max(step_px, int(round(column_width * 0.25)))
-        offsets[index] = max(
-            -max_offset,
-            min(max_offset, old_value + (step_px if int(delta) > 0 else -step_px)),
-        )
-        actual_delta = offsets[index] - old_value
-        if not actual_delta:
-            return
-        self.working.column_start_offsets = offsets
-        self._refresh_column_adjust_status()
-        self._nudge_template_column_preview(index, actual_delta)
-        self._profile_input_changed(refresh_preview=False)
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.shift_selected_column(self, delta)
 
     def _reset_selected_column(self) -> None:
-        index = self._selected_column_index()
-        offsets = self._column_offsets_for_count()
-        old_value = offsets[index]
-        if old_value == 0:
-            return
-        offsets[index] = 0
-        self.working.column_start_offsets = offsets
-        self._refresh_column_adjust_status()
-        self._nudge_template_column_preview(index, -old_value)
-        self._profile_input_changed(refresh_preview=False)
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.reset_selected_column(self)
 
     def _reset_all_column_offsets(self) -> None:
-        offsets = self._column_offsets_for_count()
-        if not any(offsets):
-            return
-        for index, value in enumerate(offsets):
-            if value:
-                self._nudge_template_column_preview(index, -value)
-        self.working.column_start_offsets = [0] * len(offsets)
-        self._refresh_column_adjust_status()
-        self._profile_input_changed(refresh_preview=False)
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.reset_all_column_offsets(self)
 
     @staticmethod
     def _preview_path_distance_sq(
         points: list[tuple[float, float]], x: float, y: float,
     ) -> float:
-        if not points:
-            return float("inf")
-        if len(points) == 1:
-            dx, dy = x - points[0][0], y - points[0][1]
-            return dx * dx + dy * dy
-        best = float("inf")
-        for (x0, y0), (x1, y1) in zip(points, points[1:]):
-            dx, dy = x1 - x0, y1 - y0
-            denom = dx * dx + dy * dy
-            if denom <= 0:
-                px, py = x0, y0
-            else:
-                t = max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / denom))
-                px, py = x0 + t * dx, y0 + t * dy
-            ex, ey = x - px, y - py
-            best = min(best, ex * ex + ey * ey)
-        return best
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.preview_path_distance_sq(points, x, y)
 
     def _select_template_column(
         self, event: tk.Event, line_paths: list[list[tuple[float, float]]],
     ) -> None:
-        if not line_paths:
-            return
-        distances = [
-            self._preview_path_distance_sq(points, float(event.x), float(event.y))
-            for points in line_paths
-        ]
-        index = min(range(len(distances)), key=distances.__getitem__)
-        if distances[index] > 18.0 * 18.0:
-            return
-        self.selected_column_index = index
-        self._refresh_column_adjust_status()
-        self._update_template_column_highlight()
-
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.select_template_column(self, event, line_paths)
 
     def _refresh_template_controls(self) -> None:
-        """Enable only page-template controls that currently have meaning."""
-        if not hasattr(self, "header_percent_spin"):
-            return
-        header_present = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get()) == "present"
-        footer_present = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get()) == "present"
-        side_value = SIDE_LABEL_TO_VALUE.get(self.side_mode_var.get(), "none")
-        fixed_side = side_value in {"left", "right"}
-        alternating = side_value in {"outer", "inner"}
-        self.columns_spin.configure(state="normal")
-        self.header_percent_spin.configure(state="normal" if header_present else "disabled")
-        self.footer_percent_spin.configure(state="normal" if footer_present else "disabled")
-        self.side_percent_spin.configure(state="normal" if fixed_side else "disabled")
-        self.side_percent_a_spin.configure(state="normal" if alternating else "disabled")
-        self.side_percent_b_spin.configure(state="normal" if alternating else "disabled")
-        self.first_variant_combo.configure(state="readonly" if alternating else "disabled")
-        if hasattr(self, "template_preview_frame") and hasattr(self, "notebook"):
-            try:
-                preview_visible = self.notebook.index(self.notebook.select()) == 1
-            except (tk.TclError, ValueError):
-                preview_visible = False
-            if preview_visible:
-                self.after_idle(self._refresh_template_preview)
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.refresh_template_controls(self, deps={
+            "tk": tk,
+            "HEADER_LABEL_TO_VALUE": HEADER_LABEL_TO_VALUE,
+            "FOOTER_LABEL_TO_VALUE": FOOTER_LABEL_TO_VALUE,
+            "SIDE_LABEL_TO_VALUE": SIDE_LABEL_TO_VALUE,
+        })
 
     def _move_template_preview(self, delta: int) -> None:
-        if not self.sample_indices:
-            return
-        self.template_preview_slot = (
-            int(self.template_preview_slot) + int(delta)
-        ) % len(self.sample_indices)
-        self._refresh_template_preview()
+        """Legacy template interaction API; implementation lives in its owner."""
+        return _wizard_template_interactions.move_template_preview(self, delta)
 
     def _refresh_template_preview(self) -> None:
         """Compatibility entrance: forward current Profile Wizard globals."""
