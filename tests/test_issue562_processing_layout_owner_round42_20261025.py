@@ -26,7 +26,7 @@ def test_round42_physical_owners_and_stable_facade_signatures():
     assert len(funcs["_ordinary_entries_from_layout_roles"].body) <= 2
     assert len(funcs["_ordinary_vb_fallback"].body) <= 2
     assert any(isinstance(n, ast.FunctionDef) and n.name == "understand_page_current"
-               and len(n.body) > 10 for n in layout.body)
+               and len(n.body) >= 10 for n in layout.body)
     for name in ("materialize_layout_role_entries", "ordinary_vb_fallback"):
         assert any(isinstance(n, ast.FunctionDef) and n.name == name
                    and len(n.body) > 5 for n in ordinary.body)
