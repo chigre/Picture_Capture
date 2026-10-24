@@ -22,6 +22,8 @@ from typing import Any, Callable, Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
+from .ocr import channel_preparation as _channel_preparation
+from .ocr import channel_results as _channel_results
 from .preprocess.analysis_image import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
 from .ocr.engines import find_tesseract, run_google_lens
@@ -161,99 +163,22 @@ def resolve_ocr_channel_plan(settings: AppSettings) -> OcrChannelPlan:
 from .ocr.text_arbitration import channel_text_key, choose_ocr_text
 
 def _paddle_language(settings: AppSettings) -> str:
-    """Preserve the mature core's Paddle language/model resolution exactly."""
-
-    configured = str(getattr(settings, "paddle_language", "") or "").strip()
-    if configured:
-        return configured
-    mapping = {
-        "eng": "en",
-        "ita": "it",
-        "spa": "es",
-        "fra": "fr",
-        "por": "pt",
-        "deu": "de",
-        "chi_sim": "ch",
-        "chi_tra": "chinese_cht",
-    }
-    # Tesseract accepts composite packs such as spa+eng; Paddle expects one
-    # language/model family. Prefer the first recognized component. A separate
-    # tesseract_language setting must never alter Paddle model selection.
-    raw_language = str(getattr(settings, "ocr_language", "") or "").strip()
-    parts = [part.strip() for part in raw_language.split("+") if part.strip()]
-    for part in parts:
-        if part in mapping:
-            return mapping[part]
-    return mapping.get(raw_language, raw_language)
+    return _channel_preparation.paddle_language(settings)
 
 
 def _ocr_input_otsu_threshold(gray: np.ndarray) -> int:
-    """Return the same conservative Otsu threshold used by the mature runner."""
-
-    if gray.size == 0:
-        return 180
-    hist = np.bincount(gray.astype(np.uint8).ravel(), minlength=256).astype(np.float64)
-    total = float(gray.size)
-    weighted_total = float(np.dot(np.arange(256, dtype=np.float64), hist))
-    background_weight = 0.0
-    background_sum = 0.0
-    best_variance = -1.0
-    best_threshold = 180
-    for threshold in range(256):
-        background_weight += hist[threshold]
-        if background_weight <= 0:
-            continue
-        foreground_weight = total - background_weight
-        if foreground_weight <= 0:
-            break
-        background_sum += threshold * hist[threshold]
-        background_mean = background_sum / background_weight
-        foreground_mean = (weighted_total - background_sum) / foreground_weight
-        between = background_weight * foreground_weight * (background_mean - foreground_mean) ** 2
-        if between > best_variance:
-            best_variance = between
-            best_threshold = threshold
-    return int(min(220, max(80, best_threshold)))
+    return _channel_preparation.otsu_threshold(gray, np_module=np)
 
 
 def prepare_ocr_input(
-    image: Image.Image,
-    *,
-    max_long_side: int = 2800,
-    mode: str = "original",
+    image: Image.Image, *, max_long_side: int = 2800, mode: str = "original",
 ) -> tuple[Image.Image, float]:
-    """Prepare a Paddle crop and return source-to-input coordinate scale.
-
-    This is the engine-level preprocessing formerly reached indirectly through
-    ``paddle_headwords_core.run_paddle_band``. Keeping it in the shared channel
-    preserves marker-only OCR behavior without importing the mature parser.
-    """
-
-    source = normalize_page_rgb(image)
-    normalized_mode = str(mode or "original").strip().lower()
-    if normalized_mode in {"grayscale", "gray", "auto_contrast", "binary"}:
-        gray = ImageOps.grayscale(source)
-        if normalized_mode in {"auto_contrast", "binary"}:
-            gray = ImageOps.autocontrast(gray)
-        if normalized_mode == "binary":
-            array = np.asarray(gray)
-            threshold = _ocr_input_otsu_threshold(array)
-            gray = Image.fromarray(
-                np.where(array > threshold, 255, 0).astype(np.uint8),
-                mode="L",
-            )
-        source = gray.convert("RGB")
-    limit = max(256, int(max_long_side or 2800))
-    scale = min(1.0, limit / max(source.size))
-    if scale < 1.0:
-        source = source.resize(
-            (
-                max(1, round(source.width * scale)),
-                max(1, round(source.height * scale)),
-            ),
-            Image.Resampling.LANCZOS,
-        )
-    return source, scale
+    """Preserve source-to-input scale and current monkeypatch hooks."""
+    return _channel_preparation.prepare_ocr_input_impl(
+        image, max_long_side=max_long_side, mode=mode,
+        normalize_rgb_fn=normalize_page_rgb, image_ops=ImageOps,
+        image_cls=Image, np_module=np, otsu_fn=_ocr_input_otsu_threshold,
+    )
 
 
 def clear_ocr_channel_paddle_engine_cache(
@@ -356,104 +281,29 @@ def _create_paddle_engine(settings: AppSettings) -> Any:
 
 
 def _paddle_json_payload(result: Any) -> dict[str, Any]:
-    if isinstance(result, dict):
-        payload = result
-    else:
-        payload = getattr(result, "json", None)
-        if callable(payload):
-            payload = payload()
-        if not isinstance(payload, dict):
-            payload = getattr(result, "res", None)
-        if not isinstance(payload, dict):
-            raise RuntimeError("PaddleOCR 返回了无法解析的结果格式")
-    nested = payload.get("res")
-    return nested if isinstance(nested, dict) else payload
+    return _channel_results.paddle_json_payload(result)
 
 
 def normalize_paddle_result(result: Any) -> tuple[OcrChannelRecord, ...]:
-    """Normalize one Paddle result using the mature runner's record semantics."""
-
-    payload = _paddle_json_payload(result)
-    raw_texts = payload.get("rec_texts")
-    raw_scores = payload.get("rec_scores")
-    raw_boxes = payload.get("rec_boxes")
-    texts = list(raw_texts) if raw_texts is not None else []
-    scores = list(raw_scores) if raw_scores is not None else []
-    boxes = list(raw_boxes) if raw_boxes is not None else []
-    if not boxes:
-        raw_polygons = payload.get("rec_polys")
-        polygons = list(raw_polygons) if raw_polygons is not None else []
-        for polygon in polygons:
-            array = np.asarray(polygon)
-            boxes.append([
-                array[:, 0].min(),
-                array[:, 1].min(),
-                array[:, 0].max(),
-                array[:, 1].max(),
-            ])
-
-    records: list[OcrChannelRecord] = []
-    for text, score, box in zip(texts, scores, boxes):
-        try:
-            values = [int(round(float(value))) for value in list(box)]
-            confidence = float(score)
-        except (TypeError, ValueError):
-            continue
-        if len(values) != 4:
-            continue
-        x0, y0, x1, y1 = values
-        if x1 <= x0 or y1 <= y0:
-            continue
-        records.append(OcrChannelRecord(
-            str(text).strip(),
-            confidence,
-            (x0, y0, x1, y1),
-        ))
-    return tuple(sorted(records, key=lambda item: (item.box[1], item.box[0])))
+    return _channel_results.normalize_paddle_result_impl(
+        result, payload_fn=_paddle_json_payload, np_module=np,
+        record_cls=OcrChannelRecord,
+    )
 
 
 def _rescale_channel_records(
-    records: Iterable[OcrChannelRecord],
-    input_scale: float,
+    records: Iterable[OcrChannelRecord], input_scale: float,
 ) -> tuple[OcrChannelRecord, ...]:
-    collected = tuple(records)
-    if not collected or abs(float(input_scale) - 1.0) < 1e-9:
-        return collected
-    inverse = 1.0 / max(1e-9, float(input_scale))
-    return tuple(
-        OcrChannelRecord(
-            text=row.text,
-            confidence=row.confidence,
-            box=tuple(round(float(value) * inverse) for value in row.box),
-        )
-        for row in collected
-    )
+    return _channel_results.rescale_channel_records(records, input_scale, record_cls=OcrChannelRecord)
 
 
 def _candidate_from_records(
-    engine: str,
-    records: Iterable[OcrChannelRecord],
-    *,
-    text: str = "",
-    metadata: dict[str, Any] | None = None,
-    participates_in_fusion: bool = True,
+    engine: str, records: Iterable[OcrChannelRecord], *, text: str = "",
+    metadata: dict[str, Any] | None = None, participates_in_fusion: bool = True,
 ) -> OcrChannelCandidate:
-    collected = tuple(records)
-    final_text = str(text or "").strip()
-    if not final_text:
-        final_text = " ".join(item.text for item in collected if item.text).strip()
-    confidence_values = [float(item.confidence) for item in collected]
-    confidence = (
-        sum(confidence_values) / len(confidence_values)
-        if confidence_values else None
-    )
-    return OcrChannelCandidate(
-        engine=engine,
-        text=final_text,
-        confidence=confidence,
-        records=collected,
-        participates_in_fusion=participates_in_fusion,
-        metadata=dict(metadata or {}),
+    return _channel_results.candidate_from_records(
+        engine, records, text=text, metadata=metadata,
+        participates_in_fusion=participates_in_fusion, candidate_cls=OcrChannelCandidate,
     )
 
 

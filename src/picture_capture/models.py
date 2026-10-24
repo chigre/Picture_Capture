@@ -12,6 +12,7 @@ import threading
 from PIL import Image
 
 from .geometry.layout_transform import LayoutTransform
+from .project import page_discovery as _page_discovery
 from .runtime.environment import portable_project_file
 from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
@@ -40,59 +41,19 @@ def _normalize_display_opacity(value: object, default: float = 40.0) -> float:
 
 
 def is_project_cover_image(path: Path) -> bool:
-    """Return True for a reserved project-card cover asset."""
-    return (
-        path.is_file()
-        and path.stem.casefold() in {stem.casefold() for stem in PROJECT_COVER_STEMS}
-        and path.suffix.casefold() in PROJECT_COVER_EXTENSIONS
-    )
+    return _page_discovery.is_project_cover_image(path, cover_stems=PROJECT_COVER_STEMS, cover_extensions=PROJECT_COVER_EXTENSIONS)
 
 
 def project_cover_path(root: Path, *, candidates: tuple[Path, ...] | None = None) -> Path | None:
-    """Find the preferred project cover without treating it as a scanned page."""
-    root = Path(root)
-    # _cover.* is the simple current convention. _project_cover.* remains a
-    # compatibility fallback for projects that used the earlier name.
-    try:
-        items = candidates if candidates is not None else tuple(root.iterdir())
-    except OSError:
-        return None
-    for stem in PROJECT_COVER_STEMS:
-        for suffix in PROJECT_COVER_EXTENSIONS:
-            candidate = root / f"{stem}{suffix}"
-            if candidate.is_file():
-                return candidate
-            for item in items:
-                if (
-                    item.is_file()
-                    and item.stem.casefold() == stem.casefold()
-                    and item.suffix.casefold() == suffix
-                ):
-                    return item
-    return None
+    return _page_discovery.project_cover_path(root, candidates=candidates, cover_stems=PROJECT_COVER_STEMS, cover_extensions=PROJECT_COVER_EXTENSIONS)
 
 
 def project_page_images(root: Path, *, candidates: tuple[Path, ...] | None = None) -> list[Path]:
-    """Return actual scanned pages, excluding the reserved project cover."""
-    root = Path(root)
-    try:
-        pages = [
-            path for path in (candidates if candidates is not None else root.iterdir())
-            if (
-                path.is_file()
-                and path.suffix.lower() in IMAGE_EXTENSIONS
-                and not is_project_cover_image(path)
-            )
-        ]
-    except OSError:
-        return []
-    return sorted(pages, key=lambda p: natural_text_key(p.name))
+    return _page_discovery.project_page_images(root, candidates=candidates, image_extensions=IMAGE_EXTENSIONS, is_cover_fn=is_project_cover_image, natural_key_fn=natural_text_key)
 
 
 def natural_text_key(value: object) -> tuple:
-    """Return the application's single natural, case-insensitive sort key."""
-    parts = re.split(r"(\d+)", str(value or "").casefold())
-    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in parts if part)
+    return _page_discovery.natural_text_key(value)
 
 
 class _WeakrefableEntry:
