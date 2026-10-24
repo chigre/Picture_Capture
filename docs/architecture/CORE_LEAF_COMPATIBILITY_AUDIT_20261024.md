@@ -558,3 +558,8 @@ Migrated complete `_refresh_template_preview`, `_settings_from_ui`, `_build_righ
 
 
 Round 35 CI source contracts: appearance, template worker, profile settings/column nudging and diagnostic checks now inspect the physically relocated owners, retaining the previous layout, OCR and image invariants. Inner worker indentation now matches a top-level owner rather than a class method.
+
+
+### Round 36 — multi-page validation, overlays and feedback (2026-10-24)
+
+Moved six complete implementations out of `profile/setup.py`: `validate_profile` to `wizard_validation_execution.py`, `_build_validation_tab` and `_apply_validation_feedback` to `wizard_validation_controls.py`, and `_marker_preview`, `_render_validation_result`, `_finish_validation` to `wizard_validation_visuals.py`. The original `ProjectProfileWizard` methods, static entrypoint and class/pickle identity remain intact, with explicit call-time forwarding of all live configured dependencies. The OCR verification worker retains forced PaddleOCR refresh, image and settings snapshots, cooperative cancellation and UI-thread completion, with no new PDIC/PPP writes. Image overlays retain translucent marker masks; feedback retains profile-specific CJK rules, revision checks and bounded tuning. Added `tests/test_issue562_profile_wizard_round36_20261024.py`; existing source-owner assertions check migrated implementations rather than abandoned line locations. CI matrix and three-OS OCR smoke plus real scanned-page GUI acceptance remain required. Keep PR Draft and unmerged.

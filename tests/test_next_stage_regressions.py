@@ -2479,6 +2479,12 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     config_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
     workspace_owner = (source.parent / "wizard_workspace_builder.py").read_text(encoding="utf-8")
     diagnostic_owner = (source.parent / "wizard_validation_diagnostics.py").read_text(encoding="utf-8")
+    execution_owner = (source.parent / "wizard_validation_execution.py").read_text(encoding="utf-8")
+    controls_owner = (source.parent / "wizard_validation_controls.py").read_text(encoding="utf-8")
+    visuals_owner = (source.parent / "wizard_validation_visuals.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_execution.validate_profile(" in legacy
+    assert "_wizard_validation_controls.build_validation_tab(" in legacy
+    assert "_wizard_validation_visuals.marker_preview(" in legacy
     assert "_wizard_validation_diagnostics.validation_coverage_summary(" in legacy
     assert "_wizard_template_preview.refresh_template_preview(" in legacy
     assert "_wizard_settings_assembly.settings_from_ui(" in legacy
@@ -2487,7 +2493,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner))
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -2669,9 +2675,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "settings.profile_setup_version = int(" in text
     assert 'header_mode == "auto" and geometry.top > 0' in text
     assert 'elif header_mode == "present"' in text
-    validate_start = text.index("    def validate_profile(")
-    validate_end = text.index("    def _poll_validation_queue(", validate_start)
-    validate_text = text[validate_start:validate_end]
+    validate_start = execution_owner.index("def validate_profile(")
+    validate_text = execution_owner[validate_start:]
     assert 'settings.detection_method = "paddleocr"' in validate_text
     assert "settings.paddle_use_paddleocr = True" in validate_text
     assert "force_paddle_refresh=True" in validate_text
@@ -4477,9 +4482,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
     profile_open_end = app.index("\n    def open_project_details", profile_open_start)
     assert "if self._batch_active:" in app[profile_open_start:profile_open_end]
 
-    validate_start = profile.index("    def validate_profile(")
-    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
-    assert "if self.parent._batch_active:" in profile[validate_start:validate_end]
+    validation_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_execution.validate_profile(" in profile
+    assert "if self.parent._batch_active:" in validation_owner
 
     wrapper_start = app.index("    def export_training_package(")
     wrapper_end = app.index("\n    def show_help_dialog", wrapper_start)
@@ -4512,7 +4517,12 @@ def test_project_profile_legacy_workers_drop_results_while_closing():
         start = text.index(f"    def {name}(")
         next_def = text.find("\n    def ", start + 8)
         block = text[start: next_def if next_def >= 0 else len(text)]
-        assert "_closing" in block
+        if name == "validate_profile":
+            execution_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+            assert "_wizard_validation_execution.validate_profile(" in block
+            assert "_closing" in execution_owner
+        else:
+            assert "_closing" in block
 
 
 
