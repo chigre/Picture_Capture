@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-def build_right_image_workspace(self, parent: ttk.Frame) -> None:
+def build_right_image_workspace(self, parent: ttk.Frame, *, deps) -> None:
     ttk = deps["ttk"]
     tk = deps["tk"]
     """Persistent image-only workspace shared by all Wizard steps."""

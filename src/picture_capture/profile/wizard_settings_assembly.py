@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from ..models import AppSettings
 
 
-def settings_from_ui(self) -> AppSettings:
+def settings_from_ui(self, *, deps) -> AppSettings:
     replace = deps["replace"]
     apply_reading_choice = deps["apply_reading_choice"]
     SEPARATOR_LABEL_TO_VALUE = deps["SEPARATOR_LABEL_TO_VALUE"]

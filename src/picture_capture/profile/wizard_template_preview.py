@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-def refresh_template_preview(self) -> None:
+def refresh_template_preview(self, *, deps) -> None:
     ttk = deps["ttk"]
     tk = deps["tk"]
     Image = deps["Image"]

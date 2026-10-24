@@ -31,6 +31,9 @@ def test_legacy_wizard_calls_preserve_live_dependency_references(monkeypatch):
     assert str(inspect.signature(setup.ProjectProfileWizard._refresh_template_preview)) == "(self) -> 'None'"
     assert str(inspect.signature(setup.ProjectProfileWizard._settings_from_ui)) == "(self) -> 'AppSettings'"
     assert isinstance(inspect.getattr_static(setup.ProjectProfileWizard, "_validation_coverage_summary"), staticmethod)
+    assert "deps" in inspect.signature(wizard_template_preview.refresh_template_preview).parameters
+    assert "deps" in inspect.signature(wizard_settings_assembly.settings_from_ui).parameters
+    assert "deps" in inspect.signature(wizard_workspace_builder.build_right_image_workspace).parameters
     calls = []
     monkeypatch.setattr(wizard_template_preview, "refresh_template_preview", lambda obj, *, deps: calls.append(("preview", obj, deps)))
     monkeypatch.setattr(wizard_settings_assembly, "settings_from_ui", lambda obj, *, deps: calls.append(("settings", obj, deps)))
