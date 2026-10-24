@@ -162,4 +162,6 @@ def test_compact_layout_has_page_list_under_page_icon_and_no_outer_scroll():
     assert 'slot.grid()' in source and 'slot.grid_remove()' in source
     assert 'self.sidebar_scrollbar.pack(side="right", fill="y")' not in app_source
     assert 'app.sidebar_scrollbar.pack(side="right", fill="y")' not in source
-    assert 'self.page_scroll.grid(row=0, column=1, sticky="ns")' in app_source
+    owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_source
+    assert 'self.page_scroll.grid(row=0, column=1, sticky="ns")' in owner
