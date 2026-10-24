@@ -176,7 +176,9 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
     source = (root / "app.py").read_text(encoding="utf-8")
     controller = (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
     pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
-    assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in source
+    owner = (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in source
+    assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in owner
     assert 'self._auxiliary_controller.delete_at_chip(x, y)' in pointer_source
     assert 'self._auxiliary_controller.add(x, y)' in pointer_source
     assert 'not self._section_editing and not self.polygon_draw_var.get()' in pointer_source
