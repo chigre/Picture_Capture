@@ -550,3 +550,8 @@ Moved complete `ProjectProfileWizard._build_vars` to `profile/wizard_state_initi
 
 
 Round 34 CI source-contract update: four `tests/test_next_stage_regressions.py` checks now traverse the stable `ProjectProfileWizard` wrapper and physical `wizard_tab_builders.py`/`wizard_state_initialization.py` for unchanged page template, CJK bracket and headword structure UI wording, column nudging and persistence guards. No production semantics changed by this test-only adjustment.
+
+
+### Round 35 — Profile Wizard template preview / settings assembly / image workspace / coverage diagnostics (2026-10-24)
+
+Migrated complete `_refresh_template_preview`, `_settings_from_ui`, `_build_right_image_workspace` and static `_validation_coverage_summary` implementations into `profile/wizard_template_preview.py`, `profile/wizard_settings_assembly.py`, `profile/wizard_workspace_builder.py` and `profile/wizard_validation_diagnostics.py`. Historical `ProjectProfileWizard` class method names, signatures, worker snapshots, UI thread callback split and live import-level dependencies remain through wrappers. Tests moved their source ownership checks without dropping semantic assertions; new characterization tests exercise wrapper dependency seams and important OCR/column/headword guards. No profile schema, OCR cache or PDIC/PPP format change. Six-platform CI/OCR smoke and manual true scanned GUI checks remain necessary. Keep Draft.

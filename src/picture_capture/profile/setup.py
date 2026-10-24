@@ -66,6 +66,10 @@ from ..visual.marker_ui import (
 )
 from . import wizard_state_initialization as _wizard_wizard_state_initialization
 from . import wizard_tab_builders as _wizard_wizard_tab_builders
+from . import wizard_template_preview as _wizard_template_preview
+from . import wizard_settings_assembly as _wizard_settings_assembly
+from . import wizard_workspace_builder as _wizard_workspace_builder
+from . import wizard_validation_diagnostics as _wizard_validation_diagnostics
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -502,110 +506,11 @@ class ProjectProfileWizard(tk.Toplevel):
         visit(root)
 
     def _build_right_image_workspace(self, parent: ttk.Frame) -> None:
-        """Persistent image-only workspace shared by all Wizard steps."""
-        host = ttk.LabelFrame(parent, text="图片预览", padding=6)
-        host.grid(row=0, column=0, sticky="nsew")
-        host.rowconfigure(1, weight=1)
-        host.columnconfigure(0, weight=1)
-
-        self.right_heading_var = tk.StringVar(value="代表页（前部 / 中部 / 后部）")
-        ttk.Label(
-            host, textvariable=self.right_heading_var,
-            font=("TkDefaultFont", 11, "bold"),
-        ).grid(row=0, column=0, sticky="w", pady=(0, 5))
-
-        canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
-        scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.grid(row=1, column=0, sticky="nsew")
-        scrollbar.grid(row=1, column=1, sticky="ns")
-        self.right_canvas = canvas
-
-        content = ttk.Frame(canvas, padding=(2, 2, 6, 6))
-        self.right_content = content
-        self._right_window = canvas.create_window((0, 0), window=content, anchor="nw")
-        content.columnconfigure(0, weight=1)
-        content.bind(
-            "<Configure>",
-            lambda _e: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.bind(
-            "<Configure>",
-            lambda e: canvas.itemconfigure(self._right_window, width=e.width),
-        )
-        self.right_image_pages: list[ttk.Frame] = []
-        for _ in range(4):
-            page = ttk.Frame(content)
-            page.grid(row=0, column=0, sticky="nsew")
-            page.columnconfigure(0, weight=1)
-            self.right_image_pages.append(page)
-
-        # Step 1: six editable representative pages.
-        sample_page = self.right_image_pages[0]
-        sample_page.rowconfigure(0, weight=1)
-        self.sample_frame = ttk.Frame(sample_page)
-        self.sample_frame.grid(row=0, column=0, sticky="nsew")
-        self.sample_frame.rowconfigure(0, weight=1)
-        for column in range(3):
-            self.sample_frame.columnconfigure(column, weight=1, uniform="sample")
-
-        # Step 2: one live page-template preview at a time.
-        template_page = self.right_image_pages[1]
-        template_nav = ttk.Frame(template_page)
-        template_nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        ttk.Button(
-            template_nav, text="◀ 上一张",
-            command=lambda: self._move_template_preview(-1),
-        ).pack(side="left")
-        ttk.Button(
-            template_nav, text="下一张 ▶",
-            command=lambda: self._move_template_preview(1),
-        ).pack(side="right")
-        self.template_preview_caption_var = tk.StringVar(value="")
-        ttk.Label(
-            template_nav, textvariable=self.template_preview_caption_var,
-        ).pack(side="left", expand=True)
-        self.template_preview_frame = ttk.Frame(template_page)
-        self.template_preview_frame.grid(row=1, column=0, sticky="nsew")
-        self.template_preview_frame.columnconfigure(0, weight=1)
-
-        # Step 3: one fixed example image for each built-in headword type.
-        examples_page = self.right_image_pages[2]
-        self.headword_examples_frame = ttk.Frame(examples_page)
-        self.headword_examples_frame.grid(row=0, column=0, sticky="ew")
-        self.headword_examples_frame.columnconfigure(0, weight=1)
-        self.headword_examples_frame.columnconfigure(1, weight=1)
-
-        # Step 4: one full-width validation page at a time.
-        validation_page = self.right_image_pages[3]
-        nav = ttk.Frame(validation_page)
-        nav.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        self.validation_prev_button = ttk.Button(
-            nav, text="◀ 上一页",
-            command=lambda: self._move_validation_preview(-1), state="disabled",
-        )
-        self.validation_prev_button.pack(side="left")
-        self.validation_fit_mode = "height"
-        ttk.Button(
-            nav, text="适合高度",
-            command=lambda: self._set_validation_fit("height"),
-        ).pack(side="left", padx=(6, 0))
-        ttk.Button(
-            nav, text="适合宽度",
-            command=lambda: self._set_validation_fit("width"),
-        ).pack(side="left", padx=(6, 0))
-        self.validation_caption_var = tk.StringVar(value="")
-        ttk.Label(nav, textvariable=self.validation_caption_var).pack(
-            side="left", expand=True
-        )
-        self.validation_next_button = ttk.Button(
-            nav, text="下一页 ▶",
-            command=lambda: self._move_validation_preview(1), state="disabled",
-        )
-        self.validation_next_button.pack(side="right")
-        self.validation_frame = ttk.Frame(validation_page)
-        self.validation_frame.grid(row=1, column=0, sticky="ew")
-        self.validation_frame.columnconfigure(0, weight=1)
+        """Compatibility entrance: forward current Profile Wizard globals."""
+        return _wizard_workspace_builder.build_right_image_workspace(self, parent, deps={
+            "ttk": ttk,
+            "tk": tk,
+        })
 
     def _show_right_image_page(self, index: int) -> None:
         if not getattr(self, "right_image_pages", None):
@@ -1035,213 +940,24 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_template_preview()
 
     def _refresh_template_preview(self) -> None:
-        """Render the representative-page template preview without blocking Tk."""
-        if not hasattr(self, "template_preview_frame"):
-            return
-        for child in self.template_preview_frame.winfo_children():
-            child.destroy()
-        self._template_photos.clear()
-        self._template_preview_canvas = None
-        self._template_line_items = []
-        self._template_line_paths = []
-        self._template_nudge_vector = (0.0, 0.0)
-        if not self.sample_indices:
-            ttk.Label(self.template_preview_frame, text="没有可预览页面").grid(row=0, column=0)
-            self.template_preview_caption_var.set("")
-            return
-
-        sample_count = len(self.sample_indices)
-        self.template_preview_slot %= sample_count
-        slot = int(self.template_preview_slot)
-        index = int(self.sample_indices[slot])
-        path = self.project.images[index]
-        try:
-            settings = self._settings_from_ui()
-            header_mode = HEADER_LABEL_TO_VALUE.get(self.header_mode_var.get(), "auto")
-            footer_mode = FOOTER_LABEL_TO_VALUE.get(self.footer_mode_var.get(), "none")
-            header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
-            footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-            self.update_idletasks()
-            right_width = int(getattr(self, "right_canvas", self).winfo_width())
-            target_width = max(
-                420,
-                (right_width - 24) if right_width > 100
-                else (self._wizard_image_width - 24),
-            )
-            target_height = max(420, int(self._wizard_height * 0.72))
-        except Exception as exc:
-            ttk.Label(
-                self.template_preview_frame,
-                text=f"{path.name}\n预览参数无效：{exc}",
-            ).grid(row=0, column=0)
-            self.template_preview_caption_var.set(path.name)
-            return
-
-        ttk.Label(
-            self.template_preview_frame,
-            text=f"正在后台生成预览…\n{path.name}",
-            justify="center",
-        ).grid(row=0, column=0, sticky="n", pady=30)
-        self.template_preview_caption_var.set(
-            f"{slot + 1}/{sample_count} · {path.name} · 正在生成…"
-        )
-        worker_key = f"profile-template-preview-{id(self)}"
-        selected_column = self._selected_column_index()
-
-        def worker():
-            with Image.open(path) as opened:
-                source = normalize_page_rgb(opened)
-            preview = source.copy()
-            preview.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
-            draw = ImageDraw.Draw(preview, "RGBA")
-            w, h = preview.size
-
-            if header_mode == "present":
-                draw.rectangle(
-                    (0, 0, w, round(h * header_percent / 100.0)),
-                    fill=(255, 215, 0, 105),
-                )
-            if footer_mode == "present":
-                draw.rectangle(
-                    (0, round(h * (1.0 - footer_percent / 100.0)), w, h),
-                    fill=(255, 215, 0, 105),
-                )
-
-            side = excluded_source_side(settings, index)
-            if side:
-                sp = excluded_source_side_percent(settings, index)
-                margin = round(w * sp / 100.0)
-                if side == "left":
-                    draw.rectangle((0, 0, margin, h), fill=(255, 215, 0, 105))
-                else:
-                    draw.rectangle((w - margin, 0, w, h), fill=(255, 215, 0, 105))
-
-            effective = effective_page_settings(settings, source.size, index)
-            analysis_image = page_template_analysis_image(source, effective, index)
-            geometry = derive_geometry(analysis_image, effective)
-            sx = w / max(1, source.width)
-            sy = h / max(1, source.height)
-            canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
-
-            if header_mode == "auto" and geometry.top > 0:
-                x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
-                    (0, 0, canonical_w, min(canonical_h, geometry.top)),
-                    source.size,
-                )
-                draw.rectangle(
-                    (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                    fill=(255, 215, 0, 105),
-                )
-            if footer_mode == "auto" and geometry.bottom < canonical_h:
-                x0, y0, x1, y1 = geometry.transform.canonical_box_to_source(
-                    (0, max(0, geometry.bottom), canonical_w, canonical_h),
-                    source.size,
-                )
-                draw.rectangle(
-                    (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                    fill=(255, 215, 0, 105),
-                )
-            line_paths: list[list[tuple[float, float]]] = []
-            for path_points in geometry.column_paths:
-                points = [
-                    geometry.canonical_to_source(x, y)
-                    for y, x in path_points.points
-                ]
-                line_paths.append([(px * sx, py * sy) for px, py in points])
-
-            # One nudge is exactly one full-resolution image pixel. Cache only
-            # the direction induced by an internal mirror/rotation transform.
-            canonical_step = 1.0
-            anchor_u = canonical_w / 2.0
-            anchor_v = canonical_h / 2.0
-            p0 = geometry.canonical_to_source(anchor_u, anchor_v)
-            p1 = geometry.canonical_to_source(anchor_u + canonical_step, anchor_v)
-            nudge_vector = (
-                (p1[0] - p0[0]) * sx,
-                (p1[1] - p0[1]) * sy,
-            )
-
-            variant = page_variant(settings, index)
-            side_text = side or "无页边排除"
-            region = ("前部", "中部", "后部")[min(2, slot // 2)]
-            caption = (
-                f"{region} · {slot + 1}/{sample_count} · "
-                f"{variant} 页 · {path.name} · 页边：{side_text}"
-            )
-            return preview, caption, index, slot, line_paths, nudge_vector
-
-        def done(payload) -> None:
-            try:
-                if not self.winfo_exists():
-                    return
-            except tk.TclError:
-                return
-            preview, caption, result_index, result_slot, line_paths, nudge_vector = payload
-            if (
-                result_slot != self.template_preview_slot
-                or result_slot >= sample_count
-                or self.sample_indices[result_slot] != result_index
-            ):
-                return
-            for child in self.template_preview_frame.winfo_children():
-                child.destroy()
-            photo = ImageTk.PhotoImage(
-                themed_display_image(
-                    preview, getattr(self.parent, "appearance_mode", "light")
-                )
-            )
-            self._template_photos[:] = [photo]
-            canvas = tk.Canvas(
-                self.template_preview_frame,
-                width=preview.width, height=preview.height,
-                highlightthickness=0, borderwidth=0,
-            )
-            canvas.grid(row=0, column=0, sticky="n")
-            canvas.create_image(0, 0, image=photo, anchor="nw")
-            self._template_preview_canvas = canvas
-            self._template_line_paths = [
-                [(float(x), float(y)) for x, y in points] for points in line_paths
-            ]
-            self._template_nudge_vector = (
-                float(nudge_vector[0]), float(nudge_vector[1])
-            )
-            self._template_line_items = []
-            for column_index, points in enumerate(self._template_line_paths):
-                coords = [coordinate for point in points for coordinate in point]
-                if len(coords) < 4:
-                    self._template_line_items.append(-1)
-                    continue
-                item = canvas.create_line(
-                    *coords,
-                    fill="#ee7c00" if column_index == selected_column else "#1e78d2",
-                    width=4 if column_index == selected_column else 2,
-                )
-                self._template_line_items.append(item)
-            canvas.bind(
-                "<Button-1>",
-                lambda event: self._select_template_column(
-                    event, self._template_line_paths
-                ),
-            )
-            self.template_preview_caption_var.set(caption)
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            try:
-                if not self.winfo_exists():
-                    return
-            except tk.TclError:
-                return
-            for child in self.template_preview_frame.winfo_children():
-                child.destroy()
-            ttk.Label(
-                self.template_preview_frame,
-                text=f"{path.name}\n预览失败：{exc}",
-            ).grid(row=0, column=0)
-            self.template_preview_caption_var.set(path.name)
-
-        self.parent._start_ui_worker(worker_key, worker, done, failed)
+        """Compatibility entrance: forward current Profile Wizard globals."""
+        return _wizard_template_preview.refresh_template_preview(self, deps={
+            "ttk": ttk,
+            "tk": tk,
+            "Image": Image,
+            "ImageDraw": ImageDraw,
+            "ImageTk": ImageTk,
+            "normalize_page_rgb": normalize_page_rgb,
+            "derive_geometry": derive_geometry,
+            "excluded_source_side": excluded_source_side,
+            "excluded_source_side_percent": excluded_source_side_percent,
+            "effective_page_settings": effective_page_settings,
+            "page_template_analysis_image": page_template_analysis_image,
+            "page_variant": page_variant,
+            "themed_display_image": themed_display_image,
+            "HEADER_LABEL_TO_VALUE": HEADER_LABEL_TO_VALUE,
+            "FOOTER_LABEL_TO_VALUE": FOOTER_LABEL_TO_VALUE,
+        })
 
     @staticmethod
     def _mode_row(
@@ -1808,166 +1524,25 @@ class ProjectProfileWizard(tk.Toplevel):
         )
 
     def _settings_from_ui(self) -> AppSettings:
-        s = replace(self.working)
-        s.dictionary_full_name = self.dictionary_full_name_var.get().strip()
-        s.dictionary_abbreviation = self.dictionary_abbreviation_var.get().strip()
-        s.dictionary_isbn = self.dictionary_isbn_var.get().strip()
-        s.dictionary_body_page_range = self.dictionary_body_page_range_var.get().strip()
-        apply_reading_choice(s, self.reading_var.get())
-        # Runtime geometry uses the project-confirmed column count. Automatic
-        # analysis above is a setup aid, not a hidden per-page detector.
-        s.layout_columns_policy = "fixed"
-        s.columns = max(1, int(self.columns_var.get()))
-        s.column_start_offsets = self._column_offsets_for_count(s.columns)
-        s.layout_column_separator_mode = SEPARATOR_LABEL_TO_VALUE.get(
-            self.separator_var.get(), "auto"
-        )
-        s.profile_header_mode = HEADER_LABEL_TO_VALUE.get(
-            self.header_mode_var.get(), "auto"
-        )
-        s.profile_footer_mode = FOOTER_LABEL_TO_VALUE.get(
-            self.footer_mode_var.get(), "auto"
-        )
-        s.profile_side_content_mode = SIDE_LABEL_TO_VALUE.get(
-            self.side_mode_var.get(), "none"
-        )
-        s.profile_page_pair_mode = (
-            "alternate" if s.profile_side_content_mode in {"outer", "inner"} else "same"
-        )
-        s.profile_first_page_variant = self.first_variant_var.get()
-        s.profile_header_percent = max(0.0, min(35.0, float(self.header_percent_var.get())))
-        s.profile_footer_percent = max(0.0, min(35.0, float(self.footer_percent_var.get())))
-        s.profile_side_percent = max(0.0, min(30.0, float(self.side_percent_var.get())))
-        s.profile_side_percent_a = max(
-            0.0, min(30.0, float(self.side_percent_a_var.get()))
-        )
-        s.profile_side_percent_b = max(
-            0.0, min(30.0, float(self.side_percent_b_var.get()))
-        )
-        s.dictionary_custom_profile_name = self.custom_name_var.get().strip()
-        s.ocr_language = _ocr_language_code(self.ocr_language_var.get())
-        s.dictionary_index_language = self.index_language_var.get().strip()
-        s.dictionary_content_language = self.content_language_var.get().strip()
-        s.profile_headword_tuning_level = max(
-            -2, min(2, int(self.headword_tuning_level_var.get()))
-        )
-        s.profile_parser_controls_version = 1
-        s.profile_allow_ordinary_left_edge = bool(self.ordinary_left_edge_var.get())
-        s.profile_allow_numbered_prefix = bool(self.numbered_prefix_var.get())
-        s.profile_allow_marker_prefix = bool(self.marker_prefix_var.get())
-        s.profile_headword_script_guard_version = 1
-        s.profile_headword_script_guard_enabled = bool(
-            self.headword_script_guard_var.get()
-        )
-        s.profile_tail_structure_version = 1
-        s.profile_tail_allow_pos = bool(self.tail_allow_pos_var.get())
-        s.profile_tail_allow_inflection = bool(self.tail_allow_inflection_var.get())
-        s.profile_tail_allow_variant = bool(self.tail_allow_variant_var.get())
-        s.profile_tail_allow_pronunciation = bool(
-            self.tail_allow_pronunciation_var.get()
-        )
-        s.profile_tail_allow_descriptor = bool(self.tail_allow_descriptor_var.get())
-        s.profile_tail_require_selected = bool(self.tail_require_selected_var.get())
-        s.profile_tail_allow_visual_rescue = bool(
-            self.tail_allow_visual_rescue_var.get()
-        )
-        profile_key = self._current_profile_key()
-        s.profile_symbol_inventory_version = 1
-        s.profile_symbol_inventory_enabled = bool(
-            self.symbol_inventory_enabled_var.get()
-        )
-        entry_symbols = " ".join(
-            split_configured_symbols(self.entry_marker_symbols_var.get())
-        )
-        bracket_symbols = " ".join(
-            split_configured_symbols(self.bracket_open_symbols_var.get())
-        )
-        visual_samples = [
-            dict(item)
-            for item in getattr(self, "visual_marker_samples", []) or []
-        ]
-        if profile_key == "cjk_visual":
-            entry_symbols, bracket_symbols, visual_samples = (
-                _normalize_cjk_visual_symbol_roles(
-                    entry_symbols,
-                    bracket_symbols,
-                    visual_samples,
-                )
-            )
-            # A CJK bracket opener never becomes an independent prefix merely
-            # because the old buggy Profile once stored it in both roles.
-            if not entry_symbols:
-                s.profile_allow_marker_prefix = False
-        s.profile_entry_marker_symbols = entry_symbols
-        s.profile_bracket_open_symbols = bracket_symbols
-        s.profile_symbol_visual_rescue_enabled = bool(
-            self.symbol_visual_rescue_var.get()
-        )
-        s.profile_symbol_lane_required = bool(
-            self.symbol_lane_required_var.get()
-        )
-        s.profile_symbol_lane_tolerance_percent = max(
-            20, min(120, int(self.symbol_lane_tolerance_var.get()))
-        )
-        s.profile_symbol_template_version = 1
-        s.profile_symbol_template_mode = VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE.get(
-            self.symbol_template_mode_var.get(), "combined"
-        )
-        s.profile_symbol_template_group_mode = (
-            VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE.get(
-                self.symbol_template_group_var.get(), "role"
-            )
-        )
-        s.profile_symbol_template_threshold = max(
-            0.35, min(0.95, float(self.symbol_template_threshold_var.get()))
-        )
-        s.profile_symbol_templates_json = serialize_visual_marker_samples(
-            visual_samples
-        )
-        s.profile_symbol_template_debug_enabled = bool(
-            self.symbol_template_debug_var.get()
-        )
-        s.profile_cjk_allow_single_headword = bool(self.cjk_allow_single_var.get())
-        s.profile_cjk_allow_bracketed_headword = bool(self.cjk_allow_bracketed_var.get())
-        s.profile_cjk_require_left_edge = bool(self.cjk_require_left_edge_var.get())
-        s.profile_cjk_brackets_in_body = bool(self.cjk_brackets_in_body_var.get())
-        s.profile_cjk_require_visual_evidence = bool(self.cjk_require_visual_var.get())
-        s.profile_cjk_right_context_enabled = bool(
-            self.cjk_right_context_enabled_var.get()
-        )
-        s.profile_cjk_right_context_width_percent = max(
-            30, min(200, int(self.cjk_right_context_width_var.get()))
-        )
-        apply_headword_profile(s, profile_key)
-        for name, value in language_effective_settings(s.ocr_language, s.layout_writing_mode).items():
-            if hasattr(s, name):
-                setattr(s, name, value)
-        apply_headword_tuning(s, profile_key, s.profile_headword_tuning_level)
-        # The preset may seed the hidden legacy rescue setting, but after Profile
-        # step 3 the user's explicit tail-structure choice is authoritative.
-        s.paddle_allow_strong_edge_visual_rescue = bool(
-            s.profile_tail_allow_visual_rescue
-        )
-        # Wizard specificity values are explicit project overrides and therefore
-        # take precedence over preset/tuning defaults.
-        left_percent = max(
-            0.0, min(100.0, float(self.headword_left_tolerance_var.get()))
-        )
-        column_width = max(1, int(getattr(s, "column_width", 1) or 1))
-        s.paddle_left_tolerance = max(
-            1, int(round(column_width * left_percent / 100.0))
-        )
-        s.paddle_height_ratio = max(
-            0.5, min(3.0, float(self.headword_height_ratio_var.get()))
-        )
-        s.paddle_boldness_ratio = max(
-            0.5, min(3.0, float(self.headword_boldness_ratio_var.get()))
-        )
-        s.paddle_min_candidate_score = max(
-            0.0, min(12.0, float(self.headword_min_score_var.get()))
-        )
-        s.profile_setup_version = PROFILE_SETUP_VERSION
-        return s
+        """Compatibility entrance: forward current Profile Wizard globals."""
+        return _wizard_settings_assembly.settings_from_ui(self, deps={
+            "replace": replace,
+            "apply_reading_choice": apply_reading_choice,
+            "SEPARATOR_LABEL_TO_VALUE": SEPARATOR_LABEL_TO_VALUE,
+            "HEADER_LABEL_TO_VALUE": HEADER_LABEL_TO_VALUE,
+            "FOOTER_LABEL_TO_VALUE": FOOTER_LABEL_TO_VALUE,
+            "SIDE_LABEL_TO_VALUE": SIDE_LABEL_TO_VALUE,
+            "_ocr_language_code": _ocr_language_code,
+            "split_configured_symbols": split_configured_symbols,
+            "_normalize_cjk_visual_symbol_roles": _normalize_cjk_visual_symbol_roles,
+            "VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE": VISUAL_TEMPLATE_MODE_LABEL_TO_VALUE,
+            "VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE": VISUAL_TEMPLATE_GROUP_LABEL_TO_VALUE,
+            "serialize_visual_marker_samples": serialize_visual_marker_samples,
+            "apply_headword_profile": apply_headword_profile,
+            "language_effective_settings": language_effective_settings,
+            "apply_headword_tuning": apply_headword_tuning,
+            "PROFILE_SETUP_VERSION": PROFILE_SETUP_VERSION,
+        })
 
     def _refresh_summary(self) -> None:
         try:
@@ -2430,144 +2005,10 @@ class ProjectProfileWizard(tk.Toplevel):
     def _validation_coverage_summary(
         cache_path: Path | None, entries, geometry, settings: AppSettings,
     ) -> str:
-        """Show raw OCR coverage, final-headword coverage and rejection clues."""
-        prefix = (
-            "测试方式：PaddleOCR（强制重新识别）"
-            f"｜列跟踪：{'开' if bool(getattr(settings, 'follow_column_deformation', False)) else '关'}"
-        )
-        if cache_path is None or not cache_path.exists() or not geometry.column_starts:
-            return prefix + "\n诊断缓存未生成；请重新运行【测试当前 Profile】。"
-        try:
-            payload = json.loads(cache_path.read_text(encoding="utf-8"))
-            columns = list(payload.get("columns") or [])
-        except (OSError, ValueError, TypeError) as exc:
-            return prefix + f"\n诊断缓存读取失败：{exc}"
-
-        selected_by_column: dict[int, list[float]] = {
-            index: [] for index in range(len(geometry.column_starts))
-        }
-        span = max(1, int(geometry.bottom) - int(geometry.top))
-        for entry in entries:
-            try:
-                u, v = geometry.source_to_canonical(int(entry.x), int(entry.y))
-                col = min(
-                    range(len(geometry.column_starts)),
-                    key=lambda idx: abs(geometry.x_at(idx, v) - u),
-                )
-                selected_by_column[col].append(
-                    max(0.0, min(1.0, (float(v) - float(geometry.top)) / span))
-                )
-            except Exception:
-                continue
-
-        parts: list[str] = [prefix]
-        for index in range(len(geometry.column_starts)):
-            raw_pct = 0
-            lower_total = 0
-            lower_accepted = 0
-            template_matches = 0
-            template_scores: list[float] = []
-            strong_edge_rescues = 0
-            reject_counts: dict[str, int] = {}
-            if index < len(columns):
-                column = columns[index] or {}
-                band_size = list(column.get("band_size") or [])
-                band_height = max(1, int(band_size[1])) if len(band_size) >= 2 else span
-                raw_bottom = 0
-                for record in column.get("ocr_records", []) or []:
-                    box = record.get("box") if isinstance(record, dict) else None
-                    if isinstance(box, (list, tuple)) and len(box) == 4:
-                        try:
-                            raw_bottom = max(raw_bottom, int(box[3]))
-                        except (TypeError, ValueError):
-                            pass
-                raw_pct = max(0, min(100, round(raw_bottom * 100 / band_height)))
-
-                for row in column.get("candidates", []) or []:
-                    if not isinstance(row, dict) or "meta" in row:
-                        continue
-                    box = row.get("box")
-                    if not isinstance(box, (list, tuple)) or len(box) != 4:
-                        continue
-                    try:
-                        center_y = (float(box[1]) + float(box[3])) / 2.0
-                    except (TypeError, ValueError):
-                        continue
-                    features = row.get("features") if isinstance(row, dict) else None
-                    if isinstance(features, dict):
-                        try:
-                            template_score = float(
-                                features.get("visual_marker_template_score") or 0.0
-                            )
-                        except (TypeError, ValueError):
-                            template_score = 0.0
-                        if template_score > 0:
-                            template_matches += 1
-                            template_scores.append(template_score)
-                        if bool(
-                            features.get("ordinary_strong_edge_visual_rescue")
-                        ):
-                            strong_edge_rescues += 1
-                    if center_y < band_height * 0.50:
-                        continue
-                    lower_total += 1
-                    if bool(row.get("accepted")):
-                        lower_accepted += 1
-                    else:
-                        reason = str(row.get("reject_reason") or "candidate_rejected")
-                        reject_counts[reason] = reject_counts.get(reason, 0) + 1
-
-            selected_rows = selected_by_column.get(index) or []
-            selected_pct = (
-                max(0, min(100, round(max(selected_rows) * 100)))
-                if selected_rows else 0
-            )
-
-            nominal_x = int(geometry.column_starts[index])
-            path = (
-                geometry.column_paths[index]
-                if index < len(getattr(geometry, "column_paths", []))
-                else None
-            )
-            drift = 0
-            if path is not None:
-                try:
-                    drift = max(
-                        [abs(int(x) - nominal_x) for _y, x in path.points] or [0]
-                    )
-                except Exception:
-                    drift = 0
-
-            if reject_counts:
-                top_reasons = sorted(
-                    reject_counts.items(), key=lambda item: (-item[1], item[0])
-                )[:2]
-                reason_text = "、".join(
-                    f"{reason}×{count}" for reason, count in top_reasons
-                )
-            else:
-                reason_text = "无"
-
-            warning = ""
-            if raw_pct >= 85 and selected_pct <= 65:
-                warning = " ⚠原始OCR完整但词头在中途停止"
-            template_text = ""
-            if bool(getattr(settings, "profile_symbol_template_debug_enabled", False)):
-                best_template = max(template_scores) if template_scores else 0.0
-                template_text = (
-                    f"｜模板命中{template_matches}（最高{best_template:.2f}）"
-                )
-            rescue_text = (
-                f"｜强粗体左缘补救{strong_edge_rescues}"
-                if strong_edge_rescues else ""
-            )
-            parts.append(
-                f"{index + 1}栏：原始OCR至{raw_pct}%｜词头至{selected_pct}%｜"
-                f"下半页候选{lower_total}（通过{lower_accepted}；拒绝主因：{reason_text}）｜"
-                f"左缘最大漂移{drift}px{rescue_text}{template_text}{warning}"
-            )
-        return "\n".join(parts)
-
+        """Compatibility entrance: forward current Profile Wizard globals."""
+        return _wizard_validation_diagnostics.validation_coverage_summary(cache_path, entries, geometry, settings, deps={
+            "json": json,
+        })
 
     def _set_feedback_buttons(self, state: str) -> None:
         if not hasattr(self, "feedback_too_many_button"):
