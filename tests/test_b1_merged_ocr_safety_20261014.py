@@ -106,9 +106,13 @@ def test_detection_write_order_preserves_prior_pdic_before_final_audit():
     app = (
         Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    start = app.index("        def worker(index:", app.index("    def _detect_pages("))
-    end = app.index("        def done(", start)
-    part = app[start:end]
+    owner = (
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "detection_batch_execution.py"
+    ).read_text(encoding="utf-8")
+    assert "_detection_batch_execution.detect_pages(" in app
+    start = owner.index("    def worker(index:", owner.index("def detect_pages("))
+    end = owner.index("    def done(", start)
+    part = owner[start:end]
     assert part.index("preserve_prior_pdic(project.root") < part.index("write_pdic(saved_pdic")
     assert part.index("write_pdic(saved_pdic") < part.index("record_final_decisions(")
     assert "and not force_refresh" in part
