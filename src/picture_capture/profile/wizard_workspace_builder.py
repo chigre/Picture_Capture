@@ -1,6 +1,11 @@
 """Owner for Profile Wizard persistent representative-image workspace."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tkinter import ttk
+
 
 def build_right_image_workspace(self, parent: ttk.Frame, *, deps) -> None:
     ttk = deps["ttk"]

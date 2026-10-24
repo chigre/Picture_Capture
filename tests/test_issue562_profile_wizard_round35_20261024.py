@@ -23,6 +23,7 @@ def test_original_wizard_methods_remain_delegate_seams():
         code = ast.get_source_segment(original, node)
         assert target in code
         assert len(code.splitlines()) < 30
+    assert "from tkinter import ttk" in (ROOT / "wizard_workspace_builder.py").read_text(encoding="utf-8")
     for name in ("wizard_template_preview", "wizard_settings_assembly", "wizard_workspace_builder", "wizard_validation_diagnostics"):
         assert "from .setup import" not in (ROOT / (name + ".py")).read_text(encoding="utf-8")
 
