@@ -6168,9 +6168,8 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     assert '"行间空："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通词条行切图高："' in REVIEW_WORKSPACE_SOURCE
     assert "self.review_regular_crop_height_var" in review
-    detect_start = text.index("    def _detect_pages(")
-    detect_end = text.index("    def clear_entries", detect_start)
-    detect_block = text[detect_start:detect_end]
+    assert "_detection_batch_execution.detect_pages(" in text
+    detect_block = (source.parent / "ui/detection_batch_execution.py").read_text(encoding="utf-8")
     assert 'ProcessPoolExecutor(max_workers=1' in detect_block
     # A single ordinary page still uses the legacy one-process worker, while
     # multi-page ordinary drawing uses the bounded independent page pool.
