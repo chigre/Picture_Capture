@@ -4633,6 +4633,8 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.word_window_radius = 250" in review
     assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "step = 100" in REVIEW_REFERENCE_SOURCE
@@ -5743,6 +5745,8 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
@@ -5856,6 +5860,8 @@ def test_review_right_sections_use_requested_default_expansion_states():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=(key == "reference"))' in review
     assert 'expanded = True if state is None else bool(state.get())' in review
@@ -6178,6 +6184,8 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (source.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert '"行间空："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通词条行切图高："' in REVIEW_WORKSPACE_SOURCE
     assert "self.review_regular_crop_height_var" in review
@@ -6308,6 +6316,8 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'self.review_vertical_padding_var = tk.StringVar(' in review
     assert 'self._review_vertical_padding_apply_job: str | None = None' in review
     assert 'text="上下边距："' in REVIEW_WORKSPACE_SOURCE
@@ -6360,6 +6370,8 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert '"普通字/行高："' in REVIEW_WORKSPACE_SOURCE
     assert '"大字头切图高："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in REVIEW_WORKSPACE_SOURCE
@@ -7046,6 +7058,8 @@ def test_review_network_status_uses_single_line_result_block():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'value="网络词汇核验：等待选择词条"' in review
     assert '"✓ 有词典收录：" + "、".join(found_names)' in REVIEW_LOOKUP_SOURCE
     assert '"○ 各可用词典均未检出精确词条（不代表该词不存在）"' in REVIEW_LOOKUP_SOURCE
@@ -7075,6 +7089,8 @@ def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.word_list = tk.Text(" in REVIEW_WORKSPACE_SOURCE
     assert '"wordslist_number", font=(number_family, 10)' in REVIEW_WORKSPACE_SOURCE
     assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in REVIEW_WORKSPACE_SOURCE
@@ -7092,6 +7108,8 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'text="自动检查"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="立即"' in REVIEW_WORKSPACE_SOURCE
     assert 'value="CC-CEDICT(?)"' in review
@@ -7223,6 +7241,8 @@ def test_v21210_review_toolbar_has_cc_simplified_comparison():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'value="CC简(?)"' in review
     assert 'textvariable=self.cc_simplified_compare_var' in REVIEW_WORKSPACE_SOURCE
     assert 'command=self.show_cc_simplified_comparison' in REVIEW_WORKSPACE_SOURCE
@@ -7421,6 +7441,8 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.review_panes = panes" in REVIEW_WORKSPACE_SOURCE
     assert "self.review_control_row = row1" in REVIEW_WORKSPACE_SOURCE
     assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
