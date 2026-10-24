@@ -64,7 +64,9 @@ def test_settings_crop_extraction_keeps_dialog_wrappers_and_save_boundary() -> N
 
     assert '(crop_tab, "切图")' in settings
     assert '"crop": crop_tab' in settings
-    assert "self._save_integrated_crop_settings()" in settings
+    form = (ROOT / "src/picture_capture/ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.save_settings(" in settings
+    assert "self._save_integrated_crop_settings()" in form
     assert "CropSettingsDialog.CONFIG_NAME" in helper
     assert "CROP_SETTINGS_VERSION" in helper
     assert "SOURCE_COORDINATE_SPACE" in helper
