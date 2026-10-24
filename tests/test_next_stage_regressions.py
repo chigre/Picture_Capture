@@ -2487,6 +2487,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     shell_owner = (source.parent / "wizard_shell_builder.py").read_text(encoding="utf-8")
     reading_owner = (source.parent / "wizard_reading_controls.py").read_text(encoding="utf-8")
     headword_help_owner = (source.parent / "wizard_headword_explanations.py").read_text(encoding="utf-8")
+    catalog_owner = (source.parent / "wizard_catalog.py").read_text(encoding="utf-8")
     persistence_owner = (source.parent / "wizard_persistence.py").read_text(encoding="utf-8")
     profile_events_owner = (source.parent / "wizard_profile_events.py").read_text(encoding="utf-8")
     marker_owner = (source.parent / "wizard_visual_markers.py").read_text(encoding="utf-8")
@@ -2513,7 +2514,9 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner, persistence_owner, profile_events_owner, marker_owner, bootstrap_owner, interactions_owner))
+    assert "from . import wizard_catalog as _wizard_catalog" in legacy
+    assert "HEADWORD_EXAMPLE_FILES = {" in catalog_owner
+    text = "\n".join((legacy, catalog_owner, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner, persistence_owner, profile_events_owner, marker_owner, bootstrap_owner, interactions_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
