@@ -61,10 +61,12 @@ def test_replay_ocr_and_fusion_paths_receive_original_image_path():
     app = (src / "app.py").read_text(encoding="utf-8")
     controller = (src / "ui/controllers/detection.py").read_text(encoding="utf-8")
     replay_src = (src / "ui" / "layout_step_replay.py").read_text(encoding="utf-8")
-    assert "source_image_path=detection_mask_source_path(" in app
+    batch = (src / "ui/detection_batch_execution.py").read_text(encoding="utf-8")
+    assert "_detection_batch_execution.detect_pages(" in app
+    assert "source_image_path=detection_mask_source_path(" in batch
     assert "source_image_path=detection_mask_source_path(" in controller
     assert "_run_replay, source, settings, page_index, page_sections, source_path," in replay_src
-    assert app.index("missing_ppp = missing_saved_illustrations(") < app.index("batch_started_at = time.time()")
+    assert batch.index("missing_ppp = missing_saved_illustrations(") < batch.index("batch_started_at = time.time()")
 
 
 def test_ocr_auto_mask_is_memory_only_but_existing_ppp_is_read(tmp_path):
