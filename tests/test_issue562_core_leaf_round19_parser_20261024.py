@@ -26,7 +26,8 @@ def test_parser_retains_latin_arabic_and_numbered_kana_paths():
     for line in ("ab·a·cus ['æbəkəs] n. frame", "a·ban·don /ə'bændən/ v.t. leave"):
         parsed = core.parse_headword_text(line, AppSettings(ocr_language="eng"), profile=latin)
         assert parsed is not None and parsed.has_pos
-        assert parsed.__class__.__module__ == "picture_capture.ocr.headword_models"
+        assert type(parsed) is core.HeadwordParse
+        assert parsed.__class__.__module__ == "picture_capture.paddle_headwords_core"
     assert core.parse_headword_text(
         "中文正文", AppSettings(ocr_language="eng"), profile=latin,
     ) is None
