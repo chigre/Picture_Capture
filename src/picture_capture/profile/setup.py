@@ -742,14 +742,8 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _set_feedback_buttons(self, state: str) -> None:
-        if not hasattr(self, "feedback_too_many_button"):
-            return
-        for button in (
-            self.feedback_too_many_button,
-            self.feedback_good_button,
-            self.feedback_too_few_button,
-        ):
-            button.configure(state=state)
+        """Historical UI hook; full logic owned by validation controls."""
+        return _wizard_validation_controls.set_feedback_buttons(self, state)
 
     def _apply_validation_feedback(self, result: str) -> None:
         """Legacy public call location, forwarding live dependencies to the owner."""
@@ -771,16 +765,8 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _poll_validation_queue(self) -> None:
-        if self._validation_queue is None:
-            return
-        try:
-            results = self._validation_queue.get_nowait()
-        except queue.Empty:
-            if self.winfo_exists() and self._validation_running:
-                self.after(100, self._poll_validation_queue)
-            return
-        self._validation_queue = None
-        self._finish_validation(results)
+        """Poll OCR results on the Tk main thread."""
+        return _wizard_validation_controls.poll_validation_queue(self, queue_module=queue)
 
     @staticmethod
     def _marker_preview(
@@ -796,21 +782,12 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _set_validation_fit(self, mode: str) -> None:
-        self.validation_fit_mode = "width" if mode == "width" else "height"
-        if self._validation_results:
-            self._render_validation_result()
-        try:
-            self.right_canvas.yview_moveto(0.0)
-        except tk.TclError:
-            pass
+        """Historical profile fit callback."""
+        return _wizard_validation_controls.set_validation_fit(self, mode, tk_module=tk)
 
     def _move_validation_preview(self, delta: int) -> None:
-        if not self._validation_results:
-            return
-        self.validation_preview_slot = (
-            int(self.validation_preview_slot) + int(delta)
-        ) % len(self._validation_results)
-        self._render_validation_result()
+        """Historical profile preview navigation callback."""
+        return _wizard_validation_controls.move_validation_preview(self, delta)
 
     def _render_validation_result(self) -> None:
         """Legacy public call location, forwarding live dependencies to the owner."""

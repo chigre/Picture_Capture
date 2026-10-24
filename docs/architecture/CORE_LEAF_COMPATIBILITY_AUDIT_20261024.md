@@ -640,3 +640,12 @@ Round 41 first CI identified a source-location-only regression in the existing a
   OCR cache, Entry identity or crop/export schema change. Real scanned
   dictionary-page GUI, ordinary/OCR/combined, Profile, PDIC/PPP reopen
   and crop/export equivalence are **not manually verified**. Keep Draft.
+
+
+### Round 46 — OCR channel algorithms, project page enumeration and Profile validation handlers (2026-10-25)
+
+- Seven actual OCR functions physically relocated to `ocr/channel_preparation.py` and `ocr/channel_results.py`, leaving signature-preserving old OCR channel public entrypoints which inject **current** NumPy, Pillow, threshold, payload and record/candidate constructors at each call. The model dataclasses and OCR session do not move; pixel space/box ordering/fusion fields and stored formats remain unchanged.
+- Four actual project cover/path/page-enumeration/natural-sorting algorithms physically relocated from `models.py` to `project/page_discovery.py`; the existing settings, Entry and project state classes remain at their historical pickle paths. Current cover predicates and sort callbacks are passed by the old entrypoints.
+- Four complete Tk validation queue/button/preview/fit algorithms physically moved out of `profile/setup.py` into existing `profile/wizard_validation_controls.py`. All public Wizard methods still dispatch in the original Tk event loop; no new OCR worker/UI concurrency.
+- Focused tests `tests/test_issue562_ocr_channel_project_profile_round46_20261025.py` assert physical owners, live monkeypatch seams, source boxes, page discovery and Tk event handling. Also strengthened a previous source-test's unpatched-import identity check in a fresh interpreter to avoid suite-order pollution while retaining the same invariant.
+- Root remains **10** Python files; no root alias/shim added. Real scanned dictionary-page GUI ordinary/OCR/combined flow, Profile, PDIC/PPP reopen and crop/export equality, plus independent review, remain **manual acceptance pending**. PR remains Draft; no merge or Ready.

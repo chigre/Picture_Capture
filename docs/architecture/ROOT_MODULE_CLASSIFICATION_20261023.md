@@ -144,3 +144,8 @@ canvas/descendant algorithms moved from `profile/setup.py` to
 Characterization test: `tests/test_issue562_shared_observations_wizard_scroll_round45_20261025.py`.
 Root file count stays 10. Independent real dictionary scan, PDIC/PPP
 save/reopen and crop/export parity remain pending; PR remains Draft.
+
+
+## Round 46 — OCR channel, project page discovery and Profile validation
+
+Root `ocr_channel.py` retains stable public models, session and hooks; seven algorithm implementations moved into `ocr/channel_preparation.py` and `ocr/channel_results.py`. Root `models.py` retains persisted model identity but delegates four project discovery/sorting algorithms to `project/page_discovery.py`. Four Tk validation algorithms moved from `profile/setup.py` to `profile/wizard_validation_controls.py`, with the historical methods still running on the original main UI event path. Focused tests: `tests/test_issue562_ocr_channel_project_profile_round46_20261025.py`. Ten root Python files remain, no stubs. Representative dictionary scans, PDIC/PPP save/reopen and export parity remain pending; PR stays Draft.

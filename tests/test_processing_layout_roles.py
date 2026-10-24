@@ -199,10 +199,17 @@ def test_layout_runtime_does_not_replace_canonical_entry_materializer() -> None:
 
 
 def test_phase6d_processing_import_keeps_core_left_edge_native() -> None:
-    assert (
-        processing._core._detect_entries_left_edge
-        is processing._original_detect_entries_left_edge
+    # Other tests exercise live core/facade monkeypatch mirrors. A fresh
+    # interpreter checks the true cold-import contract without leakage.
+    import subprocess
+    import sys
+
+    program = (
+        "from picture_capture import processing; "
+        "assert processing._core._detect_entries_left_edge "
+        "is processing._original_detect_entries_left_edge"
     )
+    subprocess.run([sys.executable, "-c", program], check=True)
 
 
 def test_phase6d_processing_fallback_injects_enhanced_left_edge(monkeypatch) -> None:

@@ -146,3 +146,45 @@ def apply_validation_feedback(self, result: str) -> None:
     self.validation_status_var.set("识别规则已调整，需要重新测试")
     self._set_feedback_buttons("disabled")
 
+
+
+# Runs in the caller's Tk event-loop; no widget operations on background workers.
+
+def set_feedback_buttons(self, state: str) -> None:
+    if not hasattr(self, "feedback_too_many_button"):
+        return
+    for button in (
+        self.feedback_too_many_button,
+        self.feedback_good_button,
+        self.feedback_too_few_button,
+    ):
+        button.configure(state=state)
+
+def poll_validation_queue(self, *, queue_module) -> None:
+    if self._validation_queue is None:
+        return
+    try:
+        results = self._validation_queue.get_nowait()
+    except queue_module.Empty:
+        if self.winfo_exists() and self._validation_running:
+            self.after(100, self._poll_validation_queue)
+        return
+    self._validation_queue = None
+    self._finish_validation(results)
+
+def set_validation_fit(self, mode: str, *, tk_module) -> None:
+    self.validation_fit_mode = "width" if mode == "width" else "height"
+    if self._validation_results:
+        self._render_validation_result()
+    try:
+        self.right_canvas.yview_moveto(0.0)
+    except tk_module.TclError:
+        pass
+
+def move_validation_preview(self, delta: int) -> None:
+    if not self._validation_results:
+        return
+    self.validation_preview_slot = (
+        int(self.validation_preview_slot) + int(delta)
+    ) % len(self._validation_results)
+    self._render_validation_result()
