@@ -40,7 +40,8 @@ def test_normal_compact_and_extreme_page_tooltips_are_identical():
     compact = Path(simple_page_controls.__file__).read_text(encoding="utf-8")
     extreme = Path(workspace_tools.__file__).read_text(encoding="utf-8")
     for tip in ("切换到上页（Shift + 鼠标右键）", "切换到下页（鼠标右键）"):
-        assert tip in source
+        owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_workspace_build.py").read_text(encoding="utf-8")
+        assert tip in owner
         assert tip in compact
         assert tip in extreme
     assert 'app._attach_tooltip(\n            button,' in extreme
