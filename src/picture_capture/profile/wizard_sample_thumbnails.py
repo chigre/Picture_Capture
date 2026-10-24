@@ -113,7 +113,8 @@ def poll_sample_thumbnail_load(self, *, deps) -> None:
 def render_sample_thumbnail_slot(
     self, slot: int, index: int, name: str,
     image: Image.Image | None, error: str | None,
-, *, deps) -> None:
+    *, deps,
+) -> None:
     ttk = deps["ttk"]
     ImageTk = deps["ImageTk"]
     themed_display_image = deps["themed_display_image"]
