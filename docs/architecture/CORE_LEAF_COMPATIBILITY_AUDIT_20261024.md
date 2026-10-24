@@ -429,3 +429,20 @@ The preceding Round 22 head `2578c5c4` passed exact-head six-platform CI and thr
 - **Nine production implementation functions** moved in this batch. No persisted class (Entry, OCRRecord, CropRecord, IllustrationSplitResult, etc.) was moved. The two core modules decreased by roughly 4.7 KB net because history-preserving signature wrappers remain. Package root remains **10 .py files**, no new root-level shims.
 - Tests `tests/test_issue562_core_leaf_round25_paddle_20261024.py` and `tests/test_issue562_core_leaf_round25_processing_20261024.py` test AST boundary, historical call signatures/model origins, engine cache reuse and raw OCR source coordinates, subprocess invocation, PPP manual-annotation persistence, source crop clipping and live multiprocessing job readers. Existing larger suites remain required.
 - **Release gate:** exact-head 6-job CI and 3-OS OCR Platform Smoke must pass; actual dictionary-page GUI ordinary/OCR/combined scan, manual correction, image export and PDIC/PPP save-reopen parity remain independent acceptance gates. Keep PR Draft and do not merge.
+
+
+## Round 26 — 7 source-pixel geometry, spawn and atomic crop staging implementations (2026-10-24)
+
+Previous Round 25 head `200bdd3c`: Windows, macOS and Ubuntu OCR Smoke **all passed**, while the main six-platform CI remained queued as this batch began. All new code remains unmerged in Draft PR #663.
+
+**New implementation owners:**
+- `geometry/page_runtime_context.py`: moved `_page_geometry_context` Profile resolution and disposable analysis-image/geometry construction, preserving source-image pixels and current preprocessing/Profile/geometry callbacks. Historical `processing_core._page_geometry_context` retains its signature/module origin.
+- `detection/spawn_job_execution.py`: moved `detect_entries_job` one-page spawn-safe ordinary-marker scan, SECTION read and PDIC commit. `processing_core.detect_entries_job` retains the importable top-level function, original source width/coordinate semantics and live PNG/detector/PDIC hooks.
+- `illustration/source_detection_jobs.py`: moved `detect_illustration_regions` image-file loading and disposable source RGB detection, plus `detect_illustrations_job` background-safe PPP update dispatch. Both historical core APIs remain unchanged; source file and detection functions are passed on each call.
+- `crop/image_staging_io.py`: moved `_save_crop`, `_stage_text_file`, `_stage_crop` actual implementations. Persisted source cropping, alpha conversion and path clamping remain the same. UTF-8 staging continues to flush/fsync to temporary files without publishing early. Failure cleans up partially written temporary output, and crop/transaction callbacks remain dynamically patchable. Atomic publish is still performed by the existing caller once all pieces are successfully staged.
+
+**Compatibility regression suites:** `tests/test_issue562_core_leaf_round26_page_jobs_20261024.py` checks exact AST ownership, untouched historical signatures, live geometry callbacks, source image and one-page PDIC context, and illustration jobs. `tests/test_issue562_core_leaf_round26_staging_20261024.py` checks exact AST ownership, live crop staging hooks, source pixel crop parity, UTF-8 manifest writes and failure cleanup.
+
+**Scope:** Seven complete function bodies migrated into four new leaf modules. No `Entry`, `Geometry`, `CropRecord`, `IllustrationSplitResult` or other class moved; no root compatibility shims created; package root remains ten Python modules. Core source size is nearly unchanged because call-time injection and full historic signatures are retained in the compatibility entrypoints. No intentional alterations to OCR parsing, cache data, source pixel coordinates, manual edits, PDIC/PPP/SECTION metadata, temp filename formats or crop publish semantics.
+
+**Acceptance gate:** exact Round 26 HEAD six-platform CI and Windows/macOS/Ubuntu OCR Smoke must pass independently; representative real dictionary page GUI ordinary/OCR/combined scan, editing, crop and PDIC/PPP save/reopen parity remains outstanding. Keep PR Draft and do not merge automatically.
