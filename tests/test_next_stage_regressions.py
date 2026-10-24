@@ -3252,7 +3252,9 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
     assert 'canvas.bind(\n            "<Button-1>"' in preview_owner
     assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in preview_owner
-    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
+    analysis_owner = (source.parent / "wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.apply_analysis_suggestion(" in text
+    assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in analysis_owner
     assert "def _nudge_template_column_preview" in text
     assert "canvas.move(items[index], dx, dy)" in text
     assert "self._profile_input_changed(refresh_preview=False)" in text
@@ -3357,9 +3359,11 @@ def test_vb_ordinary_defaults_are_not_replaced_by_scale_heuristics():
     assert "horizontal_tolerance_was_auto" in layout_actions
     assert 'if "character_height" in values:' in layout_actions
     assert 'return _run_detect_layout_current(self)' in app_text
-    assert "body_indent_was_auto" in profile_text
-    assert "horizontal_tolerance_was_auto" in profile_text
-    assert 'if "character_height" in self._analysis_suggestion:' in profile_text
+    analysis_owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.apply_analysis_suggestion(" in profile_text
+    assert "body_indent_was_auto" in analysis_owner
+    assert "horizontal_tolerance_was_auto" in analysis_owner
+    assert 'if "character_height" in self._analysis_suggestion:' in analysis_owner
     assert settings.ordinary_right_divisor == 1.0
     assert settings.white_threshold_high == 999
     assert settings.white_threshold_low == 700
