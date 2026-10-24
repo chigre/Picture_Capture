@@ -347,3 +347,13 @@ replace these checks.
 - Tests `tests/test_issue562_core_leaf_round19_parser_20261024.py` and `tests/test_issue562_core_leaf_round19_manual_20261024.py` check old public signatures/module origins, Latin/Arabic/Japanese parse paths, live patchable collaborators, existing image-coordinate candidate precedence and sidecar roundtrip/error tolerance.
 - Package root remains **10** physical Python modules; no new root shim; OCR cache, PDIC/PPP/SECTION schemas, saved manual override keys and crop output publishing stay unchanged.
 - **Acceptance pending:** full exact-head CI across Windows/macOS/Ubuntu and Python 3.10/3.13, OCR three-OS smoke, then real representative dictionary-page GUI scan/edit/export and save/reopen parity. Keep Draft and unmerged.
+
+
+## Round 19 corrective CI fix and Round 20 POS-grammar extraction (2026-10-24)
+
+- The six-platform Round 19 CI on `8507138c` reported a single new test expectation mismatch: `test_issue562_core_leaf_round19_parser_20261024.py` expected `HeadwordParse.__module__ == "picture_capture.ocr.headword_models"`, but the production class deliberately uses the historical `picture_capture.paddle_headwords_core` identity for compatibility. `6c623dc4` corrects the **test assertion only**, checks identity against `core.HeadwordParse`, and does not relocate the class or change any stored object format.
+- Round 20 introduces `ocr/pos_cue_policy.py`, now owning the implementations of `_compile_patterns`, `_strip_entry_modifiers`, and `_find_pos_cue`. Core keeps exactly the same public function signatures and module identities while injecting its current `re`, `AppSettings` and patchable `_strip_entry_modifiers` per call.
+- The moved logic retains profile-specific Latin-only narrowing of generic lemma regex, invalid user-regex error mapping, POS token-boundary/noise checks, pronunciation exclusions, gender/morphology and Roman-marker removal, and optional numeric prefix cues. No accepted lemma/class/decision rule was intentionally changed.
+- New regression `tests/test_issue562_core_leaf_round20_pos_20261024.py` covers signature/origin, Latin profile and invalid regex handling, narrow OCR POS noise, pronunciation/numeric handling and current-core modifier monkeypatch path.
+- Root physical Python inventory remains **10**, with no compatibility stub. OCR saved classes, cache, Profile, PDIC/PPP/SECTION and manual selection formats, as well as crop output transactions, remain in their existing owners.
+- **Verification requirement:** recheck exact latest-head six-platform CI and three-platform OCR smoke; then perform independent actual dictionary-page GUI scan/edit/export/sidecar reopen. Keep PR **Draft**; never auto-merge.
