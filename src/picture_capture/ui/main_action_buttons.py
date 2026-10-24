@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 def sidebar_action_button_impl(
     self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
-, deps: dict[str, Any]) -> tk.Widget:
+    deps: dict[str, Any],
+) -> tk.Widget:
     ttk = deps["ttk"]
     tk = deps["tk"]
     """Return one dense action button for the main sidebar.
@@ -65,7 +66,8 @@ def sidebar_action_button_impl(
 
 def footer_action_button_impl(
     self, parent: tk.Misc, text: str, command, *, role: str
-, deps: dict[str, Any]) -> tk.Button:
+    deps: dict[str, Any],
+) -> tk.Button:
     tk = deps["tk"]
     """Create one emphasized bottom-bar action with a functional color."""
     colors = self._main_ui_colors
