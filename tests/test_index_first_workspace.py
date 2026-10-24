@@ -131,8 +131,10 @@ def test_main_window_has_no_minimum_width_constraint():
 
 def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
     app, _ = sources()
-    assert '"canvas": "#e9edf2"' in app
-    assert '"canvas": base["canvas"]' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert '"canvas": "#e9edf2"' in appearance
+    assert '"canvas": base["canvas"]' in appearance
     assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in app
 
 
@@ -189,7 +191,8 @@ def test_page_columns_order_and_mandatory_visibility():
     assert 'menu.add_checkbutton(label="画线", state="disabled")' in PAGE_INDEX_SOURCE
     assert 'label="区块", variable=section_var, state="disabled"' in PAGE_INDEX_SOURCE
     assert '"bookmark": 25' in PAGE_INDEX_SOURCE
-    assert 'borderwidth=1' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert 'borderwidth=1' in appearance
 
 
 def test_mini_page_list_below_task_icons():
@@ -210,10 +213,12 @@ def test_mini_page_list_below_task_icons():
 
 def test_rail_styles_are_compact_in_both_themes():
     app, tools = sources()
-    assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in app
-    assert 'style.configure("PC.CompactPage.Treeview", rowheight=22' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in appearance
+    assert 'style.configure("PC.CompactPage.Treeview", rowheight=22' in appearance
     assert 'padding=(0, 0), relief="flat"' in tools
-    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in app
+    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in appearance
 
 
 def test_compact_index_has_optional_headers_and_horizontal_scroll():
@@ -222,7 +227,8 @@ def test_compact_index_has_optional_headers_and_horizontal_scroll():
     assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
-    assert 'font=self.compact_page_font' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert 'font=self.compact_page_font' in appearance
     assert 'self.compact_page_font = default_page_font.copy()' in app
     assert "round(base_size * 0.9)" in app
 
