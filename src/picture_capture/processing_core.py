@@ -60,6 +60,9 @@ from .ordinary import cjk_marker_reconciliation as _cjk_marker_reconciliation
 from .quality import detection_entry_fusion as _detection_entry_fusion
 from .geometry import column_path_tracking as _column_path_tracking
 from .ocr import ordinary_marker_text_enrichment as _ordinary_marker_text_enrichment
+from .detection import page_method_dispatch as _page_method_dispatch
+from .refinement import existing_entry_positions as _existing_entry_positions
+from .ocr import legacy_entry_text_reading as _legacy_entry_text_reading
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -646,77 +649,25 @@ def detect_entries(
     page_sections: list[PageSection] | None = None,
     left_edge_detector: Any | None = None,
 ) -> tuple[list[Entry], Geometry]:
-    """Detect markers with the active Project Profile page template applied."""
-    detect_left_edge = left_edge_detector or _detect_entries_left_edge
-    source = normalize_page_rgb(image)
-    effective = effective_page_settings(settings, source.size, profile_page_index)
-    analysis_source = page_template_analysis_image(source, effective, profile_page_index)
-    method = effective.detection_method.strip().lower()
-    if method in {"paddleocr", "combined"}:
-        geometry = derive_geometry(analysis_source, effective)
-        from .paddle_headwords import detect_paddle_headwords
-        ocr_entries = detect_paddle_headwords(
-            analysis_source, geometry, effective,
-            cache_path=paddle_cache_path,
-            force_refresh=force_paddle_refresh,
-            filter_rules_path=paddle_filter_rules_path,
-            page_sections=page_sections,
-        )
-        if method == "combined":
-            # Run the restored ordinary detector unchanged, including its
-            # page-specific auto-layout and VB separator chain.  The OCR path
-            # likewise keeps its own existing geometry/parser/refinement logic;
-            # only their final entry observations are fused.
-            ordinary_effective, _applied_layout = ordinary_page_layout_settings(
-                analysis_source, effective
-            )
-            ordinary_entries, _ordinary_geometry = detect_left_edge(
-                analysis_source, ordinary_effective, page_sections=page_sections
-            )
-            review_candidates: list[dict] = []
-            if paddle_cache_path is not None and paddle_cache_path.exists():
-                try:
-                    cached_payload = json.loads(
-                        paddle_cache_path.read_text(encoding="utf-8")
-                    )
-                    if isinstance(cached_payload, dict):
-                        review_candidates = [
-                            item for item in list(
-                                cached_payload.get("review_candidates") or []
-                            )
-                            if isinstance(item, dict)
-                        ]
-                except (OSError, ValueError, TypeError):
-                    review_candidates = []
-            entries = _fuse_detection_entries(
-                ordinary_entries, ocr_entries, geometry, effective, page_sections,
-                review_candidates=review_candidates,
-                image=analysis_source,
-            )
-        else:
-            entries = ocr_entries
-    else:
-        ordinary_effective, _applied_layout = ordinary_page_layout_settings(
-            analysis_source, effective
-        )
-        entries, geometry = detect_left_edge(
-            analysis_source, ordinary_effective, page_sections=page_sections
-        )
-
-    entries = [
-        entry for entry in entries
-        if entry_allowed_by_page_template(
-            entry.x, entry.y, source.size, effective, profile_page_index,
-        )
-        and (
-            not page_sections
-            or v_is_inside_sections(
-                geometry.source_to_canonical(entry.x, entry.y)[1],
-                page_sections, geometry.top, geometry.bottom,
-            )
-        )
-    ]
-    return sort_entries_reading_order(entries, geometry, page_sections), geometry
+    """Historical Profile-aware ordinary/OCR/combined entrypoint."""
+    return _page_method_dispatch.detect_entries_impl(
+        image, settings, paddle_cache_path, force_paddle_refresh,
+        paddle_filter_rules_path, profile_page_index, page_sections,
+        left_edge_detector,
+        deps={{
+            "_detect_entries_left_edge": _detect_entries_left_edge,
+            "normalize_page_rgb": normalize_page_rgb,
+            "effective_page_settings": effective_page_settings,
+            "page_template_analysis_image": page_template_analysis_image,
+            "derive_geometry": derive_geometry,
+            "ordinary_page_layout_settings": ordinary_page_layout_settings,
+            "_fuse_detection_entries": _fuse_detection_entries,
+            "entry_allowed_by_page_template": entry_allowed_by_page_template,
+            "v_is_inside_sections": v_is_inside_sections,
+            "sort_entries_reading_order": sort_entries_reading_order,
+            "json": json,
+        }},
+    )
 
 
 def refine_existing_entries(
@@ -764,84 +715,19 @@ def _refine_existing_entries_with_geometry(
     align_to_ink_top: bool = False,
     fixed_half_gutter: bool = False,
 ) -> tuple[list[Entry], dict[str, int]]:
-    """Refine Y without reclassifying Layout rows."""
-    canonical = geometry.transform.canonical_image_for_analysis(analysis_source)
-    gray = np.asarray(ImageOps.grayscale(canonical), dtype=np.uint8)
-
-    if align_to_ink_top:
-        from .refinement.top_edge import refine_existing_marker_to_ink_top
-    else:
-        from .paddle_headwords import refine_separator_y
-
-    line_height = max(
-        2,
-        _source_px(effective.character_height),
+    """Historical Y refinement with current core geometry/ink callbacks."""
+    return _existing_entry_positions.refine_existing_entries_with_geometry_impl(
+        entries, effective, analysis_source, geometry,
+        align_to_ink_top=align_to_ink_top,
+        fixed_half_gutter=fixed_half_gutter,
+        deps={{
+            "_source_px": _source_px,
+            "column_index": column_index,
+            "replace": replace,
+            "np": np,
+            "ImageOps": ImageOps,
+        }},
     )
-    source_pixel_scale = 1.0
-    search_ratio = max(0.05, min(0.80, float(effective.paddle_separator_search_ratio)))
-    max_delta = (
-        max(0, round(line_height * max(0.0, min(1.5, float(effective.separator_y_max_shift_ratio)))))
-        if align_to_ink_top
-        else max(2, round(line_height * search_ratio))
-    )
-
-    refined_entries: list[Entry] = []
-    moved = 0
-    limited = 0
-    unverified = 0
-    for entry in entries:
-        canonical_u, canonical_v = geometry.source_to_canonical(entry.x, entry.y)
-        col = column_index(entry.x, geometry, entry.y)
-        column_x = max(0, round(geometry.x_at(col, canonical_v)))
-        column_right = min(
-            gray.shape[1],
-            column_x + max(10, min(int(geometry.column_widths[col]), int(effective.column_width))),
-        )
-        if align_to_ink_top:
-            from .refinement.fixed_band import fixed_half_gutter_band
-            column_x, column_right = fixed_half_gutter_band(
-                geometry, col, int(canonical_v), gray.shape[1],
-                int(effective.column_width), int(effective.gutter),
-            )
-        new_v = int(canonical_v)
-        if column_right > column_x:
-            if align_to_ink_top:
-                candidate_v, _details = refine_existing_marker_to_ink_top(
-                    gray, int(canonical_v), line_height, effective,
-                    anchor_x=int(canonical_u),
-                    column_left=column_x, column_right=column_right,
-                    lower_bound=max(0, int(geometry.top)),
-                    upper_bound=int(geometry.bottom),
-                )
-                if not str(_details.get("reason", "")).startswith("verified_whole_column_"):
-                    unverified += 1
-            else:
-                candidate_v, _details = refine_separator_y(
-                    gray[:, column_x:column_right],
-                    int(canonical_v),
-                    line_height,
-                    effective,
-                    pixel_scale=source_pixel_scale,
-                    lower_bound=max(0, int(geometry.top)),
-                )
-            delta = int(candidate_v) - int(canonical_v)
-            if abs(delta) > max_delta:
-                limited += 1
-                delta = max(-max_delta, min(max_delta, delta))
-            new_v = int(canonical_v) + delta
-
-        if new_v != int(canonical_v):
-            moved += 1
-        new_x, new_y = geometry.canonical_to_source(int(canonical_u), int(new_v))
-        refined_entries.append(replace(entry, x=int(new_x), y=int(new_y)))
-
-    return refined_entries, {
-        "total": len(entries),
-        "moved": moved,
-        "limited": limited,
-        "max_delta": int(max_delta),
-        "unverified": unverified,
-    }
 
 
 def detect_entries_job(
@@ -1003,48 +889,19 @@ def ocr_entries(
     profile_page_index: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> list[str]:
-    source, effective, _analysis_source, geometry = _page_geometry_context(
-        image, settings, profile_page_index,
+    """Historical text-only OCR through currently configured engine and crop."""
+    return _legacy_entry_text_reading.ocr_entries_impl(
+        image, entries, settings, replace_rules,
+        profile_page_index=profile_page_index, page_sections=page_sections,
+        deps={{
+            "_page_geometry_context": _page_geometry_context,
+            "sort_entries_reading_order": sort_entries_reading_order,
+            "line_box": line_box,
+            "run_tesseract": run_tesseract,
+            "resolved_tesseract_language": resolved_tesseract_language,
+            "process_ocr_text": process_ocr_text,
+        }},
     )
-    results: list[str] = []
-    # The legacy text-only OCR consumer must use the same bracketed-lemma
-    # boundary as ordinary drawn-marker OCR. A concrete CJK Profile and the
-    # user's bracket-structure toggle are both required.
-    from .profile.dictionary import effective_project_profile_id, load_dictionary_profile
-    from .ordinary.marker_ocr_text import bracketed_ocr_lemma
-    profile = load_dictionary_profile(
-        None,
-        preset=effective_project_profile_id(effective, None),
-        language=effective.ocr_language,
-    )
-    bracket_profile = bool(
-        getattr(effective, "profile_cjk_allow_bracketed_headword", False)
-        and profile.uses_parser("cjk_bracketed")
-    )
-    paddle_engine = None
-    if effective.ocr_engine == "paddleocr":
-        from .paddle_headwords import get_paddle_engine
-        paddle_engine = get_paddle_engine(effective)
-    for entry in sort_entries_reading_order(entries, geometry, page_sections):
-        crop = source.crop(line_box(entry, geometry, source, effective))
-        if effective.ocr_engine == "paddleocr":
-            from .paddle_headwords import recognize_paddle_text
-            raw = recognize_paddle_text(crop, effective, engine=paddle_engine)
-        else:
-            psm = 5 if str(getattr(effective, "layout_writing_mode", "")).startswith("vertical") else 7
-            raw = run_tesseract(
-                crop, resolved_tesseract_language(effective), effective.ocr_executable, psm=psm
-            )
-        text = process_ocr_text(
-            raw, replace_rules, effective.lowercase_ocr,
-        ) if effective.ocr_replace else str(raw or "").strip()
-        # Clean after replacement as well: user rules may preserve or rewrite
-        # delimiters. Otherwise use the same untouched result as before.
-        lemma = bracketed_ocr_lemma(text, enabled=bracket_profile)
-        results.append(lemma if lemma is not None else text)
-    return results
-
-
 
 
 def _save_crop(
