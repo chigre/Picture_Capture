@@ -30,7 +30,9 @@ from .ordinary.postprocess import stabilize_ordinary_visual_entries
 from .ordinary.visual import recover_ordinary_visual_entries
 from .layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
 from .layout import current_page as _current_page_understanding
+from .layout import shared_geometry as _shared_geometry
 from .ordinary import layout_roles as _ordinary_layout_roles
+from .ordinary import observation_policy as _ordinary_observation_policy
 from .ordinary.debug_stage import _record_ordinary_debug_stage
 from .layout.page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
@@ -92,24 +94,10 @@ def _uses_cjk_indent_topology(settings: AppSettings) -> bool:
 
 
 def _geometry_from_page_understanding(understanding: PageUnderstanding) -> Any:
-    layout = understanding.layout
-    starts = [int(column.left) for column in layout.columns]
-    widths = [max(1, int(column.right) - int(column.left)) for column in layout.columns]
-    paths = [
-        _core.ColumnPath([
-            (int(layout.body_top), int(column.left)),
-            (int(layout.body_bottom), int(column.left)),
-        ])
-        for column in layout.columns
-    ]
-    return _core.Geometry(
-        column_starts=starts,
-        column_widths=widths,
-        top=int(layout.body_top),
-        bottom=int(layout.body_bottom),
-        column_paths=paths,
-        transform=layout.transform,
-        source_size=layout.source_size,
+    """Legacy hook: retain current core geometry factories."""
+    return _shared_geometry.geometry_from_page_understanding(
+        understanding, column_path_type=_core.ColumnPath,
+        geometry_type=_core.Geometry,
     )
 
 
@@ -125,36 +113,10 @@ def _ordinary_settings_for_shared_geometry(
     *,
     method: str,
 ) -> AppSettings:
-    """Freeze ordinary/VB to the already-resolved shared page geometry."""
-    frozen = replace(effective)
-    frozen.detection_method = str(method or "left_edge")
-    frozen.ordinary_auto_layout = False
-    frozen.manual_columns = False
-    frozen.follow_column_deformation = False
-
-    starts = [int(value) for value in list(getattr(geometry, "column_starts", []) or [])]
-    widths = [int(value) for value in list(getattr(geometry, "column_widths", []) or [])]
-    frozen.columns = max(1, len(starts) or int(getattr(frozen, "columns", 1) or 1))
-    frozen.start_y = int(getattr(geometry, "top", getattr(frozen, "start_y", 0)))
-
-    if starts:
-        frozen.manual_x = starts[0]
-    if widths:
-        frozen.column_width = max(1, widths[0])
-
-    if len(starts) >= 2 and widths:
-        frozen.gutter = max(0, starts[1] - (starts[0] + widths[0]))
-
-    if starts:
-        base_width = max(1, int(getattr(frozen, "column_width", widths[0] if widths else 1)))
-        base_gutter = max(0, int(getattr(frozen, "gutter", 0) or 0))
-        pitch = base_width + base_gutter
-        frozen.column_start_offsets = [
-            int(start - (starts[0] + index * pitch))
-            for index, start in enumerate(starts)
-        ]
-
-    return frozen
+    """Legacy hook: freeze using the current settings copier."""
+    return _shared_geometry.ordinary_settings_for_shared_geometry(
+        effective, geometry, method=method, replace_settings=replace,
+    )
 
 
 def _detect_entries_left_edge(
@@ -213,25 +175,13 @@ def _allowed_entries(
     profile_page_index: int,
     page_sections: list[PageSection] | None,
 ) -> list[Entry]:
-    # All private call sites pass detect_entries()' already-normalized source.
-    # This filter only needs page size, so a second full-page RGB copy is waste.
-    source_size = tuple(image.size)
-    effective = _core.effective_page_settings(
-        settings, source_size, profile_page_index,
+    """Legacy Entry gate with current template and SECTION hooks."""
+    return _ordinary_observation_policy.allowed_entries(
+        entries, image, settings, geometry, profile_page_index, page_sections,
+        effective_page_settings=_core.effective_page_settings,
+        entry_allowed_by_page_template=_core.entry_allowed_by_page_template,
+        v_is_inside_sections=_core.v_is_inside_sections,
     )
-    return [
-        entry for entry in entries
-        if _core.entry_allowed_by_page_template(
-            entry.x, entry.y, source_size, effective, profile_page_index,
-        )
-        and (
-            not page_sections
-            or _core.v_is_inside_sections(
-                geometry.source_to_canonical(entry.x, entry.y)[1],
-                page_sections, geometry.top, geometry.bottom,
-            )
-        )
-    ]
 
 
 
@@ -272,38 +222,22 @@ def _ordinary_vb_fallback(
 def _review_candidates_from_cache(
     paddle_cache_path: Path | None,
 ) -> list[dict]:
-    if paddle_cache_path is None or not paddle_cache_path.exists():
-        return []
-    try:
-        payload = json.loads(paddle_cache_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
-        return []
-    if not isinstance(payload, dict):
-        return []
-    return [
-        item for item in list(payload.get("review_candidates") or [])
-        if isinstance(item, dict)
-    ]
+    """Legacy OCR cache reader; keep the current JSON decoder."""
+    return _ordinary_observation_policy.review_candidates_from_cache(
+        paddle_cache_path, json_loads=json.loads,
+    )
 
 
 def _hard_negative_rows_from_candidates(
     review_candidates: list[dict],
     geometry: Any,
 ) -> list[tuple[int, int]]:
-    """Return canonical (column, V) events with OCR hard-negative consensus."""
-    try:
-        rows = _core._latent_review_rows(review_candidates, geometry)
-    except Exception:
-        return []
-    result: list[tuple[int, int]] = []
-    for candidate, column, v in rows:
-        try:
-            hard = bool(_core._review_candidate_hard_negative_consensus(candidate))
-        except Exception:
-            hard = False
-        if hard:
-            result.append((int(column), int(v)))
-    return result
+    """Legacy hard-negative consensus with current core hooks."""
+    return _ordinary_observation_policy.hard_negative_rows_from_candidates(
+        review_candidates, geometry,
+        latent_review_rows=_core._latent_review_rows,
+        hard_negative_consensus=_core._review_candidate_hard_negative_consensus,
+    )
 
 
 def _shared_detector_observations(

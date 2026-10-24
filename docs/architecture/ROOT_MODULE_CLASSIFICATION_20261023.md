@@ -112,3 +112,23 @@ The installer command names remain unchanged. Root inventory is **10** files.
   **10**; these are implementation extractions, not root API retirements.
   Real dictionary scans, Profile GUI interaction, PDIC/PPP reopen and crop
   export parity remain pending manual acceptance; PR stays Draft.
+
+
+## 2026-10-25 Round 44: shared geometry and ordinary observations
+
+Five complete root `processing.py` algorithms now physically live in two
+cohesive owners: `layout/shared_geometry.py` constructs source/canonical
+`Geometry`/`ColumnPath` and freezes nonuniform ordinary column offsets;
+`ordinary/observation_policy.py` enforces page-template and SECTION Entry
+gates, reads OCR review-cache candidates without writes, and computes
+conservative hard-negative consensus rows. All five original processing
+function signatures and `__module__` stay stable; historical callers,
+`_geometry_from_page_design`, and `_shared_detector_observations` resolve
+the old callable names at runtime. Delegates inject current core factories,
+settings copier, template/SECTION filters, JSON decoder and consensus hooks,
+preserving monkeypatch behavior. Regression:
+`tests/test_issue562_shared_geometry_observations_round44_20261025.py`.
+No new root stub, serialized model move, Tk worker change, PDIC/PPP or OCR
+cache schema change. Real scanned dictionary-page ordinary/OCR/combined,
+Profile, PDIC/PPP save/reopen and crop/export parity remain **manual
+acceptance pending**. PR stays Draft and unmerged.
