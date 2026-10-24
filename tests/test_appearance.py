@@ -168,8 +168,10 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert 'appearance_mode = self.appearance_mode' in project_session
     assert 'self._recent_projects_rebuild = rebuild' in project_session
     assert 'getattr(event, "widget", None) is not dialog' in project_session
-    assert '"*TCombobox*Listbox.background"' in app_source
-    assert '"*TCombobox*Listbox.selectBackground"' in app_source
+    theme_owner = (ROOT / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_global_appearance(" in app_source
+    assert '"*TCombobox*Listbox.background"' in theme_owner
+    assert '"*TCombobox*Listbox.selectBackground"' in theme_owner
     assert 'apply_native_titlebar_appearance(root, self.appearance_mode)' in app_source
     assert 'if isinstance(widget, tk.Toplevel)' in app_source
     overlay = (ROOT / "src/picture_capture/ui/entry_overlay_builder.py").read_text(encoding="utf-8")
