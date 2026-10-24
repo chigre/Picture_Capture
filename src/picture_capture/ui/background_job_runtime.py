@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 def start_ui_worker(
     self, key: str, worker, on_done, on_error=None, *, wait_on_close: bool = False,
-, deps: dict[str, Any]) -> int:
+    deps: dict[str, Any],
+) -> int:
     threading = deps["threading"]
     traceback = deps["traceback"]
     """Run one replaceable blocking operation without letting its worker touch Tk.
