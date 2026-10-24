@@ -169,3 +169,8 @@ Five real methods moved from `profile/setup.py` to `wizard_tab_builders`, `wizar
 ## Phase 3: review crop, OCR current-page and durable Tk close (2026-10-25)
 
 Eight actual `app.py` implementations physically migrated to `ui/review_crop_geometry.py`, `ui/ocr_current_workflow.py`, and `ui/main_app_lifecycle.py`, with old public call signatures and call-time patched collaborators retained. Test: `tests/test_issue562_root_review_ocr_lifecycle_phase3_20261025.py`. Root count stays 10; no pickle/PDIC/PPP changes. Real scanned dictionary page, Profile, ordinary/OCR/combined and save/reopen/export manual acceptance remains pending. PR stays Draft.
+
+
+## Phase 4: complete page detection and ordinary worker ownership (2026-10-25)
+
+Root `processing.py` now preserves the stable public `detect_entries` and `detect_entries_job` signatures but physically delegates their former full algorithms to `detection/page_pipeline.py` and `detection/ordinary_page_job.py`. Call-time dependency snapshots retain legacy runtime monkeypatches; Windows spawn entry remains importable. The ordinary Layout, VB emergency fallback, OCR/combined, GPU preflight and PDIC writer sequences are unchanged. New regression: `tests/test_issue562_detection_pipeline_owner_phase4_20261025.py`. Real scan GUI/Profile/PDIC/PPP/reopen/export acceptance remains outstanding; Draft must remain open.

@@ -687,3 +687,10 @@ Phase 3 type-annotation audit: new review crop owner uses `TYPE_CHECKING` import
 
 
 Phase 3 exact-head CI correction: Ubuntu Python 3.13 pytest reported 1 source-location assertion failure (`test_index_first_workspace::test_inline_review_slice_uses_text_based_height_without_classification`, 3860 other tests passed). The expectation was reanchored to the new physical `ui/review_crop_geometry.py` while also asserting the public root delegate and unchanged text-based/no-classification behavior. This is a test-location update only; the production crop algorithm was not modified. Exact new HEAD CI and OCR Smoke must be rechecked.
+
+
+### Root-retirement Phase 4 — physical page detector and ordinary job (2026-10-25)
+
+- Relocated the **full `processing.detect_entries` page-orchestration algorithm** (ordinary Layout role materialization, CJK bracket/large-glyph recovery, last-mile visual checks, OCR/combined shared evidence and VB fallback) into `detection/page_pipeline.py::detect_entries_impl`; also moved the **full `processing.detect_entries_job` worker algorithm** (preflight validation, source opening, layout capture, baseline and PDIC atomic writer service) into `detection/ordinary_page_job.py::detect_entries_job_impl`.
+- The two original public `processing` function signatures remain unchanged; they forward *live* legacy globals into the new owner at invocation. This preserves monkeypatch behavior and `processing_core` namespace mirror. Spawn workers still import `processing.detect_entries_job`, not a new pickle identity. GPU preflight, per-page profiler, Layout stage ordering, image closure, source pixels, and PDIC writer service are unchanged.
+- New targeted characterization suite `tests/test_issue562_detection_pipeline_owner_phase4_20261025.py` checks ownership, signatures, runtime-patched collaborators, ordinary fallback, OCR/combined unreliable-page fallback and worker dependency injection. Real scanned dictionary page manual ordinary/OCR/combined, Profile, PDIC/PPP save/reopen and crop/export parity **NOT DONE**; PR remains Draft/unmerged.
