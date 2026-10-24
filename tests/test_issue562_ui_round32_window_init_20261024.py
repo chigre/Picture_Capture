@@ -59,6 +59,7 @@ def test_old_constructors_initialize_toplevel_before_delegation(monkeypatch):
     settings_deps = steps[1][4]
     review_deps = steps[3][3]
     assert settings_deps["ttk"] is gui.ttk
+    assert settings_deps["LATIN_ORDER"] == gui.LATIN_ORDER
     assert settings_deps["DETECTION_LABELS"] is gui.DETECTION_LABELS
     assert settings_deps["_settings_illustration_ui"] is gui._settings_illustration_ui
     assert settings_deps["fit_window_to_work_area"] is gui.fit_window_to_work_area

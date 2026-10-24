@@ -534,3 +534,8 @@ Root `app.py` further decreased **9,058 bytes** to **251,847 bytes**; root physi
 ### Round 33 — main Tk application startup and resolved appearance (2026-10-24)
 
 Moved the complete post-`tk.Tk.__init__` startup implementation (session state, widget model variables, worker queues, controller wiring, theme and layout initialization, after-idle hooks) to `ui/main_app_initialization.py`. `PictureCaptureApp.__init__` remains the original class entrypoint and still executes the Tk superclass first, then forwards live dependencies, including the original `app.py` path for icon resource resolution. Also moved the complete theme reconfiguration implementation to `ui/appearance_resolution.py`, adjusting its imports from `ui/` while retaining call-time live palette/normalizer/Tk hooks. Added `tests/test_issue562_ui_round33_app_startup_20261024.py` with AST ownership and super/delegation seam regression checks. No project data-class, PDIC/PPP, OCR cache, physical root Python count (10) or serialized path changes. Full six-job CI and three-platform OCR Smoke plus manual representative-page GUI acceptance are still mandatory; keep the PR Draft and unmerged.
+
+
+### Round 33 CI GUI construction fix
+
+Six-matrix CI pytest passed its source contracts but the actual Tk GUI construction smoke exposed a missing call-time `LATIN_ORDER` dependency in the relocated SettingsDialog constructor. Explicitly supply the canonical app-module constant to `ui/settings/dialog_initialization.py` and guard the forwarding seam in `test_issue562_ui_round32_window_init_20261024.py`. No change to collation or Settings behavior; owner receives the exact previous constant.

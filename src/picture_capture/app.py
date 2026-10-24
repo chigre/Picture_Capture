@@ -669,6 +669,7 @@ class SettingsDialog(tk.Toplevel):
                 "_build_modern_dialog_heading": _build_modern_dialog_heading,
                 "effective_project_profile_id": effective_project_profile_id,
                 "project_profile_path": project_profile_path,
+                "LATIN_ORDER": LATIN_ORDER,
                 "preferred_font_family": preferred_font_family,
                 "_settings_illustration_ui": _settings_illustration_ui,
                 "_settings_ref_box_ui": _settings_ref_box_ui,

@@ -20,6 +20,7 @@ def initialize_settings_dialog(self: Any, parent: Any, initial_tab: str | None =
     _build_modern_dialog_heading = deps["_build_modern_dialog_heading"]
     effective_project_profile_id = deps["effective_project_profile_id"]
     project_profile_path = deps["project_profile_path"]
+    LATIN_ORDER = deps["LATIN_ORDER"]
     preferred_font_family = deps["preferred_font_family"]
     _settings_illustration_ui = deps["_settings_illustration_ui"]
     _settings_ref_box_ui = deps["_settings_ref_box_ui"]
