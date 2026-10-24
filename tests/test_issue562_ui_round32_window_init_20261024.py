@@ -111,3 +111,11 @@ def test_review_constructor_keeps_source_geometry_sidebar_and_live_event_binding
         'self.review_extended_crop_multiplier_var.trace_add(',
     ):
         assert token in source
+
+
+def test_extracted_review_window_keeps_annotation_only_entry_identity():
+    from pathlib import Path
+    owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "from ..models import AppSettings, Entry as WordEntry" in owner
+    assert "self.row_entries: list[WordEntry] = []" in owner
+    assert "from ..app import" not in owner

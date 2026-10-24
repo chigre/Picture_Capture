@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from PIL import ImageTk
-    from ..models import AppSettings
+    from ..models import AppSettings, Entry as WordEntry
 
 
 def initialize_review_window(self: Any, parent: Any, *, deps: dict[str, Any]) -> None:
