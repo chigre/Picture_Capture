@@ -183,18 +183,20 @@ def test_pre_split_project_inherits_old_crop_width_once(tmp_path: Path):
 
 def test_marker_ocr_uses_shared_multi_engine_channel_and_shared_crop():
     import picture_capture.processing_core as processing_core
-    from picture_capture.ocr import ordinary_marker_crop
+    from picture_capture.ocr import ordinary_marker_crop, ordinary_marker_text_enrichment
 
     source = Path(processing_core.__file__).read_text(encoding="utf-8")
     crop_owner = Path(ordinary_marker_crop.__file__).read_text(encoding="utf-8")
-    assert "resolve_entry_ocr_row_metrics(" in source
+    enrichment_owner = Path(ordinary_marker_text_enrichment.__file__).read_text(encoding="utf-8")
+    assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in source
+    assert "resolve_entry_ocr_row_metrics(" in enrichment_owner
     assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in source
     assert "entry_ocr_crop_box(" in crop_owner
-    assert "OcrChannelSession" in source
-    assert "channel.recognize_crop(" in source
-    assert "choose_ocr_text(" in source
-    assert 'engine_name == "paddleocr"' not in source
-    assert "core.run_tesseract(" not in source
+    assert "OcrChannelSession" in enrichment_owner
+    assert "channel.recognize_crop(" in enrichment_owner
+    assert "choose_ocr_text(" in enrichment_owner
+    assert 'engine_name == "paddleocr"' not in enrichment_owner
+    assert "core.run_tesseract(" not in enrichment_owner
 
 
 def test_core_composition_exposes_static_marker_ocr_for_non_gui_consumers():
