@@ -295,3 +295,13 @@ Keep PR #663 in **Draft** until an independent GUI check exercises a
 representative dictionary scan: layout/OCR/crop, editing, sidecar save-reopen,
 and PDIC/PPP parity across real OCR engines. CI is necessary but does not
 replace these checks.
+
+
+## Round 15 — OCR cache persistence and pixel fingerprint (2026-10-24)
+
+- `src/picture_capture/ocr/source_coordinate_persistence.py` owns recursive removal of transient `_axis_v` / canonical coordinates and the exact normalized-RGB pixel hash. The previous functions in `paddle_headwords_core.py` remain at the same import path, signature, and `__module__`.
+- The SHA-256 input remains precisely `{width}x{height}|RGB|` in ASCII followed by the complete normalized RGB byte stream; the core supplies the *current* `normalize_page_rgb` and `hashlib` on each call, preserving monkeypatch seams.
+- Source-coordinate JSON persistence retains recursive list/tuple handling, key filtering, unmodified inputs, and authoritative `source_y` fields (including Paddle, Tesseract, and Lens coarse/anchor variants). No cache schema or invalidation rule was intentionally changed.
+- Regression: `tests/test_issue562_core_leaf_round15_cache_20261024.py` covers nested JSON projection, nonmutation, historical origins, deterministic digest parity, and live normalization monkeypatches.
+- The root still has ten Python files; no class relocation, root shim, UI changes, PDIC/PPP schema update, or crop output transaction changes.
+- **Acceptance pending:** exact-head six-platform CI and OCR platform smoke plus independent representative GUI scan, edit, and save/reopen verification. Keep PR Draft and unmerged.
