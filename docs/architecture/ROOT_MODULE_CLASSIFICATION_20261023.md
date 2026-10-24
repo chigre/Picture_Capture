@@ -91,3 +91,24 @@ The installer command names remain unchanged. Root inventory is **10** files.
 ## 2026-10-25 Round 42: processing root business logic reduction
 
 `processing.py` continues as the historical detection facade and call-time patch point. Actual optional illustration masking, Layout-only versus composed understanding and analysis-image cleanup now live in `layout/current_page.py`; ordinary Layout-role Entry materialization (including refined canonical Y and classification metadata) and fallback-only VB execution live in `ordinary/layout_roles.py`. Three former implementation bodies were removed from the root, with exact legacy signatures retained as delegates. Root remains 10 physical Python modules for public/API and serialization reasons, not because the moved algorithms are still rooted. No persistence schema or OCR cache layout changed; real scanned-page acceptance remains pending.
+
+
+## 2026-10-25 Round 43: Profile symbol-role and Layout trace owners
+
+- `profile/setup.py` retains the actual `ProjectProfileWizard(tk.Toplevel)`
+  UI class, its method signatures, public Profile label tables and historical
+  helper functions. The label/catalog tables and real CJK bracket-vs-entry
+  normalization and marker-capture precedence algorithms are now physically
+  owned by `profile/wizard_catalog.py`. Legacy setup helpers inject the
+  current `split_configured_symbols` and `BRACKET_ROLE_SYMBOLS` at call time
+  to preserve runtime monkeypatch behavior. No Tk widget is created off-thread.
+- The real read-only Layout replay stage snapshot and added/removed provenance
+  algorithm now lives in `ordinary/debug_stage.py`. The public
+  `processing._record_ordinary_debug_stage` name re-exports the same callable,
+  and `processing.detect_entries` still resolves that name at call time.
+- New focused regression `tests/test_issue562_profile_catalog_debug_stage_20261025.py`
+  protects symbol role precedence, sample nonmutation, patch injection,
+  read-only trace deltas and physical ownership. The root-file count remains
+  **10**; these are implementation extractions, not root API retirements.
+  Real dictionary scans, Profile GUI interaction, PDIC/PPP reopen and crop
+  export parity remain pending manual acceptance; PR stays Draft.
