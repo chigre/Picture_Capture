@@ -82,8 +82,11 @@ def test_layout_materialization_uses_shared_y_adapter() -> None:
     # Entry classification is now attached inside the canonical materializer,
     # so its separator-Y contract no longer depends on installer order.
     source = Path(processing.__file__).read_text(encoding="utf-8")
-    assert "refined_layout_entry_y_by_line(" in source
-    assert 'getattr(line, "role"' in source
+    owner = Path(processing.__file__).with_name("ordinary") / "layout_roles.py"
+    physical = owner.read_text(encoding="utf-8")
+    assert "refine_entry_y=refined_layout_entry_y_by_line" in source
+    assert "refine_entry_y(" in physical
+    assert 'getattr(line, "role"' in physical
 
 
 def test_layout_adapter_refines_only_entry_rows(monkeypatch) -> None:
