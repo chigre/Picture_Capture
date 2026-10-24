@@ -495,3 +495,28 @@ def _draw_review_entry_highlight(self, deps: MainCanvasRenderDeps, geometry=None
     except tk.TclError:
         pass
 
+
+
+# Main-canvas crop plan assembly; preview and publication share the same planner.
+
+def _current_page_crop_plan(self, *, deps: dict[str, Any]):
+    build_page_crop_plan = deps["build_page_crop_plan"]
+    if self.image is None or self.current_page is None:
+        return None
+    config = self._load_crop_settings()
+    special = config.get("special_pages", {}).get(self.current_page.stem, {}) if isinstance(config.get("special_pages", {}), dict) else {}
+    top_y = int(special.get("top_y", config.get("general_top_y", self.settings.start_y)))
+    bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
+    margin = int(config.get("polygon_margin", 0))
+    entry_left = int(config.get("entry_left_padding_x", 0))
+    entry_right = int(config.get("entry_right_padding_x", 0))
+    integrate_illustrations = bool(config.get("integrate_illustrations", True))
+    return build_page_crop_plan(
+        self.image, list(self.entries), list(self.polygons), self.settings,
+        top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
+        entry_left_padding=entry_left, entry_right_padding=entry_right,
+        integrate_illustrations=integrate_illustrations,
+        profile_page_index=max(0, int(self.current_index)),
+        page_sections=list(self.page_sections),
+        auxiliary_lines=list(self._auxiliary_edits.lines), page_stem=self.current_page.stem, previous_entry_ref=self._illustration_controller_for_call().previous_entry_ref(),
+    )

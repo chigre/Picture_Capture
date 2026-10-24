@@ -143,6 +143,8 @@ from .ui import review_appearance_workflow as _review_appearance
 from .ui import focused_filter_workflow as _focused_filter
 from .proofreading import focused_pdic_updates as _focused_pdic
 from .ui import main_canvas_render_workflow as _main_canvas_render
+from .ui import main_display_cache as _main_display_cache
+from .ui import main_pdic_persistence as _main_pdic_persistence
 from .ui import canvas_pointer_workflow as _canvas_pointer
 from .ui import main_appearance_policy as _main_appearance_policy
 from .ui import main_sidebar_sections as _sidebar_sections
@@ -2829,26 +2831,8 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def _get_cached_display_photo(self, size: tuple[int, int]) -> ImageTk.PhotoImage:
-        """Return the resized page image for the current page/zoom.
-
-        The page background is display-only.  OCR always receives ``self.image``
-        in original-page pixels, so reusing this PhotoImage cannot alter OCR or
-        separator coordinates.  A new page object or zoom size invalidates the
-        cache automatically.
-        """
-        if self.image is None:
-            raise RuntimeError("没有可显示的页面图像")
-        binary = bool(self.binary_preview_var.get())
-        key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)
-        if self.photo is None or self._display_photo_cache_key != key:
-            display = (
-                binary_preview_image(self.image).resize(size, Image.Resampling.LANCZOS)
-                if binary else self.image.resize(size, Image.Resampling.LANCZOS)
-            )
-            display = themed_display_image(display, self.appearance_mode)
-            self.photo = ImageTk.PhotoImage(display)
-            self._display_photo_cache_key = key
-        return self.photo
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_display_cache._get_cached_display_photo(self, size, deps={"Image": Image, "ImageTk": ImageTk, "binary_preview_image": binary_preview_image, "themed_display_image": themed_display_image})
 
     def _canvas_controller_for_call(self) -> CanvasController:
         controller = self.__dict__.get("canvas_controller")
@@ -2878,55 +2862,16 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _current_effective_profile_settings(self) -> AppSettings:
-        """Resolve the current page's Project Profile template without mutating project settings."""
-        if self.image is None:
-            return self.settings
-        return effective_page_settings(
-            self.settings, self.image.size,
-            max(0, int(self.__dict__.get("current_index", 0) or 0)),
-        )
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_display_cache._current_effective_profile_settings(self, deps={"effective_page_settings": effective_page_settings})
 
     def _display_geometry_key(self) -> tuple:
-        if self.image is None:
-            return ()
-        s = self.settings
-        return (
-            id(self.image), int(self.__dict__.get("current_index", 0) or 0),
-            int(s.columns),
-            str(s.layout_columns_policy), str(s.layout_column_separator_mode),
-            str(s.analysis_threshold_mode),
-            float(s.manual_x), float(s.gutter), float(s.column_width),
-            float(s.start_y), bool(s.crop_to_bottom_y), float(s.bottom_y),
-            bool(s.follow_column_deformation), float(s.column_track_block_height),
-            float(s.column_track_radius), float(s.body_indent),
-            float(s.column_track_max_step), str(s.layout_transform),
-            str(getattr(s, "layout_writing_mode", "horizontal-tb") or "horizontal-tb"),
-            str(getattr(s, "layout_text_direction", "ltr") or "ltr"),
-            str(getattr(s, "profile_header_mode", "auto")),
-            str(getattr(s, "profile_footer_mode", "auto")),
-            str(getattr(s, "profile_side_content_mode", "none")),
-            str(getattr(s, "profile_page_pair_mode", "same")),
-            str(getattr(s, "profile_first_page_variant", "A")),
-            float(getattr(s, "profile_header_percent", 6.0)),
-            float(getattr(s, "profile_footer_percent", 5.0)),
-            float(getattr(s, "profile_side_percent", 8.0)),
-            float(getattr(s, "profile_side_percent_a", getattr(s, "profile_side_percent", 8.0))),
-            float(getattr(s, "profile_side_percent_b", getattr(s, "profile_side_percent", 8.0))),
-        )
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_display_cache._display_geometry_key(self, deps={})
 
     def _get_cached_display_geometry(self):
-        """Reuse the same per-page Profile geometry used by detection."""
-        if self.image is None:
-            raise RuntimeError("没有可显示的页面图像")
-        key = self._display_geometry_key()
-        if self._display_geometry_cache is None or self._display_geometry_cache_key != key:
-            effective = self._current_effective_profile_settings()
-            analysis_image = page_template_analysis_image(
-                self.image, effective, max(0, int(self.current_index)),
-            )
-            self._display_geometry_cache = derive_geometry(analysis_image, effective)
-            self._display_geometry_cache_key = key
-        return self._display_geometry_cache
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_display_cache._get_cached_display_geometry(self, deps={"page_template_analysis_image": page_template_analysis_image, "derive_geometry": derive_geometry})
 
     def _main_ocr_review_option_enabled(self, setting_name: str) -> bool:
         """Return the persisted visibility of a main-canvas OCR aid."""
@@ -2961,25 +2906,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _current_page_crop_plan(self):
-        if self.image is None or self.current_page is None:
-            return None
-        config = self._load_crop_settings()
-        special = config.get("special_pages", {}).get(self.current_page.stem, {}) if isinstance(config.get("special_pages", {}), dict) else {}
-        top_y = int(special.get("top_y", config.get("general_top_y", self.settings.start_y)))
-        bottom_y = int(special.get("bottom_y", config.get("general_bottom_y", 0)))
-        margin = int(config.get("polygon_margin", 0))
-        entry_left = int(config.get("entry_left_padding_x", 0))
-        entry_right = int(config.get("entry_right_padding_x", 0))
-        integrate_illustrations = bool(config.get("integrate_illustrations", True))
-        return build_page_crop_plan(
-            self.image, list(self.entries), list(self.polygons), self.settings,
-            top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
-            entry_left_padding=entry_left, entry_right_padding=entry_right,
-            integrate_illustrations=integrate_illustrations,
-            profile_page_index=max(0, int(self.current_index)),
-            page_sections=list(self.page_sections),
-            auxiliary_lines=list(self._auxiliary_edits.lines), page_stem=self.current_page.stem, previous_entry_ref=self._illustration_controller_for_call().previous_entry_ref(),
-        )
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_canvas_render._current_page_crop_plan(self, deps={"build_page_crop_plan": build_page_crop_plan})
 
     def _draw_crop_plan_preview(self) -> None:
         """Overlay the exact entry/PPP crop plan on the main page image."""
@@ -3546,79 +3474,24 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _ordered_entries_reading_order(self) -> list[WordEntry]:
-        """Return entries in reading order without mutation."""
-        image = self.__dict__.get("image")
-        entries = list(self.__dict__.get("entries") or [])
-        settings = self.__dict__.get("settings")
-        if image is None or settings is None or not entries:
-            return entries
-        return sort_entries_reading_order(
-            entries, self._get_cached_display_geometry(), self.page_sections,
-        )
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence._ordered_entries_reading_order(self, deps={"sort_entries_reading_order": sort_entries_reading_order})
 
     def _sort_entries_reading_order(self) -> None:
-        """Keep manual and OCR entries in one geometry-based reading order."""
-        entries = self.__dict__.get("entries")
-        if entries is None:
-            return
-        entries[:] = self._ordered_entries_reading_order()
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence._sort_entries_reading_order(self, deps={})
 
     def pages_tuple(self, index: int | None = None) -> tuple[str, str, str]:
-        assert self.project
-        i = self.current_index if index is None else index
-        current = self.project.images[i].stem
-        previous = self.project.images[i - 1].stem if i > 0 else "@"
-        following = self.project.images[i + 1].stem if i + 1 < len(self.project.images) else "@"
-        return current, previous, following
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence.pages_tuple(self, index=index, deps={})
 
     def save_pdic(self, silent: bool = False, sync_editors: bool = True) -> None:
-        if not self.project or not self.current_page or self.image is None: return
-        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
-            return
-        from .proofreading.transactions import _recovery_path
-        if _recovery_path(self.current_page).exists():
-            raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
-        if self.__dict__.get("_deferred_save_uncertain", False):
-            raise RuntimeError("R3 PDIC write outcome uncertain; reload/recover before saving")
-        # Commit live state; cancel any older queued checkbox snapshot.
-        deferred_job = self.__dict__.get("_deferred_save_job")
-        if deferred_job is not None:
-            try:
-                self.after_cancel(deferred_job)
-            except tk.TclError:
-                pass
-        self.__dict__["_deferred_save_job"] = None
-        # Keep the queued snapshot until the actual PDIC publication succeeds.
-        from .proofreading.save_safety import protect_app_pdic_commit
-        with protect_app_pdic_commit(self):
-            # Review edits bypass stale main-canvas editor values.
-            if sync_editors:
-                self._sync_entry_editor_texts()
-            self._sort_entries_reading_order()
-            changed = write_pdic(pdic_path(self.current_page), self.entries, self.image.width, self.pages_tuple())
-        self.__dict__["_deferred_save_snapshot"] = None
-        self.__dict__["_deferred_save_page"] = None
-        self.__dict__["_deferred_save_uncertain"] = False
-        self._last_pdic_write_changed = changed
-        self._flush_pending_manual_override()
-        self._flush_proofreading_candidate_evidence()
-        self._flush_proofreading_add_evidence()
-        if changed:
-            self._refresh_word_fill_check_from_line_count(self.current_index, len(self.entries), persist=True)
-            self._update_page_row(self.current_index)
-        if not silent: self.status_var.set(f"已保存 {pdic_path(self.current_page).name}" if changed else "内容无变化，无需保存")
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence.save_pdic(self, silent=silent,sync_editors=sync_editors, deps={"tk": tk, "pdic_path": pdic_path, "write_pdic": write_pdic})
 
     def _sync_entry_editor_texts(self) -> None:
-        """Commit editor values to the exact Entry objects they were created for."""
-        active_ids = {id(entry) for entry in self.entries}
-        for editor, entry in self.entry_editor_bindings:
-            if id(entry) not in active_ids:
-                continue
-            try:
-                entry.word = editor.get().strip()
-            except tk.TclError:
-                # A redraw may already have destroyed the old widget.
-                continue
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence._sync_entry_editor_texts(self, deps={"tk": tk})
 
     def save_all(self) -> None:
         if not self.guard(): return
@@ -3631,46 +3504,12 @@ class PictureCaptureApp(tk.Tk):
             self.status_var.set("参数已保存")
 
     def toggle_autosave(self) -> None:
-        if self.autosave_job:
-            self.after_cancel(self.autosave_job)
-            self.autosave_job = None
-        if self.autosave_var.get():
-            delay = max(1, round(self.settings.batch_interval * 1000))
-            self.autosave_job = self.after(delay, self.autosave_tick)
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence.toggle_autosave(self, deps={})
 
     def autosave_tick(self) -> None:
-        self.autosave_job = None
-        if not self.autosave_var.get():
-            return
-        try:
-            # Autosave PDIC only for editable batch pages; never autosave PPP
-            # while a background batch owns the current page.
-            if self._batch_active and not self._can_save_current_during_batch_navigation():
-                return
-            if self.project and self.current_page:
-                self._last_pdic_write_changed = False
-                review = self.review_window
-                review_saved = False
-                if review is not None:
-                    try:
-                        if review.winfo_exists():
-                            review_saved = bool(review.autosave_commit())
-                        else:
-                            self.review_window = None
-                    except tk.TclError:
-                        self.review_window = None
-                if not review_saved:
-                    self.save_pdic(silent=True)
-                polygon_changed = False if self._batch_active else self._save_normalized_ppp()
-                if self._last_pdic_write_changed or polygon_changed:
-                    self.status_var.set("已自动保存")
-        except (OSError, RuntimeError, ValueError) as exc:
-            # In particular, never fall back to stale main-canvas buffers when
-            # ReviewWindow's PDIC transaction failed.
-            self.status_var.set(f"自动保存失败，校对修改仍保留：{exc}")
-        finally:
-            # Failed I/O must not silently disable the next autosave tick.
-            self.toggle_autosave()
+        """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
+        return _main_pdic_persistence.autosave_tick(self, deps={"tk": tk})
 
     def open_settings(self, initial_tab: str | None = None) -> None:
         # Pull unsaved quick-panel values (notably OCR language) into the settings

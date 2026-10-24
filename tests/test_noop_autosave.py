@@ -36,7 +36,10 @@ def test_autosave_status_is_conditional_on_real_changes():
     source = (Path(__file__).resolve().parents[1] / "src" /
               "picture_capture" / "app.py").read_text("utf-8")
     block = source[source.index("    def autosave_tick("):source.index("    def open_settings(", source.index("    def autosave_tick("))]
-    assert "self._last_pdic_write_changed or polygon_changed" in block
+    assert "_main_pdic_persistence.autosave_tick" in block
+    owner = (Path(__file__).resolve().parents[1] / "src" /
+             "picture_capture" / "ui" / "main_pdic_persistence.py").read_text("utf-8")
+    assert "self._last_pdic_write_changed or polygon_changed" in owner
 
 
 def test_classification_sidecar_does_not_replace_unchanged_content(tmp_path):
