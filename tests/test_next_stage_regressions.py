@@ -1441,7 +1441,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    styles=app.split("    def _configure_main_workspace_styles(",1)[1].split("    def _sidebar_action_button(",1)[0]
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    styles=(root / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
     assert "theme_use(" not in styles
     for token in ('"PC.Section.TLabelframe"','"PC.Treeview"','"PC.Footer.TFrame"','"PC.EditActive.TButton"'):
         assert token in styles
@@ -2231,8 +2232,9 @@ def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():
     assert "for value in range(5, 100, 5):" in canvas_controller
     assert 'label_x = x - label_gap if ruler_id == "left" else x + label_gap' in canvas_controller
     assert 'anchor = "e" if ruler_id == "left" else "w"' in canvas_controller
-    assert '"ruler_margin": "#f1f3f6"' in app
-    assert '"ruler_margin": "#20252b"' in app
+    theme = (root / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert '"ruler_margin": "#f1f3f6"' in theme
+    assert '"ruler_margin": "#20252b"' in theme
     assert 'tags=("ruler-margin",)' in canvas_controller
     assert 'fill=margin_color, outline=""' in canvas_controller
     assert "标尺可以帮助版面参数的手动填写。" in canvas_controller
@@ -2298,7 +2300,9 @@ def test_layout_percentage_helpers_preserve_pixel_backend_contract():
     assert "def _quick_percent_parameter_changed(self, name: str)" in text
     assert "def _quick_pixel_parameter_changed(self, name: str)" in text
     assert 'self._quick_geometry_edit_source[name] = "pixel"' in text
-    assert 'geometry_source == "pixel"' in text
+    quick_apply = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/quick_settings_apply.py").read_text(encoding="utf-8")
+    assert "_quick_settings_apply.apply_quick_settings(" in text
+    assert 'geometry_source == "pixel"' in quick_apply
 
 
 def test_page_template_auto_footer_uses_full_page_height_not_legacy_bottom_y():
