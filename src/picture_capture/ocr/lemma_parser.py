@@ -284,7 +284,7 @@ def parse_headword_text_impl(
         bug_types=bugs,
     )
 
-ndef looks_like_marker_noise_lemma(parsed: HeadwordParse | None, *, regex_module: Any) -> bool:
+def looks_like_marker_noise_lemma(parsed: HeadwordParse | None, *, regex_module: Any) -> bool:
     """Reject only very narrow square/bullet OCR artifacts used as fake lemmas.
 
     Examples observed on these pages include ``Ml adj./s.`` where the printed
