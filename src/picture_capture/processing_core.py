@@ -71,6 +71,10 @@ from .refinement import existing_entry_workflow as _existing_entry_workflow
 from .illustration import ppp_detection_update as _ppp_detection_update
 from .illustration import crop_box_policy as _illustration_crop_box_policy
 from .crop import spawn_job_owners as _spawn_job_owners
+from .geometry import page_runtime_context as _page_runtime_context
+from .detection import spawn_job_execution as _spawn_detection_jobs
+from .illustration import source_detection_jobs as _source_detection_jobs
+from .crop import image_staging_io as _image_staging_io
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -355,21 +359,16 @@ def _page_geometry_context(
     settings: AppSettings,
     profile_page_index: int = 0,
 ) -> tuple[Image.Image, AppSettings, Image.Image, Geometry]:
-    """Resolve one page through the single Profile -> geometry boundary.
-
-    Persisted project geometry remains in reference-page canonical pixels.
-    Physical Profile percentages are resolved against this source page, and
-    page-edge exclusions are applied only to a disposable analysis copy.
-    Every downstream consumer can therefore share the same runtime geometry
-    while crops/PDIC/PPP continue to use untouched source pixels.
-    """
-    source = normalize_page_rgb(image)
-    effective = effective_page_settings(settings, source.size, profile_page_index)
-    analysis_source = page_template_analysis_image(
-        source, effective, profile_page_index,
+    """Historical Profile/page geometry boundary with current core hooks."""
+    return _page_runtime_context.page_geometry_context(
+        image, settings, profile_page_index,
+        deps={
+            "normalize_page_rgb": normalize_page_rgb,
+            "effective_page_settings": effective_page_settings,
+            "page_template_analysis_image": page_template_analysis_image,
+            "derive_geometry": derive_geometry,
+        },
     )
-    geometry = derive_geometry(analysis_source, effective)
-    return source, effective, analysis_source, geometry
 
 
 def _left_edge_otsu_threshold(gray: np.ndarray) -> int:
@@ -729,19 +728,19 @@ def detect_entries_job(
     pages: tuple[str, str, str],
     profile_page_index: int = 0,
 ) -> int:
-    """Spawn-safe ordinary-line detection job that commits one PDIC page."""
-    page = Path(image_path)
-    with Image.open(page) as opened:
-        image = normalize_page_rgb(opened)
-    settings.detection_method = "left_edge"
-    entries, _geometry = detect_entries(
-        image, settings, profile_page_index=profile_page_index,
-        page_sections=read_page_sections(page),
+    """Historical spawn-safe ordinary drawing and PDIC write entrypoint."""
+    return _spawn_detection_jobs.detect_entries_job_impl(
+        image_path, settings, pages, profile_page_index,
+        deps={
+            "Path": Path,
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+            "detect_entries": detect_entries,
+            "read_page_sections": read_page_sections,
+            "write_pdic": write_pdic,
+            "pdic_path_for_image": pdic_path_for_image,
+        },
     )
-    write_pdic(pdic_path_for_image(page), entries, image.width, pages)
-    return len(entries)
-
-
 
 
 def run_tesseract(image: Image.Image, language: str, executable: str = "tesseract", psm: int = 7) -> str:
@@ -891,47 +890,30 @@ def _save_crop(
     image: Image.Image, output: Path, box: tuple[int, int, int, int],
     *, transparent_background: bool = False,
 ) -> tuple[int, int, int, int]:
-    box = clamp_box(box, image)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    crop = image.crop(box)
-    try:
-        if transparent_background:
-            result = prepare_crop_background(crop, transparent=True)
-            try:
-                result.save(output, "PNG")
-            finally:
-                result.close()
-        else:
-            crop.save(output, "PNG")
-    finally:
-        crop.close()
-    return box
+    """Historical file crop helper with current source clamp and alpha policy."""
+    return _image_staging_io.save_crop_impl(
+        image, output, box, transparent_background=transparent_background,
+        deps={"clamp_box": clamp_box, "prepare_crop_background": prepare_crop_background},
+    )
 
 
 def _stage_text_file(target: Path, text: str, *, encoding: str = "utf-8") -> Path:
-    temp = _publish_temp_path(target)
-    try:
-        with temp.open("w", encoding=encoding, newline="") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        return temp
-    except Exception:
-        temp.unlink(missing_ok=True)
-        raise
+    """Historical fsynced manifest stage and failure-cleanup entrypoint."""
+    return _image_staging_io.stage_text_file_impl(
+        target, text, encoding=encoding,
+        deps={"_publish_temp_path": _publish_temp_path, "os": os},
+    )
 
 
 def _stage_crop(
     image: Image.Image, target: Path, box: tuple[int, int, int, int],
     *, transparent_background: bool = False,
 ) -> tuple[tuple[int, int, int, int], Path]:
-    temp = _publish_temp_path(target)
-    try:
-        saved_box = _save_crop(image, temp, box, transparent_background=transparent_background)
-        return saved_box, temp
-    except Exception:
-        temp.unlink(missing_ok=True)
-        raise
+    """Historical staged crop helper using current crop writer and temp path."""
+    return _image_staging_io.stage_crop_impl(
+        image, target, box, transparent_background=transparent_background,
+        deps={"_publish_temp_path": _publish_temp_path, "_save_crop": _save_crop},
+    )
 
 
 def split_single_lines(
@@ -1215,18 +1197,18 @@ def detect_illustration_regions(
     analysis_column_width: int = 520,
     profile_page_index: int = 0,
 ) -> list[PolygonRegion]:
-    """Historical path API backed by the shared in-memory detector."""
-    with Image.open(Path(image_path)) as opened:
-        image = normalize_page_rgb(opened)
-    try:
-        return detect_illustration_regions_from_image(
-            image,
-            settings,
-            analysis_column_width=int(analysis_column_width),
-            profile_page_index=int(profile_page_index),
-        )
-    finally:
-        image.close()
+    """Historical source-image illustration path detection entrypoint."""
+    return _source_detection_jobs.detect_illustration_regions_impl(
+        image_path, settings,
+        analysis_column_width=analysis_column_width,
+        profile_page_index=profile_page_index,
+        deps={
+            "Image": Image, "Path": Path,
+            "normalize_page_rgb": normalize_page_rgb,
+            "detect_illustration_regions_from_image": detect_illustration_regions_from_image,
+        },
+    )
+
 
 def detect_illustrations_to_ppp(
     image_path: Path, settings: AppSettings, *, profile_page_index: int = 0,
@@ -1251,10 +1233,12 @@ def detect_illustrations_to_ppp(
 def detect_illustrations_job(
     image_path: str, settings: AppSettings, profile_page_index: int = 0,
 ) -> dict[str, int]:
-    """Background-safe one-page illustration detector used by the GUI batch runner."""
-    return detect_illustrations_to_ppp(
-        Path(image_path), settings, profile_page_index=profile_page_index,
+    """Historical spawn-safe illustration detection job API."""
+    return _source_detection_jobs.detect_illustrations_job_impl(
+        image_path, settings, profile_page_index,
+        deps={"Path": Path, "detect_illustrations_to_ppp": detect_illustrations_to_ppp},
     )
+
 
 def illustration_crop_bounds(
     image: Image.Image,
