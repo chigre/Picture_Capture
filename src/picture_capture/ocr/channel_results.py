@@ -1,6 +1,9 @@
 """Paddle OCR result decoding and normalized channel materialization."""
 from __future__ import annotations
-from typing import Any, Iterable
+from typing import Any, Iterable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..ocr_channel import OcrChannelRecord, OcrChannelCandidate
 
 def paddle_json_payload(result: Any) -> dict[str, Any]:
     if isinstance(result, dict):

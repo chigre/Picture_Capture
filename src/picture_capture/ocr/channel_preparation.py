@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PIL import Image
     import numpy as np
+    from ..models import AppSettings
 
 def paddle_language(settings: AppSettings) -> str:
     """Preserve the mature core's Paddle language/model resolution exactly."""
