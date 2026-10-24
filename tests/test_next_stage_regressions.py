@@ -2490,6 +2490,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     persistence_owner = (source.parent / "wizard_persistence.py").read_text(encoding="utf-8")
     profile_events_owner = (source.parent / "wizard_profile_events.py").read_text(encoding="utf-8")
     marker_owner = (source.parent / "wizard_visual_markers.py").read_text(encoding="utf-8")
+    bootstrap_owner = (source.parent / "wizard_bootstrap.py").read_text(encoding="utf-8")
+    interactions_owner = (source.parent / "wizard_template_interactions.py").read_text(encoding="utf-8")
+    assert "_wizard_bootstrap.initialize_wizard(" in legacy
+    assert "_wizard_template_interactions.shift_selected_column(" in legacy
     assert "_wizard_persistence.persist_current_profile(" in legacy
     assert "_wizard_profile_events.headword_changed(" in legacy
     assert "_wizard_visual_markers.capture_visual_marker_sample(" in legacy
@@ -2509,7 +2513,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner, persistence_owner, profile_events_owner, marker_owner))
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner, persistence_owner, profile_events_owner, marker_owner, bootstrap_owner, interactions_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -3247,17 +3251,19 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     text = source.read_text(encoding="utf-8")
     tab_owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    column_owner = (source.parent / "wizard_template_interactions.py").read_text(encoding="utf-8")
+    assert "_wizard_template_interactions.shift_selected_column(" in text
     assert "_wizard_wizard_tab_builders.build_template_tab(" in text
     assert 'text="栏左线微调"' in tab_owner
     assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in tab_owner
     assert "每次移动约 0.1% 单栏宽" in tab_owner
     assert 'text="← 左移 0.1%"' in tab_owner
     assert 'text="右移 0.1% →"' in tab_owner
-    assert "人工偏移 {percent:+.2f}% 单栏宽" in text
+    assert "人工偏移 {percent:+.2f}% 单栏宽" in column_owner
     assert 'text="重置当前"' in tab_owner
     assert 'text="重置全部"' in tab_owner
     assert "def _shift_selected_column" in text
-    assert "self.working.column_start_offsets = offsets" in text
+    assert "self.working.column_start_offsets = offsets" in column_owner
     settings_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
     assert "_wizard_settings_assembly.settings_from_ui(" in text
     assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in settings_owner
@@ -3268,12 +3274,12 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     assert "_wizard_sample_analysis.apply_analysis_suggestion(" in text
     assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in analysis_owner
     assert "def _nudge_template_column_preview" in text
-    assert "canvas.move(items[index], dx, dy)" in text
-    assert "self._profile_input_changed(refresh_preview=False)" in text
-    select_start = text.index("    def _select_template_column(")
-    select_end = text.index("\n\n    def _refresh_template_controls", select_start)
-    assert "_refresh_template_preview" not in text[select_start:select_end]
-    assert "self._update_template_column_highlight()" in text[select_start:select_end]
+    assert "canvas.move(items[index], dx, dy)" in column_owner
+    assert "self._profile_input_changed(refresh_preview=False)" in column_owner
+    select_start = column_owner.index("def select_template_column(")
+    select_end = column_owner.index("\n\ndef refresh_template_controls(", select_start)
+    assert "_refresh_template_preview" not in column_owner[select_start:select_end]
+    assert "self._update_template_column_highlight()" in column_owner[select_start:select_end]
     preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
     assert "_wizard_template_preview.refresh_template_preview(" in text
     assert "canvas.create_image(0, 0, image=photo, anchor=\"nw\")" in preview_owner
@@ -4526,7 +4532,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
 def test_project_profile_legacy_workers_drop_results_while_closing():
     root = Path(__file__).resolve().parents[1]
     text = (root / "src" / "picture_capture" / "profile/setup.py").read_text(encoding="utf-8")
-    assert "self._closing = False" in text
+    bootstrap_owner = (root / "src/picture_capture/profile/wizard_bootstrap.py").read_text(encoding="utf-8")
+    assert "_wizard_bootstrap.initialize_wizard(" in text
+    assert "self._closing = False" in bootstrap_owner
     for name in (
         "_start_sample_thumbnail_load",
         "_poll_sample_thumbnail_load",
