@@ -70,6 +70,7 @@ from .ocr import tesseract_subprocess as _tesseract_subprocess
 from .refinement import existing_entry_workflow as _existing_entry_workflow
 from .illustration import ppp_detection_update as _ppp_detection_update
 from .illustration import crop_box_policy as _illustration_crop_box_policy
+from .crop import spawn_job_owners as _spawn_job_owners
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -1361,17 +1362,18 @@ def split_whole_entries_job(
     transparent_background: bool = False,
     previous_image_path: str | Path | None = None,
 ) -> list[CropRecord]:
-    """Spawn-safe worker: build the crop plan first, then execute it."""
-    page = Path(image_path)
-    entries = read_pdic(Path(pdic_file))
-    polygons = read_ppp(Path(ppp_file)) if ppp_file else []
-    return split_whole_entries(
-        page, entries, settings, Path(output_dir), top_y=top_y, bottom_y=bottom_y, polygons=polygons,
-        entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
-        integrate_illustrations=integrate_illustrations,
-        profile_page_index=profile_page_index,
-        transparent_background=transparent_background,
-        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
+    """Historical spawn-importable WW crop worker with live file readers."""
+    return _spawn_job_owners.split_whole_entries_job_impl(
+        image_path, pdic_file, settings, output_dir,
+        top_y, bottom_y, ppp_file, entry_left_padding, entry_right_padding,
+        integrate_illustrations, profile_page_index,
+        transparent_background, previous_image_path, deps={
+            "Path": Path,
+            "read_pdic": read_pdic,
+            "read_ppp": read_ppp,
+            "split_whole_entries": split_whole_entries,
+            "previous_entry_ref_for_image": previous_entry_ref_for_image,
+        },
     )
 
 
@@ -1391,15 +1393,19 @@ def split_illustrations_job(
     transparent_background: bool = False,
     previous_image_path: str | Path | None = None,
 ) -> IllustrationSplitResult:
-    """Spawn-safe worker: plan PPP/entry relations before exporting standalone PPPs."""
-    page = Path(image_path)
-    polygons = read_ppp(Path(ppp_file))
-    entries = read_pdic(Path(pdic_file)) if pdic_file else []
-    return split_illustrations(
-        page, polygons, Path(output_dir), settings, top_y=top_y, bottom_y=bottom_y, margin=margin, entries=entries,
-        entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
-        integrate_illustrations=integrate_illustrations,
-        profile_page_index=profile_page_index,
-        transparent_background=transparent_background,
-        previous_entry_ref=previous_entry_ref_for_image(previous_image_path),
+    """Historical spawn-importable PPP crop worker with live file readers."""
+    return _spawn_job_owners.split_illustrations_job_impl(
+        image_path, ppp_file, output_dir, settings,
+        top_y, bottom_y, margin, pdic_file,
+        entry_left_padding, entry_right_padding,
+        integrate_illustrations, profile_page_index,
+        transparent_background, previous_image_path, deps={
+            "Path": Path,
+            "read_ppp": read_ppp,
+            "read_pdic": read_pdic,
+            "split_illustrations": split_illustrations,
+            "previous_entry_ref_for_image": previous_entry_ref_for_image,
+        },
     )
+
+
