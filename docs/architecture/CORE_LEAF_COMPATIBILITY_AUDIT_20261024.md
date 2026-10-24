@@ -566,3 +566,8 @@ Moved six complete implementations out of `profile/setup.py`: `validate_profile`
 
 
 Round 36 first CI revealed three stale test-only source slices still expecting the validation overlay, UI rendering and background queue to physically live in `profile/setup.py`. Assertions now inspect `wizard_validation_visuals.py` and `wizard_validation_execution.py` behind verified old-class forwarding methods, retaining opacity, themed display, batch-gating and worker snapshot checks.
+
+
+### Round 37 — Representative-page thumbnails, slot selection and async layout analysis (2026-10-24)
+
+Physically extracted 13 `ProjectProfileWizard` methods from `profile/setup.py` to two canonical modules: `wizard_sample_thumbnails.py` owns group rendering/loading, full-set thumbnail decode, per-slot replacement/polling, cell rendering and the complete manual page picker. `wizard_sample_analysis.py` owns asynchronous representative-page layout estimation, queue polling, revision-guarded aggregation and explicit application of layout suggestions. All historical method names/signatures remain on the wizard class and pass live runtime helpers at call time. Threads still only read snapshot indices/paths/settings/images, with Tk cell materialization on the main thread. Slot changes only refresh the affected cell and visible template preview; stale generation/revision results are rejected. Automatic analysis still requires sufficient successful samples; no settings/PDIC/PPP persistence schema changes. New test file `tests/test_issue562_profile_wizard_round37_20261024.py` and existing source-location tests cover delegation, snapshots, stale work and single-slot invariants. Keep Draft pending CI (six OS/Python matrix), OCR smoke and manual scanned-page acceptance.

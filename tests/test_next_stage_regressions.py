@@ -2482,6 +2482,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     execution_owner = (source.parent / "wizard_validation_execution.py").read_text(encoding="utf-8")
     controls_owner = (source.parent / "wizard_validation_controls.py").read_text(encoding="utf-8")
     visuals_owner = (source.parent / "wizard_validation_visuals.py").read_text(encoding="utf-8")
+    thumbnails_owner = (source.parent / "wizard_sample_thumbnails.py").read_text(encoding="utf-8")
+    analysis_owner = (source.parent / "wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_thumbnails.choose_sample_page(" in legacy
+    assert "_wizard_sample_analysis.analyze_representative_pages(" in legacy
     assert "_wizard_validation_execution.validate_profile(" in legacy
     assert "_wizard_validation_controls.build_validation_tab(" in legacy
     assert "_wizard_validation_visuals.marker_preview(" in legacy
@@ -2493,7 +2497,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner))
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -2569,9 +2573,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     # rebuild/re-decode all six thumbnails or refresh a hidden template preview.
     assert "def _start_sample_thumbnail_slot_load" in text
     assert "def _render_sample_thumbnail_slot" in text
-    choose_start = text.index("    def _choose_sample_page(")
-    choose_end = text.index("    def _persist_current_profile(", choose_start)
-    choose_text = text[choose_start:choose_end]
+    choose_start = thumbnails_owner.index("def choose_sample_page(")
+    choose_text = thumbnails_owner[choose_start:]
     assert "self._start_sample_thumbnail_slot_load(slot)" in choose_text
     assert "self._start_sample_thumbnail_load()" not in choose_text
     assert "preview_uses_slot = self.template_preview_slot == slot" in choose_text
@@ -4444,10 +4447,10 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     assert "len(self.sample_indices)" not in worker
     assert "sample_count" in worker
 
-    analysis_start = profile.index("    def analyze_representative_pages(")
-    analysis_end = profile.index("\n    def _poll_analysis_queue", analysis_start)
-    analysis = profile[analysis_start:analysis_end]
-    worker = analysis[analysis.index("        def worker()"):analysis.index("        threading.Thread", analysis.index("        def worker()"))]
+    analysis_owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.analyze_representative_pages(" in profile
+    analysis = analysis_owner[analysis_owner.index("def analyze_representative_pages("):]
+    worker = analysis[analysis.index("    def worker()"):analysis.index("    threading.Thread", analysis.index("    def worker()"))]
     assert "self.project" not in worker
     assert "self._analysis_queue" not in worker
     assert "result_queue.put" in worker
@@ -4519,11 +4522,15 @@ def test_project_profile_legacy_workers_drop_results_while_closing():
         next_def = text.find("\n    def ", start + 8)
         block = text[start: next_def if next_def >= 0 else len(text)]
         if name == "validate_profile":
-            execution_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+            owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
             assert "_wizard_validation_execution.validate_profile(" in block
-            assert "_closing" in execution_owner
+        elif name in {"analyze_representative_pages", "_poll_analysis_queue"}:
+            owner = (root / "src/picture_capture/profile/wizard_sample_analysis.py").read_text(encoding="utf-8")
+            assert "_wizard_sample_analysis." in block
         else:
-            assert "_closing" in block
+            owner = (root / "src/picture_capture/profile/wizard_sample_thumbnails.py").read_text(encoding="utf-8")
+            assert "_wizard_sample_thumbnails." in block
+        assert "_closing" in owner
 
 
 
