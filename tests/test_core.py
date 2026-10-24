@@ -8136,7 +8136,9 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
 def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_current():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="颜色模式："' in text
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    init = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert 'text="颜色模式："' in init
     assert '"system": "跟随系统"' in text
     assert 'text="深色模式（夜间模式）"' not in text
     assert "single_line_labels: bool = False" in text
@@ -8144,11 +8146,11 @@ def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_curren
     assert "_settings_field_form.add_setting_group(" in text
     assert "wraplength=0 if single_line_labels else 180" in form
     assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in form
-    display_call = text.index('self._add_setting_group(\n            display,\n            "界面与校对"')
-    display_block = text[display_call:display_call + 240]
+    display_call = init.index('self._add_setting_group(\n        display,\n        "界面与校对"')
+    display_block = init[display_call:display_call + 240]
     assert 'single_line_labels=True' not in display_block
-    assert "appearance_help = ttk.Label(" in text
-    assert "appearance_group, appearance_help, horizontal_padding=24, min_wrap=160" in text
+    assert "appearance_help = ttk.Label(" in init
+    assert "appearance_group, appearance_help, horizontal_padding=24, min_wrap=160" in init
 
 
 def test_page_list_context_menu_matches_visible_column_order():
@@ -8284,7 +8286,9 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
 
     assert 'text="校对模式："' in REVIEW_WORKSPACE_SOURCE
     assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in text
+    review_init = (root / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in text
+    assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in review_init
     assert 'text="OCR不匹配"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="含特定字符"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="排除单字符"' in REVIEW_WORKSPACE_SOURCE
@@ -8297,11 +8301,11 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
-    assert 'key: tk.BooleanVar(value=(key == "reference"))' in text
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in review_init
     assert 'accent_button.bind(' in REVIEW_WORKSPACE_SOURCE and '"<Button-3>"' in REVIEW_WORKSPACE_SOURCE
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text
-    assert 'self.focused_page_range_var = parent.page_range_spec_var' in text
+    assert 'self.focused_page_range_var = parent.page_range_spec_var' in review_init
     assert 'indices = self.parent._parse_page_spec(' in FOCUSED_FILTER_SOURCE
     assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in FOCUSED_FILTER_SOURCE
     assert '"ocr_words": ocr_words' in FOCUSED_FILTER_SOURCE
