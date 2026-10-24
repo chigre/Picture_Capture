@@ -2472,7 +2472,14 @@ def test_project_profile_headword_examples_are_packaged():
 
 def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
-    text = source.read_text(encoding="utf-8")
+    legacy = source.read_text(encoding="utf-8")
+    tab_owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    state_owner = (source.parent / "wizard_state_initialization.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_template_tab(" in legacy
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
+    assert "_wizard_wizard_state_initialization.build_vars(" in legacy
+    # Inspect the original compatibility class and physically relocated implementations.
+    text = "\n".join((legacy, tab_owner, state_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -2865,7 +2872,10 @@ def test_profile_setup_exposes_complete_headword_structure_controls():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "profile/setup.py"
     )
-    text = source.read_text(encoding="utf-8")
+    legacy = source.read_text(encoding="utf-8")
+    owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
+    text = legacy + "\n" + owner
     assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
     assert "按 OCR 语言排除不兼容的词头首字符（推荐）" in text
     assert "日语允许汉字/假名，中文允许汉字" in text
@@ -3213,8 +3223,8 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     assert 'text="← 左移 0.1%"' in tab_owner
     assert 'text="右移 0.1% →"' in tab_owner
     assert "人工偏移 {percent:+.2f}% 单栏宽" in text
-    assert 'text="重置当前"' in text
-    assert 'text="重置全部"' in text
+    assert 'text="重置当前"' in tab_owner
+    assert 'text="重置全部"' in tab_owner
     assert "def _shift_selected_column" in text
     assert "self.working.column_start_offsets = offsets" in text
     assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
@@ -5553,9 +5563,12 @@ def test_cjk_profile_ui_explains_bracket_role_at_the_controls():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "profile/setup.py"
     ).read_text(encoding="utf-8")
-    assert "不包括【括号】" in source
-    assert "【不要填这里】" in source
-    assert "采【时按“括号起始”保存" in source
+    setup_source = source
+    tab_owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/profile/wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_headword_tab(" in setup_source
+    assert "不包括【括号】" in tab_owner
+    assert "【不要填这里】" in tab_owner
+    assert "采【时按“括号起始”保存" in tab_owner
 
 
 def test_selected_paddle_cache_compaction_is_scoped_and_preserves_reusable_ocr():
