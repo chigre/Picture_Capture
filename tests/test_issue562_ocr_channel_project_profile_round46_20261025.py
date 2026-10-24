@@ -68,7 +68,9 @@ def test_result_normalization_box_sort_and_live_record_factory(monkeypatch):
 def test_project_cover_and_page_list_conventions(monkeypatch, tmp_path):
     for name in ("_cover.JPG", "10.png", "2.PNG", "notes.txt"):
         (tmp_path / name).write_bytes(b"sample")
-    assert models.project_cover_path(tmp_path).name == "_cover.JPG"
+    # Windows resolves case-insensitive paths using the requested spelling.
+    # Only the filename's case differs; both resolve to the same cover file.
+    assert models.project_cover_path(tmp_path).name.casefold() == "_cover.jpg"
     assert [p.name for p in models.project_page_images(tmp_path)] == ["2.PNG", "10.png"]
     assert "is_cover_fn(" in inspect.getsource(page_discovery.project_page_images)
     monkeypatch.setattr(models, "is_project_cover_image", lambda _p: True)
