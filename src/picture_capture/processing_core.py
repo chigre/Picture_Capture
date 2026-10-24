@@ -107,131 +107,21 @@ def ordinary_page_layout_settings(
         replace_fn=replace, field_switches=ORDINARY_AUTO_LAYOUT_FIELDS,
     )
 
-@dataclass(slots=True)
-class ColumnPath:
-    """Piecewise-linear left edge of one dictionary column."""
+# Historical public class names and pickle module identities remain stable.
+# These are the exact classes implemented in their domain-owned modules:
+# never subclass them here, which would change dataclass identity and equality.
+from .geometry.processing_models import ColumnPath, Geometry
+from .crop.plan_models import (
+    CropRecord, EntryCropPiecePlan, IllustrationCropPlan, PageCropPlan,
+    IllustrationCropEvent, IllustrationSplitResult,
+)
 
-    points: list[tuple[int, int]]
-
-    def x_at(self, y: int) -> int:
-        if not self.points:
-            return 0
-        if y <= self.points[0][0]:
-            return self.points[0][1]
-        if y >= self.points[-1][0]:
-            return self.points[-1][1]
-        for (y0, x0), (y1, x1) in zip(self.points, self.points[1:]):
-            if y0 <= y <= y1:
-                if y1 == y0:
-                    return x0
-                ratio = (y - y0) / (y1 - y0)
-                return round(x0 + ratio * (x1 - x0))
-        return self.points[-1][1]
-
-    def x_bounds(self, y0: int, y1: int) -> tuple[int, int]:
-        samples = [self.x_at(y0), self.x_at(y1)]
-        samples.extend(x for y, x in self.points if y0 <= y <= y1)
-        return min(samples), max(samples)
-
-
-@dataclass(slots=True)
-class Geometry:
-    column_starts: list[int]
-    column_widths: list[int]
-    top: int
-    bottom: int
-    column_paths: list[ColumnPath]
-    transform: LayoutTransform = LayoutTransform()
-    source_size: tuple[int, int] = (0, 0)
-
-    def x_at(self, column: int, y: int) -> int:
-        if 0 <= column < len(self.column_paths):
-            return self.column_paths[column].x_at(y)
-        return self.column_starts[column]
-
-    def x_bounds(self, column: int, y0: int, y1: int) -> tuple[int, int]:
-        if 0 <= column < len(self.column_paths):
-            return self.column_paths[column].x_bounds(y0, y1)
-        x = self.column_starts[column]
-        return x, x
-
-    def source_to_canonical(self, x: int, y: int) -> tuple[int, int]:
-        if self.source_size == (0, 0):
-            return x, y
-        return self.transform.source_to_canonical_point(x, y, self.source_size)
-
-    def canonical_to_source(self, x: int, y: int) -> tuple[int, int]:
-        if self.source_size == (0, 0):
-            return x, y
-        return self.transform.canonical_to_source_point(x, y, self.source_size)
-
-
-@dataclass(slots=True)
-class CropRecord:
-    page: str
-    index: int
-    word: str
-    filename: str
-    box: tuple[int, int, int, int]
-
-
-@dataclass(slots=True)
-class EntryCropPiecePlan:
-    output_index: int
-    entry_ref_index: int | None
-    word: str
-    box: tuple[int, int, int, int]
-    suffix: str
-    source_mode: str = "cleaned"
-    merge_polygon_indices: tuple[int, ...] = ()
-
-
-@dataclass(slots=True)
-class IllustrationCropPlan:
-    polygon_index: int
-    name: str
-    associated_entry_index: int | None
-    associated_word: str
-    relation: str
-    standalone: bool
-    box: tuple[int, int, int, int] | None
-
-
-@dataclass(slots=True)
-class PageCropPlan:
-    entry_pieces: list[EntryCropPiecePlan]
-    illustrations: list[IllustrationCropPlan]
-    integrate_illustrations: bool = True
-    # Preview-only regions after auxiliary stop lines; never included in WW export.
-    auxiliary_gaps: list[tuple[int, int, int, int]] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class IllustrationCropEvent:
-    page: str
-    polygon_index: int
-    name: str
-    associated_word: str
-    relation: str
-    action: str
-    filename: str = ""
-
-
-@dataclass(slots=True)
-class IllustrationSplitResult:
-    records: list[CropRecord]
-    events: list[IllustrationCropEvent]
-
-    # Backward-compatible sequence behaviour for callers that historically
-    # treated split_illustrations() as a list of CropRecord.
-    def __iter__(self):
-        return iter(self.records)
-
-    def __len__(self) -> int:
-        return len(self.records)
-
-    def __getitem__(self, index):
-        return self.records[index]
+for _historical_processing_class in (
+    ColumnPath, Geometry, CropRecord, EntryCropPiecePlan, IllustrationCropPlan,
+    PageCropPlan, IllustrationCropEvent, IllustrationSplitResult,
+):
+    _historical_processing_class.__module__ = __name__
+del _historical_processing_class
 
 
 def _analysis_image(image: Image.Image, max_width: int = _ANALYSIS_MAX_WIDTH) -> tuple[Image.Image, float]:
