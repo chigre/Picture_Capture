@@ -608,3 +608,12 @@ New `tests/test_issue562_training_export_page_v2_round41_20261024.py` checks phy
 
 
 Round 41 first CI identified a source-location-only regression in the existing alpha-safe image loader test. The test now verifies the historical `training_export.export_training_page` delegation and the exact `normalize_page_rgb(opened)` usage in `training/export_page_v2.py`, preserving behavior and root public API checks.
+
+
+### Round 42 — Processing facade: Page Understanding and ordinary role/fallback physical owners (2026-10-25)
+
+- Physically extracted `processing._understand_page_current` (illustration masking, trace, Layout-only/composed dispatch, fail-open/fail-closed behavior and temporary image cleanup) to `layout/current_page.py:understand_page_current`. The legacy processing callable remains a stable signature-preserving delegate; layout imports remain lazy in the canonical owner and no runtime installer is invoked.
+- Physically extracted `processing._ordinary_entries_from_layout_roles` and `processing._ordinary_vb_fallback` into `ordinary/layout_roles.py`. Layout entry scale/source Y mapping and fallback-only VB behavior are unchanged; the facade forwards its current refinement callback, Entry constructor, VB detector, page-template filter, sorter and dataclass replacement function on every call, preserving monkeypatch seams.
+- Root `processing.py`: **41,760 → 36,905 bytes**, **-4,855 bytes**. Root Python files remain **10**, aggregate root Python bytes **449,419 → 444,564**. No new root shims, no model/pickle or persisted schema moves.
+- New regression `tests/test_issue562_processing_layout_owner_round42_20261025.py` checks physical AST owners, historical signatures, source path/mask trace/close, live Y-refinement and Entry factory, and VB detector/filter/sort patching. Three prior source-contract tests now inspect the actual physical owner rather than assuming implementation is still in the facade; their behavioral assertions remain.
+- This extraction does **not** establish representative scanned dictionary-page GUI acceptance. Ordinary/OCR/combined detection, Tk main-thread behavior, PDIC/PPP save/reopen and crop/export equivalence remain **manual acceptance pending**. CI and OCR smoke must be checked on the exact new commit before any readiness discussion. PR stays Draft; no merge.

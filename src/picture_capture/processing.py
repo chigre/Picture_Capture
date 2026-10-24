@@ -29,6 +29,8 @@ from .ordinary.indent_topology import finalize_indented_topology
 from .ordinary.postprocess import stabilize_ordinary_visual_entries
 from .ordinary.visual import recover_ordinary_visual_entries
 from .layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
+from .layout import current_page as _current_page_understanding
+from .ordinary import layout_roles as _ordinary_layout_roles
 from .layout.page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
 from .refinement.separator_y import refined_layout_entry_y_by_line
@@ -71,95 +73,12 @@ def _understand_page_current(
     replay_preview: Any | None = None,
     source_image_path: Path | None = None,
 ) -> PageUnderstanding | None:
-    """Resolve Page Understanding with optional static illustration masking."""
-    analysis_image = image
-    mask_stats = None
-    append_reason = None
-    mask_candidates: list[dict[str, Any]] | None = (
-        [] if layout_trace is not None else None
+    """Historical processing hook; Layout owns masking and page composition."""
+    return _current_page_understanding.understand_page_current(
+        image, settings, page_index=page_index, page_sections=page_sections,
+        layout_only=layout_only, layout_trace=layout_trace,
+        replay_preview=replay_preview, source_image_path=source_image_path,
     )
-    masking_enabled = bool(getattr(settings, "layout_mask_illustrations", False))
-    mask_error = None
-    if masking_enabled:
-        from .layout.illustration_mask import (
-            IllustrationMaskStats,
-            append_mask_reason,
-            mask_large_illustrations_for_layout,
-        )
-
-        mask_stats = IllustrationMaskStats()
-        append_reason = append_mask_reason
-        try:
-            analysis_image, mask_stats = mask_large_illustrations_for_layout(
-                image,
-                settings,
-                profile_page_index=int(page_index),
-                **({"source_image_path": source_image_path}
-                   if source_image_path is not None else {}),
-                **({"candidate_debug": mask_candidates}
-                   if mask_candidates is not None else {}),
-            )
-        except Exception as exc:
-            if bool(getattr(settings, "layout_mask_illustrations_use_existing", False)):
-                raise
-            analysis_image = image
-            mask_stats = IllustrationMaskStats()
-            mask_error = f"{type(exc).__name__}: {exc}"
-
-    if layout_trace is not None:
-        # A disabled/no-candidates/no-mask/failure result is still an explicit
-        # stage: the user must not infer that masking was skipped silently.
-        stats = mask_stats
-        layout_trace.add_note(
-            "illustration_mask", "Layout 前插图区域检测／白化",
-            ("启用后先筛选自动插图候选，只有安全通过的多边形才填白。"
-             if masking_enabled else "当前项目已关闭 Layout 前插图掩膜。"),
-            details={
-                "enabled": masking_enabled,
-                "detected": int(stats.detected) if stats else 0,
-                "masked": int(stats.masked) if stats else 0,
-                "rejected_small": int(stats.rejected_small) if stats else 0,
-                "rejected_headlike": int(stats.rejected_headlike) if stats else 0,
-                "failure_fallback_to_unmasked": mask_error,
-            },
-            candidates=mask_candidates,
-        )
-        if replay_preview is not None and masking_enabled:
-            replay_preview("illustration_mask", analysis_image)
-
-    try:
-        # Both the layout-only and enriched Page Understanding branches use
-        # explicit Physical Layout composition. Legacy installer preparation is
-        # no longer part of the normal detection path.
-        if layout_only:
-            from .layout.core_understanding import understand_layout_core
-
-            understanding = understand_layout_core(
-                analysis_image,
-                settings,
-                page_index=page_index,
-                **({"trace": layout_trace} if layout_trace is not None else {}),
-            )
-        else:
-            from .layout.composition import understand_composed_page
-
-            understanding = understand_composed_page(
-                analysis_image,
-                settings,
-                page_index=page_index,
-                page_sections=page_sections,
-            )
-        if append_reason is not None and mask_stats is not None:
-            append_reason(understanding, mask_stats)
-        return understanding
-    except Exception:
-        return None
-    finally:
-        if analysis_image is not image:
-            try:
-                analysis_image.close()
-            except Exception:
-                pass
 
 
 
@@ -322,53 +241,11 @@ def _ordinary_entries_from_layout_roles(
     page_index: int = 0,
     diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[Entry]:
-    """Materialize final Layout entry rows with canonical classification."""
-    from .proofreading.classification import copy_layout_line_classification
-
-    layout = understanding.layout
-    refined_y_by_line = (
-        refined_layout_entry_y_by_line(
-            image,
-            understanding,
-            page_index=int(page_index),
-            diagnostics=diagnostics,
-        )
-        if image is not None
-        else {}
+    """Historical patchable materialization entrypoint; ordinary owns the body."""
+    return _ordinary_layout_roles.materialize_layout_role_entries(
+        understanding, image, page_index=page_index, diagnostics=diagnostics,
+        refine_entry_y=refined_layout_entry_y_by_line, entry_type=Entry,
     )
-    result: list[Entry] = []
-    for column in list(getattr(layout, "columns", []) or []):
-        for line in list(getattr(column, "lines", []) or []):
-            if str(getattr(line, "role", "") or "") != "entry":
-                continue
-            canonical_y = int(refined_y_by_line.get(
-                id(line),
-                int(layout.body_top) + int(line.y0),
-            ))
-            source_x, source_y = layout.transform.canonical_to_source_point(
-                int(column.left),
-                canonical_y,
-                layout.source_size,
-            )
-            entry = Entry(
-                word="",
-                x=int(source_x),
-                y=int(source_y),
-                confidence=None,
-                ocr_source="page_understanding:ordinary_layout_role",
-                issue_type="PAGE_UNDERSTANDING_ORDINARY_LAYOUT_ROLE",
-            )
-            meta = copy_layout_line_classification(line, entry)
-            if meta.entry_scale == "oversized":
-                entry.ocr_oversized_cjk = True
-                entry.ocr_single_cjk = True
-                if meta.detected_head_height > 0:
-                    entry.ocr_visual_run_height = float(meta.detected_head_height)
-                    entry.ocr_line_height_reference = float(
-                        getattr(layout, "ordinary_line_height", 0.0) or 0.0
-                    )
-            result.append(entry)
-    return result
 
 
 def _ordinary_vb_fallback(
@@ -380,23 +257,15 @@ def _ordinary_vb_fallback(
     profile_page_index: int,
     page_sections: list[PageSection] | None,
 ) -> tuple[list[Entry], Any]:
-    """Run original VB only when Page Understanding cannot produce columns."""
-    vb_settings = replace(effective)
-    vb_settings.detection_method = "left_edge"
-    entries, geometry = _original_detect_entries_left_edge(
-        analysis_image,
-        vb_settings,
-        page_sections=page_sections,
+    """Historical VB fallback hook; retain call-time patched dependencies."""
+    return _ordinary_layout_roles.ordinary_vb_fallback(
+        analysis_image, source, settings, effective,
+        profile_page_index=profile_page_index, page_sections=page_sections,
+        left_edge_detector=_original_detect_entries_left_edge,
+        allowed_entries=_allowed_entries,
+        sort_entries_reading_order=_core.sort_entries_reading_order,
+        replace_settings=replace,
     )
-    entries = _allowed_entries(
-        list(entries),
-        source,
-        settings,
-        geometry,
-        profile_page_index,
-        page_sections,
-    )
-    return _core.sort_entries_reading_order(entries, geometry, page_sections), geometry
 
 
 def _review_candidates_from_cache(

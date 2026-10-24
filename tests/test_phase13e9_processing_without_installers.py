@@ -35,12 +35,14 @@ def test_processing_both_modes_skip_historical_installer(monkeypatch):
 
 def test_normal_processing_source_no_longer_calls_ensure_runtime():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    tree = ast.parse((root / "processing.py").read_text(encoding="utf-8"))
+    tree = ast.parse((root / "layout" / "current_page.py").read_text(encoding="utf-8"))
     definitions = [node for node in ast.walk(tree)
                    if isinstance(node, ast.FunctionDef)
-                   and node.name == "_understand_page_current"]
+                   and node.name == "understand_page_current"]
     assert len(definitions) == 1
     calls = [node.func.id for node in ast.walk(definitions[0])
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
     assert "_ensure_layout_runtime" not in calls
     assert "understand_composed_page" in calls
+    facade = (root / "processing.py").read_text(encoding="utf-8")
+    assert "_current_page_understanding.understand_page_current(" in facade

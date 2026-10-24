@@ -2,6 +2,7 @@
 import inspect
 
 from picture_capture import processing
+from picture_capture.ordinary import layout_roles as ordinary_layout_roles
 from picture_capture.refinement import separator_y as separator_y_refinement
 
 
@@ -12,7 +13,10 @@ def test_refiner_exposes_optional_diagnostics_without_changing_default_signature
 
 
 def test_layout_materializer_forwards_diagnostics_without_changing_normal_path():
-    source = inspect.getsource(processing._ordinary_entries_from_layout_roles)
+    source = inspect.getsource(ordinary_layout_roles.materialize_layout_role_entries)
+    facade = inspect.getsource(processing._ordinary_entries_from_layout_roles)
+    assert "diagnostics=diagnostics" in facade
+    assert "refine_entry_y=refined_layout_entry_y_by_line" in facade
     assert "diagnostics=diagnostics" in source
     assert "canonical_y = int(refined_y_by_line.get(" in source
 

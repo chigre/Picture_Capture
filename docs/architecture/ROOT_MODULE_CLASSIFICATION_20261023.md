@@ -86,3 +86,8 @@ GUI and `python -m picture_capture` entrypoints were already routed through
 External Python imports `picture_capture.cli` and `picture_capture.launcher`
 are deliberately retired; use their `picture_capture.bootstrap.*` owners.
 The installer command names remain unchanged. Root inventory is **10** files.
+
+
+## 2026-10-25 Round 42: processing root business logic reduction
+
+`processing.py` continues as the historical detection facade and call-time patch point. Actual optional illustration masking, Layout-only versus composed understanding and analysis-image cleanup now live in `layout/current_page.py`; ordinary Layout-role Entry materialization (including refined canonical Y and classification metadata) and fallback-only VB execution live in `ordinary/layout_roles.py`. Three former implementation bodies were removed from the root, with exact legacy signatures retained as delegates. Root remains 10 physical Python modules for public/API and serialization reasons, not because the moved algorithms are still rooted. No persistence schema or OCR cache layout changed; real scanned-page acceptance remains pending.
