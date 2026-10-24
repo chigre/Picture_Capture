@@ -1082,6 +1082,8 @@ def test_secondary_windows_share_modern_shell_without_changing_review_window():
     settings_start = source.index("class SettingsDialog")
     settings_end = source.index("class ReviewWindow", settings_start)
     settings = source[settings_start:settings_end]
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     assert '_build_modern_dialog_heading(' in settings
     assert '"设置中心"' in settings
     assert 'text="校验当前设置"' in settings
@@ -1137,6 +1139,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert "_settings_field_form.add_setting_group(" in settings
     settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     schema = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
@@ -1285,6 +1289,8 @@ def test_settings_center_uses_native_compact_right_pane_help():
     settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert "_settings_field_form.add_setting_group(" in settings
     settings += "\n" + (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    settings += "\n" + (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
 
     assert "inline_help = ttk.Label" not in settings
     assert "check_help = ttk.Label" not in settings
@@ -5651,13 +5657,12 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "help.py"
     ).read_text(encoding="utf-8")
-    start = text.index('    def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:')
-    end = text.index("    @staticmethod\n    def _crop_nonnegative_int", start)
-    block = text[start:end]
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    block = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     # The early update_idletasks() used only to obtain screen/window geometry is
     # allowed.  The old trailing all-tab layout flush after autosave binding was
     # the Windows/Tk hang and must not return.
-    tail = block[block.index("        self._autosave_ready = True"):]
+    tail = block[block.index("    self._autosave_ready = True"):]
     assert "self.update_idletasks()" not in tail
     assert "for _canvas in self._settings_canvases.values():" not in tail
     panel = (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
