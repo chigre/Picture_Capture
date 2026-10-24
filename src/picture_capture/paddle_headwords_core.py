@@ -40,6 +40,9 @@ from .ocr import user_filter_rules as _user_filter_rules
 from .ocr import grammar_tail_parsing as _grammar_tail_parsing
 from .ocr import language_resolution as _language_resolution
 from .ocr import source_coordinate_persistence as _source_coordinate_persistence
+from .ocr import symbol_inventory as _symbol_inventory
+from .ocr import source_candidate_coordinates as _source_candidate_coordinates
+from .ocr import review_anchor_variants as _review_anchor_variants
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -220,155 +223,13 @@ def _split_configured_symbols(value: str | None) -> tuple[str, ...]:
 def _configured_symbol_inventory(
     settings: AppSettings, profile: DictionaryProfile,
 ) -> dict[str, Any]:
-    """Resolve dictionary-specific symbol roles with Project Profile overrides.
-
-    Standalone entry markers (○/●/◆...) and bracket openers are separate roles.
-    The historical profile_symbol_inventory_enabled switch now controls only
-    the standalone-marker inventory. Bracket openers remain active whenever
-    the user enabled the explicit bracket-headword structure; otherwise a
-    configured bracket opener/template can be silently disabled merely because
-    the dictionary has no standalone marker prefix.
-    """
-    base = dict(profile.symbol_inventory or {})
-    has_role_aware_inventory = bool(profile.symbol_inventory is not None)
-    entry = tuple(str(x) for x in base.get("entry_markers", []) if str(x))
-    if not entry and not has_role_aware_inventory:
-        entry = tuple(str(x) for x in profile.entry_leading_symbols if str(x))
-    bracket = tuple(str(x) for x in base.get("bracket_openers", []) if str(x))
-
-    parser_controls = int(
-        getattr(settings, "profile_parser_controls_version", 0) or 0
-    ) >= 1
-    marker_role_enabled = (
-        bool(getattr(settings, "profile_allow_marker_prefix", False))
-        if parser_controls else profile.uses_parser("cjk_marker_pinyin")
+    """Profile symbol roles; pass current public parser and family hooks."""
+    return _symbol_inventory.configured_symbol_inventory(
+        settings, profile,
+        split_symbols_fn=_split_configured_symbols,
+        visual_samples_fn=visual_marker_samples_from_settings,
+        symbol_families=_SYMBOL_FAMILY_BY_LITERAL,
     )
-    bracket_role_enabled = (
-        bool(getattr(settings, "profile_cjk_allow_bracketed_headword", True))
-        if parser_controls else profile.uses_parser("cjk_bracketed")
-    )
-
-    saved = int(getattr(settings, "profile_symbol_inventory_version", 0) or 0) >= 1
-    if saved:
-        marker_inventory_enabled = bool(
-            getattr(settings, "profile_symbol_inventory_enabled", True)
-        )
-        entry = (
-            _split_configured_symbols(
-                getattr(settings, "profile_entry_marker_symbols", "")
-            )
-            if marker_inventory_enabled and marker_role_enabled else ()
-        )
-        # Bracket structure has its own explicit checkbox and must not be
-        # disabled by the standalone-marker switch.
-        bracket = (
-            _split_configured_symbols(
-                getattr(settings, "profile_bracket_open_symbols", "")
-            )
-            if bracket_role_enabled else ()
-        )
-        visual_rescue = bool(
-            getattr(settings, "profile_symbol_visual_rescue_enabled", True)
-        )
-        lane_required = bool(
-            getattr(settings, "profile_symbol_lane_required", True)
-        )
-        lane_tolerance = max(
-            20, min(
-                120,
-                int(getattr(settings, "profile_symbol_lane_tolerance_percent", 50) or 50),
-            )
-        )
-    else:
-        marker_inventory_enabled = bool(base.get("enabled", True))
-        visual_rescue = bool(base.get("visual_rescue", True))
-        lane_required = bool(base.get("lane_expected", False))
-        lane_tolerance = max(
-            20, min(120, int(base.get("lane_tolerance_percent") or 50))
-        )
-        if not marker_role_enabled:
-            entry = ()
-        if not bracket_role_enabled:
-            bracket = ()
-        if (
-            not entry
-            and parser_controls
-            and marker_role_enabled
-            and marker_inventory_enabled
-        ):
-            entry = ("○", "●", "◦", "•", "〓", "◆", "◇", "►", "▶")
-
-    template_mode = str(
-        getattr(settings, "profile_symbol_template_mode", "combined") or "combined"
-    )
-    if template_mode not in {"off", "combined", "template_first"}:
-        template_mode = "combined"
-    group_mode = str(
-        getattr(settings, "profile_symbol_template_group_mode", "role") or "role"
-    )
-    if group_mode not in {"role", "literal"}:
-        group_mode = "role"
-    template_threshold = max(
-        0.35,
-        min(
-            0.95,
-            float(getattr(settings, "profile_symbol_template_threshold", 0.68) or 0.68),
-        ),
-    )
-    templates = (
-        visual_marker_samples_from_settings(settings)
-        if int(getattr(settings, "profile_symbol_template_version", 0) or 0) >= 1
-        and template_mode != "off"
-        else []
-    )
-    templates = [
-        sample for sample in templates
-        if (
-            str(sample.get("role") or "") == "bracket_open"
-            and bracket_role_enabled
-        ) or (
-            str(sample.get("role") or "") == "entry_marker"
-            and marker_inventory_enabled
-            and marker_role_enabled
-        )
-    ]
-
-    effective_enabled = bool(
-        (marker_inventory_enabled and marker_role_enabled and entry)
-        or (bracket_role_enabled and bracket)
-        or templates
-    )
-    families = {
-        _SYMBOL_FAMILY_BY_LITERAL[symbol]
-        for symbol in entry + bracket
-        if symbol in _SYMBOL_FAMILY_BY_LITERAL
-    }
-    for family in (str(x) for x in base.get("visual_families", []) if str(x)):
-        if family == "bracket_open" and bracket_role_enabled:
-            families.add(family)
-        elif (
-            family != "bracket_open"
-            and marker_inventory_enabled
-            and marker_role_enabled
-        ):
-            families.add(family)
-
-    return {
-        "enabled": effective_enabled,
-        "standalone_inventory_enabled": marker_inventory_enabled,
-        "marker_role_enabled": marker_role_enabled,
-        "bracket_role_enabled": bracket_role_enabled,
-        "entry_markers": entry,
-        "bracket_openers": bracket,
-        "visual_rescue": visual_rescue,
-        "lane_required": lane_required,
-        "lane_tolerance_percent": lane_tolerance,
-        "visual_families": tuple(sorted(families)),
-        "visual_templates": templates,
-        "visual_template_mode": template_mode,
-        "visual_template_group_mode": group_mode,
-        "visual_template_threshold": template_threshold,
-    }
 
 def _starts_with_unconfigured_headword_symbol(
     text: str,
@@ -2076,61 +1937,10 @@ def _attach_source_candidate_coordinates(
     geometry: "Geometry",
     column: int,
 ) -> None:
-    """Attach original-image X/Y while keeping reading-axis values private."""
-    for item in diagnostics:
-        if "meta" in item:
-            meta = item.get("meta") or {}
-            meta["coordinate_space"] = "source_image_pixels"
-            if meta.get("_header_cutoff_axis_v") is not None:
-                try:
-                    axis_v = int(meta["_header_cutoff_axis_v"])
-                    axis_u = int(geometry.x_at(column, axis_v))
-                    sx, sy = geometry.canonical_to_source(axis_u, axis_v)
-                    meta["header_cutoff_source_x"] = int(sx)
-                    meta["header_cutoff_source_y"] = int(sy)
-                except (TypeError, ValueError):
-                    pass
-            continue
-
-        # Low-level filtering works on a temporary transformed reading axis.
-        # Keep that fact private; every public/cache coordinate is source X/Y.
-        try:
-            axis_v = int(item.get("_axis_v", item.get("_axis_v", item.get("source_y", 0))))
-        except (TypeError, ValueError):
-            axis_v = 0
-        try:
-            coarse_axis_v = int(item.get("_coarse_axis_v", item.get("coarse_canonical_v", item.get("coarse_source_y", axis_v))))
-        except (TypeError, ValueError):
-            coarse_axis_v = axis_v
-        try:
-            anchor_axis_v = int(item.get("_anchor_axis_v", item.get("anchor_canonical_v", item.get("anchor_source_y", coarse_axis_v))))
-        except (TypeError, ValueError):
-            anchor_axis_v = coarse_axis_v
-
-        axis_u = int(geometry.x_at(column, axis_v))
-        source_x, source_y = geometry.canonical_to_source(axis_u, axis_v)
-        coarse_axis_u = int(geometry.x_at(column, coarse_axis_v))
-        coarse_source_x, coarse_source_y = geometry.canonical_to_source(
-            coarse_axis_u, coarse_axis_v
-        )
-        anchor_axis_u = int(geometry.x_at(column, anchor_axis_v))
-        anchor_source_x, anchor_source_y = geometry.canonical_to_source(
-            anchor_axis_u, anchor_axis_v
-        )
-
-        item["_axis_v"] = axis_v
-        item["_coarse_axis_v"] = coarse_axis_v
-        item["_anchor_axis_v"] = anchor_axis_v
-        for key in ("canonical_u", "canonical_v", "coarse_canonical_v", "anchor_canonical_v", "canonical_coordinate_space"):
-            item.pop(key, None)
-        item["coordinate_space"] = "source_image_pixels"
-        item["source_x"] = int(source_x)
-        item["source_y"] = int(source_y)
-        item["coarse_source_x"] = int(coarse_source_x)
-        item["coarse_source_y"] = int(coarse_source_y)
-        item["anchor_source_x"] = int(anchor_source_x)
-        item["anchor_source_y"] = int(anchor_source_y)
-
+    """Attach original source pixel coordinates via the canonical OCR owner."""
+    return _source_candidate_coordinates.attach_source_candidate_coordinates(
+        diagnostics, geometry, column,
+    )
 
 def _candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
     if not candidate:
@@ -2502,75 +2312,8 @@ def _manual_selection_path(cache_path: Path) -> Path:
 
 
 def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any]]) -> int:
-    """Expose an image-derived anchor Y as the unchecked fallback position.
-
-    v2.8.19 keeps three distinct vertical facts: ``original_box`` / OCR coarse Y
-    for diagnosis, ``anchor_source_y`` derived from local image ink geometry,
-    and the final refined Y.  The blue fallback checkbox uses the image anchor
-    when available; this avoids returning to an OCR box top that may itself have
-    leaked into the preceding line.  OCR coarse Y remains preserved in cache.
-    """
-    additions: list[dict[str, Any]] = []
-    created = 0
-    for item in list(review_candidates):
-        if str(item.get("position_variant", "refined")) != "refined":
-            continue
-        try:
-            refined_y = int(item.get("source_y", 0))
-            refined_x = int(item.get("source_x", 0))
-            coarse_y = int(item.get("coarse_source_y", refined_y))
-            coarse_x = int(item.get("coarse_source_x", refined_x))
-            anchor_y = int(item.get("anchor_source_y", coarse_y))
-            anchor_x = int(item.get("anchor_source_x", coarse_x))
-            refined_v = int(item.get("_axis_v", refined_y))
-            coarse_v = int(item.get("_coarse_axis_v", refined_v))
-            anchor_v = int(item.get("_anchor_axis_v", coarse_v))
-        except (TypeError, ValueError):
-            continue
-        if refined_y <= 0 or anchor_y <= 0 or anchor_y == refined_y:
-            continue
-        base_id = str(item.get("candidate_id", ""))
-        if not base_id:
-            continue
-        group_id = str(item.get("position_group_id") or base_id)
-        item["position_group_id"] = group_id
-        item["refined_source_y"] = refined_y
-        item["coarse_source_y"] = coarse_y
-        item["anchor_source_y"] = anchor_y
-        item["position_variant"] = "refined"
-
-        fallback = dict(item)
-        fallback["candidate_id"] = f"{base_id}-rawy"
-        fallback["source_x"] = anchor_x
-        fallback["source_y"] = anchor_y
-        fallback["_axis_v"] = anchor_v
-        fallback["refined_source_y"] = refined_y
-        fallback["coarse_source_x"] = coarse_x
-        fallback["coarse_source_y"] = coarse_y
-        fallback["_coarse_axis_v"] = coarse_v
-        fallback["anchor_source_x"] = anchor_x
-        fallback["anchor_source_y"] = anchor_y
-        fallback["_anchor_axis_v"] = anchor_v
-        fallback["position_group_id"] = group_id
-        fallback["position_variant"] = "original"
-        fallback["selected"] = False
-        fallback["manual_override"] = False
-        fallback["needs_review"] = False
-        fallback["decision_reason"] = "image_anchor_y_fallback"
-        fallback["fallback_kind"] = "image_anchor"
-        fallback["issue_types"] = list(item.get("issue_types", []) or [])
-        additions.append(fallback)
-        created += 1
-    review_candidates.extend(additions)
-    review_candidates.sort(
-        key=lambda row: (
-            int(row.get("column", 0)),
-            int(row.get("canonical_v", row.get("source_y", 0))),
-            str(row.get("position_variant", "")),
-        )
-    )
-    return created
-
+    """Historical anchor-Y fallback variant expansion; preserve mutation and order."""
+    return _review_anchor_variants.expand_original_y_fallback_candidates(review_candidates)
 
 def _enforce_position_variant_exclusivity(review_candidates: list[dict[str, Any]]) -> int:
     """Ensure at most one Y variant is selected for each physical headword."""
