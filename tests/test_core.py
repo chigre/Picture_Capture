@@ -3720,12 +3720,14 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
     app_text = (package / "app.py").read_text(encoding="utf-8")
     project_session = (package / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     training_text = (package / "training_export.py").read_text(encoding="utf-8")
+    training_owner_text = (package / "training/export_page_v2.py").read_text(encoding="utf-8")
     layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
     paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
 
     assert "self.image = normalize_page_rgb(opened)" in project_session
     assert "image = normalize_page_rgb(opened)" in (app_text + project_session)
-    assert "image = normalize_page_rgb(opened)" in training_text
+    assert "_page_v2.export_training_page(" in training_text
+    assert "image = normalize_page_rgb(opened)" in training_owner_text
     assert "source = normalize_page_rgb(image)" in layout_text
     assert "oriented = normalize_page_rgb(image)" in paddle_text
 
