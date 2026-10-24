@@ -397,9 +397,8 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
     import picture_capture.app as app_module
 
     source = Path(inspect.getsourcefile(app_module)).read_text(encoding="utf-8")
-    detect_start = source.index("    def _detect_pages(")
-    detect_end = source.index("    def clear_entries(", detect_start)
-    batch = source[detect_start:detect_end]
+    assert "_detection_batch_execution.detect_pages(" in source
+    batch = (Path(inspect.getsourcefile(app_module)).parent / "ui" / "detection_batch_execution.py").read_text(encoding="utf-8")
     assert 'if method == "combined":' in batch
     assert "ocr_existing_entry_words_from_markers(" in batch
     assert "only_blank=True" in batch
