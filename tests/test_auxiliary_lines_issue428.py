@@ -102,7 +102,9 @@ def test_preview_and_real_export_use_same_crop_planner():
     core = (root / "processing_core.py").read_text(encoding="utf-8")
     owner = (root / "crop" / "page_workflow.py").read_text(encoding="utf-8")
     illustration_owner = (root / "crop" / "illustration_export.py").read_text(encoding="utf-8")
-    assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in app
+    canvas_owner = (root / "ui" / "main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    assert "_main_canvas_render._current_page_crop_plan(" in app
+    assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in canvas_owner
     # Crop planning and export are now physically owned by crop/page_workflow.
     # Verify that both public entry points compose this same canonical owner.
     assert "pieces = partition_entry_pieces(" in owner

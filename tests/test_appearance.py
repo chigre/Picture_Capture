@@ -163,8 +163,10 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     assert '"system-appearance-detect"' in theme_owner
     assert '"_pc_appearance_map_pending"' in theme_owner
     assert "if getattr(widget, \"_pc_appearance_map_pending\", False):" in theme_owner
-    assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in app_source
-    assert 'display = themed_display_image(display, self.appearance_mode)' in app_source
+    cache_owner = (ROOT / "src/picture_capture/ui/main_display_cache.py").read_text(encoding="utf-8")
+    assert "_main_display_cache._get_cached_display_photo(" in app_source
+    assert 'key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)' in cache_owner
+    assert 'display = themed_display_image(display, self.appearance_mode)' in cache_owner
     assert 'normalize_appearance_mode(preloaded.get("appearance_mode")) == self.appearance_mode' in project_session
     assert 'appearance_mode = self.appearance_mode' in project_session
     assert 'self._recent_projects_rebuild = rebuild' in project_session

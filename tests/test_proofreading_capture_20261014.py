@@ -327,13 +327,15 @@ def _pdic_save_regions():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     helper = (root / "proofreading/deferred_save.py").read_text(encoding="utf-8")
+    pdic_owner = (root / "ui/main_pdic_persistence.py").read_text(encoding="utf-8")
+    assert "_main_pdic_persistence.save_pdic(" in app
     wrapper = app[app.index("    def _flush_deferred_page_save("):]
     wrapper = wrapper[:wrapper.index("\n    def ")]
     # The GUI remains a thin call-time adapter to the same persistence API.
     assert "flush_deferred_page_save(self, write_pdic=write_pdic, pdic_path=pdic_path)" in wrapper
     regions = []
     for source, method, indentation, prefix in (
-        (app, "save_pdic(", "    ", "self."),
+        (pdic_owner, "save_pdic(", "", "self."),
         (helper, "flush_deferred_page_save(", "", "app."),
     ):
         start = source.index(indentation + "def " + method)

@@ -3626,9 +3626,11 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'normalize_page_rgb(opened)' in load_block
     assert 'convert("RGBA")' not in load_block
 
-    cache_start = text.index("    def _get_cached_display_photo(")
-    cache_end = text.index("    def _apply_display_mode(", cache_start)
-    cache_block = text[cache_start:cache_end]
+    assert "_main_display_cache._get_cached_display_photo(" in text
+    cache_source = (source.parent / "ui/main_display_cache.py").read_text(encoding="utf-8")
+    cache_start = cache_source.index("def _get_cached_display_photo(")
+    cache_end = cache_source.index("\ndef _current_effective_profile_settings(", cache_start)
+    cache_block = cache_source[cache_start:cache_end]
     assert 'self.image.resize(size, Image.Resampling.LANCZOS)' in cache_block
     assert 'self.image.convert("RGB")' not in cache_block
 
@@ -3749,9 +3751,11 @@ def test_v294_candidate_checkbox_uses_local_overlay_update_and_deferred_save():
 def test_v294_background_photo_cache_key_includes_page_size_binary_and_appearance():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _get_cached_display_photo(")
-    end = text.index("    def _apply_display_mode(", start)
-    block = text[start:end]
+    assert "_main_display_cache._get_cached_display_photo(" in text
+    cache_source = (source.parent / "ui/main_display_cache.py").read_text(encoding="utf-8")
+    start = cache_source.index("def _get_cached_display_photo(")
+    end = cache_source.index("\ndef _current_effective_profile_settings(", start)
+    block = cache_source[start:end]
     assert "key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)" in block
     assert "self._display_photo_cache_key != key" in block
 
@@ -6040,9 +6044,11 @@ def test_v21117_review_autosave_reuses_main_autosave_variable_and_tick():
     review = text[start:end]
     assert 'variable=self.parent.autosave_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self.parent.toggle_autosave()' in REVIEW_WORKSPACE_SOURCE
-    tick_start = text.index("    def autosave_tick", text.index("class PictureCaptureApp"))
-    tick_end = text.index("    def open_settings", tick_start)
-    tick = text[tick_start:tick_end]
+    assert "_main_pdic_persistence.autosave_tick(" in text
+    owner = (Path(inspect.getsourcefile(app_module)).parent /
+             "ui" / "main_pdic_persistence.py").read_text(encoding="utf-8")
+    tick_start = owner.index("def autosave_tick(")
+    tick = owner[tick_start:]
     assert 'review.autosave_commit()' in tick
 
 
@@ -8209,7 +8215,10 @@ def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded(
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     app_owner = (root / "app.py").read_text(encoding="utf-8")
     assert "_main_workspace_build.build_ui(" in app_owner
-    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    text = (app_owner + "\n" +
+            (root / "ui/main_workspace_build.py").read_text(encoding="utf-8") + "\n" +
+            (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8"))
+    assert "_main_canvas_render._current_page_crop_plan(" in app_owner
     pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
