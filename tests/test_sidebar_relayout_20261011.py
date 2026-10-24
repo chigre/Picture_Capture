@@ -24,8 +24,10 @@ def test_light_and_dark_use_same_compact_button_geometry():
     assert 'style="PC.Sidebar.TFrame", width=DEFAULT_RAIL_WIDTH, height=33' in source
     assert 'entry.grid_propagate(False)' in source
     assert 'entry.configure(width=36 if extreme else app.workspace_rail_width)' in source
-    assert 'padding=(0, 0), relief="flat"' in app
-    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in app
+    appearance_owner = (ROOT / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert 'padding=(0, 0), relief="flat"' in appearance_owner
+    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in appearance_owner
     assert 'padding=(0, 0), relief="flat"' in source
 
 
@@ -73,8 +75,10 @@ def test_light_rail_button_height_and_dark_captions_are_consistently_centered():
     assert 'text_button = tk.Button(' in source
     assert 'anchor="center", justify="center"' in source
     assert 'relief="flat", bd=0, highlightthickness=0' in source
-    assert 'style.configure(button_style, anchor="center", justify="center")' in app
-    assert 'anchor="center", justify="center"' in app
+    appearance_owner = (ROOT / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert 'style.configure(button_style, anchor="center", justify="center")' in appearance_owner
+    assert 'anchor="center", justify="center"' in appearance_owner
 
 
 def test_theme_toggle_keeps_four_window_preset_commands_unchanged():
