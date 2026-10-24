@@ -5,8 +5,10 @@ The original class methods remain patchable and pass live Tk dependencies.
 """
 from __future__ import annotations
 
+from tkinter import Canvas
 
-def active_tab_canvas(self, *, tk) -> tk.Canvas | None:
+
+def active_tab_canvas(self, *, tk) -> Canvas | None:
     try:
         index = self.notebook.index(self.notebook.select())
         return self.tab_canvases[index]
