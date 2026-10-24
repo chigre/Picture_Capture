@@ -197,7 +197,9 @@ def test_dark_mode_is_integrated_without_changing_project_image_semantics() -> N
     preview_owner = (ROOT / "src/picture_capture/profile/wizard_template_preview.py").read_text(encoding="utf-8")
     assert "_wizard_template_preview.refresh_template_preview(" in profile_source
     assert 'preview, getattr(self.parent, "appearance_mode", "light")' in preview_owner
-    assert 'display, getattr(self.parent, "appearance_mode", "light")' in profile_source
+    validation_visuals = (ROOT / "src/picture_capture/profile/wizard_validation_visuals.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_visuals.render_validation_result(" in profile_source
+    assert 'display, getattr(self.parent, "appearance_mode", "light")' in validation_visuals
 
 
 def test_destroyed_toplevel_is_ignored_by_delayed_appearance_callback(monkeypatch) -> None:

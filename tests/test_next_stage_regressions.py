@@ -2536,9 +2536,10 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert 'child.configure(wraplength=wrap, justify="left")' in text
     assert "ProfileYellow.TLabelframe" not in text
     assert "fill=(255, 215, 0, 105)" in text
-    marker_start = text.index("    def _marker_preview(")
-    marker_end = text.index("    def _set_validation_fit(", marker_start)
-    assert "fill=(255, 215, 0, 105)" in text[marker_start:marker_end]
+    marker_start = legacy.index("    def _marker_preview(")
+    marker_end = legacy.index("    def _set_validation_fit(", marker_start)
+    assert "_wizard_validation_visuals.marker_preview(" in legacy[marker_start:marker_end]
+    assert "fill=(255, 215, 0, 105)" in visuals_owner
     assert 'text="A 页排除宽度%"' in text
     assert 'text="B 页排除宽度%"' in text
     assert "s.profile_side_percent_a" in text
@@ -4361,14 +4362,14 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
         assert 'self._ui_worker_key_active("profile-validation")' in block
         assert "self._ui_close_requested" in block
 
-    validate_start = profile.index("    def validate_profile(")
-    validate_end = profile.index("\n    def _poll_validation_queue", validate_start)
-    validate = profile[validate_start:validate_end]
+    validation_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_execution.validate_profile(" in profile
+    validate = validation_owner[validation_owner.index("def validate_profile("):]
     assert 'self.parent._start_ui_worker(' in validate
     assert '"profile-validation"' in validate
     assert "wait_on_close=True" in validate
     assert "stop_event.is_set()" in validate
-    assert "self.project.images[index]" not in validate[validate.index("        def worker():"):]
+    assert "self.project.images[index]" not in validate[validate.index("    def worker():"):]
 
     close_profile = profile[profile.index("    def _close_without_save("):]
     assert "self._validation_close_requested = True" in close_profile
