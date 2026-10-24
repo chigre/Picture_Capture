@@ -18,8 +18,10 @@ def test_gui_title_and_right_hand_metadata_status_are_independent():
     app = (root / "app.py").read_text(encoding="utf-8")
     controller = (root / "ui" / "controllers" / "page.py").read_text(encoding="utf-8")
     project_session = (root / "ui/project_session_workflow.py").read_text(encoding="utf-8")
-    assert 'self.title("Picture Capture")' in app
-    assert "OCR 词头定位" not in app[app.index("self.title(\"Picture Capture\")"):app.index("fit_window_to_work_area(self", app.index("self.title(\"Picture Capture\")"))]
+    startup = (root / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert 'self.title("Picture Capture")' in startup
+    assert "OCR 词头定位" not in startup[startup.index("self.title(\"Picture Capture\")"):startup.index("fit_window_to_work_area(self", startup.index("self.title(\"Picture Capture\")"))]
     workspace = (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert "_main_workspace_build.build_ui(" in app
     assert "textvariable=self.image_metadata_status_var" in workspace

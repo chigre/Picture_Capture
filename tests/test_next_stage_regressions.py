@@ -1486,9 +1486,11 @@ def test_new_project_sidebar_defaults_do_not_overwrite_existing_session_preferen
     text = source.read_text(encoding="utf-8")
     project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
-    startup = text[
-        text.index("        self.section_expanded = {"):
-        text.index("        self._collapsible_sections:", text.index("        self.section_expanded = {"))
+    startup_owner = (source.parent / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in text
+    startup = startup_owner[
+        startup_owner.index("    self.section_expanded = {"):
+        startup_owner.index("    self._collapsible_sections:", startup_owner.index("    self.section_expanded = {"))
     ]
     assert "sidebar_section_defaults_version" not in startup
     assert "SIDEBAR_SECTION_DEFAULTS_VERSION" not in text
@@ -4628,10 +4630,12 @@ def test_v214_application_icon_is_packaged_and_propagated_to_toplevels():
     assert '"data/*.png"' in pyproject
 
     app_source = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert "self.iconphoto(True, self._app_icon_photo)" in app_source
-    assert "self.iconphoto(False, self._app_icon_photo)" in app_source
-    assert "self._app_icon_registered = True" in app_source
-    assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in app_source
+    startup = (root / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app_source
+    assert "self.iconphoto(True, self._app_icon_photo)" in startup
+    assert "self.iconphoto(False, self._app_icon_photo)" in startup
+    assert "self._app_icon_registered = True" in startup
+    assert 'self.bind_class("Toplevel", "<Map>", self._app_icon_toplevel_mapped, add="+")' in startup
     handler_start = app_source.index("    def _app_icon_toplevel_mapped(")
     handler_end = app_source.index("\n    def ", handler_start + 10)
     handler = app_source[handler_start:handler_end]

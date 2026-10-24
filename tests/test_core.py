@@ -5447,7 +5447,9 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    defaults=text.split('self.section_expanded = {',1)[1].split("stored_sections =",1)[0]
+    startup = (root / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in text
+    defaults=startup.split('self.section_expanded = {',1)[1].split("stored_sections =",1)[0]
     for key,value in (("preprocess","False"),("normal","True"),("aux","False"),("ocr","False"),("actions","False"),("postproduction","False"),("pages","True")):
         assert f'"{key}": {value}' in defaults
     assert "def _apply_new_project_sidebar_defaults(self) -> None:" in text
@@ -8342,8 +8344,10 @@ def test_generated_app_icon_is_packaged_and_applied_to_root():
     assert icon.exists()
     assert icon.stat().st_size > 1000
     assert '"data/*.png"' in pyproject
-    assert 'icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"' in app_text
-    assert "self.iconphoto(True, self._app_icon_photo)" in app_text
+    startup = (root / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert '"app_module_file": __file__' in app_text
+    assert 'icon_path = Path(app_module_file).resolve().parent / "data" / "app_icon.png"' in startup
+    assert "self.iconphoto(True, self._app_icon_photo)" in startup
 
 
 

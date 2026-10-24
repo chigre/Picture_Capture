@@ -13,7 +13,9 @@ def test_modes_and_saved_session_migrate_to_compact():
     assert 'for caption in ("极简", "紧凑", "正常", "最大")' in tools
     assert 'if mode in {"最简", "简单"}:' in tools
     assert 'mode = "紧凑"' in tools
-    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app
+    startup = (APP.parent / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in startup
     review_initializer = (APP.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "_review_window_initialization.initialize_review_window(" in app
     assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in review_initializer
@@ -37,8 +39,10 @@ def test_compact_page_list_uses_ninety_percent_font_while_range_controls_remain_
     assert 'style.configure("PC.Workspace80.Treeview.Heading"' not in source
     assert 'widget.configure(style="PC.CompactPage.Treeview")' in source
     assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
-    assert 'self.compact_page_font = default_page_font.copy()' in app
-    assert "round(base_size * 0.9)" in app
+    startup = (MODULE.parents[1] / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert 'self.compact_page_font = default_page_font.copy()' in startup
+    assert "round(base_size * 0.9)" in startup
     appearance_owner = (MODULE.parents[1] / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
     assert "_main_appearance_policy.configure_main_workspace_styles(" in app
     assert 'font=self.compact_page_font' in appearance_owner

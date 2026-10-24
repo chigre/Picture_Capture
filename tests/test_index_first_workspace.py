@@ -130,8 +130,10 @@ def test_borderless_index_and_vector_rail_icon_art():
 
 def test_main_window_has_no_minimum_width_constraint():
     app, _ = sources()
-    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in app
-    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in app
+    startup = (ROOT / 'ui/main_app_initialization.py').read_text(encoding='utf-8')
+    assert '_main_app_initialization.initialize_main_app(' in app
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in startup
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in startup
 
 
 def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
@@ -140,7 +142,9 @@ def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
     assert "_main_appearance_policy.configure_main_workspace_styles(" in app
     assert '"canvas": "#e9edf2"' in appearance
     assert '"canvas": base["canvas"]' in appearance
-    assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in app
+    dynamic = (ROOT / "ui/appearance_resolution.py").read_text(encoding="utf-8")
+    assert "_appearance_resolution.apply_resolved_appearance(" in app
+    assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in dynamic
 
 
 def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
@@ -234,8 +238,10 @@ def test_compact_index_has_optional_headers_and_horizontal_scroll():
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
     appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
     assert 'font=self.compact_page_font' in appearance
-    assert 'self.compact_page_font = default_page_font.copy()' in app
-    assert "round(base_size * 0.9)" in app
+    startup = (ROOT / 'ui/main_app_initialization.py').read_text(encoding='utf-8')
+    assert '_main_app_initialization.initialize_main_app(' in app
+    assert 'self.compact_page_font = default_page_font.copy()' in startup
+    assert "round(base_size * 0.9)" in startup
 
 
 def test_canvas_right_click_navigation_and_sidebar_presets():
@@ -370,8 +376,10 @@ def test_workspace_mode_is_restored_from_last_session():
     project_session = (ROOT / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     session = (ROOT / "ui" / "controllers" / "session.py").read_text(encoding="utf-8")
     assert '"workspace_mode": getattr(app, "workspace_mode", "最大")' in session
-    assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in app
-    assert 'self._restore_workspace_mode_pending = True' in app
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in startup
+    assert 'self._restore_workspace_mode_pending = True' in startup
     assert 'self._restore_workspace_layout()' in project_session
     assert 'set_sidebar_mode(self, self.workspace_mode)' in app
     assert 'app.workspace_mode = mode' in tools
@@ -582,5 +590,7 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
 
 def test_saved_legacy_simple_mode_migrates_to_new_name():
     app, _ = sources()
-    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app
-    assert 'stored_mode in {"极简", "紧凑", "正常", "最大"}' in app
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in startup
+    assert 'stored_mode in {"极简", "紧凑", "正常", "最大"}' in startup
