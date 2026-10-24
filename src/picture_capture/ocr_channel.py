@@ -24,6 +24,7 @@ from PIL import Image, ImageOps
 
 from .ocr import channel_preparation as _channel_preparation
 from .ocr import channel_results as _channel_results
+from .ocr import paddle_engine_lifecycle as _paddle_engine_lifecycle
 from .preprocess.analysis_image import normalize_page_rgb
 from .models import AppSettings, resolved_tesseract_language
 from .ocr.engines import find_tesseract, run_google_lens
@@ -182,102 +183,24 @@ def prepare_ocr_input(
 
 
 def clear_ocr_channel_paddle_engine_cache(
-    *,
-    keep_key: tuple[str, str, str, bool] | None = None,
+    *, keep_key: tuple[str, str, str, bool] | None = None,
 ) -> None:
-    """Drop channel-owned Paddle engines that are no longer active.
-
-    Local references held by in-flight OCR calls remain valid. Keeping only one
-    strongly cached configuration preserves the mature runner's memory behavior
-    when users switch language/model/device settings.
-    """
-
-    with _PADDLE_ENGINE_CACHE_LOCK:
-        stale = [key for key in _PADDLE_ENGINE_CACHE if key != keep_key]
-        for key in stale:
-            _PADDLE_ENGINE_CACHE.pop(key, None)
-    if stale:
-        gc.collect()
+    """Historical mutable cache hook; safely drop inactive Paddle engines."""
+    return _paddle_engine_lifecycle.clear_cached_engines(
+        keep_key=keep_key, cache=_PADDLE_ENGINE_CACHE,
+        lock=_PADDLE_ENGINE_CACHE_LOCK, gc_module=gc,
+    )
 
 
 def _create_paddle_engine(settings: AppSettings) -> Any:
-    language = _paddle_language(settings)
-    orientation = bool(getattr(settings, "paddle_use_textline_orientation", False))
-    policy = resolve_inference_policy()
-    device = policy.device
-    version = str(getattr(settings, "paddle_ocr_version", "PP-OCRv5") or "PP-OCRv5")
-    key = (language, device, version, orientation, policy.mkldnn, policy.cpu_threads)
-    with _PADDLE_ENGINE_CACHE_LOCK:
-        existing = _PADDLE_ENGINE_CACHE.get(key)
-        if existing is not None:
-            return existing
-
-    # Preserve the mature runner's process bootstrap before constructing a new
-    # PaddleOCR pipeline. TextDetection and general OCR keep separate caches;
-    # dropping the former avoids retaining two heavyweight Paddle pipelines.
-    from .layout.detection import clear_text_detection_cache
-    clear_text_detection_cache()
-
-    # Paddle 3.x may otherwise re-enable the PIR path after another pipeline has
-    # run in the same process. Windows pip-wheel CUDA DLLs also need their
-    # directories registered before importing PaddleOCR.
-    import os
-    os.environ["FLAGS_enable_pir_api"] = "0"
-    from .runtime.windows_gpu import configure_windows_nvidia_dlls
-    configure_windows_nvidia_dlls()
-
-    try:
-        from paddleocr import PaddleOCR
-    except Exception as exc:
-        raise RuntimeError(
-            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行："
-            "uv sync --extra ocr-cpu"
-        ) from exc
-    kwargs = dict(
-        lang=language,
-        ocr_version=version,
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=orientation,
+    """Historical lazy engine factory with call-time providers and one cache."""
+    return _paddle_engine_lifecycle.create_paddle_engine_impl(
+        settings, paddle_language_fn=_paddle_language,
+        resolve_inference_policy_fn=resolve_inference_policy,
+        constructor_variants_fn=paddle_constructor_variants,
+        cache=_PADDLE_ENGINE_CACHE, cache_lock=_PADDLE_ENGINE_CACHE_LOCK,
+        clear_cache_fn=clear_ocr_channel_paddle_engine_cache,
     )
-    last_exc: Exception | None = None
-    engine = None
-    for candidate in paddle_constructor_variants(kwargs, policy):
-        try:
-            engine = PaddleOCR(**candidate)
-            break
-        except TypeError as exc:
-            # Older builds may lack acceleration tuning arguments. Preserve
-            # the selected device instead of silently defaulting to GPU.
-            last_exc = exc
-            legacy = {k: v for k, v in candidate.items()
-                      if k not in {"enable_mkldnn", "cpu_threads"}}
-            if legacy == candidate:
-                continue
-            try:
-                engine = PaddleOCR(**legacy)
-                break
-            except Exception as retry_exc:
-                last_exc = retry_exc
-        except Exception as exc:
-            last_exc = exc
-            # When Auto oneDNN fails, the next candidate disables it.
-            continue
-    if engine is None:
-        raise RuntimeError(
-            f"PaddleOCR 初始化失败（语言={language}，设备={device}，版本={version}）：{last_exc}"
-        ) from last_exc
-
-    from .quality.inference_monitor import record_model_event
-    record_model_event("PaddleOCR", policy.device, policy.mkldnn, policy.cpu_threads)
-
-    clear_ocr_channel_paddle_engine_cache(keep_key=key)
-    with _PADDLE_ENGINE_CACHE_LOCK:
-        existing = _PADDLE_ENGINE_CACHE.get(key)
-        if existing is not None:
-            return existing
-        _PADDLE_ENGINE_CACHE[key] = engine
-    return engine
 
 
 def _paddle_json_payload(result: Any) -> dict[str, Any]:

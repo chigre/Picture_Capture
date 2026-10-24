@@ -149,3 +149,8 @@ save/reopen and crop/export parity remain pending; PR remains Draft.
 ## Round 46 — OCR channel, project page discovery and Profile validation
 
 Root `ocr_channel.py` retains stable public models, session and hooks; seven algorithm implementations moved into `ocr/channel_preparation.py` and `ocr/channel_results.py`. Root `models.py` retains persisted model identity but delegates four project discovery/sorting algorithms to `project/page_discovery.py`. Four Tk validation algorithms moved from `profile/setup.py` to `profile/wizard_validation_controls.py`, with the historical methods still running on the original main UI event path. Focused tests: `tests/test_issue562_ocr_channel_project_profile_round46_20261025.py`. Ten root Python files remain, no stubs. Representative dictionary scans, PDIC/PPP save/reopen and export parity remain pending; PR stays Draft.
+
+
+## Round 47 — PaddleOCR channel model lifecycle owner
+
+`ocr/paddle_engine_lifecycle.py` now owns lazy engine construction and clearing inactive caches. The original `ocr_channel._create_paddle_engine` and `clear_ocr_channel_paddle_engine_cache` functions inject current providers and preserve the historical API, worker/resource owner and GPU single-pipeline policy. Characterization regression: `tests/test_issue562_ocr_paddle_lifecycle_round47_20261025.py`. Root remains 10 Python modules with reduced bytes. Real scanned dictionary-page/OCR/combined, PDIC/PPP reopen and crop/export manual acceptance remain pending; Draft stays unmerged.
