@@ -80,6 +80,10 @@ def test_round38_wizard_original_entrypoints_forward_live_globals(monkeypatch):
     assert calls[6][2]["language_effective_settings"] is setup.language_effective_settings
     assert calls[7][2]["dictionary_profile_preset"] is setup.dictionary_profile_preset
     assert calls[7][2]["HEADWORD_HELP_LINES"] is setup.HEADWORD_HELP_LINES
+    assert calls[7][2]["HEADWORD_EXAMPLE_FILES"] is setup.HEADWORD_EXAMPLE_FILES
+    assert calls[7][2]["Image"] is setup.Image
+    assert calls[7][2]["ImageTk"] is setup.ImageTk
+    assert calls[7][2]["themed_display_image"] is setup.themed_display_image
 
 
 def test_round38_shell_keeps_wizard_sash_tabs_and_ui_navigation():

@@ -1040,6 +1040,10 @@ class ProjectProfileWizard(tk.Toplevel):
             "ttk": ttk,
             "dictionary_profile_preset": dictionary_profile_preset,
             "HEADWORD_HELP_LINES": HEADWORD_HELP_LINES,
+            "HEADWORD_EXAMPLE_FILES": HEADWORD_EXAMPLE_FILES,
+            "Image": Image,
+            "ImageTk": ImageTk,
+            "themed_display_image": themed_display_image,
         })
 
     def _ocr_language_changed(self) -> None:

@@ -6,6 +6,10 @@ def refresh_headword_description(self, *, deps) -> None:
     ttk = deps["ttk"]
     dictionary_profile_preset = deps["dictionary_profile_preset"]
     HEADWORD_HELP_LINES = deps["HEADWORD_HELP_LINES"]
+    HEADWORD_EXAMPLE_FILES = deps["HEADWORD_EXAMPLE_FILES"]
+    Image = deps["Image"]
+    ImageTk = deps["ImageTk"]
+    themed_display_image = deps["themed_display_image"]
     key = self._current_profile_key()
     try:
         profile = dictionary_profile_preset(key)
