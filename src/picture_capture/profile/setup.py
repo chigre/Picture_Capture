@@ -73,6 +73,8 @@ from . import wizard_validation_diagnostics as _wizard_validation_diagnostics
 from . import wizard_validation_execution as _wizard_validation_execution
 from . import wizard_validation_controls as _wizard_validation_controls
 from . import wizard_validation_visuals as _wizard_validation_visuals
+from . import wizard_sample_thumbnails as _wizard_sample_thumbnails
+from . import wizard_sample_analysis as _wizard_sample_analysis
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -1496,274 +1498,70 @@ class ProjectProfileWizard(tk.Toplevel):
             return
 
     def _sample_groups(self) -> list[ttk.LabelFrame]:
-        for child in self.sample_frame.winfo_children():
-            child.destroy()
-        self._sample_cells.clear()
-        self._sample_photo_by_slot.clear()
-        region_titles = ("前部", "中部", "后部")
-        groups: list[ttk.LabelFrame] = []
-        for column, title in enumerate(region_titles):
-            group = ttk.LabelFrame(self.sample_frame, text=title, padding=5)
-            group.grid(row=0, column=column, sticky="nsew", padx=3, pady=2)
-            group.columnconfigure(0, weight=1)
-            group.rowconfigure(0, weight=1, uniform="sample_row")
-            group.rowconfigure(1, weight=1, uniform="sample_row")
-            groups.append(group)
-        return groups
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.sample_groups(self, deps={
+            "ttk": ttk,
+        })
 
     def _show_sample_loading_state(self) -> None:
-        groups = self._sample_groups()
-        self._photos.clear()
-        for slot, index in enumerate(self.sample_indices):
-            path = self.project.images[index]
-            group = groups[min(2, slot // 2)]
-            cell = ttk.Frame(group)
-            cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
-            cell.columnconfigure(0, weight=1)
-            cell.rowconfigure(0, weight=1)
-            self._sample_cells[slot] = cell
-            ttk.Label(
-                cell, text="正在加载代表页…", anchor="center",
-            ).pack(fill="x", ipady=24)
-            ttk.Label(cell, text=path.name, wraplength=260).pack(anchor="center", pady=(3, 0))
-            ttk.Button(
-                cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
-            ).pack(anchor="center", pady=(3, 0))
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.show_sample_loading_state(self, deps={
+            "ttk": ttk,
+        })
 
     def _start_sample_thumbnail_load(self) -> None:
-        if self._closing or not self.winfo_exists():
-            return
-        self._thumbnail_load_generation += 1
-        generation = self._thumbnail_load_generation
-        indices = list(self.sample_indices)
-        paths = [self.project.images[index] for index in indices]
-        self._show_sample_loading_state()
-        self.update_idletasks()
-        right_w = int(getattr(self, "right_canvas", self).winfo_width())
-        right_h = int(getattr(self, "right_canvas", self).winfo_height())
-        available_w = right_w if right_w > 200 else self._wizard_image_width
-        available_h = right_h if right_h > 300 else self._wizard_height
-        thumb_w = max(180, (available_w - 54) // 3)
-        thumb_h = max(220, (available_h - 150) // 2 - 42)
-
-        result_queue: queue.Queue = queue.Queue(maxsize=1)
-        self._thumbnail_queue = result_queue
-
-        def worker() -> None:
-            results = []
-            for slot, (index, path) in enumerate(zip(indices, paths)):
-                try:
-                    with Image.open(path) as opened:
-                        image = normalize_page_rgb(opened)
-                    image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
-                    results.append((slot, index, path.name, image, None))
-                except Exception as exc:
-                    results.append((slot, index, path.name, None, str(exc)))
-            result_queue.put((generation, results))
-
-        threading.Thread(target=worker, daemon=True).start()
-        self.after(50, self._poll_sample_thumbnail_load)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.start_sample_thumbnail_load(self, deps={
+            "queue": queue,
+            "threading": threading,
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+        })
 
     def _poll_sample_thumbnail_load(self) -> None:
-        if self._closing:
-            self._thumbnail_queue = None
-            return
-        if self._thumbnail_queue is None:
-            return
-        try:
-            generation, results = self._thumbnail_queue.get_nowait()
-        except queue.Empty:
-            if self.winfo_exists():
-                self.after(50, self._poll_sample_thumbnail_load)
-            return
-        self._thumbnail_queue = None
-        if generation != self._thumbnail_load_generation:
-            return
-        self._finish_sample_thumbnail_load(results)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.poll_sample_thumbnail_load(self, deps={
+            "queue": queue,
+        })
 
     def _render_sample_thumbnail_slot(
         self, slot: int, index: int, name: str,
         image: Image.Image | None, error: str | None,
     ) -> None:
-        """Replace one representative-page cell without rebuilding its siblings."""
-        if slot >= len(self.sample_indices) or self.sample_indices[slot] != index:
-            return
-        cell = self._sample_cells.get(slot)
-        if cell is None or not cell.winfo_exists():
-            return
-        for child in cell.winfo_children():
-            child.destroy()
-        if image is not None:
-            photo = ImageTk.PhotoImage(
-                themed_display_image(
-                    image, getattr(self.parent, "appearance_mode", "light")
-                )
-            )
-            self._sample_photo_by_slot[slot] = photo
-            ttk.Label(cell, image=photo, anchor="center").pack(fill="both", expand=True)
-        else:
-            self._sample_photo_by_slot.pop(slot, None)
-            ttk.Label(
-                cell, text=f"缩略图失败：{error}", wraplength=250,
-            ).pack(fill="x", ipady=20)
-        ttk.Label(cell, text=name, wraplength=260).pack(anchor="center", pady=(3, 0))
-        ttk.Button(
-            cell, text="更换…", command=lambda s=slot: self._choose_sample_page(s),
-        ).pack(anchor="center", pady=(3, 0))
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.render_sample_thumbnail_slot(self, slot, index, name, image, error, deps={
+            "ttk": ttk,
+            "ImageTk": ImageTk,
+            "themed_display_image": themed_display_image,
+        })
 
     def _finish_sample_thumbnail_load(self, results) -> None:
-        groups = self._sample_groups()
-        self._photos.clear()
-        for slot, index, name, image, error in results:
-            if slot >= len(self.sample_indices) or self.sample_indices[slot] != index:
-                continue
-            group = groups[min(2, slot // 2)]
-            cell = ttk.Frame(group)
-            cell.grid(row=slot % 2, column=0, sticky="nsew", pady=3)
-            cell.columnconfigure(0, weight=1)
-            cell.rowconfigure(0, weight=1)
-            self._sample_cells[slot] = cell
-            self._render_sample_thumbnail_slot(slot, index, name, image, error)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.finish_sample_thumbnail_load(self, results, deps={
+            "ttk": ttk,
+        })
 
     def _start_sample_thumbnail_slot_load(self, slot: int) -> None:
-        """Decode only one replacement thumbnail and keep all other cells intact."""
-        if self._closing or not self.winfo_exists() or not (0 <= slot < len(self.sample_indices)):
-            return
-        index = self.sample_indices[slot]
-        path = self.project.images[index]
-        generation = self._thumbnail_slot_generation.get(slot, 0) + 1
-        self._thumbnail_slot_generation[slot] = generation
-        token = (slot, generation)
-        self._thumbnail_slot_pending.add(token)
-        result_queue = self._thumbnail_slot_queue
-
-        self.update_idletasks()
-        right_w = int(getattr(self, "right_canvas", self).winfo_width())
-        right_h = int(getattr(self, "right_canvas", self).winfo_height())
-        available_w = right_w if right_w > 200 else self._wizard_image_width
-        available_h = right_h if right_h > 300 else self._wizard_height
-        thumb_w = max(180, (available_w - 54) // 3)
-        thumb_h = max(220, (available_h - 150) // 2 - 42)
-
-        def worker() -> None:
-            image = None
-            error = None
-            try:
-                with Image.open(path) as opened:
-                    image = normalize_page_rgb(opened)
-                image.thumbnail((thumb_w, thumb_h), Image.Resampling.LANCZOS)
-            except Exception as exc:
-                error = str(exc)
-            result_queue.put(
-                (slot, generation, index, path.name, image, error)
-            )
-
-        threading.Thread(target=worker, daemon=True).start()
-        self.after(50, self._poll_sample_thumbnail_slot_load)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.start_sample_thumbnail_slot_load(self, slot, deps={
+            "threading": threading,
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+        })
 
     def _poll_sample_thumbnail_slot_load(self) -> None:
-        if self._closing:
-            self._thumbnail_slot_pending.clear()
-            return
-        processed = False
-        while True:
-            try:
-                slot, generation, index, name, image, error = (
-                    self._thumbnail_slot_queue.get_nowait()
-                )
-            except queue.Empty:
-                break
-            processed = True
-            self._thumbnail_slot_pending.discard((slot, generation))
-            if self._thumbnail_slot_generation.get(slot) != generation:
-                continue
-            self._render_sample_thumbnail_slot(slot, index, name, image, error)
-
-        if self._thumbnail_slot_pending and self.winfo_exists():
-            self.after(50, self._poll_sample_thumbnail_slot_load)
-        elif processed:
-            self.update_idletasks()
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.poll_sample_thumbnail_slot_load(self, deps={
+            "queue": queue,
+        })
 
     def _choose_sample_page(self, slot: int) -> None:
-        all_indices = list(range(len(self.project.images)))
-        if not all_indices:
-            return
-        auto_candidates = set(self.sample_candidates)
-        picker = tk.Toplevel(self)
-        picker.title("更换代表页")
-        picker.geometry("680x540")
-        picker.transient(self)
-        picker.grab_set()
-
-        ttk.Label(
-            picker,
-            text=(
-                "自动抽样会避开 0000_*、目录、附录等明显非正文页；"
-                "手动更换时仍可从项目全部页面中选择。"
-            ),
-            wraplength=640,
-        ).pack(anchor="w", padx=10, pady=(10, 6))
-        body = ttk.Frame(picker)
-        body.pack(fill="both", expand=True, padx=10)
-        scrollbar = ttk.Scrollbar(body, orient="vertical")
-        listing = tk.Listbox(body, yscrollcommand=scrollbar.set, exportselection=False)
-        scrollbar.configure(command=listing.yview)
-        listing.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        current = self.sample_indices[slot]
-        selected_row = current
-        for row, index in enumerate(all_indices):
-            path = self.project.images[index]
-            status = "正文候选" if index in auto_candidates else "自动略过 · 手动可选"
-            listing.insert("end", f"{index + 1:05d}    [{status}]    {path.name}")
-            if index == current:
-                selected_row = row
-        listing.selection_set(selected_row)
-        listing.see(selected_row)
-
-        def apply_choice(_event=None) -> None:
-            selection = listing.curselection()
-            if not selection:
-                return
-            index = all_indices[int(selection[0])]
-            current_index = self.sample_indices[slot]
-            if index == current_index:
-                picker.destroy()
-                return
-            if index in self.sample_indices:
-                messagebox.showinfo("代表页已使用", "这张页面已经在代表页中，请选择另一张。", parent=picker)
-                return
-            preview_uses_slot = self.template_preview_slot == slot
-            self.sample_indices[slot] = index
-            self.template_preview_slot = min(
-                self.template_preview_slot, len(self.sample_indices) - 1
-            )
-            self._profile_revision += 1
-            self._mark_validation_stale()
-            self._analysis_suggestion = {}
-            if hasattr(self, "analysis_suggestion_var"):
-                self.analysis_suggestion_var.set("代表页已更换，请重新分析当前代表页。")
-                self.apply_analysis_button.configure(state="disabled")
-
-            self._start_sample_thumbnail_slot_load(slot)
-
-            # The template preview is hidden while representative pages are
-            # being edited. Refresh it only when it is actually visible and the
-            # replaced slot is the page currently previewed there.
-            if preview_uses_slot and hasattr(self, "notebook"):
-                try:
-                    if self.notebook.index(self.notebook.select()) == 1:
-                        self._refresh_template_preview()
-                except (tk.TclError, ValueError):
-                    pass
-            picker.destroy()
-
-        listing.bind("<Double-Button-1>", apply_choice)
-        footer = ttk.Frame(picker)
-        footer.pack(fill="x", padx=10, pady=10)
-        ttk.Button(footer, text="取消", command=picker.destroy).pack(side="right")
-        ttk.Button(footer, text="使用此页", command=apply_choice).pack(side="right", padx=(0, 8))
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_thumbnails.choose_sample_page(self, slot, deps={
+            "tk": tk,
+            "ttk": ttk,
+            "messagebox": messagebox,
+        })
 
     def _persist_current_profile(
         self, *, finalize: bool = False, apply_runtime: bool = False,
@@ -1821,129 +1619,36 @@ class ProjectProfileWizard(tk.Toplevel):
             self.analyze_representative_pages(auto_apply=True)
 
     def analyze_representative_pages(self, auto_apply: bool = False) -> None:
-        if self._closing or self._analysis_running or not self.sample_indices:
-            return
-        self._analysis_running = True
-        self._analysis_revision_started = self._profile_revision
-        self._analysis_auto_apply = bool(auto_apply)
-        self.analyze_button.configure(state="disabled")
-        self.analysis_suggestion_var.set("正在分析代表页版面…")
-        settings = self._settings_from_ui()
-        indices = list(self.sample_indices)
-        paths = {index: self.project.images[index] for index in indices}
-        result_queue: queue.Queue = queue.Queue(maxsize=1)
-        self._analysis_queue = result_queue
-
-        def worker() -> None:
-            estimates = []
-            errors: list[str] = []
-            for index in indices:
-                path = paths[index]
-                try:
-                    with Image.open(path) as opened:
-                        image = normalize_page_rgb(opened)
-                    page_settings = effective_page_settings(settings, image.size, index)
-                    analysis_image = page_template_analysis_image(image, page_settings, index)
-                    estimates.append(detect_layout_parameters(analysis_image, page_settings))
-                except Exception as exc:
-                    errors.append(f"{path.name}: {exc}")
-            result_queue.put((estimates, errors))
-
-        threading.Thread(target=worker, daemon=True).start()
-        self.after(100, self._poll_analysis_queue)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_analysis.analyze_representative_pages(self, auto_apply, deps={
+            "queue": queue,
+            "threading": threading,
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+            "effective_page_settings": effective_page_settings,
+            "page_template_analysis_image": page_template_analysis_image,
+            "detect_layout_parameters": detect_layout_parameters,
+        })
 
     def _poll_analysis_queue(self) -> None:
-        if self._closing:
-            self._analysis_queue = None
-            return
-        if self._analysis_queue is None:
-            return
-        try:
-            estimates, errors = self._analysis_queue.get_nowait()
-        except queue.Empty:
-            if self.winfo_exists() and self._analysis_running:
-                self.after(100, self._poll_analysis_queue)
-            return
-        self._analysis_queue = None
-        self._finish_analysis(estimates, errors)
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_analysis.poll_analysis_queue(self, deps={
+            "queue": queue,
+        })
 
     def _finish_analysis(self, estimates, errors: list[str]) -> None:
-        self._analysis_running = False
-        self.analyze_button.configure(state="normal")
-        if self._analysis_revision_started != self._profile_revision:
-            self._analysis_suggestion = {}
-            self._analysis_auto_apply = False
-            self.analysis_suggestion_var.set(
-                "分析期间 Profile 设置已改变；旧分析结果已丢弃，请重新分析代表页。"
-            )
-            self.apply_analysis_button.configure(state="disabled")
-            return
-        if not estimates:
-            self.analysis_suggestion_var.set("代表页分析失败；可直接人工选择页面模板。")
-            self.apply_analysis_button.configure(state="disabled")
-            return
-        aggregate, consistency = aggregate_layout_estimates(estimates, columns_policy="detect")
-        height_note = apply_profile_ink_height_suggestion(aggregate, estimates)
-        separator = "present" if sum(
-            e.separator_x is not None for e in estimates
-        ) > len(estimates) / 2 else "auto"
-        self._analysis_suggestion = {
-            **{name: int(value) for name, value in aggregate.items()},
-            "separator": separator,
-        }
-        sep_text = "有中央分隔线" if separator == "present" else "分隔线待判"
-        error_text = (f"；{len(errors)} 页未参与" if errors else "") + height_note
-        self.analysis_suggestion_var.set(
-            f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}"
-        )
-        self.apply_analysis_button.configure(state="normal")
-        total_samples = len(estimates) + len(errors)
-        enough_for_auto = len(estimates) >= max(2, (total_samples + 1) // 2)
-        if self._analysis_auto_apply and enough_for_auto:
-            self.apply_analysis_suggestion()
-            self.analysis_suggestion_var.set(
-                f"已采用代表页建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}；可直接修改。"
-            )
-        elif self._analysis_auto_apply and not enough_for_auto:
-            self.analysis_suggestion_var.set(
-                f"自动建议：{aggregate['columns']}栏 · {sep_text} · {consistency}{error_text}；"
-                "成功样本不足，未自动应用，请检查代表页后手动决定。"
-            )
-        self._analysis_auto_apply = False
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_analysis.finish_analysis(self, estimates, errors, deps={
+            "aggregate_layout_estimates": aggregate_layout_estimates,
+            "apply_profile_ink_height_suggestion": apply_profile_ink_height_suggestion,
+        })
 
     def apply_analysis_suggestion(self) -> None:
-        if not self._analysis_suggestion:
-            return
-        self.columns_var.set(int(self._analysis_suggestion.get("columns", self.columns_var.get())))
-        self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))
-        self.selected_column_index = min(
-            self._selected_column_index(), max(0, int(self.columns_var.get()) - 1)
-        )
-        self._refresh_column_adjust_status()
-        old_character_height = max(1, int(self.working.character_height))
-        body_indent_was_auto = int(self.working.body_indent) == old_character_height
-        horizontal_tolerance_was_auto = (
-            int(self.working.horizontal_tolerance)
-            == max(1, round(old_character_height / 2.0))
-        )
-        for name in (
-            "start_y", "bottom_y", "manual_x", "column_width", "gutter",
-            "character_height", "row_padding",
-        ):
-            if name in self._analysis_suggestion:
-                setattr(self.working, name, int(self._analysis_suggestion[name]))
-        if "character_height" in self._analysis_suggestion:
-            new_character_height = max(1, int(self.working.character_height))
-            if body_indent_was_auto:
-                self.working.body_indent = new_character_height
-            if horizontal_tolerance_was_auto:
-                self.working.horizontal_tolerance = max(
-                    1, round(new_character_height / 2.0)
-                )
-        separator_value = str(self._analysis_suggestion.get("separator", "auto"))
-        self.separator_var.set(_label_for_value(
-            SEPARATOR_LABEL_TO_VALUE, separator_value, "自动判断",
-        ))
+        """Retained compatibility method; implementation in representative-page owner."""
+        return _wizard_sample_analysis.apply_analysis_suggestion(self, deps={
+            "_label_for_value": _label_for_value,
+            "SEPARATOR_LABEL_TO_VALUE": SEPARATOR_LABEL_TO_VALUE,
+        })
 
     @staticmethod
     def _validation_coverage_summary(
