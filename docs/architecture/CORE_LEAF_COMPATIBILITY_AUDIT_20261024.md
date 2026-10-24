@@ -314,3 +314,16 @@ replace these checks.
 - Characterization tests: `tests/test_issue562_core_leaf_round16_brightness_20261024.py` for point thresholds, row brightness, reverse direction, bounds, callable origin, and live NumPy callback.
 - Root Python inventory remains ten. No public model, serialized schema, PDIC/PPP/crop transaction, OCR acceptance decision, or GUI work intentionally changed.
 - **Pending:** exact-head CI/OCR smoke and representative manual dictionary page scan, editing and save/reopen. Keep PR Draft.
+
+
+## Round 17 — full legacy ordinary detection and oversized-CJK postpasses (2026-10-24)
+
+**Scope:** The actual source-pixel VB.NET `Draw_Auto` separator and scan implementations have left `processing_core.py`; these are not root-level compatibility stubs.
+
+- `ordinary/legacy_separator_search.py`: two-stage upward separator-Y search, full-white priority, row-brightness threshold fallback, short-run whitespace adjustment and historical reasons/thresholds. The core forwards **current** `np`, `_legacy_row_brightness_1000` and `legacy_row_brightness_scores_1000` per call.
+- `ordinary/legacy_page_detection.py`: transform-aware source column edges and complete original-resolution `_detect_entries_left_edge` candidate/anchor/marker sweep. The core retains the old signature and passes the current image normalization, geometry, SECTION normalization, VB point/separator hooks, marker constructors, sorting and CJK postpasses. Adaptive OCR refinement remains a *lazy* import of the same public Paddle façade, so UI-time patches still work.
+- `ordinary/cjk_marker_reconciliation.py`: independent oversized-Han duplicate-marker collapse and missing-marker rescue, without OCR content acceptance. Calls back through current core CJK column, grayscale/threshold, sorting, Entry constructor and source-pixel operations; the old lazy OCR helper imports are preserved by adjusting only the relative package path.
+- Earlier `ordinary/legacy_brightness_sampling.py` and `ordinary/vb_brightness.py` remain separate owners for the VB point, row and vectorized brightness primitives.
+- `tests/test_issue562_core_leaf_round17_legacy_20261024.py` characterizes full-white/fallback separator outcomes, reverse transforms, preserved signatures/origins, real-time public monkeypatch seams and CJK no-op guards.
+- **Invariant:** Ten package-root Python source modules (no new root shims), unchanged `Entry`/`Geometry` identities, untouched PDIC/PPP/SECTION/raw OCR JSON and crop publishing, and full-resolution source-coordinate marker results. All five historical `processing_core` entrypoints stay callable on their original paths.
+- **Acceptance outstanding:** latest exact-head six-configuration CI, three-OS OCR smoke, representative source-page ordinary/OCR/combined scan, crop export, manual edit and PDIC/PPP save/reopen parity. Keep PR **Draft**.
