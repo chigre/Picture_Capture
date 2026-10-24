@@ -231,9 +231,12 @@ def test_latin_or_profile_disabled_marker_ocr_does_not_cut_bracket_words(monkeyp
     # Direct pure-helper check is the stable policy contract; real OCR writer
     # enables this only for explicitly configured CJK-bracket dictionary mode.
     assert bracketed_ocr_lemma("prefix【apple】suffix", enabled=False) is None
+    from picture_capture.ocr import ordinary_marker_text_enrichment
     source = __import__("inspect").getsource(processing_core.ocr_existing_entry_words_from_markers)
-    assert 'profile.uses_parser("cjk_bracketed")' in source
-    assert 'profile_cjk_allow_bracketed_headword' in source
+    owner = __import__("inspect").getsource(ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl)
+    assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in source
+    assert 'profile.uses_parser("cjk_bracketed")' in owner
+    assert 'profile_cjk_allow_bracketed_headword' in owner
 
 
 
