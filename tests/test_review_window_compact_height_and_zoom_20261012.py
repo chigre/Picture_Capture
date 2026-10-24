@@ -14,9 +14,8 @@ def test_compact_review_reuses_taskbar_and_titlebar_safe_main_window_height():
     import picture_capture.app as app_module
 
     source = Path(app_module.__file__).read_text(encoding="utf-8")
-    review_init = source.split('class ReviewWindow(', 1)[1].split(
-        '    def _review_image_area_width(', 1
-    )[0]
+    assert '_review_window_initialization.initialize_review_window(' in source
+    review_init = (Path(app_module.__file__).parent / 'ui/review_window_initialization.py').read_text(encoding='utf-8')
     assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in review_init
     assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in review_init
     assert 'height = max(1, safe_client_height)' in review_init
