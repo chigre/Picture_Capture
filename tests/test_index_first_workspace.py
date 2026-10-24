@@ -362,8 +362,10 @@ def test_compact_review_anchors_to_work_area_top():
 
 def test_inline_review_slice_uses_text_based_height_without_classification():
     app, _ = sources()
-    assert '_focused_review_is_single_character(displayed_text)' in app
-    assert 'classified_entry_crop_height(' not in app
+    review_geometry = (ROOT / "ui/review_crop_geometry.py").read_text(encoding="utf-8")
+    assert "_review_crop_geometry._review_line_box(" in app
+    assert '_focused_review_is_single_character(displayed_text)' in review_geometry
+    assert 'classified_entry_crop_height(' not in review_geometry
     assert 'entry, geometry, image, review_settings, next_entry,' in REVIEW_WORKSPACE_SOURCE
     assert 'editor_text=editor_texts[index]' in REVIEW_WORKSPACE_SOURCE
     assert 'ordinary_height_only=True' not in app
