@@ -14,4 +14,4 @@ def test_specified_range_enter_invokes_existing_jump_action():
     assert "textvariable=self.page_range_spec_var" in snippet
     assert 'page_range_entry.bind("<Return>", lambda _event: self.jump_to_page_spec())' in snippet
     assert 'command=self.jump_to_page_spec' in source
-    assert source.count("def jump_to_page_spec(") == 1
+    assert app.count("def jump_to_page_spec(") == 1
