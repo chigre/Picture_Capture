@@ -146,6 +146,9 @@ from .ui import main_canvas_render_workflow as _main_canvas_render
 from .ui import canvas_pointer_workflow as _canvas_pointer
 from .ui import main_appearance_policy as _main_appearance_policy
 from .ui import main_sidebar_sections as _sidebar_sections
+from .ui import review_crop_geometry as _review_crop_geometry
+from .ui import main_app_lifecycle as _main_app_lifecycle
+from .ui import ocr_current_workflow as _main_ocr_current
 from .ui import quick_settings_apply as _quick_settings_apply
 from .ui import detection_batch_execution as _detection_batch_execution
 from .ui import main_workspace_build as _main_workspace_build
@@ -342,8 +345,8 @@ OCR_REFRESH_LABELS = {
 OCR_REFRESH_VALUES = {label: value for value, label in OCR_REFRESH_LABELS.items()}
 
 def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_width: int) -> AppSettings:
-    """Return review settings unchanged; geometry is already source pixels."""
-    return replace(settings)
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._review_crop_settings(image, settings, viewer_width, deps={"replace": replace})
 
 def _review_crop_context(
     image: Image.Image,
@@ -351,48 +354,20 @@ def _review_crop_context(
     viewer_width: int,
     page_index: int = 0,
 ):
-    """Return review crop settings plus the same per-page Profile geometry as detection."""
-    effective = effective_page_settings(settings, image.size, page_index)
-    analysis_image = page_template_analysis_image(image, effective, page_index)
-    return (
-        _review_crop_settings(image, effective, viewer_width),
-        derive_geometry(analysis_image, effective),
-    )
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._review_crop_context(image, settings, viewer_width, page_index=page_index, deps={"effective_page_settings": effective_page_settings, "page_template_analysis_image": page_template_analysis_image, "_review_crop_settings": _review_crop_settings, "derive_geometry": derive_geometry})
 
 def _is_cjk_review_index(settings: AppSettings) -> bool:
-    """Return whether the active index/profile is Chinese-oriented."""
-    language = str(getattr(settings, "ocr_language", "") or "").strip().lower()
-    profile = str(getattr(settings, "dictionary_profile_id", "") or "").strip().lower()
-    return language.startswith("chi_") or profile.startswith("cjk_")
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._is_cjk_review_index(settings, deps={})
 
 def _effective_review_single_cjk_line_height(settings: AppSettings) -> int:
-    """Resolve the review-only height for one-character CJK headwords.
-
-    An explicit project value wins. New/older projects with value 0 use a
-    language-aware default: Chinese index/profile = 2.5× the shared single-line
-    height; other profiles retain a smaller legacy-like expansion.
-    """
-    try:
-        explicit = int(getattr(settings, "review_single_cjk_line_height", 0) or 0)
-    except (TypeError, ValueError):
-        explicit = 0
-    if explicit > 0:
-        return max(1, explicit)
-    base = max(1, int(getattr(settings, "character_height", 1) or 1))
-    multiplier = 2.5 if _is_cjk_review_index(settings) else 1.6
-    return max(base, round(base * multiplier))
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._effective_review_single_cjk_line_height(settings, deps={"_is_cjk_review_index": _is_cjk_review_index})
 
 def _effective_review_regular_crop_height(settings: AppSettings) -> int:
-    """Resolve ordinary proofreading crop height in parameter pixels."""
-    try:
-        explicit = int(getattr(settings, "review_regular_crop_height", 0) or 0)
-    except (TypeError, ValueError):
-        explicit = 0
-    if explicit > 0:
-        return max(1, explicit)
-    line_height = max(1, int(getattr(settings, "character_height", 1) or 1))
-    row_padding = max(0, int(getattr(settings, "row_padding", 0) or 0))
-    return max(1, line_height + row_padding)
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._effective_review_regular_crop_height(settings, deps={})
 
 def _review_line_box(
     entry: WordEntry,
@@ -404,45 +379,8 @@ def _review_line_box(
     ordinary_height_only: bool = False,
     editor_text: str | None = None,
 ) -> tuple[int, int, int, int]:
-    """Review crop height is based only on the actual edited headword text.
-
-    A single character uses the explicitly configured large-head crop height;
-    multiple characters use the ordinary height. Deprecated classification,
-    OCR visual-run height and manual scale flags do not influence review crops.
-    """
-    configured_regular = max(
-        0, int(getattr(settings, "entry_regular_crop_height", 0) or 0)
-    )
-    configured_oversized = max(
-        0, int(getattr(settings, "entry_oversized_crop_height", 0) or 0)
-    )
-    regular_height = (
-        configured_regular or _effective_review_regular_crop_height(settings)
-    )
-    oversized_height = (
-        configured_oversized or _effective_review_single_cjk_line_height(settings)
-    )
-    displayed_text = entry.word if editor_text is None else editor_text
-    height = (
-        regular_height if ordinary_height_only
-        else oversized_height if _focused_review_is_single_character(displayed_text)
-        else regular_height
-    )
-    if geometry.transform.kind != "identity":
-        classified_settings = replace(settings)
-        classified_settings.character_height = int(height)
-        return line_box(entry, geometry, image, classified_settings)
-
-    left, _old_top, right, _bottom = line_box(
-        entry, geometry, image, settings
-    )
-    row_padding = max(0, int(getattr(settings, "row_padding", 0) or 0))
-    half_spacing = round(0.5 * row_padding)
-    top = max(int(geometry.top), int(entry.y) - half_spacing)
-    return left, top, right, min(
-        int(image.height),
-        top + max(1, int(height)),
-    )
+    """Public compatibility entrypoint with call-time patched collaborators."""
+    return _review_crop_geometry._review_line_box(entry, geometry, image, settings, next_entry, ordinary_height_only=ordinary_height_only, editor_text=editor_text, deps={"replace": replace, "line_box": line_box, "_effective_review_regular_crop_height": _effective_review_regular_crop_height, "_effective_review_single_cjk_line_height": _effective_review_single_cjk_line_height, "_focused_review_is_single_character": _focused_review_is_single_character})
 
 def _apply_focused_review_page_updates(
     page: Path, pages: list[Path], page_index: int, changes: list[dict],
@@ -2237,56 +2175,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def on_close(self) -> None:
-        if getattr(self, "_batch_active", False):
-            if not messagebox.askyesno(
-                "批量任务正在运行",
-                "当前批量任务尚未结束。是否停止任务并在当前页处理完成后退出？",
-                parent=self,
-            ):
-                return
-            self._batch_close_after_stop = True
-            self._request_batch_stop()
-            return
-
-        # Durable one-shot workers must finish their success/error cleanup
-        # boundary before the process can disappear.
-        if self._ui_worker_close_wait:
-            if not self._ui_close_requested:
-                self._ui_close_requested = True
-                for key in tuple(self._ui_worker_generations):
-                    self._invalidate_ui_worker(key)
-                self.status_var.set("正在完成后台文件操作，完成后自动退出…")
-                try:
-                    self.withdraw()
-                except tk.TclError:
-                    pass
-                if self._ui_worker_poll_job is None:
-                    self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
-            return
-
-        try:
-            self._cancel_system_appearance_poll()
-            self._ui_worker_shutdown = True
-            self._ui_close_requested = True
-            for key in tuple(self._ui_worker_generations):
-                self._invalidate_ui_worker(key)
-            if self._ui_worker_poll_job is not None:
-                try:
-                    self.after_cancel(self._ui_worker_poll_job)
-                except tk.TclError:
-                    pass
-                self._ui_worker_poll_job = None
-            self._flush_deferred_page_save()
-            if self.project and self.current_page and self.image is not None:
-                try:
-                    self.save_pdic(silent=True)
-                    self._save_normalized_ppp()
-                    self.settings.to_json(settings_path(self.project.root))
-                except (OSError, ValueError, tk.TclError):
-                    pass
-            self._save_session_state()
-        finally:
-            self.destroy()
+        """Public compatibility entrypoint with call-time patched collaborators."""
+        return _main_app_lifecycle.on_close(self, deps={"messagebox": messagebox, "tk": tk, "settings_path": settings_path})
 
     def _build_ui(self) -> None:
         """Historical main workspace construction with current Tk bindings."""
@@ -3840,61 +3730,8 @@ class PictureCaptureApp(tk.Tk):
         self.open_settings(initial_tab="project")
 
     def ocr_current(self) -> None:
-        """Backward-compatible current-page OCR, executed off the Tk thread."""
-        if self._batch_active:
-            self.status_var.set("后台画线任务运行中，暂不启动前台 OCR；可进行人工文本校对。")
-            return
-        if not self.guard() or not self.entries:
-            return
-        if not self._guard_transformed_geometry("OCR"):
-            return
-
-        project = self.project
-        page = self.current_page
-        page_index = int(self.current_index)
-        settings = replace(self.settings)
-        ordered_entries = [replace(entry) for entry in self._ordered_entries_reading_order()]
-        page_sections = list(self.page_sections)
-        pages_meta = self.pages_tuple(page_index)
-        rules_path = replace_rules_path(project.root)
-        ocred_path = qt_root(project.root) / f"{page.stem}.OCRed"
-        engine_name = OCR_ENGINE_LABELS.get(settings.ocr_engine, settings.ocr_engine)
-
-        def worker(_item, _position: int, _total: int):
-            rules = load_replace_rules(rules_path)
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            texts = ocr_entries(
-                image, ordered_entries, settings, rules,
-                profile_page_index=page_index, page_sections=page_sections,
-            )
-            for entry, text in zip(ordered_entries, texts):
-                entry.word = text
-            export_ocred(ocred_path, texts)
-            write_pdic(pdic_path(page), ordered_entries, image.width, pages_meta)
-            return texts
-
-        def done(_completed, _total, stopped, results, error):
-            if error is not None or stopped or not results:
-                return
-            if self.project is not project or self.current_page != page:
-                return
-            texts = list(results[-1])
-            current = self._ordered_entries_reading_order()
-            if len(current) == len(texts):
-                for entry, text in zip(current, texts):
-                    entry.word = text
-                self.redraw()
-            else:
-                self._request_page_load(
-                    page_index, current_already_saved=True, force=True,
-                )
-            self.status_var.set(f"{engine_name} OCR 完成：{len(texts)} 个词条")
-
-        self._start_batch_task(
-            "当前页 OCR", [page_index], worker, done,
-            item_label=lambda _item: page.name,
-        )
+        """Public compatibility entrypoint with call-time patched collaborators."""
+        return _main_ocr_current.ocr_current(self, deps={"replace": replace, "replace_rules_path": replace_rules_path, "qt_root": qt_root, "OCR_ENGINE_LABELS": OCR_ENGINE_LABELS, "load_replace_rules": load_replace_rules, "Image": Image, "normalize_page_rgb": normalize_page_rgb, "ocr_entries": ocr_entries, "export_ocred": export_ocred, "write_pdic": write_pdic, "pdic_path": pdic_path})
 
     def _export_controller_for_call(self) -> ExportController:
         controller = self.__dict__.get("export_controller")

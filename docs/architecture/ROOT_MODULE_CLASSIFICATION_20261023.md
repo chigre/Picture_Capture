@@ -164,3 +164,8 @@ Moved 19 concrete UI methods from root `app.py` into physical `ui/main_appearanc
 ## Phase 2: Profile Wizard physical ownership (2026-10-25)
 
 Five real methods moved from `profile/setup.py` to `wizard_tab_builders`, `wizard_profile_events`, `wizard_headword_explanations`, and `wizard_settings_assembly`. Compatibility method signatures and call-time patchpoints retained. End goal of only `__init__.py` and `__main__.py` at root remains pending compatibility proof and real scanned-page acceptance.
+
+
+## Phase 3: review crop, OCR current-page and durable Tk close (2026-10-25)
+
+Eight actual `app.py` implementations physically migrated to `ui/review_crop_geometry.py`, `ui/ocr_current_workflow.py`, and `ui/main_app_lifecycle.py`, with old public call signatures and call-time patched collaborators retained. Test: `tests/test_issue562_root_review_ocr_lifecycle_phase3_20261025.py`. Root count stays 10; no pickle/PDIC/PPP changes. Real scanned dictionary page, Profile, ordinary/OCR/combined and save/reopen/export manual acceptance remains pending. PR stays Draft.
