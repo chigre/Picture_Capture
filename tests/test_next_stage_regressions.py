@@ -2478,6 +2478,8 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
     config_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
     workspace_owner = (source.parent / "wizard_workspace_builder.py").read_text(encoding="utf-8")
+    diagnostic_owner = (source.parent / "wizard_validation_diagnostics.py").read_text(encoding="utf-8")
+    assert "_wizard_validation_diagnostics.validation_coverage_summary(" in legacy
     assert "_wizard_template_preview.refresh_template_preview(" in legacy
     assert "_wizard_settings_assembly.settings_from_ui(" in legacy
     assert "_wizard_workspace_builder.build_right_image_workspace(" in legacy
@@ -2485,7 +2487,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner))
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
@@ -2881,7 +2883,9 @@ def test_profile_setup_exposes_complete_headword_structure_controls():
     legacy = source.read_text(encoding="utf-8")
     owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
-    text = legacy + "\n" + owner
+    settings_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
+    assert "_wizard_settings_assembly.settings_from_ui(" in legacy
+    text = "\n".join((legacy, owner, settings_owner))
     assert "完整词头结构（词头前 + 词头本体 + 词头后）" in text
     assert "按 OCR 语言排除不兼容的词头首字符（推荐）" in text
     assert "日语允许汉字/假名，中文允许汉字" in text
@@ -3233,9 +3237,12 @@ def test_project_profile_exposes_clickable_column_left_line_nudging():
     assert 'text="重置全部"' in tab_owner
     assert "def _shift_selected_column" in text
     assert "self.working.column_start_offsets = offsets" in text
-    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in text
-    assert 'canvas.bind(\n                "<Button-1>"' in text
-    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in text
+    settings_owner = (source.parent / "wizard_settings_assembly.py").read_text(encoding="utf-8")
+    assert "_wizard_settings_assembly.settings_from_ui(" in text
+    assert "s.column_start_offsets = self._column_offsets_for_count(s.columns)" in settings_owner
+    preview_owner = (source.parent / "wizard_template_preview.py").read_text(encoding="utf-8")
+    assert 'canvas.bind(\n            "<Button-1>"' in preview_owner
+    assert 'fill="#ee7c00" if column_index == selected_column else "#1e78d2"' in preview_owner
     assert "self.working.column_start_offsets = [0] * max(1, int(self.columns_var.get()))" in text
     assert "def _nudge_template_column_preview" in text
     assert "canvas.move(items[index], dx, dy)" in text
@@ -4053,8 +4060,8 @@ def test_round2_heavy_finalizers_and_review_crops_stay_off_tk():
     assert "with Image.open(path) as opened:" in preview
     assert "derive_geometry(" in preview
     assert "self.parent._start_ui_worker(" in preview
-    worker_start = preview.index("        def worker():")
-    done_start = preview.index("        def done(", worker_start)
+    worker_start = preview.index("    def worker():")
+    done_start = preview.index("    def done(", worker_start)
     worker = preview[worker_start:done_start]
     assert "ImageTk.PhotoImage" not in worker
     assert "themed_display_image(" in preview[done_start:]
@@ -4427,7 +4434,7 @@ def test_concurrency_review_workers_use_snapshots_not_live_app_state():
     preview_owner = (root / "src/picture_capture/profile/wizard_template_preview.py").read_text(encoding="utf-8")
     assert "_wizard_template_preview.refresh_template_preview(" in profile
     preview = preview_owner[preview_owner.index("def refresh_template_preview("):]
-    worker = preview[preview.index("        def worker():"):preview.index("        def done(", preview.index("        def worker():"))]
+    worker = preview[preview.index("    def worker():"):preview.index("    def done(", preview.index("    def worker():"))]
     assert "len(self.sample_indices)" not in worker
     assert "sample_count" in worker
 
