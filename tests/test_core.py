@@ -5832,7 +5832,9 @@ def test_review_toolbar_controls_are_grouped_by_function():
     assert display.index("padding_row = ttk.Frame(") < display.index("font_row = ttk.Frame(")
     assert 'text="文本左边距：", style="PCR.Black.TLabel"' in display
     assert 'text="上下边距：", style="PCR.Black.TLabel"' in display
-    assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in review
+    styles_owner = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_style_policy.py").read_text(encoding="utf-8")
+    assert "_review_style_policy.configure_review_styles(" in review
+    assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in styles_owner
 
     ocr_start = build.index('right, "ocr", "OCR结果"')
     ocr_end = build.index('right, "network", "词条联网核验结果"', ocr_start)
@@ -5883,7 +5885,8 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
 
     styles_start = review.index("    def _configure_review_styles(")
     styles_end = review.index("    def _review_flat_button(", styles_start)
-    styles = review[styles_start:styles_end]
+    assert "_review_style_policy.configure_review_styles(" in review[styles_start:styles_end]
+    styles = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_style_policy.py").read_text(encoding="utf-8")
     assert "theme_use(" not in styles
     assert '"PCR.Surface.TFrame"' in styles
     assert '"PCR.Section.TLabelframe"' not in styles
@@ -8115,8 +8118,10 @@ def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_curren
     assert '"system": "跟随系统"' in text
     assert 'text="深色模式（夜间模式）"' not in text
     assert "single_line_labels: bool = False" in text
-    assert "wraplength=0 if single_line_labels else 180" in text
-    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in text
+    form = (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in text
+    assert "wraplength=0 if single_line_labels else 180" in form
+    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in form
     display_call = text.index('self._add_setting_group(\n            display,\n            "界面与校对"')
     display_block = text[display_call:display_call + 240]
     assert 'single_line_labels=True' not in display_block
