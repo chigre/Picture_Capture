@@ -334,5 +334,9 @@ def test_explicit_only_ocr_button_uses_overwrite_not_combined_blank_fill():
     assert "OCR文字意外覆盖了人工选定文本" in body
     assert "重新 OCR 并覆盖已有的自动 OCR 文本" in body
     # Automatic combined rescue remains blank-only, as before.
-    combined = source.split("    def _detect_pages(", 1)[1]
-    assert "only_blank=True," in combined
+    assert "_detection_batch_execution.detect_pages(" in source
+    owner = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "detection_batch_execution.py"
+    ).read_text("utf-8")
+    assert "only_blank=True," in owner
