@@ -529,3 +529,8 @@ Root `app.py` further decreased **9,058 bytes** to **251,847 bytes**; root physi
 - Proactively updated Settings Center/source location regressions and legacy `test_core.py` ReviewWindow source assertions to use the new owner **in addition to** historical class methods. Preserve negative assertions and no-real-GUI regressions.
 
 **Acceptance:** exact latest Round 32 SHA must pass all six CI matrix jobs and the three-platform OCR Smoke. A real dictionary-page GUI ordinary/OCR/combined scan, hand corrections, exports and PDIC/PPP save-reopen check remains a separate gate. Draft PR #663 stays open and unmerged.
+
+
+### Round 33 — main Tk application startup and resolved appearance (2026-10-24)
+
+Moved the complete post-`tk.Tk.__init__` startup implementation (session state, widget model variables, worker queues, controller wiring, theme and layout initialization, after-idle hooks) to `ui/main_app_initialization.py`. `PictureCaptureApp.__init__` remains the original class entrypoint and still executes the Tk superclass first, then forwards live dependencies, including the original `app.py` path for icon resource resolution. Also moved the complete theme reconfiguration implementation to `ui/appearance_resolution.py`, adjusting its imports from `ui/` while retaining call-time live palette/normalizer/Tk hooks. Added `tests/test_issue562_ui_round33_app_startup_20261024.py` with AST ownership and super/delegation seam regression checks. No project data-class, PDIC/PPP, OCR cache, physical root Python count (10) or serialized path changes. Full six-job CI and three-platform OCR Smoke plus manual representative-page GUI acceptance are still mandatory; keep the PR Draft and unmerged.
