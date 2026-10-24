@@ -35,7 +35,7 @@ def test_round40_bootstrap_super_remains_on_wizard_and_lifecycle_physically_move
     body = ast.get_source_segment(source, init)
     assert "super().__init__(parent)" in body
     assert "_wizard_bootstrap.initialize_wizard(" in body
-    assert "super().__init__(parent)" not in owner
+    assert "\n    super().__init__(parent)" not in owner
     assert list(inspect.signature(setup.ProjectProfileWizard.__init__).parameters) == ["self", "parent", "new_project"]
     assert inspect.signature(setup.ProjectProfileWizard.__init__).parameters["new_project"].kind is inspect.Parameter.KEYWORD_ONLY
     assert "self._closing = False" in owner

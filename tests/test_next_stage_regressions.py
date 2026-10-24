@@ -3324,8 +3324,11 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     wizard_start = profile_source.index("class ProjectProfileWizard(tk.Toplevel):")
     wizard_end = profile_source.index("    def _build_vars(self) -> None:", wizard_start)
     wizard_init = profile_source[wizard_start:wizard_end]
-    assert "x = work_x + max(0, (work_w - width) // 2)" in wizard_init
-    assert "y = work_y + max(0, (work_h - height) // 2)" in wizard_init
+    bootstrap = (Path(__file__).resolve().parents[1] / "src/picture_capture/profile/wizard_bootstrap.py").read_text(encoding="utf-8")
+    assert "_wizard_bootstrap.initialize_wizard(" in wizard_init
+    assert "super().__init__(parent)" in wizard_init
+    assert "x = work_x + max(0, (work_w - width) // 2)" in bootstrap
+    assert "y = work_y + max(0, (work_h - height) // 2)" in bootstrap
     dialog_init = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
     assert '(common_tab, "常用")' in dialog_init
