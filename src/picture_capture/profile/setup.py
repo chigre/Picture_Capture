@@ -70,6 +70,9 @@ from . import wizard_template_preview as _wizard_template_preview
 from . import wizard_settings_assembly as _wizard_settings_assembly
 from . import wizard_workspace_builder as _wizard_workspace_builder
 from . import wizard_validation_diagnostics as _wizard_validation_diagnostics
+from . import wizard_validation_execution as _wizard_validation_execution
+from . import wizard_validation_controls as _wizard_validation_controls
+from . import wizard_validation_visuals as _wizard_validation_visuals
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -989,70 +992,11 @@ class ProjectProfileWizard(tk.Toplevel):
 
 
     def _build_validation_tab(self, tab: ttk.Frame) -> None:
-        tab.columnconfigure(0, weight=1)
-        ttk.Label(
-            tab, text="④ 多页测试后再确认",
-            font=("TkDefaultFont", 12, "bold"),
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            tab,
-            text="测试只处理代表页，不写 PDIC；PaddleOCR 强制重新识别，不复用旧 OCR 缓存。右侧一次显示一页，可左右翻页。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=1, column=0, sticky="w", pady=(2, 8))
-
-        bar = ttk.Frame(tab)
-        bar.grid(row=2, column=0, sticky="ew")
-        self.validate_button = ttk.Button(
-            bar, text="测试当前 Profile", command=self.validate_profile,
-        )
-        self.validate_button.pack(side="left")
-        self.validation_status_var = tk.StringVar(value="尚未测试")
-        ttk.Label(
-            bar, textvariable=self.validation_status_var,
-            wraplength=max(260, self._wizard_left_width - 160),
-        ).pack(side="left", padx=(10, 0))
-
-        self.validation_diagnostic_var = tk.StringVar(
-            value="测试方式：PaddleOCR（强制重新识别）｜尚未运行测试"
-        )
-        ttk.Label(
-            tab, textvariable=self.validation_diagnostic_var,
-            foreground="#555555", justify="left",
-            wraplength=self._wizard_left_width,
-        ).grid(row=3, column=0, sticky="ew", pady=(8, 0))
-
-        feedback = ttk.LabelFrame(tab, text="结果是否合适？", padding=(8, 6))
-        feedback.grid(row=4, column=0, sticky="ew", pady=(10, 0))
-        feedback.columnconfigure(3, weight=1)
-        ttk.Label(
-            feedback,
-            text="偏多会按当前词头类型收紧；偏少会放宽。调整后重新测试，直到右侧画线结果合适。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
-        self.feedback_too_many_button = ttk.Button(
-            feedback, text="偏多",
-            command=lambda: self._apply_validation_feedback("too_many"),
-            state="disabled",
-        )
-        self.feedback_too_many_button.grid(row=1, column=0, padx=(0, 4))
-        self.feedback_good_button = ttk.Button(
-            feedback, text="合适",
-            command=lambda: self._apply_validation_feedback("good"),
-            state="disabled",
-        )
-        self.feedback_good_button.grid(row=1, column=1, padx=4)
-        self.feedback_too_few_button = ttk.Button(
-            feedback, text="偏少",
-            command=lambda: self._apply_validation_feedback("too_few"),
-            state="disabled",
-        )
-        self.feedback_too_few_button.grid(row=1, column=2, padx=4)
-        self.validation_feedback_var = tk.StringVar(value="")
-        ttk.Label(
-            feedback, textvariable=self.validation_feedback_var,
-            wraplength=max(260, self._wizard_left_width - 260),
-        ).grid(row=1, column=3, sticky="w", padx=(10, 0))
-
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_controls.build_validation_tab(self, tab, deps={
+            "ttk": ttk,
+            "tk": tk,
+        })
 
     def _profile_label_for_key(self, key: str) -> str:
         for label, value in self.profile_choices:
@@ -2021,196 +1965,23 @@ class ProjectProfileWizard(tk.Toplevel):
             button.configure(state=state)
 
     def _apply_validation_feedback(self, result: str) -> None:
-        if not self._validation_results:
-            return
-        if result == "good":
-            self.validation_feedback_var.set("已确认当前结果合适，可保存 Profile。")
-            self.validation_status_var.set("当前多页测试结果已确认合适")
-            return
-
-        old_level = max(-2, min(2, int(self.headword_tuning_level_var.get())))
-        delta = 1 if result == "too_many" else -1
-        new_level = max(-2, min(2, old_level + delta))
-        self.headword_tuning_level_var.set(new_level)
-
-        key = self._current_profile_key()
-        if new_level != old_level:
-            if key == "cjk_visual":
-                self.headword_left_tolerance_var.set(max(
-                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.5 * delta, 2)
-                ))
-                self.headword_height_ratio_var.set(max(
-                    0.5, round(float(self.headword_height_ratio_var.get()) + 0.04 * delta, 2)
-                ))
-                self.headword_boldness_ratio_var.set(max(
-                    0.5, round(float(self.headword_boldness_ratio_var.get()) + 0.05 * delta, 2)
-                ))
-                self.headword_min_score_var.set(max(
-                    0.0, round(float(self.headword_min_score_var.get()) + 0.25 * delta, 2)
-                ))
-                if result == "too_many":
-                    # Keep real CJK big-character recall: tighten left-edge and
-                    # visible numeric thresholds, but do not silently enable the
-                    # extra strong-visual gate that previously dropped true heads.
-                    self.cjk_require_left_edge_var.set(True)
-            elif key in {"latin_regular", "legacy_spanish_structured"}:
-                self.headword_left_tolerance_var.set(max(
-                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.5 * delta, 2)
-                ))
-                self.headword_boldness_ratio_var.set(max(
-                    0.5, round(float(self.headword_boldness_ratio_var.get()) + 0.06 * delta, 2)
-                ))
-                self.headword_min_score_var.set(max(
-                    0.0, round(float(self.headword_min_score_var.get()) + 0.50 * delta, 2)
-                ))
-            elif key in {"numbered_prefix", "marker_prefixed"}:
-                self.headword_left_tolerance_var.set(max(
-                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.4 * delta, 2)
-                ))
-            else:
-                self.headword_left_tolerance_var.set(max(
-                    0.0, round(float(self.headword_left_tolerance_var.get()) - 0.4 * delta, 2)
-                ))
-                self.headword_min_score_var.set(max(
-                    0.0, round(float(self.headword_min_score_var.get()) + 0.35 * delta, 2)
-                ))
-
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._refresh_headword_tuning_status()
-        self._refresh_summary()
-        direction = "收紧" if result == "too_many" else "放宽"
-        if new_level == old_level:
-            self.validation_feedback_var.set(
-                f"已经达到自动{direction}上限（{new_level:+d}）；请在第③步直接勾选/取消不属于本词典的词头结构。"
-            )
-        else:
-            self.validation_feedback_var.set(
-                f"已按当前词头类型{direction}到 {new_level:+d} 级；请重新测试。"
-            )
-        self.validation_status_var.set("识别规则已调整，需要重新测试")
-        self._set_feedback_buttons("disabled")
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_controls.apply_validation_feedback(self, result)
 
     def validate_profile(self) -> None:
-        if self._closing or self._validation_running:
-            return
-        if self.parent._batch_active:
-            self.validation_status_var.set("批量任务运行中；结束或停止后再测试 Project Profile。")
-            return
-        if self.parent._ui_worker_key_active("profile-validation"):
-            self.validation_status_var.set("上一轮 Profile 测试仍在安全结束，请稍后重试。")
-            return
-        settings = self._settings_from_ui()
-        # Project Profile validates the normal OCR-based workflow even when an
-        # old project last saved "普通画线" as its active detection method.
-        settings.detection_method = "paddleocr"
-        settings.paddle_use_paddleocr = True
-        indices = list(self.sample_indices)
-        if not indices:
-            return
-        project = self.project
-        project_root = Path(project.root)
-        paths = {index: project.images[index] for index in indices}
-        self.update_idletasks()
-        frame_width = int(self.validation_frame.winfo_width())
-        preview_width = max(
-            480,
-            (frame_width - 20) if frame_width > 100
-            else (int(self._wizard_image_width) - 8),
-        )
-        self._validation_running = True
-        self._validation_revision_started = self._profile_revision
-        self._validation_stop_event.clear()
-        stop_event = self._validation_stop_event
-        self.validate_button.configure(state="disabled")
-        self.validation_status_var.set("正在强制重新识别并测试代表页…")
-        self._validation_results = []
-        self.validation_preview_slot = 0
-        self.validation_caption_var.set("")
-        self.validation_diagnostic_var.set(
-            "测试方式：PaddleOCR（强制重新识别）｜正在生成逐栏诊断…"
-        )
-        self.validation_prev_button.configure(state="disabled")
-        self.validation_next_button.configure(state="disabled")
-        self._set_feedback_buttons("disabled")
-        self.validation_feedback_var.set("")
-        for child in self.validation_frame.winfo_children():
-            child.destroy()
-        ttk.Label(self.validation_frame, text="正在生成测试结果…").grid(
-            row=0, column=0, sticky="n", pady=30,
-        )
-        filter_path = headword_filter_rules_path(project_root, HEADWORD_FILTER_RULES_FILENAME)
-
-        def worker():
-            results = []
-            for index in indices:
-                if stop_event.is_set():
-                    break
-                path = paths[index]
-                try:
-                    with Image.open(path) as opened:
-                        image = normalize_page_rgb(opened)
-                    cache_path = (
-                        ocr_cache_root(project_root) / f"{path.stem}.json"
-                        if settings.detection_method == "paddleocr" else None
-                    )
-                    entries, geometry = detect_entries(
-                        image, settings,
-                        paddle_cache_path=cache_path,
-                        force_paddle_refresh=True,
-                        paddle_filter_rules_path=filter_path,
-                        profile_page_index=index,
-                    )
-                    preview = ProjectProfileWizard._marker_preview(
-                        image, entries, geometry, settings, index, preview_width,
-                    )
-                    coverage = ProjectProfileWizard._validation_coverage_summary(
-                        cache_path, entries, geometry, settings,
-                    )
-                    results.append((
-                        index, path.name, len(entries), len(geometry.column_starts),
-                        preview, coverage, None,
-                    ))
-                except Exception as exc:
-                    results.append((index, path.name, 0, 0, None, "", str(exc)))
-                if stop_event.is_set():
-                    break
-            return results
-
-        def done(results) -> None:
-            try:
-                if not self.winfo_exists():
-                    return
-            except tk.TclError:
-                return
-            self._validation_running = False
-            if stop_event.is_set():
-                if self._validation_close_requested:
-                    self.after_idle(self.destroy)
-                    return
-                self.validation_status_var.set("Profile 测试已安全停止。")
-                self.validate_button.configure(state="normal")
-                return
-            self._finish_validation(results)
-
-        def failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            try:
-                if not self.winfo_exists():
-                    return
-            except tk.TclError:
-                return
-            self._validation_running = False
-            if self._validation_close_requested:
-                self.after_idle(self.destroy)
-                return
-            self.validate_button.configure(state="normal")
-            self.validation_status_var.set(f"Profile 测试失败：{exc}")
-
-        self.parent._start_ui_worker(
-            "profile-validation", worker, done, failed, wait_on_close=True,
-        )
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_execution.validate_profile(self, deps={
+            "tk": tk,
+            "ttk": ttk,
+            "Path": Path,
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+            "headword_filter_rules_path": headword_filter_rules_path,
+            "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+            "ocr_cache_root": ocr_cache_root,
+            "detect_entries": detect_entries,
+            "ProjectProfileWizard": ProjectProfileWizard,
+        })
 
     def _poll_validation_queue(self) -> None:
         if self._validation_queue is None:
@@ -2229,95 +2000,13 @@ class ProjectProfileWizard(tk.Toplevel):
         image: Image.Image, entries, geometry, settings: AppSettings,
         page_index: int, preview_width: int,
     ) -> Image.Image:
-        source = image.copy()
-        target_width = max(320, int(preview_width))
-        target_height = max(
-            1, round(source.height * target_width / max(1, source.width)),
-        )
-        thumb = source.resize(
-            (target_width, target_height), Image.Resampling.LANCZOS,
-        ).convert("RGB")
-        sx = thumb.width / max(1, source.width)
-        sy = thumb.height / max(1, source.height)
-        # Drawing an RGBA fill onto an RGB image alpha-composites the mask.
-        # Drawing onto an RGBA image and then converting to RGB would instead
-        # discard alpha and make the validation masks look fully opaque.
-        draw = ImageDraw.Draw(thumb, "RGBA")
-
-        def shade_source_box(box: tuple[int, int, int, int]) -> None:
-            x0, y0, x1, y1 = box
-            if x1 <= x0 or y1 <= y0:
-                return
-            draw.rectangle(
-                (x0 * sx, y0 * sy, x1 * sx, y1 * sy),
-                fill=(255, 215, 0, 105),
-            )
-
-        canonical_w, canonical_h = geometry.transform.canonical_size(source.size)
-        header_mode = str(getattr(settings, "profile_header_mode", "auto") or "auto")
-        footer_mode = str(getattr(settings, "profile_footer_mode", "auto") or "auto")
-        if header_mode == "auto" and geometry.top > 0:
-            shade_source_box(
-                geometry.transform.canonical_box_to_source(
-                    (0, 0, canonical_w, min(canonical_h, geometry.top)),
-                    source.size,
-                )
-            )
-        elif header_mode == "present":
-            pct = max(0.0, min(
-                35.0, float(getattr(settings, "profile_header_percent", 6.0))
-            ))
-            margin = round(source.height * pct / 100.0)
-            shade_source_box((0, 0, source.width, margin))
-
-        if footer_mode == "auto" and geometry.bottom < canonical_h:
-            shade_source_box(
-                geometry.transform.canonical_box_to_source(
-                    (0, max(0, geometry.bottom), canonical_w, canonical_h),
-                    source.size,
-                )
-            )
-        elif footer_mode == "present":
-            pct = max(0.0, min(
-                35.0, float(getattr(settings, "profile_footer_percent", 5.0))
-            ))
-            margin = round(source.height * pct / 100.0)
-            shade_source_box(
-                (0, max(0, source.height - margin), source.width, source.height)
-            )
-
-        side = excluded_source_side(settings, page_index)
-        if side:
-            margin = round(
-                source.width
-                * excluded_source_side_percent(settings, page_index)
-                / 100.0
-            )
-            if side == "left":
-                shade_source_box((0, 0, margin, source.height))
-            else:
-                shade_source_box((source.width - margin, 0, source.width, source.height))
-
-        for entry in entries:
-            u, v = geometry.source_to_canonical(entry.x, entry.y)
-            try:
-                col = min(
-                    range(len(geometry.column_starts)),
-                    key=lambda idx: abs(geometry.x_at(idx, v) - u),
-                )
-                x0 = geometry.x_at(col, v)
-                x1 = x0 + max(8, int(geometry.column_widths[col] * 0.55))
-                start, end = geometry.transform.canonical_marker_to_source(
-                    (x0, v), (x1, v), source.size,
-                )
-                draw.line(
-                    (start[0] * sx, start[1] * sy, end[0] * sx, end[1] * sy),
-                    fill=(255, 0, 0, 255), width=1,
-                )
-            except Exception:
-                x, y = round(entry.x * sx), round(entry.y * sy)
-                draw.point((x, y), fill=(255, 0, 0, 255))
-        return thumb.convert("RGB")
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_visuals.marker_preview(image, entries, geometry, settings, page_index, preview_width, deps={
+            "Image": Image,
+            "ImageDraw": ImageDraw,
+            "excluded_source_side": excluded_source_side,
+            "excluded_source_side_percent": excluded_source_side_percent,
+        })
 
     def _set_validation_fit(self, mode: str) -> None:
         self.validation_fit_mode = "width" if mode == "width" else "height"
@@ -2337,105 +2026,17 @@ class ProjectProfileWizard(tk.Toplevel):
         self._render_validation_result()
 
     def _render_validation_result(self) -> None:
-        for child in self.validation_frame.winfo_children():
-            child.destroy()
-        self._validation_photos.clear()
-        if not self._validation_results:
-            self.validation_caption_var.set("")
-            self.validation_diagnostic_var.set(
-                "测试方式：PaddleOCR（强制重新识别）｜尚无测试结果"
-            )
-            self.validation_prev_button.configure(state="disabled")
-            self.validation_next_button.configure(state="disabled")
-            return
-
-        self.validation_preview_slot %= len(self._validation_results)
-        _index, name, count, columns, preview, coverage, error = self._validation_results[self.validation_preview_slot]
-        total = len(self._validation_results)
-        self.validation_caption_var.set(
-            f"{self.validation_preview_slot + 1}/{total} · {name}"
-        )
-        self.validation_diagnostic_var.set(
-            coverage or "测试方式：PaddleOCR（强制重新识别）\n诊断信息未生成"
-        )
-        state = "normal" if total > 1 else "disabled"
-        self.validation_prev_button.configure(state=state)
-        self.validation_next_button.configure(state=state)
-
-        cell = ttk.LabelFrame(self.validation_frame, text=name, padding=8)
-        cell.grid(row=0, column=0, sticky="ew")
-        cell.columnconfigure(0, weight=1)
-        if preview is not None:
-            display = preview.copy()
-            self.update_idletasks()
-            right_w = int(getattr(self, "right_canvas", self).winfo_width())
-            right_h = int(getattr(self, "right_canvas", self).winfo_height())
-            available_w = max(
-                360,
-                (right_w - 24) if right_w > 100 else self._wizard_image_width - 24,
-            )
-            available_h = max(
-                360,
-                (right_h - 120) if right_h > 200 else self._wizard_height - 160,
-            )
-            if getattr(self, "validation_fit_mode", "height") == "width":
-                scale = available_w / max(1, display.width)
-            else:
-                scale = available_h / max(1, display.height)
-            target = (
-                max(1, round(display.width * scale)),
-                max(1, round(display.height * scale)),
-            )
-            if target != display.size:
-                display = display.resize(target, Image.Resampling.LANCZOS)
-            photo = ImageTk.PhotoImage(
-                themed_display_image(
-                    display, getattr(self.parent, "appearance_mode", "light")
-                )
-            )
-            self._validation_photos.append(photo)
-            ttk.Label(cell, image=photo, anchor="n").pack(anchor="n")
-            ttk.Label(
-                cell, text=f"检出 {count} 个词头 · {columns} 栏",
-            ).pack(anchor="w", pady=(4, 0))
-        else:
-            ttk.Label(
-                cell, text=f"测试失败：{error}", wraplength=620,
-            ).pack(anchor="w", padx=10, pady=30)
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_visuals.render_validation_result(self, deps={
+            "ttk": ttk,
+            "Image": Image,
+            "ImageTk": ImageTk,
+            "themed_display_image": themed_display_image,
+        })
 
     def _finish_validation(self, results) -> None:
-        self._validation_running = False
-        self.validate_button.configure(state="normal")
-        revision_changed = self._validation_revision_started != self._profile_revision
-        self._validation_results = list(results)
-        self.validation_preview_slot = 0
-
-        failures = sum(
-            1 for _index, _name, _count, _columns, preview, _coverage, _error in results
-            if preview is None
-        )
-        validated_pages = [
-            name for _index, name, _count, _columns, preview, _coverage, _error in results
-            if preview is not None
-        ]
-        self.working.profile_last_validated_pages = (
-            validated_pages if failures == 0 and not revision_changed else []
-        )
-        if revision_changed:
-            self.validation_status_var.set(
-                "测试期间设置已改变；本次结果仅供参考，请按当前设置重新测试"
-            )
-        elif failures:
-            self.validation_status_var.set(
-                f"完成：{len(results)-failures}/{len(results)} 页成功；请逐页检查失败页后重新测试"
-            )
-        else:
-            self.validation_status_var.set(
-                f"完成：{len(results)} 页均已测试；可用左右按钮逐页检查"
-            )
-        if results and not revision_changed:
-            self._set_feedback_buttons("normal")
-        self._render_validation_result()
+        """Legacy public call location, forwarding live dependencies to the owner."""
+        return _wizard_validation_visuals.finish_validation(self, results)
 
     def save_and_close(self) -> None:
         # The confirmation button saves immediately, even if the user chooses
