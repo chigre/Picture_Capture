@@ -15,7 +15,8 @@ def starts_with_unconfigured_headword_symbol(
     text: str,
     settings: AppSettings,
     profile: DictionaryProfile,
-, *, inventory_fn: Any, symbol_families: Any, unicode_module: Any) -> bool:
+    *, inventory_fn: Any, symbol_families: Any, unicode_module: Any,
+) -> bool:
     """Reject known symbol-led rows that are outside an explicitly saved set."""
     _configured_symbol_inventory = inventory_fn
     _SYMBOL_FAMILY_BY_LITERAL = symbol_families
@@ -44,7 +45,7 @@ def starts_with_unconfigured_headword_symbol(
 
 def parse_cjk_marker_pinyin_headword(
     text: str, settings: AppSettings, profile: DictionaryProfile,
-, *, is_chinese_fn: Any, repair_fn: Any, inventory_fn: Any,
+    *, is_chinese_fn: Any, repair_fn: Any, inventory_fn: Any,
     headword_cls: Any, regex_module: Any, unicode_module: Any,
 ) -> HeadwordParse | None:
     """Parse marker-led Chinese heads used by Chinese-foreign dictionaries.
@@ -102,7 +103,7 @@ def parse_chinese_bracketed_headword(
     enforce_chinese_language: bool = True,
     allow_japanese_reading_prefix: bool = False,
     allowed_openers: tuple[str, ...] | None = None,
-, *, is_chinese_fn: Any, repair_fn: Any, headword_cls: Any,
+    is_chinese_fn: Any, repair_fn: Any, headword_cls: Any,
     bracket_closers: Any, regex_module: Any, unicode_module: Any,
 ) -> HeadwordParse | None:
     """Parse complete or line-wrapped Chinese bracket headwords.
