@@ -104,7 +104,7 @@ def test_review_constructor_keeps_source_geometry_sidebar_and_live_event_binding
         "self.geometry(", "self.minsize(",
         "self._configure_review_styles()",
         "self._build()",
-        "self._initialize_review_layout_and_rows(",
+        "self.after_idle(self._initialize_review_layout_and_rows)",
         "self.digit_map_vars",
         'self.protocol("WM_DELETE_WINDOW", self._close_review)',
         'self.review_extended_crop_multiplier_var.trace_add(',
