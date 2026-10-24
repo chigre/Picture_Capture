@@ -61,6 +61,11 @@ def test_round45_shared_ocr_and_combined_live_hooks(monkeypatch, tmp_path):
                         lambda s, g, *, method: (calls.append(method) or s))
     ordinary = Entry(word="ordinary", x=2, y=3)
     ocr = Entry(word="ocr", x=4, y=5)
+    # The public processing facade mirrors this assignment into core.
+    # Register the core's original value *before* patching the facade so
+    # monkeypatch's reverse-order undo restores both historical identities.
+    monkeypatch.setattr(processing._core, "_detect_entries_left_edge",
+                        processing._original_detect_entries_left_edge)
     monkeypatch.setattr(processing, "_detect_entries_left_edge",
                         lambda source, s, *, page_sections: ([ordinary], geometry))
     monkeypatch.setattr(processing._core, "_fuse_detection_entries",
