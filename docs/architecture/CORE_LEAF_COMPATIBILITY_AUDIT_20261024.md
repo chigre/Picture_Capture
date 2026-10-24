@@ -542,3 +542,8 @@ Six-matrix CI pytest passed its source contracts but the actual Tk GUI construct
 
 
 Round 33 follow-up: F821 lint diagnosed twelve annotation-only names in the new post-Tk startup owner that no longer inherited imports from `app.py`. Resolved via explicit `TYPE_CHECKING` imports of existing canonical models/PreprocessAnalysis/dialog classes, and widened only the local `review_window` reference annotation to its Tk base (`tk.Toplevel`) so no new UI→`app.py` import cycle is introduced. Runtime behavior and persisted class identities remain unmodified.
+
+
+### Round 34 — Profile Wizard three large method implementations (2026-10-24)
+
+Moved complete `ProjectProfileWizard._build_vars` to `profile/wizard_state_initialization.py` and `_build_template_tab` plus `_build_headword_tab` into `profile/wizard_tab_builders.py`. Historical wizard class methods retain original names and call signatures; all module-configured language, template, headword role constants and Tk modules are supplied at call time, not frozen in imported aliases. New AST and live-hook characterization tests `tests/test_issue562_profile_wizard_round34_20261024.py`. No Profile schema, PDIC/PPP, OCR cache, UI labels, callback ordering, or persisted model identity changes. Exact-head six-platform CI and OCR smoke remain mandatory. PR stays Draft pending independent physical page verification.

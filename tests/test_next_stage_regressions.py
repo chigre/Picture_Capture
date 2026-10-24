@@ -3205,11 +3205,13 @@ def test_source_pixel_settings_never_scale_against_page_width():
 def test_project_profile_exposes_clickable_column_left_line_nudging():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "profile/setup.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="栏左线微调"' in text
-    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in text
-    assert "每次移动约 0.1% 单栏宽" in text
-    assert 'text="← 左移 0.1%"' in text
-    assert 'text="右移 0.1% →"' in text
+    tab_owner = (source.parent / "wizard_tab_builders.py").read_text(encoding="utf-8")
+    assert "_wizard_wizard_tab_builders.build_template_tab(" in text
+    assert 'text="栏左线微调"' in tab_owner
+    assert "点击右侧预览中的栏左线选择；选中线显示为橙色" in tab_owner
+    assert "每次移动约 0.1% 单栏宽" in tab_owner
+    assert 'text="← 左移 0.1%"' in tab_owner
+    assert 'text="右移 0.1% →"' in tab_owner
     assert "人工偏移 {percent:+.2f}% 单栏宽" in text
     assert 'text="重置当前"' in text
     assert 'text="重置全部"' in text
