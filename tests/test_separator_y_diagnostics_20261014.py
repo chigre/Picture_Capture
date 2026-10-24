@@ -32,6 +32,9 @@ def test_replay_preserves_raw_refinement_and_clamp_separately():
 
 
 def test_replay_has_dedicated_y_refinement_stage():
-    source = inspect.getsource(processing.detect_entries)
+    from picture_capture.detection import page_pipeline
+    facade = inspect.getsource(processing.detect_entries)
+    assert "return _page_pipeline.detect_entries_impl(" in facade
+    source = inspect.getsource(page_pipeline.detect_entries_impl)
     assert "separator_y_per_line" in source
     assert "横线 Y 精修诊断（逐条）" in source
