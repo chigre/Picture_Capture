@@ -592,8 +592,7 @@ def build_headword_tab(self, tab, *, deps) -> None:
 
 def mode_row(
     parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
-    *, label_style: str | None = None,
- *, deps) -> None:
+    *, label_style: str | None = None, deps) -> None:
     ttk = deps["ttk"]
     kwargs = {"style": label_style} if label_style else {}
     ttk.Label(parent, text=label, **kwargs).grid(
