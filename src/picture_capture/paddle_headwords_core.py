@@ -49,6 +49,7 @@ from .ocr import pos_cue_policy as _pos_cue_policy
 from .ocr import cjk_prefix_parsing as _cjk_prefix_parsing
 from .ocr import cjk_single_lemma_parsing as _cjk_single_lemma_parsing
 from .ocr import column_band_sampling as _column_band_sampling
+from .ocr import paddle_engine_lifecycle as _paddle_engine_lifecycle
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -335,80 +336,24 @@ def _paddle_language(settings: AppSettings) -> str:
     return _language_resolution.paddle_language(settings)
 
 def clear_paddle_engine_cache(*, keep_key: tuple[str, str, str, bool] | None = None) -> None:
-    """Drop cached Paddle engines that are no longer the active configuration.
-
-    Local references held by an in-flight OCR call remain valid, so cache
-    eviction cannot invalidate a page currently being recognized.  We avoid
-    device-specific forced memory flushes here because those can interfere
-    with an engine still executing in another worker/thread.
-    """
-    with _ENGINE_CACHE_LOCK:
-        stale = [key for key in _ENGINE_CACHE if key != keep_key]
-        for key in stale:
-            _ENGINE_CACHE.pop(key, None)
-    if stale:
-        gc.collect()
-
+    """Historical cache eviction; preserve core cache identity and lock."""
+    return _paddle_engine_lifecycle.clear_paddle_engine_cache_impl(
+        keep_key=keep_key,
+        cache=_ENGINE_CACHE, lock=_ENGINE_CACHE_LOCK, gc_module=gc,
+    )
 
 def get_paddle_engine(settings: AppSettings) -> Any:
-    """Lazily create and reuse one active PaddleOCR 3.x general OCR pipeline."""
-    language = _paddle_language(settings)
-    orientation = bool(settings.paddle_use_textline_orientation)
-    device = resolve_paddle_device()
-    key = (language, device, settings.paddle_ocr_version, orientation)
-    with _ENGINE_CACHE_LOCK:
-        cached = _ENGINE_CACHE.get(key)
-    if cached is not None:
-        return cached
-    # Layout analysis and full OCR use separate Paddle pipelines. Once formal
-    # OCR starts, the detection-only model is no longer needed and may otherwise
-    # pin a second large CPU/GPU allocation for the rest of the session.
-    from .layout.detection import clear_text_detection_cache
-    clear_text_detection_cache()
-    # Avoid the PaddlePaddle 3.3.x CPU PIR/oneDNN incompatibility also for
-    # ordinary OCR, not only the separate layout detector.
-    os.environ["FLAGS_enable_pir_api"] = "0"
-    from .runtime.windows_gpu import configure_windows_nvidia_dlls
-    configure_windows_nvidia_dlls()
-    try:
-        from paddleocr import PaddleOCR
-    except ImportError as exc:
-        raise RuntimeError(
-            "尚未安装 PaddleOCR。请运行当前平台的 OCR 安装脚本，或在受支持平台执行：uv sync --extra ocr-cpu"
-        ) from exc
-    try:
-        kwargs = dict(
-            lang=language,
-            ocr_version=settings.paddle_ocr_version,
-            device=device,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=orientation,
-            enable_mkldnn=False,
-        )
-        try:
-            engine = PaddleOCR(**kwargs)
-        except TypeError:
-            # Compatibility with older PaddleOCR 3.x builds that do not expose
-            # enable_mkldnn on PaddleOCR itself.
-            kwargs.pop("enable_mkldnn", None)
-            engine = PaddleOCR(**kwargs)
-    except Exception as exc:
-        raise RuntimeError(
-            f"PaddleOCR 初始化失败（语言={language}，设备={device}，"
-            f"版本={settings.paddle_ocr_version}）：{exc}"
-        ) from exc
-    # Only one configuration needs to remain strongly referenced by the cache.
-    # An older engine that is still in use elsewhere stays alive through that
-    # caller's local reference and is collected only after the call finishes.
-    clear_paddle_engine_cache(keep_key=key)
-    with _ENGINE_CACHE_LOCK:
-        existing = _ENGINE_CACHE.get(key)
-        if existing is not None:
-            return existing
-        _ENGINE_CACHE[key] = engine
-    return engine
-
+    """Historical Paddle engine factory with live device/cache entrypoints."""
+    return _paddle_engine_lifecycle.get_paddle_engine_impl(
+        settings, deps={
+            "_paddle_language": _paddle_language,
+            "resolve_paddle_device": resolve_paddle_device,
+            "_ENGINE_CACHE": _ENGINE_CACHE,
+            "_ENGINE_CACHE_LOCK": _ENGINE_CACHE_LOCK,
+            "clear_paddle_engine_cache": clear_paddle_engine_cache,
+            "os": os,
+        },
+    )
 
 def unwrap_column_band(
     image: Image.Image,
@@ -439,37 +384,18 @@ def extract_ocr_records(result: Any) -> list[OCRRecord]:
     )
 
 def run_paddle_band(band: Image.Image, settings: AppSettings, engine: Any | None = None) -> list[OCRRecord]:
-    engine = engine or get_paddle_engine(settings)
-    prepared, input_scale = prepare_ocr_band(
-        band,
-        max_long_side=getattr(settings, "paddle_max_input_side", 2800),
-        mode=getattr(settings, "paddle_preprocessing", "original"),
+    """Historical Paddle raw OCR band inference and coordinate scaling."""
+    return _paddle_engine_lifecycle.run_paddle_band_impl(
+        band, settings, engine,
+        deps={
+            "get_paddle_engine": get_paddle_engine,
+            "prepare_ocr_band": prepare_ocr_band,
+            "np": np,
+            "_RAW_OCR_THRESHOLD": _RAW_OCR_THRESHOLD,
+            "extract_ocr_records": extract_ocr_records,
+            "OCRRecord": OCRRecord,
+        },
     )
-    try:
-        results = list(engine.predict(
-            np.asarray(prepared),
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=bool(settings.paddle_use_textline_orientation),
-            # Keep low-confidence fragments in the raw cache. Syllabified bold
-            # headwords are sometimes harder to recognize than the following
-            # POS/definition; candidate confidence is evaluated after same-line
-            # fragments have been merged.
-            text_rec_score_thresh=_RAW_OCR_THRESHOLD,
-        ))
-    except Exception as exc:
-        raise RuntimeError(f"PaddleOCR 推理失败：{exc}") from exc
-    if not results:
-        return []
-    records = extract_ocr_records(results[0])
-    if input_scale == 1.0:
-        return records
-    inverse = 1.0 / input_scale
-    return [
-        OCRRecord(row.text, row.confidence, tuple(round(value * inverse) for value in row.box))
-        for row in records
-    ]
-
 
 def prepare_ocr_band(
     band: Image.Image, *, max_long_side: int = 2800, mode: str = "original",
