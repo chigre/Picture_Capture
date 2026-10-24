@@ -63,6 +63,9 @@ from .ocr import ordinary_marker_text_enrichment as _ordinary_marker_text_enrich
 from .detection import page_method_dispatch as _page_method_dispatch
 from .refinement import existing_entry_positions as _existing_entry_positions
 from .ocr import legacy_entry_text_reading as _legacy_entry_text_reading
+from .crop import illustration_export as _illustration_export
+from .crop import illustration_source_bounds as _illustration_source_bounds
+from .crop import single_line_export as _single_line_export
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -956,50 +959,24 @@ def split_single_lines(
     *, profile_page_index: int = 0, page_sections: list[PageSection] | None = None,
     write_manifest: bool = True,
 ) -> list[CropRecord]:
-    with Image.open(image_path) as opened:
-        image = normalize_page_rgb(opened)
-    source, effective, _analysis_source, geometry = _page_geometry_context(
-        image, settings, profile_page_index,
+    """Historical SW crop export with staged transaction and manifest."""
+    return _single_line_export.split_single_lines_impl(
+        image_path, entries, settings, output_dir,
+        profile_page_index=profile_page_index,
+        page_sections=page_sections, write_manifest=write_manifest,
+        deps={
+            "Image": Image,
+            "normalize_page_rgb": normalize_page_rgb,
+            "_page_geometry_context": _page_geometry_context,
+            "read_page_sections": read_page_sections,
+            "sort_entries_reading_order": sort_entries_reading_order,
+            "_stage_crop": _stage_crop,
+            "line_box": line_box,
+            "CropRecord": CropRecord,
+            "_stage_text_file": _stage_text_file,
+            "_publish_file_transaction": _publish_file_transaction,
+        },
     )
-    from .refinement.analysis import whiten_illustrations_for_export as whiten
-    source = whiten(source, effective, profile_page_index, source_image_path=image_path)
-    if page_sections is None:
-        page_sections = read_page_sections(image_path)
-    records: list[CropRecord] = []
-    manifest: list[str] = []
-    replacements: list[tuple[Path, Path]] = []
-    staged: list[Path] = []
-    try:
-        for index, entry in enumerate(sort_entries_reading_order(entries, geometry, page_sections)):
-            filename = f"{image_path.stem}_SW_{index:03d}.png"
-            target = output_dir / filename
-            box, temp = _stage_crop(
-                source, target, line_box(entry, geometry, source, effective),
-            )
-            staged.append(temp)
-            replacements.append((temp, target))
-            records.append(CropRecord(image_path.name, index, entry.word, filename, box))
-            manifest.append(filename)
-        manifest_target = output_dir / f"{image_path.stem}.PSWords"
-        if write_manifest:
-            manifest_temp = _stage_text_file(
-                manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
-            )
-            staged.append(manifest_temp)
-            replacements.append((manifest_temp, manifest_target))
-        stale = list(output_dir.glob(f"{image_path.stem}_SW_*.png"))
-        if not write_manifest:
-            stale.append(manifest_target)
-        if replacements:
-            _publish_file_transaction(replacements, stale_paths=stale)
-        else:
-            for path in stale:
-                path.unlink(missing_ok=True)
-    except Exception:
-        for temp in staged:
-            temp.unlink(missing_ok=True)
-        raise
-    return records
 
 
 def _special_bounds(
@@ -1322,46 +1299,17 @@ def illustration_crop_bounds(
     margin: int = 0,
     page_sections: list[PageSection] | None = None,
 ) -> tuple[int, int, int]:
-    """Resolve persisted crop settings to current source-image pixels.
+    """Historical source-image illustration crop bounds."""
+    return _illustration_source_bounds.illustration_crop_bounds_impl(
+        image, settings, top_y=top_y, bottom_y=bottom_y,
+        margin=margin, page_sections=page_sections, deps={
+            "_source_px": _source_px,
+            "LayoutTransform": LayoutTransform,
+            "normalize_page_sections": normalize_page_sections,
+            "AppSettings": AppSettings,
+        },
+    )
 
-    Crop Settings v6 stores distances in canonical reference-page pixels. For
-    ordinary horizontal pages canonical V equals source Y. For 90-degree page
-    transforms, illustration polygons are still source-space annotations, so
-    only isotropic scalar distances such as margin are reused directly;
-    transformed whole-entry cropping is handled through canonical geometry.
-    A bottom value of 0 remains the physical image-bottom sentinel.
-    """
-    effective = settings or AppSettings()
-    transform = LayoutTransform(
-        str(getattr(effective, "layout_transform", "identity") or "identity")
-    )
-    canonical_width, canonical_height = transform.canonical_size(image.size)
-    if page_sections:
-        effective_sections = normalize_page_sections(page_sections, 0, canonical_height)
-        top_canonical = effective_sections[0].top_v
-        bottom_canonical = effective_sections[-1].bottom_v
-    else:
-        top_canonical = _source_px(max(0, int(top_y)))
-        bottom_canonical = (
-            _source_px(max(0, int(bottom_y)))
-            if int(bottom_y) > 0 else 0
-        )
-    margin_px = max(
-        0, _source_px(max(0, int(margin))),
-    )
-    # Illustration polygons are persisted in source XY. Horizontal layouts are
-    # the supported physical top/bottom crop convention; rotated layouts keep
-    # the full source-height guard rather than mislabel canonical V as source Y.
-    if transform.kind in {"identity", "mirror_x"}:
-        top = max(0, min(image.height - 1, top_canonical))
-        bottom = (
-            max(top + 1, min(image.height, bottom_canonical))
-            if bottom_canonical > 0 else image.height
-        )
-    else:
-        top = 0
-        bottom = image.height
-    return top, bottom, margin_px
 
 def illustration_polygon_box(
     image: Image.Image,
@@ -1408,131 +1356,33 @@ def split_illustrations(
     transparent_background: bool = False,
     previous_entry_ref: tuple[str, int] | None = None,
 ) -> IllustrationSplitResult:
-    """Export only PPPs that are not already carried by an associated entry crop."""
-    with Image.open(image_path) as opened:
-        image = ImageOps.exif_transpose(opened).convert("RGBA")
-    effective_settings = settings or AppSettings()
-    if page_sections is None:
-        page_sections = read_page_sections(image_path)
-    rgb_for_plan = image.convert("RGB")
-    try:
-        plan = build_page_crop_plan(
-            rgb_for_plan, list(entries or []), polygons, effective_settings,
-            top_y=top_y, bottom_y=bottom_y, illustration_margin=margin,
-            entry_left_padding=entry_left_padding, entry_right_padding=entry_right_padding,
-            integrate_illustrations=integrate_illustrations,
-            profile_page_index=profile_page_index, page_sections=page_sections,
-            auxiliary_lines=read_auxiliary_lines(image_path),
-            page_stem=image_path.stem, previous_entry_ref=previous_entry_ref,
-        )
-    finally:
-        rgb_for_plan.close()
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    records: list[CropRecord] = []
-    events: list[IllustrationCropEvent] = []
-    manifest: list[str] = []
-    replacements: list[tuple[Path, Path]] = []
-    staged: list[Path] = []
-    p_counter: dict[int, int] = {}
-    try:
-        for decision in plan.illustrations:
-            region = polygons[decision.polygon_index]
-            if not decision.standalone:
-                action = (
-                    "跳过：已完整包含于词条切图"
-                    if decision.relation == "contained"
-                    else "跳过：与词条切图部分相交，已合并到词条切图"
-                )
-                events.append(IllustrationCropEvent(
-                    image_path.name, decision.polygon_index + 1, decision.name,
-                    decision.associated_word, decision.relation, action, "",
-                ))
-                manifest.append(
-                    f"{decision.polygon_index+1:03d}|{decision.name}|SKIP|"
-                    f"{decision.relation}|{decision.associated_word}"
-                )
-                continue
-            box = decision.box
-            if box is None:
-                events.append(IllustrationCropEvent(
-                    image_path.name, decision.polygon_index + 1, decision.name,
-                    decision.associated_word, decision.relation,
-                    "跳过：超出有效切图范围", "",
-                ))
-                continue
-            crop = image.crop(box)
-            mask = Image.new("L", crop.size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.polygon([(x-box[0], y-box[1]) for x, y in region.points], fill=255)
-            crop.putalpha(mask)
-            formatted = prepare_crop_background(crop, transparent=transparent_background)
-            if decision.associated_entry_index is not None and decision.associated_entry_index >= 0:
-                ei = decision.associated_entry_index
-                p_counter[ei] = p_counter.get(ei, 0) + 1
-                filename = f"{image_path.stem}_WW_{ei:03d}(P{p_counter[ei]}).png"
-            else:
-                filename = f"{image_path.stem}_PIC_{decision.polygon_index+1:03d}.png"
-            target = output_dir / filename
-            temp = _publish_temp_path(target)
-            try:
-                formatted.save(temp, "PNG")
-            except Exception:
-                temp.unlink(missing_ok=True)
-                raise
-            finally:
-                crop.close()
-                formatted.close()
-                mask.close()
-            staged.append(temp)
-            replacements.append((temp, target))
-            label = region.label or (
-                f"{image_path.stem}|P_{decision.polygon_index+1:02d}|1|{image_path.stem}|"
-            )
-            records.append(CropRecord(
-                image_path.name, decision.polygon_index + 1,
-                decision.associated_word or label, filename, box,
-            ))
-            if decision.relation == "partial" and not integrate_illustrations:
-                action = "单独插图切图（部分超出词条；未综合插图）"
-            else:
-                action = (
-                    "单独插图切图（关联词条外部）"
-                    if decision.associated_entry_index is not None
-                    else "单独插图切图（未关联词条）"
-                )
-            events.append(IllustrationCropEvent(
-                image_path.name, decision.polygon_index + 1, decision.name,
-                decision.associated_word, decision.relation, action, filename,
-            ))
-            manifest.append(
-                f"{decision.polygon_index+1:03d}|{label}|{filename}|"
-                f"{decision.relation}|{decision.associated_word}"
-            )
-
-        manifest_target = output_dir / f"{image_path.stem}.PPPictures"
-        manifest_temp = _stage_text_file(
-            manifest_target, "\n".join(manifest) + ("\n" if manifest else ""),
-        )
-        staged.append(manifest_temp)
-        replacements.append((manifest_temp, manifest_target))
-        plan_temp, plan_target = _stage_page_crop_plan(
-            image_path.parent, image_path.stem, plan,
-        )
-        staged.append(plan_temp)
-        replacements.append((plan_temp, plan_target))
-        stale = [
-            *output_dir.glob(f"{image_path.stem}_WW_*.png"),
-            *output_dir.glob(f"{image_path.stem}_PIC_*.png"),
-        ]
-        _publish_file_transaction(replacements, stale_paths=stale)
-    except Exception:
-        for temp in staged:
-            temp.unlink(missing_ok=True)
-        raise
-    finally:
-        image.close()
-    return IllustrationSplitResult(records, events)
+    """Historical PPP illustration crop export with atomic publish semantics."""
+    return _illustration_export.split_illustrations_impl(
+        image_path, polygons, output_dir, settings,
+        top_y=top_y, bottom_y=bottom_y, margin=margin,
+        entries=entries, entry_left_padding=entry_left_padding,
+        entry_right_padding=entry_right_padding,
+        integrate_illustrations=integrate_illustrations,
+        profile_page_index=profile_page_index, page_sections=page_sections,
+        transparent_background=transparent_background,
+        previous_entry_ref=previous_entry_ref, deps={
+            "Image": Image,
+            "ImageOps": ImageOps,
+            "ImageDraw": ImageDraw,
+            "AppSettings": AppSettings,
+            "read_page_sections": read_page_sections,
+            "build_page_crop_plan": build_page_crop_plan,
+            "read_auxiliary_lines": read_auxiliary_lines,
+            "CropRecord": CropRecord,
+            "IllustrationCropEvent": IllustrationCropEvent,
+            "prepare_crop_background": prepare_crop_background,
+            "_publish_temp_path": _publish_temp_path,
+            "_stage_text_file": _stage_text_file,
+            "_stage_page_crop_plan": _stage_page_crop_plan,
+            "_publish_file_transaction": _publish_file_transaction,
+            "IllustrationSplitResult": IllustrationSplitResult,
+        },
+    )
 
 
 def resolve_crop_worker_count(configured: int = 0, cpu_count: int | None = None) -> int:
