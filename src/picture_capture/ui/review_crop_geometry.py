@@ -4,7 +4,11 @@ Physical algorithm owner; original app module supplies live monkeypatch hooks.
 No Tk or OCR engine is initialized here.
 """
 from __future__ import annotations
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL import Image
+    from ..models import AppSettings, Entry as WordEntry
 
 def _review_crop_settings(image: Image.Image, settings: AppSettings, viewer_width: int, *, deps: dict[str, Any]) -> AppSettings:
     replace = deps["replace"]
@@ -16,7 +20,8 @@ def _review_crop_context(
     settings: AppSettings,
     viewer_width: int,
     page_index: int = 0,
- *, deps: dict[str, Any]):
+    *, deps: dict[str, Any],
+):
     effective_page_settings = deps["effective_page_settings"]
     page_template_analysis_image = deps["page_template_analysis_image"]
     _review_crop_settings = deps["_review_crop_settings"]
@@ -74,7 +79,8 @@ def _review_line_box(
     *,
     ordinary_height_only: bool = False,
     editor_text: str | None = None,
- deps: dict[str, Any]) -> tuple[int, int, int, int]:
+    deps: dict[str, Any],
+) -> tuple[int, int, int, int]:
     replace = deps["replace"]
     line_box = deps["line_box"]
     _effective_review_regular_crop_height = deps["_effective_review_regular_crop_height"]

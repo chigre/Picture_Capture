@@ -682,3 +682,5 @@ Physically moved **eight complete algorithms** from root `app.py`: six review so
 
 
 Phase 3 legacy source-contract test relocation: `test_next_stage_regressions` now checks the original `app.ocr_current`/`on_close` forwarding plus real `ui/ocr_current_workflow.py` batch scheduling and `ui/main_app_lifecycle.py` durable-worker shutdown; `test_entry_classification_pipeline` inspects the actual `ui/review_crop_geometry.py` algorithm while retaining all original crop-height/classification assertions. These are **source-location updates**, not weaker runtime tests; Phase 3 added independent monkeypatch/worker behavior tests.
+
+Phase 3 type-annotation audit: new review crop owner uses `TYPE_CHECKING` imports for `Image`, `AppSettings` and historical `WordEntry` without importing heavy Tk/OCR modules at runtime. The multiline keyword-only owner signatures were normalized; original app signatures are unchanged.
