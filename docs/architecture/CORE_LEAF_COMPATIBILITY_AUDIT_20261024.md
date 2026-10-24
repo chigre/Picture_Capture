@@ -617,3 +617,26 @@ Round 41 first CI identified a source-location-only regression in the existing a
 - Root `processing.py`: **41,760 → 36,905 bytes**, **-4,855 bytes**. Root Python files remain **10**, aggregate root Python bytes **449,419 → 444,564**. No new root shims, no model/pickle or persisted schema moves.
 - New regression `tests/test_issue562_processing_layout_owner_round42_20261025.py` checks physical AST owners, historical signatures, source path/mask trace/close, live Y-refinement and Entry factory, and VB detector/filter/sort patching. Three prior source-contract tests now inspect the actual physical owner rather than assuming implementation is still in the facade; their behavioral assertions remain.
 - This extraction does **not** establish representative scanned dictionary-page GUI acceptance. Ordinary/OCR/combined detection, Tk main-thread behavior, PDIC/PPP save/reopen and crop/export equivalence remain **manual acceptance pending**. CI and OCR smoke must be checked on the exact new commit before any readiness discussion. PR stays Draft; no merge.
+
+
+## Round 45 — shared OCR/combined observations and Wizard scrolling (2026-10-25)
+
+- Physically relocated `processing._shared_detector_observations` into
+  `detection/shared_observations.py:shared_detector_observations`. It still
+  normalizes the source once, resolves effective page/template settings,
+  creates shared geometry, lazily imports Paddle OCR, reads review candidates,
+  and fuses ordinary/OCR entries only in combined mode. The original callable
+  and signature remain, injecting **current** core/facade callbacks at call
+  time (including fusion, geometry, page-template and ordinary detection).
+- Physically relocated four `ProjectProfileWizard` scrolling/ancestry
+  methods from `profile/setup.py` to `profile/wizard_scroll.py`. The
+  historical instance/static methods and Tk/ttk dependencies are preserved;
+  scrolling stays in Tk's event callbacks on the main thread, not a worker.
+- New regression: `tests/test_issue562_shared_observations_wizard_scroll_round45_20261025.py`
+  characterizes real owners, legacy signatures, runtime patched OCR/combined
+  seams, canvas routing, wheel direction, static widget ancestry and
+  out-of-range tab behavior.
+- Root Python module inventory remains **10** (no root stubs); no PDIC/PPP,
+  OCR cache, Entry identity or crop/export schema change. Real scanned
+  dictionary-page GUI, ordinary/OCR/combined, Profile, PDIC/PPP reopen
+  and crop/export equivalence are **not manually verified**. Keep Draft.

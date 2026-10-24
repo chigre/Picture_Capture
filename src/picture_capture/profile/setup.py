@@ -76,6 +76,7 @@ from . import wizard_validation_visuals as _wizard_validation_visuals
 from . import wizard_sample_thumbnails as _wizard_sample_thumbnails
 from . import wizard_sample_analysis as _wizard_sample_analysis
 from . import wizard_shell_builder as _wizard_shell_builder
+from . import wizard_scroll as _wizard_scroll
 from . import wizard_reading_controls as _wizard_reading_controls
 from . import wizard_headword_explanations as _wizard_headword_explanations
 from . import wizard_persistence as _wizard_persistence
@@ -232,55 +233,21 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _active_tab_canvas(self) -> tk.Canvas | None:
-        try:
-            index = self.notebook.index(self.notebook.select())
-            return self.tab_canvases[index]
-        except (tk.TclError, ValueError, IndexError):
-            return None
+        """Historical Wizard tab canvas selector; use live Tk errors."""
+        return _wizard_scroll.active_tab_canvas(self, tk=tk)
 
     @staticmethod
     def _is_widget_descendant(widget, ancestor) -> bool:
-        current = widget
-        while current is not None:
-            if current == ancestor:
-                return True
-            try:
-                parent_name = current.winfo_parent()
-                current = current._nametowidget(parent_name) if parent_name else None
-            except (tk.TclError, KeyError):
-                return False
-        return False
+        """Historical static widget ancestry hook."""
+        return _wizard_scroll.is_widget_descendant(widget, ancestor, tk=tk)
 
     def _wizard_mousewheel(self, event) -> str | None:
-        if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
-            return None
-        delta = int(getattr(event, "delta", 0) or 0)
-        if not delta:
-            return None
-        if hasattr(self, "right_canvas") and self._is_widget_descendant(
-            event.widget, self.right_content
-        ):
-            self.right_canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
-            return "break"
-        canvas = self._active_tab_canvas()
-        if canvas is None:
-            return None
-        canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
-        return "break"
+        """Historical mouse-wheel callback; preserve Tk main-thread routing."""
+        return _wizard_scroll.wizard_mousewheel(self, event, tk=tk, ttk=ttk)
 
     def _wizard_linux_wheel(self, event, direction: int) -> str | None:
-        if isinstance(event.widget, (tk.Spinbox, ttk.Combobox)):
-            return None
-        if hasattr(self, "right_canvas") and self._is_widget_descendant(
-            event.widget, self.right_content
-        ):
-            self.right_canvas.yview_scroll(int(direction) * 3, "units")
-            return "break"
-        canvas = self._active_tab_canvas()
-        if canvas is None:
-            return None
-        canvas.yview_scroll(int(direction) * 3, "units")
-        return "break"
+        """Historical Linux wheel callback; preserve Tk main-thread routing."""
+        return _wizard_scroll.wizard_linux_wheel(self, event, direction, tk=tk, ttk=ttk)
 
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
         """Historical Wizard method; delegate to canonical UI owner."""

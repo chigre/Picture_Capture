@@ -132,3 +132,15 @@ No new root stub, serialized model move, Tk worker change, PDIC/PPP or OCR
 cache schema change. Real scanned dictionary-page ordinary/OCR/combined,
 Profile, PDIC/PPP save/reopen and crop/export parity remain **manual
 acceptance pending**. PR stays Draft and unmerged.
+
+
+## 2026-10-25 Round 45: detection orchestration and Profile scroll owners
+
+The shared Page Understanding OCR/combined observation pipeline moved from
+root `processing.py` into `detection/shared_observations.py`, retaining the
+historical processing API and live patch points. Four Profile Wizard wheel/
+canvas/descendant algorithms moved from `profile/setup.py` to
+`profile/wizard_scroll.py` with Tk event/main-thread behavior intact.
+Characterization test: `tests/test_issue562_shared_observations_wizard_scroll_round45_20261025.py`.
+Root file count stays 10. Independent real dictionary scan, PDIC/PPP
+save/reopen and crop/export parity remain pending; PR remains Draft.

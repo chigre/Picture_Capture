@@ -33,6 +33,7 @@ from .layout import current_page as _current_page_understanding
 from .layout import shared_geometry as _shared_geometry
 from .ordinary import layout_roles as _ordinary_layout_roles
 from .ordinary import observation_policy as _ordinary_observation_policy
+from .detection import shared_observations as _shared_observations
 from .ordinary.debug_stage import _record_ordinary_debug_stage
 from .layout.page_understanding_fusion import apply_page_understanding
 from .profile.indent_ui import indent_type_label
@@ -251,56 +252,23 @@ def _shared_detector_observations(
     profile_page_index: int,
     page_sections: list[PageSection] | None,
 ) -> tuple[list[Entry], Any, list[dict]]:
-    """Generate OCR/combined observations in the shared page coordinate model."""
-    source = _core.normalize_page_rgb(image)
-    effective = _core.effective_page_settings(
-        understanding.page_settings,
-        source.size,
-        profile_page_index,
+    """Historical shared detector hook; delegate with live patchable callbacks."""
+    return _shared_observations.shared_detector_observations(
+        image, understanding, method,
+        paddle_cache_path=paddle_cache_path,
+        force_paddle_refresh=force_paddle_refresh,
+        paddle_filter_rules_path=paddle_filter_rules_path,
+        profile_page_index=profile_page_index,
+        page_sections=page_sections,
+        normalize_page_rgb=_core.normalize_page_rgb,
+        effective_page_settings=_core.effective_page_settings,
+        page_template_image=_page_template_image,
+        geometry_from_page_understanding=_geometry_from_page_understanding,
+        review_candidates_from_cache=_review_candidates_from_cache,
+        ordinary_settings_for_shared_geometry=_ordinary_settings_for_shared_geometry,
+        detect_entries_left_edge=_detect_entries_left_edge,
+        fuse_detection_entries=_core._fuse_detection_entries,
     )
-    analysis_source = _page_template_image(
-        source, effective, profile_page_index,
-    )
-    geometry = _geometry_from_page_understanding(understanding)
-
-    if method in {"paddleocr", "combined"}:
-        from .paddle_headwords import detect_paddle_headwords
-
-        ocr_entries = detect_paddle_headwords(
-            analysis_source,
-            geometry,
-            effective,
-            cache_path=paddle_cache_path,
-            force_refresh=force_paddle_refresh,
-            filter_rules_path=paddle_filter_rules_path,
-            page_sections=page_sections,
-        )
-        review_candidates = _review_candidates_from_cache(paddle_cache_path)
-        if method == "paddleocr":
-            return list(ocr_entries), geometry, review_candidates
-
-        ordinary_settings = _ordinary_settings_for_shared_geometry(
-            effective,
-            geometry,
-            method="combined",
-        )
-        ordinary_entries, _ordinary_geometry = _detect_entries_left_edge(
-            analysis_source,
-            ordinary_settings,
-            page_sections=page_sections,
-        )
-        entries = _core._fuse_detection_entries(
-            ordinary_entries,
-            ocr_entries,
-            geometry,
-            effective,
-            page_sections,
-            review_candidates=review_candidates,
-            image=analysis_source,
-        )
-        return list(entries), geometry, review_candidates
-
-    return [], geometry, []
 
 
 def detect_entries(
