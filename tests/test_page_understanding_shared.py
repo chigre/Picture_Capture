@@ -242,7 +242,10 @@ def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review()
 
 
 def test_processing_builds_shared_understanding_before_all_detector_modes():
-    source = inspect.getsource(processing.detect_entries)
+    from picture_capture.detection import page_pipeline
+    facade = inspect.getsource(processing.detect_entries)
+    assert "return _page_pipeline.detect_entries_impl(" in facade
+    source = inspect.getsource(page_pipeline.detect_entries_impl)
     # The canonical helper owns runtime preparation and dispatches either the
     # Layout-only understanding (ordinary) or enriched understand_page (OCR).
     assert "_understand_page_current(" in source
