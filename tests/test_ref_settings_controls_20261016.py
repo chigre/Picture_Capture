@@ -155,8 +155,10 @@ def test_universal_picker_covers_all_settings_color_fields():
         "illustration_label_border_color", "illustration_label_fill_color",
         "ref_box_fill_color", "ref_box_filled_color", "ref_box_text_color",
     }.issubset(colors)
-    assert 'if name.endswith("_color")' in app
-    assert "make_color_widget(parent, var)" in app
+    owner = (root / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.setting_widget(" in app
+    assert 'if name.endswith("_color")' in owner
+    assert "make_color_widget(parent, var)" in owner
     assert 'bg=chosen' in picker and 'text="选色…"' in picker
     assert "value.trace_add(" in picker
     assert "colorchooser.askcolor(" in picker
@@ -208,9 +210,10 @@ def test_generic_color_validation_blocks_invalid_autosave(color, valid):
 def test_color_validation_is_before_settings_mutation():
     src = (Path(__file__).resolve().parents[1] /
            "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    settings_start = src.index("class SettingsDialog")
-    save_start = src.index("    def save(self, *, close: bool", settings_start)
-    target = src[save_start:save_start + 2600]
+    assert "_settings_field_form.save_settings(" in src
+    target = (Path(__file__).resolve().parents[1] /
+              "src/picture_capture/ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    target = target[target.index("def save_settings("):]
     assert target.index("_settings_color_ui.validate_color_controls(self.vars)") < (
         target.index("for name, var in self.vars.items():")
     )
