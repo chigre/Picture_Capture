@@ -151,6 +151,10 @@ from .ui import main_workspace_build as _main_workspace_build
 from .ui.settings import interactive_panels as _interactive_settings_panels
 from .ui.settings import field_form_runtime as _settings_field_form
 from .ui import review_style_policy as _review_style_policy
+from .ui import background_job_runtime as _background_job_runtime
+from .ui import quick_settings_sync as _quick_settings_sync
+from .ui import paddle_environment_report as _paddle_environment_report
+from .ui import main_action_buttons as _main_action_buttons
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.page_list_grid import PageListGrid
 from .ui.text_wrap import (
@@ -3301,39 +3305,12 @@ class PictureCaptureApp(tk.Tk):
     def _start_ui_worker(
         self, key: str, worker, on_done, on_error=None, *, wait_on_close: bool = False,
     ) -> int:
-        """Run one replaceable blocking operation without letting its worker touch Tk.
+        """Historical nonblocking generation-safe Tk worker entrypoint."""
+        return _background_job_runtime.start_ui_worker(
+            self, key, worker, on_done, on_error, wait_on_close=wait_on_close,
+            deps={"threading": threading, "traceback": traceback},
+        )
 
-        wait_on_close is reserved for workers that may mutate durable files.
-        A close request suppresses their UI callback but defers destroy() until
-        the worker has reached its own success/error cleanup boundary.
-        """
-        if self._ui_worker_shutdown or self._ui_close_requested:
-            return -1
-        stale = [token for token in self._ui_worker_handlers if token[0] == key]
-        for token in stale:
-            self._ui_worker_handlers.pop(token, None)
-        generation = int(self._ui_worker_generations.get(key, 0)) + 1
-        self._ui_worker_generations[key] = generation
-        token = (key, generation)
-        self._ui_worker_handlers[token] = (on_done, on_error)
-        self._ui_worker_active.add(token)
-        if wait_on_close:
-            self._ui_worker_close_wait.add(token)
-
-        def runner() -> None:
-            try:
-                result = worker()
-                event = ("done", key, generation, result, None, None)
-            except Exception as exc:
-                event = ("error", key, generation, None, exc, traceback.format_exc())
-            self._ui_worker_queue.put(event)
-
-        threading.Thread(
-            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
-        ).start()
-        if self._ui_worker_poll_job is None:
-            self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
-        return generation
 
     def _invalidate_ui_worker(self, key: str) -> None:
         self._ui_worker_generations[key] = int(self._ui_worker_generations.get(key, 0)) + 1
@@ -3342,54 +3319,11 @@ class PictureCaptureApp(tk.Tk):
             self._ui_worker_handlers.pop(token, None)
 
     def _poll_ui_worker_queue(self) -> None:
-        self._ui_worker_poll_job = None
-        if self._ui_worker_shutdown:
-            return
-        processed = 0
-        while processed < 48:
-            try:
-                kind, key, generation, result, exc, detail = self._ui_worker_queue.get_nowait()
-            except queue.Empty:
-                break
-            processed += 1
-            token = (key, generation)
-            self._ui_worker_active.discard(token)
-            self._ui_worker_close_wait.discard(token)
-            handler = self._ui_worker_handlers.pop(token, None)
-            if (
-                not self._ui_close_requested
-                and generation == self._ui_worker_generations.get(key)
-                and handler is not None
-            ):
-                on_done, on_error = handler
-                try:
-                    if kind == "done":
-                        on_done(result)
-                    elif on_error is not None:
-                        on_error(exc, detail)
-                    else:
-                        if detail:
-                            print(detail)
-                        self.show_error(f"{key}失败", exc)
-                except tk.TclError:
-                    pass
-                except Exception as callback_exc:
-                    traceback.print_exc()
-                    try:
-                        self.show_error(f"{key}完成处理失败", callback_exc)
-                    except tk.TclError:
-                        pass
+        """Historical Tk-thread result queue polling with deferred close."""
+        return _background_job_runtime.poll_ui_worker_queue(
+            self, deps={"tk": tk, "queue": queue, "traceback": traceback},
+        )
 
-        if self._ui_close_requested and not self._ui_worker_close_wait:
-            self.after_idle(self.on_close)
-            return
-        if (
-            (self._ui_worker_handlers or self._ui_worker_close_wait or self._ui_worker_active)
-            and not self._ui_worker_shutdown
-        ):
-            self._ui_worker_poll_job = self.after(
-                8 if processed >= 48 else 60, self._poll_ui_worker_queue
-            )
 
     def _configure_global_appearance(self) -> None:
         """Historical main-window theme installer with current patched UI providers."""
@@ -3606,84 +3540,19 @@ class PictureCaptureApp(tk.Tk):
     def _sidebar_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral"
     ) -> tk.Widget:
-        """Return one dense action button for the main sidebar.
-
-        Neutral actions intentionally use the exact same ttk style as
-        `检测版面参数`, so sections 四/五 share one native button chrome.
-        Only the three explicitly emphasized actions use custom colors.
-        """
-        if role == "neutral":
-            return ttk.Button(
-                parent,
-                text=text,
-                command=command,
-                style="PC.Compact.TButton",
-            )
-
-        colors = self._main_ui_colors
-        palette = {
-            "primary": (
-                colors["primary"], colors["primary_hover"], "#ffffff",
-            ),
-            "success": (
-                colors["success"], colors["success_hover"], "#ffffff",
-            ),
-        }
-        background, active_background, foreground = palette.get(
-            role, palette["primary"]
+        """Historical compact sidebar action button with live ttk/tk providers."""
+        return _main_action_buttons.sidebar_action_button_impl(
+            self, parent, text, command, role=role,
+            deps={"ttk": ttk, "tk": tk},
         )
-        border = colors["button_border"]
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=background,
-            fg=foreground,
-            activebackground=active_background,
-            activeforeground=foreground,
-            relief="flat",
-            bd=0,
-            anchor="center",
-            justify="center",
-            highlightthickness=1,
-            highlightbackground=border,
-            highlightcolor=border,
-            padx=7,
-            pady=3,
-            cursor="hand2",
-        )
+
 
     def _footer_action_button(
         self, parent: tk.Misc, text: str, command, *, role: str
     ) -> tk.Button:
-        """Create one emphasized bottom-bar action with a functional color."""
-        colors = self._main_ui_colors
-        palette = {
-            # Scheme A: project/config entry points share the same green
-            # treatment as `保存当前页`.
-            "project": (colors["success"], colors["success_hover"], "#ffffff"),
-            "config": (colors["success"], colors["success_hover"], "#ffffff"),
-        }
-        background, active_background, foreground = palette[role]
-        border = colors["button_border"]
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=background,
-            fg=foreground,
-            activebackground=active_background,
-            activeforeground=foreground,
-            relief="flat",
-            bd=0,
-            anchor="center",
-            justify="center",
-            highlightthickness=1,
-            highlightbackground=border,
-            highlightcolor=border,
-            padx=7,
-            pady=3,
-            cursor="hand2",
+        """Historical emphasized footer button with live Tk provider."""
+        return _main_action_buttons.footer_action_button_impl(
+            self, parent, text, command, role=role, deps={"tk": tk},
         )
 
 
@@ -4241,59 +4110,17 @@ class PictureCaptureApp(tk.Tk):
                 widget.configure(text=label)
 
     def sync_quick_settings(self) -> None:
-        if not hasattr(self, "quick_vars"):
-            return
-        self._quick_syncing = True
-        try:
-            self._refresh_quick_coordinate_labels()
-            for name, var in self.quick_vars.items():
-                if hasattr(self.settings, name):
-                    value = getattr(self.settings, name)
-                    if name in LAYOUT_PERCENT_AXES:
-                        source_value = self._quick_geometry_value(name)
-                        if self.image is not None:
-                            value = _format_layout_percent(
-                                _layout_pixels_to_percent(self.image, name, source_value)
-                            )
-                        else:
-                            value = source_value
-                        pixel_var = getattr(self, "quick_pixel_vars", {}).get(name)
-                        if pixel_var is not None:
-                            pixel_var.set(str(int(round(source_value))))
-                    if name == "main_entry_x_ratio":
-                        value = round(float(value) * 100)
-                    elif name in {
-                        "batch_interval", "guide_opacity", "headword_marker_opacity",
-                        "illustration_fill_opacity",
-                    }:
-                        value = round(float(value))
-                    if name in {
-                        "main_entry_font_family",
-                        "illustration_label_font_family",
-                        "review_entry_font_family",
-                        "review_simplified_font_family",
-                    }:
-                        value = normalize_content_font_setting(value)
-                    var.set(str(value))
-            for name, var in getattr(self, "quick_bool_vars", {}).items():
-                if hasattr(self.settings, name):
-                    var.set(bool(getattr(self.settings, name)))
-            for name, var in getattr(self, "quick_color_vars", {}).items():
-                if hasattr(self.settings, name):
-                    value = str(getattr(self.settings, name))
-                    var.set(value)
-                    button = getattr(self, "quick_color_buttons", {}).get(name)
-                    if button is not None:
-                        self._style_color_button(button, value)
-            if hasattr(self, "lens_mode_var"):
-                self.lens_mode_var.set(
-                    LENS_MODE_LABELS.get(
-                        self.settings.paddle_lens_mode, LENS_MODE_LABELS["off"]
-                    )
-                )
-            self._quick_geometry_edit_source.clear()
-        finally:
-            self._quick_syncing = False
+        """Historical quick-control sync in original page-pixel coordinates."""
+        return _quick_settings_sync.sync_quick_settings_impl(
+            self, deps={
+                "LAYOUT_PERCENT_AXES": LAYOUT_PERCENT_AXES,
+                "_format_layout_percent": _format_layout_percent,
+                "_layout_pixels_to_percent": _layout_pixels_to_percent,
+                "normalize_content_font_setting": normalize_content_font_setting,
+                "LENS_MODE_LABELS": LENS_MODE_LABELS,
+            },
+        )
+
 
     def apply_quick_settings(self, show_status: bool = True, persist: bool = False, silent_errors: bool = False) -> bool:
         """Historical quick-settings conversion and side-effect API."""
@@ -4398,60 +4225,15 @@ class PictureCaptureApp(tk.Tk):
         return tuple(parts + [0] * (width - len(parts))) >= tuple(minimum) + (0,) * (width - len(minimum))
 
     def _paddle_environment_text(self, settings: AppSettings | None = None) -> str:
-        settings = settings or self.settings
-        paddleocr_version = self._distribution_version("paddleocr")
-        paddlex_version = self._distribution_version("paddlex")
-        paddle_gpu_version = self._distribution_version("paddlepaddle-gpu")
-        paddle_cpu_version = self._distribution_version("paddlepaddle")
-        paddle_available = importlib_util.find_spec("paddleocr") is not None
+        """Historical PP-OCR environment diagnostic and runtime status text."""
+        return _paddle_environment_report.paddle_environment_text_impl(
+            self, settings,
+            deps={
+                "importlib_util": importlib_util,
+                "resolve_paddle_device": resolve_paddle_device,
+            },
+        )
 
-        if paddleocr_version:
-            lines = [f"✓ PaddleOCR {paddleocr_version}"]
-        elif paddle_available:
-            lines = ["✓ PaddleOCR：已安装（版本未知）"]
-        else:
-            return "✗ PaddleOCR：未安装\nPP-OCRv6：不可用（需要 PaddleOCR >= 3.7）\nWindows 推荐运行 install_ocr_windows.bat 安装 CPU/GPU OCR 套件。"
-
-        if paddlex_version:
-            lines.append(f"✓ PaddleX {paddlex_version}")
-
-        if paddle_gpu_version and paddle_cpu_version:
-            lines.append(f"⚠ PaddlePaddle GPU {paddle_gpu_version} + CPU {paddle_cpu_version} 同时安装")
-            lines.append("建议仅保留实际使用的一个 PaddlePaddle runtime，避免 CPU/GPU 包冲突。")
-        elif paddle_gpu_version:
-            lines.append(f"✓ PaddlePaddle GPU {paddle_gpu_version}")
-        elif paddle_cpu_version:
-            lines.append(f"✓ PaddlePaddle CPU {paddle_cpu_version}")
-        else:
-            lines.append("✗ PaddlePaddle runtime：未检测到")
-
-        if self._version_at_least(paddleocr_version, (3, 7)):
-            lines.append(f"✓ PP-OCRv6：支持（配置：{settings.paddle_ocr_version or 'PP-OCRv6'}）")
-        else:
-            lines.append(
-                f"✗ PP-OCRv6：当前 PaddleOCR {paddleocr_version or '未知'} 不支持；请升级到 >= 3.7"
-            )
-
-        runtime_device = resolve_paddle_device()
-        lines.append(f"本机运行设备：{runtime_device}（自动；项目不再固定 CPU/GPU）")
-        if str(getattr(settings, "paddle_device", "auto") or "auto").lower() not in {"", "auto"}:
-            lines.append("提示：项目中的旧 paddle_device 值仅保留兼容读取，当前运行已忽略该项目级设备设置。")
-        try:
-            import paddle  # type: ignore
-            compiled_cuda = bool(paddle.device.is_compiled_with_cuda())
-            if compiled_cuda:
-                try:
-                    gpu_count = int(paddle.device.cuda.device_count())
-                except Exception:
-                    gpu_count = 0
-                lines.append(f"CUDA：可用（检测到 {gpu_count} 个 GPU）")
-            elif paddle_gpu_version:
-                lines.append("CUDA：GPU 版 runtime 已安装，但当前进程未检测到可用 CUDA。")
-            else:
-                lines.append("CUDA：未启用（CPU runtime）")
-        except Exception as exc:
-            lines.append(f"Paddle runtime 检查失败：{exc}")
-        return "\n".join(lines)
 
     def show_environment_center(self) -> None:
         existing = self.__dict__.get("_environment_center_window")
