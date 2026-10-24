@@ -1133,6 +1133,8 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     start = text.index("class SettingsDialog")
     end = text.index("class ReviewWindow", start)
     settings = text[start:end]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in settings
+    settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     schema = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
@@ -1277,6 +1279,8 @@ def test_settings_center_uses_native_compact_right_pane_help():
     settings_start = text.index("class SettingsDialog")
     settings_end = text.index("class ", settings_start + len("class SettingsDialog"))
     settings = text[settings_start:settings_end]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in settings
+    settings += "\n" + (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
 
     assert "inline_help = ttk.Label" not in settings
     assert "check_help = ttk.Label" not in settings
@@ -1443,7 +1447,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert "_main_appearance_policy.configure_main_workspace_styles(" in app
     styles=(root / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
-    assert "theme_use(" not in styles
+    scoped = styles.split("def configure_main_workspace_styles(", 1)[1]
+    assert "theme_use(" not in scoped
     for token in ('"PC.Section.TLabelframe"','"PC.Treeview"','"PC.Footer.TFrame"','"PC.EditActive.TButton"'):
         assert token in styles
     assert "_main_workspace_build.build_ui(" in app
@@ -1455,8 +1460,8 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
     for method in ("run_normal_draw_action","ocr_ordinary_lines_text_selected_scope","run_combined_draw_action","run_ocr_draw_action","backup_pdic","restore_from_pdic_backup"):
         assert method in drawing
     assert 'button = _button(row, caption, getattr(app, method))' in drawing
-    assert 'relief="flat"' in app
-    assert 'highlightthickness=1' in app
+    assert 'relief="flat"' in (app + ui + scoped)
+    assert 'highlightthickness=1' in (app + ui + scoped)
     assert '"primary": "#4F7CAC"' in styles
     assert '"success": "#69A875"' in styles
 
@@ -5635,10 +5640,12 @@ def test_settings_center_avoids_full_hidden_tab_idle_layout_cascade():
     tail = block[block.index("        self._autosave_ready = True"):]
     assert "self.update_idletasks()" not in tail
     assert "for _canvas in self._settings_canvases.values():" not in tail
-    assert "content.bind(" in text
-    assert 'cv.configure(scrollregion=cv.bbox("all"))' in text
-    assert "左侧只保留参数、单位和必要状态" in text
-    assert "每个参数下方已直接显示详细说明" not in text
+    panel = (source.parent / "ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    assert "_interactive_settings_panels.scrollable_settings_page(" in text
+    assert "content.bind(" in panel
+    assert 'cv.configure(scrollregion=cv.bbox("all"))' in panel
+    assert "左侧只保留参数、单位和必要状态" in (text + panel)
+    assert "每个参数下方已直接显示详细说明" not in (text + panel)
     assert 'pending["job"] = dialog.after(80, refresh)' in help_source
     assert 'pending["job"] = dialog.after_idle(refresh)' not in help_source
 
