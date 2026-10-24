@@ -80,7 +80,7 @@ def build_reading_tab(self, tab: ttk.Frame, *, deps) -> None:
 
 
 
-def build_language_section(self, parent: ttk.Frame, *, row: int, *, deps) -> None:
+def build_language_section(self, parent: ttk.Frame, *, row: int, deps) -> None:
     ttk = deps["ttk"]
     tk = deps["tk"]
     OCR_LANGUAGE_LABEL_TO_VALUE = deps["OCR_LANGUAGE_LABEL_TO_VALUE"]
