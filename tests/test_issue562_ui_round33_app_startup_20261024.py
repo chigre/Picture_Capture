@@ -29,6 +29,14 @@ def test_original_startup_owner_and_live_dependencies():
                   "attach_nonbmp_unicode_input(self)"):
         assert token in init
     assert "self._build_ui()" not in ast.get_source_segment(app, constructor)
+    # New owner uses TYPE_CHECKING-only references for relocated annotations;
+    # it never imports back from the historical GUI app module.
+    assert "if TYPE_CHECKING:" in init
+    assert "from ..models import Entry as WordEntry, PolygonRegion, ProjectState" in init
+    assert "from ..persistence.page_sections import PageSection" in init
+    assert "from ..preprocess.pipeline import PreprocessAnalysis" in init
+    assert "self.review_window: tk.Toplevel | None = None" in init
+    assert "from ..app import" not in init
     workspace = (BASE / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert '"PageListGrid": PageListGrid' in app
     assert '"PageThumbnailController": PageThumbnailController' in app

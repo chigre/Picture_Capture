@@ -1,5 +1,14 @@
 """Tk-independent implementation of the historical main application startup.\n\nThe stable ``PictureCaptureApp.__init__`` owns the actual Tk super-call, then\npasses live module globals into this implementation at invocation time.\n"""
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..models import Entry as WordEntry, PolygonRegion, ProjectState
+    from ..persistence.page_sections import PageSection
+    from ..preprocess.pipeline import PreprocessAnalysis
+    from .dialogs.ocr_conflict import OCRConflictReviewDialog
+    from .dialogs.old_new_comparison import OldNewComparisonWindow
+    from .dialogs.usage_guide import UsageGuideWindow
 
 
 def initialize_main_app(self, *, deps) -> None:
@@ -201,7 +210,7 @@ def initialize_main_app(self, *, deps) -> None:
     self._pending_manual_override_path: Path | None = None
     self._pending_manual_override_payload: dict | None = None
     self.ocr_review_window: OCRConflictReviewDialog | None = None
-    self.review_window: ReviewWindow | None = None
+    self.review_window: tk.Toplevel | None = None
     # (page_index, x, y) of the proofreading row mirrored on the main canvas.
     self._review_entry_highlight_target: tuple[int, int, int] | None = None
     # Keep the RGBA PhotoImage alive while the translucent review marker is shown.

@@ -539,3 +539,6 @@ Moved the complete post-`tk.Tk.__init__` startup implementation (session state, 
 ### Round 33 CI GUI construction fix
 
 Six-matrix CI pytest passed its source contracts but the actual Tk GUI construction smoke exposed a missing call-time `LATIN_ORDER` dependency in the relocated SettingsDialog constructor. Explicitly supply the canonical app-module constant to `ui/settings/dialog_initialization.py` and guard the forwarding seam in `test_issue562_ui_round32_window_init_20261024.py`. No change to collation or Settings behavior; owner receives the exact previous constant.
+
+
+Round 33 follow-up: F821 lint diagnosed twelve annotation-only names in the new post-Tk startup owner that no longer inherited imports from `app.py`. Resolved via explicit `TYPE_CHECKING` imports of existing canonical models/PreprocessAnalysis/dialog classes, and widened only the local `review_window` reference annotation to its Tk base (`tk.Toplevel`) so no new UI→`app.py` import cycle is introduced. Runtime behavior and persisted class identities remain unmodified.
