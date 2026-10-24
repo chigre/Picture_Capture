@@ -96,3 +96,25 @@ def test_crop_plan_fields_sequence_compatibility_and_pickle_roundtrip():
     assert restored[0].entry_pieces == [piece]
     assert restored[1].records == [record]
     assert restored[1].events == [event]
+
+
+def test_delegated_dependency_arguments_are_real_dicts_not_nested_sets():
+    """Regression for Round 24's deps={{...}} runtime TypeError."""
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    tree = ast.parse((root / "processing_core.py").read_text(encoding="utf-8"))
+    expected = {
+        "detect_entries", "_refine_existing_entries_with_geometry", "ocr_entries",
+    }
+    inspected = set()
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or node.name not in expected:
+            continue
+        calls = [child for child in ast.walk(node) if isinstance(child, ast.Call)]
+        keys = [
+            keyword for call in calls for keyword in call.keywords
+            if keyword.arg == "deps"
+        ]
+        assert len(keys) == 1, node.name
+        assert isinstance(keys[0].value, ast.Dict), node.name
+        inspected.add(node.name)
+    assert inspected == expected
