@@ -588,3 +588,18 @@ def build_headword_tab(self, tab, *, deps) -> None:
     help_box.columnconfigure(0, weight=1)
     self.headword_help_frame = help_box
 
+
+
+def mode_row(
+    parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
+    *, label_style: str | None = None,
+ *, deps) -> None:
+    ttk = deps["ttk"]
+    kwargs = {"style": label_style} if label_style else {}
+    ttk.Label(parent, text=label, **kwargs).grid(
+        row=row, column=0, sticky="e", pady=5
+    )
+    ttk.Combobox(
+        parent, textvariable=variable, state="readonly", width=22,
+        values=values,
+    ).grid(row=row, column=1, sticky="w", pady=5)

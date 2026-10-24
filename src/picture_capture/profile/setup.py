@@ -371,14 +371,8 @@ class ProjectProfileWizard(tk.Toplevel):
         parent, row: int, label: str, variable: tk.StringVar, values: tuple[str, ...],
         *, label_style: str | None = None,
     ) -> None:
-        kwargs = {"style": label_style} if label_style else {}
-        ttk.Label(parent, text=label, **kwargs).grid(
-            row=row, column=0, sticky="e", pady=5
-        )
-        ttk.Combobox(
-            parent, textvariable=variable, state="readonly", width=22,
-            values=values,
-        ).grid(row=row, column=1, sticky="w", pady=5)
+        """Public Wizard callback; behavior owned by the Profile domain."""
+        return _wizard_wizard_tab_builders.mode_row(parent, row, label, variable, values, label_style=label_style, deps={"ttk": ttk})
 
     def _build_headword_tab(self, tab: ttk.Frame) -> None:
         """Stable ProjectProfileWizard method; dynamic inputs reach the canonical owner."""
@@ -403,20 +397,8 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _profile_label_for_key(self, key: str) -> str:
-        for label, value in self.profile_choices:
-            if value == key:
-                return label
-        try:
-            wanted = dictionary_profile_preset(key).display_name
-        except Exception:
-            wanted = ""
-        for label, value in self.profile_choices:
-            try:
-                if dictionary_profile_preset(value).display_name == wanted:
-                    return label
-            except Exception:
-                continue
-        return self.profile_choices[0][0] if self.profile_choices else ""
+        """Public Wizard callback; behavior owned by the Profile domain."""
+        return _wizard_profile_events.profile_label_for_key(self, key, deps={"dictionary_profile_preset": dictionary_profile_preset})
 
     def _current_profile_key(self) -> str:
         return self.profile_label_to_key.get(self.headword_profile_var.get(), "custom")
@@ -534,24 +516,12 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _headword_example_asset(self, profile_key: str) -> Path | None:
-        filename = HEADWORD_EXAMPLE_FILES.get(profile_key)
-        if not filename:
-            return None
-        candidate = (
-            Path(__file__).resolve().parent.parent
-            / "data" / "headword_examples" / filename
-        )
-        return candidate if candidate.exists() else None
+        """Public Wizard callback; behavior owned by the Profile domain."""
+        return _wizard_headword_explanations.headword_example_asset(self, profile_key, deps={"HEADWORD_EXAMPLE_FILES": HEADWORD_EXAMPLE_FILES, "Path": Path, "data_root": Path(__file__).resolve().parent.parent})
 
     def _headword_example_image(self, profile_key: str) -> Image.Image | None:
-        asset = self._headword_example_asset(profile_key)
-        if asset is None:
-            return None
-        try:
-            with Image.open(asset) as opened:
-                return normalize_page_rgb(opened)
-        except Exception:
-            return None
+        """Public Wizard callback; behavior owned by the Profile domain."""
+        return _wizard_headword_explanations.headword_example_image(self, profile_key, deps={"Image": Image, "normalize_page_rgb": normalize_page_rgb})
 
     def _refresh_headword_description(self) -> None:
         """Historical Wizard method; delegate to canonical UI owner."""
@@ -603,11 +573,8 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _refresh_summary(self) -> None:
-        try:
-            settings = self._settings_from_ui()
-            self.summary_var.set("  ｜  ".join(profile_summary_tags(settings)))
-        except Exception:
-            return
+        """Public Wizard callback; behavior owned by the Profile domain."""
+        return _wizard_settings_assembly.refresh_summary(self, deps={"profile_summary_tags": profile_summary_tags})
 
     def _sample_groups(self) -> list[ttk.LabelFrame]:
         """Retained compatibility method; implementation in representative-page owner."""

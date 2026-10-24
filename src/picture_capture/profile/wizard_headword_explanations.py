@@ -162,3 +162,30 @@ def refresh_headword_specificity_visibility(self) -> None:
         else:
             self.symbol_inventory_frame.grid_remove()
 
+
+
+def headword_example_asset(self, profile_key: str, *, deps) -> Path | None:
+    HEADWORD_EXAMPLE_FILES = deps["HEADWORD_EXAMPLE_FILES"]
+    Path = deps["Path"]
+    data_root = deps["data_root"]
+    filename = HEADWORD_EXAMPLE_FILES.get(profile_key)
+    if not filename:
+        return None
+    candidate = (
+        data_root
+        / "data" / "headword_examples" / filename
+    )
+    return candidate if candidate.exists() else None
+
+
+def headword_example_image(self, profile_key: str, *, deps) -> Image.Image | None:
+    Image = deps["Image"]
+    normalize_page_rgb = deps["normalize_page_rgb"]
+    asset = self._headword_example_asset(profile_key)
+    if asset is None:
+        return None
+    try:
+        with Image.open(asset) as opened:
+            return normalize_page_rgb(opened)
+    except Exception:
+        return None

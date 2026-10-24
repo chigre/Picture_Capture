@@ -183,3 +183,12 @@ def settings_from_ui(self, *, deps) -> AppSettings:
     s.profile_setup_version = PROFILE_SETUP_VERSION
     return s
 
+
+
+def refresh_summary(self, *, deps) -> None:
+    profile_summary_tags = deps["profile_summary_tags"]
+    try:
+        settings = self._settings_from_ui()
+        self.summary_var.set("  ｜  ".join(profile_summary_tags(settings)))
+    except Exception:
+        return

@@ -200,3 +200,21 @@ def ocr_language_changed(self, *, deps) -> None:
     self._refresh_language_summary()
     self._refresh_summary()
 
+
+
+def profile_label_for_key(self, key: str, *, deps) -> str:
+    dictionary_profile_preset = deps["dictionary_profile_preset"]
+    for label, value in self.profile_choices:
+        if value == key:
+            return label
+    try:
+        wanted = dictionary_profile_preset(key).display_name
+    except Exception:
+        wanted = ""
+    for label, value in self.profile_choices:
+        try:
+            if dictionary_profile_preset(value).display_name == wanted:
+                return label
+        except Exception:
+            continue
+    return self.profile_choices[0][0] if self.profile_choices else ""

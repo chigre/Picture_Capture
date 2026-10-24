@@ -159,3 +159,8 @@ Root `ocr_channel.py` retains stable public models, session and hooks; seven alg
 ## Main UI root-retirement Phase 1 (2026-10-25)
 
 Moved 19 concrete UI methods from root `app.py` into physical `ui/main_appearance_policy.py`, `ui/main_sidebar_sections.py`, and `ui/quick_settings_apply.py`. Public `PictureCaptureApp` signatures, patched Tk globals and event-loop dispatch stay unchanged. Focused suite: `tests/test_issue562_root_ui_ownership_phase1_20261025.py`. End state targets just `__init__.py` and `__main__.py` at package root, subject to compatibility gates and representative dictionary-page manual acceptance. No merge/Ready.
+
+
+## Phase 2: Profile Wizard physical ownership (2026-10-25)
+
+Five real methods moved from `profile/setup.py` to `wizard_tab_builders`, `wizard_profile_events`, `wizard_headword_explanations`, and `wizard_settings_assembly`. Compatibility method signatures and call-time patchpoints retained. End goal of only `__init__.py` and `__main__.py` at root remains pending compatibility proof and real scanned-page acceptance.
