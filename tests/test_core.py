@@ -4154,7 +4154,9 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 
 def test_v2910_page_list_has_persistent_fill_status_column():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
     for col,label in (("bookmark","●"),("page","页面"),("section","域"),("lined","线"),("fill_status","填充状态"),("illustrations","图")):
@@ -4735,7 +4737,9 @@ def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_s
 
 def test_v2116_page_list_has_illustration_count_column_and_sort():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'self.page_list.heading("illustrations", text="图", anchor="center")' in text
     assert 'command=lambda: self._sort_page_list("illustrations")' in text
@@ -4792,7 +4796,9 @@ def test_main_crop_preview_is_selected_only_through_display_mode():
 
 def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     controller=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
     from picture_capture.ui.compact_display_menu import DISPLAY_MODES
@@ -4919,7 +4925,9 @@ def test_fixed_column_prior_constrains_sparse_box_layout():
 
 def test_bookmark_controls_and_project_switch_protect_project_settings():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     project_session = (root / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
@@ -6157,7 +6165,9 @@ def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
 
 def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wired():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    app_owner = source.read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (source.parent / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert "self.sidebar_canvas = tk.Canvas(" in text
     assert 'orient="vertical", command=self.sidebar_canvas.yview' in text
     assert "def _sidebar_mousewheel(" in text
@@ -8127,7 +8137,9 @@ def test_page_list_context_menu_matches_visible_column_order():
 
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     models=(root / "models.py").read_text(encoding="utf-8")
     block=PAGE_INDEX_SOURCE.split("def _fit_page_list_columns(",1)[1].split("\ndef _hide_page_list_section_heading_hint(",1)[0]
@@ -8155,7 +8167,9 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
 
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
