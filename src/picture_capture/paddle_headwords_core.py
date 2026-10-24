@@ -44,6 +44,7 @@ from .ocr import symbol_inventory as _symbol_inventory
 from .ocr import source_candidate_coordinates as _source_candidate_coordinates
 from .ocr import review_anchor_variants as _review_anchor_variants
 from .ocr import lemma_parser as _lemma_parser
+from .ocr import review_manual_selection as _review_manual_selection
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -2092,69 +2093,26 @@ def _expand_original_y_fallback_candidates(review_candidates: list[dict[str, Any
     return _review_anchor_variants.expand_original_y_fallback_candidates(review_candidates)
 
 def _enforce_position_variant_exclusivity(review_candidates: list[dict[str, Any]]) -> int:
-    """Ensure at most one Y variant is selected for each physical headword."""
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for item in review_candidates:
-        group_id = str(item.get("position_group_id", ""))
-        if group_id:
-            groups.setdefault(group_id, []).append(item)
-    changed = 0
-    for rows in groups.values():
-        selected = [row for row in rows if row.get("selected")]
-        if len(selected) <= 1:
-            continue
-        # A manually chosen variant wins; otherwise keep the refined default.
-        manual = [row for row in selected if row.get("manual_override")]
-        if manual:
-            keeper = manual[-1]
-        else:
-            keeper = next((row for row in selected if row.get("position_variant") == "refined"), selected[0])
-        for row in selected:
-            if row is keeper:
-                continue
-            row["selected"] = False
-            changed += 1
-    return changed
-
+    """Keep only one physical Y candidate with historical manual priority."""
+    return _review_manual_selection.enforce_position_variant_exclusivity(review_candidates)
 
 def _load_manual_selection_overrides(cache_path: Path | None) -> dict[str, dict[str, Any]]:
-    if cache_path is None:
-        return {}
-    path = _manual_selection_path(cache_path)
-    if not path.exists():
-        return {}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        overrides = raw.get("overrides", {}) if isinstance(raw, dict) else {}
-        return {str(k): dict(v) for k, v in overrides.items() if isinstance(v, dict)}
-    except Exception:
-        return {}
-
+    """Historical read-only manual selection sidecar with live path/JSON hooks."""
+    return _review_manual_selection.load_manual_selection_overrides(
+        cache_path, path_fn=_manual_selection_path, json_loads_fn=json.loads,
+    )
 
 def _apply_manual_selection_overrides(
     review_candidates: list[dict[str, Any]], overrides: dict[str, dict[str, Any]],
 ) -> None:
-    for item in review_candidates:
-        override = overrides.get(str(item.get("candidate_id", "")))
-        if not override:
-            continue
-        if "selected" in override:
-            item["selected"] = bool(override["selected"])
-        if override.get("word") is not None:
-            item["word"] = str(override.get("word") or "")
-        if override.get("engine"):
-            item["final_engine"] = str(override["engine"])
-        item["manual_override"] = True
-        item["decision_reason"] = "manual_override"
-        issues = list(item.get("issue_types", []) or [])
-        if "MANUAL_OVERRIDE" not in issues:
-            issues.append("MANUAL_OVERRIDE")
-        item["issue_types"] = issues
+    """Apply manual candidate selection in place without changing its schema."""
+    return _review_manual_selection.apply_manual_selection_overrides(
+        review_candidates, overrides,
+    )
 
 
 _FINAL_LINE_DEDUP_RATIO = 0.22
 _SINGLE_CJK_LINE_DEDUP_RATIO = 0.55
-
 
 def _review_finalization_deps() -> _review_finalization.ReviewFinalizationDeps:
     """Resolve monkeypatchable OCR globals and shared quality lock live."""
