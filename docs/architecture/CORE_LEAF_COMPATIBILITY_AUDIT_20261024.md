@@ -305,3 +305,12 @@ replace these checks.
 - Regression: `tests/test_issue562_core_leaf_round15_cache_20261024.py` covers nested JSON projection, nonmutation, historical origins, deterministic digest parity, and live normalization monkeypatches.
 - The root still has ten Python files; no class relocation, root shim, UI changes, PDIC/PPP schema update, or crop output transaction changes.
 - **Acceptance pending:** exact-head six-platform CI and OCR platform smoke plus independent representative GUI scan, edit, and save/reopen verification. Keep PR Draft and unmerged.
+
+
+## Round 16 — legacy VB brightness sampling (2026-10-24)
+
+- Extracted `_legacy_is_point` and `_legacy_row_brightness_1000` implementations from `processing_core.py` into `ordinary/legacy_brightness_sampling.py`; the historical core function names, signatures, and `__module__` remain unchanged.
+- Keep original VB.NET-compatible semantics: inclusive vertical sample rows with the historical `area_x * area_y` divisor, reading-direction sampling, image boundary checks, NumPy float64 accumulation, Python `round`, and 0–1000 row scale. Call-time `np` injection preserves the live core monkeypatch seam.
+- Characterization tests: `tests/test_issue562_core_leaf_round16_brightness_20261024.py` for point thresholds, row brightness, reverse direction, bounds, callable origin, and live NumPy callback.
+- Root Python inventory remains ten. No public model, serialized schema, PDIC/PPP/crop transaction, OCR acceptance decision, or GUI work intentionally changed.
+- **Pending:** exact-head CI/OCR smoke and representative manual dictionary page scan, editing and save/reopen. Keep PR Draft.
