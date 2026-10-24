@@ -37,7 +37,9 @@ def test_compact_page_list_uses_ninety_percent_font_while_range_controls_remain_
     assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
     assert 'self.compact_page_font = default_page_font.copy()' in app
     assert "round(base_size * 0.9)" in app
-    assert 'font=self.compact_page_font' in app
+    appearance_owner = (MODULE.parents[1] / "ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert 'font=self.compact_page_font' in appearance_owner
     assert 'base_font_size * 0.8' not in app
     assert 'widget.configure(font=_compact_font(app) if compact else "TkDefaultFont")' in source
     assert '_apply_compact_sidebar_font(app, mode == "紧凑")' in source
