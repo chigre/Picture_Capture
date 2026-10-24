@@ -2484,6 +2484,12 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     visuals_owner = (source.parent / "wizard_validation_visuals.py").read_text(encoding="utf-8")
     thumbnails_owner = (source.parent / "wizard_sample_thumbnails.py").read_text(encoding="utf-8")
     analysis_owner = (source.parent / "wizard_sample_analysis.py").read_text(encoding="utf-8")
+    shell_owner = (source.parent / "wizard_shell_builder.py").read_text(encoding="utf-8")
+    reading_owner = (source.parent / "wizard_reading_controls.py").read_text(encoding="utf-8")
+    headword_help_owner = (source.parent / "wizard_headword_explanations.py").read_text(encoding="utf-8")
+    assert "_wizard_shell_builder.build_ui(" in legacy
+    assert "_wizard_reading_controls.build_reading_tab(" in legacy
+    assert "_wizard_headword_explanations.refresh_headword_description(" in legacy
     assert "_wizard_sample_thumbnails.choose_sample_page(" in legacy
     assert "_wizard_sample_analysis.analyze_representative_pages(" in legacy
     assert "_wizard_validation_execution.validate_profile(" in legacy
@@ -2497,7 +2503,7 @@ def test_project_profile_wizard_uses_analysis_as_a_setup_aid_then_stable_columns
     assert "_wizard_wizard_tab_builders.build_headword_tab(" in legacy
     assert "_wizard_wizard_state_initialization.build_vars(" in legacy
     # Inspect the original compatibility class and physically relocated implementations.
-    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner))
+    text = "\n".join((legacy, tab_owner, state_owner, preview_owner, config_owner, workspace_owner, diagnostic_owner, execution_owner, controls_owner, visuals_owner, thumbnails_owner, analysis_owner, shell_owner, reading_owner, headword_help_owner))
     assert "代表页会自动分析并建议栏数；确认后作为本项目的稳定栏数使用。" in text
     assert 's.layout_columns_policy = "fixed"' in text
     assert "设置已修改，需要重新测试" in text
