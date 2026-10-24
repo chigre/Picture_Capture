@@ -357,3 +357,11 @@ replace these checks.
 - New regression `tests/test_issue562_core_leaf_round20_pos_20261024.py` covers signature/origin, Latin profile and invalid regex handling, narrow OCR POS noise, pronunciation/numeric handling and current-core modifier monkeypatch path.
 - Root physical Python inventory remains **10**, with no compatibility stub. OCR saved classes, cache, Profile, PDIC/PPP/SECTION and manual selection formats, as well as crop output transactions, remain in their existing owners.
 - **Verification requirement:** recheck exact latest-head six-platform CI and three-platform OCR smoke; then perform independent actual dictionary-page GUI scan/edit/export/sidecar reopen. Keep PR **Draft**; never auto-merge.
+
+
+### Round 20 CI regression correction (2026-10-24)
+
+- CI on `bd16c293` failed during `tests/conftest.py` import: `ocr/pos_cue_policy.py` unintentionally contained `_BUNDLED_PROFILE = load_dictionary_profile(...)`, resulting in `NameError`. The cause was a source-range extraction that captured the *adjacent* grammar-tail wrappers and module globals following `_find_pos_cue`.
+- `2696eb03` restored `_leading_inflection_cue`, `_parallel_marker_extension`, `_BUNDLED_PROFILE`, `_USAGE_ABBREVIATIONS`, `_consume_leading_space`, `_parse_structured_tail`, and `_parse_bug_types` to their original `paddle_headwords_core` module and initialization order. `efe20945` removed those unintended definitions from `ocr/pos_cue_policy.py`.
+- `141822ad` added an AST contract that the new leaf owns **exactly three** functions and that all original grammar-tail wrappers and bundled dictionary profile still exist at their historical core paths. The intended three POS entrypoints remain wrappers with live dependency injection; no stored type, schema, or user-facing rule change was made.
+- Re-run exact-head CI and three-platform OCR smoke before considering the correction verified; real dictionary-page GUI acceptance remains pending, and PR stays Draft.
