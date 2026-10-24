@@ -58,4 +58,6 @@ def test_profile_wizard_has_mode_selector_and_guards_ordinary_layout_scan():
     reading_owner = (path.parent / "wizard_reading_controls.py").read_text(encoding="utf-8")
     assert "_wizard_reading_controls.build_reading_tab(" in text
     assert "add_wizard_layout_selector(self, tab, row=6)" in reading_owner
-    assert 'self.working.dictionary_layout_kind != "illustrated"' in text
+    save_owner = (path.parent / "wizard_persistence.py").read_text(encoding="utf-8")
+    assert "_wizard_persistence.move_step(" in text
+    assert 'self.working.dictionary_layout_kind != "illustrated"' in save_owner
