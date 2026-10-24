@@ -75,6 +75,9 @@ from . import wizard_validation_controls as _wizard_validation_controls
 from . import wizard_validation_visuals as _wizard_validation_visuals
 from . import wizard_sample_thumbnails as _wizard_sample_thumbnails
 from . import wizard_sample_analysis as _wizard_sample_analysis
+from . import wizard_shell_builder as _wizard_shell_builder
+from . import wizard_reading_controls as _wizard_reading_controls
+from . import wizard_headword_explanations as _wizard_headword_explanations
 
 
 OCR_LANGUAGE_LABEL_TO_VALUE = {
@@ -370,145 +373,24 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self, padding=10)
-        outer.pack(fill="both", expand=True)
-        outer.rowconfigure(0, weight=1)
-        outer.columnconfigure(0, weight=1)
-
-        self.profile_paned = ttk.Panedwindow(outer, orient="horizontal")
-        self.profile_paned.grid(row=0, column=0, sticky="nsew")
-
-        left_panel = ttk.Frame(self.profile_paned, padding=(2, 2, 8, 2))
-        right_panel = ttk.Frame(self.profile_paned, padding=(8, 2, 2, 2))
-        self.left_panel = left_panel
-        left_panel.rowconfigure(3, weight=1)
-        left_panel.columnconfigure(0, weight=1)
-        right_panel.rowconfigure(0, weight=1)
-        right_panel.columnconfigure(0, weight=1)
-        self.profile_paned.add(left_panel, weight=40)
-        self.profile_paned.add(right_panel, weight=60)
-        self._initial_pane_split_done = False
-        left_panel.bind(
-            "<Configure>",
-            lambda _event: self.after_idle(self._apply_left_wraps),
-            add="+",
-        )
-
-        title = "依次确认词典信息与 OCR、阅读方式、页面模板、词头结构，再用多页测试确认。"
-        ttk.Label(left_panel, text=title, font=("TkDefaultFont", 12, "bold")).grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            left_panel,
-            text="左侧只放设置；右侧始终显示当前步骤的图片。中间分隔条可以拖动。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=1, column=0, sticky="w", pady=(2, 8))
-
-        self.notebook = ttk.Notebook(left_panel)
-        self.notebook.grid(row=3, column=0, sticky="nsew")
-        self.tabs: list[ttk.Frame] = []
-        self.tab_contents: list[ttk.Frame] = []
-        self.tab_canvases: list[tk.Canvas] = []
-        for label in (
-            "1 词典与阅读",
-            "2 页面模板",
-            "3 词头结构",
-            "4 测试确认",
-        ):
-            host = ttk.Frame(self.notebook)
-            host.rowconfigure(0, weight=1)
-            host.columnconfigure(0, weight=1)
-            canvas = tk.Canvas(host, highlightthickness=0, borderwidth=0)
-            scrollbar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
-            canvas.configure(yscrollcommand=scrollbar.set)
-            canvas.grid(row=0, column=0, sticky="nsew")
-            scrollbar.grid(row=0, column=1, sticky="ns")
-            content = ttk.Frame(canvas, padding=10)
-            window = canvas.create_window((0, 0), window=content, anchor="nw")
-            content.bind(
-                "<Configure>",
-                lambda _event, cv=canvas: cv.configure(scrollregion=cv.bbox("all")),
-            )
-            canvas.bind(
-                "<Configure>",
-                lambda event, cv=canvas, item=window: cv.itemconfigure(item, width=event.width),
-            )
-            self.notebook.add(host, text=label)
-            self.tabs.append(host)
-            self.tab_contents.append(content)
-            self.tab_canvases.append(canvas)
-
-        self._build_right_image_workspace(right_panel)
-        self._build_reading_tab(self.tab_contents[0])
-        self._build_template_tab(self.tab_contents[1])
-        self._build_headword_tab(self.tab_contents[2])
-        self._build_validation_tab(self.tab_contents[3])
-        self.notebook.bind("<<NotebookTabChanged>>", self._on_wizard_tab_changed, add="+")
-        self.bind("<MouseWheel>", self._wizard_mousewheel, add="+")
-        self.bind("<Button-4>", lambda event: self._wizard_linux_wheel(event, -1), add="+")
-        self.bind("<Button-5>", lambda event: self._wizard_linux_wheel(event, 1), add="+")
-
-        summary_box = ttk.LabelFrame(left_panel, text="当前项目Profile", padding=(8, 5))
-        summary_box.grid(row=4, column=0, sticky="ew", pady=(8, 0))
-        self.summary_var = tk.StringVar(value="")
-        ttk.Label(
-            summary_box, textvariable=self.summary_var,
-            wraplength=self._wizard_left_width,
-        ).pack(anchor="w")
-
-        footer = ttk.Frame(left_panel)
-        footer.grid(row=5, column=0, sticky="ew", pady=(8, 0))
-        ttk.Button(footer, text="上一步", command=lambda: self._move_step(-1)).pack(side="left")
-        ttk.Button(footer, text="下一步", command=lambda: self._move_step(1)).pack(side="left", padx=(6, 0))
-        ttk.Button(footer, text="关闭", command=self._close_without_save).pack(side="right")
-        ttk.Button(footer, text="确认并使用", command=self.save_and_close).pack(side="right", padx=(0, 8))
-
-        self._show_right_image_page(0)
-        self.after_idle(self._apply_initial_pane_split)
-        self.after_idle(self._apply_left_wraps)
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_shell_builder.build_ui(self, deps={
+            "ttk": ttk,
+            "tk": tk,
+        })
 
     def _apply_initial_pane_split(self) -> None:
-        """Place the startup sash at exactly 40% of the realized pane width."""
-        if getattr(self, "_initial_pane_split_done", False):
-            return
-        try:
-            self.update_idletasks()
-            pane_width = int(self.profile_paned.winfo_width())
-        except tk.TclError:
-            return
-        if pane_width <= 200:
-            self.after(20, self._apply_initial_pane_split)
-            return
-        self.profile_paned.sashpos(0, round(pane_width * 0.40))
-        self._initial_pane_split_done = True
-        self.after_idle(self._apply_left_wraps)
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_shell_builder.apply_initial_pane_split(self, deps={
+            "tk": tk,
+        })
 
     def _apply_left_wraps(self) -> None:
-        """Keep all explanatory text in the left pane readable after resizing."""
-        root = getattr(self, "left_panel", None)
-        if root is None or not root.winfo_exists():
-            return
-
-        def visit(widget) -> None:
-            for child in widget.winfo_children():
-                if isinstance(child, (ttk.Label, tk.Label)):
-                    try:
-                        parent_width = int(child.master.winfo_width())
-                    except (tk.TclError, AttributeError):
-                        parent_width = 0
-                    wrap = max(
-                        90,
-                        (parent_width - 18)
-                        if parent_width > 120
-                        else (self._wizard_left_width - 24),
-                    )
-                    try:
-                        child.configure(wraplength=wrap, justify="left")
-                    except tk.TclError:
-                        pass
-                visit(child)
-
-        visit(root)
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_shell_builder.apply_left_wraps(self, deps={
+            "ttk": ttk,
+            "tk": tk,
+        })
 
     def _build_right_image_workspace(self, parent: ttk.Frame) -> None:
         """Compatibility entrance: forward current Profile Wizard globals."""
@@ -518,41 +400,16 @@ class ProjectProfileWizard(tk.Toplevel):
         })
 
     def _show_right_image_page(self, index: int) -> None:
-        if not getattr(self, "right_image_pages", None):
-            return
-        index = max(0, min(len(self.right_image_pages) - 1, int(index)))
-        for slot, page in enumerate(self.right_image_pages):
-            if slot == index:
-                page.grid()
-                page.tkraise()
-            else:
-                page.grid_remove()
-        headings = (
-            "代表页（前部 / 中部 / 后部）",
-            "页面模板即时预览",
-            "词头类型样例",
-            "多页测试结果",
-        )
-        self.right_heading_var.set(headings[index])
-        try:
-            self.right_canvas.yview_moveto(0.0)
-        except tk.TclError:
-            pass
-
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_shell_builder.show_right_image_page(self, index, deps={
+            "tk": tk,
+        })
 
     def _on_wizard_tab_changed(self, _event=None) -> None:
-        """Switch the persistent right image pane with the selected step."""
-        try:
-            index = self.notebook.index(self.notebook.select())
-        except (tk.TclError, ValueError):
-            return
-        self._show_right_image_page(index)
-        if index == 1:
-            self.after_idle(self._refresh_template_preview)
-        elif index == 2:
-            self.after_idle(self._refresh_headword_description)
-        elif index == 3 and self._validation_results:
-            self.after_idle(self._render_validation_result)
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_shell_builder.on_wizard_tab_changed(self, _event, deps={
+            "tk": tk,
+        })
 
     def _active_tab_canvas(self) -> tk.Canvas | None:
         try:
@@ -606,156 +463,28 @@ class ProjectProfileWizard(tk.Toplevel):
         return "break"
 
     def _build_reading_tab(self, tab: ttk.Frame) -> None:
-        tab.columnconfigure(0, weight=1)
-
-        info = ttk.LabelFrame(tab, text="词典项目详情", padding=(8, 7))
-        info.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        info.columnconfigure(1, weight=1)
-        info.columnconfigure(3, weight=1)
-
-        ttk.Label(info, text="词典全称：").grid(
-            row=0, column=0, sticky="e", padx=(0, 4), pady=3
-        )
-        ttk.Entry(
-            info, textvariable=self.dictionary_full_name_var, width=24,
-        ).grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=3)
-        ttk.Label(info, text="词典简称(字母)：").grid(
-            row=0, column=2, sticky="e", padx=(0, 4), pady=3
-        )
-        ttk.Entry(
-            info, textvariable=self.dictionary_abbreviation_var, width=16,
-        ).grid(row=0, column=3, sticky="ew", pady=3)
-
-        ttk.Label(info, text="ISBN：").grid(
-            row=1, column=0, sticky="e", padx=(0, 4), pady=3
-        )
-        ttk.Entry(
-            info, textvariable=self.dictionary_isbn_var, width=24,
-        ).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=3)
-        ttk.Label(info, text="正文页码：").grid(
-            row=1, column=2, sticky="e", padx=(0, 4), pady=3
-        )
-        self.body_page_range_entry = ttk.Entry(
-            info, textvariable=self.dictionary_body_page_range_var, width=16,
-        )
-        self.body_page_range_entry.grid(
-            row=1, column=3, sticky="ew", pady=3
-        )
-        self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)
-        self.body_page_range_entry.bind("<Return>", self._body_page_range_changed)
-
-        ttk.Label(
-            tab, text="阅读方式：页面怎么读？",
-            font=("TkDefaultFont", 12, "bold"),
-        ).grid(row=1, column=0, sticky="w")
-        ttk.Label(
-            tab,
-            text="这里只确认实际页面的阅读方向；镜像或旋转由软件自动处理。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=2, column=0, sticky="w", pady=(2, 6))
-
-        choices = ttk.Frame(tab)
-        choices.grid(row=3, column=0, sticky="w")
-        for column, key in enumerate(
-            ("horizontal-ltr", "horizontal-rtl", "vertical-rl", "vertical-lr")
-        ):
-            ttk.Radiobutton(
-                choices, text=READING_LABELS[key],
-                variable=self.reading_var, value=key,
-                command=self._reading_changed,
-            ).grid(row=0, column=column, sticky="w", padx=(0, 10), pady=3)
-
-        self._build_language_section(tab, row=4)
-        from ..ui.profile_wizard_illustrated import add_wizard_layout_selector
-        add_wizard_layout_selector(self, tab, row=6)
-
-        ttk.Label(
-            tab,
-            text="右侧代表页优先使用正文页码范围；未填写或无效时再从疑似正文的前部 / 中部 / 后部抽取。每一张都可在右侧手动更换。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=5, column=0, sticky="w", pady=(10, 0))
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_reading_controls.build_reading_tab(self, tab, deps={
+            "ttk": ttk,
+            "READING_LABELS": READING_LABELS,
+        })
 
     def _build_language_section(self, parent: ttk.Frame, *, row: int) -> None:
-        box = ttk.LabelFrame(parent, text="语言与 OCR", padding=8)
-        box.grid(row=row, column=0, sticky="ew", pady=(12, 0))
-        box.columnconfigure(1, weight=1)
-
-        ttk.Label(
-            box,
-            text="常用语言置前；选择 OCR 语言时自动建议 2 位索引语言，但仍可手动覆盖。",
-            foreground="#666666", wraplength=self._wizard_left_width,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 7))
-
-        ttk.Label(box, text="OCR 语言：").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
-        combo = ttk.Combobox(
-            box, textvariable=self.ocr_language_var,
-            values=tuple(OCR_LANGUAGE_LABEL_TO_VALUE.keys()),
-            state="normal", width=28,
-        )
-        combo.grid(row=1, column=1, sticky="ew", pady=4)
-        combo.bind("<<ComboboxSelected>>", lambda _e: self._ocr_language_changed())
-        combo.bind("<FocusOut>", lambda _e: self._ocr_language_changed())
-        self.ocr_language_var.trace_add(
-            "write", lambda *_args: self.after_idle(self._refresh_language_summary)
-        )
-
-        ttk.Label(box, text="索引语言（2 位）：").grid(
-            row=2, column=0, sticky="e", padx=(0, 8), pady=4
-        )
-        ttk.Entry(
-            box, textvariable=self.index_language_var, width=12,
-        ).grid(row=2, column=1, sticky="w", pady=4)
-        ttk.Label(
-            box,
-            text="例如 en / zh / ja / fr；自动值只是建议。",
-            foreground="#666666",
-        ).grid(row=3, column=1, sticky="w")
-        ttk.Label(box, text="内容语言：").grid(
-            row=4, column=0, sticky="e", padx=(0, 8), pady=4
-        )
-        ttk.Entry(
-            box, textvariable=self.content_language_var, width=26,
-        ).grid(row=4, column=1, sticky="ew", pady=4)
-
-        backend = ttk.LabelFrame(box, text="自动派生的 OCR 后端设置", padding=7)
-        backend.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-        self.backend_summary_var = tk.StringVar(value="")
-        ttk.Label(
-            backend, textvariable=self.backend_summary_var,
-            justify="left", wraplength=self._wizard_left_width,
-        ).pack(anchor="w")
-
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_reading_controls.build_language_section(self, parent, row=row, deps={
+            "ttk": ttk,
+            "tk": tk,
+            "OCR_LANGUAGE_LABEL_TO_VALUE": OCR_LANGUAGE_LABEL_TO_VALUE,
+        })
 
     def _body_page_range_changed(self, _event=None) -> None:
-        """Re-sample representatives after the user edits the body-page range."""
-        raw = self.dictionary_body_page_range_var.get().strip()
-        configured = configured_body_page_indices(len(self.project.images), raw)
-        self.working.dictionary_body_page_range = raw
-        self.sample_candidates = probable_body_page_indices(
-            self.project.images, configured or None,
-        )
-        new_indices = representative_page_indices(
-            self.project.images, 6, configured or None,
-        )
-        if new_indices == self.sample_indices:
-            return
-        self.sample_indices = new_indices
-        self.template_preview_slot = 0
-        self.validation_preview_slot = 0
-        self._profile_revision += 1
-        self._mark_validation_stale()
-        self._analysis_suggestion = {}
-        if hasattr(self, "analysis_suggestion_var"):
-            self.analysis_suggestion_var.set("正文页码范围已改变，请重新分析当前代表页。")
-            self.apply_analysis_button.configure(state="disabled")
-        self._start_sample_thumbnail_load()
-        if hasattr(self, "notebook"):
-            try:
-                if self.notebook.index(self.notebook.select()) == 1:
-                    self._refresh_template_preview()
-            except (tk.TclError, ValueError):
-                pass
-
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_reading_controls.body_page_range_changed(self, _event, deps={
+            "tk": tk,
+            "configured_body_page_indices": configured_body_page_indices,
+            "probable_body_page_indices": probable_body_page_indices,
+            "representative_page_indices": representative_page_indices,
+        })
 
     def _build_template_tab(self, tab: ttk.Frame) -> None:
         """Stable ProjectProfileWizard method; dynamic inputs reach the canonical owner."""
@@ -1254,79 +983,12 @@ class ProjectProfileWizard(tk.Toplevel):
         self._replace_visual_marker_samples([])
 
     def _refresh_headword_structure_summary(self) -> None:
-        if not hasattr(self, "headword_structure_summary_var"):
-            return
-        active: list[str] = []
-        if self.ordinary_left_edge_var.get():
-            active.append("普通左缘短词")
-        if self.cjk_allow_bracketed_var.get():
-            active.append("【括号词】")
-        if self.cjk_allow_single_var.get():
-            active.append("大字单字")
-        if self.marker_prefix_var.get():
-            markers = self.entry_marker_symbols_var.get().strip()
-            active.append(
-                "固定符号" + (f"（{markers}）" if markers else "")
-            )
-        if self.numbered_prefix_var.get():
-            active.append("编号前缀")
-        script_guard_text = (
-            "；按OCR语言过滤首字符"
-            if self.headword_script_guard_var.get()
-            else "；不限制首字符脚本"
-        )
-        self.headword_structure_summary_var.set(
-            "当前词头前/本体："
-            + ("、".join(active) if active else "无（不会自动生成词头）")
-            + script_guard_text
-        )
-        tail_active: list[str] = []
-        if self.tail_allow_pos_var.get():
-            tail_active.append("POS")
-        if self.tail_allow_inflection_var.get():
-            tail_active.append("词形/屈折")
-        if self.tail_allow_variant_var.get():
-            tail_active.append("变体/性数")
-        if self.tail_allow_pronunciation_var.get():
-            tail_active.append("发音/音标")
-        if self.tail_allow_descriptor_var.get():
-            tail_active.append("描述型结构")
-        require_text = (
-            "普通左缘词必须命中其一"
-            if self.tail_require_selected_var.get()
-            else "词后结构仅作加分证据"
-        )
-        rescue_text = (
-            "；允许粗体左缘补救"
-            if self.tail_allow_visual_rescue_var.get()
-            else ""
-        )
-        self.tail_structure_summary_var.set(
-            "当前词后证据："
-            + ("、".join(tail_active) if tail_active else "无")
-            + f"｜{require_text}{rescue_text}"
-        )
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_headword_explanations.refresh_headword_structure_summary(self)
 
     def _refresh_headword_specificity_visibility(self) -> None:
-        if not hasattr(self, "headword_specificity_frame"):
-            return
-        self.headword_specificity_frame.grid()
-        show_cjk = bool(
-            self.cjk_allow_bracketed_var.get() or self.cjk_allow_single_var.get()
-        )
-        if hasattr(self, "cjk_specificity_frame"):
-            if show_cjk:
-                self.cjk_specificity_frame.grid()
-            else:
-                self.cjk_specificity_frame.grid_remove()
-        if hasattr(self, "symbol_inventory_frame"):
-            show_symbols = bool(
-                self.marker_prefix_var.get() or self.cjk_allow_bracketed_var.get()
-            )
-            if show_symbols:
-                self.symbol_inventory_frame.grid()
-            else:
-                self.symbol_inventory_frame.grid_remove()
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_headword_explanations.refresh_headword_specificity_visibility(self)
 
     def _refresh_headword_tuning_status(self) -> None:
         if not hasattr(self, "headword_tuning_status_var"):
@@ -1373,78 +1035,12 @@ class ProjectProfileWizard(tk.Toplevel):
             return None
 
     def _refresh_headword_description(self) -> None:
-        key = self._current_profile_key()
-        try:
-            profile = dictionary_profile_preset(key)
-        except Exception:
-            return
-        self.custom_name_entry.configure(state="normal" if key == "custom" else "disabled")
-        self.headword_description_var.set(profile.description)
-        self._refresh_headword_structure_summary()
-        self._refresh_headword_specificity_visibility()
-        hints = {
-            "latin_regular": "常规边缘：严格栏左缘定位词头；POS/词形/变体等词后结构是显式证据。视觉补救直接使用本页可见的栏左缘容差、粗体倍率和候选强度，不再叠加隐藏阈值。",
-            "cjk_visual": "视觉型：大字/括号结构及视觉突出程度是主证据；大字单字还可结合右侧留白/稀疏度。",
-            "numbered_prefix": "编号型：编号前缀是主证据；字号/粗体属于辅助证据。",
-            "marker_prefixed": "符号型：○ / ● / ◆ 等固定符号是主证据；字号/粗体属于辅助证据。",
-            "custom": "自定义：基础视觉门槛可配合上方 parser 勾选逐页测试。",
-        }
-        if hasattr(self, "headword_specificity_hint_var"):
-            self.headword_specificity_hint_var.set(
-                hints.get(key, "当前结构的左缘、字号、粗体与候选强度门槛。")
-            )
-        self._refresh_headword_tuning_status()
-
-        for child in self.headword_examples_frame.winfo_children():
-            child.destroy()
-        self._headword_example_photos.clear()
-
-        example_file = HEADWORD_EXAMPLE_FILES.get(key)
-        if example_file:
-            image = self._headword_example_image(key)
-            if image is not None:
-                self.update_idletasks()
-                right_width = int(getattr(self, "right_canvas", self).winfo_width())
-                available = (
-                    right_width if right_width > 100 else self._wizard_image_width
-                )
-                image.thumbnail(
-                    (max(320, available - 20), 520), Image.Resampling.LANCZOS,
-                )
-                photo = ImageTk.PhotoImage(
-                    themed_display_image(
-                        image, getattr(self.parent, "appearance_mode", "light")
-                    )
-                )
-                self._headword_example_photos.append(photo)
-                ttk.Label(
-                    self.headword_examples_frame, image=photo,
-                ).grid(row=0, column=0, columnspan=2, sticky="n", padx=5, pady=5)
-            else:
-                ttk.Label(
-                    self.headword_examples_frame,
-                    text=f"缺少样例图片：{example_file}",
-                    anchor="center", justify="center",
-                ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=30)
-        else:
-            ttk.Label(
-                self.headword_examples_frame,
-                text="自定义结构不绑定内置样例，请用右侧多页测试确认识别效果。",
-                anchor="center", justify="center",
-                wraplength=self._wizard_image_width,
-            ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=30)
-
-        for child in self.headword_help_frame.winfo_children():
-            child.destroy()
-        lines = HEADWORD_HELP_LINES.get(key) or (
-            "识别对象：按当前结构预设判断词条起始。",
-            "建议：结合第④步多页测试确认是否稳定。",
-        )
-        for row, line in enumerate(lines):
-            ttk.Label(
-                self.headword_help_frame,
-                text=line, wraplength=self._wizard_content_width, justify="left",
-            ).grid(row=row, column=0, sticky="w", pady=3)
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_headword_explanations.refresh_headword_description(self, deps={
+            "ttk": ttk,
+            "dictionary_profile_preset": dictionary_profile_preset,
+            "HEADWORD_HELP_LINES": HEADWORD_HELP_LINES,
+        })
 
     def _ocr_language_changed(self) -> None:
         language = _ocr_language_code(self.ocr_language_var.get())
@@ -1455,19 +1051,13 @@ class ProjectProfileWizard(tk.Toplevel):
         self._refresh_summary()
 
     def _refresh_language_summary(self) -> None:
-        language = _ocr_language_code(self.ocr_language_var.get())
-        temp = replace(self.working)
-        temp.ocr_language = language
-        apply_reading_choice(temp, self.reading_var.get())
-        derived = language_effective_settings(language, temp.layout_writing_mode)
-        self.backend_summary_var.set(
-            "PaddleOCR：{paddle}\nTesseract：{tess}\nPSM：{psm}    文字行方向识别：{orientation}".format(
-                paddle=derived.get("paddle_language") or "自动",
-                tess=derived.get("tesseract_language") or language,
-                psm=derived.get("paddle_tesseract_psm", 6),
-                orientation="开" if derived.get("paddle_use_textline_orientation") else "关",
-            )
-        )
+        """Historical Wizard method; delegate to canonical UI owner."""
+        return _wizard_reading_controls.refresh_language_summary(self, deps={
+            "_ocr_language_code": _ocr_language_code,
+            "replace": replace,
+            "apply_reading_choice": apply_reading_choice,
+            "language_effective_settings": language_effective_settings,
+        })
 
     def _settings_from_ui(self) -> AppSettings:
         """Compatibility entrance: forward current Profile Wizard globals."""
