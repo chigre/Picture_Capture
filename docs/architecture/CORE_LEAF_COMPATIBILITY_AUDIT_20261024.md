@@ -697,3 +697,6 @@ Phase 3 exact-head CI correction: Ubuntu Python 3.13 pytest reported 1 source-lo
 
 
 Phase 4 source-location compatibility: updated the two existing `test_processing_layout_roles` and `test_page_understanding_shared` source-contract checks to assert both the unchanged public processing delegates and the relocated physical implementations, preserving their existing Layout/OCR fallback ordering, worker routing and no-extra-GPU assertions.
+
+
+Phase 4 exact-head CI diagnostic: initial new-owner CI on Ubuntu 3.13 ran **3862 passed, 3 skipped, 4 failed**; all four failures were stale source-path assertions in `test_bootstrap_entrypoint`, `test_layout_core_fast_path`, `test_layout_rows_fast_path`, and `test_runtime_entry_path_guards`. Updated each guard to check the stable public processing forwarding **and** the actual new detector/worker implementation, preserving worker-service/PDIC/layout-only/GUI composition invariants rather than deleting assertions. New exact-head CI must be checked before reporting success.

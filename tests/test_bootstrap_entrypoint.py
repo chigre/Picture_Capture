@@ -101,6 +101,10 @@ def test_spawn_detection_routes_through_worker_composition_root() -> None:
 
     assert "from .worker import WorkerServices, build_worker_services" in bootstrap_init
     assert "def build_worker_services()" in worker
-    assert "from .bootstrap.worker import build_worker_services" in processing
-    assert "services = build_worker_services()" in processing
+    ordinary_job = (
+        ROOT / "src" / "picture_capture" / "detection" / "ordinary_page_job.py"
+    ).read_text(encoding="utf-8")
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in processing
+    assert "from ..bootstrap.worker import build_worker_services" in ordinary_job
+    assert "services = build_worker_services()" in ordinary_job
     assert "install_spawn_detection_runtime" not in processing

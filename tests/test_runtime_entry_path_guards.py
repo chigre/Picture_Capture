@@ -293,7 +293,10 @@ def test_static_spawn_worker_preserves_worker_services_contract(tmp_path, monkey
 def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     root = Path(__file__).resolve().parents[1]
     worker = _worker_composition_source()
-    job = inspect.getsource(processing_module.detect_entries_job)
+    from picture_capture.detection import ordinary_page_job
+    facade = inspect.getsource(processing_module.detect_entries_job)
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in facade
+    job = inspect.getsource(ordinary_page_job.detect_entries_job_impl)
 
     assert "core_services = build_core_services()" in worker
     assert "install_pdic_classification(formats)" not in worker
@@ -307,7 +310,7 @@ def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     assert "finalize_layout_column_drift(" in policy
     assert "install_layout_rows_persistence_runtime()" not in worker
 
-    assert "from .bootstrap.worker import build_worker_services" in job
+    assert "from ..bootstrap.worker import build_worker_services" in job
     assert "services = build_worker_services()" in job
     assert "with services.capture_layout_rows(" in job
     assert "formats.write_pdic(" in job

@@ -224,7 +224,11 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
     assert "unlined_export.export_unlined_page_job" in crop
     assert "resolve_unlined_physical_rows" in exporter
     assert "install_layout_rows_persistence_runtime()" not in worker
-    assert "with services.capture_layout_rows(" in processing
+    ordinary_job = (
+        root / "src" / "picture_capture" / "detection" / "ordinary_page_job.py"
+    ).read_text(encoding="utf-8")
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in processing
+    assert "with services.capture_layout_rows(" in ordinary_job
     assert "_publish_captured_result(cached, page_index)" in layout_core
     assert "_publish_captured_result(result, page_index)" in layout_core
     assert "core.understand_layout_core =" not in rows

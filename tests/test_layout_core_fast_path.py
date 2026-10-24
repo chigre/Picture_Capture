@@ -4,7 +4,9 @@ from pathlib import Path
 
 
 def test_processing_routes_ordinary_to_layout_only_fast_path() -> None:
-    source = Path("src/picture_capture/processing.py").read_text(encoding="utf-8")
+    facade = Path("src/picture_capture/processing.py").read_text(encoding="utf-8")
+    source = Path("src/picture_capture/detection/page_pipeline.py").read_text(encoding="utf-8")
+    assert "return _page_pipeline.detect_entries_impl(" in facade
     assert "ordinary_mode = method not in" in source
     assert "layout_only=ordinary_mode" in source
     assert "_current_page_understanding.understand_page_current(" in source
