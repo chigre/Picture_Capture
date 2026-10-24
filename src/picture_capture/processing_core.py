@@ -661,7 +661,7 @@ def detect_entries(
         image, settings, paddle_cache_path, force_paddle_refresh,
         paddle_filter_rules_path, profile_page_index, page_sections,
         left_edge_detector,
-        deps={{
+        deps={
             "_detect_entries_left_edge": _detect_entries_left_edge,
             "normalize_page_rgb": normalize_page_rgb,
             "effective_page_settings": effective_page_settings,
@@ -673,7 +673,7 @@ def detect_entries(
             "v_is_inside_sections": v_is_inside_sections,
             "sort_entries_reading_order": sort_entries_reading_order,
             "json": json,
-        }},
+        },
     )
 
 
@@ -712,13 +712,13 @@ def _refine_existing_entries_with_geometry(
         entries, effective, analysis_source, geometry,
         align_to_ink_top=align_to_ink_top,
         fixed_half_gutter=fixed_half_gutter,
-        deps={{
+        deps={
             "_source_px": _source_px,
             "column_index": column_index,
             "replace": replace,
             "np": np,
             "ImageOps": ImageOps,
-        }},
+        },
     )
 
 
@@ -875,14 +875,14 @@ def ocr_entries(
     return _legacy_entry_text_reading.ocr_entries_impl(
         image, entries, settings, replace_rules,
         profile_page_index=profile_page_index, page_sections=page_sections,
-        deps={{
+        deps={
             "_page_geometry_context": _page_geometry_context,
             "sort_entries_reading_order": sort_entries_reading_order,
             "line_box": line_box,
             "run_tesseract": run_tesseract,
             "resolved_tesseract_language": resolved_tesseract_language,
             "process_ocr_text": process_ocr_text,
-        }},
+        },
     )
 
 
