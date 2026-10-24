@@ -32,7 +32,7 @@ def paddle_language(settings: AppSettings) -> str:
             return mapping[part]
     return mapping.get(raw_language, raw_language)
 
-def otsu_threshold(gray: np_module.ndarray, *, np_module) -> int:
+def otsu_threshold(gray: np.ndarray, *, np_module) -> int:
     """Return the same conservative Otsu threshold used by the mature runner."""
 
     if gray.size == 0:
