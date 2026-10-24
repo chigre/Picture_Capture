@@ -70,7 +70,7 @@ def attach_source_candidate_coordinates(
         item["anchor_source_x"] = int(anchor_source_x)
         item["anchor_source_y"] = int(anchor_source_y)
 
-ndef candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
+def candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
     if not candidate:
         return None
     value = candidate.get("_axis_v", candidate.get("source_y"))
