@@ -1467,7 +1467,9 @@ def test_main_workspace_modern_styles_are_scoped_and_dense():
         assert method in drawing
     assert 'button = _button(row, caption, getattr(app, method))' in drawing
     assert 'relief="flat"' in (app + ui + scoped)
-    assert 'highlightthickness=1' in (app + ui + scoped)
+    buttons_owner = (root / "ui/main_action_buttons.py").read_text(encoding="utf-8")
+    assert "_main_action_buttons.sidebar_action_button_impl(" in app
+    assert 'highlightthickness=1' in (app + ui + scoped + buttons_owner)
     assert '"primary": "#4F7CAC"' in styles
     assert '"success": "#69A875"' in styles
 
@@ -4277,6 +4279,10 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
     worker_start = app.index("    def _ui_worker_key_active(")
     worker_end = app.index("\n    def _configure_main_workspace_styles", worker_start)
     workers = app[worker_start:worker_end]
+    assert "_background_job_runtime.start_ui_worker(" in workers
+    assert "_background_job_runtime.poll_ui_worker_queue(" in workers
+    worker_owner = (root / "src/picture_capture/ui/background_job_runtime.py").read_text(encoding="utf-8")
+    workers += "\n" + worker_owner
     assert "_ui_worker_active" in workers
     assert "_ui_worker_close_wait" in workers
     assert "generation == self._ui_worker_generations.get(key)" in workers
