@@ -1369,8 +1369,10 @@ def test_bottom_important_actions_follow_scheme_a_groups():
     app = (root / "app.py").read_text(encoding="utf-8")
     tools = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'def _footer_action_button(' in app
-    assert 'border = colors["button_border"]' in app
-    assert 'highlightthickness=1' in app
+    buttons_owner = (root / "ui/main_action_buttons.py").read_text(encoding="utf-8")
+    assert "_main_action_buttons.footer_action_button_impl(" in app
+    assert 'border = colors["button_border"]' in buttons_owner
+    assert 'highlightthickness=1' in buttons_owner
     assert 'app.workspace_quick_action_buttons.append(button)' in tools
     assert 'app.project_footer_buttons.append(button)' in tools
     for label,method in (("项目","open_recent_project"),("Profile","open_project_profile"),("设置","open_settings"),("帮助","show_help_dialog")):
@@ -3844,7 +3846,9 @@ def test_round1_blocking_ui_paths_use_background_workers():
     project_session = (source.parent / "ui/project_session_workflow.py").read_text(encoding="utf-8")
 
     assert "def _start_ui_worker(" in text
-    assert "self._ui_worker_queue.put(event)" in text
+    worker_owner = (source.parent / "ui/background_job_runtime.py").read_text(encoding="utf-8")
+    assert "_background_job_runtime.start_ui_worker(" in text
+    assert "self._ui_worker_queue.put(event)" in worker_owner
     assert "def _poll_ui_worker_queue(" in text
 
     settings_start = text.index("class SettingsDialog")
@@ -4412,7 +4416,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
 
     poll_start = app.index("    def _poll_ui_worker_queue(")
     poll_end = app.index("\n    def _configure_main_workspace_styles", poll_start)
-    assert "_ui_worker_active" in app[poll_start:poll_end]
+    owner = (root / "src/picture_capture/ui/background_job_runtime.py").read_text(encoding="utf-8")
+    assert "_background_job_runtime.poll_ui_worker_queue(" in app[poll_start:poll_end]
+    assert "_ui_worker_active" in owner
 
     load_start = project_session.index("def _load_project(")
     load_end = project_session.index("\ndef on_page_select", load_start)
