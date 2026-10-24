@@ -77,3 +77,25 @@ def test_morphology_strip_and_live_patchpoint(monkeypatch):
     assert ignored_noise == ""
     assert called == ["irrelevant "]
     monkeypatch.setattr(core, "_strip_entry_modifiers", old)
+
+
+def test_round20_leaves_grammar_tail_and_bundled_profile_in_core():
+    """Guard against extracting adjacent globals and five wrappers by mistake."""
+    import ast
+    root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
+    core_source = (root / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    leaf_source = (root / "ocr" / "pos_cue_policy.py").read_text(encoding="utf-8")
+    core_ast = ast.parse(core_source)
+    leaf_ast = ast.parse(leaf_source)
+    core_defs = {n.name for n in core_ast.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    leaf_defs = {n.name for n in leaf_ast.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    assert leaf_defs == {"compile_patterns", "strip_entry_modifiers", "find_pos_cue"}
+    assert {
+        "_leading_inflection_cue", "_parallel_marker_extension",
+        "_consume_leading_space", "_parse_structured_tail", "_parse_bug_types",
+    } <= core_defs
+    assert "_BUNDLED_PROFILE = load_dictionary_profile(" in core_source
+    assert "_BUNDLED_PROFILE =" not in leaf_source
+    assert core._BUNDLED_PROFILE is not None
+    assert core._BUNDLED_PROFILE.metadata_labels
+    assert core._parse_structured_tail.__module__ == "picture_capture.paddle_headwords_core"
