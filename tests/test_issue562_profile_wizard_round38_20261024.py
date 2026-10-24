@@ -100,7 +100,7 @@ def test_round38_shell_keeps_wizard_sash_tabs_and_ui_navigation():
 
 def test_round38_reading_controls_preserve_ocr_and_body_range_revisions():
     owner = (ROOT / "wizard_reading_controls.py").read_text(encoding="utf-8")
-    for text in ('text="词典全称："', 'text="词典简称(字母)："', 'text="ISBN："', 'text="正文页码："', 'text="索引语言（2 位）"'):
+    for text in ('text="词典全称："', 'text="词典简称(字母)："', 'text="ISBN："', 'text="正文页码："', 'text="索引语言（2 位）："'):
         assert text in owner
     assert 'self.body_page_range_entry.bind("<FocusOut>", self._body_page_range_changed)' in owner
     assert 'self._build_language_section(tab, row=4)' in owner
