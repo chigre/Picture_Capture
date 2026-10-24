@@ -8,7 +8,7 @@ from typing import Any
 
 
 def legacy_is_point(
-    rgb_sum: np_module.ndarray,
+    rgb_sum: Any,
     x: int,
     y: int,
     area_x: int,
@@ -47,7 +47,7 @@ def legacy_is_point(
 
 
 def legacy_row_brightness_1000(
-    rgb_sum: np_module.ndarray,
+    rgb_sum: Any,
     y: int,
     x: int,
     width: int,
