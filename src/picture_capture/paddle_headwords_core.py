@@ -39,6 +39,7 @@ from .ocr import peer_typography as _peer_typography
 from .ocr import user_filter_rules as _user_filter_rules
 from .ocr import grammar_tail_parsing as _grammar_tail_parsing
 from .ocr import language_resolution as _language_resolution
+from .ocr import source_coordinate_persistence as _source_coordinate_persistence
 from .ocr import headword_normalization as _headword_normalization
 from .ocr.headword_models import (
     GrammarTailParse,
@@ -2142,50 +2143,15 @@ def _candidate_axis_v(candidate: dict[str, Any] | None) -> int | None:
 
 
 def _source_only_persistence(value: Any) -> Any:
-    """Strip temporary transformed-axis fields before writing cache/debug JSON."""
-    if isinstance(value, list):
-        return [_source_only_persistence(item) for item in value]
-    if isinstance(value, tuple):
-        return [_source_only_persistence(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-
-    result: dict[str, Any] = {}
-    for key, item in value.items():
-        name = str(key)
-        if name.startswith("_") or "canonical" in name.casefold():
-            continue
-        if name in {"column_coordinate_space", "coordinate_spaces"}:
-            continue
-        result[name] = _source_only_persistence(item)
-
-    # Engine/member Y fields are page coordinates in persisted output and must
-    # therefore equal their explicit source-image Y.
-    if result.get("source_y") is not None and "y" in result:
-        result["y"] = result["source_y"]
-    for prefix in ("paddle", "tesseract", "lens"):
-        source_key = f"{prefix}_source_y"
-        axis_key = f"{prefix}_y"
-        if result.get(source_key) is not None and axis_key in result:
-            result[axis_key] = result[source_key]
-        coarse_source_key = f"{prefix}_coarse_source_y"
-        coarse_key = f"{prefix}_coarse_y"
-        if result.get(coarse_source_key) is not None and coarse_key in result:
-            result[coarse_key] = result[coarse_source_key]
-        anchor_source_key = f"{prefix}_anchor_source_y"
-        anchor_key = f"{prefix}_anchor_y"
-        if result.get(anchor_source_key) is not None and anchor_key in result:
-            result[anchor_key] = result[anchor_source_key]
-    return result
+    """Historical source-coordinate persistence, preserving callable origin."""
+    return _source_coordinate_persistence.source_only_persistence(value)
 
 
 def _image_cache_fingerprint(image: Image.Image) -> str:
-    """Return an exact normalized-pixel hash for raw OCR cache invalidation."""
-    rgb = normalize_page_rgb(image)
-    digest = hashlib.sha256()
-    digest.update(f"{rgb.width}x{rgb.height}|RGB|".encode("ascii"))
-    digest.update(rgb.tobytes())
-    return digest.hexdigest()
+    """Historical exact pixel hash using the current normalization callback."""
+    return _source_coordinate_persistence.image_cache_fingerprint(
+        image, normalize_rgb_fn=normalize_page_rgb, hash_module=hashlib,
+    )
 
 
 def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSettings) -> str:
