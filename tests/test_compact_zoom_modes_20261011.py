@@ -14,7 +14,9 @@ def test_modes_and_saved_session_migrate_to_compact():
     assert 'if mode in {"最简", "简单"}:' in tools
     assert 'mode = "紧凑"' in tools
     assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app
-    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
+    review_initializer = (APP.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app
+    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in review_initializer
 
 
 def test_compact_index_precedes_rail_at_same_independent_width():

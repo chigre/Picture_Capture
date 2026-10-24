@@ -287,13 +287,15 @@ def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     app, _ = sources()
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
     selection = (ROOT / "ui" / "review_selection_workflow.py").read_text(encoding="utf-8")
-    assert 'mini.winfo_manager() == "grid"' in app
-    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
-    assert 'if compact_workspace:' in app
-    assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
-    assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in app
-    assert 'width = max(1, work_right - x)' in app
-    assert 'height = max(1, safe_client_height)' in app
+    initializer = (ROOT / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app
+    assert 'mini.winfo_manager() == "grid"' in initializer
+    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in initializer
+    assert 'if compact_workspace:' in initializer
+    assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in initializer
+    assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in initializer
+    assert 'width = max(1, work_right - x)' in initializer
+    assert 'height = max(1, safe_client_height)' in initializer
     assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
     assert '_review_line_box(' in selection
     assert 'canvas.xview_moveto(' in selection
@@ -346,8 +348,10 @@ def test_next_page_button_is_packed_before_expandable_editor_area():
 
 def test_compact_review_anchors_to_work_area_top():
     app, _ = sources()
-    assert 'y = work_y  # Align compact proofreading to the usable desktop top.' in app
-    assert 'height = max(1, safe_client_height)' in app
+    initializer = (ROOT / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app
+    assert 'y = work_y  # Align compact proofreading to the usable desktop top.' in initializer
+    assert 'height = max(1, safe_client_height)' in initializer
 
 
 def test_inline_review_slice_uses_text_based_height_without_classification():

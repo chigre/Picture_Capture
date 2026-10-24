@@ -5577,7 +5577,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     render_text = (Path(__file__).parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     assert "self.settings.illustration_label_font_family,\n                            self.settings.ocr_language" in render_text
     assert "self.parent.settings.review_entry_font_family,\n            self.parent.settings.ocr_language" in REVIEW_WORKSPACE_SOURCE
-    assert '"review_simplified_font_family"' in app_text
+    assert "_review_window_initialization.initialize_review_window(" in app_text
+    assert '"review_simplified_font_family"' in REVIEW_WORKSPACE_SOURCE
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'values=families' in display
     assert "review_families = (AUTO_FONT_FAMILY" in REVIEW_WORKSPACE_SOURCE
@@ -5633,7 +5634,9 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
 
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     assert 'text="自动", width=5, command=self.reset_review_zoom' in REVIEW_WORKSPACE_SOURCE
-    assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
+    initializer = (Path(__file__).parents[1] / "src/picture_capture/ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app_text
+    assert "self.review_zoom_auto = stored_review_zoom <= 0" in initializer
     assert "widest_crop = max(crop.width for crop in raw_crops)" in REVIEW_WORKSPACE_SOURCE
     assert "widest_crop, auto_image_area_width, 0.99" in REVIEW_WORKSPACE_SOURCE
     assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in app_text
@@ -7016,7 +7019,9 @@ def test_environment_center_reports_opencc_and_actionable_components():
     center_text = Path(inspect.getsourcefile(center_module)).read_text(encoding="utf-8")
     assert "EnvironmentCenterWindow" in app_text
     assert "show_environment_center" in app_text
-    assert '"环境中心"' in app_text
+    settings_init = (Path(__file__).parents[1] / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in app_text
+    assert '"环境中心"' in settings_init
     assert 'self.app._distribution_version("opencc")' in center_text
     assert 'self.app._distribution_version("opencc-python-reimplemented")' in center_text
     assert "简化配置：t2s.json（词组优先）" in center_text
@@ -7134,10 +7139,12 @@ def test_v2129_review_window_has_independent_simplified_font_controls():
     body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
     assert 'text="词条字体："' in REVIEW_WORKSPACE_SOURCE
     assert 'text="简体字体："' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.review_simplified_font_family_var' in body
-    assert 'self.review_simplified_font_size_var' in body
-    assert 'self.review_simplified_font_bold_var' in body
-    assert 'self.review_simplified_font_italic_var' in body
+    init_text = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in body
+    assert 'self.review_simplified_font_family_var' in init_text
+    assert 'self.review_simplified_font_size_var' in init_text
+    assert 'self.review_simplified_font_bold_var' in init_text
+    assert 'self.review_simplified_font_italic_var' in init_text
     assert 'settings.review_simplified_font_family = family' in REVIEW_APPEARANCE_SOURCE
     assert 'settings.review_simplified_font_size = size' in REVIEW_APPEARANCE_SOURCE
 

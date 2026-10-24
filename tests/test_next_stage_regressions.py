@@ -1334,7 +1334,9 @@ def test_common_layout_settings_show_packaged_context_diagrams():
         "gutter", "character_height", "row_padding",
     ):
         assert f'"{field}": "layout_settings.png"' in schema
-    assert "help_images=True" in settings
+    dialog_init = (root / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
+    assert "help_images=True" in dialog_init
     assert "show_layout_image: bool = False" in settings
     assert '/ "data"' in help_source
     assert '/ "layout_example"' in help_source
@@ -2067,7 +2069,9 @@ def test_decimal_percentage_ui_paths_do_not_integer_cast_values():
     settings_owner = (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
     assert "_settings_field_form.save_settings(" in text
     assert "review_zoom_percent = float(self.parent.settings.review_zoom_percent)" in settings_owner
-    assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in text
+    review_init = (source.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in text
+    assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in review_init
     assert "def _stored_review_zoom_percent(self) -> float:" in text
     assert "round(self.review_zoom * 100.0, 2)" in text
     assert "int(self.parent.settings.paddle_band_width_ratio)" not in settings_owner
@@ -3264,15 +3268,17 @@ def test_project_profile_wizard_is_the_normal_entry_path():
     wizard_init = profile_source[wizard_start:wizard_end]
     assert "x = work_x + max(0, (work_w - width) // 2)" in wizard_init
     assert "y = work_y + max(0, (work_h - height) // 2)" in wizard_init
-    assert '(common_tab, "常用")' in text
-    assert '(ocr_tab, "OCR画线")' in text
-    assert '(normal_tab, "普通画线")' in text
-    assert text.index('(ocr_tab, "OCR画线")') < text.index('(normal_tab, "普通画线")')
-    assert '(display_tab, "显示/校对")' in text
-    assert '(project_tab, "项目/批量")' in text
-    assert '(crop_tab, "切图")' in text
-    assert '(advanced_tab, "高级")' in text
-    assert '"profile": advanced_tab' in text
+    dialog_init = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    assert '(common_tab, "常用")' in dialog_init
+    assert '(ocr_tab, "OCR画线")' in dialog_init
+    assert '(normal_tab, "普通画线")' in dialog_init
+    assert dialog_init.index('(ocr_tab, "OCR画线")') < dialog_init.index('(normal_tab, "普通画线")')
+    assert '(display_tab, "显示/校对")' in dialog_init
+    assert '(project_tab, "项目/批量")' in dialog_init
+    assert '(crop_tab, "切图")' in dialog_init
+    assert '(advanced_tab, "高级")' in dialog_init
+    assert '"profile": advanced_tab' in dialog_init
     start = text.index("    def open_project_profile(")
     end = text.index("    def open_project_details(", start)
     assert 'self.open_settings(initial_tab="profile")' not in text[start:end]
