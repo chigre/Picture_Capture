@@ -283,3 +283,16 @@ def parse_headword_text_impl(
         parser_trace=grammar.trace,
         bug_types=bugs,
     )
+
+ndef looks_like_marker_noise_lemma(parsed: HeadwordParse | None, *, regex_module: Any) -> bool:
+    """Reject only very narrow square/bullet OCR artifacts used as fake lemmas.
+
+    Examples observed on these pages include ``Ml adj./s.`` where the printed
+    square marker was OCRed as two letters.  Real short acronym entries normally
+    carry a descriptor such as ``Sigla de`` and therefore are not covered here.
+    """
+    re = regex_module
+    if not parsed or parsed.has_descriptor or parsed.has_inflection:
+        return False
+    compact = re.sub(r"[^A-Za-z]", "", parsed.raw).casefold()
+    return compact in {"ml", "ll", "il", "ii", "l"}
