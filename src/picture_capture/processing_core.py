@@ -53,6 +53,7 @@ from .ocr.text_io import export_ocred, import_ocred, load_replace_rules, process
 from .crop.logging import append_crop_log, append_illustration_crop_log
 from .ordinary.vb_brightness import legacy_row_brightness_scores_1000
 from .ordinary import ink_threshold as _ink_threshold
+from .ordinary import legacy_brightness_sampling as _legacy_brightness_sampling
 from .ordinary import separator_position_policy as _separator_policy
 from .ordinary import auto_layout_policy as _auto_layout_policy
 from .ordinary import fusion_entry_mapping as _fusion_entry_mapping
@@ -471,32 +472,11 @@ def _legacy_is_point(
     *,
     direction: int = 1,
 ) -> bool:
-    """Faithful full-resolution port of VB.NET IsPoint().
-
-    VB sampled area_x pixels to the reading-right of the anchor and rows from
-    -area_y/2 through +area_y/2. Its denominator intentionally remained
-    area_x * area_y even though the inclusive row loop can contain one extra
-    row. Keeping that detail preserves the old 90% gate.
-    """
-    height, width = rgb_sum.shape[:2]
-    area_x = max(1, int(area_x))
-    area_y = max(1, int(area_y))
-    direction = 1 if int(direction) >= 0 else -1
-    half = max(0, round(area_y * 0.5))
-    y0 = int(y) - half
-    y1 = int(y) + half
-    if y0 < 0 or y1 >= height:
-        return False
-
-    xs = int(x) + direction * np.arange(1, area_x + 1, dtype=np.int64)
-    if xs.size == 0 or int(xs.min()) < 0 or int(xs.max()) >= width:
-        return False
-    region = rgb_sum[y0:y1 + 1, xs]
-    if region.size == 0:
-        return False
-    denominator = float(area_x * area_y * 255 * 3)
-    brightness_percent = round(float(region.astype(np.float64).sum()) / denominator * 100.0)
-    return brightness_percent <= float(max_brightness_percent)
+    """Historical VB point brightness gate; retain original signature."""
+    return _legacy_brightness_sampling.legacy_is_point(
+        rgb_sum, x, y, area_x, area_y, max_brightness_percent,
+        direction=direction, np_module=np,
+    )
 
 
 def _legacy_row_brightness_1000(
@@ -507,17 +487,10 @@ def _legacy_row_brightness_1000(
     *,
     direction: int = 1,
 ) -> int | None:
-    """Return the VB row-brightness score on its original 0..1000 scale."""
-    height, image_width = rgb_sum.shape[:2]
-    if not (0 <= int(y) < height):
-        return None
-    width = max(1, int(width))
-    direction = 1 if int(direction) >= 0 else -1
-    xs = int(x) + direction * np.arange(1, width + 1, dtype=np.int64)
-    if xs.size == 0 or int(xs.min()) < 0 or int(xs.max()) >= image_width:
-        return None
-    total = float(rgb_sum[int(y), xs].astype(np.float64).sum())
-    return int(round(total / float(765 * width) * 1000.0))
+    """Historical VB row brightness score; retain original signature."""
+    return _legacy_brightness_sampling.legacy_row_brightness_1000(
+        rgb_sum, y, x, width, direction=direction, np_module=np,
+    )
 
 
 def _legacy_find_separator_y(
