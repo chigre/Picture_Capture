@@ -1711,3 +1711,27 @@ dependency lookup, and refusal without worker dispatch. Existing native Tk
 roundtrip, current-page controller, original-X/Y and cross-platform suites
 remain required. The real dictionary scanned-image manual gate is still
 OPEN / NOT PASSED; PR #663 stays Draft/unmerged.
+
+
+## Issue #562 — Round 77: legacy direct detection actions (2026-10-26)
+
+Following Round 76's current-page orchestration extraction, the three
+historical direct actions `paddle_detect_current`,
+`batch_auto_detect` and `run_ocr_draw(scope, force_refresh)` now delegate
+to `ui/detection_direct_actions.py`. The canonical Tk
+`ui/controllers/detection.py` retains all public method names and injects
+the live `guard_ocr_action_selection` entrypoint at call time. The new owner
+keeps the original ordering (OCR engine preflight, project/quick-settings
+guards, explicit current/all scope, mode selection, detector dispatch).
+Invalid scopes/engines never mutate the stored mode or run inference; the
+all-pages ordinary/combined batch path does not implicitly save settings.
+Direct unit tests and existing controller tests protect these differences,
+including `paddle_detect_current`'s sync/save/current action contract.
+
+The Round 76 six-platform CI initially failed only on two stale code-location
+assertions that expected worker dispatch/scheduling inside the legacy
+controller. Those regression source contracts now check the actual flow owner
+as well as the public adapter. No OCR algorithm, PDIC/PPP/SECTION schema,
+original-image XY, pickle class identity, native Tk binding, or root shim
+changed. The real dictionary-page human scan gate remains OPEN / NOT PASSED,
+and PR #663 must stay Draft.
