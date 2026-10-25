@@ -2382,7 +2382,13 @@ def collect_violations() -> list[str]:
     # belongs to the import-light crop owner. Keep historical model identities
     # and root public function adapters, not algorithm copies.
     crop_workflow = PACKAGE_ROOT / "crop/page_workflow.py"
-    crop_core = PACKAGE_ROOT / "processing_core.py"
+    crop_core = PACKAGE_ROOT / "runtime/processing_core_runtime.py"
+    core_bridge = PACKAGE_ROOT / "processing_core.py"
+    if not core_bridge.is_file() or (
+        "_sys.modules[__name__] = _canonical"
+        not in core_bridge.read_text(encoding="utf-8")
+    ):
+        violations.append("historical processing_core import identity bridge missing")
     if not crop_workflow.is_file():
         violations.append("canonical whole-entry crop workflow owner missing")
     else:
