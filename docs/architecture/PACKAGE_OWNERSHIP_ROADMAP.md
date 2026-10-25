@@ -1874,3 +1874,33 @@ PDIC/PPP/SECTION serialization, text line format, OCR engine calls and
 legacy monkeypatch seams remain unchanged. Six-platform CI and platform
 smoke remain necessary, and real scanned-dictionary human signoff is
 OPEN / NOT PASSED; PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 83: CI source test repair and concurrent PDIC edit guard (2026-10-26)
+
+Round 82's initial CI regression was a **stale source-order assertion** in
+`tests/test_issue562_batch_ocr_commit_ambiguity_round81_20261026.py`. A
+new Round 82 exporter-exception compensation path correctly appears before
+the PDIC error handler, so the test incorrectly compared the PDIC guard
+against an OCRed rollback in an unrelated earlier exception branch. The
+test now isolates the PDIC error handler before enforcing its guard-before-
+rollback invariant; no runtime safety behavior was reversed.
+
+The existing-PDIC OCR page worker also now snapshots the exact on-disk
+PDIC bytes **before reading its entries and performing OCR**. Once inference
+returns, but *before changing entry words or publishing either OCRed or PDIC*,
+it checks the file bytes again. A change (including appearance or deletion
+of a PDIC file) raises a clear conflict error, protecting corrections made
+by another project window/process during the potentially long OCR job.
+This is defense in depth over the Tk foreground batch page-claim protocol;
+it preserves the existing original-image X/Y marker semantics, read-pdic
+sorting, OCR cardinality, and canonical paired publication sequence.
+
+Fault-injection tests cover external PDIC rewrite with new words/coordinates,
+deletion, newly created PDIC, output untouched on conflicts and successful
+normal publication without interference. The check is **optimistic**, not
+a filesystem transaction or exclusive lock: external modification between
+the final verification and PDIC write is still theoretically possible.
+Automated CI and OCR platform smoke remain independent gates; real-scanned
+dictionary human visual acceptance remains OPEN/NOT PASSED. PR #663 stays
+Draft and unmerged.
