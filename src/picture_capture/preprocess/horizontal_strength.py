@@ -24,7 +24,7 @@ class HorizontalStrengthOps:
 
 
 def interpolate_perspective_estimate(
-    estimate: PerspectiveEstimate,
+    estimate: Any,
     size: tuple[int, int],
     strength: float,
     *,
