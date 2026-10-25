@@ -87,10 +87,12 @@ def test_batch_page_ocr_failure_does_not_publish_ocred_or_pdic(tmp_path):
 def test_controller_delegates_to_physical_ocr_page_owner():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     controller = (root / "ui/controllers/detection.py").read_text(encoding="utf-8")
+    flow = (root / "ui/batch_ocr_flow.py").read_text(encoding="utf-8")
     leaf = (root / "ocr/batch_existing_entries.py").read_text(encoding="utf-8")
     assert "from ...ocr.batch_existing_entries import process_existing_pdic_page" in controller
-    assert "return process_existing_pdic_page(" in controller
-    assert "foreground_page_edit=True, allow_pdic_edits=True," in controller
+    assert "return run_existing_pdic_batch(" in controller
+    assert 'live["process_existing_pdic_page"](' in flow
+    assert "foreground_page_edit=True, allow_pdic_edits=True," in flow
     assert "foreground_page_edit=True" not in leaf
     assert "def process_existing_pdic_page(" in leaf
     assert 'deps["ocr_entries"](' in leaf
