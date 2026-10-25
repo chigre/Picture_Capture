@@ -15,7 +15,7 @@ from picture_capture.profile.dictionary import load_dictionary_profile
 
 def test_historical_module_signatures_and_owner():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     assert (root / "ocr" / "pos_cue_policy.py").is_file()
     assert not (root / "pos_cue_policy.py").exists()
     assert core._compile_patterns.__module__ == "picture_capture.paddle_headwords_core"

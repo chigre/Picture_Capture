@@ -16,7 +16,7 @@ from picture_capture.ocr import paddle_engine_lifecycle
 
 def test_exact_lifecycle_owner_and_original_core_signatures():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 10
+    assert len(list(pkg.glob("*.py"))) == 9
     path = pkg / "ocr" / "paddle_engine_lifecycle.py"
     assert path.is_file()
     assert not (pkg / path.name).exists()

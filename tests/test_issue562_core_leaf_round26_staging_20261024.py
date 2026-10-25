@@ -13,7 +13,7 @@ from picture_capture.crop import image_staging_io
 
 def test_crop_io_single_owner_and_original_function_paths():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 10
+    assert len(list(pkg.glob("*.py"))) == 9
     path = pkg / "crop" / "image_staging_io.py"
     assert path.is_file()
     assert not (pkg / path.name).exists()

@@ -14,7 +14,7 @@ from picture_capture.geometry.layout_transform import LayoutTransform
 
 def test_exact_model_owners_no_root_compat_stubs():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     mapping = {
         "geometry/processing_models.py": {"ColumnPath", "Geometry"},
         "crop/plan_models.py": {

@@ -16,7 +16,7 @@ from picture_capture.ocr import legacy_entry_text_reading
 
 def test_algorithm_leaf_scope_and_historical_ownership():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     owners = {
         "detection/page_method_dispatch.py": {"detect_entries_impl"},
         "refinement/existing_entry_positions.py": {"refine_existing_entries_with_geometry_impl"},

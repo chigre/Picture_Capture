@@ -16,7 +16,7 @@ from picture_capture.illustration import source_detection_jobs
 
 def test_round26_owners_and_historical_signatures():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 10
+    assert len(list(pkg.glob("*.py"))) == 9
     expected = {
         "geometry/page_runtime_context.py": {"page_geometry_context"},
         "detection/spawn_job_execution.py": {"detect_entries_job_impl"},
