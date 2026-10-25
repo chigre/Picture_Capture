@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 
 from ..models import read_noncomment_lines
+from ..io.formats import write_text_atomic
 
 
 def load_replace_rules(path: Path) -> list[tuple[str, str, str]]:
@@ -37,7 +38,9 @@ def process_ocr_text(
 
 
 def export_ocred(path: Path, texts: list[str]) -> None:
-    path.write_text(
+    """Atomically replace OCRed sidecars; never expose a partial text file."""
+    write_text_atomic(
+        path,
         "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts)),
         encoding="utf-8",
     )
