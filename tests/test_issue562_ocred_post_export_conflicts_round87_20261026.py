@@ -12,7 +12,7 @@ import pytest
 from picture_capture.models import Entry
 from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.ocr.batch_publication import publish_existing_pdic_ocr
-from picture_capture.ocr.text_io import export_ocred
+from picture_capture.ocr.text_io import export_ocred, render_ocred_text
 
 
 def _save_pdic(path: Path, word: str = "original") -> None:
@@ -25,6 +25,7 @@ def _publish(ocred, pdic, export, save, *, expected_pdic_bytes):
         100, ("001", "@", "@"),
         export_ocred=export, write_pdic=save,
         expected_pdic_bytes=expected_pdic_bytes,
+        expected_exported_ocred_bytes=render_ocred_text(["new-ocr"]).encode("utf-8"),
     )
 
 
@@ -105,14 +106,14 @@ def test_both_files_edited_during_export_are_not_rolled_back(tmp_path):
         # Interleave an independent OCRed editor after our export.
         path.write_bytes(manual)
 
-    # A post-export OCRed snapshot cannot distinguish a manual edit made
-    # inside the exporter from the exporter's own output. This case must
-    # therefore be reported as a remaining limitation, not as a guarantee.
-    with pytest.raises(RuntimeError, match="PDIC 在 OCRed 导出期间被其他操作修改"):
+    # The worker-supplied canonical byte expectation rejects an unrelated
+    # OCRed edit even when it happened inside the export callback itself.
+    with pytest.raises(RuntimeError, match="OCRed 导出后内容与预期不符"):
         _publish(ocred, pdic, export_and_manual_edit,
                  lambda *_args: pytest.fail("stale PDIC must not save"),
                  expected_pdic_bytes=original_pdic)
     assert read_pdic(pdic)[0].word == "new-manual-pdic"
+    assert ocred.read_bytes() == manual
 
 
 @pytest.mark.parametrize("old", [None, b"\xef\xbb\xbf000|`old\r\n"])
