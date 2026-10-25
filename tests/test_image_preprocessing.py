@@ -1450,7 +1450,9 @@ def test_main_workspace_exposes_and_locks_preprocess_mode():
     for snippet in ("def _preprocess_mode_active(", "allow_page_navigation: bool = True"):
         assert snippet in app
     assert "_redraw_preprocess_preview(size)" in render_source
-    assert "普通编辑已锁定" in app
+    lifecycle = (root / "ui/main_app_lifecycle.py").read_text(encoding="utf-8")
+    assert "普通编辑已锁定" in lifecycle
+    assert "return _main_app_lifecycle.guard(" in app
 
 def test_global_deskew_prefers_reliable_physical_header_rule(
     monkeypatch,

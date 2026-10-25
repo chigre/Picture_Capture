@@ -284,9 +284,11 @@ def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
 
 def test_single_column_fit_includes_two_gutters():
     app, _ = sources()
-    assert 'gutter = float(self.settings.gutter)' in app
-    assert 'fit_width = column_width + 2 * gutter' in app
-    assert 'available / fit_width' in app
+    canvas = (ROOT / "ui" / "controllers" / "canvas.py").read_text(encoding="utf-8")
+    assert "self._canvas_controller_for_call().fit_single_column_width()" in app
+    assert 'gutter = float(app.settings.gutter)' in canvas
+    assert 'fit_width = column_width + 2 * gutter' in canvas
+    assert 'available / fit_width' in canvas
 
 
 def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():

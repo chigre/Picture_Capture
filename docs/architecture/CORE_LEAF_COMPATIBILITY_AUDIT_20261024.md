@@ -743,3 +743,8 @@ Phase 5 CI source-contract correction: the first exact-head macOS Python 3.13 py
 - Moved **15 concrete methods** out of root `app.py` into existing `ui/controllers/canvas.py` (single-column viewport fit), `ui/canvas_pointer_workflow.py` (eight PPP label/rectangle/SECTION operations), `ui/quick_settings_apply.py` (five quick color, overlay and autosave handlers), and `ui/main_app_lifecycle.py` (edit/batch guard).
 - The original `PictureCaptureApp` signatures and `staticmethod` binding remain intact. The rectangle edit retains dynamic `PictureCaptureApp._rectangle_bounds` dispatch; label, symbol, Tk exception and messagebox collaborators are injected from the live app module at each call. No changes to serialized Entry/AppSettings, OCR or ordinary/combined detection, PPP/PDIC layout, or worker ownership.
 - New targeted regression: `tests/test_issue562_main_canvas_ppp_quick_owner_phase9_20261025.py`. It verifies real UI ownership, rectangle edit and monkeypatch, current label hooks, viewport fit, color and editing guard. Manual scanned dictionary-page GUI/Profile/PDIC/PPP/export acceptance **not done**. Keep PR Draft and unmerged.
+
+
+### Phase 9 CI source-contract follow-up
+
+- Historical tests previously inspected algorithm strings in `app.py` or required an exact function set in `ui/quick_settings_apply.py`. Updated these tests to assert the actual physical owner (`ui/main_app_lifecycle.py`, `ui/controllers/canvas.py`, `ui/canvas_pointer_workflow.py`) and the still-present app delegates, without removing the substantive preprocess guard, viewport gutter, PPP label geometry or owner-function inventory checks.

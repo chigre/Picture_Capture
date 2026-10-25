@@ -516,8 +516,8 @@ def _polygon_display_name(region: PolygonRegion, index: int, *, deps: dict[str, 
     return label_text(region.label) or f"P_{index + 1:02d}"
 
 def _set_polygon_display_name(self, region: PolygonRegion, name: str, *, deps: dict[str, Any]) -> None:
-    user_edited_link = deps["user_edited_link"]
     """Compatibility setter: accept only association-code changes."""
+    user_edited_link = deps["user_edited_link"]
     region.label = user_edited_link(region.label, name)
 
 def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry, *, deps: dict[str, Any]) -> None:

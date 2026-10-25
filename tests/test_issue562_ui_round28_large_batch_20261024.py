@@ -28,6 +28,9 @@ def test_exact_ui_algorithm_owners_and_retained_app_method_signatures():
             "apply_quick_settings", "_quick_percent_parameter_changed",
             "_quick_pixel_parameter_changed", "_quick_parameter_changed",
             "_quick_geometry_value",
+            "_style_color_button", "choose_overlay_color",
+            "_apply_overlay_visibility_toggle", "_run_quick_autosave",
+            "_refresh_quick_coordinate_labels",
         },
         "detection_batch_execution.py": {"detect_pages"},
     }
