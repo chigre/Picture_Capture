@@ -17,41 +17,41 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageOps
 
-from .models import AppSettings, Entry, resolved_tesseract_language
-from .ocr import review_finalization as _review_finalization
-from .ocr import pairing_arbitration as _ocr_pairing
-from .ocr import visual_evidence as _visual_evidence
-from .ocr import cjk_recovery as _cjk_recovery
-from .ocr import candidate_filter as _headword_filter
-from .ocr import page_detection as _page_detection
-from .ocr import paddle_results as _paddle_results
-from .ocr import headword_script as _headword_script
-from .ocr import lemma_repairs as _lemma_repairs
-from .ocr import line_grouping as _line_grouping
-from .ocr import alphabetical_warnings as _alphabetical_warnings
-from .ocr import band_preprocessing as _band_preprocessing
-from .ocr import band_coordinates as _band_coordinates
-from .ocr import boundary_measurements as _boundary_measurements
-from .ocr import image_separator_geometry as _image_separator_geometry
-from .ocr import line_structure_repairs as _line_structure_repairs
-from .ocr import visual_rescue_policy as _visual_rescue_policy
-from .ocr import peer_typography as _peer_typography
-from .ocr import user_filter_rules as _user_filter_rules
-from .ocr import grammar_tail_parsing as _grammar_tail_parsing
-from .ocr import language_resolution as _language_resolution
-from .ocr import source_coordinate_persistence as _source_coordinate_persistence
-from .ocr import symbol_inventory as _symbol_inventory
-from .ocr import source_candidate_coordinates as _source_candidate_coordinates
-from .ocr import review_anchor_variants as _review_anchor_variants
-from .ocr import lemma_parser as _lemma_parser
-from .ocr import review_manual_selection as _review_manual_selection
-from .ocr import pos_cue_policy as _pos_cue_policy
-from .ocr import cjk_prefix_parsing as _cjk_prefix_parsing
-from .ocr import cjk_single_lemma_parsing as _cjk_single_lemma_parsing
-from .ocr import column_band_sampling as _column_band_sampling
-from .ocr import paddle_engine_lifecycle as _paddle_engine_lifecycle
-from .ocr import headword_normalization as _headword_normalization
-from .ocr.headword_models import (
+from ..models import AppSettings, Entry, resolved_tesseract_language
+from ..ocr import review_finalization as _review_finalization
+from ..ocr import pairing_arbitration as _ocr_pairing
+from ..ocr import visual_evidence as _visual_evidence
+from ..ocr import cjk_recovery as _cjk_recovery
+from ..ocr import candidate_filter as _headword_filter
+from ..ocr import page_detection as _page_detection
+from ..ocr import paddle_results as _paddle_results
+from ..ocr import headword_script as _headword_script
+from ..ocr import lemma_repairs as _lemma_repairs
+from ..ocr import line_grouping as _line_grouping
+from ..ocr import alphabetical_warnings as _alphabetical_warnings
+from ..ocr import band_preprocessing as _band_preprocessing
+from ..ocr import band_coordinates as _band_coordinates
+from ..ocr import boundary_measurements as _boundary_measurements
+from ..ocr import image_separator_geometry as _image_separator_geometry
+from ..ocr import line_structure_repairs as _line_structure_repairs
+from ..ocr import visual_rescue_policy as _visual_rescue_policy
+from ..ocr import peer_typography as _peer_typography
+from ..ocr import user_filter_rules as _user_filter_rules
+from ..ocr import grammar_tail_parsing as _grammar_tail_parsing
+from ..ocr import language_resolution as _language_resolution
+from ..ocr import source_coordinate_persistence as _source_coordinate_persistence
+from ..ocr import symbol_inventory as _symbol_inventory
+from ..ocr import source_candidate_coordinates as _source_candidate_coordinates
+from ..ocr import review_anchor_variants as _review_anchor_variants
+from ..ocr import lemma_parser as _lemma_parser
+from ..ocr import review_manual_selection as _review_manual_selection
+from ..ocr import pos_cue_policy as _pos_cue_policy
+from ..ocr import cjk_prefix_parsing as _cjk_prefix_parsing
+from ..ocr import cjk_single_lemma_parsing as _cjk_single_lemma_parsing
+from ..ocr import column_band_sampling as _column_band_sampling
+from ..ocr import paddle_engine_lifecycle as _paddle_engine_lifecycle
+from ..ocr import headword_normalization as _headword_normalization
+from ..ocr.headword_models import (
     GrammarTailParse,
     HeadwordFilterRule,
     HeadwordParse,
@@ -59,7 +59,7 @@ from .ocr.headword_models import (
     OCRRecord,
 )
 
-from .ocr.paddle_cache_storage import (
+from ..ocr.paddle_cache_storage import (
     atomic_write_json_impl as _cache_atomic_write_json_impl,
     atomic_write_text_impl as _cache_atomic_write_text_impl,
     compact_cached_candidate_impl as _cache_compact_cached_candidate_impl,
@@ -68,7 +68,7 @@ from .ocr.paddle_cache_storage import (
     regenerable_sidecars_impl as _cache_regenerable_sidecars_impl,
 )
 
-from .quality.paddle_diagnostic_formatting import (
+from ..quality.paddle_diagnostic_formatting import (
     candidate_reason_impl as _diag_candidate_reason_impl,
     candidate_tsv_row_impl as _diag_candidate_tsv_row_impl,
     comparison_text_impl as _diag_comparison_text_impl,
@@ -78,10 +78,10 @@ from .quality.paddle_diagnostic_formatting import (
     issues_text_impl as _diag_issues_text_impl,
     tsv_clean_impl as _diag_tsv_clean_impl,
 )
-from .runtime.environment import resolve_paddle_device
-from .preprocess.page_pixels import normalize_page_rgb
-from .persistence.page_sections import PageSection, normalize_page_sections, section_index_for_v
-from .profile.dictionary import (
+from ..runtime.environment import resolve_paddle_device
+from ..preprocess.page_pixels import normalize_page_rgb
+from ..persistence.page_sections import PageSection, normalize_page_sections, section_index_for_v
+from ..profile.dictionary import (
     PROFILE_FILENAME,
     DictionaryProfile,
     effective_project_profile_id,
@@ -89,15 +89,15 @@ from .profile.dictionary import (
     load_dictionary_profile,
     starts_with_internal_article_symbol,
 )
-from .ocr.engines import find_tesseract, run_google_lens, tesseract_status
-from .visual.marker_templates import (
+from ..ocr.engines import find_tesseract, run_google_lens, tesseract_status
+from ..visual.marker_templates import (
     match_visual_marker_template,
     split_configured_symbols,
     visual_marker_samples_from_settings,
 )
 
 if TYPE_CHECKING:
-    from .processing import Geometry
+    from ..processing import Geometry
 
 
 _ENGINE_CACHE: dict[tuple[str, str, str, bool], Any] = {}
@@ -411,7 +411,7 @@ def _records_to_canonical_band(
     records: list[OCRRecord], source_band_size: tuple[int, int], transform_kind: str
 ) -> list[OCRRecord]:
     """Historical source-to-canonical OCR box bridge, preserving record identity."""
-    from .geometry.layout_transform import LayoutTransform
+    from ..geometry.layout_transform import LayoutTransform
     return _band_coordinates.records_to_canonical_band(
         records, source_band_size, transform_kind,
         transform_cls=LayoutTransform, record_cls=OCRRecord,
@@ -438,7 +438,7 @@ def run_tesseract_band_records(
     psm_override: int | None = None,
 ) -> tuple[list[OCRRecord], str]:
     """Legacy public adapter; execution lives in an independent OCR module."""
-    from .ocr.tesseract_runner import run_tesseract_band_records_impl
+    from ..ocr.tesseract_runner import run_tesseract_band_records_impl
     return run_tesseract_band_records_impl(
         band, settings, psm_override,
         resolve_fn=_tesseract_executable, group_fn=group_ocr_records,
@@ -1293,7 +1293,7 @@ def _image_cache_fingerprint(image: Image.Image) -> str:
 
 
 def _cache_signature(image: Image.Image, geometry: "Geometry", settings: AppSettings) -> str:
-    from .ocr.paddle_raw_cache_signature import cache_signature
+    from ..ocr.paddle_raw_cache_signature import cache_signature
     return cache_signature(
         image, geometry, settings,
         image_fingerprint=_image_cache_fingerprint,
@@ -1853,3 +1853,10 @@ def detect_paddle_headwords(
         page_sections=page_sections,
         record_filter=record_filter,
     )
+
+# Stable historical pickle and function identity for external plugins and
+# in-process monkeypatch users of picture_capture.paddle_headwords_core.
+# These are only locally defined callables; do not retag imported classes.
+for _legacy_fn_name in ["parse_headword_filter_rules","load_headword_filter_rules","_rule_matches","evaluate_headword_filter_rules","_ocr_language_parts","_leading_script_family","_headword_script_compatibility","_is_chinese_ocr","_is_japanese_ocr","_split_configured_symbols","_configured_symbol_inventory","_starts_with_unconfigured_headword_symbol","_parse_cjk_marker_pinyin_headword","_parse_cjk_single_with_pinyin","_parse_chinese_bracketed_headword","_is_single_cjk_ideograph","_make_chinese_visual_headword","_parse_chinese_single_character_headword","_paddle_language","clear_paddle_engine_cache","get_paddle_engine","unwrap_column_band","_json_payload","extract_ocr_records","run_paddle_band","prepare_ocr_band","_records_to_canonical_band","recognize_paddle_text","_tesseract_executable","run_tesseract_band_records","_repair_headword_ocr","_vertical_overlap","group_ocr_records","_merge_ocr_lines","_repair_split_headword_lines","_repair_wrapped_headword_structure","_repair_multiline_headword_state_machine","normalize_headword","_compile_patterns","_strip_entry_modifiers","_find_pos_cue","_leading_inflection_cue","_parallel_marker_extension","_consume_leading_space","_parse_structured_tail","_parse_bug_types","parse_headword_text","_looks_like_marker_noise_lemma","_ink_ratio","_leading_box","_true_runs","_otsu_threshold","_separator_analysis_x_bounds","detect_image_separator_candidates","match_ocr_lines_to_image_boundaries","_visual_evidence_deps","_binary_rle_components","_visual_marker_shape_metrics","_visual_family_symbol","_classify_visual_symbol_component","_trusted_visual_marker_lanes","_apply_trusted_visual_marker_lanes","_detect_visual_entry_markers","_match_visual_entry_markers_to_lines","_parse_cjk_visual_marker_line","_parse_visual_configured_symbol_line","_leading_cjk_ideograph","_cjk_visual_projection_runs","_cjk_right_context_metrics","_cjk_right_context_features","_cjk_candidate_right_context_metrics","_cjk_candidate_right_context_features","_cjk_word_for_visual_run","_cjk_recovery_deps","_robust_record_line_height","_single_cjk_from_local_records","_recover_oversized_cjk_ocr_records","_record_already_represents_oversized_run","_recover_image_first_oversized_cjk_records","_suppress_raw_records_shadowed_by_verified_cjk_recovery","refine_separator_y","refine_separator_y_adaptive","refine_first_content_y","_header_cutoff","_accepted_cjk_row_for_visual_run","_selected_tail_structure_evidence","_ordinary_visual_rescue_thresholds","_ordinary_strong_edge_visual_rescue","_headword_filter_deps","filter_headword_records","_median_and_mad","_annotate_peer_typography_matches","_attach_source_candidate_coordinates","_candidate_axis_v","_source_only_persistence","_image_cache_fingerprint","_cache_signature","_records_as_merged_lines","_candidate_rows","_alphabetical_sort_key","_annotate_alphabetical_warnings","_apply_alphabetical_warnings_to_entries","_ocr_pairing_deps","_alignment_key","_lemma_similarity","_orthographic_similarity","_eligible_alignment_rows","_candidate_pair_score","_pair_ocr_candidates","_pairs_need_lens","_make_ocr_pair","_copy_candidate_to_pair","_pair_with_lens_candidates","_engine_quality","_stable_candidate_id","_issues_for_pair","_arbitrate_pair","_apply_pair_engine_position","_agreement_summary","_atomic_write_text","_atomic_write_json","_compact_cached_candidate","compact_ocr_cache_payload","_regenerable_sidecars","compact_ocr_cache_file","_tsv_clean","_candidate_reason","_candidate_tsv_row","_diagnostic_text","_comparison_text","_engines_long_text","_fusion_text","_issues_text","_manual_selection_path","_expand_original_y_fallback_candidates","_enforce_position_variant_exclusivity","_load_manual_selection_overrides","_apply_manual_selection_overrides","_review_finalization_deps","_review_candidate_box_height","_review_candidates_same_cjk_glyph","_review_candidate_priority","_normalize_cjk_review_word","_looks_like_multi_cjk_headword","_review_candidates_same_cjk_compound","_candidate_has_single_cjk_identity","_candidate_line_height","_boxes_same_large_cjk_region","_single_cjk_duplicate_pair","_deduplicate_selected_cjk_review_candidates","_entries_from_review_candidates","_update_project_quality_summary","_page_detection_deps","detect_paddle_headwords"]:
+    globals()[_legacy_fn_name].__module__ = "picture_capture.paddle_headwords_core"
+del _legacy_fn_name
