@@ -6,8 +6,10 @@ not an atomic cross-process compare-and-swap.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 from picture_capture.models import Entry
 from picture_capture.io.formats import read_pdic, write_pdic
@@ -167,3 +169,46 @@ def test_post_export_guard_precedes_pdic_write_and_rollback():
     assert source.index("if current_ocred != published_ocred:") < source.index(
         "write_pdic(pdic_path, entries, image_width, pages_info)"
     )
+
+
+def test_worker_rejects_manual_edit_inside_export_callback(tmp_path):
+    from picture_capture.ocr.batch_existing_entries import process_existing_pdic_page
+
+    page = tmp_path / "001.png"
+    Image.new("RGB", (100, 140), "white").save(page)
+    pdic = page.with_suffix(".PDIC")
+    _save_pdic(pdic)
+    original_pdic = pdic.read_bytes()
+    ocred = tmp_path / "QT" / "001.OCRed"
+    ocred.parent.mkdir(parents=True, exist_ok=True)
+    ocred.write_bytes(b"original-ocred")
+    manual = b"000|`human-edit-during-export\\n"
+    writes = []
+
+    def export_then_manual_edit(path, texts):
+        export_ocred(path, texts)
+        path.write_bytes(manual)
+
+    deps = {
+        "pdic_path": lambda path: path.with_suffix(".PDIC"),
+        "read_pdic": read_pdic,
+        "Image": Image,
+        "normalize_page_rgb": lambda opened: opened.copy().convert("RGB"),
+        "effective_page_settings": lambda settings, _size, _index: settings,
+        "page_template_analysis_image": lambda image, _settings, _index: image,
+        "read_page_sections": lambda _page: [],
+        "sort_entries_reading_order": lambda entries, _geometry, _sections: entries,
+        "derive_geometry": lambda *_args: object(),
+        "ocr_entries": lambda *_args, **_kwargs: ["new-ocr"],
+        "qt_root": lambda root: root / "QT",
+        "export_ocred": export_then_manual_edit,
+        "write_pdic": lambda *_args: writes.append("pdic"),
+    }
+    with pytest.raises(RuntimeError, match="OCRed 导出后内容与预期不符"):
+        process_existing_pdic_page(
+            page, 0, tmp_path, SimpleNamespace(), [], ("001", "@", "@"),
+            deps=deps,
+        )
+    assert writes == []
+    assert ocred.read_bytes() == manual
+    assert pdic.read_bytes() == original_pdic
