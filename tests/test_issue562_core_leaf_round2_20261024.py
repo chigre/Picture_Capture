@@ -24,7 +24,7 @@ def test_leaf_ownership_and_old_core_import_signatures():
     assert (PACKAGE / "ocr/paddle_results.py").is_file()
     assert not (PACKAGE / "column_tracking_math.py").exists()
     assert not (PACKAGE / "paddle_results.py").exists()
-    assert len(list(PACKAGE.glob("*.py"))) == 7
+    assert len(list(PACKAGE.glob("*.py"))) == 5
     assert processing_core._smooth_track.__module__ == "picture_capture.processing_core"
     assert processing_core._column_tracking_dimensions.__module__ == "picture_capture.processing_core"
     assert paddle_headwords_core._json_payload.__module__ == "picture_capture.paddle_headwords_core"

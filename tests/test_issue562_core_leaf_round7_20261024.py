@@ -26,7 +26,7 @@ def _geometry(width=100, height=200):
 
 
 def test_original_core_path_and_contracts():
-    assert len(list(PKG.glob("*.py"))) == 7
+    assert len(list(PKG.glob("*.py"))) == 5
     assert (PKG / "crop/entry_vertical_bounds.py").is_file()
     assert (PKG / "ocr/band_preprocessing.py").is_file()
     assert not (PKG / "entry_vertical_bounds.py").exists()
