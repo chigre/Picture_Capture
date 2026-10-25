@@ -117,7 +117,6 @@ def test_batch_selection_prompts_flushes_editor_and_schedules_first_pdic(tmp_pat
     )
 
     done(1, 1, False, [2], None)
-    assert app.events[-1] == ("load-page", 0, True) or app.status_var.value == "批量 OCR 完成：2 个词条"
     assert ("load-page", 0, True) in app.events
     assert app.status_var.value == "批量 OCR 完成：2 个词条"
 
