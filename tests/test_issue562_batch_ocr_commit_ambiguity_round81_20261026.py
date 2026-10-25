@@ -127,7 +127,10 @@ def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch
     def read_with_post_error(self):
         if self == pdic:
             count["pdic"] += 1
-            if count["pdic"] == 2:
+            # Read 1 snapshots the pre-export PDIC; read 2 verifies it
+            # before calling the writer; read 3 verifies an ambiguous
+            # writer failure. Inject at read 3 to exercise this contract.
+            if count["pdic"] == 3:
                 raise PermissionError("PDIC read denied after writer error")
         return original_read(self)
 
@@ -140,7 +143,7 @@ def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch
             write_pdic=lambda *_args: (_ for _ in ()).throw(OSError("writer denied")),
         )
     assert "writer denied" in str(caught.value.__cause__)
-    assert count["pdic"] == 2
+    assert count["pdic"] == 3
     assert import_ocred(ocred) == ["new"]
     assert original_read(pdic) == b"old"
 
