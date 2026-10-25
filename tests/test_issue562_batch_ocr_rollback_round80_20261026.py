@@ -155,3 +155,28 @@ def test_real_batch_page_pdic_failure_restores_existing_sidecar(tmp_path):
         )
     assert ocred.read_bytes() == old_ocred
     assert page.with_suffix(".PDIC").read_bytes() == old_pdic
+
+
+def test_unresolved_pdic_transaction_marker_restores_proofread_ocred(tmp_path):
+    ocred = tmp_path / "QT" / "001.OCRed"
+    ocred.parent.mkdir()
+    export_ocred(ocred, ["reviewed"])
+    before = ocred.read_bytes()
+    pdic = tmp_path / "001.PDIC"
+    pdic.write_bytes(b"reviewed#15#40#15#40#001#@#@\\n")
+    original_pdic = pdic.read_bytes()
+    marker = pdic.with_name(f".{pdic.name}.r3-inflight.json")
+    marker.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Unresolved R3 transaction"):
+        publish_existing_pdic_ocr(
+            ocred, pdic, ["fresh"], [Entry("fresh", 15, 40)], 100,
+            ("001", "@", "@"),
+            export_ocred=export_ocred,
+            write_pdic=write_pdic,
+        )
+
+    assert pdic.read_bytes() == original_pdic
+    assert ocred.read_bytes() == before
+    assert marker.exists()
+    assert list(ocred.parent.glob(".001.OCRed.*.tmp")) == []
