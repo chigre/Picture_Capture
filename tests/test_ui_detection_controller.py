@@ -9,6 +9,7 @@ from PIL import Image
 import picture_capture.ui.controllers.detection as detection_module
 from picture_capture.models import AppSettings, Entry
 from picture_capture.ui.controllers.detection import DetectionController
+from picture_capture.ocr.text_io import export_ocred as real_export_ocred
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -426,10 +427,14 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
         lambda _image, _entries, _settings, _rules, **_kwargs: ["alpha"],
     )
     monkeypatch.setattr(detection_module, "qt_root", lambda _root: tmp_path / "qt")
+    def record_export(path, texts):
+        exports.append((path, list(texts)))
+        real_export_ocred(path, texts)
+
     monkeypatch.setattr(
         detection_module,
         "export_ocred",
-        lambda path, texts: exports.append((path, list(texts))),
+        record_export,
     )
     monkeypatch.setattr(
         detection_module,
