@@ -1563,3 +1563,25 @@ unchanged. Tests characterize both the physical owner and the real worker
 through the existing controller test. No schema or root compatibility shim
 changed. Full six-platform CI and real dictionary scan acceptance remain
 independent; the latter is NOT PASSED, and PR #663 must stay Draft.
+
+
+## Issue #562 — Round 71: current-page detection worker (2026-10-25)
+
+The actual image-open/normalize, ordinary/OCR/combined inference and
+combined-mode blank-text fill now belong to
+`detection/current_page_worker.py` rather than the Tk
+`ui/controllers/detection.py` callback closure. The controller continues
+to snapshot settings and existing markers, own batch scheduling and cancellation,
+check the project/page identity before applying results, merge selected columns,
+sort, update OCR review quality and redraw the GUI.
+
+The worker retains call-time injection of the original processing, mask,
+replace-rules, OCR and profile hooks; no new root shim, pickled class or
+persisted schema changed. Combined mode must reject any alteration to entry
+source X/Y during OCR text fill. Unit tests cover each detection method,
+argument/source mask semantics and the hard coordinate invariant, while
+existing controller tests continue to cover batch/done callback behavior.
+Round 70 OCRed/PDIC publication ownership remains in
+`ocr/batch_existing_entries.py`; this worker performs **no publication**.
+CI and real dictionary-page human acceptance are separate; keep PR #663
+Draft until the latter is explicitly completed.
