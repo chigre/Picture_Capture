@@ -716,8 +716,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 10:
-        violations.append(f"root Python module count regressed: {root_py_count} > 10")
+    if root_py_count > 9:
+        violations.append(f"root Python module count regressed: {root_py_count} > 9")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -2552,7 +2552,12 @@ def collect_violations() -> list[str]:
     # Issue #562: training candidate/PDIC linkage is source-space aware and
     # has one physical owner; keep its historic root import for consumers.
     gt_owner = PACKAGE_ROOT / "training/ground_truth_matching.py"
-    training_entry = PACKAGE_ROOT / "training_export.py"
+    training_entry = PACKAGE_ROOT / "training/export_runtime.py"
+    training_bridge = PACKAGE_ROOT / "training_export/__init__.py"
+    if (PACKAGE_ROOT / "training_export.py").is_file():
+        violations.append("retired root training_export.py returned")
+    if not training_bridge.is_file() or "_sys.modules[__name__] = _canonical" not in training_bridge.read_text(encoding="utf-8"):
+        violations.append("training export historical module identity bridge missing")
     if not gt_owner.is_file():
         violations.append("training ground-truth matching owner missing")
     else:
@@ -2562,13 +2567,13 @@ def collect_violations() -> list[str]:
             violations.append("canonical training matcher implementation missing")
         if "def _candidate_ground_truth_link(" in entry_source:
             violations.append("training matcher implementation duplicated at root")
-        if "from .training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
+        if "from ..training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
             violations.append("training legacy matcher export disconnected")
 
     # Issue #562: project-context snapshot and v2 manifest serialization have
     # one import-light training owner behind the historical root API.
     manifest_owner = PACKAGE_ROOT / "training/manifest_v2.py"
-    legacy_export = PACKAGE_ROOT / "training_export.py"
+    legacy_export = PACKAGE_ROOT / "training/export_runtime.py"
     if not manifest_owner.is_file():
         violations.append("training v2 manifest/context canonical owner missing")
     else:
@@ -2579,7 +2584,7 @@ def collect_violations() -> list[str]:
                 violations.append(f"training v2 canonical owner missing {name}")
             if f"def {name}(" in legacy_source:
                 violations.append(f"training v2 implementation duplicated at root: {name}")
-        if "from .training.manifest_v2 import (" not in legacy_source:
+        if "from ..training.manifest_v2 import (" not in legacy_source:
             violations.append("legacy training exporter lost canonical manifest/context re-exports")
         if "TRAINING_EXPORT_FORMAT" not in manifest_source:
             violations.append("training v2 canonical format marker missing")
@@ -2587,7 +2592,7 @@ def collect_violations() -> list[str]:
     # Issue #562: the training archive publisher has a single physical owner,
     # with the historical public module exporting the *same* class and callable.
     zip_owner = PACKAGE_ROOT / "training/zip_publish.py"
-    legacy_training = PACKAGE_ROOT / "training_export.py"
+    legacy_training = PACKAGE_ROOT / "training/export_runtime.py"
     if not zip_owner.is_file():
         violations.append("canonical training ZIP publish owner missing")
     else:
@@ -2601,7 +2606,7 @@ def collect_violations() -> list[str]:
             violations.append("duplicate root training ZIP cancellation exception")
         if "def make_training_zip(" in training_source:
             violations.append("duplicate root training ZIP publisher")
-        if "from .training.zip_publish import TrainingExportCancelled, make_training_zip" not in training_source:
+        if "from ..training.zip_publish import TrainingExportCancelled, make_training_zip" not in training_source:
             violations.append("legacy training ZIP publisher aliases disconnected")
         if 'TrainingExportCancelled.__module__ = "picture_capture.training_export"' not in zip_source:
             violations.append("training ZIP exception legacy pickle identity lost")

@@ -7,25 +7,25 @@ import shutil
 
 from PIL import Image, ImageOps
 
-from .io.formats import pdic_path, read_pdic, read_ppp
-from .preprocess.analysis_image import normalize_page_rgb
-from .models import AppSettings
-from .geometry.coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
-from .processing import column_index, derive_geometry
-from .profile.semantics import (
+from ..io.formats import pdic_path, read_pdic, read_ppp
+from ..preprocess.analysis_image import normalize_page_rgb
+from ..models import AppSettings
+from ..geometry.coordinate_space import SOURCE_COORDINATE_SPACE, coordinate_contract
+from ..processing import column_index, derive_geometry
+from ..profile.semantics import (
     effective_page_settings,
     excluded_source_side,
     excluded_source_side_percent,
     page_template_analysis_image,
 )
-from .persistence.project_storage import ocr_cache_root, ppp_read_path_for_image
+from ..persistence.project_storage import ocr_cache_root, ppp_read_path_for_image
 
 
-from .training.manifest_v2 import (
+from ..training.manifest_v2 import (
     TRAINING_EXPORT_FORMAT, copy_project_context, write_training_manifest,
 )
-from .training.zip_publish import TrainingExportCancelled, make_training_zip
-from .training import export_page_v2 as _page_v2
+from ..training.zip_publish import TrainingExportCancelled, make_training_zip
+from ..training import export_page_v2 as _page_v2
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -46,7 +46,7 @@ def _copy_if_exists(source: Path, target: Path) -> str | None:
 
 # Keep the training_export compatibility and monkeypatch import path stable;
 # source-pixel matching itself is owned by training/ground_truth_matching.
-from .training.ground_truth_matching import _candidate_ground_truth_link
+from ..training.ground_truth_matching import _candidate_ground_truth_link
 
 def export_training_page(
     page: Path,
@@ -80,3 +80,9 @@ def export_training_page(
             "json": json,
         },
     )
+
+# Public compatibility: original module path remains the *same module object*
+# under picture_capture.training_export; keep locally-defined helper pickles.
+for _historical_training_name in ("_read_json", "_copy_if_exists", "export_training_page"):
+    globals()[_historical_training_name].__module__ = "picture_capture.training_export"
+del _historical_training_name

@@ -23,14 +23,14 @@ def _staging(tmp_path: Path) -> Path:
 
 
 def test_physical_owner_and_exact_public_abi_in_composed_v3() -> None:
-    root = Path(training_export.__file__).resolve().parent
+    root = Path(training_export.__file__).resolve().parent.parent
     assert Path(zip_publish.__file__).resolve() == root / "training" / "zip_publish.py"
     assert training_export.TrainingExportCancelled is zip_publish.TrainingExportCancelled
     assert training_export.make_training_zip is zip_publish.make_training_zip
     composed = importlib.import_module("picture_capture.training.export_composed")
     assert composed.TrainingExportCancelled is zip_publish.TrainingExportCancelled
     assert composed.make_training_zip is zip_publish.make_training_zip
-    facade = (root / "training_export.py").read_text(encoding="utf-8")
+    facade = (root / "training/export_runtime.py").read_text(encoding="utf-8")
     assert "class TrainingExportCancelled(" not in facade
     assert "def make_training_zip(" not in facade
     assert "temp_zip.replace(zip_path)" in (root / "training" / "zip_publish.py").read_text(encoding="utf-8")

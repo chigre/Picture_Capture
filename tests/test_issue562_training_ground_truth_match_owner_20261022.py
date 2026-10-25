@@ -15,14 +15,14 @@ def _layout(transform):
 
 
 def test_physical_owner_with_unchanged_legacy_training_export_symbol() -> None:
-    package = Path(training_export.__file__).resolve().parent
+    package = Path(training_export.__file__).resolve().parent.parent
     assert Path(matching.__file__).resolve() == package / "training" / "ground_truth_matching.py"
     assert training_export._candidate_ground_truth_link is matching._candidate_ground_truth_link
     assert matching._candidate_ground_truth_link.__module__ == (
         "picture_capture.training.ground_truth_matching"
     )
     assert "def _candidate_ground_truth_link(" not in (
-        package / "training_export.py"
+        package / "training/export_runtime.py"
     ).read_text(encoding="utf-8")
 
 
