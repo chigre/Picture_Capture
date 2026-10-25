@@ -511,7 +511,8 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
     assert "self.detection_controller = DetectionController(self)" in startup
     assert startup.index("self.detection_controller = DetectionController(self)") < startup.index("self._build_ui()")
     assert "def _detection_controller_for_call(" in app
-    assert 'self.__dict__.get("detection_controller")' in app
+    assert '"detection_controller", DetectionController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
 
     expected = {
         "auto_detect_current": "auto_detect_current",

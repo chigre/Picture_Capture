@@ -189,7 +189,8 @@ def test_review_controller_wiring_keeps_picture_capture_app_compatibility_method
     assert "_main_app_initialization.initialize_main_app(" in app
     assert "self.review_controller = ReviewController(self)" in startup
     assert "def _review_controller_for_call(" in app
-    assert 'self.__dict__.get("review_controller")' in app
+    assert '"review_controller", ReviewController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert startup.index("self.review_controller = ReviewController(self)") < startup.index("self._build_ui()")
 
     expected = {

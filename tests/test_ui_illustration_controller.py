@@ -356,7 +356,8 @@ def test_illustration_controller_wiring_preserves_app_compatibility_method() -> 
     assert "self.illustration_controller = IllustrationController(self)" in startup
     assert startup.index("self.illustration_controller = IllustrationController(self)") < startup.index("self._build_ui()")
     assert "def _illustration_controller_for_call(" in app
-    assert 'self.__dict__.get("illustration_controller")' in app
+    assert '"illustration_controller", IllustrationController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert "def detect_illustrations_selected_scope(self)" in app
     assert "self._illustration_controller_for_call().detect_illustrations_selected_scope()" in app
     assert "from .illustration import IllustrationController" in controllers

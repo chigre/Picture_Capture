@@ -255,7 +255,8 @@ def test_headword_controller_wiring_preserves_app_compatibility_methods() -> Non
     assert "self.headword_controller = HeadwordController(" in startup
     assert startup.index("self.headword_controller = HeadwordController(") < startup.index("self._build_ui()")
     assert "def _headword_controller_for_call(" in app
-    assert 'self.__dict__.get("headword_controller")' in app
+    assert '"headword_controller", HeadwordController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert "def select_existing_headwords_file(self)" in app
     assert (
         "self._headword_controller_for_call().select_existing_headwords_file()" in app

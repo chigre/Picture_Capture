@@ -7,6 +7,7 @@ the native static tooltip helper, with runtime patchpoint-compatible delegation.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from .controller_lifecycle import get_or_create_controller
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -492,12 +493,8 @@ def _attach_tooltip(
 
 
 def _project_controller_for_call(self, deps: ProjectSessionDeps) -> ProjectController:
-    ProjectController = deps.ProjectController
-    controller = self.__dict__.get("project_controller")
-    if controller is None:
-        controller = ProjectController(self)
-        self.__dict__["project_controller"] = controller
-    return controller
+    """Keep project lifecycle's live class from the caller's dependency snapshot."""
+    return get_or_create_controller(self, "project_controller", deps.ProjectController)
 
 
 def _choose_new_project_image_suffix(self, deps: ProjectSessionDeps, root: Path) -> str | None:

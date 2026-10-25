@@ -166,6 +166,7 @@ from .ui.settings import dialog_initialization as _settings_dialog_initializatio
 from .ui import review_window_initialization as _review_window_initialization
 from .ui import review_layout_events as _review_layout_events
 from .ui import main_app_initialization as _main_app_initialization
+from .ui import controller_lifecycle as _controller_lifecycle
 from .ui import appearance_resolution as _appearance_resolution
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
 from .ui.page_list_grid import PageListGrid
@@ -2516,11 +2517,10 @@ class PictureCaptureApp(tk.Tk):
         return _main_display_cache._get_cached_display_photo(self, size, deps={"Image": Image, "ImageTk": ImageTk, "binary_preview_image": binary_preview_image, "themed_display_image": themed_display_image})
 
     def _canvas_controller_for_call(self) -> CanvasController:
-        controller = self.__dict__.get("canvas_controller")
-        if controller is None:
-            controller = CanvasController(self)
-            self.__dict__["canvas_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "canvas_controller", CanvasController,
+        )
 
     def _display_mode_from_flags(self) -> str:
         return self._canvas_controller_for_call().display_mode_from_flags()
@@ -2842,11 +2842,10 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _review_controller_for_call(self) -> ReviewController:
-        controller = self.__dict__.get("review_controller")
-        if controller is None:
-            controller = ReviewController(self)
-            self.__dict__["review_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "review_controller", ReviewController,
+        )
 
     def _load_ocr_review_candidates(self) -> None:
         self._review_controller_for_call().load_ocr_review_candidates()
@@ -2995,11 +2994,10 @@ class PictureCaptureApp(tk.Tk):
         )
 
     def _detection_controller_for_call(self) -> DetectionController:
-        controller = self.__dict__.get("detection_controller")
-        if controller is None:
-            controller = DetectionController(self)
-            self.__dict__["detection_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "detection_controller", DetectionController,
+        )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
         self._detection_controller_for_call().paddle_detect_current(force_refresh)
@@ -3119,11 +3117,10 @@ class PictureCaptureApp(tk.Tk):
         return _main_ocr_current.ocr_current(self, deps={"replace": replace, "replace_rules_path": replace_rules_path, "qt_root": qt_root, "OCR_ENGINE_LABELS": OCR_ENGINE_LABELS, "load_replace_rules": load_replace_rules, "Image": Image, "normalize_page_rgb": normalize_page_rgb, "ocr_entries": ocr_entries, "export_ocred": export_ocred, "write_pdic": write_pdic, "pdic_path": pdic_path})
 
     def _export_controller_for_call(self) -> ExportController:
-        controller = self.__dict__.get("export_controller")
-        if controller is None:
-            controller = ExportController(self)
-            self.__dict__["export_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "export_controller", ExportController,
+        )
 
     def export_text(self) -> None:
         self._export_controller_for_call().export_text()
@@ -3132,11 +3129,10 @@ class PictureCaptureApp(tk.Tk):
         self._export_controller_for_call().import_text()
 
     def _crop_controller_for_call(self) -> CropController:
-        controller = self.__dict__.get("crop_controller")
-        if controller is None:
-            controller = CropController(self)
-            self.__dict__["crop_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "crop_controller", CropController,
+        )
 
     def split_lines_current(self) -> None:
         self._crop_controller_for_call().split_lines_current()
@@ -3168,11 +3164,10 @@ class PictureCaptureApp(tk.Tk):
         self._crop_controller_for_call().split_entries_selected_scope()
 
     def _illustration_controller_for_call(self) -> IllustrationController:
-        controller = self.__dict__.get("illustration_controller")
-        if controller is None:
-            controller = IllustrationController(self)
-            self.__dict__["illustration_controller"] = controller
-        return controller
+        """Preserve lazy controller identity and live constructor patchpoints."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "illustration_controller", IllustrationController,
+        )
 
     def detect_illustrations_selected_scope(self) -> None:
         self._illustration_controller_for_call().detect_illustrations_selected_scope()
@@ -3244,15 +3239,12 @@ class PictureCaptureApp(tk.Tk):
         self.restore_from_pdic_backup()
 
     def _headword_controller_for_call(self) -> HeadwordController:
-        controller = self.__dict__.get("headword_controller")
-        if controller is None:
-            controller = HeadwordController(
-                self,
-                parse_words_of_pages_text=_parse_words_of_pages_text,
-                fill_page_entries=_fill_page_entries,
-            )
-            self.__dict__["headword_controller"] = controller
-        return controller
+        """Retain live parsing/fill callbacks during lazy Headword creation."""
+        return _controller_lifecycle.get_or_create_controller(
+            self, "headword_controller", HeadwordController,
+            parse_words_of_pages_text=_parse_words_of_pages_text,
+            fill_page_entries=_fill_page_entries,
+        )
 
     def select_existing_headwords_file(self) -> None:
         self._headword_controller_for_call().select_existing_headwords_file()

@@ -323,7 +323,8 @@ def test_canvas_controller_wiring_keeps_picture_capture_app_compatibility_method
     assert "_main_app_initialization.initialize_main_app(" in app
     assert "self.canvas_controller = CanvasController(self)" in startup
     assert "def _canvas_controller_for_call(" in app
-    assert 'self.__dict__.get("canvas_controller")' in app
+    assert '"canvas_controller", CanvasController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert startup.index("self.canvas_controller = CanvasController(self)") < startup.index("self._build_ui()")
 
     expected = {
