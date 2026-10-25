@@ -145,6 +145,110 @@ def main() -> int:
                 )
                 _assert(len(app.polygons) == 1, "initial GUI PPP polygon missing")
 
+                # Round 64: exercise the ORIGINAL user-facing detection
+                # actions and OCR-engine preflight on the live Tk workspace.
+                # The detector backend is a dispatch spy, not a model run;
+                # missing native OCR packages must never be fabricated here.
+                engine_names = (
+                    "paddle_use_paddleocr",
+                    "paddle_compare_tesseract",
+                    "paddle_enable_lens",
+                )
+                _assert(
+                    all(name in app.quick_bool_vars for name in engine_names),
+                    "Tk OCR engine switches missing from the main workspace",
+                )
+                previous_switches = {
+                    name: bool(app.quick_bool_vars[name].get())
+                    for name in engine_names
+                }
+                settings_fields = (*engine_names, "paddle_tesseract_rescue",
+                                   "paddle_lens_mode", "detection_method")
+                previous_settings = {
+                    name: getattr(app.settings, name) for name in settings_fields
+                }
+                previous_lens_label = app.lens_mode_var.get()
+                marker_hash = _source_hash(pdic_path(first))
+                polygon_hash = _source_hash(ppp_read_path_for_image(first))
+                try:
+                    for name, enabled in (
+                        ("paddle_use_paddleocr", False),
+                        ("paddle_compare_tesseract", False),
+                        ("paddle_enable_lens", True),
+                    ):
+                        app.quick_bool_vars[name].set(enabled)
+                        setattr(app.settings, name, enabled)
+                    app.settings.paddle_tesseract_rescue = False
+                    app.settings.paddle_lens_mode = "off"
+                    app.lens_mode_var.set("off")
+                    blocked_dialogs = []
+
+                    def capture_blocked_ocr(title, detail, **_kwargs):
+                        blocked_dialogs.append((title, detail))
+
+                    with patch.object(
+                        app, "_detect_pages",
+                        side_effect=AssertionError("invalid OCR action reached backend"),
+                    ) as forbidden_dispatch, patch.object(
+                        module.messagebox, "showerror",
+                        side_effect=capture_blocked_ocr,
+                    ):
+                        app.run_ocr_draw_action()
+                        app.run_combined_draw_action()
+                        forbidden_dispatch.assert_not_called()
+                    _assert(
+                        len(blocked_dialogs) == 2
+                        and all(title == "OCR 引擎配置无效"
+                                for title, _text in blocked_dialogs),
+                        "Lens-off-only selection did not block both OCR draw actions",
+                    )
+                    _assert(
+                        app.settings.detection_method
+                        == previous_settings["detection_method"],
+                        "rejected OCR action mutated selected drawing mode",
+                    )
+                    _assert(
+                        _source_hash(pdic_path(first)) == marker_hash
+                        and _source_hash(ppp_read_path_for_image(first)) == polygon_hash,
+                        "rejected OCR action rewrote saved PDIC/PPP",
+                    )
+
+                    # Ordinary drawing must stay usable with *all* OCR
+                    # engines disabled. Only the heavy backend is intercepted;
+                    # real Tk action/quick-settings/scope logic runs unchanged.
+                    app.quick_bool_vars["paddle_enable_lens"].set(False)
+                    app.settings.paddle_enable_lens = False
+                    dispatched = []
+
+                    def capture_normal_draw(indices, *, method, force_refresh):
+                        dispatched.append((
+                            list(indices), method, force_refresh,
+                            bool(app.quick_bool_vars["paddle_use_paddleocr"].get()),
+                            bool(app.settings.paddle_use_paddleocr),
+                        ))
+
+                    with patch.object(app, "_detect_pages",
+                                      side_effect=capture_normal_draw):
+                        app.run_normal_draw_action()
+                    _assert(
+                        dispatched == [([0], "left_edge", False, False, False)],
+                        "ordinary GUI action failed OCR-free left_edge routing",
+                    )
+                    _assert(
+                        _source_hash(pdic_path(first)) == marker_hash
+                        and _source_hash(ppp_read_path_for_image(first)) == polygon_hash,
+                        "ordinary action dispatch spy unexpectedly touched PDIC/PPP",
+                    )
+                finally:
+                    for name, value in previous_settings.items():
+                        setattr(app.settings, name, value)
+                    for name, value in previous_switches.items():
+                        app.quick_bool_vars[name].set(value)
+                    app.lens_mode_var.set(previous_lens_label)
+                    app.sync_quick_settings()
+                    app.save_settings()
+
+
                 for entry in app.entries:
                     if (entry.x, entry.y) == (80, 76):
                         entry.word = "synthetic-alpha-edited"
@@ -510,7 +614,8 @@ def main() -> int:
                     "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
                     "two-page navigation; v3 Profile; production crop PNG pixel parity, " 
                     "PWWords/widths/plan; GUI CropController async parity; "
-                    "SECTION edit/save/reopen/evidence; source image immutable",
+                    "SECTION edit/save/reopen/evidence; OCR guard and ordinary dispatch; "
+                    "source image immutable",
                     flush=True,
                 )
             return 0

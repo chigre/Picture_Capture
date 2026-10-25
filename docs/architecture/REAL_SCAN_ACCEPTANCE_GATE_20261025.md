@@ -46,7 +46,26 @@ another page switch without reviving stale SECTION records.
 
 This is an **automated Tk callback and persistence test on synthetic
 pages**, not evidence that a human has dragged SECTION lines on the
-real dictionary scan. The manual gate remains open. It exercises
+real dictionary scan. The manual gate remains open.
+
+**Round 64** extends that live Tk synthetic-workspace smoke to the actual
+ordinary/OCR/combined user-action entrypoints. Setting the three visible
+engine switches to Lens-only with its mode **off** must reject both OCR and
+combined draw **before any backend dispatch**, report the expected invalid
+OCR-engine configuration, and leave the current mode and PDIC/PPP bytes
+unchanged. The same window then disables all OCR engines and invokes the
+ordinary draw action; its real quick-settings validator and page-scope
+selection must dispatch exactly one current-page `left_edge` request
+without persisting a temporarily invented Paddle selection. Saved settings,
+original UI switches and active lens value are restored afterward.
+
+**Important limit:** The expensive detector worker is replaced *only* with
+an explicit call-recording spy in this Round 64 smoke to make action routing
+and negative engine preflight testable without native Paddle/Tesseract/Lens
+runtimes. The original user action and Tk settings are real; **no real
+ordinary segmentation, OCR inference, fused output or model-level accuracy**
+is claimed. All three modes on full-resolution dictionary scans remain
+part of the open manual acceptance gate. It exercises
 `write_project_profile`/`load_dictionary_profile` for a real project-local
 Profile v3 sidecar without opening the human Profile wizard.
 
