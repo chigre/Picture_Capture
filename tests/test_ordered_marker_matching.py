@@ -61,7 +61,7 @@ def test_real_benchmark_uses_identical_production_matching_primitive():
     from picture_capture.quality import detection_entry_fusion
     fusion = Path(detection_entry_fusion.__file__).read_text(encoding="utf-8")
     benchmark = (
-        Path(core.__file__).resolve().parents[2] / "scripts" /
+        Path(__file__).resolve().parents[1] / "scripts" /
         "detection_benchmark.py"
     ).read_text(encoding="utf-8")
     # The benchmark now delegates to a pure metric helper, which must use

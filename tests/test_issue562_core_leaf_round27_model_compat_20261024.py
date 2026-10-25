@@ -27,7 +27,7 @@ def test_exact_model_owners_no_root_compat_stubs():
         assert leaf.is_file() and not (root / leaf.name).exists()
         nodes = ast.parse(leaf.read_text(encoding="utf-8")).body
         assert {n.name for n in nodes if isinstance(n, ast.ClassDef)} == names
-    core_tree = ast.parse((root / "processing_core.py").read_text(encoding="utf-8"))
+    core_tree = ast.parse((root / "runtime/processing_core_runtime.py").read_text(encoding="utf-8"))
     assert not any(
         isinstance(n, ast.ClassDef) and n.name in {
             "ColumnPath", "Geometry", "CropRecord", "EntryCropPiecePlan",
