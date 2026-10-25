@@ -116,9 +116,20 @@ def publish_existing_pdic_ocr(
     except FileNotFoundError:
         pdic_after_export = None
     except OSError as inspect_error:
+        # The PDIC writer has not run: do not strand a freshly exported
+        # OCRed beside an unverified PDIC. Best-effort compensation still
+        # cannot make concurrent external sidecar writers transactional.
+        try:
+            _restore_ocred_bytes(ocred_path, previous)
+        except Exception as rollback_error:
+            raise RuntimeError(
+                "无法核验导出后的 PDIC，且 OCRed 回滚失败；"
+                "未启动 PDIC 保存，请人工核查两份文件："
+                f"核查={inspect_error!r}；回滚={rollback_error!r}"
+            ) from inspect_error
         raise RuntimeError(
-            "OCRed 已导出，但无法确认 PDIC 是否在导出期间被修改；"
-            "未启动 PDIC 保存，请核查两份文件："
+            "无法核验导出后的 PDIC；已恢复原有 OCRed，"
+            "未启动 PDIC 保存，请核查 PDIC："
             f"核查={inspect_error!r}"
         ) from inspect_error
     if pdic_after_export != previous_pdic:
