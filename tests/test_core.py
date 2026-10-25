@@ -5650,7 +5650,7 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
     events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
     assert "_review_layout_events._stored_review_zoom_percent(" in app_text
     assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in events
-    assert "not self.review_zoom_auto" in app_text
+    assert "not self.review_zoom_auto" in events
 
 
 def test_google_lens_language_follows_headword_ocr_language():
