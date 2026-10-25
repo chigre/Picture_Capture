@@ -40,7 +40,7 @@ def parsed():
 
 
 def test_leaf_inventory_signature_and_legacy_origins():
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     for path in ("ocr/visual_rescue_policy.py", "ocr/peer_typography.py"):
         assert (PKG / path).is_file()
         assert not (PKG / Path(path).name).exists()

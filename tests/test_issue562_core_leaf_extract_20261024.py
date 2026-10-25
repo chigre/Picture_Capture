@@ -22,7 +22,7 @@ def test_core_leaves_have_real_package_owners_without_root_compat_stubs():
     assert not (PKG / "polygon_geometry.py").exists()
     assert not (PKG / "worker_policy.py").exists()
     assert not (PKG / "headword_normalization.py").exists()
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
 
 
 def test_core_legacy_callable_module_paths_and_signatures():

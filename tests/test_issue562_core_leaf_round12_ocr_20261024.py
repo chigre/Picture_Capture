@@ -41,7 +41,7 @@ def find_pos(text, regex, max_chars):
 
 
 def test_historical_core_signatures_class_identity_and_leaf_presence():
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     assert (PKG / "ocr/line_structure_repairs.py").is_file()
     assert not (PKG / "line_structure_repairs.py").exists()
     for fn in (

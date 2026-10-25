@@ -50,7 +50,7 @@ def _gray():
 
 
 def test_paths_signatures_root_inventory_and_model_identity():
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     assert (PKG / "crop/line_box_geometry.py").is_file()
     assert (PKG / "ocr/image_separator_geometry.py").is_file()
     assert not (PKG / "line_box_geometry.py").exists()

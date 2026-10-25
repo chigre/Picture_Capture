@@ -27,7 +27,7 @@ def parse_direct(tail, pos, search_limit=60, **kwargs):
 
 
 def test_leaf_root_inventory_and_historical_grammar_model_identity():
-    assert len(list(ROOT.glob("*.py"))) == 9
+    assert len(list(ROOT.glob("*.py"))) == 7
     assert (ROOT / "ocr/grammar_tail_parsing.py").is_file()
     assert not (ROOT / "grammar_tail_parsing.py").exists()
     for fn in (
