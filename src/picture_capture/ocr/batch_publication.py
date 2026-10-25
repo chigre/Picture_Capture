@@ -48,6 +48,26 @@ def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
             temp_path.unlink(missing_ok=True)
 
 
+def _restore_ocred_if_unchanged(
+    path: Path, previous: bytes | None, published: bytes | None,
+) -> None:
+    """Do not compensate over a sidecar edited after our export returned.
+
+    This is an optimistic guard, not a cross-process compare-and-swap: an
+    external writer can still race between this read and os.replace/unlink.
+    """
+    try:
+        current = path.read_bytes()
+    except FileNotFoundError:
+        current = None
+    if current != published:
+        raise RuntimeError(
+            "OCRed 在批量 OCR 发布后被其他操作修改；"
+            "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
+        )
+    _restore_ocred_bytes(path, previous)
+
+
 def publish_existing_pdic_ocr(
     ocred_path: Path,
     pdic_path: Path,
@@ -122,6 +142,20 @@ def publish_existing_pdic_ocr(
                 ) from rollback_error
         raise
 
+    # Capture the sidecar produced by this export. If an external editor
+    # changes it while PDIC verification or saving is in progress, neither
+    # a stale PDIC commit nor a compensating OCRed rollback may overwrite it.
+    try:
+        published_ocred = ocred_path.read_bytes()
+    except FileNotFoundError:
+        published_ocred = None
+    except OSError as inspect_error:
+        raise RuntimeError(
+            "OCRed 导出后无法核验其文件版本；"
+            "未启动 PDIC 保存，请人工核查 OCRed："
+            f"核查={inspect_error!r}"
+        ) from inspect_error
+
     # OCRed export can take time or invoke patched filesystem hooks.
     # If another editor writes PDIC during export, undo this OCRed sidecar
     # and refuse to overwrite their latest PDIC file.
@@ -134,7 +168,7 @@ def publish_existing_pdic_ocr(
         # OCRed beside an unverified PDIC. Best-effort compensation still
         # cannot make concurrent external sidecar writers transactional.
         try:
-            _restore_ocred_bytes(ocred_path, previous)
+            _restore_ocred_if_unchanged(ocred_path, previous, published_ocred)
         except Exception as rollback_error:
             raise RuntimeError(
                 "无法核验导出后的 PDIC，且 OCRed 回滚失败；"
@@ -148,7 +182,7 @@ def publish_existing_pdic_ocr(
         ) from inspect_error
     if pdic_after_export != previous_pdic:
         try:
-            _restore_ocred_bytes(ocred_path, previous)
+            _restore_ocred_if_unchanged(ocred_path, previous, published_ocred)
         except Exception as rollback_error:
             raise RuntimeError(
                 "PDIC 在 OCRed 导出期间被修改，且 OCRed 回滚失败："
@@ -157,6 +191,17 @@ def publish_existing_pdic_ocr(
         raise RuntimeError(
             "PDIC 在 OCRed 导出期间被其他操作修改；"
             "已恢复原有 OCRed，未覆盖人工校对的 PDIC"
+        )
+    # The PDIC read itself can take time (or be monkeypatched in legacy
+    # callers). Reject a concurrent OCRed correction before touching PDIC.
+    try:
+        current_ocred = ocred_path.read_bytes()
+    except FileNotFoundError:
+        current_ocred = None
+    if current_ocred != published_ocred:
+        raise RuntimeError(
+            "OCRed 在导出后、PDIC 保存前被其他操作修改；"
+            "未覆盖人工校对的 OCRed，未启动 PDIC 保存"
         )
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
@@ -178,7 +223,7 @@ def publish_existing_pdic_ocr(
                 f"PDIC={pdic_error!r}"
             ) from pdic_error
         try:
-            _restore_ocred_bytes(ocred_path, previous)
+            _restore_ocred_if_unchanged(ocred_path, previous, published_ocred)
         except Exception as rollback_error:
             raise RuntimeError(
                 "PDIC 保存失败，OCRed 回滚也失败："
