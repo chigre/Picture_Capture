@@ -144,7 +144,10 @@ def test_post_export_ocred_unreadable_reports_ambiguity_without_pdic(
     assert calls == []
     assert not pdic.exists()
     # Fail closed: retain the newly exported bytes until recoverable.
-    assert real_read(ocred) == b"000|`new\n"
+    # The canonical atomic text writer uses native newlines on Windows
+    # (CRLF), while POSIX uses LF. Compare decoded logical text here;
+    # byte-exact rollback is covered by separate old-file restoration tests.
+    assert ocred.read_text(encoding="utf-8") == "000|`new\n"
 
 
 def test_real_batch_page_export_post_commit_failure_does_not_modify_pdic(tmp_path):
