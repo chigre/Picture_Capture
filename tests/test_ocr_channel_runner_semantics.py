@@ -155,7 +155,7 @@ def test_windows_gpu_helper_rename_preserves_paddle_import_timing():
     assert "from paddleocr import PaddleOCR" not in channel
     assert "_paddle_engine_lifecycle.create_paddle_engine_impl(" in channel
     assert "_paddle_engine_lifecycle.clear_cached_engines(" in channel
-    core = (package / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    core = (package / "ocr/headword_core_runtime.py").read_text(encoding="utf-8")
     assert "_paddle_engine_lifecycle.get_paddle_engine_impl(" in core
 
 def test_legacy_boundary_bridge_no_longer_uses_core_paddle_runner_helpers():

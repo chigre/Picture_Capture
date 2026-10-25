@@ -83,7 +83,7 @@ def test_round20_leaves_grammar_tail_and_bundled_profile_in_core():
     """Guard against extracting adjacent globals and five wrappers by mistake."""
     import ast
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    core_source = (root / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    core_source = (root / "ocr" / "headword_core_runtime.py").read_text(encoding="utf-8")
     leaf_source = (root / "ocr" / "pos_cue_policy.py").read_text(encoding="utf-8")
     core_ast = ast.parse(core_source)
     leaf_ast = ast.parse(leaf_source)
