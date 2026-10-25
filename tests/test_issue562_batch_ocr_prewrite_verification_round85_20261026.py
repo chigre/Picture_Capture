@@ -1,0 +1,116 @@
+"""Round 85: unreadable PDIC *before* writer call must not strand new OCRed.
+
+The Round 81 ambiguous-commit rule remains separate: after a PDIC writer
+raises, unreadable PDIC must NOT trigger an OCRed-only rollback.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from picture_capture.models import Entry
+from picture_capture.ocr.batch_publication import publish_existing_pdic_ocr
+from picture_capture.ocr.text_io import export_ocred, import_ocred
+import picture_capture.ocr.batch_publication as publication
+
+
+@pytest.mark.parametrize("had_sidecar", [False, True])
+@pytest.mark.parametrize("had_pdic", [False, True])
+def test_prewrite_pdic_read_error_restores_exact_sidecar_and_skips_writer(
+    tmp_path, monkeypatch, had_sidecar, had_pdic,
+):
+    pdic = tmp_path / "001.PDIC"
+    if had_pdic:
+        pdic.write_bytes(b"unchanged PDIC bytes")
+    ocred = tmp_path / "QT" / "001.OCRed"
+    ocred.parent.mkdir()
+    old_ocred = None
+    if had_sidecar:
+        old_ocred = b"\xef\xbb\xbf000|`manually-corrected\r\n"
+        ocred.write_bytes(old_ocred)
+
+    read_original = Path.read_bytes
+    pdic_reads = []
+    writes = []
+
+    def unreadable_after_export(self):
+        if self == pdic:
+            pdic_reads.append(len(pdic_reads) + 1)
+            if len(pdic_reads) == 2:
+                raise PermissionError("verification read denied")
+        return read_original(self)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable_after_export)
+    with pytest.raises(RuntimeError, match="无法核验导出后的 PDIC；已恢复原有 OCRed") as caught:
+        publish_existing_pdic_ocr(
+            ocred, pdic, ["new OCR"], [Entry("new OCR", 7, 31)],
+            100, ("001", "@", "@"),
+            export_ocred=export_ocred,
+            write_pdic=lambda *_args: writes.append("pdic writer invoked"),
+        )
+    assert isinstance(caught.value.__cause__, PermissionError)
+    assert pdic_reads == [1, 2]
+    assert writes == []
+    if had_sidecar:
+        assert read_original(ocred) == old_ocred
+    else:
+        assert not ocred.exists()
+    if had_pdic:
+        assert read_original(pdic) == b"unchanged PDIC bytes"
+    else:
+        assert not pdic.exists()
+    assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
+
+
+def test_prewrite_verification_and_rollback_both_fail_reports_both(
+    tmp_path, monkeypatch,
+):
+    pdic = tmp_path / "001.PDIC"
+    pdic.write_bytes(b"old")
+    ocred = tmp_path / "001.OCRed"
+    export_ocred(ocred, ["old"])
+    old_bytes = ocred.read_bytes()
+    original_read = Path.read_bytes
+    count = {"pdic": 0}
+    writes = []
+
+    def fail_second_pdic_read(self):
+        if self == pdic:
+            count["pdic"] += 1
+            if count["pdic"] == 2:
+                raise PermissionError("verification denied")
+        return original_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_second_pdic_read)
+    monkeypatch.setattr(
+        publication, "_restore_ocred_bytes",
+        lambda *_args: (_ for _ in ()).throw(OSError("rollback denied")),
+    )
+    with pytest.raises(RuntimeError, match="无法核验导出后的 PDIC，且 OCRed 回滚失败") as caught:
+        publish_existing_pdic_ocr(
+            ocred, pdic, ["new"], [Entry("new", 7, 31)],
+            100, ("001", "@", "@"),
+            export_ocred=export_ocred,
+            write_pdic=lambda *_args: writes.append("pdic writer invoked"),
+        )
+    assert isinstance(caught.value.__cause__, PermissionError)
+    assert "verification denied" in str(caught.value)
+    assert "rollback denied" in str(caught.value)
+    assert count["pdic"] == 2
+    assert writes == []
+    assert import_ocred(ocred) == ["new"]
+    assert original_read(ocred) != old_bytes
+    assert original_read(pdic) == b"old"
+
+
+def test_prewrite_and_postwrite_verification_errors_have_distinct_recovery_rules():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src/picture_capture/ocr/batch_publication.py"
+    ).read_text(encoding="utf-8")
+    prewrite = source.split("except OSError as inspect_error:", 3)[2]
+    postwrite = source.split("except Exception as pdic_error:", 1)[1]
+    assert "_restore_ocred_bytes(ocred_path, previous)" in prewrite
+    assert "不执行仅 OCRed 回滚" in postwrite
+    assert "current_pdic != previous_pdic" in postwrite
