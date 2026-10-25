@@ -10,7 +10,7 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from PIL import Image
-    from ..ocr_channel import OcrChannelCandidate, OcrChannelResult
+    from ..ocr_channel import OcrChannelCandidate, OcrChannelRecord, OcrChannelResult
 
 def run_paddle_raw(
     self,
