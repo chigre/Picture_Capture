@@ -20,6 +20,7 @@ from ...preprocess.analysis_image import normalize_page_rgb
 from ...layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr.action_guard import guard_ocr_action_selection
+from ...ocr.batch_existing_entries import process_existing_pdic_page
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -277,39 +278,25 @@ class DetectionController:
         pages_info = {i: app.pages_tuple(i) for i in indices}
 
         def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            entries = read_pdic(pdic_path(page))
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            effective_settings = effective_page_settings(settings, image.size, index)
-            analysis_image = page_template_analysis_image(image, effective_settings, index)
-            sections = read_page_sections(page)
-            entries = sort_entries_reading_order(
-                entries,
-                derive_geometry(analysis_image, effective_settings),
-                sections,
+            return process_existing_pdic_page(
+                project.images[index], index, project.root,
+                settings, rules, pages_info[index],
+                deps={
+                    "read_pdic": read_pdic,
+                    "pdic_path": pdic_path,
+                    "Image": Image,
+                    "normalize_page_rgb": normalize_page_rgb,
+                    "effective_page_settings": effective_page_settings,
+                    "page_template_analysis_image": page_template_analysis_image,
+                    "read_page_sections": read_page_sections,
+                    "sort_entries_reading_order": sort_entries_reading_order,
+                    "derive_geometry": derive_geometry,
+                    "ocr_entries": ocr_entries,
+                    "qt_root": qt_root,
+                    "export_ocred": export_ocred,
+                    "write_pdic": write_pdic,
+                },
             )
-            texts = ocr_entries(
-                image,
-                entries,
-                settings,
-                rules,
-                profile_page_index=index,
-                page_sections=sections,
-            )
-            for entry, text in zip(entries, texts):
-                entry.word = text
-            export_ocred(
-                qt_root(project.root) / f"{page.stem}.OCRed",
-                texts,
-            )
-            write_pdic(
-                pdic_path(page),
-                entries,
-                image.width,
-                pages_info[index],
-            )
-            return len(texts)
 
         def done(completed, total_pages, stopped, results, error):
             if error is not None:
