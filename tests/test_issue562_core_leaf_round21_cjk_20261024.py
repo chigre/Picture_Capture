@@ -42,7 +42,11 @@ def test_round21_exact_owners_without_moving_runtime_regex_globals():
             isinstance(n, (ast.Assign, ast.AnnAssign))
             for n in tree.body
         )
-    source = (pkg / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    # The implementation and runtime regex state physically moved into OCR;
+    # the historical root import remains one live module-identity bridge.
+    compatibility = (pkg / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    assert "_sys.modules[__name__] = _canonical" in compatibility
+    source = (pkg / "ocr/headword_core_runtime.py").read_text(encoding="utf-8")
     for constant in (
         "_CJK_SINGLE_PINYIN_RE =", "_CJK_IDEOGRAPH_RE =",
         "_CJK_RADICAL_SECTION_RE =", "_BRACKET_CLOSER_BY_OPENER =",
