@@ -22,6 +22,7 @@ from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr.action_guard import guard_ocr_action_selection
 from ...ocr.batch_existing_entries import process_existing_pdic_page
 from ...detection.current_page_worker import detect_current_page
+from ..detection_current_page_result import apply_current_page_detection_result
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -103,47 +104,22 @@ class DetectionController:
             )
 
         def done(_completed, _total, stopped, results, error):
-            if error is not None or stopped or not results:
-                return
-            if app.project is not project or app.current_page != page:
-                return
-            detected, geometry, text_stats = results[-1]
-            if clicked_x is None:
-                app.entries = list(detected)
-            else:
-                col = column_index_for_click(clicked_x, geometry)
-                merged = [
-                    entry for entry in existing_entries
-                    if column_index(entry.x, geometry, entry.y) != col
-                ]
-                merged.extend(
-                    entry for entry in detected
-                    if column_index(entry.x, geometry, entry.y) == col
-                )
-                app.entries = merged
-            app._sort_entries_reading_order()
-            if settings.detection_method in {"paddleocr", "combined"}:
-                app._load_ocr_review_candidates()
-                app._refresh_page_quality_colors()
-            app.redraw()
-            if settings.detection_method in {"paddleocr", "combined"}:
-                cache = ocr_cache_root(project.root) / f"{page.stem}.json"
-                quality = app._current_page_quality_text()
-                fill_text = ""
-                if settings.detection_method == "combined" and text_stats:
-                    fill_text = (
-                        f"；普通救漏自动补字 {int(text_stats.get('filled', 0))} 条"
-                        f"（普通框 {int(text_stats.get('regular', 0))}，"
-                        f"大字框 {int(text_stats.get('large', 0))}）"
-                    )
-                app.status_var.set(
-                    f"智能画线完成：{len(app.entries)} 个词条；{quality}"
-                    f"{fill_text}；紧凑OCR缓存 {cache.name}"
-                )
-            else:
-                app.status_var.set(
-                    f"智能画线完成：检测到 {len(app.entries)} 个词条；可手动增删后保存"
-                )
+            return apply_current_page_detection_result(
+                app,
+                project=project,
+                page=page,
+                settings=settings,
+                existing_entries=existing_entries,
+                clicked_x=clicked_x,
+                stopped=stopped,
+                results=results,
+                error=error,
+                deps={
+                    "column_index_for_click": column_index_for_click,
+                    "column_index": column_index,
+                    "ocr_cache_root": ocr_cache_root,
+                },
+            )
 
         label = {
             "combined": "融合画线 当前页识别",
