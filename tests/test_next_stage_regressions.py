@@ -4214,7 +4214,12 @@ def test_round3_long_tail_ui_paths_are_backgrounded_and_snapshotted():
     current_start = detection_text.index("    def auto_detect_current(")
     current_end = detection_text.index("\n    def paddle_detect_current", current_start)
     current_block = detection_text[current_start:current_end]
-    assert "app._start_batch_task(" in current_block
+    current_flow = (
+        root / "src/picture_capture/ui/detection_current_page_flow.py"
+    ).read_text(encoding="utf-8")
+    assert "return run_current_page_detection(" in current_block
+    assert "app._start_batch_task(" in current_flow
+    assert 'current["detect_current_page"](' in current_flow
 
     # Current-page OCR is now physically owned by the UI workflow module;
     # the public app method still delegates with live patchable collaborators.
