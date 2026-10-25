@@ -38,6 +38,7 @@ def test_live_tk_ocr_actions_guard_before_any_backend_invocation():
 
 
 def test_no_ocr_inference_claim_and_six_matrix_invocations_unchanged():
+    source = (ROOT / "scripts/gui_project_roundtrip_smoke.py").read_text(encoding="utf-8")
     doc = (ROOT / "docs/architecture/REAL_SCAN_ACCEPTANCE_GATE_20261025.md").read_text(
         encoding="utf-8",
     )
