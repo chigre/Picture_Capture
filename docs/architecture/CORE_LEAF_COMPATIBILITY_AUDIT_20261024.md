@@ -711,3 +711,11 @@ Phase 4 exact-head CI diagnostic: initial new-owner CI on Ubuntu 3.13 ran **3862
 
 
 Phase 5 CI source-contract correction: the first exact-head macOS Python 3.13 pytest exposed seven stale assertions that searched the original `app.py` for physically relocated algorithms (appearance display-photo key, auxiliary-line crop planner, two cache-key/zoom checks, Review autosave callback, SECTION preview plan and proofreading evidence flush order). Updated `test_appearance.py`, `test_auxiliary_lines_issue428.py`, `test_core.py`, and `test_proofreading_capture_20261014.py` to check both original public delegates **and** the real owner source; retained every behavioral invariant and the existing independent runtime tests. Recheck new exact HEAD before claiming pass.
+
+
+### Root-retirement Phase 6 — physical shared OCR session engine execution (2026-10-25)
+
+- Relocated **five complete methods** of root `ocr_channel.OcrChannelSession` into the new `ocr/channel_engine_execution.py`: `run_paddle_raw`, `run_paddle_records`, `run_tesseract_records`, `run_lens_records`, and `recognize_crop`. Actual Paddle raw inference, preprocessing/source-coordinate box normalization, Tesseract TSV grouping, Lens metadata/diagnostic confidence, and per-crop conflict arbitration are now domain-owned, not merely re-exported.
+- The historical class, all method signatures, OcrChannel dataclasses and pickle identities stay in `ocr_channel.py`. Existing patchable `subprocess`, `np`, image normalization, OCR engine factories, result constructors and text providers are injected at **call time**. Existing `_run_*` and `_needs_conflict_lens` method overrides still dispatch through `self`. No Tk access, no eager Paddle import, no worker/spawn changes, no PDIC/PPP/OCRed format changes.
+- Added `tests/test_issue562_ocr_channel_engine_execution_phase6_20261025.py` to check physical ownership, public method signatures, runtime patchpoints, source-coordinate boxes, conflict-vs-diagnostic Lens policy and real Tesseract TSV decoding under a subprocess fake. Existing OCR runner and full suite remain required gates.
+- Real representative scanned dictionary page ordinary/OCR/combined, Profile, PDIC/PPP save/reopen and crop/export parity remain **MANUAL ACCEPTANCE NOT DONE**. PR must remain Draft, Open, unmerged.
