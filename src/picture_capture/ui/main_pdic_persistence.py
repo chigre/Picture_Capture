@@ -131,3 +131,69 @@ def autosave_tick(self, *, deps: dict[str, Any]) -> None:
     finally:
         # Failed I/O must not silently disable the next autosave tick.
         self.toggle_autosave()
+
+
+# Page navigation and SECTION durability, without changing PDIC/PPP formats.
+
+def _save_current_page_files(self, *, sync_editors: bool = True, deps: dict[str, Any]) -> tuple[Path, Path] | None:
+    pdic_path = deps["pdic_path"]
+    """Persist all editable artifacts for the currently displayed page.
+
+    Page navigation must commit both the visible headword editors (.pdic)
+    and illustration polygons (.ppp) before another page replaces them.
+    """
+    if not self.project or not self.current_page or self.image is None:
+        return None
+    self.save_pdic(silent=True, sync_editors=sync_editors)
+    ppp = self._ppp_write_path(self.current_page)
+    self._save_normalized_ppp()
+    self._update_page_row(self.current_index)
+    return pdic_path(self.current_page), ppp
+
+def _save_current_page_by_mode(self, *, sync_editors: bool = True, deps: dict[str, Any]) -> Path | None:
+    pdic_path = deps["pdic_path"]
+    """ save current page by mode."""
+    if not self.project or not self.current_page or self.image is None:
+        return None
+    if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
+        self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
+        return None
+    from ..illustration.profile import effective_page_kind
+    if effective_page_kind(self.settings, self.current_page) == "illustrated":
+        return None
+    if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
+        target = self._ppp_write_path(self.current_page)
+        self._save_normalized_ppp()
+        self._update_page_row(self.current_index)
+        return target
+    self.save_pdic(silent=True, sync_editors=sync_editors)
+    return pdic_path(self.current_page)
+
+def save_current_page(self, *, deps: dict[str, Any]) -> None:
+    if not self.guard():
+        return
+    try:
+        saved = self._save_current_page_by_mode()
+        if saved is not None:
+            mode = "插图" if self.polygon_draw_var.get() else "画线"
+            self.status_var.set(f"已保存当前页（{mode}）：{saved.name}")
+    except Exception as exc:
+        self.show_error("保存当前页失败", exc)
+
+def _persist_current_page_sections(self, *, deps: dict[str, Any]) -> None:
+    LayoutTransform = deps["LayoutTransform"]
+    write_page_sections = deps["write_page_sections"]
+    """Save explicit SECTION bounds without touching PDIC/PPP."""
+    if self.current_page is None or self.image is None:
+        return
+    transform = LayoutTransform(
+        str(getattr(self.settings, "layout_transform", "identity") or "identity")
+    )
+    canonical_width, canonical_height = transform.canonical_size(self.image.size)
+    write_page_sections(
+        self.current_page,
+        list(self.page_sections),
+        canonical_width=canonical_width,
+        canonical_height=canonical_height,
+        layout_transform=transform.kind,
+    )

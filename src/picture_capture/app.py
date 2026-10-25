@@ -145,6 +145,7 @@ from .proofreading import focused_pdic_updates as _focused_pdic
 from .ui import main_canvas_render_workflow as _main_canvas_render
 from .ui import main_display_cache as _main_display_cache
 from .ui import main_pdic_persistence as _main_pdic_persistence
+from .ui import main_dialog_lifecycle as _main_dialog_lifecycle
 from .ui import canvas_pointer_workflow as _canvas_pointer
 from .ui import main_appearance_policy as _main_appearance_policy
 from .ui import main_sidebar_sections as _sidebar_sections
@@ -2342,71 +2343,23 @@ class PictureCaptureApp(tk.Tk):
         self.apply_quick_settings(persist=True)
 
     def _save_current_page_files(self, *, sync_editors: bool = True) -> tuple[Path, Path] | None:
-        """Persist all editable artifacts for the currently displayed page.
-
-        Page navigation must commit both the visible headword editors (.pdic)
-        and illustration polygons (.ppp) before another page replaces them.
-        """
-        if not self.project or not self.current_page or self.image is None:
-            return None
-        self.save_pdic(silent=True, sync_editors=sync_editors)
-        ppp = self._ppp_write_path(self.current_page)
-        self._save_normalized_ppp()
-        self._update_page_row(self.current_index)
-        return pdic_path(self.current_page), ppp
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_pdic_persistence._save_current_page_files(self, sync_editors=sync_editors, deps={"pdic_path": pdic_path})
 
     def _save_current_page_by_mode(self, *, sync_editors: bool = True) -> Path | None:
-        """ save current page by mode."""
-        if not self.project or not self.current_page or self.image is None:
-            return None
-        if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
-            self.status_var.set("后台任务运行中：当前页只读，避免覆盖处理结果。")
-            return None
-        from .illustration.profile import effective_page_kind
-        if effective_page_kind(self.settings, self.current_page) == "illustrated":
-            return None
-        if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):
-            target = self._ppp_write_path(self.current_page)
-            self._save_normalized_ppp()
-            self._update_page_row(self.current_index)
-            return target
-        self.save_pdic(silent=True, sync_editors=sync_editors)
-        return pdic_path(self.current_page)
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_pdic_persistence._save_current_page_by_mode(self, sync_editors=sync_editors, deps={"pdic_path": pdic_path})
 
     def save_current_page(self) -> None:
-        if not self.guard():
-            return
-        try:
-            saved = self._save_current_page_by_mode()
-            if saved is not None:
-                mode = "插图" if self.polygon_draw_var.get() else "画线"
-                self.status_var.set(f"已保存当前页（{mode}）：{saved.name}")
-        except Exception as exc:
-            self.show_error("保存当前页失败", exc)
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_pdic_persistence.save_current_page(self, deps={})
 
     def export_training_package(self) -> None:
         self._export_controller_for_call().export_training_package()
 
     def show_help_dialog(self) -> None:
-        existing = self.__dict__.get("_usage_guide_window")
-        if existing is not None:
-            try:
-                if existing.winfo_exists():
-                    existing.deiconify()
-                    existing.lift()
-                    existing.focus_force()
-                    existing._refresh_context()
-                    return
-            except tk.TclError:
-                pass
-        window = UsageGuideWindow(self)
-        self._usage_guide_window = window
-        window.bind(
-            "<Destroy>",
-            lambda event, w=window: self.__dict__.pop("_usage_guide_window", None)
-            if event.widget is w else None,
-            add="+",
-        )
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_dialog_lifecycle.show_help_dialog(self, deps={"tk": tk, "UsageGuideWindow": UsageGuideWindow})
 
     @staticmethod
     def _distribution_version(name: str) -> str | None:
@@ -2439,25 +2392,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def show_environment_center(self) -> None:
-        existing = self.__dict__.get("_environment_center_window")
-        if existing is not None:
-            try:
-                if existing.winfo_exists():
-                    existing.deiconify()
-                    existing.lift()
-                    existing.focus_force()
-                    existing.refresh()
-                    return
-            except tk.TclError:
-                pass
-        window = EnvironmentCenterWindow(self)
-        self._environment_center_window = window
-        window.bind(
-            "<Destroy>",
-            lambda event, w=window: self.__dict__.pop("_environment_center_window", None)
-            if event.widget is w else None,
-            add="+",
-        )
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_dialog_lifecycle.show_environment_center(self, deps={"tk": tk, "EnvironmentCenterWindow": EnvironmentCenterWindow})
 
     def check_ocr_engines(self) -> None:
         """Backward-compatible action name: open the unified environment center."""
@@ -2932,20 +2868,8 @@ class PictureCaptureApp(tk.Tk):
         return _canvas_pointer._update_polygon_canvas_geometry(self, _canvas_pointer_deps(), region_index)
 
     def _persist_current_page_sections(self) -> None:
-        """Save explicit SECTION bounds without touching PDIC/PPP."""
-        if self.current_page is None or self.image is None:
-            return
-        transform = LayoutTransform(
-            str(getattr(self.settings, "layout_transform", "identity") or "identity")
-        )
-        canonical_width, canonical_height = transform.canonical_size(self.image.size)
-        write_page_sections(
-            self.current_page,
-            list(self.page_sections),
-            canonical_width=canonical_width,
-            canonical_height=canonical_height,
-            layout_transform=transform.kind,
-        )
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_pdic_persistence._persist_current_page_sections(self, deps={"LayoutTransform": LayoutTransform, "write_page_sections": write_page_sections})
 
     def _set_section_editing(self, active: bool) -> None:
         return _canvas_pointer._set_section_editing(self, _canvas_pointer_deps(), active)
@@ -3333,58 +3257,12 @@ class PictureCaptureApp(tk.Tk):
         return _main_pdic_persistence.autosave_tick(self, deps={"tk": tk})
 
     def open_settings(self, initial_tab: str | None = None) -> None:
-        # Pull unsaved quick-panel values (notably OCR language) into the settings
-        # object first so language-dependent options are immediately correct.
-        if not self.apply_quick_settings(show_status=False, persist=False):
-            return
-        existing = self.__dict__.get("_settings_dialog")
-        if existing is not None:
-            try:
-                if existing.winfo_exists():
-                    existing.select_tab(initial_tab)
-                    existing.deiconify()
-                    existing.lift()
-                    return
-            except tk.TclError:
-                pass
-        dialog = SettingsDialog(self, initial_tab=initial_tab)
-        self._settings_dialog = dialog
-        dialog.bind(
-            "<Destroy>",
-            lambda event, w=dialog: self.__dict__.pop("_settings_dialog", None)
-            if event.widget is w else None,
-            add="+",
-        )
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_dialog_lifecycle.open_settings(self, initial_tab, deps={"tk": tk, "SettingsDialog": SettingsDialog})
 
     def open_project_profile(self, new_project: bool = False) -> None:
-        if not self.project:
-            messagebox.showinfo("尚未打开", "请先打开或新建词典项目。", parent=self)
-            return
-        if self._batch_active:
-            self.status_var.set("批量任务运行中，结束或停止后再打开 Project Profile。")
-            return
-        # Keep the wizard's working copy aligned with any unsaved/debounced
-        # quick-panel edits made immediately before opening Project Profile.
-        if not self.apply_quick_settings(show_status=False, persist=False, silent_errors=True):
-            return
-        existing = self.__dict__.get("_project_profile_wizard")
-        if existing is not None:
-            try:
-                if existing.winfo_exists():
-                    existing.deiconify()
-                    existing.lift()
-                    existing.focus_force()
-                    return
-            except tk.TclError:
-                pass
-        wizard = ProjectProfileWizard(self, new_project=new_project)
-        self._project_profile_wizard = wizard
-        wizard.bind(
-            "<Destroy>",
-            lambda event, w=wizard: self.__dict__.pop("_project_profile_wizard", None)
-            if event.widget is w else None,
-            add="+",
-        )
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_dialog_lifecycle.open_project_profile(self, new_project, deps={"tk": tk, "messagebox": messagebox, "ProjectProfileWizard": ProjectProfileWizard})
 
     def open_project_details(self) -> None:
         self.open_settings(initial_tab="project")
@@ -3553,34 +3431,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def open_review(self) -> None:
-        if not (self.guard() and self.entries):
-            return
-        if self.review_window is not None:
-            try:
-                if self.review_window.winfo_exists():
-                    self.review_window.lift()
-                    self.review_window.focus_force()
-                    return
-            except tk.TclError:
-                pass
-            self.review_window = None
-        # Capture any text still being edited on the main canvas before the
-        # review window starts using the shared Entry objects.
-        self._sync_entry_editor_texts()
-        # Keep the established behavior: proofreading starts with both main
-        # canvas OCR aids disabled, even though their controls now live in the
-        # main Auxiliary Options section.
-        self.settings.review_main_show_ocr_choices = False
-        self.settings.review_main_show_ocr_background = False
-        if hasattr(self, "quick_bool_vars"):
-            for name in ("review_main_show_ocr_choices", "review_main_show_ocr_background"):
-                if name in self.quick_bool_vars:
-                    self.quick_bool_vars[name].set(False)
-        review = ReviewWindow(self)
-        self.review_window = review
-        # Proofreading owns OCR selection while it is open, so simplify the
-        # main canvas immediately (unless the user re-enables either aid).
-        self.redraw()
+        """Legacy Tk callback; real implementation lives in the UI domain."""
+        return _main_dialog_lifecycle.open_review(self, deps={"tk": tk, "ReviewWindow": ReviewWindow})
 
     def show_error(self, title: str, exc: Exception) -> None:
         self.status_var.set(f"{title}：{exc}")

@@ -189,3 +189,8 @@ Five substantive engine and orchestration algorithms moved from `ocr_channel.Ocr
 ## Phase 7 — Review responsive layout and Settings form physical owners (2026-10-25)
 
 Moved 13 substantive methods from root `app.py` into `ui/review_layout_events.py` (10 proofreading window pane/zoom lifecycle methods), existing `ui/settings/field_form_runtime.py` (settings value conversion), and existing `ui/settings/interactive_panels.py` (collapsible settings and intro widgets). Existing Tk class methods and runtime monkeypatch injection are preserved; no new root compatibility files. Regression: `tests/test_issue562_review_settings_layout_phase7_20261025.py`; historical source guards reanchored to real implementations. Target remains root `__init__.py`/`__main__.py` only after compatibility gates and manual scanned-page acceptance; Draft/unmerged.
+
+
+## Phase 8 — Dialog lifecycle and page persistence (2026-10-25)
+
+Nine complete `app.py` methods now physically live in `ui/main_dialog_lifecycle.py` (five Tk dialog/window opening and reuse flows) and existing `ui/main_pdic_persistence.py` (four PDIC/PPP navigation saves, user save and SECTION persistence flows). Root `PictureCaptureApp` retains stable call-time patched callbacks and Tk-thread ownership. Regression: `tests/test_issue562_main_dialog_page_save_phase8_20261025.py`. Root file count remains 10; end-state only `__init__.py`/`__main__.py` is still pending compatibility proof. Manual real scanned-page acceptance is NOT DONE. Draft/unmerged.
