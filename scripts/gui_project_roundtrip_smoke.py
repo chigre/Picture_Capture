@@ -29,6 +29,12 @@ from picture_capture.persistence.project_storage import (
 from picture_capture.profile.dictionary import (
     load_dictionary_profile, write_project_profile,
 )
+from picture_capture.geometry.coordinate_space import SOURCE_COORDINATE_SPACE
+from picture_capture.persistence.page_sections import (
+    PAGE_SECTIONS_FORMAT, PageSection, read_page_sections,
+)
+from picture_capture.persistence.project_storage import page_sections_path_for_image
+from picture_capture.proofreading.section import section_snapshot_for_source_point
 
 
 def _assert(condition: bool, message: str) -> None:
@@ -207,6 +213,82 @@ def main() -> int:
                     == {tuple(r.points) for r in disk_polygons},
                     "reopened page did not reload saved PPP source vertices",
                 )
+                # Round 63: operate the ORIGINAL Tk SECTION edit callback;
+                # its persist action must write a source-coordinate v2 sidecar.
+                # The two sections intentionally have a gap between markers.
+                app.page_sections = [
+                    PageSection(50, 215), PageSection(230, 425),
+                ]
+                app._set_section_editing(True)
+                _assert(app._section_editing, "SECTION edit mode did not activate")
+                app._drag_section_boundary = (1, "top")
+                app._drag_page_section_boundary_to(95, 242)
+                _assert(
+                    app.page_sections == [
+                        PageSection(50, 215), PageSection(242, 425),
+                    ],
+                    "Tk SECTION edge dragging lost source-space interval",
+                )
+                _assert(
+                    app._finish_section_editing() is True and not app._section_editing,
+                    "Tk SECTION edit completion did not commit/exit",
+                )
+                section_file = page_sections_path_for_image(first)
+                _assert(section_file.is_file(), "SECTION v2 sidecar not written")
+                section_data = json.loads(
+                    section_file.read_text(encoding="utf-8"),
+                )
+                _assert(
+                    section_data["format"] == PAGE_SECTIONS_FORMAT
+                    and section_data["coordinate_space"] == SOURCE_COORDINATE_SPACE
+                    and section_data["source_width"] == 640
+                    and section_data["source_height"] == 460,
+                    "SECTION sidecar lost v2 source-image metadata",
+                )
+                _assert(
+                    section_data["sections"][1]["top_source_segment_xyxy"]
+                    == [[0, 242], [639, 242]],
+                    "SECTION dragging did not serialize original-image XY segment",
+                )
+                _assert(
+                    read_page_sections(first)
+                    == [PageSection(50, 215), PageSection(242, 425)],
+                    "SECTION v2 writer/reader lost the edited interval",
+                )
+                first_section = section_snapshot_for_source_point(first, 85, 182)
+                second_section = section_snapshot_for_source_point(first, 95, 300)
+                _assert(
+                    first_section is not None
+                    and first_section[0] == "section:1"
+                    and second_section is not None
+                    and second_section[0] == "section:2"
+                    and first_section[1] == second_section[1],
+                    "SECTION-proofreading evidence lost section/fingerprint identity",
+                )
+                _assert(
+                    section_snapshot_for_source_point(first, 95, 225) is None,
+                    "SECTION gap was incorrectly assigned to a nearest section",
+                )
+                section_hash = _source_hash(section_file)
+                pdic_before_section_navigation = _source_hash(pdic_path(first))
+                ppp_before_section_navigation = _source_hash(
+                    ppp_read_path_for_image(first),
+                )
+                app.load_page(1, skip_current_save=True)
+                _assert(not app.page_sections, "SECTION leaked to the other page")
+                app.load_page(0, skip_current_save=True)
+                _assert(
+                    app.page_sections == [PageSection(50, 215), PageSection(242, 425)]
+                    and _source_hash(section_file) == section_hash,
+                    "SECTION edit lost persistence across real Tk page navigation",
+                )
+                _assert(
+                    _source_hash(pdic_path(first)) == pdic_before_section_navigation
+                    and _source_hash(ppp_read_path_for_image(first))
+                    == ppp_before_section_navigation,
+                    "SECTION page roundtrip modified PDIC or PPP bytes",
+                )
+
                 # Exercise the REAL production crop planner and atomic
                 # publisher on already-reloaded, original-coordinate PDIC
                 # entries. No fabricated crop plan or pixel operation.
@@ -384,6 +466,34 @@ def main() -> int:
                     "GUI crop unexpectedly rewrote project Profile v3",
                 )
 
+                # A 0-SECTION edit must atomically remove the canonical sidecar
+                # on a new nonmigrated project, without touching PDIC or PPP.
+                pdic_before_section_clear = _source_hash(pdic_path(first))
+                ppp_before_section_clear = _source_hash(
+                    ppp_read_path_for_image(first),
+                )
+                app.page_sections = []
+                app._set_section_editing(True)
+                _assert(
+                    app._finish_section_editing() is True,
+                    "SECTION zero-count edit did not exit through Tk completion",
+                )
+                _assert(
+                    not section_file.exists()
+                    and not read_page_sections(first)
+                    and section_snapshot_for_source_point(first, 85, 182) is None,
+                    "SECTION=0 resurrected or left the canonical sidecar",
+                )
+                app.load_page(1, skip_current_save=True)
+                app.load_page(0, skip_current_save=True)
+                _assert(not app.page_sections, "SECTION=0 returned after page reload")
+                _assert(
+                    _source_hash(pdic_path(first)) == pdic_before_section_clear
+                    and _source_hash(ppp_read_path_for_image(first))
+                    == ppp_before_section_clear,
+                    "SECTION=0 inadvertently touched PDIC or PPP",
+                )
+
                 # Second identical publication should not rewrite atomically or
                 # alter the recorded bytes/timestamps of immutable source scans.
                 _assert(
@@ -399,7 +509,8 @@ def main() -> int:
                     "[managed-project-smoke] PASS: Tk project load; original XY; "
                     "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
                     "two-page navigation; v3 Profile; production crop PNG pixel parity, " 
-                    "PWWords/widths/plan; GUI CropController async parity; source image immutable",
+                    "PWWords/widths/plan; GUI CropController async parity; "
+                    "SECTION edit/save/reopen/evidence; source image immutable",
                     flush=True,
                 )
             return 0

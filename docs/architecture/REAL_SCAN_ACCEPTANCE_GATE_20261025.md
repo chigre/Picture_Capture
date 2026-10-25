@@ -28,7 +28,25 @@ the GUI-generated PWWords, width manifest and PNG content SHA-256 with the
 previous direct-production baseline; validates the 100% batch-progress state,
 unchanged source-PDIC/PPP vertices and Profile sidecar, and original source
 image immutability. This is programmatically activated UI logic, **not** a
-human button click or manual Crop Preview approval. It exercises
+human button click or manual Crop Preview approval.
+
+**Round 63** also executes the original Tk SECTION edit flow on the same
+synthetic two-page project. It enters SECTION edit mode, drags the second
+section's top edge from source Y=230 to Y=242 using
+`_drag_page_section_boundary_to`, finishes through
+`_finish_section_editing`, and inspects the **real** v2 sidecar's
+`SOURCE_COORDINATE_SPACE` and saved original-image endpoint pairs.
+The real `read_page_sections` loader must recover the intervals after
+switching away and back in Tk; original PDIC/PPP bytes must remain unchanged.
+Proofreading's actual `section_snapshot_for_source_point` must resolve
+section 1 and 2 to the same sidecar fingerprint, refuse any coordinate in
+the deliberate interval gap, and refuse attribution after 0-SECTION
+removes the canonical sidecar. The 0-SECTION state must also survive
+another page switch without reviving stale SECTION records.
+
+This is an **automated Tk callback and persistence test on synthetic
+pages**, not evidence that a human has dragged SECTION lines on the
+real dictionary scan. The manual gate remains open. It exercises
 `write_project_profile`/`load_dictionary_profile` for a real project-local
 Profile v3 sidecar without opening the human Profile wizard.
 
