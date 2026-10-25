@@ -1785,3 +1785,33 @@ source marker preservation, output format, nested directory creation and
 injected atomic replacement failures. Cross-platform CI and independent
 human visual real-scan acceptance remain required. The latter is NOT PASSED,
 and PR #663 remains Draft/unmerged.
+
+
+## Issue #562 — Round 80: compensating OCRed rollback on PDIC failure (2026-10-26)
+
+The existing-PDIC batch OCR page worker now delegates its paired sidecar
+publication to `ocr/batch_publication.py`. Publication retains the original
+**OCRed then PDIC** order and the canonical injectable `export_ocred` and
+`write_pdic` functions, preserving existing tests and caller behavior.
+Before exporting, the publisher snapshots exact prior OCRed bytes (or records
+its absence). If the individually atomic PDIC writer raises, it restores
+the previous OCRed bytes using a same-directory temporary file, fsync and
+atomic `os.replace`, or removes the newly created sidecar. It re-raises the
+original PDIC exception on successful compensation. If compensation itself
+fails, a combined error reports **both** PDIC and OCRed rollback failures;
+temporary restore files are removed. If the OCRed exporter fails first,
+PDIC is never invoked.
+
+The original page's X/Y marker values, PDIC structure, OCRed backtick format,
+and word-count parity check from Round 79 are unchanged. Behavior and fault
+injection tests cover success, original bytes preservation including BOM/CRLF,
+new sidecar cleanup, an export error, rollback error, and a real single-page
+worker with an injected PDIC writer failure.
+
+**Important limitation:** compensation only covers catchable runtime errors.
+Process termination, power loss in between the two publications, another
+writer racing the batch, or a failed rollback cannot be treated as a
+cross-file atomic transaction. Existing R3 PDIC transaction markers are
+respected through `write_pdic`; no direct overwrite of PDIC is introduced.
+Multi-platform CI and the separate real scanned-dictionary human gate remain
+required; manual signoff remains OPEN / NOT PASSED, and PR #663 stays Draft.
