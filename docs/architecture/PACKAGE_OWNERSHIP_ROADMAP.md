@@ -1935,3 +1935,37 @@ two-file atomic transaction. No claim of full concurrency safety or scan
 acceptance is made. Require full six-platform CI plus OCR Smoke, and retain
 the real scanned-dictionary manual gate OPEN / NOT PASSED. PR #663 remains
 Draft and unmerged.
+
+
+## Issue #562 — Round 85: repair six-platform CI and pre-write verification recovery (2026-10-26)
+
+The Round 84 HEAD `dc771f8` passed OCR Platform Smoke but **failed all
+six CI platform jobs**. Their logs showed one shared regression:
+`test_failed_pdic_verification_never_reverts_only_ocred` still injected a
+read failure on the second PDIC read. Round 84 had introduced a second read
+*before* invoking the PDIC writer, so the test accidentally exercised the
+pre-write guard rather than the original Round 81 post-writer ambiguous
+commit. The fault injection now targets the third read, preserving the
+essential Round 81 rule: when a writer may have committed and PDIC cannot be
+verified, **never** roll back OCRed alone.
+
+A separate data-integrity improvement closes the earlier pre-write failure
+path: if OCRed export succeeds but PDIC cannot be read for the newly added
+pre-write version check, the PDIC writer has **not** run. The publisher now
+attempts byte-exact compensation of OCRed (or deletes a newly created
+sidecar), then raises a clear diagnostic with the verification error as its
+cause. If compensation fails, it reports both errors explicitly and requires
+manual recovery. This does not claim anything about a concurrent external
+writer; two-file atomicity is still unavailable.
+
+Fault-injection tests cover missing/existing PDIC, missing/existing OCRed
+(including BOM/CRLF), failed pre-write read, writer never invoked, exact
+rollback, and rollback failure. The existing post-writer ambiguity test
+continues to verify that the new OCRed is retained when PDIC status cannot
+be established after the writer has raised. No original-image coordinates,
+PPP/SECTION data, OCR text format, Windows spawn/Tk seams, or canonical
+PDIC writer semantics were changed.
+
+Six-platform CI and OCR Platform Smoke are independent required gates.
+Real scanned-dictionary manual acceptance remains **OPEN / NOT PASSED**;
+PR #663 stays **Draft / unmerged**.
