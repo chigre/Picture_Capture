@@ -18,6 +18,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "picture_capture"
 SCHEMA = PACKAGE / "ui" / "settings" / "schema.py"
+HELP_CATALOG = PACKAGE / "ui" / "settings" / "help_catalog.py"
 # The single physical AppSettings field schema lives under Profile; models.py
 # re-exports that identical class object for its historical public/pickle API.
 MODELS = PACKAGE / "profile" / "settings_model.py"
@@ -110,8 +111,8 @@ def schema_locations(fields):
 
 
 def schema_help_keys():
-    """Literal help metadata can be checked without importing Tk."""
-    tree = ast.parse(SCHEMA.read_text(encoding="utf-8"))
+    """Read literal help keys from their canonical UI-free owner, without Tk."""
+    tree = ast.parse(HELP_CATALOG.read_text(encoding="utf-8"))
     found = {"SETTING_HELP": set(), "CHECK_HELP": set()}
     for node in tree.body:
         if not isinstance(node, ast.Assign):
