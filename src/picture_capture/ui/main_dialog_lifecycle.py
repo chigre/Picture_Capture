@@ -142,3 +142,24 @@ def open_review(self, *, deps: dict[str, Any]) -> None:
     # Proofreading owns OCR selection while it is open, so simplify the
     # main canvas immediately (unless the user re-enables either aid).
     self.redraw()
+
+
+def show_text_report(self, title: str, text: str, *, deps: dict[str, Any]) -> None:
+    """Build the read-only scrollable text report on the current Tk thread.
+
+    The caller supplies live app globals so test monkeypatches and runtime
+    appearance/font choices remain effective without importing app.py here.
+    """
+    tk = deps["tk"]
+    ttk = deps["ttk"]
+    fit_window_to_work_area = deps["fit_window_to_work_area"]
+    preferred_font_family = deps["preferred_font_family"]
+    win = tk.Toplevel(self); win.title(title); fit_window_to_work_area(win, 900, 650, min_width=640, min_height=460)
+    frame = ttk.Frame(win, padding=6); frame.pack(fill="both", expand=True)
+    box = tk.Text(frame, wrap="none", font=(preferred_font_family(win, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 11))
+    ybar = ttk.Scrollbar(frame, orient="vertical", command=box.yview)
+    xbar = ttk.Scrollbar(frame, orient="horizontal", command=box.xview)
+    box.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
+    box.grid(row=0, column=0, sticky="nsew"); ybar.grid(row=0, column=1, sticky="ns"); xbar.grid(row=1, column=0, sticky="ew")
+    frame.rowconfigure(0, weight=1); frame.columnconfigure(0, weight=1)
+    box.insert("1.0", text); box.configure(state="disabled")

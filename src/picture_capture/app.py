@@ -3209,15 +3209,14 @@ class PictureCaptureApp(tk.Tk):
         self._review_controller_for_call().check_headword_order(all_pages)
 
     def _show_text_report(self, title: str, text: str) -> None:
-        win = tk.Toplevel(self); win.title(title); fit_window_to_work_area(win, 900, 650, min_width=640, min_height=460)
-        frame = ttk.Frame(win, padding=6); frame.pack(fill="both", expand=True)
-        box = tk.Text(frame, wrap="none", font=(preferred_font_family(win, ("Consolas", "Menlo", "DejaVu Sans Mono"), fallback_named_font="TkFixedFont"), 11))
-        ybar = ttk.Scrollbar(frame, orient="vertical", command=box.yview)
-        xbar = ttk.Scrollbar(frame, orient="horizontal", command=box.xview)
-        box.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
-        box.grid(row=0, column=0, sticky="nsew"); ybar.grid(row=0, column=1, sticky="ns"); xbar.grid(row=1, column=0, sticky="ew")
-        frame.rowconfigure(0, weight=1); frame.columnconfigure(0, weight=1)
-        box.insert("1.0", text); box.configure(state="disabled")
+        """Legacy Tk report entrypoint; build the report on the calling UI thread."""
+        return _main_dialog_lifecycle.show_text_report(
+            self, title, text, deps={
+                "tk": tk, "ttk": ttk,
+                "fit_window_to_work_area": fit_window_to_work_area,
+                "preferred_font_family": preferred_font_family,
+            },
+        )
 
     def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
         self._detection_controller_for_call().batch_auto_detect(force_paddle_refresh)
