@@ -84,5 +84,6 @@ def process_existing_pdic_page(
         texts, entries, image.width, pages_info,
         export_ocred=deps["export_ocred"],
         write_pdic=deps["write_pdic"],
+        expected_pdic_bytes=source_pdic_bytes,
     )
     return len(texts)
