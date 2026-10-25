@@ -1759,3 +1759,29 @@ Round 78 tests cover project changes during confirmation, stale completion
 historical PDIC edit permissions. Full multi-platform CI is required; the
 independent real scanned-dictionary-page gate remains MANUAL GATE OPEN /
 NOT PASSED. PR #663 is Draft and must not be merged.
+
+
+## Issue #562 — Round 79: batch OCR one-to-one integrity and OCRed atomicity (2026-10-26)
+
+The `ocr/batch_existing_entries.py` publication boundary now refuses OCR
+output whose text count differs from the number of existing PDIC entries.
+Previously a plain `zip(entries, texts)` could silently retain stale words
+or discard extra OCR strings, then save PDIC and OCRed with differing
+cardinalities. The check raises before mutating entries or publishing either
+artifact and preserves existing source-image marker X/Y.
+
+The canonical legacy `ocr/text_io.export_ocred` now writes OCRed sidecars
+through the pre-existing `io.formats.write_text_atomic` helper instead of
+`Path.write_text`. It retains the original `NNN|`backtick`word` line
+format, UTF-8 encoding and processing facade identity; a temporary file is
+flushed and atomically replaced on the same filesystem, and the helper
+cleans temporary files if the replace fails. The old OCRed destination remains
+intact on failure; parent directories are created if missing.
+
+This is single-file atomicity, **not** a claim of a cross-file transaction
+between OCRed and PDIC. Existing output ordering and PDIC's canonical
+`write_pdic` API remain unchanged. New tests cover OCR under-/over-count,
+source marker preservation, output format, nested directory creation and
+injected atomic replacement failures. Cross-platform CI and independent
+human visual real-scan acceptance remain required. The latter is NOT PASSED,
+and PR #663 remains Draft/unmerged.
