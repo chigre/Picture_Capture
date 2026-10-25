@@ -2078,8 +2078,10 @@ def test_decimal_percentage_ui_paths_do_not_integer_cast_values():
     review_init = (source.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "_review_window_initialization.initialize_review_window(" in text
     assert "stored_review_zoom = float(getattr(parent.settings, \"review_zoom_percent\", 0.0) or 0.0)" in review_init
+    review_events = (source.parent / "ui/review_layout_events.py").read_text(encoding="utf-8")
     assert "def _stored_review_zoom_percent(self) -> float:" in text
-    assert "round(self.review_zoom * 100.0, 2)" in text
+    assert "_review_layout_events._stored_review_zoom_percent(" in text
+    assert "round(self.review_zoom * 100.0, 2)" in review_events
     assert "int(self.parent.settings.paddle_band_width_ratio)" not in settings_owner
     assert "int(self.parent.settings.paddle_separator_roi_width_ratio)" not in settings_owner
 

@@ -163,6 +163,7 @@ from .ui import paddle_environment_report as _paddle_environment_report
 from .ui import main_action_buttons as _main_action_buttons
 from .ui.settings import dialog_initialization as _settings_dialog_initialization
 from .ui import review_window_initialization as _review_window_initialization
+from .ui import review_layout_events as _review_layout_events
 from .ui import main_app_initialization as _main_app_initialization
 from .ui import appearance_resolution as _appearance_resolution
 from .ui.page_thumbnails import PageThumbnailController, visible_page_iids
@@ -473,31 +474,8 @@ class SettingsDialog(tk.Toplevel):
         )
 
     def _setting_var(self, name: str) -> tk.Variable:
-        if name in self.vars:
-            return self.vars[name]
-        raw = getattr(self.parent.settings, name)
-        choices = self.SETTING_CHOICES.get(name)
-        if choices:
-            reverse = {value: label for label, value in choices.items()}
-            value = reverse.get(str(raw), str(raw))
-        elif name == "paddle_left_tolerance":
-            value = _format_layout_percent(
-                _column_pixels_to_percent(self.parent.settings, raw)
-            )
-        elif name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
-            source_value = (
-                self.parent._quick_geometry_value(name)
-                if hasattr(self.parent, "_quick_geometry_value")
-                else raw
-            )
-            value = _format_layout_percent(
-                _layout_pixels_to_percent(self.parent.image, name, source_value)
-            )
-        else:
-            value = str(raw)
-        var = tk.StringVar(value=value)
-        self.vars[name] = var
-        return var
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _settings_field_form._setting_var(self, name, deps={"tk": tk, "_format_layout_percent": _format_layout_percent, "_column_pixels_to_percent": _column_pixels_to_percent, "LAYOUT_PERCENT_AXES": LAYOUT_PERCENT_AXES, "_layout_pixels_to_percent": _layout_pixels_to_percent})
 
     def _setting_widget(self, parent: ttk.Frame, name: str) -> tk.Widget:
         """Historical setting field widget factory."""
@@ -552,27 +530,8 @@ class SettingsDialog(tk.Toplevel):
         names: tuple[str, ...] | list[str],
         checks: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
     ) -> None:
-        shell = ttk.Frame(parent)
-        shell.pack(fill="x", pady=(0, 10))
-        expanded = tk.BooleanVar(value=False)
-        title_var = tk.StringVar(value=f"▸ {title}")
-        body = ttk.Frame(shell)
-
-        def toggle() -> None:
-            if expanded.get():
-                expanded.set(False)
-                body.pack_forget()
-                title_var.set(f"▸ {title}")
-            else:
-                expanded.set(True)
-                title_var.set(f"▾ {title}")
-                body.pack(fill="x", pady=(6, 0))
-
-        ttk.Button(shell, textvariable=title_var, command=toggle).pack(fill="x")
-        if names:
-            self._add_setting_group(body, "参数", names)
-        if checks:
-            self._add_check_group(body, "行为", checks)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _interactive_settings_panels._add_collapsible_settings(self, parent,title,names,checks, deps={"tk": tk, "ttk": ttk})
 
     def _scrollable_settings_page(self, tab: ttk.Frame) -> ttk.Frame:
         """Historical responsive settings page with nested help and scrolling."""
@@ -582,21 +541,8 @@ class SettingsDialog(tk.Toplevel):
 
 
     def _settings_intro(self, parent: ttk.Frame, title: str, text: str) -> None:
-        title_label = ttk.Label(
-            parent, text=title, font=("TkDefaultFont", 11, "bold"), justify="left",
-        )
-        title_label.pack(anchor="w", fill="x")
-        body_label = ttk.Label(
-            parent, text=text, foreground="#5f6670", justify="left",
-        )
-        body_label.pack(anchor="w", fill="x", pady=(3, 10))
-        self._bind_responsive_labels(
-            parent,
-            title_label,
-            body_label,
-            horizontal_padding=12,
-            min_wrap=160,
-        )
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _interactive_settings_panels._settings_intro(self, parent,title,text, deps={"ttk": ttk})
 
     def __init__(self, parent: "PictureCaptureApp", initial_tab: str | None = None) -> None:
         """Stable SettingsDialog constructor; preserve Tk's original super() semantics."""
@@ -883,172 +829,47 @@ class ReviewWindow(tk.Toplevel):
         self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
         width: int | None = None, anchor: str = "center",
     ) -> tk.Button:
-        """Create one flat review-workspace button without changing global Tk styling."""
-        # Classic Tk widgets are authored in the light palette even when the
-        # window opens while dark mode is active; the global reversible mapper
-        # darkens them after creation.
-        palette = {
-            "neutral": ("#eceff3", "#e1e5ea", "#30343b"),
-            "primary": ("#5e9f69", "#4f8e5c", "#ffffff"),
-            "danger": ("#f3eeee", "#f4d9d9", "#9b3a3a"),
-        }
-        background, active_background, foreground = palette.get(role, palette["neutral"])
-        options = {
-            "text": text,
-            "command": command,
-            "bg": background,
-            "fg": foreground,
-            "activebackground": active_background,
-            "activeforeground": foreground,
-            "relief": "flat",
-            "bd": 0,
-            "highlightthickness": 0,
-            "padx": 8,
-            "pady": 4,
-            "cursor": "hand2",
-            "anchor": anchor,
-        }
-        if width is not None:
-            options["width"] = width
-        return tk.Button(parent, **options)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._review_flat_button(self, parent,text,command,role=role,width=width,anchor=anchor, deps={"tk": tk})
 
     def _review_collapsible_section(
         self, parent: tk.Misc, key: str, title: str, *, padding: int = 6,
         fill: str = "x", expand: bool = False, pady=(0, 6),
     ) -> ttk.Frame:
-        """Create one flat right-pane section while honoring its initial state."""
-        frame = ttk.Frame(parent, padding=(padding, 2), style="PCR.Surface.TFrame")
-        frame.pack(fill=fill, expand=expand, pady=pady)
-        state = self.review_right_section_expanded.get(key)
-        expanded = True if state is None else bool(state.get())
-        title_var = tk.StringVar(value=("▾ " if expanded else "▸ ") + title)
-        toggle = ttk.Label(
-            frame, textvariable=title_var, style="PCR.Header.TLabel", cursor="hand2",
-        )
-        toggle.pack(fill="x")
-        toggle.bind(
-            "<Button-1>", lambda _event, section_key=key: self._toggle_review_right_section(section_key)
-        )
-        ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(3, 5))
-        body = ttk.Frame(frame, style="PCR.Surface.TFrame")
-        if expanded:
-            body.pack(fill="both", expand=True)
-        self._review_right_sections[key] = {
-            "frame": frame,
-            "body": body,
-            "title": title,
-            "title_var": title_var,
-            "expand_when_open": bool(expand),
-        }
-        if not expanded:
-            frame.pack_configure(expand=False)
-        return body
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._review_collapsible_section(self, parent,key,title,padding=padding,fill=fill,expand=expand,pady=pady, deps={"tk": tk, "ttk": ttk})
 
     def _toggle_review_right_section(self, key: str) -> None:
-        section = self._review_right_sections.get(key)
-        state = self.review_right_section_expanded.get(key)
-        if section is None or state is None:
-            return
-        expanded = not bool(state.get())
-        state.set(expanded)
-        title = str(section["title"])
-        title_var = section["title_var"]
-        body = section["body"]
-        frame = section["frame"]
-        title_var.set(("▾ " if expanded else "▸ ") + title)
-        if expanded:
-            body.pack(fill="both", expand=True)
-            frame.pack_configure(expand=bool(section["expand_when_open"]))
-        else:
-            body.pack_forget()
-            frame.pack_configure(expand=False)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._toggle_review_right_section(self, key, deps={})
 
     def _toggle_focused_panel(self) -> None:
-        expanded = not bool(self.focused_panel_expanded.get())
-        self.focused_panel_expanded.set(expanded)
-        self.focused_panel_title.set(("▾ " if expanded else "▸ ") + "重点筛选校对")
-        if expanded:
-            self.focused_panel_body.pack(fill="x", pady=(4, 0))
-        else:
-            self.focused_panel_body.pack_forget()
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._toggle_focused_panel(self, deps={})
 
     def _fit_review_left_pane_to_toolbar(self) -> None:
-        """Size the left pane just wide enough to show the complete top toolbar."""
-        panes = getattr(self, "review_panes", None)
-        row = getattr(self, "review_control_row", None)
-        if panes is None or row is None:
-            return
-        try:
-            self.update_idletasks()
-            required = int(row.winfo_reqwidth()) + 14
-            available = max(1, int(panes.winfo_width()) - 1)
-            panes.sashpos(0, min(required, available))
-        except (tk.TclError, ValueError):
-            return
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._fit_review_left_pane_to_toolbar(self, deps={"tk": tk})
 
     def _initialize_review_layout_and_rows(self) -> None:
-        """Finalize pane geometry before the first proofreading crop render."""
-        try:
-            if not self.winfo_exists():
-                return
-        except tk.TclError:
-            return
-        self._fit_review_left_pane_to_toolbar()
-        try:
-            self.update_idletasks()
-        except tk.TclError:
-            return
-        if self._review_auto_zoom_job is not None:
-            try:
-                self.after_cancel(self._review_auto_zoom_job)
-            except tk.TclError:
-                pass
-            self._review_auto_zoom_job = None
-        self._review_auto_zoom_width = self._review_image_area_width()
-        self._request_render_rows(focus_index=0)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._initialize_review_layout_and_rows(self, deps={"tk": tk})
 
     def _review_image_area_width(self, canvas_width: int | None = None) -> int:
-        """Leave room for the main-style sequence badge beside each crop."""
-        try:
-            if canvas_width is None:
-                canvas_width = int(self.canvas.winfo_width())
-            from .ui.review_crop_sequence import review_sequence_gutter
-            badge_width = review_sequence_gutter(self)
-        except (AttributeError, tk.TclError, TypeError, ValueError):
-            return 1
-        # 6px outer padding on each side, plus the measured badge and gap.
-        return max(1, int(canvas_width) - 12 - badge_width)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._review_image_area_width(self, canvas_width=canvas_width, deps={"tk": tk})
 
     def _review_canvas_configured(self, event: tk.Event) -> None:
-        try:
-            self.canvas.itemconfigure(self.rows_window, width=event.width)
-        except tk.TclError:
-            return
-        if not self.review_zoom_auto:
-            return
-        usable_width = self._review_image_area_width(event.width)
-        # Ignore geometry noise that cannot change the rounded crop width.
-        if abs(usable_width - int(self._review_auto_zoom_width or 0)) <= 1:
-            return
-        self._review_auto_zoom_width = usable_width
-        if self._review_auto_zoom_job is not None:
-            try:
-                self.after_cancel(self._review_auto_zoom_job)
-            except tk.TclError:
-                pass
-        self._review_auto_zoom_job = self.after(120, self._apply_auto_review_zoom_resize)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._review_canvas_configured(self, event, deps={"tk": tk})
 
     def _apply_auto_review_zoom_resize(self) -> None:
-        self._review_auto_zoom_job = None
-        if not self.review_zoom_auto:
-            return
-        if getattr(self, "_filter_rows_active", False):
-            self._request_filter_batch_render()
-        else:
-            self._request_render_rows(focus_index=self.active_index)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._apply_auto_review_zoom_resize(self, deps={})
 
     def _stored_review_zoom_percent(self) -> float:
-        return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)
+        """Stable Tk callback; full behavior is owned by its UI domain module."""
+        return _review_layout_events._stored_review_zoom_percent(self, deps={})
 
     def _build(self) -> None:
         return _review_workspace._build(self, _review_workspace_deps())

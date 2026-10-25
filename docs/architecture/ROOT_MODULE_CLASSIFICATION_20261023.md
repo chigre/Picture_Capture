@@ -184,3 +184,8 @@ Twelve real `app.py` algorithms now live in `ui/main_display_cache.py`, existing
 ## Phase 6 — OCR session engine execution (2026-10-25)
 
 Five substantive engine and orchestration algorithms moved from `ocr_channel.OcrChannelSession` into `ocr/channel_engine_execution.py`. Root `ocr_channel.py` retains stable session/dataclass public identities and call-time monkeypatch forwarding. Paddle preprocessing/source boxes, Tesseract TSV, Lens conflict/diagnostic policy, and crop fusion ordering are preserved; no persistence or Tk changes. Characterization: `tests/test_issue562_ocr_channel_engine_execution_phase6_20261025.py`. Root file count stays 10; the root-only `__init__.py`/`__main__.py` goal is not yet achieved. Real scanned-page GUI/Profile/PDIC/PPP reopen/export acceptance remains pending; keep Draft.
+
+
+## Phase 7 — Review responsive layout and Settings form physical owners (2026-10-25)
+
+Moved 13 substantive methods from root `app.py` into `ui/review_layout_events.py` (10 proofreading window pane/zoom lifecycle methods), existing `ui/settings/field_form_runtime.py` (settings value conversion), and existing `ui/settings/interactive_panels.py` (collapsible settings and intro widgets). Existing Tk class methods and runtime monkeypatch injection are preserved; no new root compatibility files. Regression: `tests/test_issue562_review_settings_layout_phase7_20261025.py`; historical source guards reanchored to real implementations. Target remains root `__init__.py`/`__main__.py` only after compatibility gates and manual scanned-page acceptance; Draft/unmerged.

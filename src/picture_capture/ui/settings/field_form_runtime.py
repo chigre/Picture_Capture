@@ -352,3 +352,38 @@ def save_settings(self, *, close: bool = True, show_errors: bool = True, deps: d
         if show_errors:
             messagebox.showerror("参数无效", str(exc), parent=self)
         return False
+
+
+# Actual SettingsDialog value initialization (percent/pixel and language choices).
+
+def _setting_var(self, name: str, *, deps: dict[str, Any]) -> tk.Variable:
+    tk = deps["tk"]
+    _format_layout_percent = deps["_format_layout_percent"]
+    _column_pixels_to_percent = deps["_column_pixels_to_percent"]
+    LAYOUT_PERCENT_AXES = deps["LAYOUT_PERCENT_AXES"]
+    _layout_pixels_to_percent = deps["_layout_pixels_to_percent"]
+    if name in self.vars:
+        return self.vars[name]
+    raw = getattr(self.parent.settings, name)
+    choices = self.SETTING_CHOICES.get(name)
+    if choices:
+        reverse = {value: label for label, value in choices.items()}
+        value = reverse.get(str(raw), str(raw))
+    elif name == "paddle_left_tolerance":
+        value = _format_layout_percent(
+            _column_pixels_to_percent(self.parent.settings, raw)
+        )
+    elif name in LAYOUT_PERCENT_AXES and self.parent.image is not None:
+        source_value = (
+            self.parent._quick_geometry_value(name)
+            if hasattr(self.parent, "_quick_geometry_value")
+            else raw
+        )
+        value = _format_layout_percent(
+            _layout_pixels_to_percent(self.parent.image, name, source_value)
+        )
+    else:
+        value = str(raw)
+    var = tk.StringVar(value=value)
+    self.vars[name] = var
+    return var

@@ -243,3 +243,55 @@ def scrollable_settings_page(self, tab: ttk.Frame, *, deps: dict[str, Any]) -> t
         add="+",
     )
     return content
+
+
+# Actual SettingsDialog collapsible controls and introductory layout.
+
+def _add_collapsible_settings(
+    self,
+    parent: ttk.Frame,
+    title: str,
+    names: tuple[str, ...] | list[str],
+    checks: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
+ *, deps: dict[str, Any]) -> None:
+    tk = deps["tk"]
+    ttk = deps["ttk"]
+    shell = ttk.Frame(parent)
+    shell.pack(fill="x", pady=(0, 10))
+    expanded = tk.BooleanVar(value=False)
+    title_var = tk.StringVar(value=f"▸ {title}")
+    body = ttk.Frame(shell)
+
+    def toggle() -> None:
+        if expanded.get():
+            expanded.set(False)
+            body.pack_forget()
+            title_var.set(f"▸ {title}")
+        else:
+            expanded.set(True)
+            title_var.set(f"▾ {title}")
+            body.pack(fill="x", pady=(6, 0))
+
+    ttk.Button(shell, textvariable=title_var, command=toggle).pack(fill="x")
+    if names:
+        self._add_setting_group(body, "参数", names)
+    if checks:
+        self._add_check_group(body, "行为", checks)
+
+def _settings_intro(self, parent: ttk.Frame, title: str, text: str, *, deps: dict[str, Any]) -> None:
+    ttk = deps["ttk"]
+    title_label = ttk.Label(
+        parent, text=title, font=("TkDefaultFont", 11, "bold"), justify="left",
+    )
+    title_label.pack(anchor="w", fill="x")
+    body_label = ttk.Label(
+        parent, text=text, foreground="#5f6670", justify="left",
+    )
+    body_label.pack(anchor="w", fill="x", pady=(3, 10))
+    self._bind_responsive_labels(
+        parent,
+        title_label,
+        body_label,
+        horizontal_padding=12,
+        min_wrap=160,
+    )

@@ -149,9 +149,11 @@ def test_review_right_panel_opens_only_reference_list_by_default():
     assert 'value=(key not in {"digit", "accent"})' not in initial
     assert 'right, "reference", "参考词表",' in review_source
     assert 'fill="both", expand=True, pady=(0, 0)' in review_source
+    events_source = (BASE / "ui/review_layout_events.py").read_text(encoding="utf-8")
     assert 'def _toggle_review_right_section(self, key: str)' in source
-    assert 'body.pack_forget()' in source
-    assert 'body.pack(fill="both", expand=True)' in source
+    assert "_review_layout_events._toggle_review_right_section(" in source
+    assert 'body.pack_forget()' in events_source
+    assert 'body.pack(fill="both", expand=True)' in events_source
 
 
 def test_layout_autodetect_button_reuses_seven_field_range_detector():
