@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .batch_publication import publish_existing_pdic_ocr
-from .text_io import render_ocred_text
+from .text_io import render_ocred_bytes
 
 
 def process_existing_pdic_page(
@@ -94,6 +94,6 @@ def process_existing_pdic_page(
         write_pdic=deps["write_pdic"],
         expected_pdic_bytes=source_pdic_bytes,
         expected_ocred_bytes=source_ocred_bytes,
-        expected_exported_ocred_bytes=render_ocred_text(texts).encode("utf-8"),
+        expected_exported_ocred_bytes=render_ocred_bytes(texts),
     )
     return len(texts)
