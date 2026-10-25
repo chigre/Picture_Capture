@@ -14,7 +14,7 @@ from PIL import Image
 from picture_capture.models import Entry
 from picture_capture.io.formats import read_pdic, write_pdic
 from picture_capture.ocr.batch_publication import publish_existing_pdic_ocr
-from picture_capture.ocr.text_io import export_ocred, render_ocred_text
+from picture_capture.ocr.text_io import export_ocred, render_ocred_bytes
 
 
 def _save_pdic(path: Path, word: str = "original") -> None:
@@ -27,7 +27,7 @@ def _publish(ocred, pdic, export, save, *, expected_pdic_bytes):
         100, ("001", "@", "@"),
         export_ocred=export, write_pdic=save,
         expected_pdic_bytes=expected_pdic_bytes,
-        expected_exported_ocred_bytes=render_ocred_text(["new-ocr"]).encode("utf-8"),
+        expected_exported_ocred_bytes=render_ocred_bytes(["new-ocr"]),
     )
 
 
