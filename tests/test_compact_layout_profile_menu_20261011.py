@@ -159,7 +159,7 @@ def test_review_right_panel_opens_only_reference_list_by_default():
 def test_layout_autodetect_button_reuses_seven_field_range_detector():
     source = Path(compact_layout_profile_menu.__file__).read_text(encoding="utf-8")
     app_source = (BASE / "app.py").read_text(encoding="utf-8")
-    process = (BASE / "processing_core.py").read_text(encoding="utf-8")
+    process = (BASE / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     parent = source.index('auto_row = row()')
     checkbox = source.index('text="使用自动版面参数"', parent)
     button = source.index('text="自动检测", command=app.detect_layout_current', parent)

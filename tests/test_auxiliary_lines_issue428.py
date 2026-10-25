@@ -99,7 +99,7 @@ def test_no_auxiliary_only_export_when_no_real_entry():
 def test_preview_and_real_export_use_same_crop_planner():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
-    core = (root / "processing_core.py").read_text(encoding="utf-8")
+    core = (root / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     owner = (root / "crop" / "page_workflow.py").read_text(encoding="utf-8")
     illustration_owner = (root / "crop" / "illustration_export.py").read_text(encoding="utf-8")
     canvas_owner = (root / "ui" / "main_canvas_render_workflow.py").read_text(encoding="utf-8")

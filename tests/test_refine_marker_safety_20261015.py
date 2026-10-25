@@ -43,7 +43,7 @@ def test_refine_button_has_settings_hint_and_shared_y_engine():
     src = Path(__file__).parents[1] / "src" / "picture_capture"
     app = (src / "ui/selected_marker_actions.py").read_text(encoding="utf-8")
     menu = (src / "ui/compact_task_menus.py").read_text(encoding="utf-8")
-    core = (src / "processing_core.py").read_text(encoding="utf-8")
+    core = (src / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     assert "请先去设置中心的精修Y调整参数" in app
     assert "请先去设置中心的精修Y调整参数" in menu
     assert "settings.paddle_refine_separator_y = True" in app

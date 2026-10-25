@@ -142,7 +142,7 @@ def test_plain_small_text_rows_and_latin_profile_do_not_expand():
 def test_marker_ocr_and_preview_use_identical_role_independent_visual_extent():
     from pathlib import Path
     base = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    source = (base / "processing_core.py").read_text("utf-8")
+    source = (base / "runtime/processing_core_runtime.py").read_text("utf-8")
     crop_owner = (base / "ocr" / "ordinary_marker_crop.py").read_text("utf-8")
     preview = (base / "ui" / "ocr_crop_preview.py").read_text("utf-8")
     assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in source
