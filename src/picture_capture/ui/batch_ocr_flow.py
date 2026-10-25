@@ -11,6 +11,8 @@ OCR and OCRed/PDIC publication remain in ocr.batch_existing_entries.
 from dataclasses import replace
 from typing import Any, Callable, Mapping
 
+from .batch_ocr_completion import complete_existing_pdic_batch
+
 
 def run_existing_pdic_batch(
     app: Any,
@@ -22,10 +24,11 @@ def run_existing_pdic_batch(
         return
     if not app._guard_transformed_geometry("批量 OCR"):
         return
+    project = app.project
     current = dependencies()
     indices = [
         i
-        for i, page in enumerate(app.project.images)
+        for i, page in enumerate(project.images)
         if current["read_pdic"](current["pdic_path"](page))
     ]
     if not indices:
@@ -38,12 +41,15 @@ def run_existing_pdic_batch(
         parent=app,
     ):
         return
+    # A nested native confirmation dialog can pump the Tk event loop. Do not
+    # commit the new project's editor if the original project was replaced.
+    if app.project is not project:
+        return
 
     # Preserve the newest visible text before a worker claims this page.
     if callable(getattr(app, "save_pdic", None)):
         app._sync_entry_editor_texts()
         app.save_pdic(silent=True, sync_editors=False)
-    project = app.project
     settings = replace(app.settings)
     rules = current["load_replace_rules"](
         current["replace_rules_path"](project.root)
@@ -73,17 +79,15 @@ def run_existing_pdic_batch(
         )
 
     def done(completed, total_pages, stopped, results, error):
-        if error is not None:
-            return
-        count = sum(int(value or 0) for value in results)
-        if not getattr(app, "_batch_foreground_pages", False):
-            app.load_page(app.current_index, skip_current_save=True)
-        if stopped:
-            app.status_var.set(
-                f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条"
-            )
-        else:
-            app.status_var.set(f"批量 OCR 完成：{count} 个词条")
+        return complete_existing_pdic_batch(
+            app,
+            project=project,
+            completed=completed,
+            total_pages=total_pages,
+            stopped=stopped,
+            results=results,
+            error=error,
+        )
 
     app._start_batch_task(
         "批量 OCR",
