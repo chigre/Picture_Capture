@@ -80,6 +80,7 @@ def publish_existing_pdic_ocr(
     write_pdic: Callable[..., Any],
     expected_pdic_bytes: bytes | None | object = _UNSPECIFIED_PDic_SNAPSHOT,
     expected_ocred_bytes: bytes | None | object = _UNSPECIFIED_OCRED_SNAPSHOT,
+    expected_exported_ocred_bytes: bytes | None = None,
 ) -> None:
     """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
     try:
@@ -155,6 +156,19 @@ def publish_existing_pdic_ocr(
             "未启动 PDIC 保存，请人工核查 OCRed："
             f"核查={inspect_error!r}"
         ) from inspect_error
+
+    # The worker knows the exact canonical bytes that its exporter must
+    # produce. If a different value appears (including a manual edit inside
+    # the export callback), refuse PDIC publication. Never roll back a
+    # sidecar whose ownership cannot be established from these bytes.
+    if (
+        expected_exported_ocred_bytes is not None
+        and published_ocred != expected_exported_ocred_bytes
+    ):
+        raise RuntimeError(
+            "OCRed 导出后内容与预期不符，可能存在并发人工修改；"
+            "未启动 PDIC 保存，未回滚不明来源的 OCRed，请人工核查"
+        )
 
     # OCRed export can take time or invoke patched filesystem hooks.
     # If another editor writes PDIC during export, undo this OCRed sidecar
