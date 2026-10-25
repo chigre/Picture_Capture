@@ -15,6 +15,7 @@ from .geometry.layout_transform import LayoutTransform
 from .project import page_discovery as _page_discovery
 from .project import state_opening as _project_state_opening
 from .profile import settings_storage_io as _settings_storage_io
+from .profile import settings_value_policy as _settings_value_policy
 from .runtime.environment import portable_project_file
 from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
@@ -33,14 +34,8 @@ _APP_SETTINGS_SAVE_LOCK = threading.Lock()
 
 
 def _normalize_display_opacity(value: object, default: float = 40.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        number = float(default)
-    if not math.isfinite(number):
-        number = float(default)
-    return max(0.0, min(100.0, number))
-
+    """Preserve root monkeypatch seam; normalization lives in Profile value policy."""
+    return _settings_value_policy.normalize_display_opacity(value, default, math_module=math)
 
 def is_project_cover_image(path: Path) -> bool:
     return _page_discovery.is_project_cover_image(path, cover_stems=PROJECT_COVER_STEMS, cover_extensions=PROJECT_COVER_EXTENSIONS)
@@ -150,15 +145,8 @@ class PolygonRegion:
 
 
 def _app_settings_storage_alias(storage_name: str) -> property:
-    """Return one static public alias backed by an existing dataclass slot."""
-    def getter(settings):
-        return getattr(settings, storage_name)
-
-    def setter(settings, value):
-        setattr(settings, storage_name, value)
-
-    return property(getter, setter)
-
+    """Preserve the historical field descriptor factory for the native dataclass."""
+    return _settings_value_policy.app_settings_storage_alias(storage_name)
 
 class _AppSettingsMeta(type):
     """Normalize compatibility keyword aliases before the dataclass initializer."""
@@ -741,49 +729,10 @@ class AppSettings(metaclass=_AppSettingsMeta):
     entry_ocr_right_ratio = _app_settings_storage_alias("crop_width_percent")
 
     def __setattr__(self, name: str, value: object) -> None:
-        # Preserve the former runtime-property contract now that these values
-        # are native dataclass fields: construction and later assignments are
-        # both normalized immediately rather than only at render/save time.
-        if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
-            value = _normalize_display_opacity(value)
-        if name == "crop_width_percent":
-            try:
-                ratio = float(value)
-            except (ValueError, TypeError, OverflowError) as exc:
-                raise ValueError("切图宽度须在1–100%之间") from exc
-            if not 1.0 <= ratio <= 100.0:
-                raise ValueError("切图宽度须在1–100%之间")
-            value = ratio
-        if name == "physical_row_projection_width_percent":
-            try:
-                value = float(value)
-            except (TypeError, ValueError, OverflowError) as exc:
-                raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
-            if not 10.0 <= value <= 100.0:  # also rejects NaN/infinity
-                raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
-        if name.startswith("separator_y_ink_safe_") and name != "separator_y_ink_safe_gap":
-            allowed = {
-                "separator_y_ink_safe_max_fraction": (0.01, 0.30),
-                "separator_y_ink_safe_ink_threshold": (0.0, 255.0),
-                "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20),
-                "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10),
-            }
-            if name in allowed:
-                try:
-                    numeric = float(value)
-                except (ValueError, TypeError, OverflowError) as exc:
-                    raise ValueError(f"{name} 必须是数字。") from exc
-                low, high = allowed[name]
-                if not low <= numeric <= high:
-                    raise ValueError(f"{name} 必须在 {low}–{high} 之间。")
-                if name == "separator_y_ink_safe_ink_threshold":
-                    if not numeric.is_integer():
-                        raise ValueError(f"{name} 必须是整数。")
-                    value = int(numeric)
-                else:
-                    value = numeric
-        object.__setattr__(self, name, value)
-
+        """Historical assignment hook: run the complete Profile value policy."""
+        return _settings_value_policy.assign_setting_value(
+            self, name, value, opacity_normalizer=_normalize_display_opacity,
+        )
     @property
     def row_height(self) -> int:
         return max(1, self.character_height + self.row_padding)
