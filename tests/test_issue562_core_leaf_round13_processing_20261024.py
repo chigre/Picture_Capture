@@ -14,7 +14,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_leaf_inventory_original_functions_and_exact_signatures():
-    assert len(list(PKG.glob("*.py"))) == 7
+    assert len(list(PKG.glob("*.py"))) == 5
     for path in ("geometry/column_offsets.py", "ordinary/review_signals.py"):
         assert (PKG / path).is_file()
         assert not (PKG / Path(path).name).exists()

@@ -21,7 +21,7 @@ def test_no_root_launcher_or_cli_and_same_console_command():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'picture-capture-cli = "picture_capture.bootstrap.cli:main"' in pyproject
     assert 'picture-capture = "picture_capture.bootstrap.application:main"' in pyproject
-    assert len(tuple(PACKAGE.glob("*.py"))) == 7
+    assert len(tuple(PACKAGE.glob("*.py"))) == 5
 
 
 def test_cli_parser_keeps_inspect_draw_ocr_and_crop_actions():
