@@ -27,7 +27,7 @@ def test_conflicting_pdic_during_ocred_export_restores_sidecar_and_keeps_manual_
     _pdic_entry(pdic, "original")
     original_pdic = pdic.read_bytes()
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir()
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     old_ocred = None
     if sidecar_preexisting:
         ocred.write_bytes(b"\xef\xbb\xbf000|`old-manual\r\n")
@@ -67,7 +67,7 @@ def test_stale_source_snapshot_rejects_before_ocred_export(
 ):
     pdic = tmp_path / "001.PDIC"
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir()
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     ocred.write_bytes(b"000|`original\n")
     old_ocred = ocred.read_bytes()
     initial = None
