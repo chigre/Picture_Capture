@@ -13,6 +13,8 @@ from PIL import Image
 
 from .geometry.layout_transform import LayoutTransform
 from .project import page_discovery as _page_discovery
+from .project import state_opening as _project_state_opening
+from .profile import settings_storage_io as _settings_storage_io
 from .runtime.environment import portable_project_file
 from .profile.settings_migrations import (
     canonicalize_app_settings_payload,
@@ -787,48 +789,21 @@ class AppSettings(metaclass=_AppSettingsMeta):
         return max(1, self.character_height + self.row_padding)
 
     def to_json(self, path: Path) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = canonicalize_app_settings_payload(asdict(self))
-        for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
-            payload[name] = _normalize_display_opacity(payload.get(name, 40.0))
-        serialized = json.dumps(payload, ensure_ascii=False, indent=2)
-
-        # Publish only fully written settings: interrupted writes must not
-        # truncate an existing project configuration. A unique same-directory
-        # temporary file also prevents parallel saves sharing a fixed .tmp.
-        with _APP_SETTINGS_SAVE_LOCK:
-            temporary: Path | None = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    encoding="utf-8",
-                    dir=path.parent,
-                    prefix=f".{path.name}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as stream:
-                    temporary = Path(stream.name)
-                    stream.write(serialized)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(temporary, path)
-            finally:
-                if temporary is not None:
-                    temporary.unlink(missing_ok=True)
+        """Compatibility entrypoint; real atomic JSON writer is in profile/settings_storage_io.py."""
+        return _settings_storage_io.write_settings_json(self, path, deps={
+            "Path": Path, "canonicalize_app_settings_payload": canonicalize_app_settings_payload,
+            "_normalize_display_opacity": _normalize_display_opacity,
+            "asdict": asdict, "json": json, "tempfile": tempfile, "os": os,
+            "_APP_SETTINGS_SAVE_LOCK": _APP_SETTINGS_SAVE_LOCK,
+        })
 
     @classmethod
     def from_json(cls, path: Path) -> "AppSettings":
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        # Existing project configs created before the 100%-width default
-        # retain the historical 60% when this field was absent.
-        raw.setdefault("paddle_separator_roi_width_ratio", 60.0)
-        for name in ("guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"):
-            raw[name] = _normalize_display_opacity(raw.get(name, 40.0))
-        raw = migrate_app_settings_payload(raw, cls)
-
-        known = cls.__dataclass_fields__
-        return cls(**{key: value for key, value in raw.items() if key in known})
+        """Compatibility entrypoint for migrated settings reader."""
+        return _settings_storage_io.read_settings_json(cls, path, deps={
+            "json": json, "_normalize_display_opacity": _normalize_display_opacity,
+            "migrate_app_settings_payload": migrate_app_settings_payload,
+        })
 
 
 
@@ -841,74 +816,14 @@ class ProjectState:
 
     @classmethod
     def open(cls, root: Path) -> "ProjectState":
-        root = root.expanduser().resolve()
-        if not root.is_dir():
-            raise NotADirectoryError(root)
+        """Compatibility entrypoint; the actual project bootstrap lives in project/."""
+        return _project_state_opening.open_project_state(cls, root, deps={
+            "project_page_images": project_page_images,
+            "AppSettings": AppSettings,
+            "resolve_wordslist_path": resolve_wordslist_path,
+            "read_noncomment_lines": read_noncomment_lines,
+        })
 
-        images = project_page_images(root)
-
-        # Storage v2: a clean/new scan folder gets exactly one software-owned
-        # child directory. Existing legacy projects remain readable until the GUI
-        # explicitly migrates them, so opening a project never silently moves data.
-        # Do not create anything in an empty/non-project folder selected by mistake.
-        from .persistence.project_storage import (
-            ensure_project_storage, has_legacy_project_data, is_managed_project,
-            profile_path as active_profile_path,
-            qt_root, settings_path as active_settings_path,
-        )
-        if images and (is_managed_project(root) or not has_legacy_project_data(root)):
-            try:
-                from . import __version__
-            except Exception:
-                __version__ = "unknown"
-            ensure_project_storage(root, __version__)
-        # Recover page-level PNG/manifest transactions before any export can start.
-        # An uncommitted transaction is rolled back; committed ones finish cleanup.
-        from .crop.publish import recover_incomplete_crop_publications
-        recover_incomplete_crop_publications(root)
-        json_settings = active_settings_path(root)
-        if json_settings.exists():
-            settings = AppSettings.from_json(json_settings)
-        else:
-            settings = AppSettings()
-            # A v3 profile sidecar can bootstrap a project that predates
-            # settings.json.  Never apply this over an existing modern/legacy
-            # settings file: those remain authoritative.
-            try:
-                from .profile.dictionary import apply_project_profile_components
-                apply_project_profile_components(active_profile_path(root), settings)
-            except Exception:
-                pass
-        # settings.json is authoritative for mutable project state.  The profile
-        # sidecar is only a compatibility fallback for projects that do not yet
-        # have settings.json; it must never overwrite a user's newer selection.
-        settings_has_profile = False
-        if json_settings.exists():
-            try:
-                saved_settings = json.loads(json_settings.read_text(encoding="utf-8-sig"))
-                settings_has_profile = bool(
-                    isinstance(saved_settings, dict)
-                    and str(saved_settings.get("dictionary_profile_id") or "").strip()
-                )
-            except (OSError, ValueError, TypeError):
-                settings_has_profile = False
-        if not settings_has_profile:
-            try:
-                from .profile.dictionary import project_profile_preset_id
-                settings.dictionary_profile_id = project_profile_preset_id(
-                    active_profile_path(root), getattr(settings, "dictionary_profile_id", "latin_structured_symbols")
-                )
-            except Exception:
-                pass
-        words_path = resolve_wordslist_path(root, settings.wordslist_path)
-        words = read_noncomment_lines(words_path) if words_path.exists() else []
-        active_qt = qt_root(root)
-        (active_qt / "PaddleOCR").mkdir(parents=True, exist_ok=True)
-        (active_qt / "PSW").mkdir(parents=True, exist_ok=True)
-        (active_qt / "PWW").mkdir(parents=True, exist_ok=True)
-        (active_qt / "PIC").mkdir(parents=True, exist_ok=True)
-        (active_qt / "PicDic").mkdir(parents=True, exist_ok=True)
-        return cls(root=root, images=images, settings=settings, words=words)
 
 
 def resolved_tesseract_language(settings: AppSettings) -> str:
