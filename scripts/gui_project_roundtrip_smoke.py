@@ -96,10 +96,15 @@ def _pump_until(app, predicate, *, seconds: float, description: str) -> None:
     status = app.status_var.get() if getattr(app, "status_var", None) is not None else "missing"
     actual = getattr(app, "current_page", None)
     project = getattr(app, "project", None)
+    batch_active = getattr(app, "_batch_active", None)
+    progress_var = getattr(app, "batch_progress_var", None)
+    progress = progress_var.get() if progress_var is not None else None
+    width_active = app._ui_worker_key_active("crop-width-normalization")
     raise RuntimeError(
         f"Tk integration timed out during {description}; "
         f"actual_page={actual!s}, project_root={getattr(project, 'root', None)!s}, "
-        f"status={status!r}"
+        f"status={status!r}, batch_active={batch_active!r}, "
+        f"batch_progress={progress!r}, crop_width_worker_active={width_active!r}"
     )
 
 
