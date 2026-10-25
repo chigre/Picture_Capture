@@ -20,6 +20,9 @@ import tempfile
 from typing import Any, Callable
 
 
+_UNSPECIFIED_PDic_SNAPSHOT = object()
+
+
 def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
     if previous is None:
         path.unlink(missing_ok=True)
@@ -54,6 +57,7 @@ def publish_existing_pdic_ocr(
     *,
     export_ocred: Callable[..., Any],
     write_pdic: Callable[..., Any],
+    expected_pdic_bytes: bytes | None | object = _UNSPECIFIED_PDic_SNAPSHOT,
 ) -> None:
     """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
     try:
@@ -66,6 +70,16 @@ def publish_existing_pdic_ocr(
         previous_pdic = pdic_path.read_bytes()
     except FileNotFoundError:
         previous_pdic = None
+    # A long-running batch captured its source PDIC before OCR inference.
+    # Refuse to publish if a new manual edit arrived after its last check.
+    if (
+        expected_pdic_bytes is not _UNSPECIFIED_PDic_SNAPSHOT
+        and previous_pdic != expected_pdic_bytes
+    ):
+        raise RuntimeError(
+            "批量 OCR 发布前 PDIC 已被其他操作修改；"
+            "未改写 OCRed 或 PDIC，避免覆盖人工校对内容"
+        )
 
     # An exporter can atomically replace OCRed and then raise from a later
     # hook. PDIC has not been called yet; restore this sidecar before letting
@@ -93,6 +107,32 @@ def publish_existing_pdic_ocr(
                     f"导出={export_error!r}；回滚={rollback_error!r}"
                 ) from rollback_error
         raise
+
+    # OCRed export can take time or invoke patched filesystem hooks.
+    # If another editor writes PDIC during export, undo this OCRed sidecar
+    # and refuse to overwrite their latest PDIC file.
+    try:
+        pdic_after_export = pdic_path.read_bytes()
+    except FileNotFoundError:
+        pdic_after_export = None
+    except OSError as inspect_error:
+        raise RuntimeError(
+            "OCRed 已导出，但无法确认 PDIC 是否在导出期间被修改；"
+            "未启动 PDIC 保存，请核查两份文件："
+            f"核查={inspect_error!r}"
+        ) from inspect_error
+    if pdic_after_export != previous_pdic:
+        try:
+            _restore_ocred_bytes(ocred_path, previous)
+        except Exception as rollback_error:
+            raise RuntimeError(
+                "PDIC 在 OCRed 导出期间被修改，且 OCRed 回滚失败："
+                f"回滚={rollback_error!r}"
+            ) from rollback_error
+        raise RuntimeError(
+            "PDIC 在 OCRed 导出期间被其他操作修改；"
+            "已恢复原有 OCRed，未覆盖人工校对的 PDIC"
+        )
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
