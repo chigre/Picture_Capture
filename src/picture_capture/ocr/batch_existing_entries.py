@@ -36,6 +36,13 @@ def process_existing_pdic_page(
         source_pdic_bytes = pdic_file.read_bytes()
     except FileNotFoundError:
         source_pdic_bytes = None
+    # OCRed can also be manually proofread while the inference worker runs.
+    # Snapshot before inference and pass the original bytes to publication.
+    ocred_file = deps["qt_root"](project_root) / f"{page.stem}.OCRed"
+    try:
+        source_ocred_bytes = ocred_file.read_bytes()
+    except FileNotFoundError:
+        source_ocred_bytes = None
     entries = deps["read_pdic"](pdic_file)
     with deps["Image"].open(page) as opened:
         image = deps["normalize_page_rgb"](opened)
@@ -79,11 +86,12 @@ def process_existing_pdic_page(
     for entry, text in zip(entries, texts):
         entry.word = text
     publish_existing_pdic_ocr(
-        deps["qt_root"](project_root) / f"{page.stem}.OCRed",
+        ocred_file,
         pdic_file,
         texts, entries, image.width, pages_info,
         export_ocred=deps["export_ocred"],
         write_pdic=deps["write_pdic"],
         expected_pdic_bytes=source_pdic_bytes,
+        expected_ocred_bytes=source_ocred_bytes,
     )
     return len(texts)
