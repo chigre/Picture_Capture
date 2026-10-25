@@ -1546,3 +1546,20 @@ Retire the two Python import paths for external direct callers; use canonical
 `picture_capture.bootstrap.cli` / `picture_capture.bootstrap.launcher`.
 The root count is ratcheted to 10. Retain root modules with historical
 pickle identities, core-mirroring, and main Tk app ABI for later explicit audit.
+
+
+## Issue #562 — Round 70: batch existing-PDIC OCR page ownership (2026-10-25)
+
+The single-page worker body that reads existing PDIC markers, normalizes source
+RGB, applies page/template/SECTION reading geometry, fills OCR text, and
+publishes the OCRed sidecar followed by PDIC has moved physically from
+`ui/controllers/detection.py` to `ocr/batch_existing_entries.py`.
+The Tk controller still exclusively owns consent, current editor flushing,
+foreground PDIC edit permissions, project page selection, worker scheduling,
+completion status and reload. A call-time dependency map retains legacy
+monkeypatch hooks, including Windows spawn-worker behavior; source entry X/Y,
+OCRed-before-PDIC publication order and original failure propagation are
+unchanged. Tests characterize both the physical owner and the real worker
+through the existing controller test. No schema or root compatibility shim
+changed. Full six-platform CI and real dictionary scan acceptance remain
+independent; the latter is NOT PASSED, and PR #663 must stay Draft.
