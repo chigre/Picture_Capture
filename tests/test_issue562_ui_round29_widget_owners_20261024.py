@@ -15,7 +15,10 @@ def test_widget_owners_and_historical_class_signatures():
     assert len(list(root.glob("*.py"))) == 10
     expected = {
         "ui/main_workspace_build.py": {"build_ui"},
-        "ui/settings/interactive_panels.py": {"add_check_group", "scrollable_settings_page"},
+        "ui/settings/interactive_panels.py": {
+            "add_check_group", "scrollable_settings_page",
+            "_add_collapsible_settings", "_settings_intro",
+        },
     }
     for relative, names in expected.items():
         source = root / relative

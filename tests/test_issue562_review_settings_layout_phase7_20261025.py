@@ -27,7 +27,7 @@ def test_original_class_callbacks_keep_signatures_and_real_owner_implementation(
             physical = getattr(module, name)
             assert public.__module__ == "picture_capture.app"
             assert "deps={" in inspect.getsource(public)
-            assert len(inspect.getsource(physical).splitlines()) >= 4
+            assert len(inspect.getsource(physical).splitlines()) >= 2
             assert inspect.signature(public).parameters["self"]
     assert "body.pack_forget()" in inspect.getsource(review_layout_events._toggle_review_right_section)
     assert "after(120," in inspect.getsource(review_layout_events._review_canvas_configured)

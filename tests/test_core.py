@@ -5647,7 +5647,9 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
     assert "self.review_zoom_auto = stored_review_zoom <= 0" in initializer
     assert "widest_crop = max(crop.width for crop in raw_crops)" in REVIEW_WORKSPACE_SOURCE
     assert "widest_crop, auto_image_area_width, 0.99" in REVIEW_WORKSPACE_SOURCE
-    assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in app_text
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._stored_review_zoom_percent(" in app_text
+    assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in events
     assert "not self.review_zoom_auto" in app_text
 
 
@@ -5875,7 +5877,8 @@ def test_review_right_sections_use_requested_default_expansion_states():
     review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=(key == "reference"))' in review
-    assert 'expanded = True if state is None else bool(state.get())' in review
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert 'expanded = True if state is None else bool(state.get())' in events
     for key, title in (
         ("display", "显示设置"),
         ("digit", "数字替换映射"),
@@ -5886,8 +5889,9 @@ def test_review_right_sections_use_requested_default_expansion_states():
     ):
         assert f'right, "{key}", "{title}"' in REVIEW_WORKSPACE_SOURCE
     assert 'def _toggle_review_right_section(self, key: str) -> None:' in review
-    assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in review
-    assert "body.pack_forget()" in review
+    assert "_review_layout_events._toggle_review_right_section(" in review
+    assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in events
+    assert "body.pack_forget()" in events
 
 
 def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
@@ -5913,12 +5917,14 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'panes.add(left, weight=0)' in build
     assert 'panes.add(right, weight=1)' in build
     assert 'self.review_panes = panes' in build
-    assert 'self._fit_review_left_pane_to_toolbar' in review
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "def _fit_review_left_pane_to_toolbar(" in events
+    assert "_review_layout_events._fit_review_left_pane_to_toolbar(" in review
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
     assert 'self._review_collapsible_section(' in build
-    section_helper = review[
-        review.index("    def _review_collapsible_section("):
-        review.index("    def _build(self) -> None:")
+    section_helper = events[
+        events.index("def _review_collapsible_section("):
+        events.index("def _toggle_review_right_section(")
     ]
     assert 'style="PCR.Header.TLabel"' in section_helper
     assert 'relief="sunken"' not in build
@@ -5941,9 +5947,11 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
 
-    section_start = review.index("    def _review_collapsible_section(")
-    section_end = review.index("    def _build(self) -> None:", section_start)
-    section = review[section_start:section_end]
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._review_collapsible_section(" in review
+    section_start = events.index("def _review_collapsible_section(")
+    section_end = events.index("def _toggle_focused_panel(", section_start)
+    section = events[section_start:section_end]
     assert "ttk.LabelFrame(" not in section
     assert 'ttk.Separator(frame, orient="horizontal")' in section
     assert "body.pack_forget()" in section
@@ -7464,10 +7472,12 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     assert "self.review_control_row = row1" in REVIEW_WORKSPACE_SOURCE
     assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
     assert "def _initialize_review_layout_and_rows" in review
-    assert "self._fit_review_left_pane_to_toolbar()" in review
-    fit_start = review.index("    def _fit_review_left_pane_to_toolbar")
-    fit_end = review.index("    def _build(self) -> None:", fit_start)
-    fit = review[fit_start:fit_end]
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._initialize_review_layout_and_rows(" in review
+    assert "self._fit_review_left_pane_to_toolbar()" in events
+    fit_start = events.index("def _fit_review_left_pane_to_toolbar(")
+    fit_end = events.index("def _initialize_review_layout_and_rows(", fit_start)
+    fit = events[fit_start:fit_end]
     assert "row.winfo_reqwidth()" in fit
     assert "panes.sashpos(0, min(required, available))" in fit
     assert "panes.add(left, weight=0)" in REVIEW_WORKSPACE_SOURCE

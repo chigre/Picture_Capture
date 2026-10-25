@@ -15,7 +15,7 @@ def test_owners_are_parseable_functions_and_no_root_shims():
     assert len(list(root.glob("*.py"))) == 10
     owners = {
         "ui/settings/field_form_runtime.py": {
-            "setting_widget", "add_setting_group", "save_settings",
+            "setting_widget", "add_setting_group", "save_settings", "_setting_var",
         },
         "ui/review_style_policy.py": {"configure_review_styles"},
     }
