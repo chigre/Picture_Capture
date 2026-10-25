@@ -5,7 +5,7 @@ their implementation and uses only dependencies captured at call time.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -507,3 +507,102 @@ def canvas_right_click(self, deps: CanvasPointerDeps, event: tk.Event) -> None:
     # foreground edits reserve pages from the background runner.
     self.change_page(1)
 
+
+
+# Physical PPP label, rectangle and SECTION geometry callbacks.
+
+def _polygon_display_name(region: PolygonRegion, index: int, *, deps: dict[str, Any]) -> str:
+    label_text = deps["label_text"]
+    return label_text(region.label) or f"P_{index + 1:02d}"
+
+def _set_polygon_display_name(self, region: PolygonRegion, name: str, *, deps: dict[str, Any]) -> None:
+    user_edited_link = deps["user_edited_link"]
+    """Compatibility setter: accept only association-code changes."""
+    region.label = user_edited_link(region.label, name)
+
+def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry, *, deps: dict[str, Any]) -> None:
+    tk = deps["tk"]
+    label_text = deps["label_text"]
+    if self._batch_active and self._batch_allow_pdic_edits:
+        return
+    try:
+        text = widget.get().strip()
+    except tk.TclError:
+        return
+    if self._illustration_controller_for_call().update_label(region, text):
+        self.status_var.set(f"PPP标签已保存：{label_text(region.label)}")
+    try:
+        widget.delete(0, tk.END)
+        widget.insert(0, label_text(region.label))
+    except tk.TclError:
+        pass
+
+def _commit_polygon_label_return(self, region: PolygonRegion, widget: tk.Entry, *, deps: dict[str, Any]) -> str:
+    tk = deps["tk"]
+    self._update_polygon_label(region, widget)
+    try:
+        self.canvas.focus_set()
+    except tk.TclError:
+        pass
+    return "break"
+
+def _rectangle_bounds(region: PolygonRegion, tolerance: int = 2) -> tuple[int, int, int, int] | None:
+    """Return bounds when a four-point PPP is an axis-aligned rectangle."""
+    if len(region.points) != 4:
+        return None
+    xs = [p[0] for p in region.points]
+    ys = [p[1] for p in region.points]
+    x0, x1 = min(xs), max(xs)
+    y0, y1 = min(ys), max(ys)
+    if x1 - x0 <= tolerance or y1 - y0 <= tolerance:
+        return None
+    expected = {(x0, y0), (x1, y0), (x1, y1), (x0, y1)}
+    for px, py in region.points:
+        if not any(abs(px - ex) <= tolerance and abs(py - ey) <= tolerance for ex, ey in expected):
+            return None
+    return x0, y0, x1, y1
+
+def _set_rectangle_side(region: PolygonRegion, side: str, value: int, *, deps: dict[str, Any]) -> None:
+    PictureCaptureApp = deps["PictureCaptureApp"]
+    bounds = PictureCaptureApp._rectangle_bounds(region)
+    if bounds is None:
+        return
+    x0, y0, x1, y1 = bounds
+    if side == "left":
+        value = min(value, x1 - 1)
+        region.points = [(value if abs(x - x0) <= 2 else x, y) for x, y in region.points]
+    elif side == "right":
+        value = max(value, x0 + 1)
+        region.points = [(value if abs(x - x1) <= 2 else x, y) for x, y in region.points]
+    elif side == "top":
+        value = min(value, y1 - 1)
+        region.points = [(x, value if abs(y - y0) <= 2 else y) for x, y in region.points]
+    elif side == "bottom":
+        value = max(value, y0 + 1)
+        region.points = [(x, value if abs(y - y1) <= 2 else y) for x, y in region.points]
+
+def _external_polygon_label_position(
+    min_x: float, min_y: float, max_x: float, max_y: float,
+    label_width: int, label_height: int, canvas_width: float, canvas_height: float,
+    gap: int = 6,
+) -> tuple[float, float]:
+    """Position label above the figure, aligned to its left edge."""
+    margin = 2.0
+    x = max(margin, min(min_x, max(margin, canvas_width - label_width - margin)))
+    y = min_y - gap - label_height
+    if y < margin:
+        y = min(max(margin, min_y + gap), max(margin, canvas_height - label_height - margin))
+    return x, y
+
+def _section_gap_entry_count(self, *, deps: dict[str, Any]) -> int:
+    v_is_inside_sections = deps["v_is_inside_sections"]
+    if not self.page_sections:
+        return 0
+    geometry = self._get_cached_display_geometry()
+    return sum(
+        1 for entry in self.entries
+        if not v_is_inside_sections(
+            geometry.source_to_canonical(entry.x, entry.y)[1],
+            self.page_sections, geometry.top, geometry.bottom,
+        )
+    )

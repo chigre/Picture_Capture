@@ -2252,23 +2252,12 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _style_color_button(button: tk.Button, color: str) -> None:
-        color = str(color or "#ff0000")
-        try:
-            button.configure(bg=color, activebackground=color, text="")
-        except tk.TclError:
-            button.configure(text=color)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _quick_settings_apply._style_color_button(button, color, deps={"tk": tk})
 
     def choose_overlay_color(self, setting_name: str, button: tk.Button) -> None:
-        current = str(getattr(self.settings, setting_name, "#ff0000"))
-        _rgb, chosen = colorchooser.askcolor(color=current, parent=self, title="选择颜色")
-        if not chosen:
-            return
-        chosen = str(chosen).lower()
-        if hasattr(self, "quick_color_vars") and setting_name in self.quick_color_vars:
-            self.quick_color_vars[setting_name].set(chosen)
-        setattr(self.settings, setting_name, chosen)
-        self._style_color_button(button, chosen)
-        self._quick_parameter_changed(immediate=True)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _quick_settings_apply.choose_overlay_color(self, setting_name, button, deps={"colorchooser": colorchooser})
 
     def _quick_percent_parameter_changed(self, name: str) -> None:
         """Stable main-window Tk callback, physically implemented under ui/."""
@@ -2283,35 +2272,20 @@ class PictureCaptureApp(tk.Tk):
         return _quick_settings_apply._quick_parameter_changed(self, *_args,immediate=immediate, deps={"tk": tk})
 
     def _apply_overlay_visibility_toggle(self, setting_name: str, variable: tk.BooleanVar) -> None:
-        """ apply overlay visibility toggle."""
-        setattr(self.settings, setting_name, bool(variable.get()))
-        if setting_name == "show_rulers" and not bool(variable.get()):
-            self._hide_ruler_hint()
-        self._quick_parameter_changed(immediate=True)
-        self.redraw()
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _quick_settings_apply._apply_overlay_visibility_toggle(self, setting_name, variable)
 
     def _run_quick_autosave(self) -> None:
-        self._quick_autosave_job = None
-        # While the user is halfway through typing a numeric value, validation
-        # can fail temporarily. Silent live-save simply waits for the next edit;
-        # the explicit 保存参数 button still reports an error immediately.
-        self.apply_quick_settings(show_status=False, persist=True, silent_errors=True)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _quick_settings_apply._run_quick_autosave(self)
 
     def _quick_geometry_value(self, name: str) -> int:
         """Stable main-window Tk callback, physically implemented under ui/."""
         return _quick_settings_apply._quick_geometry_value(self, name, deps={})
 
     def _refresh_quick_coordinate_labels(self) -> None:
-        if not hasattr(self, "quick_field_labels"):
-            return
-        labels = {
-            "start_y": "正文起始Y：",
-            "manual_x": "首栏X：",
-        }
-        for name, label in labels.items():
-            widget = self.quick_field_labels.get(name)
-            if widget is not None:
-                widget.configure(text=label)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _quick_settings_apply._refresh_quick_coordinate_labels(self)
 
     def sync_quick_settings(self) -> None:
         """Historical quick-control sync in original page-pixel coordinates."""
@@ -2495,16 +2469,8 @@ class PictureCaptureApp(tk.Tk):
         return _batch_workflow._request_batch_stop(_batch_workflow_deps(), self)
 
     def guard(self) -> bool:
-        if self._preprocess_mode_active():
-            self.status_var.set("预处理模式中：普通编辑已锁定，请先退出预处理模式。")
-            return False
-        if getattr(self, "_batch_active", False):
-            if not self._claim_page_for_manual_edit():
-                return False
-        if not self.project or not self.current_page or self.image is None:
-            messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
-            return False
-        return True
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _main_app_lifecycle.guard(self, deps={"messagebox": messagebox})
 
     @staticmethod
     def _ppp_write_path(page: Path) -> Path:
@@ -2710,26 +2676,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def fit_single_column_width(self) -> None:
-        """Scale a single dictionary column to the available viewer width."""
-        if self.image is None:
-            return
-        try:
-            column_width = float(self.settings.column_width)
-            gutter = float(self.settings.gutter)
-        except (AttributeError, TypeError, ValueError):
-            column_width, gutter = 0.0, -1.0
-        # Fit one column with a gutter-sized margin on each side.
-        fit_width = column_width + 2 * gutter
-        if not (0 < column_width <= self.image.width and gutter >= 0 and fit_width > 0):
-            self.status_var.set("请先设置有效的单栏宽度和栏间距。")
-            return
-        self.update_idletasks()
-        available = max(1, self.canvas.winfo_width())
-        self.view_scale = min(3.0, max(0.08, available / fit_width))
-        self._update_view_zoom_label()
-        self.redraw()
-        self._set_idle_cursor_status()
-        self.canvas.xview_moveto(0.0)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return self._canvas_controller_for_call().fit_single_column_width()
 
     def fit_page_height(self) -> None:
         self._canvas_controller_for_call().fit_page_height()
@@ -2769,34 +2717,20 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _polygon_display_name(region: PolygonRegion, index: int) -> str:
-        return label_text(region.label) or f"P_{index + 1:02d}"
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._polygon_display_name(region, index, deps={"label_text": label_text})
 
     def _set_polygon_display_name(self, region: PolygonRegion, name: str) -> None:
-        """Compatibility setter: accept only association-code changes."""
-        region.label = user_edited_link(region.label, name)
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._set_polygon_display_name(self, region, name, deps={"user_edited_link": user_edited_link})
 
     def _update_polygon_label(self, region: PolygonRegion, widget: tk.Entry) -> None:
-        if self._batch_active and self._batch_allow_pdic_edits:
-            return
-        try:
-            text = widget.get().strip()
-        except tk.TclError:
-            return
-        if self._illustration_controller_for_call().update_label(region, text):
-            self.status_var.set(f"PPP标签已保存：{label_text(region.label)}")
-        try:
-            widget.delete(0, tk.END)
-            widget.insert(0, label_text(region.label))
-        except tk.TclError:
-            pass
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._update_polygon_label(self, region, widget, deps={"tk": tk, "label_text": label_text})
 
     def _commit_polygon_label_return(self, region: PolygonRegion, widget: tk.Entry) -> str:
-        self._update_polygon_label(region, widget)
-        try:
-            self.canvas.focus_set()
-        except tk.TclError:
-            pass
-        return "break"
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._commit_polygon_label_return(self, region, widget, deps={"tk": tk})
 
     def _sync_polygon_label_texts(self) -> None:
         return _canvas_pointer._sync_polygon_label_texts(self, _canvas_pointer_deps())
@@ -2806,42 +2740,16 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _rectangle_bounds(region: PolygonRegion, tolerance: int = 2) -> tuple[int, int, int, int] | None:
-        """Return bounds when a four-point PPP is an axis-aligned rectangle."""
-        if len(region.points) != 4:
-            return None
-        xs = [p[0] for p in region.points]
-        ys = [p[1] for p in region.points]
-        x0, x1 = min(xs), max(xs)
-        y0, y1 = min(ys), max(ys)
-        if x1 - x0 <= tolerance or y1 - y0 <= tolerance:
-            return None
-        expected = {(x0, y0), (x1, y0), (x1, y1), (x0, y1)}
-        for px, py in region.points:
-            if not any(abs(px - ex) <= tolerance and abs(py - ey) <= tolerance for ex, ey in expected):
-                return None
-        return x0, y0, x1, y1
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._rectangle_bounds(region, tolerance)
 
     def _nearest_polygon_edge(self, x: int, y: int, radius_screen: float = 9.0) -> tuple[int, str] | None:
         return _canvas_pointer._nearest_polygon_edge(self, _canvas_pointer_deps(), x, y, radius_screen)
 
     @staticmethod
     def _set_rectangle_side(region: PolygonRegion, side: str, value: int) -> None:
-        bounds = PictureCaptureApp._rectangle_bounds(region)
-        if bounds is None:
-            return
-        x0, y0, x1, y1 = bounds
-        if side == "left":
-            value = min(value, x1 - 1)
-            region.points = [(value if abs(x - x0) <= 2 else x, y) for x, y in region.points]
-        elif side == "right":
-            value = max(value, x0 + 1)
-            region.points = [(value if abs(x - x1) <= 2 else x, y) for x, y in region.points]
-        elif side == "top":
-            value = min(value, y1 - 1)
-            region.points = [(x, value if abs(y - y0) <= 2 else y) for x, y in region.points]
-        elif side == "bottom":
-            value = max(value, y0 + 1)
-            region.points = [(x, value if abs(y - y1) <= 2 else y) for x, y in region.points]
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._set_rectangle_side(region, side, value, deps={"PictureCaptureApp": PictureCaptureApp})
 
     def _delete_polygon_region(self, region: PolygonRegion) -> None:
         return _canvas_pointer._delete_polygon_region(self, _canvas_pointer_deps(), region)
@@ -2853,13 +2761,8 @@ class PictureCaptureApp(tk.Tk):
         label_width: int, label_height: int, canvas_width: float, canvas_height: float,
         gap: int = 6,
     ) -> tuple[float, float]:
-        """Position label above the figure, aligned to its left edge."""
-        margin = 2.0
-        x = max(margin, min(min_x, max(margin, canvas_width - label_width - margin)))
-        y = min_y - gap - label_height
-        if y < margin:
-            y = min(max(margin, min_y + gap), max(margin, canvas_height - label_height - margin))
-        return x, y
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._external_polygon_label_position(min_x, min_y, max_x, max_y, label_width, label_height, canvas_width, canvas_height, gap)
 
     def _polygon_label_canvas_position(self, region: PolygonRegion, widget: tk.Widget) -> tuple[float, float]:
         return _canvas_pointer._polygon_label_canvas_position(self, _canvas_pointer_deps(), region, widget)
@@ -2891,16 +2794,8 @@ class PictureCaptureApp(tk.Tk):
         return _canvas_pointer._drag_page_section_boundary_to(self, _canvas_pointer_deps(), source_x, source_y)
 
     def _section_gap_entry_count(self) -> int:
-        if not self.page_sections:
-            return 0
-        geometry = self._get_cached_display_geometry()
-        return sum(
-            1 for entry in self.entries
-            if not v_is_inside_sections(
-                geometry.source_to_canonical(entry.x, entry.y)[1],
-                self.page_sections, geometry.top, geometry.bottom,
-            )
-        )
+        """Stable Tk/public API; implementation owned by its UI domain."""
+        return _canvas_pointer._section_gap_entry_count(self, deps={"v_is_inside_sections": v_is_inside_sections})
 
     def toggle_auxiliary_mode(self) -> None:
         if self.ref_box_controller.pointer_active:

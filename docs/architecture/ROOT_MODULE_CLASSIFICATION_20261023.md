@@ -194,3 +194,8 @@ Moved 13 substantive methods from root `app.py` into `ui/review_layout_events.py
 ## Phase 8 — Dialog lifecycle and page persistence (2026-10-25)
 
 Nine complete `app.py` methods now physically live in `ui/main_dialog_lifecycle.py` (five Tk dialog/window opening and reuse flows) and existing `ui/main_pdic_persistence.py` (four PDIC/PPP navigation saves, user save and SECTION persistence flows). Root `PictureCaptureApp` retains stable call-time patched callbacks and Tk-thread ownership. Regression: `tests/test_issue562_main_dialog_page_save_phase8_20261025.py`. Root file count remains 10; end-state only `__init__.py`/`__main__.py` is still pending compatibility proof. Manual real scanned-page acceptance is NOT DONE. Draft/unmerged.
+
+
+## Phase 9 — Main window PPP and quick-control ownership (2026-10-25)
+
+Fifteen actual main-window methods were physically moved from root `app.py` to existing `ui/controllers/canvas.py`, `ui/canvas_pointer_workflow.py`, `ui/quick_settings_apply.py`, and `ui/main_app_lifecycle.py`. Legacy Tk callbacks, staticmethod identities and call-time patchpoints remain. Dedicated regression: `tests/test_issue562_main_canvas_ppp_quick_owner_phase9_20261025.py`. Physical root remains 10 files; final goal of only `__init__.py` and `__main__.py` is still pending compatibility gates and real-page manual acceptance.

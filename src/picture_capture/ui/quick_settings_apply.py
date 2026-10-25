@@ -232,3 +232,54 @@ def _quick_geometry_value(self, name: str, *, deps: dict[str, Any]) -> int:
             )
         )
     return raw
+
+
+# Physical quick-color and autosave UI behavior.
+
+def _style_color_button(button: tk.Button, color: str, *, deps: dict[str, Any]) -> None:
+    tk = deps["tk"]
+    color = str(color or "#ff0000")
+    try:
+        button.configure(bg=color, activebackground=color, text="")
+    except tk.TclError:
+        button.configure(text=color)
+
+def choose_overlay_color(self, setting_name: str, button: tk.Button, *, deps: dict[str, Any]) -> None:
+    colorchooser = deps["colorchooser"]
+    current = str(getattr(self.settings, setting_name, "#ff0000"))
+    _rgb, chosen = colorchooser.askcolor(color=current, parent=self, title="选择颜色")
+    if not chosen:
+        return
+    chosen = str(chosen).lower()
+    if hasattr(self, "quick_color_vars") and setting_name in self.quick_color_vars:
+        self.quick_color_vars[setting_name].set(chosen)
+    setattr(self.settings, setting_name, chosen)
+    self._style_color_button(button, chosen)
+    self._quick_parameter_changed(immediate=True)
+
+def _apply_overlay_visibility_toggle(self, setting_name: str, variable: tk.BooleanVar) -> None:
+    """ apply overlay visibility toggle."""
+    setattr(self.settings, setting_name, bool(variable.get()))
+    if setting_name == "show_rulers" and not bool(variable.get()):
+        self._hide_ruler_hint()
+    self._quick_parameter_changed(immediate=True)
+    self.redraw()
+
+def _run_quick_autosave(self) -> None:
+    self._quick_autosave_job = None
+    # While the user is halfway through typing a numeric value, validation
+    # can fail temporarily. Silent live-save simply waits for the next edit;
+    # the explicit 保存参数 button still reports an error immediately.
+    self.apply_quick_settings(show_status=False, persist=True, silent_errors=True)
+
+def _refresh_quick_coordinate_labels(self) -> None:
+    if not hasattr(self, "quick_field_labels"):
+        return
+    labels = {
+        "start_y": "正文起始Y：",
+        "manual_x": "首栏X：",
+    }
+    for name, label in labels.items():
+        widget = self.quick_field_labels.get(name)
+        if widget is not None:
+            widget.configure(text=label)

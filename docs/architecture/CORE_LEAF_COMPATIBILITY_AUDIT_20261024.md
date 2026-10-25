@@ -736,3 +736,10 @@ Phase 5 CI source-contract correction: the first exact-head macOS Python 3.13 py
 - New characterization `tests/test_issue562_main_dialog_page_save_phase8_20261025.py` covers real ownership, patchable dialog reuse, PDIC+PPP page-navigation commit, background page ownership, review-window reuse, and SECTION persistence. Root count stays ten until safe API/pickle compatibility retirement. **Representative scanned dictionary-page manual GUI/Profile/ordinary/OCR/combined/PDIC/PPP reopen/export acceptance is NOT DONE**; keep PR Draft, Open and unmerged.
 
 - Phase 8 CI remediation: nine historical tests still searched root `app.py` for moved implementations. Reanchored each assertion to `ui/main_dialog_lifecycle.py` or `ui/main_pdic_persistence.py` and added root delegate checks, preserving original behavioral guards. No tests removed.
+
+
+### Phase 9 — main canvas, PPP and quick-control physical ownership (2026-10-25)
+
+- Moved **15 concrete methods** out of root `app.py` into existing `ui/controllers/canvas.py` (single-column viewport fit), `ui/canvas_pointer_workflow.py` (eight PPP label/rectangle/SECTION operations), `ui/quick_settings_apply.py` (five quick color, overlay and autosave handlers), and `ui/main_app_lifecycle.py` (edit/batch guard).
+- The original `PictureCaptureApp` signatures and `staticmethod` binding remain intact. The rectangle edit retains dynamic `PictureCaptureApp._rectangle_bounds` dispatch; label, symbol, Tk exception and messagebox collaborators are injected from the live app module at each call. No changes to serialized Entry/AppSettings, OCR or ordinary/combined detection, PPP/PDIC layout, or worker ownership.
+- New targeted regression: `tests/test_issue562_main_canvas_ppp_quick_owner_phase9_20261025.py`. It verifies real UI ownership, rectangle edit and monkeypatch, current label hooks, viewport fit, color and editing guard. Manual scanned dictionary-page GUI/Profile/PDIC/PPP/export acceptance **not done**. Keep PR Draft and unmerged.

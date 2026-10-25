@@ -59,3 +59,19 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
         self._save_session_state()
     finally:
         self.destroy()
+
+
+# Main editing guard retains the original Tk/worker transaction policy.
+
+def guard(self, *, deps: dict[str, Any]) -> bool:
+    messagebox = deps["messagebox"]
+    if self._preprocess_mode_active():
+        self.status_var.set("预处理模式中：普通编辑已锁定，请先退出预处理模式。")
+        return False
+    if getattr(self, "_batch_active", False):
+        if not self._claim_page_for_manual_edit():
+            return False
+    if not self.project or not self.current_page or self.image is None:
+        messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
+        return False
+    return True
