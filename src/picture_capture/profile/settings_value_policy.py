@@ -35,45 +35,45 @@ def assign_setting_value(
     opacity_normalizer: Callable[[object], float],
 ) -> None:
     """Validate canonical setting assignments before mutating slotted fields."""
-# Preserve the former runtime-property contract now that these values
-# are native dataclass fields: construction and later assignments are
-# both normalized immediately rather than only at render/save time.
-if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
-    value = opacity_normalizer(value)
-if name == "crop_width_percent":
-    try:
-        ratio = float(value)
-    except (ValueError, TypeError, OverflowError) as exc:
-        raise ValueError("切图宽度须在1–100%之间") from exc
-    if not 1.0 <= ratio <= 100.0:
-        raise ValueError("切图宽度须在1–100%之间")
-    value = ratio
-if name == "physical_row_projection_width_percent":
-    try:
-        value = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
-    if not 10.0 <= value <= 100.0:  # also rejects NaN/infinity
-        raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
-if name.startswith("separator_y_ink_safe_") and name != "separator_y_ink_safe_gap":
-    allowed = {
-        "separator_y_ink_safe_max_fraction": (0.01, 0.30),
-        "separator_y_ink_safe_ink_threshold": (0.0, 255.0),
-        "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20),
-        "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10),
-    }
-    if name in allowed:
+    # Preserve the former runtime-property contract now that these values
+    # are native dataclass fields: construction and later assignments are
+    # both normalized immediately rather than only at render/save time.
+    if name in {"guide_opacity", "headword_marker_opacity", "illustration_fill_opacity"}:
+        value = opacity_normalizer(value)
+    if name == "crop_width_percent":
         try:
-            numeric = float(value)
+            ratio = float(value)
         except (ValueError, TypeError, OverflowError) as exc:
-            raise ValueError(f"{name} 必须是数字。") from exc
-        low, high = allowed[name]
-        if not low <= numeric <= high:
-            raise ValueError(f"{name} 必须在 {low}–{high} 之间。")
-        if name == "separator_y_ink_safe_ink_threshold":
-            if not numeric.is_integer():
-                raise ValueError(f"{name} 必须是整数。")
-            value = int(numeric)
-        else:
-            value = numeric
-object.__setattr__(settings, name, value)
+            raise ValueError("切图宽度须在1–100%之间") from exc
+        if not 1.0 <= ratio <= 100.0:
+            raise ValueError("切图宽度须在1–100%之间")
+        value = ratio
+    if name == "physical_row_projection_width_percent":
+        try:
+            value = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("物理行墨迹投影采样宽度必须是 10–100% 的数字。") from exc
+        if not 10.0 <= value <= 100.0:  # also rejects NaN/infinity
+            raise ValueError("物理行墨迹投影采样宽度必须在 10–100% 单栏宽之间。")
+    if name.startswith("separator_y_ink_safe_") and name != "separator_y_ink_safe_gap":
+        allowed = {
+            "separator_y_ink_safe_max_fraction": (0.01, 0.30),
+            "separator_y_ink_safe_ink_threshold": (0.0, 255.0),
+            "separator_y_ink_safe_existing_ink_ratio": (0.0, 0.20),
+            "separator_y_ink_safe_gap_ink_ratio": (0.0, 0.10),
+        }
+        if name in allowed:
+            try:
+                numeric = float(value)
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise ValueError(f"{name} 必须是数字。") from exc
+            low, high = allowed[name]
+            if not low <= numeric <= high:
+                raise ValueError(f"{name} 必须在 {low}–{high} 之间。")
+            if name == "separator_y_ink_safe_ink_threshold":
+                if not numeric.is_integer():
+                    raise ValueError(f"{name} 必须是整数。")
+                value = int(numeric)
+            else:
+                value = numeric
+    object.__setattr__(settings, name, value)
