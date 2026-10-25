@@ -6,7 +6,11 @@ inject currently patched legacy providers on each invocation. No Tk or eager
 Paddle import occurs here; source-pixel boxes and engine failures are unchanged.
 """
 from __future__ import annotations
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PIL import Image
+    from ..ocr_channel import OcrChannelCandidate, OcrChannelResult
 
 def run_paddle_raw(
     self,
@@ -15,15 +19,16 @@ def run_paddle_raw(
     engine: Any | None = None,
     deps: dict[str, Any],
 ) -> tuple[Any, ...]:
-    np = deps["np"]
-    normalize_page_rgb = deps["normalize_page_rgb"]
-    _RAW_OCR_THRESHOLD = deps["_RAW_OCR_THRESHOLD"]
     """Execute Paddle inference and return raw Paddle results.
 
     This deliberately contains no headword/parser policy. The shared channel
     also owns Paddle result normalization; compatibility consumers only adapt
     the neutral records into their historical record type.
     """
+    np = deps["np"]
+    normalize_page_rgb = deps["normalize_page_rgb"]
+    _RAW_OCR_THRESHOLD = deps["_RAW_OCR_THRESHOLD"]
+
 
     active = engine or self.get_paddle_engine()
     try:
@@ -48,12 +53,13 @@ def run_paddle_records(
     engine: Any | None = None,
     deps: dict[str, Any],
 ) -> OcrChannelCandidate:
+    """Run Paddle with mature crop preprocessing and source-coordinate boxes."""
     prepare_ocr_input = deps["prepare_ocr_input"]
     normalize_paddle_result = deps["normalize_paddle_result"]
     _rescale_channel_records = deps["_rescale_channel_records"]
     _candidate_from_records = deps["_candidate_from_records"]
     OcrChannelCandidate = deps["OcrChannelCandidate"]
-    """Run Paddle with mature crop preprocessing and source-coordinate boxes."""
+
 
     try:
         prepared, input_scale = prepare_ocr_input(
@@ -87,6 +93,7 @@ def run_tesseract_records(
     psm: int,
     *, deps: dict[str, Any],
 ) -> OcrChannelCandidate:
+    """Run Tesseract TSV and retain word boxes for every consumer."""
     find_tesseract = deps["find_tesseract"]
     BytesIO = deps["BytesIO"]
     normalize_page_rgb = deps["normalize_page_rgb"]
@@ -95,7 +102,7 @@ def run_tesseract_records(
     OcrChannelRecord = deps["OcrChannelRecord"]
     _candidate_from_records = deps["_candidate_from_records"]
     OcrChannelCandidate = deps["OcrChannelCandidate"]
-    """Run Tesseract TSV and retain word boxes for every consumer."""
+
 
     if self._tesseract_runner is not None:
         return self._tesseract_runner(image, int(psm))
@@ -205,12 +212,13 @@ def run_lens_records(
     default_confidence: float | None = None,
     deps: dict[str, Any],
 ) -> OcrChannelCandidate:
+    """Run Lens and normalize its geometry without consumer policy."""
     run_google_lens = deps["run_google_lens"]
     normalize_page_rgb = deps["normalize_page_rgb"]
     OcrChannelRecord = deps["OcrChannelRecord"]
     _candidate_from_records = deps["_candidate_from_records"]
     OcrChannelCandidate = deps["OcrChannelCandidate"]
-    """Run Lens and normalize its geometry without consumer policy."""
+
 
     if self._lens_runner is not None:
         return self._lens_runner(image)
@@ -283,8 +291,9 @@ def recognize_crop(
     tesseract_psm: int = 7,
     deps: dict[str, Any],
 ) -> OcrChannelResult:
-    OcrChannelResult = deps["OcrChannelResult"]
     """Run all OCR engines selected for the shared channel on one crop."""
+    OcrChannelResult = deps["OcrChannelResult"]
+
 
     candidates: list[OcrChannelCandidate] = []
     if self.plan.enabled("paddle"):
