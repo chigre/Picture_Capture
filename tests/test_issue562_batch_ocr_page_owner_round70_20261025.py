@@ -96,4 +96,7 @@ def test_controller_delegates_to_physical_ocr_page_owner():
     assert "foreground_page_edit=True" not in leaf
     assert "def process_existing_pdic_page(" in leaf
     assert 'deps["ocr_entries"](' in leaf
-    assert 'deps["write_pdic"](' in leaf
+    publication = (root / "ocr/batch_publication.py").read_text(encoding="utf-8")
+    assert "publish_existing_pdic_ocr(" in leaf
+    assert 'write_pdic=deps["write_pdic"]' in leaf
+    assert "write_pdic(pdic_path, entries, image_width, pages_info)" in publication
