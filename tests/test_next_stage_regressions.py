@@ -414,10 +414,15 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
     current_start = controller_source.index("    def auto_detect_current(")
     current_end = controller_source.index("    def paddle_detect_current(", current_start)
     current = controller_source[current_start:current_end]
-    assert 'if settings.detection_method == "combined":' in current
-    assert "ocr_existing_entry_words_from_markers(" in current
-    assert "only_blank=True" in current
-    assert "融合画线自动补字不得修改任何画线坐标" in current
+    worker = (
+        Path(inspect.getsourcefile(app_module)).parent
+        / "detection" / "current_page_worker.py"
+    ).read_text(encoding="utf-8")
+    assert "return detect_current_page(" in current
+    assert 'if settings.detection_method == "combined":' in worker
+    assert 'deps["ocr_existing_entry_words_from_markers"](' in worker
+    assert "only_blank=True" in worker
+    assert "融合画线自动补字不得修改任何画线坐标" in worker
 
 
 def test_cli_combined_autodraw_also_fills_blank_rescue_text():
