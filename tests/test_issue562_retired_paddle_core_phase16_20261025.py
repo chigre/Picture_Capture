@@ -13,7 +13,8 @@ from picture_capture.ocr import headword_core_runtime as canonical
 
 def test_root_compat_bridge_is_minimal_and_runtime_has_one_canonical_owner():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    bridge = (pkg / "paddle_headwords_core.py").read_text(encoding="utf-8")
+    assert not (pkg / "paddle_headwords_core.py").exists()
+    bridge = (pkg / "paddle_headwords_core/__init__.py").read_text(encoding="utf-8")
     assert "_sys.modules[__name__] = _canonical" in bridge
     assert "def " not in bridge
     assert "class " not in bridge

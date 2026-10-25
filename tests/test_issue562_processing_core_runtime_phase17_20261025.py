@@ -16,7 +16,8 @@ from picture_capture.runtime import processing_core_runtime as canonical
 
 def test_core_owned_by_runtime_and_legacy_import_aliases_one_module():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    source = (pkg / "processing_core.py").read_text(encoding="utf-8")
+    assert not (pkg / "processing_core.py").exists()
+    source = (pkg / "processing_core/__init__.py").read_text(encoding="utf-8")
     implementation = (pkg / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     assert "_sys.modules[__name__] = _canonical" in source
     assert "def " not in source and "class " not in source

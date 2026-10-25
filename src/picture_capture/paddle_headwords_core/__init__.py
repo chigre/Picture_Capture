@@ -6,6 +6,6 @@ remain side-effect-free. It creates no duplicate functions, state or callbacks.
 """
 import sys as _sys
 
-from .ocr import headword_core_runtime as _canonical
+from ..ocr import headword_core_runtime as _canonical
 
 _sys.modules[__name__] = _canonical
