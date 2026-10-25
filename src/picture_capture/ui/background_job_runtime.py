@@ -103,3 +103,14 @@ def poll_ui_worker_queue(self, *, deps: dict[str, Any]) -> None:
         self._ui_worker_poll_job = self.after(
             8 if processed >= 48 else 60, self._poll_ui_worker_queue
         )
+
+
+def _ui_worker_key_active(self, key: str, *, deps: dict[str, Any]) -> bool:
+    return any(token[0] == key for token in self._ui_worker_active)
+
+
+def _invalidate_ui_worker(self, key: str, *, deps: dict[str, Any]) -> None:
+    self._ui_worker_generations[key] = int(self._ui_worker_generations.get(key, 0)) + 1
+    stale = [token for token in self._ui_worker_handlers if token[0] == key]
+    for token in stale:
+        self._ui_worker_handlers.pop(token, None)

@@ -748,3 +748,10 @@ Phase 5 CI source-contract correction: the first exact-head macOS Python 3.13 py
 ### Phase 9 CI source-contract follow-up
 
 - Historical tests previously inspected algorithm strings in `app.py` or required an exact function set in `ui/quick_settings_apply.py`. Updated these tests to assert the actual physical owner (`ui/main_app_lifecycle.py`, `ui/controllers/canvas.py`, `ui/canvas_pointer_workflow.py`) and the still-present app delegates, without removing the substantive preprocess guard, viewport gutter, PPP label geometry or owner-function inventory checks.
+
+
+### Phase 10 — residual Tk navigation, UI-worker generations and OCR runtime versions (2026-10-25)
+
+- Physically relocated **10 complete algorithms** out of `app.py`: sidebar pointer hit-testing and Windows/Linux wheel routing (3) to existing `ui/main_sidebar_sections.py`; Treeview wheel/overlay navigation (2) to `ui/page_index_workflow.py`; transformed-coordinate write safety guard (1) to `ui/main_app_lifecycle.py`; UI-worker generation activity/invalidation (2) to `ui/background_job_runtime.py`; installed distribution-version lookup and comparison (2) to `ui/paddle_environment_report.py`.
+- Public `PictureCaptureApp` callbacks and `staticmethod` identities remain. `tk`, `transformed_geometry_pending`, `importlib_metadata`, and `re` are injected at call time, preserving original monkeypatch seams. Tk operations remain on the UI thread; no OCR/ordinary/combined pipeline, PDIC/PPP, model, spawn or crop/export format changes.
+- Characterization: `tests/test_issue562_root_remaining_ui_algorithms_phase10_20261025.py`. Root-only `__init__.py`/`__main__.py` goal is not yet reached. Real scanned dictionary-page GUI/Profile/ordinary/OCR/combined/PDIC/PPP save-reopen/crop-export manual acceptance remains **NOT DONE**. Keep PR Draft, Open and unmerged.

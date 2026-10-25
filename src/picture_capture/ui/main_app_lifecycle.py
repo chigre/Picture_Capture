@@ -75,3 +75,15 @@ def guard(self, *, deps: dict[str, Any]) -> bool:
         messagebox.showinfo("尚未打开", "请先打开包含扫描图片的项目目录。", parent=self)
         return False
     return True
+
+
+def _guard_transformed_geometry(self, action: str, *, deps: dict[str, Any]) -> bool:
+    transformed_geometry_pending = deps["transformed_geometry_pending"]
+    if not transformed_geometry_pending(self.settings):
+        return True
+    message = (
+        f"{action}尚未启用 {self.settings.layout_transform} 的完整 原图坐标适配；"
+        "为避免写入错误 PDIC 或方向错误的切图，本次操作已取消。"
+    )
+    self.status_var.set(message)
+    return False

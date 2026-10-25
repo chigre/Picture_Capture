@@ -67,3 +67,24 @@ def paddle_environment_text_impl(self, settings: AppSettings | None = None, *, d
     except Exception as exc:
         lines.append(f"Paddle runtime 检查失败：{exc}")
     return "\n".join(lines)
+
+
+def _distribution_version(name: str, *, deps: dict[str, Any]) -> str | None:
+    importlib_metadata = deps["importlib_metadata"]
+    try:
+        return importlib_metadata.version(name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def _version_at_least(version: str | None, minimum: tuple[int, ...], *, deps: dict[str, Any]) -> bool:
+    re = deps["re"]
+    if not version:
+        return False
+    parts = [int(value) for value in re.findall(r"\d+", version)]
+    if not parts:
+        return False
+    width = max(len(parts), len(minimum))
+    return tuple(parts + [0] * (width - len(parts))) >= tuple(minimum) + (0,) * (width - len(minimum))

@@ -758,3 +758,20 @@ def _refresh_page_quality_colors(self, deps: PageIndexDeps) -> None:
         except tk.TclError: pass
     self._page_meta_job = self.after_idle(lambda g=generation: self._refresh_page_metadata_step(g, 0))
 
+
+
+def _list_mousewheel(self, event: tk.Event, *, deps: dict[str, Any]) -> str:
+    self.page_list.yview_scroll((-1 if event.delta > 0 else 1) * 3, "units")
+    self._schedule_page_cell_overlay_refresh()
+    return "break"
+
+
+def _select_page_from_lined_overlay(self, index: int, *, deps: dict[str, Any]) -> None:
+    if not self.project or not (0 <= index < len(self.project.images)):
+        return
+    # Overlay labels sit above Treeview cells, so navigate directly instead
+    # of synthesizing a delayed TreeviewSelect event.
+    if index != self.current_index:
+        self._request_page_load(index)
+    else:
+        self._set_page_list_selection(index, ensure_visible=True)

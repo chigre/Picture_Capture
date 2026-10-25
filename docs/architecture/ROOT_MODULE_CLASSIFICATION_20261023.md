@@ -199,3 +199,10 @@ Nine complete `app.py` methods now physically live in `ui/main_dialog_lifecycle.
 ## Phase 9 — Main window PPP and quick-control ownership (2026-10-25)
 
 Fifteen actual main-window methods were physically moved from root `app.py` to existing `ui/controllers/canvas.py`, `ui/canvas_pointer_workflow.py`, `ui/quick_settings_apply.py`, and `ui/main_app_lifecycle.py`. Legacy Tk callbacks, staticmethod identities and call-time patchpoints remain. Dedicated regression: `tests/test_issue562_main_canvas_ppp_quick_owner_phase9_20261025.py`. Physical root remains 10 files; final goal of only `__init__.py` and `__main__.py` is still pending compatibility gates and real-page manual acceptance.
+
+
+### Phase 10 — residual Tk navigation, UI-worker generations and OCR runtime versions (2026-10-25)
+
+- Physically relocated **10 complete algorithms** out of `app.py`: sidebar pointer hit-testing and Windows/Linux wheel routing (3) to existing `ui/main_sidebar_sections.py`; Treeview wheel/overlay navigation (2) to `ui/page_index_workflow.py`; transformed-coordinate write safety guard (1) to `ui/main_app_lifecycle.py`; UI-worker generation activity/invalidation (2) to `ui/background_job_runtime.py`; installed distribution-version lookup and comparison (2) to `ui/paddle_environment_report.py`.
+- Public `PictureCaptureApp` callbacks and `staticmethod` identities remain. `tk`, `transformed_geometry_pending`, `importlib_metadata`, and `re` are injected at call time, preserving original monkeypatch seams. Tk operations remain on the UI thread; no OCR/ordinary/combined pipeline, PDIC/PPP, model, spawn or crop/export format changes.
+- Characterization: `tests/test_issue562_root_remaining_ui_algorithms_phase10_20261025.py`. Root-only `__init__.py`/`__main__.py` goal is not yet reached. Real scanned dictionary-page GUI/Profile/ordinary/OCR/combined/PDIC/PPP save-reopen/crop-export manual acceptance remains **NOT DONE**. Keep PR Draft, Open and unmerged.

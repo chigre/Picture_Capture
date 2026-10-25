@@ -1856,7 +1856,8 @@ class PictureCaptureApp(tk.Tk):
         return _sidebar_sections._ensure_sidebar_navigation_width(self, deps={"tk": tk})
 
     def _ui_worker_key_active(self, key: str) -> bool:
-        return any(token[0] == key for token in self._ui_worker_active)
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _background_job_runtime._ui_worker_key_active(self, key, deps={})
 
     def _start_ui_worker(
         self, key: str, worker, on_done, on_error=None, *, wait_on_close: bool = False,
@@ -1869,10 +1870,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _invalidate_ui_worker(self, key: str) -> None:
-        self._ui_worker_generations[key] = int(self._ui_worker_generations.get(key, 0)) + 1
-        stale = [token for token in self._ui_worker_handlers if token[0] == key]
-        for token in stale:
-            self._ui_worker_handlers.pop(token, None)
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _background_job_runtime._invalidate_ui_worker(self, key, deps={})
 
     def _poll_ui_worker_queue(self) -> None:
         """Historical Tk-thread result queue polling with deferred close."""
@@ -2013,33 +2012,19 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _pointer_over_sidebar(self) -> bool:
-        canvas = self.__dict__.get("sidebar_canvas")
-        if canvas is None:
-            return False
-        try:
-            x = canvas.winfo_pointerx() - canvas.winfo_rootx()
-            y = canvas.winfo_pointery() - canvas.winfo_rooty()
-            return 0 <= x < canvas.winfo_width() and 0 <= y < canvas.winfo_height()
-        except tk.TclError:
-            return False
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _sidebar_sections._pointer_over_sidebar(selfdeps={"tk": tk})
 
     def _resize_sidebar_content(self, event: tk.Event | None = None) -> None:
         return _page_index._resize_sidebar_content(self, _page_index_deps(), event)
 
     def _sidebar_mousewheel(self, event: tk.Event) -> str | None:
-        if not self._pointer_over_sidebar():
-            return None
-        delta = int(getattr(event, "delta", 0) or 0)
-        if delta:
-            self.sidebar_canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
-            return "break"
-        return None
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _sidebar_sections._sidebar_mousewheel(self, event, deps={})
 
     def _sidebar_linux_mousewheel(self, _event: tk.Event, direction: int) -> str | None:
-        if not self._pointer_over_sidebar():
-            return None
-        self.sidebar_canvas.yview_scroll(direction * 3, "units")
-        return "break"
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _sidebar_sections._sidebar_linux_mousewheel(self, _event, direction, deps={})
 
     def _apply_page_list_display_columns(self, *, save: bool = True) -> None:
         return _page_index._apply_page_list_display_columns(self, _page_index_deps(), save=save)
@@ -2063,9 +2048,8 @@ class PictureCaptureApp(tk.Tk):
         return _page_index._schedule_page_cell_overlay_refresh(self, _page_index_deps())
 
     def _list_mousewheel(self, event: tk.Event) -> str:
-        self.page_list.yview_scroll((-1 if event.delta > 0 else 1) * 3, "units")
-        self._schedule_page_cell_overlay_refresh()
-        return "break"
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _page_index._list_mousewheel(self, event, deps={})
 
     def _page_list_scroll(self, *args) -> None:
         return _page_index._page_list_scroll(self, _page_index_deps(), *args)
@@ -2122,14 +2106,8 @@ class PictureCaptureApp(tk.Tk):
         return _page_index._set_page_list_selection(self, _page_index_deps(), index, ensure_visible=ensure_visible)
 
     def _select_page_from_lined_overlay(self, index: int) -> None:
-        if not self.project or not (0 <= index < len(self.project.images)):
-            return
-        # Overlay labels sit above Treeview cells, so navigate directly instead
-        # of synthesizing a delayed TreeviewSelect event.
-        if index != self.current_index:
-            self._request_page_load(index)
-        else:
-            self._set_page_list_selection(index, ensure_visible=True)
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _page_index._select_page_from_lined_overlay(self, index, deps={})
 
     def _clear_lined_cell_overlays(self) -> None:
         return _page_index._clear_lined_cell_overlays(self, _page_index_deps())
@@ -2337,22 +2315,13 @@ class PictureCaptureApp(tk.Tk):
 
     @staticmethod
     def _distribution_version(name: str) -> str | None:
-        try:
-            return importlib_metadata.version(name)
-        except importlib_metadata.PackageNotFoundError:
-            return None
-        except Exception:
-            return None
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _paddle_environment_report._distribution_version(name, deps={"importlib_metadata": importlib_metadata})
 
     @staticmethod
     def _version_at_least(version: str | None, minimum: tuple[int, ...]) -> bool:
-        if not version:
-            return False
-        parts = [int(value) for value in re.findall(r"\d+", version)]
-        if not parts:
-            return False
-        width = max(len(parts), len(minimum))
-        return tuple(parts + [0] * (width - len(parts))) >= tuple(minimum) + (0,) * (width - len(minimum))
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _paddle_environment_report._version_at_least(version, minimum, deps={"re": re})
 
     def _paddle_environment_text(self, settings: AppSettings | None = None) -> str:
         """Historical PP-OCR environment diagnostic and runtime status text."""
@@ -3025,14 +2994,8 @@ class PictureCaptureApp(tk.Tk):
 
 
     def _guard_transformed_geometry(self, action: str) -> bool:
-        if not transformed_geometry_pending(self.settings):
-            return True
-        message = (
-            f"{action}尚未启用 {self.settings.layout_transform} 的完整 原图坐标适配；"
-            "为避免写入错误 PDIC 或方向错误的切图，本次操作已取消。"
-        )
-        self.status_var.set(message)
-        return False
+        """Legacy API; physical behavior now owned by its UI module."""
+        return _main_app_lifecycle._guard_transformed_geometry(self, action, deps={"transformed_geometry_pending": transformed_geometry_pending})
 
     def auto_detect_current(
         self, clicked_x: int | None = None, force_paddle_refresh: bool = False,

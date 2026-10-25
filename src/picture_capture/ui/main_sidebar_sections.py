@@ -134,3 +134,33 @@ def _apply_new_project_sidebar_defaults(self, *, deps: dict[str, Any]) -> None:
         section = self._collapsible_sections.get(key)
         if section is not None:
             self._set_section_expanded(section, expanded, persist=False)
+
+
+def _pointer_over_sidebar(self, *, deps: dict[str, Any]) -> bool:
+    tk = deps["tk"]
+    canvas = self.__dict__.get("sidebar_canvas")
+    if canvas is None:
+        return False
+    try:
+        x = canvas.winfo_pointerx() - canvas.winfo_rootx()
+        y = canvas.winfo_pointery() - canvas.winfo_rooty()
+        return 0 <= x < canvas.winfo_width() and 0 <= y < canvas.winfo_height()
+    except tk.TclError:
+        return False
+
+
+def _sidebar_mousewheel(self, event: tk.Event, *, deps: dict[str, Any]) -> str | None:
+    if not self._pointer_over_sidebar():
+        return None
+    delta = int(getattr(event, "delta", 0) or 0)
+    if delta:
+        self.sidebar_canvas.yview_scroll((-1 if delta > 0 else 1) * 3, "units")
+        return "break"
+    return None
+
+
+def _sidebar_linux_mousewheel(self, _event: tk.Event, direction: int, *, deps: dict[str, Any]) -> str | None:
+    if not self._pointer_over_sidebar():
+        return None
+    self.sidebar_canvas.yview_scroll(direction * 3, "units")
+    return "break"
