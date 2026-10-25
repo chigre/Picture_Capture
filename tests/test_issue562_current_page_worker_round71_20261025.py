@@ -122,10 +122,12 @@ def test_current_page_worker_owns_inference_not_tk_publication():
     controller = (root / "ui/controllers/detection.py").read_text(encoding="utf-8")
     worker = (root / "detection/current_page_worker.py").read_text(encoding="utf-8")
     assert "from ...detection.current_page_worker import detect_current_page" in controller
-    assert "return detect_current_page(" in controller
+    flow = (root / "ui/detection_current_page_flow.py").read_text(encoding="utf-8")
+    assert "return run_current_page_detection(" in controller
+    assert 'current["detect_current_page"](' in flow
     assert "def detect_current_page(" in worker
     assert 'deps["detect_entries"](' in worker
     assert 'deps["ocr_existing_entry_words_from_markers"](' in worker
     assert "app.redraw()" not in worker
     assert "write_pdic" not in worker
-    assert "app._start_batch_task(" in controller
+    assert "app._start_batch_task(" in flow
