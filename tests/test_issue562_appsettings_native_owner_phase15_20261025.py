@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, fields, replace
-import inspect
+from pathlib import Path
 import json
 import pickle
 
@@ -20,8 +20,12 @@ def test_exact_native_appsettings_owner_and_old_pickle_identity():
     assert pickle.loads(pickle.dumps(cls)) is cls
     assert pickle.loads(pickle.dumps(cls())) == cls()
     assert len(fields(cls)) > 150
-    assert not isinstance(cls, type("FacadeSubclass", (settings_model.AppSettings,), {}))
-    assert "dictionary_index_language" in inspect.getsource(settings_model.AppSettings)
+    # __module__ intentionally points to the historical pickle path, so
+    # inspect.getsource(class) resolves there. Verify the physical AST owner.
+    source = Path(settings_model.__file__).read_text(encoding="utf-8")
+    assert "class AppSettings(metaclass=_AppSettingsMeta):" in source
+    assert "dictionary_index_language" in source
+    assert "class AppSettings" not in Path(models.__file__).read_text(encoding="utf-8")
 
 
 def test_native_field_order_compat_aliases_and_replace():

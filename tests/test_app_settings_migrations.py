@@ -8,6 +8,7 @@ import sys
 import picture_capture.profile.settings_migrations as migrations
 import picture_capture.models as models
 import picture_capture.profile.settings_storage_io as settings_storage_io
+import picture_capture.profile.settings_model as settings_model
 from picture_capture.models import AppSettings
 from picture_capture.crop.entry_crop_settings import install_entry_crop_settings
 from picture_capture.refinement.separator_y_settings import install_separator_y_settings
@@ -20,13 +21,15 @@ def test_phase11a_migration_owner_is_one_way() -> None:
     migration_source = Path(migrations.__file__).read_text(encoding="utf-8")
     model_source = Path(models.__file__).read_text(encoding="utf-8")
     storage_source = Path(settings_storage_io.__file__).read_text(encoding="utf-8")
+    native_source = Path(settings_model.__file__).read_text(encoding="utf-8")
 
     assert "from .models" not in migration_source
     assert "import picture_capture.models" not in migration_source
     # The compatibility method retains the call-time migration dependency,
     # while the actual reader now lives in the Profile storage owner.
     assert "migrate_app_settings_payload(raw, cls)" in storage_source
-    assert "return _settings_storage_io.read_settings_json" in model_source
+    assert "return _settings_storage_io.read_settings_json" in native_source
+    assert "from .profile.settings_model import AppSettings, _AppSettingsMeta" in model_source
     assert "from ..models" not in storage_source
     assert 'old_v158_headword_regex = (' not in model_source + storage_source
     assert 'profile_symbol_role_semantics_version", 0' not in model_source + storage_source

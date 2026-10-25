@@ -8203,7 +8203,7 @@ def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default()
     assert "_main_workspace_build.build_ui(" in app_owner
     text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    models=(root / "models.py").read_text(encoding="utf-8")
+    models=(root / "profile/settings_model.py").read_text(encoding="utf-8")
     block=PAGE_INDEX_SOURCE.split("def _fit_page_list_columns(",1)[1].split("\ndef _hide_page_list_section_heading_hint(",1)[0]
     assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
     assert 'self.page_list.winfo_width()' in block
@@ -8221,7 +8221,7 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
     block = schema[start:end]
     assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
     assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
-    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    models = (root / "src" / "picture_capture" / "profile" / "settings_model.py").read_text(encoding="utf-8")
     assert "paddle_use_paddleocr: bool = True" in models
     assert "paddle_compare_tesseract: bool = False" in models
     assert "paddle_dual_ocr_arbitration: bool = False" in models

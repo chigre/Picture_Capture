@@ -2255,7 +2255,7 @@ def test_main_canvas_percentage_rulers_are_fixed_display_only_overlays():
     canvas_controller = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "canvas.py"
     ).read_text(encoding="utf-8")
-    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    models = (root / "src" / "picture_capture" / "profile" / "settings_model.py").read_text(encoding="utf-8")
 
     assert "show_rulers: bool = True" in models
     assert 'ruler_color: str = "#1976d2"' in models
