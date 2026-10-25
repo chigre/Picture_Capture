@@ -188,6 +188,10 @@ class DetectionController:
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
         app = self.app
+        # This legacy entrypoint can be invoked directly, bypassing the
+        # ordinary toolbar action. Keep the same preflight on every OCR path.
+        if not guard_ocr_action_selection(app):
+            return
         app.settings.detection_method = "paddleocr"
         app.sync_quick_settings()
         app.save_settings()
@@ -331,7 +335,14 @@ class DetectionController:
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
         app = self.app
+        # The historical direct API must not bypass the current OCR-engine
+        # preflight or treat an unknown scope as an implicit all-page request.
+        if not guard_ocr_action_selection(app):
+            return
         if not app.guard() or not app.apply_quick_settings(show_status=False):
+            return
+        if scope not in {"current", "all"}:
+            app.show_error("页面范围无效", ValueError(f"未知 OCR 页面范围: {scope!r}"))
             return
         app.settings.detection_method = "paddleocr"
         indices = (
