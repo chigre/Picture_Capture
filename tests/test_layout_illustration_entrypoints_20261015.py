@@ -64,7 +64,9 @@ def test_replay_ocr_and_fusion_paths_receive_original_image_path():
     batch = (src / "ui/detection_batch_execution.py").read_text(encoding="utf-8")
     assert "_detection_batch_execution.detect_pages(" in app
     assert "source_image_path=detection_mask_source_path(" in batch
-    assert "source_image_path=detection_mask_source_path(" in controller
+    worker = (src / "detection/current_page_worker.py").read_text(encoding="utf-8")
+    assert "return detect_current_page(" in controller
+    assert 'source_image_path=deps["detection_mask_source_path"](' in worker
     assert "_run_replay, source, settings, page_index, page_sections, source_path," in replay_src
     assert batch.index("missing_ppp = missing_saved_illustrations(") < batch.index("batch_started_at = time.time()")
 
