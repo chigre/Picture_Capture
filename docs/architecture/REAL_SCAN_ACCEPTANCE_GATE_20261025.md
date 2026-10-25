@@ -19,7 +19,16 @@ boxes/dimensions, pixel-for-pixel RGB comparisons with source-image
 cropping (opaque normal export), nonempty synthetic ink, PWWords and width
 manifests, the CropPlan JSON, no orphan temporary files, unchanged
 PDIC/Profile/source PNG hashes, plus byte-for-byte PNG/manifest stability on
-a second identical export. It exercises
+a second identical export. **Round 62** additionally invokes the real
+`PictureCaptureApp.split_whole_current()` Tk action into
+`ui/controllers/crop.CropController`, with canonical on-disk project
+`_CropSettings.json`, the unmocked threaded batch worker, Tk queue poll
+and asynchronous PNG-width completion callback. On job completion it compares
+the GUI-generated PWWords, width manifest and PNG content SHA-256 with the
+previous direct-production baseline; validates the 100% batch-progress state,
+unchanged source-PDIC/PPP vertices and Profile sidecar, and original source
+image immutability. This is programmatically activated UI logic, **not** a
+human button click or manual Crop Preview approval. It exercises
 `write_project_profile`/`load_dictionary_profile` for a real project-local
 Profile v3 sidecar without opening the human Profile wizard.
 

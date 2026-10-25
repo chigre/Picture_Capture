@@ -316,6 +316,74 @@ def main() -> int:
                     "crop export rewrote PDIC labels or source positions",
                 )
 
+                # Round 62: repeat that export through the PUBLIC Tk callback,
+                # not the direct processing API. Preserve the original settings
+                # persistence while providing the same explicit crop defaults.
+                from picture_capture.crop.settings import normalize_crop_settings_payload
+                for name in (
+                    "columns", "layout_columns_policy", "column_width",
+                    "start_y", "bottom_y",
+                ):
+                    setattr(app.settings, name, getattr(export_settings, name))
+                crop_config = normalize_crop_settings_payload(None, app.settings)
+                crop_config.update({
+                    "general_top_y": 55,
+                    "general_bottom_y": 420,
+                    "integrate_illustrations": False,
+                    "entry_width_mode": "off",
+                })
+                crop_settings_file = qt_root(root) / "_CropSettings.json"
+                crop_settings_file.parent.mkdir(parents=True, exist_ok=True)
+                crop_settings_file.write_text(
+                    json.dumps(crop_config, ensure_ascii=False), encoding="utf-8",
+                )
+                _assert(
+                    app._load_crop_settings()["integrate_illustrations"] is False
+                    and app._load_crop_settings()["entry_width_mode"] == "off",
+                    "Tk crop settings did not read the saved project config",
+                )
+                _assert(not app._batch_active, "unexpected active batch before GUI crop")
+                app.split_whole_current()
+                _assert(app._batch_active, "GUI crop callback did not launch batch")
+                _pump_until(
+                    app,
+                    lambda: (
+                        not app._batch_active
+                        and not app._ui_worker_key_active("crop-width-normalization")
+                        and "已导出" in app.status_var.get()
+                        and "失败" not in app.status_var.get()
+                    ),
+                    seconds=40,
+                    description="GUI CropController asynchronous crop and width callback",
+                )
+                _assert(
+                    app.batch_progress_var.get() == 100.0,
+                    "GUI crop batch did not complete progress to 100%",
+                )
+                _assert(
+                    _source_hash(output_dir / f"{first.stem}.PWWords") == first_manifest
+                    and _source_hash(output_dir / f"{first.stem}.PWWWidths.json") == first_widths
+                    and {
+                        row.filename: _source_hash(output_dir / row.filename)
+                        for row in crop_records
+                    } == first_crop_hashes,
+                    "GUI CropController export differs from direct production output",
+                )
+                _assert(
+                    {tuple(p.points) for p in read_ppp(ppp_read_path_for_image(first))}
+                    == {tuple(p.points) for p in disk_polygons},
+                    "GUI crop altered PPP vertices",
+                )
+                _assert(
+                    [(e.word, e.x, e.y) for e in read_pdic(pdic_path(first))]
+                    == [(e.word, e.x, e.y) for e in app.entries],
+                    "GUI crop altered source PDIC marker identities",
+                )
+                _assert(
+                    _source_hash(profile_file) == profile_sha,
+                    "GUI crop unexpectedly rewrote project Profile v3",
+                )
+
                 # Second identical publication should not rewrite atomically or
                 # alter the recorded bytes/timestamps of immutable source scans.
                 _assert(
@@ -331,7 +399,7 @@ def main() -> int:
                     "[managed-project-smoke] PASS: Tk project load; original XY; "
                     "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
                     "two-page navigation; v3 Profile; production crop PNG pixel parity, " 
-                    "PWWords/widths/plan; source image immutable",
+                    "PWWords/widths/plan; GUI CropController async parity; source image immutable",
                     flush=True,
                 )
             return 0
