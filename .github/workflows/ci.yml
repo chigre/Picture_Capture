@@ -107,6 +107,14 @@ jobs:
         if: runner.os != 'Linux'
         run: uv run --locked python scripts/gui_smoke.py
 
+      - name: Managed project PDIC/PPP Tk save-reopen (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked python scripts/gui_project_roundtrip_smoke.py
+
+      - name: Managed project PDIC/PPP Tk save-reopen (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked python scripts/gui_project_roundtrip_smoke.py
+
       - name: B2 proofreading evidence Tk integration (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a uv run --locked python scripts/gui_proofreading_evidence_smoke.py
@@ -171,6 +179,14 @@ jobs:
       - name: GUI construction smoke (Windows/macOS)
         if: runner.os != 'Linux'
         run: uv run --locked --python 3.10 python scripts/gui_smoke.py
+
+      - name: Managed project PDIC/PPP Tk save-reopen (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked --python 3.10 python scripts/gui_project_roundtrip_smoke.py
+
+      - name: Managed project PDIC/PPP Tk save-reopen (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked --python 3.10 python scripts/gui_project_roundtrip_smoke.py
       - name: Run compatibility test runner
         run: uv run --locked --python 3.10 python run_tests.py
       - name: Compile Python sources on 3.10

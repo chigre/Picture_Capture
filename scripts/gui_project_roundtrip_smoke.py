@@ -1,0 +1,204 @@
+"""Synthetic managed-project Tk read/save/reopen smoke for Issue #562.
+
+Runs real bootstrap, project-load worker, Tk event callbacks and managed PDIC/PPP
+persistence in an isolated two-page temporary project. NEVER claims to validate
+real dictionary scan pixels or a human's GUI/Profile/crop judgment.
+"""
+from __future__ import annotations
+
+import faulthandler
+import hashlib
+from pathlib import Path
+import os
+import sys
+import tempfile
+import threading
+import time
+from unittest.mock import patch
+
+from PIL import Image, ImageDraw
+
+from picture_capture import __version__
+from picture_capture.io.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp
+from picture_capture.models import AppSettings, Entry, PolygonRegion
+from picture_capture.persistence.project_storage import (
+    ensure_project_storage, ppp_read_path_for_image, ppp_write_path_for_image,
+    settings_path,
+)
+
+
+def _assert(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def _source_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _sample_project(root: Path) -> tuple[Path, Path]:
+    root.mkdir(parents=True, exist_ok=True)
+    page1, page2 = root / "synthetic-001.png", root / "synthetic-002.png"
+    for path in (page1, page2):
+        image = Image.new("RGB", (640, 460), "white")
+        drawer = ImageDraw.Draw(image)
+        for x in (70, 365):
+            for y in (75, 180, 285):
+                drawer.rectangle((x, y, x + 140, y + 12), fill=(25, 25, 25))
+        image.save(path)
+        image.close()
+    ensure_project_storage(root, __version__)
+    initial = AppSettings()
+    initial.to_json(settings_path(root))
+    _assert(
+        write_pdic(
+            pdic_path(page1),
+            [Entry("synthetic-alpha", 80, 76), Entry("synthetic-beta", 85, 182)],
+            640, ("synthetic-001", "@", "synthetic-002"),
+        ),
+        "fixture PDIC writer did not publish",
+    )
+    _assert(
+        write_ppp(
+            ppp_write_path_for_image(page1),
+            [PolygonRegion("P_01|synthetic-001|xxx", [
+                (400, 92), (500, 92), (500, 142), (400, 142),
+            ])],
+            page1.stem,
+        ),
+        "fixture PPP writer did not publish",
+    )
+    return page1, page2
+
+
+def _pump_until(app, predicate, *, seconds: float, description: str) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        app.update()
+        if predicate():
+            return
+        time.sleep(0.025)
+    raise RuntimeError(f"Tk integration timed out during {description}")
+
+
+def main() -> int:
+    from picture_capture.bootstrap.application import build_application
+
+    module = build_application()
+    complete = threading.Event()
+
+    def watchdog() -> None:
+        if complete.wait(95):
+            return
+        print("[managed-project-smoke] hard timeout", flush=True)
+        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+        os._exit(124)
+
+    threading.Thread(target=watchdog, name="project-roundtrip-watchdog", daemon=True).start()
+
+    with tempfile.TemporaryDirectory(prefix="pc-managed-roundtrip-") as temp:
+        root = Path(temp) / "synthetic-dictionary"
+        first, second = _sample_project(root)
+        original_hashes = {page.name: _source_hash(page) for page in (first, second)}
+        app = module.PictureCaptureApp()
+        try:
+            app.withdraw()
+
+            def unexpected_dialog(*args, **kwargs):
+                raise AssertionError(f"unexpected modal during managed synthetic smoke: {args!r}")
+
+            with patch.object(module.messagebox, "askyesno", side_effect=unexpected_dialog), patch.object(
+                module.messagebox, "showerror", side_effect=unexpected_dialog,
+            ):
+                app._load_project(root)
+                _pump_until(
+                    app,
+                    lambda: app.project is not None
+                    and app.current_page == first
+                    and app.image is not None,
+                    seconds=32, description="initial managed project bootstrap",
+                )
+                _assert(app.current_index == 0, "project did not select first page")
+                _assert(app.image.size == (640, 460), "source image dimensions changed")
+                _assert(
+                    {(e.word, e.x, e.y) for e in app.entries}
+                    == {("synthetic-alpha", 80, 76), ("synthetic-beta", 85, 182)},
+                    "initial GUI PDIC markers do not match saved source XY",
+                )
+                _assert(len(app.polygons) == 1, "initial GUI PPP polygon missing")
+
+                for entry in app.entries:
+                    if (entry.x, entry.y) == (80, 76):
+                        entry.word = "synthetic-alpha-edited"
+                app.save_pdic(silent=True, sync_editors=False)
+                persisted = read_pdic(pdic_path(first))
+                _assert(
+                    {(e.word, e.x, e.y) for e in persisted}
+                    == {("synthetic-alpha-edited", 80, 76), ("synthetic-beta", 85, 182)},
+                    "GUI PDIC save changed marker identities or source coordinates",
+                )
+
+                added_points = [(410, 295), (515, 295), (515, 342), (410, 342)]
+                app.polygons.append(PolygonRegion("", list(added_points)))
+                _assert(app._save_normalized_ppp(), "GUI PPP save did not publish new polygon")
+                disk_polygons = read_ppp(ppp_read_path_for_image(first))
+                _assert(len(disk_polygons) == 2, "PPP save lost a polygon")
+                _assert(
+                    {tuple(r.points) for r in disk_polygons}
+                    == {
+                        ((400, 92), (500, 92), (500, 142), (400, 142)),
+                        tuple(added_points),
+                    },
+                    "PPP save changed source polygon vertices",
+                )
+
+                app.settings.headword_custom_order = "ZYX"
+                app.save_settings()
+                _assert(
+                    AppSettings.from_json(settings_path(root)).headword_custom_order == "ZYX",
+                    "GUI settings did not persist through canonical settings path",
+                )
+                app.load_page(1, skip_current_save=True)
+                _assert(
+                    app.current_page == second and not app.entries and not app.polygons,
+                    "page navigation leaked prior page PDIC or PPP state",
+                )
+                app.load_page(0, skip_current_save=True)
+                _assert(app.current_page == first, "could not navigate back to first page")
+                _assert(
+                    {(e.word, e.x, e.y) for e in app.entries}
+                    == {("synthetic-alpha-edited", 80, 76), ("synthetic-beta", 85, 182)},
+                    "reopened page did not reload saved PDIC source XY",
+                )
+                _assert(
+                    {tuple(p.points) for p in app.polygons}
+                    == {tuple(r.points) for r in disk_polygons},
+                    "reopened page did not reload saved PPP source vertices",
+                )
+                # Second identical publication should not rewrite atomically or
+                # alter the recorded bytes/timestamps of immutable source scans.
+                _assert(
+                    not app._save_normalized_ppp(),
+                    "unchanged PPP save published a different document",
+                )
+                for path in (first, second):
+                    _assert(
+                        _source_hash(path) == original_hashes[path.name],
+                        f"source scan was mutated: {path.name}",
+                    )
+                print(
+                    "[managed-project-smoke] PASS: Tk project load; original XY; "
+                    "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
+                    "two-page navigation; source image immutable",
+                    flush=True,
+                )
+            return 0
+        finally:
+            try:
+                app.destroy()
+            finally:
+                complete.set()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
