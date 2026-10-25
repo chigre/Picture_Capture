@@ -16,7 +16,7 @@ from picture_capture.crop import (
 
 def test_crop_algorithm_ownership_and_source_compatibility():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     owners = {
         "illustration_export.py": "split_illustrations_impl",
         "illustration_source_bounds.py": "illustration_crop_bounds_impl",

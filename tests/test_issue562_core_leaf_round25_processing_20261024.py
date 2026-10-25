@@ -18,7 +18,7 @@ from picture_capture.crop import spawn_job_owners
 
 def test_exact_owners_and_historical_module_identity():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     owners = {
         "ocr/tesseract_subprocess.py": {"run_tesseract_impl"},
         "refinement/existing_entry_workflow.py": {"refine_existing_entries_impl"},

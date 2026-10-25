@@ -75,7 +75,7 @@ def test_symbol_inventory_uses_current_core_parser_templates_and_families(monkey
 
 def test_round18_files_are_owned_below_ocr_not_root():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     for file in ("symbol_inventory.py", "source_candidate_coordinates.py", "review_anchor_variants.py"):
         assert (pkg / "ocr" / file).is_file()
         assert not (pkg / file).exists()

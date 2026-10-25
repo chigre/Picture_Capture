@@ -17,7 +17,7 @@ def _settings():
 
 def test_round21_exact_owners_without_moving_runtime_regex_globals():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     owners = {
         "cjk_prefix_parsing.py": {
             "starts_with_unconfigured_headword_symbol",

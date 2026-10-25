@@ -123,7 +123,7 @@ def test_helper_owners_preserve_historical_names_and_behavior():
 
 def test_round22_single_function_owner_no_hidden_runtime_globals():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     path = pkg / "ocr" / "column_band_sampling.py"
     assert path.is_file()
     assert not (pkg / "column_band_sampling.py").exists()
