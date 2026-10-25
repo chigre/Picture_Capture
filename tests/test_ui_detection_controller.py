@@ -532,7 +532,12 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
     # Phase 12L keeps the guard as a normal action-boundary preflight.
     assert "def guard_ocr_action_selection(" in ocr_guard
     assert "setattr(app_class, method_name, guarded)" not in ocr_guard
-    assert controller.count("guard_ocr_action_selection(app)") >= 2
+    direct_actions = (
+        ROOT / "src/picture_capture/ui/detection_direct_actions.py"
+    ).read_text(encoding="utf-8")
+    assert controller.count("ocr_engine_guard=guard_ocr_action_selection") >= 4
+    assert direct_actions.count("if not ocr_engine_guard(app):") >= 2
+    assert "setattr(app_class, method_name, guarded)" not in direct_actions
 
     # Phase 5A retires only the method monkey patch; the shared ordinary
     # quick-settings helper remains reusable by postproduction paths.
