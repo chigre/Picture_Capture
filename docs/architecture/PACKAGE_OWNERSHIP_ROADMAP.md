@@ -1655,3 +1655,31 @@ No PDIC/PPP/SECTION schema, source pixel coordinates, OCR execution algorithm,
 pickled identity or root compatibility shim is modified. Six-platform CI and
 real dictionary scan visual signoff remain separate; the manual gate is NOT
 PASSED, and PR #663 remains Draft.
+
+
+## Issue #562 — Round 75: CI source-contract repair and current-page setup owner (2026-10-26)
+
+Round 74's six-platform failure originated in a stale source-location assertion:
+`tests/test_runtime_entry_path_guards.py` expected ordinary selected-page
+drawing implementation directly inside `ui/controllers/detection.py` after
+Round 74 moved it to `ui/detection_selected_scope_actions.py`. The
+assertion now verifies both the legacy controller adapter and its physical
+implementation (ordinary guard, drawing mode assignment and dispatch).
+Production drawing semantics were not modified to satisfy that test.
+
+The current-page draw action's busy/project/geometry/PPP guards, immutable
+worker-bound settings and source-page/SECTION/unsaved-PDIC snapshots, plus OCR
+cache and rules-path selection, now live in
+`ui/detection_current_page_setup.py`. The controller still owns the original
+Tk entrypoint and closure workers, dispatches to
+`detection/current_page_worker.py` and publishes through
+`ui/detection_current_page_result.py`. Dependencies resolve from the
+controller module at call time so existing tests and plugins can still patch
+its original functions. A dataclass snapshot is local to the UI flow; no
+existing pickle class identity or PDIC/PPP/SECTION serialization changes.
+Tests cover the original guard order, abort without editor writes, source X/Y,
+section copy, OCR cache/rules selection and no cache for ordinary drawing.
+
+Latest CI must be independently verified before reporting PASS. Real scanned
+dictionary pages are still required for visual signoff; that manual gate is
+NOT PASSED, and PR #663 remains Draft/unmerged.
