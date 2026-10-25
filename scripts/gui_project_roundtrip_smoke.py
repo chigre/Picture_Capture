@@ -553,6 +553,10 @@ def main() -> int:
                     and app._load_crop_settings()["entry_width_mode"] == "off",
                     "Tk crop settings did not read the saved project config",
                 )
+                # UI status text is shared with settings autosave: it can
+                # legitimately become "参数已保存" after export completion.
+                # Observe worker lifecycle and 100% progress instead; the
+                # manifest/PNG hashes below verify actual published output.
                 _assert(not app._batch_active, "unexpected active batch before GUI crop")
                 app.split_whole_current()
                 _assert(app._batch_active, "GUI crop callback did not launch batch")
@@ -561,7 +565,7 @@ def main() -> int:
                     lambda: (
                         not app._batch_active
                         and not app._ui_worker_key_active("crop-width-normalization")
-                        and "已导出" in app.status_var.get()
+                        and app.batch_progress_var.get() == 100.0
                         and "失败" not in app.status_var.get()
                     ),
                     seconds=40,
