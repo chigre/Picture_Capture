@@ -1815,3 +1815,31 @@ cross-file atomic transaction. Existing R3 PDIC transaction markers are
 respected through `write_pdic`; no direct overwrite of PDIC is introduced.
 Multi-platform CI and the separate real scanned-dictionary human gate remain
 required; manual signoff remains OPEN / NOT PASSED, and PR #663 stays Draft.
+
+
+## Issue #562 — Round 81: protect against PDIC post-commit exceptions (2026-10-26)
+
+Round 80's compensating `ocr/batch_publication.py` recovery now snapshots
+the **existing PDIC bytes** before OCRed publication and rereads PDIC if
+the PDIC writer raises. The authoritative writer uses atomic replacement,
+but failure can still surface after bytes have committed (for example,
+post-commit edit-clock/bookkeeping). Blindly restoring only OCRed in that case
+would make the two published artifacts diverge.
+
+The recovery therefore restores OCRed **only if PDIC bytes are unchanged**.
+If PDIC has changed despite the exception, it leaves OCRed as published and
+raises a clear ambiguous-commit diagnostic with the original exception as its
+cause, rather than claiming rollback. If the post-error PDIC cannot be read,
+it also declines an OCRed-only rollback and reports that verification failed.
+This is a safe failure policy, not proof that PDIC matches OCRed after a
+noncanonical/partial external writer; manual inspection or project recovery
+may still be needed.
+
+Direct fault-injection tests cover a synthetic post-commit failure,
+`io.formats.write_pdic` successfully swapping bytes but failing during
+bookkeeping, PDIC originally absent, PDIC unchanged on failed write,
+and a noncanonical partial writer. The tests retain the earlier
+R3 transaction marker and byte-exact OCRed compensation coverage.
+Cross-platform CI and OCR platform smoke must both pass independently,
+and the real scanned dictionary-image manual gate remains NOT PASSED.
+PR #663 remains Draft and unmerged.
