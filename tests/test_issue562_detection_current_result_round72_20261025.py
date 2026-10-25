@@ -124,7 +124,9 @@ def test_controller_uses_canonical_tk_result_owner_without_worker_publication():
     controller = (root / "ui/controllers/detection.py").read_text(encoding="utf-8")
     result = (root / "ui/detection_current_page_result.py").read_text(encoding="utf-8")
     worker = (root / "detection/current_page_worker.py").read_text(encoding="utf-8")
-    assert "return apply_current_page_detection_result(" in controller
+    flow = (root / "ui/detection_current_page_flow.py").read_text(encoding="utf-8")
+    assert "return run_current_page_detection(" in controller
+    assert 'current["apply_current_page_detection_result"](' in flow
     assert "def apply_current_page_detection_result(" in result
     assert "if app.project is not project or app.current_page != page:" in result
     assert "app._load_ocr_review_candidates()" in result
