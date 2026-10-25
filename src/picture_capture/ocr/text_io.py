@@ -37,13 +37,14 @@ def process_ocr_text(
     return text.lower() if lowercase else text
 
 
+def render_ocred_text(texts: list[str]) -> str:
+    """Canonical legacy OCRed text, shared by exporter and version checks."""
+    return "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts))
+
+
 def export_ocred(path: Path, texts: list[str]) -> None:
     """Atomically replace OCRed sidecars; never expose a partial text file."""
-    write_text_atomic(
-        path,
-        "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts)),
-        encoding="utf-8",
-    )
+    write_text_atomic(path, render_ocred_text(texts), encoding="utf-8")
 
 
 def import_ocred(path: Path) -> list[str]:
