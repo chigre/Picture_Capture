@@ -200,8 +200,19 @@ def test_gui_composition_no_longer_installs_ordinary_action_runtime():
         / "controllers"
         / "detection.py"
     ).read_text(encoding="utf-8")
-    assert 'app.settings.detection_method = "left_edge"' in controller_source
-    assert 'app._detect_pages(indices, method="left_edge", force_refresh=False)' in controller_source
+    selected_scope_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "ui"
+        / "detection_selected_scope_actions.py"
+    ).read_text(encoding="utf-8")
+    assert "return run_selected_draw_action(" in controller_source
+    assert 'method="left_edge"' in controller_source
+    assert 'if method == "left_edge":' in selected_scope_source
+    assert "ordinary_settings_guard(app)" in selected_scope_source
+    assert "app.settings.detection_method = method" in selected_scope_source
+    assert "app._detect_pages(indices, method=method, force_refresh=force_refresh)" in selected_scope_source
 
 
 def test_spawn_worker_is_static_top_level_pickleable_without_gui_mutation():
