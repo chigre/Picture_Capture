@@ -27,6 +27,11 @@ from ..batch_ocr_flow import run_existing_pdic_batch
 from ..detection_selected_scope_actions import run_selected_draw_action
 from ..detection_current_page_setup import prepare_current_page_detection
 from ..detection_current_page_flow import run_current_page_detection
+from ..detection_direct_actions import (
+    run_current_paddle_action,
+    run_all_pages_auto_detect,
+    run_legacy_scoped_ocr,
+)
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -95,15 +100,10 @@ class DetectionController:
         )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
-        app = self.app
-        # This legacy entrypoint can be invoked directly, bypassing the
-        # ordinary toolbar action. Keep the same preflight on every OCR path.
-        if not guard_ocr_action_selection(app):
-            return
-        app.settings.detection_method = "paddleocr"
-        app.sync_quick_settings()
-        app.save_settings()
-        app.auto_detect_current(force_paddle_refresh=force_refresh)
+        return run_current_paddle_action(
+            self.app, force_refresh=force_refresh,
+            ocr_engine_guard=guard_ocr_action_selection,
+        )
 
     def run_combined_draw_action(self) -> None:
         """Combined selected-page drawing with the live OCR preflight."""
@@ -120,13 +120,8 @@ class DetectionController:
         )
 
     def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
-        app = self.app
-        if not app.project:
-            return
-        app._detect_pages(
-            list(range(len(app.project.images))),
-            method=app.settings.detection_method,
-            force_refresh=force_paddle_refresh,
+        return run_all_pages_auto_detect(
+            self.app, force_refresh=force_paddle_refresh,
         )
 
     def batch_ocr(self) -> None:
@@ -159,24 +154,7 @@ class DetectionController:
         )
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
-        app = self.app
-        # The historical direct API must not bypass the current OCR-engine
-        # preflight or treat an unknown scope as an implicit all-page request.
-        if not guard_ocr_action_selection(app):
-            return
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        if scope not in {"current", "all"}:
-            app.show_error("页面范围无效", ValueError(f"未知 OCR 页面范围: {scope!r}"))
-            return
-        app.settings.detection_method = "paddleocr"
-        indices = (
-            [app.current_index]
-            if scope == "current"
-            else list(range(len(app.project.images)))
-        )
-        app._detect_pages(
-            indices,
-            method="paddleocr",
-            force_refresh=force_refresh,
+        return run_legacy_scoped_ocr(
+            self.app, scope=scope, force_refresh=force_refresh,
+            ocr_engine_guard=guard_ocr_action_selection,
         )
