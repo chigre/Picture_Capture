@@ -59,6 +59,7 @@ def test_single_column_zoom_and_invalid_width():
         canvas=SimpleNamespace(winfo_width=lambda:480,xview_moveto=lambda v: None),
         update_idletasks=lambda:None,_update_view_zoom_label=lambda:None,
         redraw=lambda:None,_set_idle_cursor_status=lambda:None,view_scale=1.0)
+    state._canvas_controller_for_call=lambda: CanvasController(state)
     app.PictureCaptureApp.fit_single_column_width(state)
     assert state.view_scale==2.0
     state.settings.column_width=0
