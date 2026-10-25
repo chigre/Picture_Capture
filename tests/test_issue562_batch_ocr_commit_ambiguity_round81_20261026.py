@@ -148,6 +148,9 @@ def test_ambiguous_pdic_boundary_is_checked_before_ocred_compensation():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture/ocr"
     source = (root / "batch_publication.py").read_text(encoding="utf-8")
     assert "current_pdic != previous_pdic" in source
-    assert source.index("if current_pdic != previous_pdic:") < source.index(
+    # Round 82 also compensates OCRed-export failures *before* PDIC is
+    # called. Restrict this ordering assertion to the PDIC error handler.
+    pdic_handler = source.split("except Exception as pdic_error:", 1)[1]
+    assert pdic_handler.index("if current_pdic != previous_pdic:") < pdic_handler.index(
         "_restore_ocred_bytes(ocred_path, previous)"
     )
