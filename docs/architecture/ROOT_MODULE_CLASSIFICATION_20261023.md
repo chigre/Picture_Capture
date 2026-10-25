@@ -11,7 +11,7 @@ in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. Th
 owner migration reduced 15 → 14 without root shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
 claim that Issue #562 or the oversized-module refactor is complete.
 
-## Remaining root contracts (9/9 classified)
+## Remaining root contracts (7/7 classified)
 
 Each row names an existing physical root file. Retention means keep its current
 import contract while extracting implementation separately when justified.
@@ -24,9 +24,7 @@ import contract while extracting implementation separately when justified.
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
 | `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
-| `paddle_headwords_core.py` | ocr | Retained historical OCR core/model and patchable exported functions; selected review-finalization chain lives in `ocr/review_finalization.py` and the full multi-engine sequence matching, Lens arbitration and coordinate mapping now live in `ocr/pairing_arbitration.py`. OCR image-first symbol/marker and CJK visual projection/context evidence resides in `ocr/visual_evidence.py`; the whole verified CJK local-recovery and three-way separator Y refinement chain now resides in `ocr/cjk_recovery.py`, while original call signatures and recovery policy names remain in the patchable core. The entire OCR candidate parsing, visual-structure scoring, accept/reject and per-page diagnostic orchestration now resides in `ocr/candidate_filter.py` with 42 call-time bindings. The complete multi-engine page invocation (45 live patchable callbacks/policies), raw/reusable cache, review arbitration and v3 report write transaction now belongs to `ocr/page_detection.py` with the original core detection entrypoint preserved as a live adapter. GUI preprocessing operations already live in `ui/preprocess_workflow.py` (merged #647). The complete GUI batch ownership/dispatch/parallel queue/pause-stop lifecycle now resides in `ui/batch_workflow.py` (12 original app method adapters); existing batch results and status semantics remain unchanged. Existing facade mirror, original cache/pickle identity and runtime model remain unchanged. |
 | `processing.py` | processing / ordinary | Public detection facade and assignment mirroring; ordinary/GPU worker coordination contract. |
-| `processing_core.py` | processing / crop | Historical geometry/crop dataclass/pickle identities and public call-time adapters; canonical whole-entry planning and export now reside in `crop/page_workflow.py`. The whole-entry page crop plan, entry/PPP pairing, union crop, staging and atomic publication execution live in `crop/page_workflow.py`, with live callback composition from the retained `processing_core.py` facade. Page crop dataclass/pickle identities and root public entry points remain stable. |
 
 ## Canonical moved owners and consumers
 
@@ -270,3 +268,10 @@ Fifteen actual main-window methods were physically moved from root `app.py` to e
 - Physically migrated the complete Tk report-window construction (Toplevel sizing, font selection, two-axis scrolling, read-only text insertion and grid weights) from root `app.PictureCaptureApp._show_text_report` into existing `ui/main_dialog_lifecycle.py:show_text_report`. This is a real widget assembly implementation, not a copied helper or new generic wrapper layer.
 - Original method name/signature remains, with four live app globals passed at call time for monkeypatch and appearance compatibility. No worker thread, `after` scheduling, OCR mode, PDIC/PPP/SECTION or export format changes. Focused test `tests/test_issue562_text_report_owner_phase20_20261025.py` uses fake widgets to verify the actual report contents, read-only state, both scrollbars, sizing, font and live patched collaborators without requiring a display.
 - Root file count unchanged. Exact-head six-platform CI and three-OS OCR Smoke required; representative real scanned dictionary-page GUI/Profile, ordinary/OCR/combined, PDIC/PPP save/reopen and crop/export parity manual acceptance **NOT DONE**. Keep PR #663 Draft/Open/unmerged.
+
+### Phase 19 — Historical core imports retired from the physical root (2026-10-25)
+
+- Deleted the two obsolete **root-only compatibility files** `processing_core.py` (411 B) and `paddle_headwords_core.py` (434 B). Their 83 processing and 154 OCR algorithms were **already** physically moved to `runtime/processing_core_runtime.py` and `ocr/headword_core_runtime.py` in earlier phases; this phase retires only the two redundant root compatibility files.
+- Both historical imports now exist as lightweight `processing_core/__init__.py` and `paddle_headwords_core/__init__.py` package aliases, bound to the same canonical module object, maintaining pickle, Windows spawn, live monkeypatch behavior and metadata-only import of bare `picture_capture`. No duplication of algorithms or state.
+- Root Python file cap and classification tightened from **9 to 7**; guard rejects either removed file returning, requires identity bridges and preserves leaf algorithm checks. Focused unit tests check old import paths and pickle/monkeypatch functionality.
+- **Still NOT DONE:** real scanned dictionary-page manual Profile/Tk, ordinary/OCR/combined detection, PDIC/PPP save-reopen, crop/export parity. Draft PR #663 remains open, unmerged, never marked Ready.

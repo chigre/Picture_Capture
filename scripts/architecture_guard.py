@@ -716,8 +716,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 9:
-        violations.append(f"root Python module count regressed: {root_py_count} > 9")
+    if root_py_count > 7:
+        violations.append(f"root Python module count regressed: {root_py_count} > 7")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -2378,12 +2378,21 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "ocr/channel_legacy.py").is_file():
         violations.append("canonical OCR-channel bridge owner missing")
 
+    # Phase 19: old OCR core has one lazy alias package, not a root file.
+    paddle_bridge = PACKAGE_ROOT / "paddle_headwords_core/__init__.py"
+    if (PACKAGE_ROOT / "paddle_headwords_core.py").exists():
+        violations.append("retired root paddle_headwords_core.py reintroduced")
+    if not paddle_bridge.is_file() or "_sys.modules[__name__] = _canonical" not in paddle_bridge.read_text(encoding="utf-8"):
+        violations.append("historical paddle_headwords_core identity bridge missing")
+
     # #562: complete whole-entry plan/link/export/atomic-publication workflow
     # belongs to the import-light crop owner. Keep historical model identities
     # and root public function adapters, not algorithm copies.
     crop_workflow = PACKAGE_ROOT / "crop/page_workflow.py"
     crop_core = PACKAGE_ROOT / "runtime/processing_core_runtime.py"
-    core_bridge = PACKAGE_ROOT / "processing_core.py"
+    core_bridge = PACKAGE_ROOT / "processing_core/__init__.py"
+    if (PACKAGE_ROOT / "processing_core.py").exists():
+        violations.append("retired root processing_core.py reintroduced")
     if not core_bridge.is_file() or (
         "_sys.modules[__name__] = _canonical"
         not in core_bridge.read_text(encoding="utf-8")
