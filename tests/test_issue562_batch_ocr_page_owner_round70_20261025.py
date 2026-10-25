@@ -90,7 +90,8 @@ def test_controller_delegates_to_physical_ocr_page_owner():
     leaf = (root / "ocr/batch_existing_entries.py").read_text(encoding="utf-8")
     assert "from ...ocr.batch_existing_entries import process_existing_pdic_page" in controller
     assert "return process_existing_pdic_page(" in controller
-    assert '"foreground_page_edit=True, allow_pdic_edits=True,"' not in leaf
+    assert "foreground_page_edit=True, allow_pdic_edits=True," in controller
+    assert "foreground_page_edit=True" not in leaf
     assert "def process_existing_pdic_page(" in leaf
     assert 'deps["ocr_entries"](' in leaf
     assert 'deps["write_pdic"](' in leaf
