@@ -56,10 +56,10 @@ class OcrChannelPlan:
     lens_mode: str = "off"
 
     def enabled(self, engine: str) -> bool:
-        return str(engine or "").strip().lower() in self.enabled_engines
+        return _channel_policy.plan_enabled(self, engine)
 
     def votes(self, engine: str) -> bool:
-        return str(engine or "").strip().lower() in self.voting_engines
+        return _channel_policy.plan_votes(self, engine)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +85,7 @@ class OcrChannelCandidate:
 
     @property
     def ok(self) -> bool:
-        return bool(str(self.text or "").strip()) and not self.error
+        return _channel_results.candidate_is_ok(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,12 +95,11 @@ class OcrChannelResult:
     lens_attempted: bool = False
 
     def candidate(self, engine: str) -> OcrChannelCandidate | None:
-        wanted = str(engine or "").strip().lower()
-        return next((item for item in self.candidates if item.engine == wanted), None)
+        return _channel_results.find_channel_candidate(self, engine)
 
     @property
     def successful(self) -> tuple[OcrChannelCandidate, ...]:
-        return tuple(item for item in self.candidates if item.ok)
+        return _channel_results.successful_candidates(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +110,7 @@ class OcrTextChoice:
 
 
 def _normalized_engine_name(value: object) -> str:
-    return _ENGINE_ALIASES.get(str(value or "").strip().lower(), "")
+    return _channel_policy.normalized_engine_name(value, aliases=_ENGINE_ALIASES)
 
 
 def resolve_ocr_channel_plan(settings: AppSettings) -> OcrChannelPlan:
@@ -274,15 +273,10 @@ class OcrChannelSession:
 
     @staticmethod
     def _needs_conflict_lens(candidates: Iterable[OcrChannelCandidate]) -> bool:
-        successful = [item for item in candidates if item.ok]
-        if len(successful) < 2:
-            return True
-        keys = {
-            channel_text_key(item.text)
-            for item in successful
-            if channel_text_key(item.text)
-        }
-        return len(keys) > 1
+        """Retain the historical static hook; OCR policy owns the decision."""
+        return _channel_policy.needs_conflict_lens(
+            candidates, text_key=channel_text_key,
+        )
 
     def recognize_crop(
         self,

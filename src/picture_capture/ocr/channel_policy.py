@@ -8,7 +8,7 @@ call, so monkeypatches on the public channel remain observable. This module
 never initializes Paddle, Lens, Tk, or project storage.
 """
 
-from typing import Any
+from typing import Any, Callable, Iterable, Mapping
 from ..models import AppSettings
 
 
@@ -56,3 +56,35 @@ def resolve_plan(
         voting_engines=tuple(voting),
         lens_mode=lens_mode,
     )
+
+def normalized_engine_name(value: object, *, aliases: Mapping[str, str]) -> str:
+    """Normalize an OCR engine while honoring the public alias table at call time."""
+    return aliases.get(str(value or "").strip().lower(), "")
+
+
+def plan_enabled(plan: Any, engine: str) -> bool:
+    """Keep exact historical case folding and membership behavior."""
+    return str(engine or "").strip().lower() in plan.enabled_engines
+
+
+def plan_votes(plan: Any, engine: str) -> bool:
+    return str(engine or "").strip().lower() in plan.voting_engines
+
+
+def needs_conflict_lens(
+    candidates: Iterable[Any], *, text_key: Callable[[str], str],
+) -> bool:
+    """Request Lens on insufficient successful votes or a normalized conflict.
+
+    Retain the historical repeated key invocation for nonempty texts to avoid
+    changing a patched callback's evaluation order during this relocation.
+    """
+    successful = [item for item in candidates if item.ok]
+    if len(successful) < 2:
+        return True
+    keys = {
+        text_key(item.text)
+        for item in successful
+        if text_key(item.text)
+    }
+    return len(keys) > 1

@@ -104,3 +104,18 @@ def candidate_from_records(
         participates_in_fusion=participates_in_fusion,
         metadata=dict(metadata or {}),
     )
+
+def candidate_is_ok(candidate: Any) -> bool:
+    """Engine success is nonempty text with no error, regardless of confidence."""
+    return bool(str(candidate.text or "").strip()) and not candidate.error
+
+
+def find_channel_candidate(result: Any, engine: str) -> Any | None:
+    """Return the first exact lowercased engine match, retaining tuple order."""
+    wanted = str(engine or "").strip().lower()
+    return next((item for item in result.candidates if item.engine == wanted), None)
+
+
+def successful_candidates(result: Any) -> tuple[Any, ...]:
+    """Preserve candidate ordering and immutable tuple output."""
+    return tuple(item for item in result.candidates if item.ok)
