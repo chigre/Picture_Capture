@@ -125,9 +125,11 @@ def test_controller_retains_worker_and_callback_while_preflight_moves(tmp_path):
     root = Path(__file__).resolve().parents[1] / "src/picture_capture/ui"
     controller = (root / "controllers/detection.py").read_text(encoding="utf-8")
     setup = (root / "detection_current_page_setup.py").read_text(encoding="utf-8")
-    assert "snapshot = prepare_current_page_detection(" in controller
-    assert "return detect_current_page(" in controller
-    assert "return apply_current_page_detection_result(" in controller
+    flow = (root / "detection_current_page_flow.py").read_text(encoding="utf-8")
+    assert "return run_current_page_detection(" in controller
+    assert 'live["prepare_current_page_detection"](' in flow
+    assert 'current["detect_current_page"](' in flow
+    assert 'current["apply_current_page_detection_result"](' in flow
     assert "def prepare_current_page_detection(" in setup
     assert 'deps["missing_saved_illustrations"]((page,), app.settings)' in setup
     assert "existing_entries = [deps[\"replace\"](entry) for entry in app.entries]" in setup
