@@ -33,6 +33,7 @@ from .layout import current_page as _current_page_understanding
 from .layout import shared_geometry as _shared_geometry
 from .ordinary import layout_roles as _ordinary_layout_roles
 from .ordinary import observation_policy as _ordinary_observation_policy
+from .ordinary import visual_fallback as _ordinary_visual_fallback
 from .detection import shared_observations as _shared_observations
 from .detection import page_pipeline as _page_pipeline
 from .detection import ordinary_page_job as _ordinary_page_job
@@ -128,47 +129,33 @@ def _detect_entries_left_edge(
     page_sections: list[PageSection] | None = None,
 ) -> tuple[list[Entry], Any]:
     """Historical VB observation plus legacy fallback-only visual recovery.
-
-    This function remains for combined mode and emergency compatibility.  It is
-    not the primary ordinary drawing path.
-
-    Source-contract markers retained for long-standing regression checks:
-    _legacy_is_point(
-    _legacy_find_separator_y(
-    ordinary_right_divisor
-    white_threshold_high
-    white_threshold_low
-    whitespace_adjustment
-    upward_ratio
-    from .paddle_headwords import refine_separator_y
-    refined_y, _refinement = refine_separator_y(
-    """
-    entries, geometry = _original_detect_entries_left_edge(
-        image, settings, page_sections=page_sections,
+    
+        This function remains for combined mode and emergency compatibility.  It is
+        not the primary ordinary drawing path.
+    
+        Source-contract markers retained for long-standing regression checks:
+        _legacy_is_point(
+        _legacy_find_separator_y(
+        ordinary_right_divisor
+        white_threshold_high
+        white_threshold_low
+        whitespace_adjustment
+        upward_ratio
+        from .paddle_headwords import refine_separator_y
+        refined_y, _refinement = refine_separator_y(
+        """
+    return _ordinary_visual_fallback.detect_entries_left_edge_with_recovery(
+        image, settings, page_sections,
+        original_detector=_original_detect_entries_left_edge,
+        uses_cjk_role_model=uses_cjk_role_model,
+        indent_type_label=indent_type_label,
+        uses_cjk_indent_topology=_uses_cjk_indent_topology,
+        finalize_indented_topology=finalize_indented_topology,
+        recover_cjk_oversized_heads=recover_cjk_oversized_heads,
+        recover_ordinary_visual_entries=recover_ordinary_visual_entries,
+        stabilize_ordinary_visual_entries=stabilize_ordinary_visual_entries,
+        sort_entries_reading_order=_core.sort_entries_reading_order,
     )
-    method = str(getattr(settings, "detection_method", "") or "").strip().lower()
-    cjk = uses_cjk_role_model(settings)
-    no_indent = indent_type_label(settings) == "无明显缩进"
-    if cjk:
-        if not no_indent and _uses_cjk_indent_topology(settings):
-            if method not in {"combined", "paddleocr"}:
-                entries = finalize_indented_topology(
-                    image, entries, geometry, settings, page_sections=page_sections,
-                )
-                entries = recover_cjk_oversized_heads(
-                    image, entries, geometry, settings, page_sections=page_sections,
-                )
-    else:
-        entries = recover_ordinary_visual_entries(
-            image, entries, geometry, settings, page_sections=page_sections,
-        )
-        entries = stabilize_ordinary_visual_entries(
-            image, entries, geometry, settings, page_sections=page_sections,
-        )
-    return _core.sort_entries_reading_order(
-        entries, geometry, page_sections,
-    ), geometry
-
 
 def _allowed_entries(
     entries: list[Entry],
