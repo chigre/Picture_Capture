@@ -1585,3 +1585,24 @@ Round 70 OCRed/PDIC publication ownership remains in
 `ocr/batch_existing_entries.py`; this worker performs **no publication**.
 CI and real dictionary-page human acceptance are separate; keep PR #663
 Draft until the latter is explicitly completed.
+
+
+## Issue #562 — Round 72: live detection-source tests and Tk result ownership (2026-10-26)
+
+Retarget two original-image mask / combined-OCR source contracts to the
+canonical `detection/current_page_worker.py` owner rather than the former
+controller closure, without dropping the original-image source path,
+`only_blank=True` text fill or strict source-coordinate guard.
+
+The current-page post-worker completion logic now lives physically in
+`ui/detection_current_page_result.py`. The detection controller retains
+captured page/settings identity, cancel/error worker callbacks and live,
+patchable column/geometry/OCR-cache dependencies; the result owner checks
+project **identity**, current page, cancelled/error/empty results before any
+editor state mutation. It preserves selected-column-only replacement, reading
+order, OCR candidate refresh, UI redraw and exact combined fill/status text.
+The pure inference worker never publishes GUI or PDIC state, and no root shim
+or persisted format changes. New behavioral tests cover cancellation/errors,
+stale project/page, clicked-column preservation and combined OCR status.
+This remains synthetic regression evidence: full-resolution real-scan human
+acceptance is NOT PASSED. PR #663 remains Draft and unmerged.
