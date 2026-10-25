@@ -32,7 +32,7 @@ def test_round41_v2_export_implementation_in_training_package_and_legacy_abi():
     assert '"format": TRAINING_EXPORT_FORMAT' in owner
     assert '"ground_truth_lines": ground_truth' not in legacy
     assert "from ..training_export" not in owner
-    assert "from .training.ground_truth_matching import _candidate_ground_truth_link" in legacy
+    assert "from ..training.ground_truth_matching import _candidate_ground_truth_link" in legacy
     assert facade._candidate_ground_truth_link is ground_truth_matching._candidate_ground_truth_link
     assert facade.make_training_zip is zip_publish.make_training_zip
     assert facade.TrainingExportCancelled is zip_publish.TrainingExportCancelled
