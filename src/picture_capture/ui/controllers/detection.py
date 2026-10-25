@@ -25,6 +25,7 @@ from ...detection.current_page_worker import detect_current_page
 from ..detection_current_page_result import apply_current_page_detection_result
 from ..batch_ocr_flow import run_existing_pdic_batch
 from ..detection_selected_scope_actions import run_selected_draw_action
+from ..detection_current_page_setup import prepare_current_page_detection
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -59,31 +60,26 @@ class DetectionController:
     ) -> None:
         """Run backward-compatible single-page detection through the batch worker."""
         app = self.app
-        if app._batch_active:
-            app.status_var.set("后台画线任务运行中，暂不启动前台自动识别；可进行人工校对。")
-            return
-        if not app.guard():
-            return
-        if not app._guard_transformed_geometry("自动画线"):
-            return
-
-        project = app.project
-        page = app.current_page
-        if missing_saved_illustrations((page,), app.settings):
-            app.status_var.set("当前页缺少 PPP 插图数据：请先识别插图，或在设置中心→插图关闭‘使用已有的插图数据’。")
-            return
-        page_index = int(app.current_index)
-        settings = replace(app.settings)
-        page_sections = list(app.page_sections)
-        existing_entries = [replace(entry) for entry in app.entries]
-        cache_path = (
-            ocr_cache_root(project.root) / f"{page.stem}.json"
-            if settings.detection_method in {"paddleocr", "combined"} else None
+        snapshot = prepare_current_page_detection(
+            app,
+            deps={
+                "replace": replace,
+                "missing_saved_illustrations": missing_saved_illustrations,
+                "ocr_cache_root": ocr_cache_root,
+                "headword_filter_rules_path": headword_filter_rules_path,
+                "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+            },
         )
-        filter_path = (
-            headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
-            if settings.detection_method in {"paddleocr", "combined"} else None
-        )
+        if snapshot is None:
+            return
+        project = snapshot.project
+        page = snapshot.page
+        page_index = snapshot.page_index
+        settings = snapshot.settings
+        page_sections = snapshot.page_sections
+        existing_entries = snapshot.existing_entries
+        cache_path = snapshot.cache_path
+        filter_path = snapshot.filter_path
 
         def worker(_item, _position: int, _total: int):
             return detect_current_page(
