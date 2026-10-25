@@ -12,7 +12,7 @@ from picture_capture.ui import review_window_initialization
 
 def test_only_canonical_submodules_own_window_widget_initialization():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(pkg.glob("*.py"))) == 7
+    assert len(list(pkg.glob("*.py"))) == 5
     mapping = {
         "ui/settings/dialog_initialization.py": {"initialize_settings_dialog"},
         "ui/review_window_initialization.py": {"initialize_review_window"},
