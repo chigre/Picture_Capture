@@ -7,6 +7,7 @@ real dictionary scan pixels or a human's GUI/Profile/crop judgment.
 from __future__ import annotations
 
 import faulthandler
+import json
 import hashlib
 from pathlib import Path
 import os
@@ -23,7 +24,10 @@ from picture_capture.io.formats import pdic_path, read_pdic, read_ppp, write_pdi
 from picture_capture.models import AppSettings, Entry, PolygonRegion
 from picture_capture.persistence.project_storage import (
     ensure_project_storage, ppp_read_path_for_image, ppp_write_path_for_image,
-    settings_path,
+    profile_path, qt_root, settings_path,
+)
+from picture_capture.profile.dictionary import (
+    load_dictionary_profile, write_project_profile,
 )
 
 
@@ -166,6 +170,26 @@ def main() -> int:
                     AppSettings.from_json(settings_path(root)).headword_custom_order == "ZYX",
                     "GUI settings did not persist through canonical settings path",
                 )
+                # Profile v3 is a separate project sidecar. Verify the real
+                # schema writer/loader while the Tk project's settings are live.
+                profile_file = profile_path(root)
+                write_project_profile(profile_file, app.settings, force=True)
+                saved_profile = json.loads(profile_file.read_text(encoding="utf-8"))
+                _assert(
+                    saved_profile.get("schema_version") == 3,
+                    "Profile sidecar was not saved in v3",
+                )
+                _assert(
+                    saved_profile["layout"]["columns"] == app.settings.columns,
+                    "Profile columns no longer match effective settings",
+                )
+                loaded_profile = load_dictionary_profile(profile_file)
+                _assert(
+                    bool(loaded_profile.name),
+                    "Profile file could not round-trip via canonical loader",
+                )
+                profile_sha = _source_hash(profile_file)
+
                 app.load_page(1, skip_current_save=True)
                 _assert(
                     app.current_page == second and not app.entries and not app.polygons,
@@ -183,6 +207,70 @@ def main() -> int:
                     == {tuple(r.points) for r in disk_polygons},
                     "reopened page did not reload saved PPP source vertices",
                 )
+                # Exercise the REAL production crop planner and atomic
+                # publisher on already-reloaded, original-coordinate PDIC
+                # entries. No fabricated crop plan or pixel operation.
+                from picture_capture.processing import split_whole_entries
+                export_settings = AppSettings(
+                    columns=1, layout_columns_policy="fixed",
+                    column_width=500, start_y=55, bottom_y=420,
+                )
+                output_dir = qt_root(root) / "PWW"
+                crop_records = split_whole_entries(
+                    first, list(app.entries), export_settings, output_dir,
+                    top_y=55, bottom_y=420,
+                    integrate_illustrations=False,
+                )
+                _assert(
+                    bool(crop_records),
+                    "production crop planner generated no entry pieces",
+                )
+                for record in crop_records:
+                    png = output_dir / record.filename
+                    _assert(png.is_file(), f"crop PNG was not published: {png.name}")
+                    with Image.open(png) as rendered:
+                        _assert(rendered.format == "PNG", "crop is not PNG")
+                        _assert(
+                            rendered.size == (
+                                record.box[2] - record.box[0],
+                                record.box[3] - record.box[1],
+                            ),
+                            f"crop dimensions disagree with source box: {png.name}",
+                        )
+                        _assert(
+                            rendered.width > 0 and rendered.height > 0,
+                            "export published an empty crop",
+                        )
+                names = (output_dir / f"{first.stem}.PWWords").read_text(encoding="utf-8")
+                widths = json.loads(
+                    (output_dir / f"{first.stem}.PWWWidths.json").read_text(
+                        encoding="utf-8",
+                    )
+                )
+                _assert(
+                    len(names.splitlines()) == len(crop_records),
+                    "PWWords lost crop rows during atomic publication",
+                )
+                _assert(
+                    {row.filename for row in crop_records} == set(widths),
+                    "crop width manifest disagrees with PNG list",
+                )
+                crop_plan = qt_root(root) / "CropPlan" / f"{first.stem}.json"
+                _assert(crop_plan.is_file(), "source crop plan JSON missing")
+                _assert(
+                    not list(output_dir.glob("*.tmp")),
+                    "crop transaction left orphan .tmp files",
+                )
+                _assert(
+                    _source_hash(profile_file) == profile_sha,
+                    "entry crop export unexpectedly rewrote Profile v3",
+                )
+                _assert(
+                    [(e.word, e.x, e.y) for e in read_pdic(pdic_path(first))]
+                    == [(e.word, e.x, e.y) for e in app.entries],
+                    "crop export rewrote PDIC labels or source positions",
+                )
+
                 # Second identical publication should not rewrite atomically or
                 # alter the recorded bytes/timestamps of immutable source scans.
                 _assert(
@@ -197,7 +285,8 @@ def main() -> int:
                 print(
                     "[managed-project-smoke] PASS: Tk project load; original XY; "
                     "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
-                    "two-page navigation; source image immutable",
+                    "two-page navigation; v3 Profile; production crop PNG, "
+                    "PWWords/widths/plan; source image immutable",
                     flush=True,
                 )
             return 0

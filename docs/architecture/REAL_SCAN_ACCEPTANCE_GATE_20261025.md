@@ -12,10 +12,19 @@ pages or source-coordinate PDIC/PPP evidence.
 two-page 640×460 managed-v2 project and exercises the **real Tk/bootstrap**
 and project-load worker, editable PDIC markers, in-memory PPP polygons,
 canonical PDIC/PPP publication, page navigation and disk reload, settings
-JSON, idempotent PPP save, and source-image SHA-256 immutability.
+JSON, idempotent PPP save, and source-image SHA-256 immutability. As of Round
+60, it ALSO uses the **unmocked production** `processing.split_whole_entries`
+pipeline on the reopened page: it asserts published original-coordinate PNG
+boxes/dimensions, PWWords and width manifests, the CropPlan JSON, no orphan
+temporary files and unchanged PDIC/Profile/source PNG hashes. It exercises
+`write_project_profile`/`load_dictionary_profile` for a real project-local
+Profile v3 sidecar without opening the human Profile wizard.
 
 It uses no installed OCR model and never invokes automated ordinary/OCR/
-combined detection or crop export. The six-job CI matrix runs it on
+combined detection or *human GUI crop preview*. It now exercises a **real
+production crop export**, but without a real scanner page, manual CropController
+button interaction, image quality approval or OCR inference. The six-job CI
+matrix runs it on
 Windows/macOS/Ubuntu with Python 3.10 and 3.13 (Linux uses Xvfb). The
 existing GUI construction, proofreading/R3, unit and OCR smoke are retained.
 
@@ -24,9 +33,9 @@ Local smoke invocation after installing locked project dependencies:
 - Windows/macOS: `uv run --locked python scripts/gui_project_roundtrip_smoke.py`
 - Linux GUI: `xvfb-run -a uv run --locked python scripts/gui_project_roundtrip_smoke.py`
 
-A green result establishes **synthetic UI/persistence wiring only**. It
-does not prove line-finding accuracy, external OCR availability, original
-real-scan image performance, or crop/export appearance.
+A green result establishes **synthetic UI/persistence/export wiring only**.
+It does not prove line-finding accuracy, external OCR availability, original
+real-scan image performance, or real-world crop/export visual appearance.
 
 ## Manual evidence required before Ready-for-review/merge
 
