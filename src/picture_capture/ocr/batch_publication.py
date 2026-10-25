@@ -4,8 +4,10 @@ from __future__ import annotations
 
 OCRed is an auxiliary text sidecar; PDIC is the marker source of truth.
 Both individual writers are atomic, but the filesystem does not commit the
-two files together. If the PDIC writer raises, undo the already published
-OCRed sidecar to its exact previous bytes (or remove a newly created one).
+two files together. If the PDIC writer raises *without changing PDIC*, undo
+the already published OCRed sidecar to its exact previous bytes (or remove
+a newly created one). If PDIC changed despite throwing, never revert only
+OCRed: report the ambiguous commit for explicit recovery.
 Power loss, process termination, concurrent external writers and a failed
 compensation remain outside this best-effort guarantee.
 """
@@ -56,6 +58,12 @@ def publish_existing_pdic_ocr(
         previous = ocred_path.read_bytes()
     except FileNotFoundError:
         previous = None
+    # The PDIC writer can atomically publish bytes and subsequently raise.
+    # In that case undoing only OCRed would create a mismatched pair.
+    try:
+        previous_pdic = pdic_path.read_bytes()
+    except FileNotFoundError:
+        previous_pdic = None
 
     # The OCRed exporter itself is atomic; an exporter exception propagates
     # without attempting to save PDIC or rolling back an uncommitted sidecar.
@@ -63,6 +71,22 @@ def publish_existing_pdic_ocr(
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
+        try:
+            current_pdic = pdic_path.read_bytes()
+        except FileNotFoundError:
+            current_pdic = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "PDIC 保存报错，且无法读取 PDIC 确认是否已提交；"
+                "不执行仅 OCRed 回滚，以免造成文件版本不一致："
+                f"PDIC={pdic_error!r}；核查={inspect_error!r}"
+            ) from pdic_error
+        if current_pdic != previous_pdic:
+            raise RuntimeError(
+                "PDIC 保存报错，但磁盘 PDIC 已发生变化；"
+                "未单独回滚 OCRed，请核查两份文件："
+                f"PDIC={pdic_error!r}"
+            ) from pdic_error
         try:
             _restore_ocred_bytes(ocred_path, previous)
         except Exception as rollback_error:
