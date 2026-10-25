@@ -8,6 +8,7 @@ from PIL import Image
 
 from picture_capture.models import Entry
 from picture_capture.ocr.batch_existing_entries import process_existing_pdic_page
+from picture_capture.ocr.text_io import export_ocred as real_export_ocred
 
 
 def _test_deps(tmp_path: Path, events: list, *, fail_ocr: bool = False):
@@ -21,6 +22,7 @@ def _test_deps(tmp_path: Path, events: list, *, fail_ocr: bool = False):
 
     def export_ocred(path, texts):
         events.append(("export", path, list(texts)))
+        real_export_ocred(path, texts)
 
     def write_pdic(path, entries, width, pages):
         events.append((
