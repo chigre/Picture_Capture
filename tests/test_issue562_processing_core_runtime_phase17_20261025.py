@@ -24,7 +24,7 @@ def test_core_owned_by_runtime_and_legacy_import_aliases_one_module():
     assert "def split_illustrations_job" in implementation
     assert "def _detect_entries_left_edge" in implementation
     assert canonical is importlib.import_module("picture_capture.processing_core")
-    assert canonical.__file__.endswith("runtime/processing_core_runtime.py")
+    assert Path(canonical.__file__).resolve() == (pkg / "runtime/processing_core_runtime.py").resolve()
 
 
 def test_legacy_geometry_and_crop_dataclasses_are_same_pickle_objects():
