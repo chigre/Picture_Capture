@@ -2001,3 +2001,10 @@ editing OCRed during the short export/rollback window is not transactionally
 protected. Full six-platform CI and OCR Platform Smoke remain mandatory;
 real scanned-dictionary manual acceptance stays **OPEN / NOT PASSED**,
 and PR #663 remains **Draft / unmerged**.
+
+Round 86's first six-platform CI attempt found a **test fixture setup**
+regression: the canonical PDIC writer had already created the `QT` directory,
+so one direct-publisher test's `mkdir(parents=True)` raised `FileExistsError`
+before exercising the guard. The fixture now uses `exist_ok=True`; no
+production code was weakened. This failure is recorded separately from the
+subsequent CI rerun, whose final status must be checked on the new HEAD.
