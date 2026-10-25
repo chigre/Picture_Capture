@@ -2047,3 +2047,36 @@ the existing best-effort rollback semantics. No real scanned-dictionary
 acceptance is claimed: manual gate **OPEN / NOT PASSED**; PR #663 remains
 **Draft / unmerged**. Require latest-HEAD six-platform CI and OCR
 Platform Smoke before describing the round as verified.
+
+
+## Issue #562 — Round 88: repair Round 87 six-platform CI regression (2026-10-26)
+
+The Round 87 CI on HEAD `b32f084` **failed on all six jobs** (both
+Python versions on Windows/macOS/Ubuntu); OCR Platform Smoke passed.
+Logs identified two distinct regressions:
+
+1. `expected_exported_ocred_bytes` was computed from LF-only UTF-8, but
+   the canonical `write_text_atomic` uses text mode, which publishes CRLF
+   on Windows. The post-export integrity guard consequently rejected valid
+   Windows OCRed output. The OCR leaf now calls `render_ocred_bytes` from
+   `ocr/text_io.py`, which matches the legacy text-mode writer's platform
+   newline translation without changing existing OCRed file format.
+2. Two historical controller/page tests monkeypatched `export_ocred` to
+   a **no-op spy**, which no longer satisfies the real byte-integrity
+   contract. Their spies now record the call *and* invoke the real exporter.
+   Two source-shape assertions from Rounds 81/85 were also updated to
+   check the guarded rollback helper and a stable verification-phase
+   anchor, without weakening the runtime safety tests.
+
+New Round 88 tests compare the canonical byte renderer against actual
+atomic export on the current platform, exercise UTF-8/non-ASCII text,
+ensure a no-op exporter is rejected before PDIC publication, and verify
+uncontended publication preserves original PDIC X/Y pixel coordinates.
+The new check does not bypass conflict detection, does not normalize
+user-owned OCRed bytes, and does not change the Windows legacy output
+format. Full six-platform CI and three-platform OCR Smoke are required
+on the new HEAD before declaring the regression resolved.
+
+**Outstanding:** OCRed/PDIC is still a best-effort two-file publication,
+not an atomic cross-process transaction. Real scanned-dictionary manual
+acceptance remains **OPEN / NOT PASSED**; PR #663 stays **Draft**, unmerged.
