@@ -109,8 +109,11 @@ def test_prewrite_and_postwrite_verification_errors_have_distinct_recovery_rules
         Path(__file__).resolve().parents[1]
         / "src/picture_capture/ocr/batch_publication.py"
     ).read_text(encoding="utf-8")
-    prewrite = source.split("except OSError as inspect_error:", 3)[2]
+    # Anchor on the PDIC verification phase, not the number of earlier
+    # OSError handlers (which grows as sidecar integrity checks evolve).
+    prewrite = source.split("pdic_after_export = pdic_path.read_bytes()", 1)[1]
+    prewrite = prewrite.split("if pdic_after_export != previous_pdic:", 1)[0]
     postwrite = source.split("except Exception as pdic_error:", 1)[1]
-    assert "_restore_ocred_bytes(ocred_path, previous)" in prewrite
+    assert "_restore_ocred_if_unchanged(ocred_path, previous, published_ocred)" in prewrite
     assert "不执行仅 OCRed 回滚" in postwrite
     assert "current_pdic != previous_pdic" in postwrite
