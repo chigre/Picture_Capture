@@ -22,7 +22,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 def test_new_owner_paths_and_unchanged_historical_core_callables():
     assert (PKG / "ordinary/separator_position_policy.py").is_file()
     assert (PKG / "ocr/alphabetical_warnings.py").is_file()
-    assert len(list(PKG.glob("*.py"))) == 10
+    assert len(list(PKG.glob("*.py"))) == 9
     for fn in (processing_core._is_single_cjk_headword,
                processing_core._separator_whitespace_score,
                processing_core._prefer_ocr_separator_position):

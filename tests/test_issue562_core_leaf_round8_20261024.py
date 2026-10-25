@@ -19,7 +19,7 @@ def settings(lang, model=""):
 def test_historical_paths_and_no_root_compat_shims():
     assert (PKG / "ocr/language_resolution.py").is_file()
     assert not (PKG / "language_resolution.py").exists()
-    assert len(list(PKG.glob("*.py"))) == 10
+    assert len(list(PKG.glob("*.py"))) == 9
     for fn in (core._is_chinese_ocr, core._is_japanese_ocr, core._paddle_language):
         assert fn.__module__ == "picture_capture.paddle_headwords_core"
         assert list(inspect.signature(fn).parameters) == ["settings"]

@@ -12,7 +12,7 @@ from picture_capture.ui import review_style_policy
 
 def test_owners_are_parseable_functions_and_no_root_shims():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     owners = {
         "ui/settings/field_form_runtime.py": {
             "setting_widget", "add_setting_group", "save_settings", "_setting_var",

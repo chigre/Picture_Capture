@@ -12,7 +12,7 @@ from picture_capture.ui.settings import interactive_panels
 
 def test_widget_owners_and_historical_class_signatures():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     expected = {
         "ui/main_workspace_build.py": {"build_ui"},
         "ui/settings/interactive_panels.py": {

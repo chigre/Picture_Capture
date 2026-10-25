@@ -14,7 +14,7 @@ from picture_capture.ui import (
 
 def test_exact_ui_algorithm_owners_and_retained_app_method_signatures():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 10
+    assert len(list(root.glob("*.py"))) == 9
     mapping = {
         "main_appearance_policy.py": {
             "configure_global_appearance", "configure_main_workspace_styles",

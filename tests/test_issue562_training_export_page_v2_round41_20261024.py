@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_round41_v2_export_implementation_in_training_package_and_legacy_abi():
-    legacy = (ROOT / "training_export.py").read_text(encoding="utf-8")
+    legacy = (ROOT / "training/export_runtime.py").read_text(encoding="utf-8")
     owner = (ROOT / "training/export_page_v2.py").read_text(encoding="utf-8")
     assert "_page_v2.export_training_page(" in legacy
     assert "def export_training_page(" in legacy
