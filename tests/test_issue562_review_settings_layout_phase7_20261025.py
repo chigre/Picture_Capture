@@ -64,6 +64,7 @@ def test_review_canvas_resize_is_debounced_on_main_tk_event_loop():
     stub=SimpleNamespace(canvas=canvas,rows_window="window",review_zoom_auto=True,
         _review_auto_zoom_width=100,_review_auto_zoom_job=None,
         _review_image_area_width=lambda width: 155,
+        _apply_auto_review_zoom_resize=lambda: None,
         after=lambda delay,callback: calls.append(("after",delay,callback)) or "after-id")
     app.ReviewWindow._review_canvas_configured(stub,SimpleNamespace(width=200))
     assert calls[0] == ("configure",("window",),{"width":200})
