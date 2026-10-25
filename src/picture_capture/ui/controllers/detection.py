@@ -21,6 +21,7 @@ from ...layout.mask_source_guard import missing_saved_illustrations, detection_m
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr.action_guard import guard_ocr_action_selection
 from ...ocr.batch_existing_entries import process_existing_pdic_page
+from ...detection.current_page_worker import detect_current_page
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -82,43 +83,24 @@ class DetectionController:
         )
 
         def worker(_item, _position: int, _total: int):
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            detected, geometry = detect_entries(
-                image,
-                settings,
-                paddle_cache_path=cache_path,
-                force_paddle_refresh=force_paddle_refresh,
-                paddle_filter_rules_path=filter_path,
-                profile_page_index=page_index,
+            return detect_current_page(
+                page, project.root, settings,
+                page_index=page_index,
                 page_sections=page_sections,
-                source_image_path=detection_mask_source_path(
-                    page, settings,
-                    ordinary=settings.detection_method not in {"paddleocr", "combined"},
-                ),
+                cache_path=cache_path,
+                filter_path=filter_path,
+                force_paddle_refresh=force_paddle_refresh,
+                deps={
+                    "Image": Image,
+                    "normalize_page_rgb": normalize_page_rgb,
+                    "detect_entries": detect_entries,
+                    "detection_mask_source_path": detection_mask_source_path,
+                    "ocr_existing_entry_words_from_markers": ocr_existing_entry_words_from_markers,
+                    "load_replace_rules": load_replace_rules,
+                    "replace_rules_path": replace_rules_path,
+                    "project_profile_path": project_profile_path,
+                },
             )
-            text_stats = None
-            if settings.detection_method == "combined":
-                original_coords = [
-                    (int(entry.x), int(entry.y)) for entry in detected
-                ]
-                detected, text_stats = ocr_existing_entry_words_from_markers(
-                    image,
-                    detected,
-                    settings,
-                    load_replace_rules(replace_rules_path(project.root)),
-                    profile_page_index=page_index,
-                    page_sections=page_sections,
-                    profile_path=project_profile_path(project.root),
-                    only_blank=True,
-                )
-                if [
-                    (int(entry.x), int(entry.y)) for entry in detected
-                ] != original_coords:
-                    raise RuntimeError(
-                        "融合画线自动补字不得修改任何画线坐标"
-                    )
-            return detected, geometry, text_stats
 
         def done(_completed, _total, stopped, results, error):
             if error is not None or stopped or not results:
