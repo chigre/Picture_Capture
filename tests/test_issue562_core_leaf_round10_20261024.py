@@ -28,7 +28,7 @@ def settings(**kw):
 
 
 def test_leaf_presence_original_signatures_and_model_identity():
-    assert len(list(PKG.glob("*.py"))) == 10
+    assert len(list(PKG.glob("*.py"))) == 9
     assert (PKG / "ocr/boundary_measurements.py").is_file()
     assert not (PKG / "boundary_measurements.py").exists()
     for fn in (

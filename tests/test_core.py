@@ -3725,7 +3725,7 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app_text = (package / "app.py").read_text(encoding="utf-8")
     project_session = (package / "ui/project_session_workflow.py").read_text(encoding="utf-8")
-    training_text = (package / "training_export.py").read_text(encoding="utf-8")
+    training_text = (package / "training/export_runtime.py").read_text(encoding="utf-8")
     training_owner_text = (package / "training/export_page_v2.py").read_text(encoding="utf-8")
     layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
     paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")

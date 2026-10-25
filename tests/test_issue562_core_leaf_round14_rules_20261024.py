@@ -21,7 +21,7 @@ def evaluation(rules, *, raw="casa", normalized="casa", line="casa adj.", pos="a
 
 
 def test_import_identity_signatures_and_root_inventory():
-    assert len(list(ROOT.glob("*.py"))) == 10
+    assert len(list(ROOT.glob("*.py"))) == 9
     assert (ROOT / "ocr/user_filter_rules.py").is_file()
     assert not (ROOT / "user_filter_rules.py").exists()
     for fn, args in (

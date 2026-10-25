@@ -16,7 +16,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_large_batch_paths_and_original_core_identities():
-    assert len(list(PKG.glob("*.py"))) == 10
+    assert len(list(PKG.glob("*.py"))) == 9
     for path in (
         "ordinary/auto_layout_policy.py",
         "ordinary/fusion_entry_mapping.py",

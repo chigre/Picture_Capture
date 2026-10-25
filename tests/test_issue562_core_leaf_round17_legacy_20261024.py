@@ -97,7 +97,7 @@ def test_legacy_edge_transform_and_historical_signatures():
 
 def test_full_scan_live_dependencies_and_root_inventory(monkeypatch):
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(package.glob("*.py"))) == 10
+    assert len(list(package.glob("*.py"))) == 9
     for relative in (
         "ordinary/legacy_separator_search.py",
         "ordinary/legacy_page_detection.py",

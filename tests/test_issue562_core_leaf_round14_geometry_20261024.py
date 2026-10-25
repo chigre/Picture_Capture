@@ -29,7 +29,7 @@ def settings(*, deform=False, transform="identity"):
 
 
 def test_public_functions_keep_signatures_and_identity():
-    assert len(list(ROOT.glob("*.py"))) == 10
+    assert len(list(ROOT.glob("*.py"))) == 9
     assert (ROOT / "geometry/geometry_construction.py").is_file()
     assert not (ROOT / "geometry_construction.py").exists()
     for name, args in (
