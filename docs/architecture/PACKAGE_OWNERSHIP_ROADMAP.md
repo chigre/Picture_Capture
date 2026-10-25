@@ -1969,3 +1969,35 @@ PDIC writer semantics were changed.
 Six-platform CI and OCR Platform Smoke are independent required gates.
 Real scanned-dictionary manual acceptance remains **OPEN / NOT PASSED**;
 PR #663 stays **Draft / unmerged**.
+
+
+## Issue #562 — Round 86: preserve OCRed proofreading during batch inference (2026-10-26)
+
+The earlier optimistic conflict guard protected **PDIC** against manual
+edits made during a long-running existing-marker OCR worker. It did not
+protect the independently editable **OCRed** sidecar: a user could correct
+OCRed from another process while inference was running, then the worker
+would overwrite those newer corrections even though PDIC had not changed.
+
+The existing-PDIC page worker now captures the exact OCRed bytes (or
+absence) **before OCR inference**, alongside its PDIC snapshot. It passes
+`expected_ocred_bytes` into the paired publisher. Before exporting OCRed
+or saving PDIC, publication compares the current sidecar bytes to the
+worker's snapshot; a difference (rewrite, deletion, or creation) rejects
+both writes and preserves the manual sidecar. The argument is optional,
+so existing direct calls to `publish_existing_pdic_ocr` retain their
+previous behavior. The existing PDIC pre/post-export guards, canonical
+writers, byte-exact compensating rollback and original-image X/Y
+coordinates remain unchanged.
+
+Fault-injection tests cover OCRed replacement with byte-distinct BOM/CRLF,
+deletion, creation during the worker's OCR callback, zero batch publication
+calls on conflicts, unchanged PDIC, successful commits with originally
+present/absent OCRed and preserved marker X/Y, and a direct publisher
+snapshot conflict. This is an optimistic byte comparison, **not** an
+exclusive cross-process lock: same-byte rewrites are not distinguished,
+and a writer can still race after the comparison. An unrelated process
+editing OCRed during the short export/rollback window is not transactionally
+protected. Full six-platform CI and OCR Platform Smoke remain mandatory;
+real scanned-dictionary manual acceptance stays **OPEN / NOT PASSED**,
+and PR #663 remains **Draft / unmerged**.
