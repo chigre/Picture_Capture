@@ -13,6 +13,8 @@ monkeypatch behavior (including on Windows spawn workers).
 from pathlib import Path
 from typing import Any, Mapping
 
+from .batch_publication import publish_existing_pdic_ocr
+
 
 def process_existing_pdic_page(
     page: Path,
@@ -57,14 +59,11 @@ def process_existing_pdic_page(
         )
     for entry, text in zip(entries, texts):
         entry.word = text
-    deps["export_ocred"](
+    publish_existing_pdic_ocr(
         deps["qt_root"](project_root) / f"{page.stem}.OCRed",
-        texts,
-    )
-    deps["write_pdic"](
         deps["pdic_path"](page),
-        entries,
-        image.width,
-        pages_info,
+        texts, entries, image.width, pages_info,
+        export_ocred=deps["export_ocred"],
+        write_pdic=deps["write_pdic"],
     )
     return len(texts)
