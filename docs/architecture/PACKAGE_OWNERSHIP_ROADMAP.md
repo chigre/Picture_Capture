@@ -1904,3 +1904,34 @@ the final verification and PDIC write is still theoretically possible.
 Automated CI and OCR platform smoke remain independent gates; real-scanned
 dictionary human visual acceptance remains OPEN/NOT PASSED. PR #663 stays
 Draft and unmerged.
+
+
+## Issue #562 — Round 84: verify PDIC identity across sidecar publication (2026-10-26)
+
+Round 83 captured PDIC bytes before OCR and checked them at the end of
+inference, refusing stale batches after manual edits. Round 84 carries that
+snapshot into `ocr/batch_publication.publish_existing_pdic_ocr` as an optional
+`expected_pdic_bytes` argument. The paired publisher checks the original
+worker snapshot against freshly read PDIC bytes **before exporting OCRed**.
+It then reads PDIC again **after OCRed export but before writing PDIC**.
+If an external editor replaces, removes or creates PDIC during the export,
+the publisher compensates OCRed to its exact previous bytes (or removes a
+new sidecar), and refuses to overwrite the newer manual PDIC content.
+An OCRed compensation failure is reported explicitly.
+
+The optional snapshot keeps the historical direct publishing API functional
+while protecting worker calls with the stronger expectation. Both checks
+preserve existing OCRed-then-PDIC ordering, canonical output writers,
+original X/Y marker coordinates, OCR byte-exact rollback and legacy
+monkeypatch entrypoints. Unit tests model manual edits interleaved inside
+`export_ocred`, pre-existing / newly created / removed PDIC, old OCRed
+bytes with BOM/CRLF, correct uncontended commits, direct API compatibility
+and failed compensation.
+
+**Remaining limit:** these checks cannot prevent a different process from
+altering PDIC in the tiny interval after the final comparison and before
+the canonical PDIC writer; there is no cross-process compare-and-swap or
+two-file atomic transaction. No claim of full concurrency safety or scan
+acceptance is made. Require full six-platform CI plus OCR Smoke, and retain
+the real scanned-dictionary manual gate OPEN / NOT PASSED. PR #663 remains
+Draft and unmerged.
