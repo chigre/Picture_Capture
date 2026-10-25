@@ -44,5 +44,5 @@ def test_normal_processing_source_no_longer_calls_ensure_runtime():
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
     assert "_ensure_layout_runtime" not in calls
     assert "understand_composed_page" in calls
-    facade = (root / "processing.py").read_text(encoding="utf-8")
+    facade = (root / "processing/__init__.py").read_text(encoding="utf-8")
     assert "_current_page_understanding.understand_page_current(" in facade

@@ -23,13 +23,13 @@ def test_global_layout_install_calls_only_in_legacy_processing_shim():
                     continue
                 if node.func.id not in INSTALLERS:
                     continue
-                if (relative, top.name) != ("processing.py", "_ensure_layout_runtime"):
+                if (relative, top.name) != ("processing/__init__.py", "_ensure_layout_runtime"):
                     violations.append((relative, top.name, node.func.id))
     assert violations == []
 
 
 def test_normal_processing_does_not_invoke_compatibility_shim():
-    path = PACKAGE / "processing.py"
+    path = PACKAGE / "processing/__init__.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     owners = [node for node in tree.body if isinstance(node, ast.FunctionDef)
               and node.name == "_understand_page_current"]

@@ -3834,7 +3834,7 @@ def test_ordinary_layout_threshold_policy_remains_available_for_layout_analysis(
     assert auto.dtype == bool and adaptive.dtype == bool
 
     processing_source = (
-        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "processing.py"
+        Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "processing/__init__.py"
     ).read_text(encoding="utf-8")
     start = processing_source.index("def _detect_entries_left_edge(")
     end = processing_source.index("\ndef detect_entries(", start)
@@ -4428,8 +4428,8 @@ def test_concurrency_review_tracks_critical_workers_and_stale_results():
 
 def test_concurrency_review_atomic_ocr_cache_and_timeouts_are_enforced():
     root = Path(__file__).resolve().parents[1]
-    paddle = (root / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
-    processing = (root / "src" / "picture_capture" / "processing.py").read_text(encoding="utf-8")
+    paddle = (root / "src" / "picture_capture" / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
+    processing = (root / "src" / "picture_capture" / "processing/__init__.py").read_text(encoding="utf-8")
 
     assert "_QUALITY_SUMMARY_LOCK = threading.Lock()" in paddle
     assert "with _QUALITY_SUMMARY_LOCK:" in paddle
@@ -4627,7 +4627,7 @@ def test_crop_file_transaction_rolls_back_complete_previous_set(tmp_path, monkey
 
 def test_crop_exports_stage_pngs_manifest_and_crop_plan_before_publish():
     root = Path(__file__).resolve().parents[1]
-    text = (root / "src" / "picture_capture" / "processing.py").read_text(encoding="utf-8")
+    text = (root / "src" / "picture_capture" / "processing/__init__.py").read_text(encoding="utf-8")
 
     assert "def _publish_file_transaction(" in text
     assert "def _stage_page_crop_plan(" in text

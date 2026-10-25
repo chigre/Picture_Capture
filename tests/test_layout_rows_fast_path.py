@@ -201,7 +201,7 @@ def test_gui_and_worker_composition_seed_layout_rows_for_future_qa():
         root / "src" / "picture_capture" / "bootstrap" / "worker.py"
     ).read_text(encoding="utf-8")
     processing = (
-        root / "src" / "picture_capture" / "processing.py"
+        root / "src" / "picture_capture" / "processing/__init__.py"
     ).read_text(encoding="utf-8")
     crop = (
         root / "src" / "picture_capture" / "ui" / "controllers" / "crop.py"

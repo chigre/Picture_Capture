@@ -96,7 +96,7 @@ def test_spawn_detection_routes_through_worker_composition_root() -> None:
         ROOT / "src" / "picture_capture" / "bootstrap" / "worker.py"
     ).read_text(encoding="utf-8")
     processing = (
-        ROOT / "src" / "picture_capture" / "processing.py"
+        ROOT / "src" / "picture_capture" / "processing/__init__.py"
     ).read_text(encoding="utf-8")
 
     assert "from .worker import WorkerServices, build_worker_services" in bootstrap_init
