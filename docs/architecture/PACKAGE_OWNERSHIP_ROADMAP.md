@@ -1630,3 +1630,28 @@ PDIC/PPP/SECTION schema, or Tk public method names.
 
 Synthetic/automated acceptance is not a substitute for the independent
 real-dictionary-scan visual gate, which remains NOT PASSED; PR #663 stays Draft.
+
+
+## Issue #562 — Round 74: selected-page detection action dispatch (2026-10-26)
+
+The shared user-action sequence for the ordinary, PaddleOCR and combined
+**selected-page** draw buttons now belongs physically to
+`ui/detection_selected_scope_actions.py`. The public methods in
+`ui/controllers/detection.py` remain the exact same legacy entrypoints and
+inject live ordinary quick-settings and OCR-engine validation hooks.
+
+The shared owner retains the historical execution order: validate usable OCR
+selection before project/quick-settings checks, validate the selected-page
+scope before any drawing-mode mutation, then save settings and dispatch the
+selected indices with the correct mode and refresh flag. Ordinary drawing
+stays independent of OCR-engine availability; neither an invalid OCR engine
+configuration nor a malformed selected range may start detection or change
+the stored mode. The historical direct `run_ocr_draw(scope, ...)` and
+`paddle_detect_current(...)` APIs remain separately guarded and unchanged.
+
+Tests exercise all three dispatch modes, guard short-circuit behavior, invalid
+selected ranges, refresh on/off, and stable controller method ownership.
+No PDIC/PPP/SECTION schema, source pixel coordinates, OCR execution algorithm,
+pickled identity or root compatibility shim is modified. Six-platform CI and
+real dictionary scan visual signoff remain separate; the manual gate is NOT
+PASSED, and PR #663 remains Draft.
