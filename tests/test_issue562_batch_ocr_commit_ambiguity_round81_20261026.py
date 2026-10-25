@@ -114,6 +114,36 @@ def test_pdic_modified_outside_canonical_writer_reports_ambiguous_state(tmp_path
     assert import_ocred(ocred) == ["new"]
 
 
+
+def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch):
+    ocred = tmp_path / "001.OCRed"
+    export_ocred(ocred, ["old"])
+    pdic = tmp_path / "001.PDIC"
+    pdic.write_bytes(b"old")
+
+    original_read = Path.read_bytes
+    count = {"pdic": 0}
+
+    def read_with_post_error(self):
+        if self == pdic:
+            count["pdic"] += 1
+            if count["pdic"] == 2:
+                raise PermissionError("PDIC read denied after writer error")
+        return original_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", read_with_post_error)
+    with pytest.raises(RuntimeError, match="无法读取 PDIC 确认是否已提交") as caught:
+        publish_existing_pdic_ocr(
+            ocred, pdic, ["new"], [Entry("new", 1, 2)], 100,
+            ("001", "@", "@"),
+            export_ocred=export_ocred,
+            write_pdic=lambda *_args: (_ for _ in ()).throw(OSError("writer denied")),
+        )
+    assert "writer denied" in str(caught.value.__cause__)
+    assert count["pdic"] == 2
+    assert import_ocred(ocred) == ["new"]
+    assert original_read(pdic) == b"old"
+
 def test_ambiguous_pdic_boundary_is_checked_before_ocred_compensation():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture/ocr"
     source = (root / "batch_publication.py").read_text(encoding="utf-8")
