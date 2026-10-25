@@ -18,7 +18,7 @@ from picture_capture.ocr import ordinary_marker_text_enrichment
 
 def test_round23_owners_and_exact_function_boundaries():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    assert len(list(root.glob("*.py"))) == 9
+    assert len(list(root.glob("*.py"))) == 7
     owners = {
         "quality/detection_entry_fusion.py": {"fuse_detection_entries"},
         "geometry/column_path_tracking.py": {"estimate_column_paths"},

@@ -14,7 +14,7 @@ def test_lemma_parser_owner_and_old_public_signature():
     pkg = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     assert (pkg / "ocr" / "lemma_parser.py").is_file()
     assert not (pkg / "lemma_parser.py").exists()
-    assert len(list(pkg.glob("*.py"))) == 9
+    assert len(list(pkg.glob("*.py"))) == 7
     assert core.parse_headword_text.__module__ == "picture_capture.paddle_headwords_core"
     assert list(inspect.signature(core.parse_headword_text).parameters) == [
         "text", "settings", "patterns", "profile",

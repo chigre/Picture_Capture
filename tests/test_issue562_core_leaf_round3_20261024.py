@@ -21,7 +21,7 @@ def test_real_package_owners_and_historical_core_definitions():
     assert (PKG / "ocr/headword_script.py").is_file()
     assert not (PKG / "ink_threshold.py").exists()
     assert not (PKG / "headword_script.py").exists()
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     for module, name, path in (
         (processing_core, "_left_edge_otsu_threshold", "processing_core"),
         (processing_core, "_left_edge_ink_mask", "processing_core"),
