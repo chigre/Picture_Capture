@@ -23,6 +23,7 @@ from ...ocr.action_guard import guard_ocr_action_selection
 from ...ocr.batch_existing_entries import process_existing_pdic_page
 from ...detection.current_page_worker import detect_current_page
 from ..detection_current_page_result import apply_current_page_detection_result
+from ..batch_ocr_flow import run_existing_pdic_batch
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -205,77 +206,32 @@ class DetectionController:
         )
 
     def batch_ocr(self) -> None:
-        app = self.app
-        if not app.project or app._batch_active:
-            return
-        if not app._guard_transformed_geometry("批量 OCR"):
-            return
-        indices = [
-            i
-            for i, page in enumerate(app.project.images)
-            if read_pdic(pdic_path(page))
-        ]
-        if not indices:
-            app.status_var.set("没有含 PDIC 词条的页面可执行批量 OCR")
-            return
-        if not messagebox.askyesno(
-            "批量 OCR",
-            f"将对 {len(indices)} 个已有 PDIC 的页面执行 OCR。\n\n"
-            "处理期间可暂停或停止；当前页会先完整处理并保存。继续？",
-            parent=app,
-        ):
-            return
+        """Delegate the existing-PDIC OCR action to the dedicated UI owner.
 
-        # Preserve the newest visible text before a worker claims this page.
-        if callable(getattr(app, "save_pdic", None)):
-            app._sync_entry_editor_texts()
-            app.save_pdic(silent=True, sync_editors=False)
-        project = app.project
-        settings = replace(app.settings)
-        rules = load_replace_rules(replace_rules_path(project.root))
-        pages_info = {i: app.pages_tuple(i) for i in indices}
-
-        def worker(index: int, _position: int, _total: int):
-            return process_existing_pdic_page(
-                project.images[index], index, project.root,
-                settings, rules, pages_info[index],
-                deps={
-                    "read_pdic": read_pdic,
-                    "pdic_path": pdic_path,
-                    "Image": Image,
-                    "normalize_page_rgb": normalize_page_rgb,
-                    "effective_page_settings": effective_page_settings,
-                    "page_template_analysis_image": page_template_analysis_image,
-                    "read_page_sections": read_page_sections,
-                    "sort_entries_reading_order": sort_entries_reading_order,
-                    "derive_geometry": derive_geometry,
-                    "ocr_entries": ocr_entries,
-                    "qt_root": qt_root,
-                    "export_ocred": export_ocred,
-                    "write_pdic": write_pdic,
-                },
-            )
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None:
-                return
-            count = sum(int(value or 0) for value in results)
-            if not getattr(app, "_batch_foreground_pages", False):
-                app.load_page(app.current_index, skip_current_save=True)
-            if stopped:
-                app.status_var.set(
-                    f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条"
-                )
-            else:
-                app.status_var.set(f"批量 OCR 完成：{count} 个词条")
-
-        app._start_batch_task(
-            "批量 OCR",
-            indices,
-            worker,
-            done,
-            item_label=lambda i: project.images[i].name,
-            foreground_page_edit=True, allow_pdic_edits=True,
+        Resolve original controller globals for every dispatch and worker
+        execution, retaining tests and runtime module monkeypatch behavior.
+        """
+        return run_existing_pdic_batch(
+            self.app,
+            dependencies=lambda: {
+                "read_pdic": read_pdic,
+                "pdic_path": pdic_path,
+                "messagebox": messagebox,
+                "load_replace_rules": load_replace_rules,
+                "replace_rules_path": replace_rules_path,
+                "process_existing_pdic_page": process_existing_pdic_page,
+                "Image": Image,
+                "normalize_page_rgb": normalize_page_rgb,
+                "effective_page_settings": effective_page_settings,
+                "page_template_analysis_image": page_template_analysis_image,
+                "read_page_sections": read_page_sections,
+                "sort_entries_reading_order": sort_entries_reading_order,
+                "derive_geometry": derive_geometry,
+                "ocr_entries": ocr_entries,
+                "qt_root": qt_root,
+                "export_ocred": export_ocred,
+                "write_pdic": write_pdic,
+            },
         )
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
