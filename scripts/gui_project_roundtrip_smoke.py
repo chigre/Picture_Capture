@@ -175,6 +175,13 @@ def main() -> int:
                 previous_lens_label = app.lens_mode_var.get()
                 marker_hash = _source_hash(pdic_path(first))
                 polygon_hash = _source_hash(ppp_read_path_for_image(first))
+                original_entry_snapshot = [(e.word, e.x, e.y) for e in app.entries]
+                original_polygon_snapshot = [
+                    (p.label, tuple(p.points)) for p in app.polygons
+                ]
+                original_page_index = app.current_index
+                original_page_path = app.current_page
+                original_project_root = app.project.root
                 try:
                     for name, enabled in (
                         ("paddle_use_paddleocr", False),
@@ -211,6 +218,19 @@ def main() -> int:
                         app.settings.detection_method
                         == previous_settings["detection_method"],
                         "rejected OCR action mutated selected drawing mode",
+                    )
+                    _assert(
+                        app.current_index == original_page_index
+                        and app.current_page == original_page_path
+                        and app.project.root == original_project_root,
+                        "rejected OCR action changed the active project/page",
+                    )
+                    _assert(
+                        [(e.word, e.x, e.y) for e in app.entries]
+                        == original_entry_snapshot
+                        and [(p.label, tuple(p.points)) for p in app.polygons]
+                        == original_polygon_snapshot,
+                        "rejected OCR action changed unsaved PDIC/PPP in memory",
                     )
                     _assert(
                         _source_hash(pdic_path(first)) == marker_hash
