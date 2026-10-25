@@ -48,6 +48,13 @@ def process_existing_pdic_page(
         profile_page_index=index,
         page_sections=sections,
     )
+    # A one-to-one OCR text result is required to preserve every original
+    # PDIC marker. zip() alone silently leaves trailing entries unchanged or
+    # drops surplus results, producing mismatched PDIC/OCRed output.
+    if len(texts) != len(entries):
+        raise ValueError(
+            f"批量 OCR 返回词条数不一致：PDIC {len(entries)} 条，OCR {len(texts)} 条"
+        )
     for entry, text in zip(entries, texts):
         entry.word = text
     deps["export_ocred"](
