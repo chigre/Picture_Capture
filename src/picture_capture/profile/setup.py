@@ -131,15 +131,15 @@ def _visual_marker_capture_defaults(
 
 
 def _label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
-    for label, mapped in mapping.items():
-        if mapped == value:
-            return label
-    return fallback
+    """Historical wizard API; lookup policy lives in the Profile catalog."""
+    return _wizard_catalog.label_for_value(mapping, value, fallback)
 
 
 def _ocr_language_code(value: str) -> str:
-    text = str(value or "").strip()
-    return OCR_LANGUAGE_LABEL_TO_VALUE.get(text, text or "eng")
+    """Historical wizard API; honor live monkeypatched language labels."""
+    return _wizard_catalog.ocr_language_code(
+        value, label_to_value=OCR_LANGUAGE_LABEL_TO_VALUE,
+    )
 
 
 def _screen_work_area(widget: tk.Misc) -> tuple[int, int, int, int]:

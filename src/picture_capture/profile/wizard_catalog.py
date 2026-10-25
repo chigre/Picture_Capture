@@ -171,3 +171,18 @@ def _visual_marker_capture_defaults(
     return ("bracket_open", "") if bracket_enabled else ("entry_marker", "")
 
 
+
+
+def label_for_value(mapping: dict[str, str], value: str, fallback: str) -> str:
+    """Resolve the first label matching a stored Profile value."""
+    for label, mapped in mapping.items():
+        if mapped == value:
+            return label
+    return fallback
+
+
+def ocr_language_code(value: str, *, label_to_value: dict[str, str] | None = None) -> str:
+    """Resolve a wizard OCR-language label while preserving raw engine codes."""
+    text = str(value or "").strip()
+    labels = OCR_LANGUAGE_LABEL_TO_VALUE if label_to_value is None else label_to_value
+    return labels.get(text, text or "eng")

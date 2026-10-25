@@ -34,7 +34,8 @@ def test_settings_project_extraction_keeps_dialog_wrapper_and_shared_language_co
     assert "language_codes=PROJECT_LANGUAGE_CODES" in settings
     assert "language_from_ocr=project_language_from_ocr" in settings
 
-    assert "PROJECT_LANGUAGE_CODES = (" in app
+    assert "PROJECT_LANGUAGE_CODES = _project_language_policy.PROJECT_LANGUAGE_CODES" in app
+    assert "PROJECT_LANGUAGE_CODES = (" in (ROOT / "src" / "picture_capture" / "profile" / "language_policy.py").read_text(encoding="utf-8")
     assert "def project_language_from_ocr(" in app
     assert 'text="词典项目详情"' in helper
     assert 'text="索引语言："' in helper

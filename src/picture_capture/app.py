@@ -200,6 +200,7 @@ from .profile.dictionary import (
     profile_layout_summary, write_project_profile,
 )
 from .profile.wizard import ProjectProfileWizard, _screen_work_area
+from .profile import language_policy as _project_language_policy
 from .profile.semantics import (
     effective_page_settings, entry_allowed_by_page_template, page_template_analysis_image,
 )
@@ -311,28 +312,16 @@ OCR_ENGINE_VALUES = {label: value for value, label in OCR_ENGINE_LABELS.items()}
 APPEARANCE_MODE_LABELS = {"light": "浅色", "dark": "深色", "system": "跟随系统"}
 APPEARANCE_MODE_VALUES = {label: value for value, label in APPEARANCE_MODE_LABELS.items()}
 
-# ISO 639-1; common languages first, then alphabetical.
-PROJECT_LANGUAGE_CODES = (
-    "en", "zh", "es", "fr", "de", "it", "pt", "ja", "ko", "ru",
-    "ar", "nl", "pl", "tr", "vi",
-    "af", "am", "az", "be", "bg", "bn", "bs", "ca", "cs", "cy",
-    "da", "el", "eo", "et", "eu", "fa", "fi", "ga", "gl", "gu",
-    "he", "hi", "hr", "hu", "hy", "id", "is", "ka", "kk", "km",
-    "kn", "la", "lt", "lv", "mk", "ml", "mn", "mr", "ms", "mt",
-    "ne", "no", "pa", "ro", "sk", "sl", "sq", "sr", "sv", "sw",
-    "ta", "te", "th", "tl", "uk", "ur", "uz",
-)
+# Stable public aliases; canonical language vocabulary and policy live in Profile.
+PROJECT_LANGUAGE_CODES = _project_language_policy.PROJECT_LANGUAGE_CODES
+OCR_TO_PROJECT_LANGUAGE = _project_language_policy.OCR_TO_PROJECT_LANGUAGE
 
-OCR_TO_PROJECT_LANGUAGE = {
-    "eng": "en", "spa": "es", "fra": "fr", "fre": "fr", "deu": "de", "ger": "de",
-    "ita": "it", "por": "pt", "chi_sim": "zh", "chi_tra": "zh", "ch": "zh",
-    "jpn": "ja", "japan": "ja", "kor": "ko", "korean": "ko", "rus": "ru",
-}
 
 def project_language_from_ocr(ocr_language: str) -> str:
-    """Map the first configured OCR language to an ISO 639-1 code."""
-    first = next((part.strip().lower() for part in str(ocr_language or "").split("+") if part.strip()), "")
-    return OCR_TO_PROJECT_LANGUAGE.get(first, first if len(first) == 2 and first.isalpha() else "")
+    """Historical app API with call-time OCR mapping for monkeypatch users."""
+    return _project_language_policy.project_language_from_ocr(
+        ocr_language, mapping=OCR_TO_PROJECT_LANGUAGE,
+    )
 
 def transformed_geometry_pending(settings: AppSettings) -> bool:
     """Return whether a configured transform is unknown to the geometry adapter."""
