@@ -418,7 +418,12 @@ def test_combined_drawing_automatically_runs_marker_text_ocr_for_blank_rescues()
         Path(inspect.getsourcefile(app_module)).parent
         / "detection" / "current_page_worker.py"
     ).read_text(encoding="utf-8")
-    assert "return detect_current_page(" in current
+    flow = (
+        Path(inspect.getsourcefile(app_module)).parent
+        / "ui" / "detection_current_page_flow.py"
+    ).read_text(encoding="utf-8")
+    assert "return run_current_page_detection(" in current
+    assert 'current["detect_current_page"](' in flow
     assert 'if settings.detection_method == "combined":' in worker
     assert 'deps["ocr_existing_entry_words_from_markers"](' in worker
     assert "only_blank=True" in worker
