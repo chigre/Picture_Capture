@@ -1683,3 +1683,31 @@ section copy, OCR cache/rules selection and no cache for ordinary drawing.
 Latest CI must be independently verified before reporting PASS. Real scanned
 dictionary pages are still required for visual signoff; that manual gate is
 NOT PASSED, and PR #663 remains Draft/unmerged.
+
+
+## Issue #562 — Round 76: current-page detection orchestration owner (2026-10-26)
+
+The full current-page detection task orchestration now belongs physically to
+`ui/detection_current_page_flow.py`. The stable
+`DetectionController.auto_detect_current` method is an adapter that supplies
+its live module dependency resolver. The new owner obtains
+`ui/detection_current_page_setup.py`'s validated snapshot, builds the
+one-page job and completion callbacks, keeps mode-specific task labels and
+OCR quality-refresh selection, and schedules the original `_start_batch_task`
+entrypoint. It executes the canonical
+`detection/current_page_worker.py` during processing and publishes through
+`ui/detection_current_page_result.py` only after the latter rechecks
+project/page identity and cancellation/error state. All controller module
+patchpoints (detect_entries, OCR fill, geometry/column selection, masks and
+image decode) are **resolved again at worker/callback invocation time**.
+This preserves historical monkeypatch-based integration behavior without
+adding Tk imports, root files or compatibility facades.
+
+Round 71, 72 and 75 source-contract tests now follow their physical
+implementation owners rather than asserting that orchestration remains in the
+controller. New direct flow tests verify mode-specific labels, selected page
+and source snapshot propagation, OCR cache and SECTION arguments, deferred
+dependency lookup, and refusal without worker dispatch. Existing native Tk
+roundtrip, current-page controller, original-X/Y and cross-platform suites
+remain required. The real dictionary scanned-image manual gate is still
+OPEN / NOT PASSED; PR #663 stays Draft/unmerged.
