@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+"""Compensating publication for OCRed and PDIC in an existing-marker OCR job.
+
+OCRed is an auxiliary text sidecar; PDIC is the marker source of truth.
+Both individual writers are atomic, but the filesystem does not commit the
+two files together. If the PDIC writer raises, undo the already published
+OCRed sidecar to its exact previous bytes (or remove a newly created one).
+Power loss, process termination, concurrent external writers and a failed
+compensation remain outside this best-effort guarantee.
+"""
+
+import os
+from pathlib import Path
+import tempfile
+from typing import Any, Callable
+
+
+def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
+    if previous is None:
+        path.unlink(missing_ok=True)
+        return
+
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
+            temp_path = Path(file.name)
+            file.write(previous)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def publish_existing_pdic_ocr(
+    ocred_path: Path,
+    pdic_path: Path,
+    texts: list[str],
+    entries: list[Any],
+    image_width: int,
+    pages_info: tuple[str, str, str],
+    *,
+    export_ocred: Callable[..., Any],
+    write_pdic: Callable[..., Any],
+) -> None:
+    """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
+    try:
+        previous = ocred_path.read_bytes()
+    except FileNotFoundError:
+        previous = None
+
+    # The OCRed exporter itself is atomic; an exporter exception propagates
+    # without attempting to save PDIC or rolling back an uncommitted sidecar.
+    export_ocred(ocred_path, texts)
+    try:
+        write_pdic(pdic_path, entries, image_width, pages_info)
+    except Exception as pdic_error:
+        try:
+            _restore_ocred_bytes(ocred_path, previous)
+        except Exception as rollback_error:
+            raise RuntimeError(
+                "PDIC 保存失败，OCRed 回滚也失败："
+                f"PDIC={pdic_error!r}；OCRed={rollback_error!r}"
+            ) from rollback_error
+        raise
