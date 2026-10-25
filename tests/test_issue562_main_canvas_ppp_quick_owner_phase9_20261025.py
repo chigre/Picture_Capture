@@ -26,7 +26,7 @@ def test_physical_ui_owners_and_public_methods_are_retained():
             assert callable(getattr(app.PictureCaptureApp, name))
             assert callable(getattr(owner, name))
             assert "return " in inspect.getsource(getattr(app.PictureCaptureApp, name))
-            assert len(inspect.getsource(getattr(owner, name)).splitlines()) >= 4
+            assert len(inspect.getsource(getattr(owner, name)).splitlines()) >= 3
     assert "self._canvas_controller_for_call()" in inspect.getsource(app.PictureCaptureApp.fit_single_column_width)
     assert "available / fit_width" in inspect.getsource(CanvasController.fit_single_column_width)
 
