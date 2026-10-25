@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 
 from ..preprocess.analysis_image import normalize_page_rgb
+from . import homography_ops as _homography_ops
 
 
 def _normalize_half_turn(angle: float) -> float:
@@ -85,19 +86,10 @@ def estimate_skew_from_polygons(
 
 
 def _paper_fill(image: Image.Image) -> tuple[int, int, int]:
-    source = normalize_page_rgb(image)
-    w, h = source.size
-    pw = max(1, round(w * 0.04))
-    ph = max(1, round(h * 0.04))
-    samples = [
-        np.asarray(source.crop((0, 0, pw, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), 0, w, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((0, max(0, h - ph), pw, h)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), max(0, h - ph), w, h)), dtype=np.uint8).reshape(-1, 3),
-    ]
-    pixels = np.concatenate(samples, axis=0)
-    median = np.median(pixels, axis=0)
-    return tuple(int(round(value)) for value in median[:3])
+    """Historical paper-corner sample; physically shared with homography warps."""
+    return _homography_ops.corner_paper_fill(
+        image, normalize_page_rgb=normalize_page_rgb,
+    )
 
 
 
