@@ -10,6 +10,8 @@ a newly created one). If PDIC changed despite throwing, never revert only
 OCRed: report the ambiguous commit for explicit recovery.
 Power loss, process termination, concurrent external writers and a failed
 compensation remain outside this best-effort guarantee.
+If the OCRed exporter raises after its own atomic replacement, the same
+byte-exact OCRed compensation runs before PDIC publication is attempted.
 """
 
 import os
@@ -65,9 +67,32 @@ def publish_existing_pdic_ocr(
     except FileNotFoundError:
         previous_pdic = None
 
-    # The OCRed exporter itself is atomic; an exporter exception propagates
-    # without attempting to save PDIC or rolling back an uncommitted sidecar.
-    export_ocred(ocred_path, texts)
+    # An exporter can atomically replace OCRed and then raise from a later
+    # hook. PDIC has not been called yet; restore this sidecar before letting
+    # the failure escape, but only if its on-disk bytes actually changed.
+    try:
+        export_ocred(ocred_path, texts)
+    except Exception as export_error:
+        try:
+            current_ocred = ocred_path.read_bytes()
+        except FileNotFoundError:
+            current_ocred = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "OCRed 导出报错，且无法核验 OCRed 是否已写入；"
+                "未启动 PDIC 保存，请核查 OCRed："
+                f"导出={export_error!r}；核查={inspect_error!r}"
+            ) from export_error
+        if current_ocred != previous:
+            try:
+                _restore_ocred_bytes(ocred_path, previous)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "OCRed 导出失败，且原文件回滚也失败；"
+                    "未启动 PDIC 保存："
+                    f"导出={export_error!r}；回滚={rollback_error!r}"
+                ) from rollback_error
+        raise
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
