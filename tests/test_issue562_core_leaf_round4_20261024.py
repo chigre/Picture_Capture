@@ -34,7 +34,7 @@ def test_physical_leaf_owners_and_historical_callable_origins():
     assert (PKG / "ocr/lemma_repairs.py").is_file()
     assert not (PKG / "entry_column_bounds.py").exists()
     assert not (PKG / "lemma_repairs.py").exists()
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     assert core._entry_crop_box_for_column.__module__ == "picture_capture.processing_core"
     assert paddle_core._repair_headword_ocr.__module__ == "picture_capture.paddle_headwords_core"
     assert list(inspect.signature(core._entry_crop_box_for_column).parameters) == [

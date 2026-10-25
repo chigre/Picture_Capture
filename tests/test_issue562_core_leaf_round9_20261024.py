@@ -21,7 +21,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_leaf_inventory_and_historical_core_callables():
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     assert (PKG / "preprocess/core_analysis_pixels.py").is_file()
     assert (PKG / "ocr/band_coordinates.py").is_file()
     assert not (PKG / "core_analysis_pixels.py").exists()

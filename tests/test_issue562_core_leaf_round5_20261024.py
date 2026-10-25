@@ -32,7 +32,7 @@ def test_leaf_modules_present_and_core_signatures_and_model_origins_unchanged():
     assert (PKG / "ocr/line_grouping.py").is_file()
     assert not (PKG / "reading_order.py").exists()
     assert not (PKG / "line_grouping.py").exists()
-    assert len(list(PKG.glob("*.py"))) == 9
+    assert len(list(PKG.glob("*.py"))) == 7
     for fn in (pc.column_index_for_click, pc.entry_reading_order_key,
                pc.sort_entries_reading_order, pc.sort_entries_column_y):
         assert fn.__module__ == "picture_capture.processing_core"
