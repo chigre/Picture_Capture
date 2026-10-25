@@ -1843,3 +1843,34 @@ R3 transaction marker and byte-exact OCRed compensation coverage.
 Cross-platform CI and OCR platform smoke must both pass independently,
 and the real scanned dictionary-image manual gate remains NOT PASSED.
 PR #663 remains Draft and unmerged.
+
+
+## Issue #562 — Round 82: post-commit OCRed exporter fault compensation (2026-10-26)
+
+The paired existing-PDIC OCR publisher at
+`ocr/batch_publication.py` now also handles a failure in the **first**
+publication stage: a custom `export_ocred` callable might successfully
+atomically replace the .OCRed sidecar, then throw from a downstream hook.
+Previously this error correctly prevented `write_pdic` but could leave a
+new OCRed beside the still-old PDIC. After an exporter exception, the
+publisher now reads the current OCRed bytes and, if they differ from the
+pre-export snapshot, atomically restores the exact old bytes or removes
+a newly created sidecar. An exporter failure with unchanged OCRed re-raises
+its original error without unnecessary file replacement.
+
+If the post-error OCRed bytes cannot be read, the code reports ambiguous
+publication without attempting PDIC or blind rollback. If compensation
+fails, it reports both exporter and restore errors. Existing guards against
+ambiguous **PDIC** post-commit failures (Round 81) remain intact: never
+restore only OCRed when PDIC has changed. This is a catchable-exception
+best-effort guarantee, **not** atomic publication across two files;
+power loss and external concurrency are still outside this contract.
+
+Direct fault-injection tests cover OCRed originally absent, exact old bytes
+including BOM/CRLF, export failure before replacement, export failure after
+replacement, restore failure, unreadable sidecar and the real page worker's
+PDIC-not-written response to export failure. Original image X/Y positions,
+PDIC/PPP/SECTION serialization, text line format, OCR engine calls and
+legacy monkeypatch seams remain unchanged. Six-platform CI and platform
+smoke remain necessary, and real scanned-dictionary human signoff is
+OPEN / NOT PASSED; PR #663 stays Draft and unmerged.
