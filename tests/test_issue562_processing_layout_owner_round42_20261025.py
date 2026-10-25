@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_round42_physical_owners_and_stable_facade_signatures():
-    root = ast.parse((ROOT / "processing.py").read_text(encoding="utf-8"))
+    root = ast.parse((ROOT / "processing/__init__.py").read_text(encoding="utf-8"))
     layout = ast.parse((ROOT / "layout/current_page.py").read_text(encoding="utf-8"))
     ordinary = ast.parse((ROOT / "ordinary/layout_roles.py").read_text(encoding="utf-8"))
     funcs = {n.name: n for n in root.body if isinstance(n, ast.FunctionDef)}

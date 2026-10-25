@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_legacy_vb_recovery_physical_owner_and_public_signature():
-    root = ast.parse((ROOT / "processing.py").read_text(encoding="utf-8"))
+    root = ast.parse((ROOT / "processing/__init__.py").read_text(encoding="utf-8"))
     owner = ast.parse((ROOT / "ordinary/visual_fallback.py").read_text(encoding="utf-8"))
     funcs = {n.name: n for n in root.body if isinstance(n, ast.FunctionDef)}
     implementations = {n.name: n for n in owner.body if isinstance(n, ast.FunctionDef)}

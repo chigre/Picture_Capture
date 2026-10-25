@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_round44_real_owner_and_stable_legacy_api():
-    facade = ast.parse((ROOT / "processing.py").read_text(encoding="utf-8"))
+    facade = ast.parse((ROOT / "processing/__init__.py").read_text(encoding="utf-8"))
     functions = {n.name: n for n in facade.body if isinstance(n, ast.FunctionDef)}
     for name in ("_geometry_from_page_understanding", "_ordinary_settings_for_shared_geometry",
                  "_allowed_entries", "_review_candidates_from_cache",

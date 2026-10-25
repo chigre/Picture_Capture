@@ -82,7 +82,7 @@ def test_layout_materialization_uses_shared_y_adapter() -> None:
     # Entry classification is now attached inside the canonical materializer,
     # so its separator-Y contract no longer depends on installer order.
     source = Path(processing.__file__).read_text(encoding="utf-8")
-    owner = Path(processing.__file__).with_name("ordinary") / "layout_roles.py"
+    owner = Path(processing.__file__).resolve().parents[1] / "ordinary/layout_roles.py"
     physical = owner.read_text(encoding="utf-8")
     assert "refine_entry_y=refined_layout_entry_y_by_line" in source
     assert "refine_entry_y(" in physical

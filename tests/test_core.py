@@ -3728,7 +3728,7 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
     training_text = (package / "training/export_runtime.py").read_text(encoding="utf-8")
     training_owner_text = (package / "training/export_page_v2.py").read_text(encoding="utf-8")
     layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
-    paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_text = (package / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
 
     assert "self.image = normalize_page_rgb(opened)" in project_session
     assert "image = normalize_page_rgb(opened)" in (app_text + project_session)
@@ -4951,7 +4951,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     block=project_session.split("def _load_project(",1)[1].split("def on_page_select",1)[0]
     for rule in ("self.after_cancel(pending_quick_job)","self._quick_trace_ready = False","self._display_geometry_cache = None"):
         assert rule in block
-    processing=(root / "processing.py").read_text(encoding="utf-8")
+    processing=(root / "processing/__init__.py").read_text(encoding="utf-8")
     assert "refine_separator_y" in processing
 
 def test_crop_preview_uses_export_filename_and_centered_entry_typography():
@@ -5662,7 +5662,7 @@ def test_google_lens_language_follows_headword_ocr_language():
     assert settings["ocr_language"] == "jpn"
     assert settings["paddle_lens_language"] == "jpn"
 
-    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
     assert 'getattr(settings, "ocr_language", "")' in source
     assert "band, language=lens_language" in source
     assert '"google_lens_language": lens_language' in source
@@ -7607,7 +7607,7 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     }
 
     runtime_source = Path("src/picture_capture/runtime/windows_gpu.py").read_text(encoding="utf-8")
-    paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_source = Path("src/picture_capture/paddle_headwords/__init__.py").read_text(encoding="utf-8")
     layout_source = Path("src/picture_capture/layout/detection.py").read_text(encoding="utf-8")
     verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")
     assert "add_dll_directory" in runtime_source

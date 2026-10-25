@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
 
 
 def test_round45_physical_owners_and_legacy_signatures():
-    facade = ast.parse((ROOT / "processing.py").read_text(encoding="utf-8"))
+    facade = ast.parse((ROOT / "processing/__init__.py").read_text(encoding="utf-8"))
     old = next(n for n in facade.body if isinstance(n, ast.FunctionDef)
                and n.name == "_shared_detector_observations")
     assert len(old.body) <= 2
