@@ -59,6 +59,11 @@ def _sample_project(root: Path) -> tuple[Path, Path]:
         image.close()
     ensure_project_storage(root, __version__)
     initial = AppSettings()
+    # The synthetic page is only 640 px wide; the global 700-px default
+    # would display as >100% in the real Tk percent-width control.
+    # Keep the fixture's persisted geometry valid, without changing product
+    # validation or silently weakening the user-action test.
+    initial.column_width = 500
     initial.to_json(settings_path(root))
     _assert(
         write_pdic(
