@@ -16,17 +16,17 @@ This historical module path remains the public/runtime import surface so older
 plugins, tests and user tooling keep working unchanged.
 """
 
-from . import paddle_headwords_core as _core
-from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
+from .. import paddle_headwords_core as _core
+from ..compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
 
 # This historical public path owns the broad core namespace contract. Copy core
 # symbols first, then let evidence-fusion overrides replace selected decisions.
 publish_core_namespace(globals(), _core)
 
-from .ocr import evidence_fusion as _fusion
-from .ocr.evidence_fusion import *  # noqa: F401,F403
-from .ocr.boundary_detection import detect_ocr_headword_boundaries
-from .refinement.separator_y import refine_separator_y as _shared_refine_separator_y
+from ..ocr import evidence_fusion as _fusion
+from ..ocr.evidence_fusion import *  # noqa: F401,F403
+from ..ocr.boundary_detection import detect_ocr_headword_boundaries
+from ..refinement.separator_y import refine_separator_y as _shared_refine_separator_y
 
 # Keep the shared core visible for diagnostic/tests that intentionally inspect it.
 

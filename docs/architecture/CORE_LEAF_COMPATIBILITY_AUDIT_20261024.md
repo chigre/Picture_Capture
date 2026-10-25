@@ -815,3 +815,10 @@ Phase 5 CI source-contract correction: the first exact-head macOS Python 3.13 py
 - Both historical imports now exist as lightweight `processing_core/__init__.py` and `paddle_headwords_core/__init__.py` package aliases, bound to the same canonical module object, maintaining pickle, Windows spawn, live monkeypatch behavior and metadata-only import of bare `picture_capture`. No duplication of algorithms or state.
 - Root Python file cap and classification tightened from **9 to 7**; guard rejects either removed file returning, requires identity bridges and preserves leaf algorithm checks. Focused unit tests check old import paths and pickle/monkeypatch functionality.
 - **Still NOT DONE:** real scanned dictionary-page manual Profile/Tk, ordinary/OCR/combined detection, PDIC/PPP save-reopen, crop/export parity. Draft PR #663 remains open, unmerged, never marked Ready.
+
+### Phase 20 — Retire two public facade root files (2026-10-25)
+
+- Removed root `processing.py` and `paddle_headwords.py` and physically relocated their current compatibility+coordination implementations to same-name package modules `processing/__init__.py` and `paddle_headwords/__init__.py`. The historical module names remain identical. Only relative import levels changed.
+- Original namespace publication and shared assignment mirror, public OCR refinement and normal/combined detection entrypoints, and dynamic live core monkeypatch targets are preserved; domain algorithms remain physically owned by existing `ordinary/`, `ocr/`, `detection/`, `runtime/`, etc. No duplicated implementations or class ABI changes.
+- Architecture guard and root inventory ratchet now enforce a five-file root, two exact facade consumers in package locations and no return of either old root file. Focused package import, monkeypatch, pickle, and spawn tests added and historical source-location checks reanchored.
+- Real scanned dictionary page manual acceptance **NOT DONE**: Tk/Profile UI, normal/OCR/combined, PDIC/PPP reopen and crop/export parity. PR #663 stays Draft/Open/unmerged.

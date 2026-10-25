@@ -11,7 +11,7 @@ in `persistence/` (18 → 16 files), after six-platform CI and CodeQL passed. Th
 owner migration reduced 15 → 14 without root shims. Acceptance depends on exact-head CI/reviews; this inventory is not a
 claim that Issue #562 or the oversized-module refactor is complete.
 
-## Remaining root contracts (7/7 classified)
+## Remaining root contracts (5/5 classified)
 
 Each row names an existing physical root file. Retention means keep its current
 import contract while extracting implementation separately when justified.
@@ -23,8 +23,6 @@ import contract while extracting implementation separately when justified.
 | `app.py` | bootstrap / ui | Retained Tk app entrypoint and all callback signatures. Complete 24-method preprocessing mode, perspective edit, analysis, diagnostic, preview and batch export workflow now physically resides in `ui/preprocess_workflow.py`; 12-method foreground batch scheduling and task progress now reside in `ui/batch_workflow.py`, and nine-method recent-project launcher, project restore and page reload now reside in `ui/project_session_workflow.py`; other sizeable GUI responsibilities remain for staged extraction. |
 | `models.py` | shared models | Entry/AppSettings/ProjectState identity, settings schema and historical model imports. |
 | `ocr_channel.py` | ocr | OCR selection/session/cache facade; `OcrTextChoice` serialized identity remains this module. |
-| `paddle_headwords.py` | ocr | Historical public/private OCR symbols and assignment-mirroring compatibility boundary. |
-| `processing.py` | processing / ordinary | Public detection facade and assignment mirroring; ordinary/GPU worker coordination contract. |
 
 ## Canonical moved owners and consumers
 
@@ -275,3 +273,10 @@ Fifteen actual main-window methods were physically moved from root `app.py` to e
 - Both historical imports now exist as lightweight `processing_core/__init__.py` and `paddle_headwords_core/__init__.py` package aliases, bound to the same canonical module object, maintaining pickle, Windows spawn, live monkeypatch behavior and metadata-only import of bare `picture_capture`. No duplication of algorithms or state.
 - Root Python file cap and classification tightened from **9 to 7**; guard rejects either removed file returning, requires identity bridges and preserves leaf algorithm checks. Focused unit tests check old import paths and pickle/monkeypatch functionality.
 - **Still NOT DONE:** real scanned dictionary-page manual Profile/Tk, ordinary/OCR/combined detection, PDIC/PPP save-reopen, crop/export parity. Draft PR #663 remains open, unmerged, never marked Ready.
+
+### Phase 20 — Retire two public facade root files (2026-10-25)
+
+- Removed root `processing.py` and `paddle_headwords.py` and physically relocated their current compatibility+coordination implementations to same-name package modules `processing/__init__.py` and `paddle_headwords/__init__.py`. The historical module names remain identical. Only relative import levels changed.
+- Original namespace publication and shared assignment mirror, public OCR refinement and normal/combined detection entrypoints, and dynamic live core monkeypatch targets are preserved; domain algorithms remain physically owned by existing `ordinary/`, `ocr/`, `detection/`, `runtime/`, etc. No duplicated implementations or class ABI changes.
+- Architecture guard and root inventory ratchet now enforce a five-file root, two exact facade consumers in package locations and no return of either old root file. Focused package import, monkeypatch, pickle, and spawn tests added and historical source-location checks reanchored.
+- Real scanned dictionary page manual acceptance **NOT DONE**: Tk/Profile UI, normal/OCR/combined, PDIC/PPP reopen and crop/export parity. PR #663 stays Draft/Open/unmerged.

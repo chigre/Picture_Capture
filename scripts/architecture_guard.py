@@ -43,7 +43,7 @@ MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
 # Phase 9A centralizes the retained public compatibility mechanism instead of
 # duplicating dynamic namespace/proxy implementations in each facade. Phase 9C
 # ratchets that boundary so no third production module can adopt the mechanism.
-FACADE_COMPAT_USERS = ("processing.py", "paddle_headwords.py")
+FACADE_COMPAT_USERS = ("processing/__init__.py", "paddle_headwords/__init__.py")
 FACADE_NAMESPACE_CALL = "publish_core_namespace(globals(), _core)"
 FACADE_MIRROR_CALL = "install_core_assignment_mirror(__name__, _core)"
 
@@ -426,6 +426,14 @@ def collect_violations() -> list[str]:
             if signature not in mirror_source:
                 violations.append(f"canonical facade compatibility implementation missing: {signature}")
 
+    # Historical public facade paths remain stable but their physical modules
+    # are packages rather than root Python files.
+    for name in ("processing", "paddle_headwords"):
+        if (PACKAGE_ROOT / (name + ".py")).exists():
+            violations.append(f"retired root facade returned: {name}.py")
+        if not (PACKAGE_ROOT / name / "__init__.py").is_file():
+            violations.append(f"historical public facade package missing: {name}")
+
     facade_compat_users_now: set[str] = set()
     for path in _python_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
@@ -456,14 +464,14 @@ def collect_violations() -> list[str]:
                 f"evidence_fusion import-time core mutation returned: {marker}"
             )
 
-    processing_source = (PACKAGE_ROOT / "processing.py").read_text(encoding="utf-8")
+    processing_source = (PACKAGE_ROOT / "processing/__init__.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_PROCESSING_CORE_ASSIGNMENTS:
         if marker in processing_source:
             violations.append(
                 f"processing import-time core mutation returned: {marker}"
             )
 
-    paddle_source = (PACKAGE_ROOT / "paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_source = (PACKAGE_ROOT / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_PADDLE_CORE_ASSIGNMENTS:
         if marker in paddle_source:
             violations.append(
@@ -716,8 +724,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 7:
-        violations.append(f"root Python module count regressed: {root_py_count} > 7")
+    if root_py_count > 5:
+        violations.append(f"root Python module count regressed: {root_py_count} > 5")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(

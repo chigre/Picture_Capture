@@ -19,29 +19,29 @@ from typing import Any
 
 from PIL import Image
 
-from .compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
-from .preprocess.analysis_image import build_analysis_image
-from .models import AppSettings, Entry
-from .persistence.page_sections import PageSection
-from . import processing_core as _core
-from .ordinary.cjk_large_heads import recover_cjk_oversized_heads
-from .ordinary.indent_topology import finalize_indented_topology
-from .ordinary.postprocess import stabilize_ordinary_visual_entries
-from .ordinary.visual import recover_ordinary_visual_entries
-from .layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
-from .layout import current_page as _current_page_understanding
-from .layout import shared_geometry as _shared_geometry
-from .ordinary import layout_roles as _ordinary_layout_roles
-from .ordinary import observation_policy as _ordinary_observation_policy
-from .ordinary import visual_fallback as _ordinary_visual_fallback
-from .detection import shared_observations as _shared_observations
-from .detection import page_pipeline as _page_pipeline
-from .detection import ordinary_page_job as _ordinary_page_job
-from .ordinary.debug_stage import _record_ordinary_debug_stage
-from .layout.page_understanding_fusion import apply_page_understanding
-from .profile.indent_ui import indent_type_label
-from .refinement.separator_y import refined_layout_entry_y_by_line
-from .training.baseline import save_automatic_baseline
+from ..compat.facade_mirror import install_core_assignment_mirror, publish_core_namespace
+from ..preprocess.analysis_image import build_analysis_image
+from ..models import AppSettings, Entry
+from ..persistence.page_sections import PageSection
+from .. import processing_core as _core
+from ..ordinary.cjk_large_heads import recover_cjk_oversized_heads
+from ..ordinary.indent_topology import finalize_indented_topology
+from ..ordinary.postprocess import stabilize_ordinary_visual_entries
+from ..ordinary.visual import recover_ordinary_visual_entries
+from ..layout.page_understanding import PageUnderstanding, uses_cjk_role_model, uses_cjk_script
+from ..layout import current_page as _current_page_understanding
+from ..layout import shared_geometry as _shared_geometry
+from ..ordinary import layout_roles as _ordinary_layout_roles
+from ..ordinary import observation_policy as _ordinary_observation_policy
+from ..ordinary import visual_fallback as _ordinary_visual_fallback
+from ..detection import shared_observations as _shared_observations
+from ..detection import page_pipeline as _page_pipeline
+from ..detection import ordinary_page_job as _ordinary_page_job
+from ..ordinary.debug_stage import _record_ordinary_debug_stage
+from ..layout.page_understanding_fusion import apply_page_understanding
+from ..profile.indent_ui import indent_type_label
+from ..refinement.separator_y import refined_layout_entry_y_by_line
+from ..training.baseline import save_automatic_baseline
 
 
 publish_core_namespace(globals(), _core)
@@ -62,8 +62,8 @@ def _ensure_layout_runtime() -> None:
     Page Design detector now forwards to the refined implementation statically;
     only the two lower-level idempotent installers remain here.
     """
-    from .layout.line_start_refinement import install_robust_line_starts
-    from .layout.physical_indent import install_physical_indent_inference
+    from ..layout.line_start_refinement import install_robust_line_starts
+    from ..layout.physical_indent import install_physical_indent_inference
 
     install_robust_line_starts()
     install_physical_indent_inference()
@@ -141,7 +141,7 @@ def _detect_entries_left_edge(
         white_threshold_low
         whitespace_adjustment
         upward_ratio
-        from .paddle_headwords import refine_separator_y
+        from ..paddle_headwords import refine_separator_y
         refined_y, _refinement = refine_separator_y(
         """
     return _ordinary_visual_fallback.detect_entries_left_edge_with_recovery(
