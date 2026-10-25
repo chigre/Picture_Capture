@@ -272,7 +272,14 @@ def test_reliable_page_uses_one_geometry_for_ocr_and_combined_generation():
 
 
 def test_combined_vb_observation_does_not_duplicate_cjk_layout_reasoning():
-    source = inspect.getsource(processing._detect_entries_left_edge)
+    from picture_capture.ordinary import visual_fallback
+
+    facade = inspect.getsource(processing._detect_entries_left_edge)
+    source = inspect.getsource(visual_fallback.detect_entries_left_edge_with_recovery)
+    # Check the actual owner and the still-patchable historical public entry.
+    assert "_ordinary_visual_fallback.detect_entries_left_edge_with_recovery(" in facade
+    assert "finalize_indented_topology=finalize_indented_topology" in facade
+    assert "recover_cjk_oversized_heads=recover_cjk_oversized_heads" in facade
     assert 'if method not in {"combined", "paddleocr"}' in source
     assert "finalize_indented_topology(" in source
     assert "recover_cjk_oversized_heads(" in source
