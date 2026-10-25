@@ -26,6 +26,7 @@ from ..detection_current_page_result import apply_current_page_detection_result
 from ..batch_ocr_flow import run_existing_pdic_batch
 from ..detection_selected_scope_actions import run_selected_draw_action
 from ..detection_current_page_setup import prepare_current_page_detection
+from ..detection_current_page_flow import run_current_page_detection
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -58,75 +59,31 @@ class DetectionController:
     def auto_detect_current(
         self, clicked_x: int | None = None, force_paddle_refresh: bool = False,
     ) -> None:
-        """Run backward-compatible single-page detection through the batch worker."""
-        app = self.app
-        snapshot = prepare_current_page_detection(
-            app,
-            deps={
+        """Keep the historical Tk entrypoint and live monkeypatch contracts."""
+        return run_current_page_detection(
+            self.app,
+            clicked_x=clicked_x,
+            force_paddle_refresh=force_paddle_refresh,
+            dependencies=lambda: {
+                "prepare_current_page_detection": prepare_current_page_detection,
                 "replace": replace,
                 "missing_saved_illustrations": missing_saved_illustrations,
                 "ocr_cache_root": ocr_cache_root,
                 "headword_filter_rules_path": headword_filter_rules_path,
                 "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+                "detect_current_page": detect_current_page,
+                "Image": Image,
+                "normalize_page_rgb": normalize_page_rgb,
+                "detect_entries": detect_entries,
+                "detection_mask_source_path": detection_mask_source_path,
+                "ocr_existing_entry_words_from_markers": ocr_existing_entry_words_from_markers,
+                "load_replace_rules": load_replace_rules,
+                "replace_rules_path": replace_rules_path,
+                "project_profile_path": project_profile_path,
+                "apply_current_page_detection_result": apply_current_page_detection_result,
+                "column_index_for_click": column_index_for_click,
+                "column_index": column_index,
             },
-        )
-        if snapshot is None:
-            return
-        project = snapshot.project
-        page = snapshot.page
-        page_index = snapshot.page_index
-        settings = snapshot.settings
-        page_sections = snapshot.page_sections
-        existing_entries = snapshot.existing_entries
-        cache_path = snapshot.cache_path
-        filter_path = snapshot.filter_path
-
-        def worker(_item, _position: int, _total: int):
-            return detect_current_page(
-                page, project.root, settings,
-                page_index=page_index,
-                page_sections=page_sections,
-                cache_path=cache_path,
-                filter_path=filter_path,
-                force_paddle_refresh=force_paddle_refresh,
-                deps={
-                    "Image": Image,
-                    "normalize_page_rgb": normalize_page_rgb,
-                    "detect_entries": detect_entries,
-                    "detection_mask_source_path": detection_mask_source_path,
-                    "ocr_existing_entry_words_from_markers": ocr_existing_entry_words_from_markers,
-                    "load_replace_rules": load_replace_rules,
-                    "replace_rules_path": replace_rules_path,
-                    "project_profile_path": project_profile_path,
-                },
-            )
-
-        def done(_completed, _total, stopped, results, error):
-            return apply_current_page_detection_result(
-                app,
-                project=project,
-                page=page,
-                settings=settings,
-                existing_entries=existing_entries,
-                clicked_x=clicked_x,
-                stopped=stopped,
-                results=results,
-                error=error,
-                deps={
-                    "column_index_for_click": column_index_for_click,
-                    "column_index": column_index,
-                    "ocr_cache_root": ocr_cache_root,
-                },
-            )
-
-        label = {
-            "combined": "融合画线 当前页识别",
-            "paddleocr": "OCR画线 当前页识别",
-        }.get(settings.detection_method, "当前页自动画线")
-        app._start_batch_task(
-            label, [page_index], worker, done,
-            item_label=lambda _item: page.name,
-            refresh_page_quality=settings.detection_method in {"paddleocr", "combined"},
         )
 
     def run_normal_draw_action(self) -> None:
