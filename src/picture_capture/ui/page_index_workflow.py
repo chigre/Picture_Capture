@@ -6,7 +6,7 @@ Dependencies bind at each call, without importing heavyweight app.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import tkinter as tk
