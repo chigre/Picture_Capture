@@ -1606,3 +1606,27 @@ or persisted format changes. New behavioral tests cover cancellation/errors,
 stale project/page, clicked-column preservation and combined OCR status.
 This remains synthetic regression evidence: full-resolution real-scan human
 acceptance is NOT PASSED. PR #663 remains Draft and unmerged.
+
+
+## Issue #562 — Round 73: existing-PDIC batch OCR UI flow ownership (2026-10-26)
+
+The full `DetectionController.batch_ocr` action body has been physically moved
+to `ui/batch_ocr_flow.py`, leaving the stable controller API as a thin adapter.
+The UI flow now owns eligible-PDIC page selection, saved-perspective guard,
+user confirmation, current editor text flush, settings snapshot, foreground
+page edit permissions, page worker scheduling, and completion/reload status.
+It delegates all actual OCR page decode, text fill and OCRed/PDIC publication
+to `ocr/batch_existing_entries.py` (Round 70). Controller globals are resolved
+lazily on both UI dispatch and worker invocation to preserve the original
+monkeypatch seams for tests and GUI integrations.
+
+Round 73 regression coverage verifies no-op for active jobs or no eligible
+pages, confirmation cancellation without editor mutation, editor flush order,
+foreground edit policy, worker live-dependency lookup, stopped/error
+completion, and no page reload during foreground proofreading. The original
+PDIC batch editing ownership static assertion now points to the canonical
+flow module. This change does not modify OCR inference, original image X/Y,
+PDIC/PPP/SECTION schema, or Tk public method names.
+
+Synthetic/automated acceptance is not a substitute for the independent
+real-dictionary-scan visual gate, which remains NOT PASSED; PR #663 stays Draft.
