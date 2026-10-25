@@ -1308,9 +1308,11 @@ def test_settings_center_is_reused_without_blocking_main_workspace():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "app.py"
     ).read_text(encoding="utf-8")
-    start = source.index("    def open_settings(self, initial_tab:")
-    end = source.index("\n    def open_project_profile(", start)
-    open_settings = source[start:end]
+    assert "_main_dialog_lifecycle.open_settings(" in source
+    owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    start = owner.index("def open_settings(self, initial_tab:")
+    end = owner.index("\ndef open_project_profile(", start)
+    open_settings = owner[start:end]
 
     assert 'self.__dict__.get("_settings_dialog")' in open_settings
     assert "existing.select_tab(initial_tab)" in open_settings
@@ -1368,7 +1370,8 @@ def test_project_toolbar_and_profile_scroll_layout_are_wired():
     assert "dialog.profile_canvas = profile_canvas" in profile
     assert "profile_scrollbar" in profile
     assert 'text="自定义结构名称："' in profile
-    assert "ProjectProfileWizard(self, new_project=new_project)" in app
+    assert "_main_dialog_lifecycle.open_project_profile(" in app
+    assert "ProjectProfileWizard(self, new_project=new_project)" in (root / "ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
     for method in ("choose_new_project_image_suffix", "open_project"):
         assert f"def {method}(" in (root / "ui/controllers/project.py").read_text(encoding="utf-8")
 
@@ -1449,7 +1452,8 @@ def test_usage_guide_is_modern_task_oriented_and_centered():
         for _badge,card_title,body in cards:
             assert "\\n" not in card_title
             assert "\\n" not in body
-    show=app.split("    def show_help_dialog(self) -> None:",1)[1].split("    @staticmethod",1)[0]
+    assert "_main_dialog_lifecycle.show_help_dialog(" in app
+    show=(root / "ui/main_dialog_lifecycle.py").read_text(encoding="utf-8").split("def show_help_dialog(",1)[1].split("\ndef show_environment_center(",1)[0]
     assert "UsageGuideWindow(self)" in show
     assert "_usage_guide_window" in show
     assert "messagebox.showinfo" not in show
@@ -3321,7 +3325,9 @@ def test_project_profile_validation_masks_remain_translucent():
 def test_project_profile_wizard_is_the_normal_entry_path():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert "ProjectProfileWizard(self, new_project=new_project)" in text
+    assert "_main_dialog_lifecycle.open_project_profile(" in text
+    dialog_owner = (source.parent / "ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    assert "ProjectProfileWizard(self, new_project=new_project)" in dialog_owner
     project_controller_source = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "controllers" / "project.py"
@@ -4524,7 +4530,9 @@ def test_concurrency_audit_p0_p1_guards_are_present():
 
     profile_open_start = app.index("    def open_project_profile(")
     profile_open_end = app.index("\n    def open_project_details", profile_open_start)
-    assert "if self._batch_active:" in app[profile_open_start:profile_open_end]
+    assert "_main_dialog_lifecycle.open_project_profile(" in app[profile_open_start:profile_open_end]
+    dialog_owner = (root / "src/picture_capture/ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    assert "if self._batch_active:" in dialog_owner
 
     validation_owner = (root / "src/picture_capture/profile/wizard_validation_execution.py").read_text(encoding="utf-8")
     assert "_wizard_validation_execution.validate_profile(" in profile

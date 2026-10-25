@@ -1888,7 +1888,11 @@ def test_v2810_save_current_page_is_mode_specific():
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _save_current_page_by_mode(")
     end = text.index("    def save_current_page(", start)
-    block = text[start:end]
+    assert "_main_pdic_persistence._save_current_page_by_mode(" in text[start:end]
+    owner = (source.parent / "ui/main_pdic_persistence.py").read_text(encoding="utf-8")
+    start = owner.index("def _save_current_page_by_mode(")
+    end = owner.index("\ndef save_current_page(", start)
+    block = owner[start:end]
     assert 'if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):' in block
     # PPP still has its own mode-specific save path, but now passes through
     # the disk-first canonical-label writer rather than serializing raw labels.
@@ -6421,8 +6425,10 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert 'self._schedule_review_single_cjk_height_apply("pixel")' in review
     assert 'text="显示 OCR 内容选择"' not in review
     assert 'text="显示 OCR 底色"' not in review
-    assert 'self.settings.review_main_show_ocr_choices = False' in text
-    assert 'self.settings.review_main_show_ocr_background = False' in text
+    dialog_owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    assert "_main_dialog_lifecycle.open_review(" in text
+    assert 'self.settings.review_main_show_ocr_choices = False' in dialog_owner
+    assert 'self.settings.review_main_show_ocr_background = False' in dialog_owner
     assert 'self.parent.settings.character_height = line_height' in REVIEW_APPEARANCE_SOURCE
     assert 'self.parent.settings.review_single_cjk_line_height = line_height' in REVIEW_APPEARANCE_SOURCE
 
