@@ -54,9 +54,9 @@ def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
     )[0]
     only_ocr = src.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     detector = (ROOT / "ui/controllers/detection.py").read_text(encoding="utf-8")
-    batch_ocr = body_between(
-        detector, "    def batch_ocr(", "    def run_ocr_draw(",
-    )
+    batch_flow = (ROOT / "ui/batch_ocr_flow.py").read_text(encoding="utf-8")
+    batch_ocr = batch_flow.split("def run_existing_pdic_batch(", 1)[1]
+    assert "return run_existing_pdic_batch(" in detector
     assert "foreground_page_edit=True, allow_pdic_edits=True," in refiner
     assert "_start_parallel_batch_task(" in refiner
     assert "commit_refined_page_result" in refiner
