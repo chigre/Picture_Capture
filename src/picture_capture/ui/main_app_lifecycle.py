@@ -87,3 +87,24 @@ def _guard_transformed_geometry(self, action: str, *, deps: dict[str, Any]) -> b
     )
     self.status_var.set(message)
     return False
+
+
+def clear_entries(self, *, deps: dict[str, Any]) -> None:
+    """Never clear source-coordinate markers before edit guard and confirmation."""
+    messagebox = deps["messagebox"]
+    if self.guard() and messagebox.askyesno(
+        "清除画线", "清除当前页全部词条标记？", parent=self,
+    ):
+        self.entries.clear()
+        self.redraw()
+
+
+def show_error(self, title: str, exc: Exception, *, deps: dict[str, Any]) -> None:
+    """Report UI errors with the same status, modal and traceback ordering."""
+    messagebox = deps["messagebox"]
+    traceback = deps["traceback"]
+    self.status_var.set(f"{title}：{exc}")
+    messagebox.showerror(
+        title, f"{exc}\n\n详细信息已输出到终端。", parent=self,
+    )
+    traceback.print_exc()

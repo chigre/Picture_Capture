@@ -3054,9 +3054,11 @@ class PictureCaptureApp(tk.Tk):
             },
         )
 
-    def clear_entries(self) -> None:
-        if self.guard() and messagebox.askyesno("清除画线", "清除当前页全部词条标记？", parent=self):
-            self.entries.clear(); self.redraw()
+        def clear_entries(self) -> None:
+        """Legacy Tk callback; confirmation and mutation live in UI lifecycle."""
+        return _main_app_lifecycle.clear_entries(
+            self, deps={"messagebox": messagebox},
+        )
 
     def clear_text(self) -> None:
         from .proofreading.pdic_text_cleanup import clear_selected_scope
@@ -3083,15 +3085,15 @@ class PictureCaptureApp(tk.Tk):
         """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
         return _main_pdic_persistence._sync_entry_editor_texts(self, deps={"tk": tk})
 
-    def save_all(self) -> None:
-        if not self.guard(): return
-        self.save_pdic()
-        self._save_normalized_ppp()
+        def save_all(self) -> None:
+        """Preserve guard-first PDIC then PPP save transaction."""
+        return _main_pdic_persistence.save_all(self)
 
-    def save_settings(self) -> None:
-        if self.project:
-            self.settings.to_json(settings_path(self.project.root))
-            self.status_var.set("参数已保存")
+        def save_settings(self) -> None:
+        """Persist current settings only for a project, without a schema change."""
+        return _main_pdic_persistence.save_settings(
+            self, deps={"settings_path": settings_path},
+        )
 
     def toggle_autosave(self) -> None:
         """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
@@ -3182,22 +3184,14 @@ class PictureCaptureApp(tk.Tk):
     def build_picdic(self) -> None:
         self._export_controller_for_call().build_picdic()
 
-    def _order_key(self, word: str) -> tuple:
-        return collation_key(
-            word,
-            getattr(self.settings, "headword_sort_mode", "auto"),
-            getattr(self.settings, "ocr_language", "eng"),
-            getattr(self.settings, "headword_custom_order", LATIN_ORDER),
-            getattr(self.settings, "headword_custom_fold_accents", True),
+        def _order_key(self, word: str) -> tuple:
+        return _main_pdic_persistence.order_key(
+            self, word, key_func=collation_key, latin_order=LATIN_ORDER,
         )
 
-    def _order_display_key(self, word: str) -> str:
-        return display_key(
-            word,
-            getattr(self.settings, "headword_sort_mode", "auto"),
-            getattr(self.settings, "ocr_language", "eng"),
-            getattr(self.settings, "headword_custom_order", LATIN_ORDER),
-            getattr(self.settings, "headword_custom_fold_accents", True),
+        def _order_display_key(self, word: str) -> str:
+        return _main_pdic_persistence.order_display_key(
+            self, word, key_func=display_key, latin_order=LATIN_ORDER,
         )
 
     def check_headword_order(self, all_pages: bool = False) -> None:
@@ -3272,10 +3266,11 @@ class PictureCaptureApp(tk.Tk):
         """Legacy Tk callback; real implementation lives in the UI domain."""
         return _main_dialog_lifecycle.open_review(self, deps={"tk": tk, "ReviewWindow": ReviewWindow})
 
-    def show_error(self, title: str, exc: Exception) -> None:
-        self.status_var.set(f"{title}：{exc}")
-        messagebox.showerror(title, f"{exc}\n\n详细信息已输出到终端。", parent=self)
-        traceback.print_exc()
+        def show_error(self, title: str, exc: Exception) -> None:
+        return _main_app_lifecycle.show_error(
+            self, title, exc,
+            deps={"messagebox": messagebox, "traceback": traceback},
+        )
 
 
 def main() -> int:

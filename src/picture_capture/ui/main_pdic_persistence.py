@@ -198,3 +198,41 @@ def _persist_current_page_sections(self, *, deps: dict[str, Any]) -> None:
         canonical_height=canonical_height,
         layout_transform=transform.kind,
     )
+
+
+def save_all(self) -> None:
+    """Guard once, then commit PDIC before PPP; do not hide I/O failures."""
+    if not self.guard():
+        return
+    self.save_pdic()
+    self._save_normalized_ppp()
+
+
+def save_settings(self, *, deps: dict[str, Any]) -> None:
+    """Keep project-only user settings persistence and historical status."""
+    settings_path = deps["settings_path"]
+    if self.project:
+        self.settings.to_json(settings_path(self.project.root))
+        self.status_var.set("参数已保存")
+
+
+def order_key(self, word: str, *, key_func, latin_order) -> tuple:
+    """Read the live sorting policy without changing collator or state."""
+    return key_func(
+        word,
+        getattr(self.settings, "headword_sort_mode", "auto"),
+        getattr(self.settings, "ocr_language", "eng"),
+        getattr(self.settings, "headword_custom_order", latin_order),
+        getattr(self.settings, "headword_custom_fold_accents", True),
+    )
+
+
+def order_display_key(self, word: str, *, key_func, latin_order) -> str:
+    """Display-side collation uses precisely the same setting fallback order."""
+    return key_func(
+        word,
+        getattr(self.settings, "headword_sort_mode", "auto"),
+        getattr(self.settings, "ocr_language", "eng"),
+        getattr(self.settings, "headword_custom_order", latin_order),
+        getattr(self.settings, "headword_custom_fold_accents", True),
+    )
