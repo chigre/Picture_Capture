@@ -23,6 +23,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .ocr import channel_preparation as _channel_preparation
+from .ocr import channel_policy as _channel_policy
 from .ocr import channel_results as _channel_results
 from .ocr import channel_engine_execution as _channel_engine_execution
 from .ocr import paddle_engine_lifecycle as _paddle_engine_lifecycle
@@ -115,50 +116,16 @@ def _normalized_engine_name(value: object) -> str:
 
 def resolve_ocr_channel_plan(settings: AppSettings) -> OcrChannelPlan:
     """Resolve the project-wide OCR engine selection.
-
-    Existing main-window OCR checkboxes are the authoritative selection source:
-    Paddle, Tesseract and Lens can all be enabled together. The historical
-    single ``ocr_engine`` value is only a fallback when every multi-engine switch
-    is disabled, preserving older projects and non-GUI callers.
-    """
-
-    enabled: list[str] = []
-    if bool(getattr(settings, "paddle_use_paddleocr", True)):
-        enabled.append("paddle")
-    if bool(
-        getattr(settings, "paddle_compare_tesseract", False)
-        or getattr(settings, "paddle_tesseract_rescue", False)
-    ):
-        enabled.append("tesseract")
-
-    lens_mode = str(getattr(settings, "paddle_lens_mode", "off") or "off").strip().lower()
-    if lens_mode not in {"off", "diagnostic", "conflict", "full"}:
-        lens_mode = "conflict"
-    lens_enabled = bool(getattr(settings, "paddle_enable_lens", False)) and lens_mode != "off"
-    if lens_enabled:
-        enabled.append("lens")
-    else:
-        lens_mode = "off"
-
-    if not enabled:
-        legacy = _normalized_engine_name(getattr(settings, "ocr_engine", ""))
-        enabled.append(legacy or "tesseract")
-        if enabled[0] == "lens":
-            # A legacy Lens-only project has no separate mode setting. Treat it
-            # as a normal participating OCR rather than a diagnostic observer.
-            lens_mode = "full"
-
-    enabled = [name for name in OCR_ENGINE_ORDER if name in set(enabled)]
-    voting = [
-        name for name in enabled
-        if not (name == "lens" and lens_mode == "diagnostic")
-    ]
-    return OcrChannelPlan(
-        enabled_engines=tuple(enabled),
-        voting_engines=tuple(voting),
-        lens_mode=lens_mode,
+    
+        Existing main-window OCR checkboxes are the authoritative selection source:
+        Paddle, Tesseract and Lens can all be enabled together. The historical
+        single ``ocr_engine`` value is only a fallback when every multi-engine switch
+        is disabled, preserving older projects and non-GUI callers.
+        """
+    return _channel_policy.resolve_plan(
+        settings, normalized_engine_name=_normalized_engine_name,
+        engine_order=OCR_ENGINE_ORDER, plan_type=OcrChannelPlan,
     )
-
 
 # Historical OCR-channel imports remain supported. Pure voting is now owned
 # by ocr/text_arbitration; the neutral dataclasses stay here for stable pickles.
