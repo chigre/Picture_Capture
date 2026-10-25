@@ -17,7 +17,7 @@ import threading
 import time
 from unittest.mock import patch
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 from picture_capture import __version__
 from picture_capture.io.formats import pdic_path, read_pdic, read_ppp, write_pdic, write_ppp
@@ -225,6 +225,7 @@ def main() -> int:
                     bool(crop_records),
                     "production crop planner generated no entry pieces",
                 )
+                any_ink = False
                 for record in crop_records:
                     png = output_dir / record.filename
                     _assert(png.is_file(), f"crop PNG was not published: {png.name}")
@@ -241,6 +242,25 @@ def main() -> int:
                             rendered.width > 0 and rendered.height > 0,
                             "export published an empty crop",
                         )
+                        # Production opaque crop is a *source-pixel* crop;
+                        # pixel-for-pixel parity is stronger than dimensions.
+                        with Image.open(first) as original_source:
+                            expected = original_source.crop(record.box)
+                        try:
+                            difference = ImageChops.difference(
+                                rendered.convert("RGB"), expected.convert("RGB"),
+                            )
+                            try:
+                                _assert(
+                                    difference.getbbox() is None,
+                                    f"crop pixels differ from source region: {png.name}",
+                                )
+                            finally:
+                                difference.close()
+                        finally:
+                            expected.close()
+                        any_ink = any_ink or rendered.convert("L").getextrema()[0] < 100
+                _assert(any_ink, "all produced crops lost the synthetic dark ink")
                 names = (output_dir / f"{first.stem}.PWWords").read_text(encoding="utf-8")
                 widths = json.loads(
                     (output_dir / f"{first.stem}.PWWWidths.json").read_text(
@@ -265,6 +285,31 @@ def main() -> int:
                     _source_hash(profile_file) == profile_sha,
                     "entry crop export unexpectedly rewrote Profile v3",
                 )
+                first_manifest = _source_hash(output_dir / f"{first.stem}.PWWords")
+                first_widths = _source_hash(output_dir / f"{first.stem}.PWWWidths.json")
+                first_crop_hashes = {
+                    row.filename: _source_hash(output_dir / row.filename)
+                    for row in crop_records
+                }
+                second_records = split_whole_entries(
+                    first, list(app.entries), export_settings, output_dir,
+                    top_y=55, bottom_y=420,
+                    integrate_illustrations=False,
+                )
+                _assert(
+                    [r.filename for r in second_records]
+                    == [r.filename for r in crop_records],
+                    "identical export changed crop naming/order",
+                )
+                _assert(
+                    _source_hash(output_dir / f"{first.stem}.PWWords") == first_manifest
+                    and _source_hash(output_dir / f"{first.stem}.PWWWidths.json") == first_widths
+                    and {
+                        row.filename: _source_hash(output_dir / row.filename)
+                        for row in second_records
+                    } == first_crop_hashes,
+                    "identical export changed published PNG/manifest bytes",
+                )
                 _assert(
                     [(e.word, e.x, e.y) for e in read_pdic(pdic_path(first))]
                     == [(e.word, e.x, e.y) for e in app.entries],
@@ -285,7 +330,7 @@ def main() -> int:
                 print(
                     "[managed-project-smoke] PASS: Tk project load; original XY; "
                     "PDIC edit/save/reopen; PPP geometry/save/reopen; settings; "
-                    "two-page navigation; v3 Profile; production crop PNG, "
+                    "two-page navigation; v3 Profile; production crop PNG pixel parity, " 
                     "PWWords/widths/plan; source image immutable",
                     flush=True,
                 )

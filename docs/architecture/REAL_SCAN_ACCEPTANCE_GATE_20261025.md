@@ -15,8 +15,11 @@ canonical PDIC/PPP publication, page navigation and disk reload, settings
 JSON, idempotent PPP save, and source-image SHA-256 immutability. As of Round
 60, it ALSO uses the **unmocked production** `processing.split_whole_entries`
 pipeline on the reopened page: it asserts published original-coordinate PNG
-boxes/dimensions, PWWords and width manifests, the CropPlan JSON, no orphan
-temporary files and unchanged PDIC/Profile/source PNG hashes. It exercises
+boxes/dimensions, pixel-for-pixel RGB comparisons with source-image
+cropping (opaque normal export), nonempty synthetic ink, PWWords and width
+manifests, the CropPlan JSON, no orphan temporary files, unchanged
+PDIC/Profile/source PNG hashes, plus byte-for-byte PNG/manifest stability on
+a second identical export. It exercises
 `write_project_profile`/`load_dictionary_profile` for a real project-local
 Profile v3 sidecar without opening the human Profile wizard.
 
