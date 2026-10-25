@@ -24,6 +24,7 @@ from ...ocr.batch_existing_entries import process_existing_pdic_page
 from ...detection.current_page_worker import detect_current_page
 from ..detection_current_page_result import apply_current_page_detection_result
 from ..batch_ocr_flow import run_existing_pdic_batch
+from ..detection_selected_scope_actions import run_selected_draw_action
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -133,18 +134,12 @@ class DetectionController:
         )
 
     def run_normal_draw_action(self) -> None:
-        """Run ordinary OCR-independent drawing for the selected page scope."""
-        app = self.app
-        if not app.guard() or not _apply_quick_settings_for_ordinary(app):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "left_edge"
-        app.save_settings()
-        app._detect_pages(indices, method="left_edge", force_refresh=False)
+        """Ordinary selected-page drawing; retain the legacy public entrypoint."""
+        return run_selected_draw_action(
+            self.app,
+            method="left_edge",
+            ordinary_settings_guard=_apply_quick_settings_for_ordinary,
+        )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
         app = self.app
@@ -158,41 +153,17 @@ class DetectionController:
         app.auto_detect_current(force_paddle_refresh=force_refresh)
 
     def run_combined_draw_action(self) -> None:
-        app = self.app
-        if not guard_ocr_action_selection(app):
-            return
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "combined"
-        app.save_settings()
-        app._detect_pages(
-            indices,
-            method="combined",
-            force_refresh=app.ocr_refresh_var.get() == "force",
+        """Combined selected-page drawing with the live OCR preflight."""
+        return run_selected_draw_action(
+            self.app, method="combined",
+            ocr_engine_guard=guard_ocr_action_selection,
         )
 
     def run_ocr_draw_action(self) -> None:
-        app = self.app
-        if not guard_ocr_action_selection(app):
-            return
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "paddleocr"
-        app.save_settings()
-        app._detect_pages(
-            indices,
-            method="paddleocr",
-            force_refresh=app.ocr_refresh_var.get() == "force",
+        """OCR selected-page drawing with the live OCR preflight."""
+        return run_selected_draw_action(
+            self.app, method="paddleocr",
+            ocr_engine_guard=guard_ocr_action_selection,
         )
 
     def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
