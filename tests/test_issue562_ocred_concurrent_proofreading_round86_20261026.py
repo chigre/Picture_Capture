@@ -120,7 +120,7 @@ def test_direct_publisher_rejects_changed_sidecar_without_touching_pdic(tmp_path
     write_pdic(pdic, [Entry("original", 11, 22)], 88, ("001", "@", "@"))
     original_pdic = pdic.read_bytes()
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir(parents=True)
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     ocred.write_bytes(b"000|`before\n")
     expected = ocred.read_bytes()
     ocred.write_bytes(b"000|`proofread\n")
