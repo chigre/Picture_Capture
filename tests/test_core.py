@@ -5293,6 +5293,7 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
 def test_crop_settings_v7_declares_source_coordinate_space():
     root = Path(__file__).resolve().parents[1]
     schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    catalog = (root / "src" / "picture_capture" / "ui" / "settings" / "help_catalog.py").read_text(encoding="utf-8")
     crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
     assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
@@ -5301,8 +5302,8 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     assert '"entry_left_padding_x"' in crop_class
     assert '"entry_right_padding_x"' in crop_class
     assert "原图像素" in crop_class
-    assert '"start_y": "正文起始 Y"' in schema
-    assert '"manual_x": "第一栏左缘 X"' in schema
+    assert '"start_y": "正文起始 Y"' in catalog
+    assert '"manual_x": "第一栏左缘 X"' in catalog
     assert '"paddle_left_tolerance": "% 单栏宽"' in schema
     assert '"paddle_separator_safety_px": "原图px"' in schema
 

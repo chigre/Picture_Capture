@@ -1145,6 +1145,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "schema.py"
     ).read_text(encoding="utf-8")
+    catalog = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "settings" / "help_catalog.py"
+    ).read_text(encoding="utf-8")
     help_source = (
         Path(__file__).resolve().parents[1]
         / "src" / "picture_capture" / "ui" / "settings" / "help.py"
@@ -1163,13 +1167,13 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
     ).read_text(encoding="utf-8")
 
     assert '"bottom_y", int' in schema
-    assert '"bottom_y": "正文结束 Y"' in schema
+    assert '"bottom_y": "正文结束 Y"' in catalog
     common_start = schema.index("COMMON_FIELDS = (")
     common_end = schema.index("\nNORMAL_COMMON_FIELDS", common_start)
     common_fields = schema[common_start:common_end]
     assert '"bottom_y"' not in common_fields
-    assert '"columns": "正文栏数"' in schema
-    assert '"manual_x": "第一栏左缘 X"' in schema
+    assert '"columns": "正文栏数"' in catalog
+    assert '"manual_x": "第一栏左缘 X"' in catalog
     assert '"start_y": "% 图高"' in schema
     assert '"manual_x": "% 图宽"' in schema
     assert '"column_width": "% 图宽"' in schema
@@ -1197,10 +1201,10 @@ def test_settings_center_uses_context_help_units_and_user_facing_modes():
         assert f'"{name}", float' in schema, name
     assert "def _show_setting_help(" in settings
     assert 'text="设置说明"' in settings
-    assert "程序取第 1 个捕获组作为原始词头" in schema
-    assert "实际 POS 正则由 Profile 的 pos_labels 动态生成" in schema
-    assert "可作为新词条起始证据" in schema
-    assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in schema
+    assert "程序取第 1 个捕获组作为原始词头" in catalog
+    assert "实际 POS 正则由 Profile 的 pos_labels 动态生成" in catalog
+    assert "可作为新词条起始证据" in catalog
+    assert "命中只增加一项结构证据，不会无条件把该行接受为词头" in catalog
     assert 'text="ⓘ"' in settings
     assert 'panes = ttk.Panedwindow(host, orient="horizontal")' in settings
     assert 'panes.add(left, weight=3)' in settings
@@ -1328,14 +1332,15 @@ def test_common_layout_settings_show_packaged_context_diagrams():
     end = app_text.index("class ReviewWindow", start)
     settings = app_text[start:end]
     schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    catalog = (root / "src" / "picture_capture" / "ui" / "settings" / "help_catalog.py").read_text(encoding="utf-8")
     help_source = (root / "src" / "picture_capture" / "ui" / "settings" / "help.py").read_text(encoding="utf-8")
 
-    assert '"columns": "layout_col_number.png"' in schema
+    assert '"columns": "layout_col_number.png"' in catalog
     for field in (
         "start_y", "bottom_y", "manual_x", "column_width",
         "gutter", "character_height", "row_padding",
     ):
-        assert f'"{field}": "layout_settings.png"' in schema
+        assert f'"{field}": "layout_settings.png"' in catalog
     dialog_init = (root / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
     assert "_settings_dialog_initialization.initialize_settings_dialog(" in settings
     assert "help_images=True" in dialog_init
