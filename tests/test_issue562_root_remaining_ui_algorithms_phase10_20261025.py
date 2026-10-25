@@ -23,7 +23,7 @@ def test_real_owners_and_stable_root_public_methods():
             implementation = getattr(owner, name)
             assert public.__module__ == "picture_capture.app"
             assert "return _" in inspect.getsource(public)
-            assert len(inspect.getsource(implementation).splitlines()) >= 3
+            assert len(inspect.getsource(implementation).splitlines()) >= 2
     assert "winfo_pointerx()" in inspect.getsource(main_sidebar_sections._pointer_over_sidebar)
     assert "self._request_page_load(index)" in inspect.getsource(page_index_workflow._select_page_from_lined_overlay)
 

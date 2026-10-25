@@ -18,9 +18,9 @@ def test_round31_leaf_owners_and_old_app_api():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     assert len(list(root.glob("*.py"))) == 10
     owners = {
-        "background_job_runtime.py": {"start_ui_worker", "poll_ui_worker_queue"},
+        "background_job_runtime.py": {"start_ui_worker", "poll_ui_worker_queue", "_ui_worker_key_active", "_invalidate_ui_worker"},
         "quick_settings_sync.py": {"sync_quick_settings_impl"},
-        "paddle_environment_report.py": {"paddle_environment_text_impl"},
+        "paddle_environment_report.py": {"paddle_environment_text_impl", "_distribution_version", "_version_at_least"},
         "main_action_buttons.py": {"sidebar_action_button_impl", "footer_action_button_impl"},
     }
     for filename, names in owners.items():

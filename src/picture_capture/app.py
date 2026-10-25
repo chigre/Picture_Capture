@@ -2013,7 +2013,7 @@ class PictureCaptureApp(tk.Tk):
 
     def _pointer_over_sidebar(self) -> bool:
         """Legacy API; physical behavior now owned by its UI module."""
-        return _sidebar_sections._pointer_over_sidebar(selfdeps={"tk": tk})
+        return _sidebar_sections._pointer_over_sidebar(self, deps={"tk": tk})
 
     def _resize_sidebar_content(self, event: tk.Event | None = None) -> None:
         return _page_index._resize_sidebar_content(self, _page_index_deps(), event)
