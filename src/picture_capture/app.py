@@ -3054,7 +3054,7 @@ class PictureCaptureApp(tk.Tk):
             },
         )
 
-        def clear_entries(self) -> None:
+    def clear_entries(self) -> None:
         """Legacy Tk callback; confirmation and mutation live in UI lifecycle."""
         return _main_app_lifecycle.clear_entries(
             self, deps={"messagebox": messagebox},
@@ -3085,11 +3085,11 @@ class PictureCaptureApp(tk.Tk):
         """Legacy Tk callback/API; physical algorithm lives in the UI owner."""
         return _main_pdic_persistence._sync_entry_editor_texts(self, deps={"tk": tk})
 
-        def save_all(self) -> None:
+    def save_all(self) -> None:
         """Preserve guard-first PDIC then PPP save transaction."""
         return _main_pdic_persistence.save_all(self)
 
-        def save_settings(self) -> None:
+    def save_settings(self) -> None:
         """Persist current settings only for a project, without a schema change."""
         return _main_pdic_persistence.save_settings(
             self, deps={"settings_path": settings_path},
@@ -3184,12 +3184,12 @@ class PictureCaptureApp(tk.Tk):
     def build_picdic(self) -> None:
         self._export_controller_for_call().build_picdic()
 
-        def _order_key(self, word: str) -> tuple:
+    def _order_key(self, word: str) -> tuple:
         return _main_pdic_persistence.order_key(
             self, word, key_func=collation_key, latin_order=LATIN_ORDER,
         )
 
-        def _order_display_key(self, word: str) -> str:
+    def _order_display_key(self, word: str) -> str:
         return _main_pdic_persistence.order_display_key(
             self, word, key_func=display_key, latin_order=LATIN_ORDER,
         )
@@ -3266,7 +3266,7 @@ class PictureCaptureApp(tk.Tk):
         """Legacy Tk callback; real implementation lives in the UI domain."""
         return _main_dialog_lifecycle.open_review(self, deps={"tk": tk, "ReviewWindow": ReviewWindow})
 
-        def show_error(self, title: str, exc: Exception) -> None:
+    def show_error(self, title: str, exc: Exception) -> None:
         return _main_app_lifecycle.show_error(
             self, title, exc,
             deps={"messagebox": messagebox, "traceback": traceback},
