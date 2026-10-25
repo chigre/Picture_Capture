@@ -119,7 +119,15 @@ def test_gui_composition_no_longer_installs_ocr_guard_and_actions_call_it_static
     ).read_text(encoding="utf-8")
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
-    assert controller.count("guard_ocr_action_selection(app)") >= 2
+    direct = (
+        root / "src/picture_capture/ui/detection_direct_actions.py"
+    ).read_text(encoding="utf-8")
+    selected = (
+        root / "src/picture_capture/ui/detection_selected_scope_actions.py"
+    ).read_text(encoding="utf-8")
+    assert controller.count("ocr_engine_guard=guard_ocr_action_selection") >= 4
+    assert direct.count("if not ocr_engine_guard(app):") == 2
+    assert "if not ocr_engine_guard(app):" in selected
     owner_source = (root / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
     existing_marker_action = owner_source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     assert "guard_ocr_action_selection(self)" in existing_marker_action
