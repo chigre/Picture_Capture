@@ -4,7 +4,6 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
-import pytest
 from picture_capture import app
 from picture_capture.ui import main_dialog_lifecycle, main_pdic_persistence
 
@@ -39,7 +38,7 @@ def test_open_settings_uses_live_monkeypatched_dialog_and_reuses_window(monkeypa
         def deiconify(self): pass
         def lift(self): pass
     monkeypatch.setattr(app, "SettingsDialog", FakeDialog)
-    stub=SimpleNamespace(__dict__=None) if False else SimpleNamespace()
+    stub=SimpleNamespace()
     stub.apply_quick_settings=lambda **kwargs: True
     app.PictureCaptureApp.open_settings(stub, "ocr")
     assert len(made)==1 and made[0].initial_tab=="ocr"

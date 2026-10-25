@@ -5,6 +5,7 @@ invariants. The public app methods inject patched IO/Tk collaborators at call ti
 """
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
+from pathlib import Path
 if TYPE_CHECKING:
     from ..models import Entry as WordEntry
     import tkinter as tk
