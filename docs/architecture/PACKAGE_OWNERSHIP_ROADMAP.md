@@ -1735,3 +1735,27 @@ as well as the public adapter. No OCR algorithm, PDIC/PPP/SECTION schema,
 original-image XY, pickle class identity, native Tk binding, or root shim
 changed. The real dictionary-page human scan gate remains OPEN / NOT PASSED,
 and PR #663 must stay Draft.
+
+
+## Issue #562 — Round 78: project-bound existing-PDIC OCR completion (2026-10-26)
+
+`ui/batch_ocr_completion.py` now physically owns the existing-PDIC batch
+OCR completion/UI publication callback. It only updates status or reloads
+the current page if the active project is **identically the project object**
+captured when the batch was scheduled. The page worker is deliberately still
+allowed to finish saving its captured original project's OCRed and PDIC output;
+its completion callback cannot reload or overwrite UI status in a newly opened
+project. Original foreground proofreading behavior is preserved: never force
+a page reload while `_batch_foreground_pages` is enabled.
+
+In `ui/batch_ocr_flow.py`, the project is captured before eligible PDIC
+enumeration and before the native modal confirmation. The post-confirmation
+identity check prevents an unrelated newly opened project's unsaved editor
+content from being synchronized/saved or being scheduled with stale page
+indices when the modal Tk event loop permits a project switch. No new
+format, root compatibility wrapper or OCR inference path is introduced.
+Round 78 tests cover project changes during confirmation, stale completion
+(including stop and foreground flags), original-project success/status and
+historical PDIC edit permissions. Full multi-platform CI is required; the
+independent real scanned-dictionary-page gate remains MANUAL GATE OPEN /
+NOT PASSED. PR #663 is Draft and must not be merged.
