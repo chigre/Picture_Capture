@@ -91,7 +91,12 @@ def test_atomic_sidecar_contract_is_physical_and_pdic_writer_remains_canonical()
     leaf = (root / "ocr/batch_existing_entries.py").read_text(encoding="utf-8")
     writer = (root / "ocr/text_io.py").read_text(encoding="utf-8")
     assert "if len(texts) != len(entries):" in leaf
-    assert 'deps["export_ocred"](' in leaf
-    assert 'deps["write_pdic"](' in leaf
+    publication = (root / "ocr/batch_publication.py").read_text(encoding="utf-8")
+    assert "publish_existing_pdic_ocr(" in leaf
+    assert 'export_ocred=deps["export_ocred"]' in leaf
+    assert 'write_pdic=deps["write_pdic"]' in leaf
+    assert "export_ocred(ocred_path, texts)" in publication
+    assert "write_pdic(pdic_path, entries, image_width, pages_info)" in publication
+    assert "_restore_ocred_bytes(ocred_path, previous)" in publication
     assert "write_text_atomic(" in writer
     assert "path.write_text(" not in writer
