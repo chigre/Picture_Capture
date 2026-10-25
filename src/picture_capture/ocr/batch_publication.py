@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 
 _UNSPECIFIED_PDic_SNAPSHOT = object()
+_UNSPECIFIED_OCRED_SNAPSHOT = object()
 
 
 def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
@@ -58,12 +59,25 @@ def publish_existing_pdic_ocr(
     export_ocred: Callable[..., Any],
     write_pdic: Callable[..., Any],
     expected_pdic_bytes: bytes | None | object = _UNSPECIFIED_PDic_SNAPSHOT,
+    expected_ocred_bytes: bytes | None | object = _UNSPECIFIED_OCRED_SNAPSHOT,
 ) -> None:
     """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
     try:
         previous = ocred_path.read_bytes()
     except FileNotFoundError:
         previous = None
+    # A worker may spend minutes on OCR inference. Preserve manual OCRed
+    # proofreading from another window/process that happened meanwhile.
+    # Check before either sidecar export or PDIC write; direct callers can
+    # omit this optional optimistic snapshot for backward compatibility.
+    if (
+        expected_ocred_bytes is not _UNSPECIFIED_OCRED_SNAPSHOT
+        and previous != expected_ocred_bytes
+    ):
+        raise RuntimeError(
+            "批量 OCR 发布前 OCRed 已被其他操作修改；"
+            "未改写 OCRed 或 PDIC，避免覆盖人工校对内容"
+        )
     # The PDIC writer can atomically publish bytes and subsequently raise.
     # In that case undoing only OCRed would create a mismatched pair.
     try:
