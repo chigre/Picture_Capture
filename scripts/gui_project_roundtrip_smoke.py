@@ -78,7 +78,14 @@ def _pump_until(app, predicate, *, seconds: float, description: str) -> None:
         if predicate():
             return
         time.sleep(0.025)
-    raise RuntimeError(f"Tk integration timed out during {description}")
+    status = app.status_var.get() if getattr(app, "status_var", None) is not None else "missing"
+    actual = getattr(app, "current_page", None)
+    project = getattr(app, "project", None)
+    raise RuntimeError(
+        f"Tk integration timed out during {description}; "
+        f"actual_page={actual!s}, project_root={getattr(project, 'root', None)!s}, "
+        f"status={status!r}"
+    )
 
 
 def main() -> int:
@@ -97,7 +104,8 @@ def main() -> int:
     threading.Thread(target=watchdog, name="project-roundtrip-watchdog", daemon=True).start()
 
     with tempfile.TemporaryDirectory(prefix="pc-managed-roundtrip-") as temp:
-        root = Path(temp) / "synthetic-dictionary"
+        # macOS /var may resolve to /private/var; match the loader's .resolve().
+        root = (Path(temp) / "synthetic-dictionary").resolve()
         first, second = _sample_project(root)
         original_hashes = {page.name: _source_hash(page) for page in (first, second)}
         app = module.PictureCaptureApp()
