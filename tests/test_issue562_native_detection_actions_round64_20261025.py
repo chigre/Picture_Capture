@@ -51,6 +51,8 @@ def test_no_ocr_inference_claim_and_six_matrix_invocations_unchanged():
     # project settings autosave can overwrite after the actual crop callback.
     assert 'and app.batch_progress_var.get() == 100.0' in source
     assert 'and "已导出" in app.status_var.get()' not in source
+    assert "batch_progress={progress!r}" in source
+    assert "crop_width_worker_active={width_active!r}" in source
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert workflow.count("scripts/gui_project_roundtrip_smoke.py") == 4
     assert workflow.count("Managed project PDIC/PPP Tk save-reopen") == 4
