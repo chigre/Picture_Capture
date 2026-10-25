@@ -2000,7 +2000,7 @@ def collect_violations() -> list[str]:
     # #562: full multi-engine OCR page orchestration, review, and compact
     # cache persistence is canonical in the leaf; legacy core only dispatches.
     page_detection_owner = PACKAGE_ROOT / "ocr/page_detection.py"
-    page_detection_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    page_detection_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not page_detection_owner.is_file():
         violations.append("canonical page-wide OCR orchestration owner missing")
     else:
@@ -2042,7 +2042,7 @@ def collect_violations() -> list[str]:
     # CJK visual fallback and diagnostic report owner. Keep live core patch
     # seams and avoid a hidden second implementation or heavyweight import.
     candidate_filter_owner = PACKAGE_ROOT / "ocr/candidate_filter.py"
-    candidate_filter_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    candidate_filter_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not candidate_filter_owner.is_file():
         violations.append("complete OCR candidate filter owner missing")
     else:
@@ -2085,7 +2085,7 @@ def collect_violations() -> list[str]:
     # #562: move the entire verified oversized CJK recovery chain and
     # all three marker-Y refinement paths to one canonical OCR owner.
     recovery_owner = PACKAGE_ROOT / "ocr/cjk_recovery.py"
-    recovery_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    recovery_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not recovery_owner.is_file():
         violations.append("canonical local CJK OCR recovery and refinement owner missing")
     else:
@@ -2135,7 +2135,7 @@ def collect_violations() -> list[str]:
     # #562: visual marker/cjk pixel evidence belongs to one canonical OCR
     # owner. Preserve core compatibility functions and their call-time patches.
     visual_evidence_owner = PACKAGE_ROOT / "ocr/visual_evidence.py"
-    visual_evidence_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    visual_evidence_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not visual_evidence_owner.is_file():
         violations.append("canonical OCR visual marker and CJK evidence owner missing")
     else:
@@ -2183,7 +2183,7 @@ def collect_violations() -> list[str]:
     # #562: the full OCR matching/voting/position chain must stay in one
     # import-light canonical owner. Core signatures and live patch seams stay.
     pairing_owner = PACKAGE_ROOT / "ocr/pairing_arbitration.py"
-    pairing_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    pairing_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not pairing_owner.is_file():
         violations.append("canonical multi-engine OCR pairing/arbitration owner missing")
     else:
@@ -2228,7 +2228,7 @@ def collect_violations() -> list[str]:
     # report now share one canonical import-light OCR leaf. Keep call-time public
     # patch seams and never move model/pickle types into implementation leaves.
     ocr_review_owner = PACKAGE_ROOT / "ocr/review_finalization.py"
-    ocr_review_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    ocr_review_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not ocr_review_owner.is_file():
         violations.append("canonical OCR review finalization owner missing")
     else:
