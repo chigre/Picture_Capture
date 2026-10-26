@@ -2644,3 +2644,17 @@ manual acceptance **OPEN / NOT PASSED**.
   process crash. Six-platform CI and OCR smoke require exact-HEAD validation.
   PR #663 remains Draft/unmerged; real dictionary-page GUI acceptance is
   **OPEN / NOT PASSED**.
+
+### Round 110 (2026-10-27): post-SECTION-read provenance guard
+
+- `ocr/batch_existing_entries.py` verifies canonical SECTION path/bytes and
+  original-image SHA-256 immediately after the patchable SECTION reader,
+  before sorting and OCR inference. A reader that returns stale lanes while
+  editing SECTION or replacing the source scan is rejected without publishing
+  either PDIC or OCRed.
+- `tests/test_issue562_section_reader_provenance_round110_20261027.py`
+  injects SECTION rewrite/deletion, same-size scan replacement and control
+  success, asserting inference is not called and original sidecars survive.
+- This adds an optimistic guard, not cross-process locking or atomicity.
+  Keep PR #663 Draft/unmerged; manual real dictionary-page GUI scan and
+  save/reopen acceptance remain **OPEN / NOT PASSED**.
