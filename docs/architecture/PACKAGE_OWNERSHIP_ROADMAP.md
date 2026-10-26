@@ -2466,3 +2466,29 @@ manual acceptance **OPEN / NOT PASSED**.
   The test double now accepts `**_kwargs` and still raises the same injected
   error. Production ownership checks were **not** weakened. Verify the new
   exact HEAD in six-platform CI and OCR Smoke before claiming success.
+
+### Round 102 (2026-10-26): verify persisted PDIC records after writer success
+
+- The existing post-commit guard in `ocr/batch_publication.py` detects a
+  **missing** PDIC, but a writer callback that silently returns without
+  changing an **existing** PDIC could still report success. OCRed would
+  contain the new OCR result while PDIC retained old marker text.
+- `ocr/batch_existing_entries.py` now reads the committed PDIC before
+  reporting page success and compares row count/order, sanitized OCR text,
+  original source-pixel X/Y coordinates and all three page-link fields with
+  the requested records. It reports a read/parse failure or mismatch
+  explicitly. Since PDIC publication has already returned, it does **not**
+  attempt a dangerous one-sided OCRed rollback.
+- `tests/test_issue562_pdic_persisted_records_round102_20261026.py`
+  uses the real page worker and serializers to inject a silently no-op
+  writer against a pre-existing PDIC, wrong word, wrong X coordinate,
+  wrong page link and malformed PDIC, plus a normal save/reopen success.
+  It checks unchanged source-image/SECTION, the newly published OCRed
+  bytes, retained original PDIC for the no-op case and no rollback temps.
+- This is post-commit **detection**, not atomic cross-file publication or
+  automatic recovery. The final read can race with non-cooperating writers;
+  an error after a successful writer requires human inspection. No change
+  to PDIC/PPP/SECTION schema, pixel-coordinate math, Windows spawn or Tk
+  ownership. Exact-HEAD six-platform CI and three-platform OCR Smoke must
+  be checked. PR #663 remains **Draft / unmerged**; real scanned-dictionary
+  manual GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
