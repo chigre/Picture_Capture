@@ -2700,3 +2700,16 @@ manual acceptance **OPEN / NOT PASSED**.
 - This is optimistic conflict detection, not cross-process atomicity.
   Draft PR #663 remains unmerged; real dictionary GUI acceptance is
   **OPEN / NOT PASSED**.
+
+### Round 114 (2026-10-27): failed-export inspection race
+
+- A failed OCRed export now rechecks PDIC immediately before the OCRed
+  compensation attempt, closing the stale PDIC-snapshot window during
+  OCRed inspection. If PDIC was replaced/removed, retain both latest disk
+  states and refuse OCRed-only rollback; unchanged control still restores
+  the original OCRed bytes and rethrows the export error.
+- `tests/test_issue562_export_rollback_pdic_race_round114_20261027.py`
+  injects PDIC replacement/removal during the OCRed read after the first
+  failed-export PDIC check. No PDIC writer is invoked.
+- The guard is optimistic, not an atomic cross-process CAS. Draft PR #663
+  remains unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
