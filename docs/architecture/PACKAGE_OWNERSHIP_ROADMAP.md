@@ -2624,3 +2624,23 @@ manual acceptance **OPEN / NOT PASSED**.
 
 - The initial Round 108 regression fixture created an already-existing QT directory without `exist_ok=True`; fixed in `a062bff`. The next six-platform CI run exposed two test-only diagnostic mismatches: a removed PDIC/OCRed is reported as a failed post-hash read, whereas a replaced sidecar is reported as a byte-version conflict. The assertions now explicitly distinguish both paths while continuing to require an error, preservation of external changes, and no unilateral rollback.
 - Neither correction weakens production validation or changes persistence formats. Exact-head six-platform CI and OCR Platform Smoke must be confirmed after the test correction; Draft PR #663 and real-page manual acceptance remain unchanged.
+
+### Round 109 (2026-10-27): freeze intended PDIC fields across writer callbacks
+
+- The batch worker previously compared reloaded PDIC records and canonical
+  eight-field rows against live Entry objects *after* invoking a patchable
+  exporter/PDIC writer. An in-place callback mutation could redefine the
+  expected result, silently accepting a wrong marker text or original-pixel
+  coordinate (or falsely rejecting a correct write).
+- `ocr/batch_existing_entries.py` now snapshots intended word/X/Y fields in
+  independent value objects before publication, and uses those values for
+  both persisted-record and serialized-row verification. The actual writer
+  still receives the historical Entry objects; no schema/API changes.
+- `tests/test_issue562_writer_mutation_snapshot_round109_20261027.py`
+  injects mutations before and after writing PDIC and checks the normal path.
+  The before-write mismatch must be rejected without a one-sided OCRed rollback;
+  the after-write mutation must not cause a false mismatch.
+- This protects against mutable callbacks, not concurrent filesystem CAS or
+  process crash. Six-platform CI and OCR smoke require exact-HEAD validation.
+  PR #663 remains Draft/unmerged; real dictionary-page GUI acceptance is
+  **OPEN / NOT PASSED**.
