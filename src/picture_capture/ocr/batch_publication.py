@@ -173,6 +173,23 @@ def publish_existing_pdic_ocr(
     try:
         export_ocred(ocred_path, texts)
     except Exception as export_error:
+        # A patchable exporter may have changed PDIC before raising. If so,
+        # reverting only OCRed would leave an inconsistent committed pair.
+        # Preserve both disk versions for manual recovery instead.
+        try:
+            pdic_after_failed_export = pdic_path.read_bytes()
+        except FileNotFoundError:
+            pdic_after_failed_export = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "OCRed 导出失败，且无法核验 PDIC 是否被修改；"
+                "拒绝单侧回滚，请人工核查两份文件"
+            ) from inspect_error
+        if pdic_after_failed_export != previous_pdic:
+            raise RuntimeError(
+                "OCRed 导出失败，且导出期间 PDIC 已被修改；"
+                "拒绝单侧回滚，请人工核查两份文件"
+            ) from export_error
         try:
             current_ocred = ocred_path.read_bytes()
         except FileNotFoundError:
