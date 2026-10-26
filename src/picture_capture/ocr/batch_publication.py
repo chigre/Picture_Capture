@@ -379,3 +379,24 @@ def publish_existing_pdic_ocr(
                 "请人工核查 PDIC、OCRed 和页面来源："
                 f"来源={context_error!r}"
             ) from context_error
+
+        # Hashing the original scan can be slow. An external editor may
+        # change OCRed *during* this post-commit provenance check, after the
+        # first OCRed check above. Detect that late race without reverting
+        # either already committed sidecar.
+        try:
+            final_ocred = ocred_path.read_bytes()
+        except FileNotFoundError:
+            final_ocred = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "PDIC 已保存，页面来源核验后无法再次读取 OCRed；"
+                "未执行单侧回滚，请人工核查两份文件："
+                f"核查={inspect_error!r}"
+            ) from inspect_error
+        if final_ocred != published_ocred:
+            raise RuntimeError(
+                "PDIC 已保存，但页面来源核验期间 OCRed 被其他操作修改；"
+                "保留已提交的 PDIC 和最新 OCRed，未执行单侧回滚；"
+                "请人工核查两份文件"
+            )
