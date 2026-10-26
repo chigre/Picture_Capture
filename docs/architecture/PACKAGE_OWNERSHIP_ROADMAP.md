@@ -2658,3 +2658,17 @@ manual acceptance **OPEN / NOT PASSED**.
 - This adds an optimistic guard, not cross-process locking or atomicity.
   Keep PR #663 Draft/unmerged; manual real dictionary-page GUI scan and
   save/reopen acceptance remain **OPEN / NOT PASSED**.
+
+### Round 111 (2026-10-27): fix six-platform CI regression from Round 110
+
+- Round 110's extra source-image SHA-256 checkpoint shifted historical
+  fault-injection hash counts, causing nine CI failures despite successful
+  OCR Platform Smoke. Preserve the original image-hash checkpoint order and
+  perform a lightweight `verify_section_source()` immediately after the
+  patchable SECTION reader instead. This detects stale SECTION path/bytes
+  without altering image-hash fault injection or postcommit behavior.
+- The immediate reader guard covers SECTION edits/removal; source-image
+  replacement remains protected at the existing subsequent image-hash
+  checkpoints, not at this exact early point. This is not atomic locking.
+- PR #663 remains Draft and unmerged; real dictionary GUI acceptance remains
+  **OPEN / NOT PASSED**.
