@@ -202,6 +202,13 @@ def process_existing_pdic_page(
         SimpleNamespace(word=entry.word, x=entry.x, y=entry.y)
         for entry in entries
     ]
+    # The exporter receives a mutable OCR text list. Freeze the intended
+    # serialized bytes and count before calling patchable callbacks: a
+    # callback can mutate texts *after* correctly exporting the sidecar.
+    # Later checks must compare against the original OCR result, not that
+    # mutated list (which would falsely report corruption or return zero).
+    intended_ocred_bytes = render_ocred_bytes(texts)
+    intended_entry_count = len(intended_entries)
     publish_existing_pdic_ocr(
         ocred_file,
         pdic_file,
@@ -210,7 +217,7 @@ def process_existing_pdic_page(
         write_pdic=deps["write_pdic"],
         expected_pdic_bytes=source_pdic_bytes,
         expected_ocred_bytes=source_ocred_bytes,
-        expected_exported_ocred_bytes=render_ocred_bytes(texts),
+        expected_exported_ocred_bytes=intended_ocred_bytes,
         validate_page_context=verify_page_sources,
     )
 
@@ -296,7 +303,7 @@ def process_existing_pdic_page(
             "PDIC 保存后核验词条期间无法再次读取 OCRed；"
             "未单独回滚，请人工核查 OCRed 与 PDIC"
         ) from error
-    if final_ocred_bytes != render_ocred_bytes(texts):
+    if final_ocred_bytes != intended_ocred_bytes:
         raise RuntimeError(
             "PDIC 保存后核验词条期间 OCRed 被修改或移除；"
             "保留磁盘上的最新 OCRed 与 PDIC，未执行单侧回滚；"
@@ -339,9 +346,9 @@ def process_existing_pdic_page(
             "页面来源最终核验后无法再次读取 OCRed；"
             "未执行单侧回滚，请人工核查两份文件"
         ) from error
-    if last_ocred_bytes != render_ocred_bytes(texts):
+    if last_ocred_bytes != intended_ocred_bytes:
         raise RuntimeError(
             "页面来源最终核验期间 OCRed 被其他操作修改；"
             "保留磁盘上的最新 OCRed 和 PDIC，未执行单侧回滚"
         )
-    return len(texts)
+    return intended_entry_count
