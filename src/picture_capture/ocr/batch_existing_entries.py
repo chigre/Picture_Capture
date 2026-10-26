@@ -11,6 +11,7 @@ monkeypatch behavior (including on Windows spawn workers).
 """
 
 import hashlib
+from collections import Counter
 from copy import copy
 from pathlib import Path
 from types import SimpleNamespace
@@ -147,6 +148,10 @@ def process_existing_pdic_page(
         verify_section_source()
 
     entries = deps["read_pdic"](pdic_file)
+    # Reading-order sorting may reorder markers, but must not add, remove
+    # or move any original PDIC pixel coordinate. Capture a multiset so
+    # duplicate locations remain accounted for without relying on order.
+    source_marker_coordinates = Counter((entry.x, entry.y) for entry in entries)
     with deps["Image"].open(page) as opened:
         image = deps["normalize_page_rgb"](opened)
     # A scan replaced between the initial fingerprint and decoding is
@@ -168,6 +173,16 @@ def process_existing_pdic_page(
         deps["derive_geometry"](analysis_image, effective_settings),
         sections,
     )
+    if Counter((entry.x, entry.y) for entry in entries) != source_marker_coordinates:
+        raise RuntimeError(
+            "批量 OCR 排序期间词条数量或原图像素坐标被修改；"
+            "已跳过当前页保存，避免覆盖原有 PDIC 标记"
+        )
+    # OCR callbacks receive mutable Entry objects to support the legacy
+    # reading pipeline, but recognition is only authorized to supply text.
+    # Freeze the sorted coordinate sequence, and reject any later move or
+    # reorder before writing either OCRed or PDIC.
+    sorted_marker_coordinates = [(entry.x, entry.y) for entry in entries]
     texts = deps["ocr_entries"](
         image,
         entries,
@@ -176,6 +191,11 @@ def process_existing_pdic_page(
         profile_page_index=index,
         page_sections=sections,
     )
+    if [(entry.x, entry.y) for entry in entries] != sorted_marker_coordinates:
+        raise RuntimeError(
+            "批量 OCR 识别期间词条原图像素坐标或顺序被修改；"
+            "已跳过当前页保存，避免覆盖原有 PDIC 标记"
+        )
     try:
         current_pdic_bytes = pdic_file.read_bytes()
     except FileNotFoundError:
