@@ -81,6 +81,7 @@ def publish_existing_pdic_ocr(
     expected_pdic_bytes: bytes | None | object = _UNSPECIFIED_PDic_SNAPSHOT,
     expected_ocred_bytes: bytes | None | object = _UNSPECIFIED_OCRED_SNAPSHOT,
     expected_exported_ocred_bytes: bytes | None = None,
+    validate_page_context: Callable[[], None] | None = None,
 ) -> None:
     """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
     try:
@@ -115,6 +116,12 @@ def publish_existing_pdic_ocr(
             "批量 OCR 发布前 PDIC 已被其他操作修改；"
             "未改写 OCRed 或 PDIC，避免覆盖人工校对内容"
         )
+
+    # A page's SECTION sidecar may have changed during inference, altering
+    # marker order / OCR reading lanes without changing PDIC itself. Validate
+    # before touching OCRed, then again just before committing PDIC.
+    if validate_page_context is not None:
+        validate_page_context()
 
     # An exporter can atomically replace OCRed and then raise from a later
     # hook. PDIC has not been called yet; restore this sidecar before letting
@@ -234,6 +241,24 @@ def publish_existing_pdic_ocr(
             "OCRed 在导出后、PDIC 保存前被其他操作修改；"
             "未覆盖人工校对的 OCRed，未启动 PDIC 保存"
         )
+    if validate_page_context is not None:
+        try:
+            validate_page_context()
+        except Exception as context_error:
+            # OCRed was already published; undo only our own unchanged export.
+            # A concurrent manual OCRed edit must not be overwritten here.
+            try:
+                _restore_ocred_if_unchanged(
+                    ocred_path, previous, published_ocred,
+                )
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "SECTION 发布前核验失败，且 OCRed 回滚失败；"
+                    "未启动 PDIC 保存，请人工核查两份文件："
+                    f"SECTION={context_error!r}；OCRed={rollback_error!r}"
+                ) from context_error
+            raise
+
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
