@@ -2407,3 +2407,27 @@ manual acceptance **OPEN / NOT PASSED**.
   and PPP/SECTION schemas are unchanged. Exact-HEAD six-platform CI and
   three-platform OCR Smoke are required. PR #663 remains **Draft / unmerged**;
   real scanned-dictionary acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 100 (2026-10-26): revalidate SECTION after source-image hashing
+
+- `ocr/batch_existing_entries.py` now checks the resolved SECTION path and
+  exact bytes **again after** computing the original scan SHA-256. The existing
+  page-source callback previously checked SECTION first, then hashed the
+  image. For large scans, an external editor could replace/remove SECTION
+  *during* the hash and leave the validator reporting success even though
+  OCR used the old reading lanes. This extra check applies to both the
+  pre-commit and post-commit callbacks, without changing the PDIC/PPP/SECTION
+  formats, OCR text, source-pixel X/Y coordinates, or Windows spawn/Tk paths.
+- `tests/test_issue562_section_hash_window_round100_20261026.py` injects
+  SECTION replacement/deletion immediately after the hash, at both the
+  pre-PDIC and post-PDIC checkpoints. It verifies pre-commit OCRed byte-exact
+  compensation, preservation of external SECTION changes, no premature PDIC
+  commit, explicit post-commit conflict reporting without one-sided rollback,
+  original X/Y coordinates and the uncontended five-hash success path.
+- **Limitations:** this narrows a real SECTION-vs-hash TOCTOU window but does
+  not implement cross-process locking or a multi-file atomic transaction.
+  Concurrent byte-identical rewrites, post-final-check edits and crashes
+  remain outside the guarantee. Require exact-HEAD six-platform CI and
+  three-OS OCR Platform Smoke; keep PR #663 **Draft / unmerged** and the real
+  dictionary scan/manual GUI/save-reopen gate **OPEN / NOT PASSED**.
