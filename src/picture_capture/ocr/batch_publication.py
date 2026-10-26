@@ -307,3 +307,18 @@ def publish_existing_pdic_ocr(
             "保留已提交的 PDIC 和最新 OCRed，未执行单侧回滚；"
             "请人工核查两份文件"
         )
+
+    # SECTION and source-image bytes can also change inside the PDIC writer
+    # callback. The pre-commit context check cannot detect that race.
+    # PDIC has already been committed: report stale page provenance without
+    # rolling back either artifact or overwriting external source edits.
+    if validate_page_context is not None:
+        try:
+            validate_page_context()
+        except Exception as context_error:
+            raise RuntimeError(
+                "PDIC 已保存，但保存期间页面来源（SECTION/原始图像）"
+                "已变化或无法核验；未执行单侧回滚，"
+                "请人工核查 PDIC、OCRed 和页面来源："
+                f"来源={context_error!r}"
+            ) from context_error
