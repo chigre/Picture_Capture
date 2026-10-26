@@ -209,10 +209,18 @@ def process_existing_pdic_page(
     # mutated list (which would falsely report corruption or return zero).
     intended_ocred_bytes = render_ocred_bytes(texts)
     intended_entry_count = len(intended_entries)
+    # Keep callback-owned mutable arguments separate from the validated
+    # intended records. Exporters may rewrite their text list or mutate
+    # Entry objects; the PDIC writer must receive the original OCR result.
+    publication_texts = list(texts)
+    publication_entries = [
+        SimpleNamespace(word=entry.word, x=entry.x, y=entry.y)
+        for entry in intended_entries
+    ]
     publish_existing_pdic_ocr(
         ocred_file,
         pdic_file,
-        texts, entries, image.width, pages_info,
+        publication_texts, publication_entries, image.width, pages_info,
         export_ocred=deps["export_ocred"],
         write_pdic=deps["write_pdic"],
         expected_pdic_bytes=source_pdic_bytes,
