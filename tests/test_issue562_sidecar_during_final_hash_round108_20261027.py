@@ -20,7 +20,7 @@ def test_final_provenance_hash_catches_sidecar_edit(tmp_path, monkeypatch, fault
     pdic = page.with_suffix(".PDIC")
     write_pdic(pdic, [Entry("before", 17, 43)], 100, ("001", "@", "@"))
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir()
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     ocred.write_bytes(b"old")
     original_hash = worker._source_image_sha256
     calls = {"count": 0}
