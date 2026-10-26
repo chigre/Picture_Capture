@@ -34,7 +34,10 @@ def _test_deps(tmp_path: Path, events: list, *, fail_ocr: bool = False):
         real_write_pdic(path, entries, width, pages)
 
     return {
-        "read_pdic": lambda _path: [
+        # The initial page has no on-disk PDIC in this fixture; after the
+        # writer returns, verify the real persisted records rather than
+        # returning the stale source markers from the test double.
+        "read_pdic": lambda _path: real_read_pdic(_path) if Path(_path).exists() else [
             Entry("original-a", 9, 14),
             Entry("original-b", 42, 78),
         ],
