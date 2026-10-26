@@ -304,4 +304,31 @@ def process_existing_pdic_page(
             "已变化或无法核验；未执行单侧回滚，"
             "请人工核查 PDIC、OCRed 和页面来源"
         ) from source_error
+    # The final provenance hash can be slow. Recheck both committed sidecars
+    # after it returns so a concurrent proofreader cannot change either file
+    # during that hash and still receive a successful batch completion.
+    try:
+        last_pdic_bytes = pdic_file.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            "页面来源最终核验后无法再次读取 PDIC；"
+            "未执行单侧回滚，请人工核查两份文件"
+        ) from error
+    if last_pdic_bytes != pdic_after_reopen:
+        raise RuntimeError(
+            "页面来源最终核验期间 PDIC 被其他操作修改；"
+            "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚"
+        )
+    try:
+        last_ocred_bytes = ocred_file.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            "页面来源最终核验后无法再次读取 OCRed；"
+            "未执行单侧回滚，请人工核查两份文件"
+        ) from error
+    if last_ocred_bytes != render_ocred_bytes(texts):
+        raise RuntimeError(
+            "页面来源最终核验期间 OCRed 被其他操作修改；"
+            "保留磁盘上的最新 OCRed 和 PDIC，未执行单侧回滚"
+        )
     return len(texts)
