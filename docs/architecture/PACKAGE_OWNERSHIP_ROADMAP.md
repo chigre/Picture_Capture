@@ -2580,3 +2580,29 @@ manual acceptance **OPEN / NOT PASSED**.
   confirmation. PR #663 stays **Draft / unmerged** and representative real
   dictionary-page manual GUI/OCR/PDIC/PPP/save-reopen acceptance remains
   **OPEN / NOT PASSED**.
+
+### Round 106 (2026-10-26): detect late source edits during persisted PDIC verification
+
+- The publisher validates SECTION and source-image bytes after PDIC write,
+  but the page worker subsequently reopens and validates all persisted PDIC
+  fields. An external editor can change SECTION or replace/remove the original
+  scan during that potentially slow record parse. Previously the worker could
+  return success despite now-stale reading lanes or original-pixel provenance.
+- `ocr/batch_existing_entries.py` now calls the existing full page-source
+  validator **after** persisted PDIC rows and OCRed bytes are verified. It
+  checks canonical SECTION path/bytes and streamed original-image SHA-256,
+  including a second SECTION check after hashing. Late edits/read errors
+  produce an explicit post-commit conflict. Already committed PDIC/OCRed
+  are not rolled back independently; external source edits are preserved.
+- `tests/test_issue562_source_during_pdic_reopen_round106_20261026.py`
+  injects SECTION modification/removal and same-size original-image
+  replacement/removal from the post-save PDIC parser, plus a normal control.
+  It verifies committed OCR text, original X/Y pixels, page associations,
+  external edits and no leaked OCRed rollback temporary files.
+- **Boundary:** this is another optimistic provenance check, not an atomic
+  cross-process transaction or crash recovery mechanism. The final-read
+  race and byte-identical rewrites remain possible. No PDIC/PPP/SECTION
+  schema, Windows spawn/Tk or OCR engine behavior is changed. Verify
+  exact-HEAD six-platform CI and three-OS OCR smoke before claiming success.
+  PR #663 remains **Draft / unmerged**. Real scanned dictionary-page manual
+  GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
