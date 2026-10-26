@@ -1,7 +1,7 @@
-"""Round 85: unreadable PDIC *before* writer call must not strand new OCRed.
+"""Unreadable PDIC after OCRed export must preserve ambiguous disk state.
 
-The Round 81 ambiguous-commit rule remains separate: after a PDIC writer
-raises, unreadable PDIC must NOT trigger an OCRed-only rollback.
+Round 118 extends the ambiguous-commit policy to the prewrite read: a
+failed PDIC inspection cannot prove that PDIC was not externally replaced.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import picture_capture.ocr.batch_publication as publication
 
 @pytest.mark.parametrize("had_sidecar", [False, True])
 @pytest.mark.parametrize("had_pdic", [False, True])
-def test_prewrite_pdic_read_error_restores_exact_sidecar_and_skips_writer(
+def test_prewrite_pdic_read_error_preserves_exported_sidecar_and_skips_writer(
     tmp_path, monkeypatch, had_sidecar, had_pdic,
 ):
     pdic = tmp_path / "001.PDIC"
@@ -42,7 +42,7 @@ def test_prewrite_pdic_read_error_restores_exact_sidecar_and_skips_writer(
         return read_original(self)
 
     monkeypatch.setattr(Path, "read_bytes", unreadable_after_export)
-    with pytest.raises(RuntimeError, match="无法核验导出后的 PDIC；已恢复原有 OCRed") as caught:
+    with pytest.raises(RuntimeError, match="拒绝单侧回滚，未启动 PDIC 保存") as caught:
         publish_existing_pdic_ocr(
             ocred, pdic, ["new OCR"], [Entry("new OCR", 7, 31)],
             100, ("001", "@", "@"),
@@ -52,10 +52,11 @@ def test_prewrite_pdic_read_error_restores_exact_sidecar_and_skips_writer(
     assert isinstance(caught.value.__cause__, PermissionError)
     assert pdic_reads == [1, 2]
     assert writes == []
+    assert import_ocred(ocred) == ["new OCR"]
     if had_sidecar:
-        assert read_original(ocred) == old_ocred
+        assert read_original(ocred) != old_ocred
     else:
-        assert not ocred.exists()
+        assert ocred.exists()
     if had_pdic:
         assert read_original(pdic) == b"unchanged PDIC bytes"
     else:
@@ -63,7 +64,7 @@ def test_prewrite_pdic_read_error_restores_exact_sidecar_and_skips_writer(
     assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
 
 
-def test_prewrite_verification_and_rollback_both_fail_reports_both(
+def test_prewrite_verification_failure_never_attempts_rollback(
     tmp_path, monkeypatch,
 ):
     pdic = tmp_path / "001.PDIC"
@@ -83,11 +84,14 @@ def test_prewrite_verification_and_rollback_both_fail_reports_both(
         return original_read(self)
 
     monkeypatch.setattr(Path, "read_bytes", fail_second_pdic_read)
-    monkeypatch.setattr(
-        publication, "_restore_ocred_bytes",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("rollback denied")),
-    )
-    with pytest.raises(RuntimeError, match="无法核验导出后的 PDIC，且 OCRed 回滚失败") as caught:
+    rollback_calls = []
+
+    def forbid_rollback(*_args, **_kwargs):
+        rollback_calls.append(True)
+        raise AssertionError("unsafe rollback attempted")
+
+    monkeypatch.setattr(publication, "_restore_ocred_if_unchanged", forbid_rollback)
+    with pytest.raises(RuntimeError, match="拒绝单侧回滚，未启动 PDIC 保存") as caught:
         publish_existing_pdic_ocr(
             ocred, pdic, ["new"], [Entry("new", 7, 31)],
             100, ("001", "@", "@"),
@@ -96,7 +100,7 @@ def test_prewrite_verification_and_rollback_both_fail_reports_both(
         )
     assert isinstance(caught.value.__cause__, PermissionError)
     assert "verification denied" in str(caught.value)
-    assert "rollback denied" in str(caught.value)
+    assert rollback_calls == []
     assert count["pdic"] == 2
     assert writes == []
     assert import_ocred(ocred) == ["new"]
@@ -114,6 +118,7 @@ def test_prewrite_and_postwrite_verification_errors_have_distinct_recovery_rules
     prewrite = source.split("pdic_after_export = pdic_path.read_bytes()", 1)[1]
     prewrite = prewrite.split("if pdic_after_export != previous_pdic:", 1)[0]
     postwrite = source.split("except Exception as pdic_error:", 1)[1]
-    assert "_restore_ocred_if_unchanged(ocred_path, previous, published_ocred)" in prewrite
+    assert "拒绝单侧回滚，未启动 PDIC 保存" in prewrite
+    assert "_restore_ocred_if_unchanged(ocred_path, previous, published_ocred)" not in prewrite
     assert "不执行仅 OCRed 回滚" in postwrite
     assert "current_pdic != previous_pdic" in postwrite
