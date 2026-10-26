@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 from .batch_publication import publish_existing_pdic_ocr
 from .text_io import render_ocred_bytes
+from ..persistence.project_storage import page_sections_read_path_for_image
 
 
 def process_existing_pdic_page(
@@ -44,6 +45,27 @@ def process_existing_pdic_page(
         source_ocred_bytes = ocred_file.read_bytes()
     except FileNotFoundError:
         source_ocred_bytes = None
+    # SECTION determines marker reading order and OCR page lanes. Its canonical
+    # location can change when a managed-v2 project supersedes a migrated QT
+    # copy. Capture both the resolved source path and its exact bytes.
+    section_source_path = page_sections_read_path_for_image(page)
+    try:
+        section_source_bytes = section_source_path.read_bytes()
+    except FileNotFoundError:
+        section_source_bytes = None
+
+    def verify_section_source() -> None:
+        current_path = page_sections_read_path_for_image(page)
+        try:
+            current_bytes = current_path.read_bytes()
+        except FileNotFoundError:
+            current_bytes = None
+        if current_path != section_source_path or current_bytes != section_source_bytes:
+            raise RuntimeError(
+                "批量 OCR 处理期间 SECTION 已被其他操作修改或切换来源；"
+                "已跳过当前页保存，避免使用过期的分区阅读顺序"
+            )
+
     entries = deps["read_pdic"](pdic_file)
     with deps["Image"].open(page) as opened:
         image = deps["normalize_page_rgb"](opened)
@@ -95,5 +117,6 @@ def process_existing_pdic_page(
         expected_pdic_bytes=source_pdic_bytes,
         expected_ocred_bytes=source_ocred_bytes,
         expected_exported_ocred_bytes=render_ocred_bytes(texts),
+        validate_page_context=verify_section_source,
     )
     return len(texts)
