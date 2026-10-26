@@ -2810,3 +2810,19 @@ manual acceptance **OPEN / NOT PASSED**.
   They cannot prevent external disk writes or a post-check race. Draft PR
   #663 remains unmerged; real dictionary GUI acceptance remains
   **OPEN / NOT PASSED**.
+
+### Round 121 (2026-10-27): cross-platform fixture recovery for original-coordinate guards
+
+- Exact-HEAD six-platform CI for Round 120 failed five cases in
+  `tests/test_issue562_marker_coordinates_round120_20261027.py` with
+  `FileExistsError` / Windows `WinError 183`. The canonical PDIC writer
+  creates the `QT` directory, so the test fixtures cannot assume it is
+  absent when creating the OCRed sidecar.
+- Both fixtures now use `mkdir(exist_ok=True)` and retain their original
+  assertions for coordinate mutation, dropped markers, OCR reordering,
+  legal sort reordering, byte-exact sidecar preservation and pixel coordinates.
+  No production behavior was changed in this correction.
+- OCR Platform Smoke on the failing HEAD was green, but six-platform CI was
+  **failed**, not passed; only the new HEAD's checks can establish recovery.
+  PR #663 remains Draft/unmerged. Manual dictionary GUI scan, proofread,
+  save and reopen acceptance is **OPEN / NOT PASSED**.
