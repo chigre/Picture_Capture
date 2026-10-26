@@ -2194,3 +2194,32 @@ transaction. Six-platform CI and three-platform OCR Smoke must pass on
 the exact Round 91 HEAD before claiming verification. Real scanned-dictionary
 manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance stays **OPEN / NOT PASSED**;
 PR #663 remains **Draft**, unmerged.
+
+
+## Issue #562 — Round 92: fix final SECTION fault-injection timing after image guard (2026-10-26)
+
+Round 91's new post-image-decode `verify_page_sources()` added an
+intentional early SECTION validation before OCR inference. That changed
+the count of SECTION file reads in the Round 90 failure-injection test:
+snapshot (1), post-decode (2), pre-export (3), and final pre-PDIC (4).
+The existing test injected a manual OCRed edit plus SECTION replacement
+on read 3, so it correctly failed **before** OCRed export, rather than
+exercising the intended final publication compensation path. The exact
+Round 91 HEAD failed all six CI matrix jobs on that stale test assertion,
+while OCR Platform Smoke succeeded.
+
+The regression now injects on read 4, retaining its explicit assertions
+that the newer human OCRed edit survives, no PDIC save occurs, and the
+combined SECTION-conflict/rollback-refusal error is reported. A new
+parameterized fault-injection test changes SECTION only on that final
+validation, with both an existing BOM/CRLF OCRed sidecar and an absent
+sidecar. It verifies exact restoration/removal of OCRed, preservation of
+the unchanged PDIC, preservation of the external SECTION edit, and no
+temporary sidecar leak. This fixes a test scheduling mismatch rather
+than weakening production page-source checks.
+
+**Still open:** image, SECTION, PDIC and OCRed checks remain optimistic;
+no cross-process compare-and-swap or two-file atomic commit is promised.
+Full six-platform CI and OCR Platform Smoke must be checked for the new
+HEAD. PR #663 remains Draft and unmerged; real scanned-dictionary manual
+acceptance stays **OPEN / NOT PASSED**.
