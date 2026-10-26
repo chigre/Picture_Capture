@@ -2338,3 +2338,10 @@ transaction is claimed. Require fresh exact-HEAD six-platform CI and
 three-OS OCR Platform Smoke before accepting this round. Keep PR #663
 **Draft / unmerged** and real dictionary-page GUI/OCR/PDIC/PPP/save-reopen
 manual acceptance **OPEN / NOT PASSED**.
+
+### Round 96 (2026-10-26): post-commit OCRed recheck after provenance hashing
+
+- `ocr/batch_publication.py` now re-reads the exported OCRed bytes **after** the final post-commit SECTION/source-image verification. A large scan hash can take long enough for another window to edit or delete OCRed after the previous post-PDIC check. Detect the late conflict instead of returning false success.
+- The new guard reports a distinct error on changed/missing OCRed or an unreadable OCRed sidecar. PDIC has already been committed: **do not** independently roll back PDIC or overwrite the externally edited OCRed. Original PDIC X/Y coordinates and OCRed serialization remain unchanged.
+- `tests/test_issue562_postcommit_ocred_recheck_round96_20261026.py` injects edits, deletion, and read denial during the third page-context check, plus the uncontended success path. The tests assert byte preservation, committed PDIC coordinates, and no single-sided compensation.
+- This is a **detection** improvement, not an atomic multi-file transaction. A writer can still race after the last check; byte-equal rewrites are invisible. Cross-process locking and crash recovery require separate design and Windows spawn/Tk compatibility review. Real dictionary scan acceptance remains **OPEN / NOT PASSED**.
