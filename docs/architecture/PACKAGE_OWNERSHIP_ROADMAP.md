@@ -2223,3 +2223,38 @@ no cross-process compare-and-swap or two-file atomic commit is promised.
 Full six-platform CI and OCR Platform Smoke must be checked for the new
 HEAD. PR #663 remains Draft and unmerged; real scanned-dictionary manual
 acceptance stays **OPEN / NOT PASSED**.
+
+
+## Issue #562 — Round 93: detect OCRed edits after successful PDIC save (2026-10-26)
+
+The existing-marker OCR publisher already compared OCRed immediately before
+calling `write_pdic`, but a second window/process could change or remove the
+sidecar **during** a successful PDIC writer callback. Previously the publisher
+returned success without noticing that the committed PDIC and OCRed no longer
+represented the same OCR batch.
+
+`ocr/batch_publication.py` now reads OCRed once more **after a successful
+PDIC save** and compares its exact bytes with the just-exported sidecar.
+A changed/removed sidecar raises an explicit **PDIC already committed,
+OCRed modified** conflict. A read/permission error also raises an explicit
+ambiguous-state error. Crucially, the publisher does **not** roll back
+either file at this point: PDIC may already be committed, and an OCRed
+manual edit must not be overwritten. Normal export-before-PDIC ordering,
+source X/Y coordinates, existing fault compensation and Windows/Tk worker
+dependency injection remain unchanged.
+
+`tests/test_issue562_ocred_post_pdic_commit_round93_20261026.py`
+exercises an OCRed rewrite or deletion interleaved after the real PDIC
+writer commits, a post-commit OCRed read failure, a normal commit preserving
+original pixel coordinates, and the actual existing-PDIC worker path.
+It asserts the conflict is reported, the latest human OCRed content is
+preserved, and the committed PDIC is not unsafely rolled back.
+
+**Remaining limits:** this is *detection*, not an atomic transaction. A
+writer may still race after the post-save read, byte-identical external
+writes cannot be distinguished, and a conflict can leave a pair requiring
+manual recovery. This change does not claim full concurrency safety.
+Six-platform CI and OCR Platform Smoke must be checked on the exact new
+HEAD. PR #663 remains **Draft / unmerged**, and real scanned-dictionary
+manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance remains
+**OPEN / NOT PASSED**.
