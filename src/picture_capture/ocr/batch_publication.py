@@ -286,3 +286,24 @@ def publish_existing_pdic_ocr(
                 f"PDIC={pdic_error!r}；OCRed={rollback_error!r}"
             ) from rollback_error
         raise
+
+    # The PDIC writer can return successfully while another window edits or
+    # removes OCRed during the save callback. A pre-save version check alone
+    # cannot notice that race. PDIC is already committed here: report the
+    # mismatched pair for recovery, never roll back either side independently.
+    try:
+        ocred_after_pdic = ocred_path.read_bytes()
+    except FileNotFoundError:
+        ocred_after_pdic = None
+    except OSError as inspect_error:
+        raise RuntimeError(
+            "PDIC 已保存，但无法核验 OCRed 在保存期间是否被修改；"
+            "未执行单侧回滚，请人工核查两份文件："
+            f"核查={inspect_error!r}"
+        ) from inspect_error
+    if ocred_after_pdic != published_ocred:
+        raise RuntimeError(
+            "PDIC 已保存，但 OCRed 在保存期间被其他操作修改；"
+            "保留已提交的 PDIC 和最新 OCRed，未执行单侧回滚；"
+            "请人工核查两份文件"
+        )
