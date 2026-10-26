@@ -196,4 +196,24 @@ def process_existing_pdic_page(
             "（文字、数量、顺序、原图像素坐标或页面关联）；"
             "未单独回滚 OCRed，请人工核查两份文件"
         )
+    # Reopening/parsing a large PDIC can take time. An external proofreader
+    # may change or remove OCRed after the publication helper's final guard
+    # but before the page worker reports success. Verify the canonical
+    # exported bytes once more after the persisted-record read. The PDIC
+    # has already been committed, so do not roll back either side alone.
+    try:
+        final_ocred_bytes = ocred_file.read_bytes()
+    except FileNotFoundError:
+        final_ocred_bytes = None
+    except OSError as error:
+        raise RuntimeError(
+            "PDIC 保存后核验词条期间无法再次读取 OCRed；"
+            "未单独回滚，请人工核查 OCRed 与 PDIC"
+        ) from error
+    if final_ocred_bytes != render_ocred_bytes(texts):
+        raise RuntimeError(
+            "PDIC 保存后核验词条期间 OCRed 被修改或移除；"
+            "保留磁盘上的最新 OCRed 与 PDIC，未执行单侧回滚；"
+            "请人工核查两份文件"
+        )
     return len(texts)
