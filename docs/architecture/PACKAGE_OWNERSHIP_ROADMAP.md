@@ -2529,3 +2529,28 @@ manual acceptance **OPEN / NOT PASSED**.
   OCR Platform Smoke must be checked before calling this round green.
   PR #663 remains **Draft / unmerged**; real dictionary-scan manual
   GUI/OCR/PDIC/PPP/save-reopen acceptance stays **OPEN / NOT PASSED**.
+
+### Round 104 (2026-10-26): protect PDIC byte identity across post-save record parsing
+
+- Round 102 verifies persisted PDIC records after the writer returns. A
+  long-running parser can return the original correct rows even if another
+  process replaces or deletes PDIC before the worker finishes verification.
+  Comparing parsed words/X/Y/page links alone could incorrectly report
+  success for an already-replaced on-disk file.
+- `ocr/batch_existing_entries.py` now snapshots the full PDIC bytes just
+  before reopening the saved records and compares them again immediately
+  after validating the parsed rows. Missing/unreadable PDIC and changed
+  bytes are explicit post-commit conflicts. OCRed is **not** rolled back
+  independently, and external PDIC edits are preserved.
+- `tests/test_issue562_pdic_during_reopen_round104_20261026.py`
+  injects a manual PDIC replacement, deletion and read denial *after* the
+  post-save parser returns, plus a normal save/reopen control. It checks
+  original image-pixel X/Y and page links, unchanged scan/SECTION, canonical
+  OCRed persistence, and absence of rollback temporary files.
+- **Boundary:** optimistic before/after file-version checks are not an
+  atomic cross-process transaction; a writer can still race after the last
+  check or perform byte-identical rewrites. No PDIC/PPP/SECTION schema,
+  Windows spawn/Tk, or OCR model behavior changes. Check exact-HEAD six-
+  platform CI and OCR Platform Smoke before marking this round verified.
+  PR #663 must remain **Draft / unmerged**; representative real dictionary
+  scan/edit/save/reopen manual acceptance remains **OPEN / NOT PASSED**.
