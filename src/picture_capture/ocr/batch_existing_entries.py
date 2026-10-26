@@ -99,6 +99,13 @@ def process_existing_pdic_page(
                 "已跳过当前页保存，避免写入过期 OCR 与像素坐标"
             )
 
+        # Hashing a large source scan can take significant time. SECTION
+        # may be replaced *during* that hash, after the first SECTION read.
+        # Recheck the resolved SECTION path and exact bytes once the image
+        # digest completes so neither the pre-commit nor post-commit check
+        # silently accepts stale reading lanes.
+        verify_section_source()
+
     entries = deps["read_pdic"](pdic_file)
     with deps["Image"].open(page) as opened:
         image = deps["normalize_page_rgb"](opened)
