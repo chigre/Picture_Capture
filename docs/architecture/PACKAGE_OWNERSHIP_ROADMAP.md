@@ -2457,3 +2457,12 @@ manual acceptance **OPEN / NOT PASSED**.
   Windows/macOS/Ubuntu OCR Platform Smoke. Keep PR #663 **Draft / unmerged**;
   representative real dictionary-page GUI/OCR/PDIC/PPP/save-reopen manual
   acceptance remains **OPEN / NOT PASSED**.
+
+- **First CI failure / repair:** the Round 101 initial six-platform run
+  exposed one Round 85 test double that monkeypatched
+  `_restore_ocred_bytes` with a positional-only `lambda *_args`. The new
+  guarded rollback passes `expected_current` by keyword, so the spy raised
+  `TypeError` instead of its intended injected `OSError("rollback denied")`.
+  The test double now accepts `**_kwargs` and still raises the same injected
+  error. Production ownership checks were **not** weakened. Verify the new
+  exact HEAD in six-platform CI and OCR Smoke before claiming success.
