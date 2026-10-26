@@ -62,7 +62,14 @@ def test_final_provenance_hash_catches_sidecar_edit(tmp_path, monkeypatch, fault
     if fault == "none":
         assert run() == 1
     else:
-        with pytest.raises(RuntimeError, match="页面来源最终核验期间"):
+        # Replacement is a byte-version conflict; deletion is a read failure.
+        # Both must be reported without compensating either committed sidecar.
+        message = (
+            "页面来源最终核验后无法再次读取"
+            if fault.endswith("_remove")
+            else "页面来源最终核验期间"
+        )
+        with pytest.raises(RuntimeError, match=message):
             run()
     assert calls["count"] == 6
     if fault == "pdic_replace":
