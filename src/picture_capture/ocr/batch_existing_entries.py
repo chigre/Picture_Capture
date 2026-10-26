@@ -10,12 +10,27 @@ The explicit live dependency map preserves the historical controller's
 monkeypatch behavior (including on Windows spawn workers).
 """
 
+import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
 from .batch_publication import publish_existing_pdic_ocr
 from .text_io import render_ocred_bytes
 from ..persistence.project_storage import page_sections_read_path_for_image
+
+
+def _source_image_sha256(path: Path) -> bytes:
+    """Hash original on-disk image bytes without loading the scan into RAM.
+
+    OCR works on decoded pixels, but a replaced source image can invalidate
+    both recognized text and source-pixel marker coordinates. Use streaming
+    bytes instead of file size/mtime (which miss same-size rewrites).
+    """
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.digest()
 
 
 def process_existing_pdic_page(
@@ -30,6 +45,9 @@ def process_existing_pdic_page(
 ) -> int:
     """Run one existing-PDIC OCR job with the original publication order."""
     pdic_file = deps["pdic_path"](page)
+    # OCRed/PDIC/SECTION alone do not identify the scan whose pixels were
+    # decoded. Preserve its content identity before opening the image.
+    source_image_hash = _source_image_sha256(page)
     # Snapshot disk bytes before inference. External/manual proofreading may
     # replace PDIC while OCR runs; never overwrite that newer edit with the
     # markers loaded at worker start. The batch UI also locks worker-owned
@@ -66,9 +84,27 @@ def process_existing_pdic_page(
                 "已跳过当前页保存，避免使用过期的分区阅读顺序"
             )
 
+    def verify_page_sources() -> None:
+        verify_section_source()
+        try:
+            current_image_hash = _source_image_sha256(page)
+        except FileNotFoundError as error:
+            raise RuntimeError(
+                "批量 OCR 处理期间原始图像已被移除；"
+                "已跳过当前页保存，避免写入过期 OCR 与像素坐标"
+            ) from error
+        if current_image_hash != source_image_hash:
+            raise RuntimeError(
+                "批量 OCR 处理期间原始图像已被其他操作修改；"
+                "已跳过当前页保存，避免写入过期 OCR 与像素坐标"
+            )
+
     entries = deps["read_pdic"](pdic_file)
     with deps["Image"].open(page) as opened:
         image = deps["normalize_page_rgb"](opened)
+    # A scan replaced between the initial fingerprint and decoding is
+    # already stale, even if no subsequent edit occurs during inference.
+    verify_page_sources()
     effective_settings = deps["effective_page_settings"](
         settings, image.size, index,
     )
@@ -117,6 +153,6 @@ def process_existing_pdic_page(
         expected_pdic_bytes=source_pdic_bytes,
         expected_ocred_bytes=source_ocred_bytes,
         expected_exported_ocred_bytes=render_ocred_bytes(texts),
-        validate_page_context=verify_section_source,
+        validate_page_context=verify_page_sources,
     )
     return len(texts)
