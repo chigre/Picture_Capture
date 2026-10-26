@@ -17,8 +17,8 @@ from picture_capture.ocr.text_io import export_ocred, render_ocred_bytes
 
 
 PAGES = ("001", "@", "@")
-OLD_OCRED = b"\\xef\\xbb\\xbf000|`reviewed-before\\r\\n"
-HUMAN_OCRED = b"\\xef\\xbb\\xbf000|`reviewed-during-hash\\r\\n"
+OLD_OCRED = b"\xef\xbb\xbf000|`reviewed-before\r\n"
+HUMAN_OCRED = b"\xef\xbb\xbf000|`reviewed-during-hash\r\n"
 
 
 def _files(tmp_path, old_ocred):
