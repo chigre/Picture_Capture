@@ -33,7 +33,7 @@ def test_mutable_callbacks_cannot_publish_changed_marker_coordinates(
     )
     original_pdic = pdic.read_bytes()
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir()
+    ocred.parent.mkdir(exist_ok=True)
     ocred.write_bytes(b"previously proofread OCRed bytes")
     original_ocred = ocred.read_bytes()
     calls = []
@@ -88,7 +88,7 @@ def test_sort_can_reorder_without_changing_source_pixel_coordinates(tmp_path):
         80, ("001", "@", "@"),
     )
     qt = tmp_path / "QT"
-    qt.mkdir()
+    qt.mkdir(exist_ok=True)
     ocred = qt / "001.OCRed"
     ocred.write_bytes(b"old OCRed")
 
