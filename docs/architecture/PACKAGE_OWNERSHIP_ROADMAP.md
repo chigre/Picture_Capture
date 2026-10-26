@@ -2606,3 +2606,16 @@ manual acceptance **OPEN / NOT PASSED**.
   exact-HEAD six-platform CI and three-OS OCR smoke before claiming success.
   PR #663 remains **Draft / unmerged**. Real scanned dictionary-page manual
   GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 108 (2026-10-27): sidecar race during final source hash
+
+- The final source-image/SECTION provenance check can be slow. After it returns,
+  the existing-PDIC OCR worker now rechecks committed PDIC and canonical OCRed
+  bytes, reporting concurrent replacement/removal without one-sided rollback.
+- Fault-injection regression `test_issue562_sidecar_during_final_hash_round108_20261027.py`
+  injects PDIC/OCRed replacement and deletion inside the final image hash,
+  preserving external changes and original pixel coordinates on the control.
+- This remains optimistic byte comparison, **not** cross-process atomic commit,
+  CAS, or crash recovery. Windows spawn/Tk and persisted schemas are unchanged.
+  PR #663 remains Draft/unmerged; real dictionary scanning manual acceptance
+  remains **OPEN / NOT PASSED**.
