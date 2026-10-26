@@ -25,7 +25,8 @@ def _files(tmp_path, old_ocred):
     pdic = tmp_path / "001.PDIC"
     write_pdic(pdic, [Entry("old", 19, 57)], 120, PAGES)
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir()
+    # write_pdic already creates the managed QT directory.
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     if old_ocred is not None:
         ocred.write_bytes(old_ocred)
     return pdic, ocred
