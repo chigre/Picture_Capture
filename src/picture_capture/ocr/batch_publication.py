@@ -344,6 +344,26 @@ def publish_existing_pdic_ocr(
             ) from rollback_error
         raise
 
+    # Capture the committed PDIC before the potentially slow final source
+    # image hash. Detect a later external PDIC edit without rolling back
+    # either artifact once the PDIC writer has returned successfully.
+    if validate_page_context is not None:
+        try:
+            committed_pdic = pdic_path.read_bytes()
+        except FileNotFoundError:
+            committed_pdic = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "PDIC 已保存，但无法核验提交后的 PDIC 版本；"
+                "未执行单侧回滚，请人工核查两份文件："
+                f"核查={inspect_error!r}"
+            ) from inspect_error
+        if committed_pdic is None:
+            raise RuntimeError(
+                "PDIC 保存函数已返回，但提交后的 PDIC 文件不存在；"
+                "未执行单侧回滚，请人工核查两份文件"
+            )
+
     # The PDIC writer can return successfully while another window edits or
     # removes OCRed during the save callback. A pre-save version check alone
     # cannot notice that race. PDIC is already committed here: report the
@@ -398,5 +418,23 @@ def publish_existing_pdic_ocr(
             raise RuntimeError(
                 "PDIC 已保存，但页面来源核验期间 OCRed 被其他操作修改；"
                 "保留已提交的 PDIC 和最新 OCRed，未执行单侧回滚；"
+                "请人工核查两份文件"
+            )
+
+        # The final provenance check can also outlast a concurrent PDIC edit.
+        try:
+            final_pdic = pdic_path.read_bytes()
+        except FileNotFoundError:
+            final_pdic = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "PDIC 已保存，页面来源核验后无法再次读取 PDIC；"
+                "未执行单侧回滚，请人工核查两份文件："
+                f"核查={inspect_error!r}"
+            ) from inspect_error
+        if final_pdic != committed_pdic:
+            raise RuntimeError(
+                "PDIC 已保存，但页面来源核验期间 PDIC 被其他操作修改；"
+                "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
                 "请人工核查两份文件"
             )
