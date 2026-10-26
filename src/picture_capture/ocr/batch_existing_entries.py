@@ -12,6 +12,7 @@ monkeypatch behavior (including on Windows spawn workers).
 
 import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Mapping
 
 from .batch_publication import publish_existing_pdic_ocr
@@ -189,6 +190,14 @@ def process_existing_pdic_page(
         )
     for entry, text in zip(entries, texts):
         entry.word = text
+    # Capture the intended marker fields before invoking patchable exporters
+    # and writers. A callback may mutate Entry objects in place: validating
+    # against those changed objects would bless an unintended PDIC version
+    # (or falsely reject a correct file after a post-write mutation).
+    intended_entries = [
+        SimpleNamespace(word=entry.word, x=entry.x, y=entry.y)
+        for entry in entries
+    ]
     publish_existing_pdic_ocr(
         ocred_file,
         pdic_file,
@@ -233,7 +242,7 @@ def process_existing_pdic_page(
         word = entry.word.replace("\r", " ").replace("\n", " ").replace("#", "＃").strip()
         return (word, entry.x, entry.y, *pages_info)
 
-    expected_records = [record(entry) for entry in entries]
+    expected_records = [record(entry) for entry in intended_entries]
     actual_records = [
         (entry.word, entry.x, entry.y,
          entry.current_page, entry.previous_page, entry.next_page)
@@ -266,7 +275,7 @@ def process_existing_pdic_page(
     # accepts extra fields. Check the same captured PDIC version's full rows
     # against write_pdic's canonical eight-field serialization as well.
     _verify_pdic_serialized_rows(
-        pdic_after_reopen, entries, image.width, pages_info,
+        pdic_after_reopen, intended_entries, image.width, pages_info,
     )
 
     # Reopening/parsing a large PDIC can take time. An external proofreader
