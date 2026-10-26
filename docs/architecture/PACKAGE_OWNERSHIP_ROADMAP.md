@@ -2790,3 +2790,23 @@ manual acceptance **OPEN / NOT PASSED**.
   failure-injection test additionally covers a PDIC replacement during export.
   No assertion of a fully transactional two-file commit is made. PR #663
   remains Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 120 (2026-10-27): original PDIC pixel-coordinate ownership at callback boundaries
+
+- `ocr/batch_existing_entries.py` snapshots a multiset of original PDIC
+  marker (X,Y) pixel coordinates immediately after loading the records.
+  The SECTION-aware sorter may **reorder** these entries, but may not drop,
+  add or move markers. This is validated before calling OCR.
+- After sorting, the ordered X/Y sequence is frozen again. OCR callbacks
+  may provide recognized text but may not change marker coordinates or
+  reorder the entry list. Violations stop the page **before** either OCRed
+  export or PDIC publication, preserving existing on-disk data.
+- `tests/test_issue562_marker_coordinates_round120_20261027.py`
+  fault-injects sort-time coordinate changes and dropped markers, OCR-time
+  coordinate changes and entry reordering, plus a positive test proving a
+  genuine coordinate-preserving SECTION sorter reorder remains valid.
+- The guards are in memory and do not alter the existing source-image hash,
+  SECTION-read or PDIC-read checkpoint counts used by older fault tests.
+  They cannot prevent external disk writes or a post-check race. Draft PR
+  #663 remains unmerged; real dictionary GUI acceptance remains
+  **OPEN / NOT PASSED**.
