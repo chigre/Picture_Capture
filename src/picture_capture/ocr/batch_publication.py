@@ -65,6 +65,13 @@ def _restore_ocred_if_unchanged(
             "OCRed 在批量 OCR 发布后被其他操作修改；"
             "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
         )
+    # An exporter may succeed without changing the sidecar (or leave it
+    # absent). In that case compensation has nothing to undo. In particular,
+    # do not replace an identical file or unlink an absent one: a concurrent
+    # editor could write after the version read but before that unnecessary
+    # filesystem mutation. Still perform the read above to detect conflicts.
+    if previous == published:
+        return
     _restore_ocred_bytes(path, previous)
 
 

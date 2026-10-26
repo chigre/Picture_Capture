@@ -2384,3 +2384,26 @@ manual acceptance **OPEN / NOT PASSED**.
   claiming success. No schema or source-coordinate change. PR #663 stays
   **Draft / unmerged**; representative real dictionary-scan acceptance stays
   **OPEN / NOT PASSED**.
+
+
+### Round 99 (2026-10-26): eliminate needless OCRed rollback writes
+
+- The guarded OCRed compensator in `ocr/batch_publication.py` still reads
+  the current sidecar and rejects unexpected bytes. When the original and
+  published snapshots are **identical** (including both absent), it now
+  returns without calling the atomic restorer. Previously this no-op path
+  could unnecessarily replace an identical file or unlink an absent one;
+  an external editor writing immediately after the guard's read could
+  lose their edit to that avoidable mutation.
+- `tests/test_issue562_noop_ocred_compensation_round99_20261026.py`
+  injects external writes after the version read for both existing and
+  absent sidecars, verifies the changed-current rejection path, byte-exact
+  BOM/CRLF restoration for a genuine export change, and a failed PDIC
+  writer after an identical OCRed export. Original PDIC X/Y coordinates
+  and persisted bytes remain unchanged on that failure.
+- This closes only the **no-op** compensation race; genuine rollback still
+  has a read-to-replace/unlink TOCTOU window. No cross-process lock or
+  multi-file atomic transaction is claimed. Windows spawn/Tk boundaries
+  and PPP/SECTION schemas are unchanged. Exact-HEAD six-platform CI and
+  three-platform OCR Smoke are required. PR #663 remains **Draft / unmerged**;
+  real scanned-dictionary acceptance remains **OPEN / NOT PASSED**.
