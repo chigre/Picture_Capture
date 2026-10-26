@@ -2080,3 +2080,42 @@ on the new HEAD before declaring the regression resolved.
 **Outstanding:** OCRed/PDIC is still a best-effort two-file publication,
 not an atomic cross-process transaction. Real scanned-dictionary manual
 acceptance remains **OPEN / NOT PASSED**; PR #663 stays **Draft**, unmerged.
+
+
+## Issue #562 — Round 89: export-error OCRed ownership guard (2026-10-26)
+
+The Round 87 optimistic rollback guard protected OCRed edits made **after**
+the exporter returned successfully. The exporter-exception branch still
+restored old OCRed bytes unconditionally after observing a changed sidecar.
+A patched exporter or post-export hook could atomically publish the batch
+sidecar, allow an external proofreader to edit it, and then raise; the old
+exception handler would silently erase that newer manual OCRed edit.
+
+`ocr/batch_publication.publish_existing_pdic_ocr` now applies the worker's
+canonical `expected_exported_ocred_bytes` on the **exporter failure path**.
+If disk OCRed differs from both its pre-export snapshot and the expected
+batch bytes, the publisher reports an ownership conflict and **does not**
+rollback the unknown sidecar or start PDIC publication. If disk OCRed matches
+the batch's expected bytes, rollback uses
+`_restore_ocred_if_unchanged` to check again immediately before restoring
+exact old bytes (including BOM/CRLF), or removing a newly created sidecar.
+A failed compensation remains an explicit error. Direct legacy calls that
+omit expected bytes keep best-effort compensation with the additional
+pre-restore recheck; they cannot attribute arbitrary content to the exporter.
+
+Round 89 fault-injection coverage: existing/absent OCRed, external edit
+inside an exporter that raises, exporter raises after its own atomic write,
+unexpected noncanonical exporter bytes, interleaved manual edit between
+exception inspection and compensation, legacy direct API, and the real
+existing-marker worker with original image-pixel X/Y preserved. No PDIC
+write is permitted on these error paths.
+
+**Boundary:** byte comparisons are optimistic, not cross-process locks or
+two-file transactions. An edit after the final check can still race with
+replace/unlink; identical-byte external writes cannot be distinguished.
+The Windows 3.10 Tcl `init.tcl` initialization failure seen on the
+preceding HEAD is a separate CI environment issue; its failed job was
+rerun and must be judged by its final outcome, not assumed green.
+Six-platform CI and OCR Smoke must be checked on the final Round 89 HEAD.
+Real scanned-dictionary manual acceptance remains OPEN / NOT PASSED;
+PR #663 stays Draft and unmerged.
