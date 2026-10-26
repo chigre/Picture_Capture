@@ -133,8 +133,25 @@ def publish_existing_pdic_ocr(
                 f"导出={export_error!r}；核查={inspect_error!r}"
             ) from export_error
         if current_ocred != previous:
+            # The worker supplies the canonical bytes for its own export.
+            # If an external editor replaced OCRed before the exporter
+            # raised, the observed bytes are not ours to compensate.
+            # For legacy direct callers without an expectation, keep the
+            # historical best-effort rollback but check again just before
+            # replacing the sidecar.
+            if (
+                expected_exported_ocred_bytes is not None
+                and current_ocred != expected_exported_ocred_bytes
+            ):
+                raise RuntimeError(
+                    "OCRed 导出失败，磁盘内容与本次导出预期不符；"
+                    "可能存在并发人工修改，拒绝回滚不明来源的 OCRed；"
+                    f"导出={export_error!r}"
+                ) from export_error
             try:
-                _restore_ocred_bytes(ocred_path, previous)
+                _restore_ocred_if_unchanged(
+                    ocred_path, previous, current_ocred,
+                )
             except Exception as rollback_error:
                 raise RuntimeError(
                     "OCRed 导出失败，且原文件回滚也失败；"
