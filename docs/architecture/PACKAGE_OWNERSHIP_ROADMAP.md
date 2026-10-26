@@ -2303,3 +2303,38 @@ now verifies the **three** intended checkpoints in order: before OCRed
 export, after export/before PDIC, and after successful PDIC. This is a test
 expectation update, not a relaxation of production guards. The follow-up
 commit requires fresh six-platform CI and OCR Smoke verification.
+
+
+## Issue #562 — Round 95: revalidate sidecars after final provenance check (2026-10-26)
+
+The Round 94 page-source callback streams the original scan to verify its
+SHA-256 and rereads SECTION. That check can take significant time on large
+scans. Previously the publisher checked OCRed and PDIC **before** this
+callback, then wrote PDIC immediately after it returned. A second editor
+could therefore replace either sidecar *during the last source check* and
+the worker might overwrite a newer PDIC or accept a newer OCRed silently.
+
+`ocr/batch_publication.py` now performs an additional **PDIC then OCRed**
+exact-byte comparison immediately after the final pre-save
+`validate_page_context()` returns. If PDIC changed, it refuses to call the
+PDIC writer and compensates only the worker-owned OCRed export. If OCRed
+also changed, the guarded compensation refuses to overwrite the human edit.
+If OCRed alone changed, the writer is skipped and the newer OCRed is left
+untouched. A final PDIC read failure is reported explicitly and triggers
+guarded OCRed compensation; an unreadable final OCRed is not blindly
+rolled back. The optional callback is unchanged and old direct callers
+without it retain their existing behavior.
+
+`tests/test_issue562_precommit_revalidation_round95_20261026.py`
+injects a PDIC edit, OCRed edit, combined edit and PDIC read failure
+*during the final page-context check*, with both missing and existing
+BOM/CRLF OCRed originals. It also covers uncontended X/Y coordinate
+preservation, all three provenance checks and legacy direct invocation.
+
+**Still open:** the last comparison and filesystem replacement are not
+atomic; non-cooperating external writers and crashes can still leave
+inconsistent files. No cross-process locking or atomic multi-file
+transaction is claimed. Require fresh exact-HEAD six-platform CI and
+three-OS OCR Platform Smoke before accepting this round. Keep PR #663
+**Draft / unmerged** and real dictionary-page GUI/OCR/PDIC/PPP/save-reopen
+manual acceptance **OPEN / NOT PASSED**.
