@@ -2619,3 +2619,8 @@ manual acceptance **OPEN / NOT PASSED**.
   CAS, or crash recovery. Windows spawn/Tk and persisted schemas are unchanged.
   PR #663 remains Draft/unmerged; real dictionary scanning manual acceptance
   remains **OPEN / NOT PASSED**.
+
+### Round 108 CI follow-up (2026-10-26): missing-sidecar diagnostic assertion
+
+- The initial Round 108 regression fixture created an already-existing QT directory without `exist_ok=True`; fixed in `a062bff`. The next six-platform CI run exposed two test-only diagnostic mismatches: a removed PDIC/OCRed is reported as a failed post-hash read, whereas a replaced sidecar is reported as a byte-version conflict. The assertions now explicitly distinguish both paths while continuing to require an error, preservation of external changes, and no unilateral rollback.
+- Neither correction weakens production validation or changes persistence formats. Exact-head six-platform CI and OCR Platform Smoke must be confirmed after the test correction; Draft PR #663 and real-page manual acceptance remain unchanged.
