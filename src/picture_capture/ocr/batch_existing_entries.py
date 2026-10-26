@@ -11,6 +11,7 @@ monkeypatch behavior (including on Windows spawn workers).
 """
 
 import hashlib
+from copy import copy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping
@@ -213,10 +214,7 @@ def process_existing_pdic_page(
     # intended records. Exporters may rewrite their text list or mutate
     # Entry objects; the PDIC writer must receive the original OCR result.
     publication_texts = list(texts)
-    publication_entries = [
-        SimpleNamespace(word=entry.word, x=entry.x, y=entry.y)
-        for entry in intended_entries
-    ]
+    publication_entries = [copy(entry) for entry in entries]
     publish_existing_pdic_ocr(
         ocred_file,
         pdic_file,
