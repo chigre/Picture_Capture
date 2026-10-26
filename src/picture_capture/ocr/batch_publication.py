@@ -24,8 +24,35 @@ _UNSPECIFIED_PDic_SNAPSHOT = object()
 _UNSPECIFIED_OCRED_SNAPSHOT = object()
 
 
-def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
+def _read_optional_ocred_bytes(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _restore_ocred_bytes(
+    path: Path,
+    previous: bytes | None,
+    *,
+    expected_current: bytes | None | object = _UNSPECIFIED_OCRED_SNAPSHOT,
+) -> None:
+    """Stage compensation first, then recheck ownership just before mutation.
+
+    Staging and fsync may be slow. A single check before staging lets a
+    concurrent manual edit be overwritten by the eventual replace/unlink.
+    This second check narrows that window but is not a filesystem CAS:
+    non-cooperating writers can still race after the last read.
+    """
     if previous is None:
+        if (
+            expected_current is not _UNSPECIFIED_OCRED_SNAPSHOT
+            and _read_optional_ocred_bytes(path) != expected_current
+        ):
+            raise RuntimeError(
+                "OCRed 在回滚前被其他操作修改；"
+                "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
+            )
         path.unlink(missing_ok=True)
         return
 
@@ -42,6 +69,16 @@ def _restore_ocred_bytes(path: Path, previous: bytes | None) -> None:
             file.write(previous)
             file.flush()
             os.fsync(file.fileno())
+        # A manual edit can land while the rollback temp file is written or
+        # synced. Never replace it merely because the earlier read matched.
+        if (
+            expected_current is not _UNSPECIFIED_OCRED_SNAPSHOT
+            and _read_optional_ocred_bytes(path) != expected_current
+        ):
+            raise RuntimeError(
+                "OCRed 在回滚暂存期间被其他操作修改；"
+                "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
+            )
         os.replace(temp_path, path)
     finally:
         if temp_path is not None:
@@ -72,7 +109,7 @@ def _restore_ocred_if_unchanged(
     # filesystem mutation. Still perform the read above to detect conflicts.
     if previous == published:
         return
-    _restore_ocred_bytes(path, previous)
+    _restore_ocred_bytes(path, previous, expected_current=published)
 
 
 def publish_existing_pdic_ocr(
