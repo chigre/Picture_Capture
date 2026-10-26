@@ -2345,3 +2345,22 @@ manual acceptance **OPEN / NOT PASSED**.
 - The new guard reports a distinct error on changed/missing OCRed or an unreadable OCRed sidecar. PDIC has already been committed: **do not** independently roll back PDIC or overwrite the externally edited OCRed. Original PDIC X/Y coordinates and OCRed serialization remain unchanged.
 - `tests/test_issue562_postcommit_ocred_recheck_round96_20261026.py` injects edits, deletion, and read denial during the third page-context check, plus the uncontended success path. The tests assert byte preservation, committed PDIC coordinates, and no single-sided compensation.
 - This is a **detection** improvement, not an atomic multi-file transaction. A writer can still race after the last check; byte-equal rewrites are invisible. Cross-process locking and crash recovery require separate design and Windows spawn/Tk compatibility review. Real dictionary scan acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 97 (2026-10-26): post-commit PDIC recheck after source hashing
+
+- `ocr/batch_publication.py` snapshots the committed PDIC immediately after
+  its writer returns and rechecks the exact bytes after the final SECTION /
+  original-image hash and OCRed recheck. Late PDIC replacement, deletion or
+  read failure now reports an explicit already-committed conflict, rather
+  than a false success. Neither PDIC nor OCRed is rolled back independently.
+- `tests/test_issue562_postcommit_pdic_recheck_round97_20261026.py`
+  injects late PDIC replacement/deletion, final read denial, missing committed
+  PDIC and initial snapshot read denial, plus normal X/Y and OCRed-byte checks.
+- The extra reads are conditional on the existing page-context callback,
+  preserving legacy direct-call sequencing and Windows spawn/Tk boundaries.
+  This is optimistic detection, not atomic commit: edits before the initial
+  snapshot, byte-identical writes and changes after the final read can escape.
+  Exact-HEAD six-platform CI and OCR Smoke still require verification.
+  PR #663 remains **Draft / unmerged**; real dictionary-scan manual
+  acceptance remains **OPEN / NOT PASSED**.
