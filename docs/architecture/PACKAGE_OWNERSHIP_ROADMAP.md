@@ -2294,3 +2294,12 @@ recovery. Full six-platform CI and three-platform OCR Smoke are required
 on the exact Round 94 HEAD before declaring success. PR #663 remains
 **Draft / unmerged**; real scanned-dictionary manual acceptance remains
 **OPEN / NOT PASSED**.
+
+Round 94 first CI attempt exposed a stale Round 90 source-structure assertion
+that required exactly two page-context checks. Four completed Linux/macOS
+matrix jobs failed only that assertion (the new behavior tests passed);
+the remaining matrix jobs were still running at inspection. The assertion
+now verifies the **three** intended checkpoints in order: before OCRed
+export, after export/before PDIC, and after successful PDIC. This is a test
+expectation update, not a relaxation of production guards. The follow-up
+commit requires fresh six-platform CI and OCR Smoke verification.
