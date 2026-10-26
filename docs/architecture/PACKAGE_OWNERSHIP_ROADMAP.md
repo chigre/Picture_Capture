@@ -2258,3 +2258,39 @@ Six-platform CI and OCR Platform Smoke must be checked on the exact new
 HEAD. PR #663 remains **Draft / unmerged**, and real scanned-dictionary
 manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance remains
 **OPEN / NOT PASSED**.
+
+
+## Issue #562 — Round 94: detect page-source edits during committed PDIC saves (2026-10-26)
+
+Round 93 checked OCRed bytes after successful PDIC publication, but the
+`validate_page_context` callback (resolved SECTION source path + bytes and
+streamed original-image SHA-256) was only called **before** the PDIC writer.
+A concurrent external edit to SECTION or the scan **inside** a successful
+`write_pdic` callback could leave OCR text and source pixel coordinates
+stale while the batch incorrectly returned success.
+
+`ocr/batch_publication.py` now invokes the existing page-source validator
+a third time **after PDIC save and the post-save OCRed check**. A SECTION
+rewrite/source switch, same-size image pixel rewrite, scan removal or source
+read failure is reported explicitly as **PDIC already saved; page-source
+provenance changed or cannot be verified**. This is a detection-only
+post-commit conflict: neither PDIC nor OCRed is rolled back independently,
+and external SECTION/image edits are left intact for human recovery. The
+optional callback and dependency injection remain backward-compatible with
+legacy direct callers and Windows spawn/Tk. Normal PDIC/OCRed serialization,
+PPP/SECTION formats and source X/Y marker coordinates are unchanged.
+
+`tests/test_issue562_postcommit_page_source_round94_20261026.py`
+injects real SECTION and image edits/deletion from the PDIC writer through
+the actual existing-PDIC worker, and exercises post-save validator errors,
+normal third validation, committed PDIC and OCRed preservation, X/Y
+coordinates and non-rollback behavior.
+
+**Limitations:** an extra streaming source-image hash adds I/O after each
+successful page save. Post-commit checks are optimistic and cannot detect
+a byte-identical rewrite, changes after the final read, or guarantee an
+atomic multi-file transaction. Detected conflicts can require manual
+recovery. Full six-platform CI and three-platform OCR Smoke are required
+on the exact Round 94 HEAD before declaring success. PR #663 remains
+**Draft / unmerged**; real scanned-dictionary manual acceptance remains
+**OPEN / NOT PASSED**.
