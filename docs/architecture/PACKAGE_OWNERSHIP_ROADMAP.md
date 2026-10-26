@@ -2117,5 +2117,9 @@ The Windows 3.10 Tcl `init.tcl` initialization failure seen on the
 preceding HEAD is a separate CI environment issue; its failed job was
 rerun and must be judged by its final outcome, not assumed green.
 Six-platform CI and OCR Smoke must be checked on the final Round 89 HEAD.
+The first Round 89 six-platform CI attempt exposed a stale Round 79
+source-text assertion expecting an unguarded `_restore_ocred_bytes` call.
+That test now checks for the guarded compensation and canonical-byte
+ownership check instead; the first attempt is not counted as passing.
 Real scanned-dictionary manual acceptance remains OPEN / NOT PASSED;
 PR #663 stays Draft and unmerged.
