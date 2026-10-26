@@ -162,4 +162,38 @@ def process_existing_pdic_page(
         expected_exported_ocred_bytes=render_ocred_bytes(texts),
         validate_page_context=verify_page_sources,
     )
+
+    # A PDIC writer can return normally without persisting the requested
+    # markers (for example, a swallowed I/O error or a no-op writer spy).
+    # Checking only that PDIC exists is insufficient when an older PDIC is
+    # already present: OCRed would be new while marker text stayed stale.
+    # Verify the saved records, original source-pixel coordinates, order and
+    # page links before reporting this page as completed. PDIC has already
+    # been committed at this point; never compensate OCRed alone on failure.
+    try:
+        persisted = deps["read_pdic"](pdic_file)
+    except Exception as error:
+        raise RuntimeError(
+            "PDIC 保存函数已返回，但无法读取保存后的词条；"
+            "未单独回滚 OCRed，请人工核查两份文件"
+        ) from error
+
+    def record(entry: Any) -> tuple[Any, ...]:
+        # Match write_pdic's historical text sanitization exactly. Do not
+        # normalize X/Y: they must remain the original image-pixel values.
+        word = entry.word.replace("\\r", " ").replace("\\n", " ").replace("#", "＃").strip()
+        return (word, entry.x, entry.y, *pages_info)
+
+    expected_records = [record(entry) for entry in entries]
+    actual_records = [
+        (entry.word, entry.x, entry.y,
+         entry.current_page, entry.previous_page, entry.next_page)
+        for entry in persisted
+    ]
+    if actual_records != expected_records:
+        raise RuntimeError(
+            "PDIC 保存函数已返回，但磁盘词条与本次 OCR 结果不一致"
+            "（文字、数量、顺序、原图像素坐标或页面关联）；"
+            "未单独回滚 OCRed，请人工核查两份文件"
+        )
     return len(texts)
