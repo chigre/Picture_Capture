@@ -166,8 +166,10 @@ def test_manual_ocred_edit_during_final_section_check_survives_rollback(
     def interleaved_read(path):
         if path == section_path:
             section_reads[0] += 1
-            # Snapshot, pre-export check, then final pre-PDIC check.
-            if section_reads[0] == 3:
+            # Snapshot, post-decode source check, pre-export check,
+            # then final pre-PDIC check. Round 91 added post-decode
+            # image/SECTION validation, so the final check is fourth.
+            if section_reads[0] == 4:
                 ocred.write_bytes(latest)
                 write_page_sections(page, [PageSection(10, 85)])
         return real_read(path)
@@ -177,9 +179,45 @@ def test_manual_ocred_edit_during_final_section_check_survives_rollback(
         _run(page, lambda *_args, **_kwargs: ["fresh"], pdic_writes=writes)
     assert "OCRed 在批量 OCR 发布后被其他操作修改" in str(exc.value)
     assert writes == []
-    assert section_reads[0] == 3
+    assert section_reads[0] == 4
     assert ocred.read_bytes() == latest
     assert pdic.read_bytes() == old_pdic
+
+
+
+@pytest.mark.parametrize("old_ocred", [None, b"\\xef\\xbb\\xbfmanual-review\\r\\n"])
+def test_section_edit_at_final_pre_pdic_check_restores_only_batch_ocred(
+    tmp_path, monkeypatch, old_ocred,
+):
+    """A final SECTION conflict after OCRed export compensates exact bytes."""
+    page, pdic, ocred = _page(tmp_path)
+    write_page_sections(page, [PageSection(0, 75)])
+    if old_ocred is None:
+        ocred.unlink()
+    else:
+        ocred.write_bytes(old_ocred)
+    original_pdic = pdic.read_bytes()
+    section_path = page_sections_read_path_for_image(page)
+    real_read = Path.read_bytes
+    section_reads = [0]
+    writes = []
+
+    def edit_section_on_final_validation(path):
+        if path == section_path:
+            section_reads[0] += 1
+            if section_reads[0] == 4:
+                write_page_sections(page, [PageSection(21, 90)])
+        return real_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", edit_section_on_final_validation)
+    with pytest.raises(RuntimeError, match="SECTION 已被其他操作修改或切换来源"):
+        _run(page, lambda *_args, **_kwargs: ["fresh"], pdic_writes=writes)
+    assert section_reads[0] == 4
+    assert writes == []
+    assert pdic.read_bytes() == original_pdic
+    assert (ocred.read_bytes() if ocred.exists() else None) == old_ocred
+    assert read_page_sections(page) == [PageSection(21, 90)]
+    assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
 
 
 def test_uncontended_section_preserves_ocr_lane_and_original_marker_xy(tmp_path):
