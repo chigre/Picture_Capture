@@ -216,6 +216,22 @@ def publish_existing_pdic_ocr(
                     "可能存在并发人工修改，拒绝回滚不明来源的 OCRed；"
                     f"导出={export_error!r}"
                 ) from export_error
+            # PDIC may change while OCRed is inspected or staged for
+            # compensation. Recheck before any OCRed-only rollback.
+            try:
+                pdic_before_compensation = pdic_path.read_bytes()
+            except FileNotFoundError:
+                pdic_before_compensation = None
+            except OSError as inspect_error:
+                raise RuntimeError(
+                    "OCRed 导出失败，回滚前无法核验 PDIC；"
+                    "拒绝单侧回滚，请人工核查两份文件"
+                ) from inspect_error
+            if pdic_before_compensation != previous_pdic:
+                raise RuntimeError(
+                    "OCRed 导出失败，回滚前 PDIC 已被其他操作修改；"
+                    "拒绝单侧回滚，请人工核查两份文件"
+                ) from export_error
             try:
                 _restore_ocred_if_unchanged(
                     ocred_path, previous, current_ocred,
