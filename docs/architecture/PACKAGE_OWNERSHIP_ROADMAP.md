@@ -2713,3 +2713,14 @@ manual acceptance **OPEN / NOT PASSED**.
   failed-export PDIC check. No PDIC writer is invoked.
 - The guard is optimistic, not an atomic cross-process CAS. Draft PR #663
   remains unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 115 (2026-10-27): compensation preflight read failure
+
+- Added a fault-injection regression for a `PermissionError` on the third
+  PDIC read (the final failed-export compensation preflight). The worker
+  must retain the newly exported OCRed bytes rather than rolling back a
+  potentially mismatched pair, leave PDIC unchanged, and never call its
+  writer. This covers the read-error branch introduced in Round 114.
+- No new production change in this round; cross-process atomicity and
+  process-crash recovery remain outside the optimistic guard. PR #663 stays
+  Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
