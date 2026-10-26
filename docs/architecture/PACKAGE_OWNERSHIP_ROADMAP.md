@@ -2741,3 +2741,18 @@ manual acceptance **OPEN / NOT PASSED**.
 - This does not add cross-process atomicity or replace manual GUI
   acceptance; Draft PR #663 stays unmerged, real dictionary-page scan/
   edit/save/reopen acceptance remains **OPEN / NOT PASSED**.
+
+### Round 117 (2026-10-27): publication callback argument isolation
+
+- Existing-PDIC OCR now supplies a separate text-list copy and shallow
+  `Entry` copies to the publication helper. A patchable OCRed exporter
+  mutating its text-list argument cannot change the worker's intended
+  count/content or the subsequent PDIC writer inputs. Preserve the original
+  `Entry` class for legacy writer and Tk integration compatibility.
+- `tests/test_issue562_export_callback_isolation_round117_20261027.py`
+  checks an exporter that mutates the list after saving OCRed, ensuring
+  persisted PDIC text, source-pixel coordinates and page count remain correct.
+- The original writer callback can still mutate its own copies, and final
+  persisted-byte validation remains necessary. This is not a cross-process
+  transaction. PR #663 remains Draft/unmerged; real dictionary GUI acceptance
+  **OPEN / NOT PASSED**.
