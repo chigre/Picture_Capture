@@ -2756,3 +2756,21 @@ manual acceptance **OPEN / NOT PASSED**.
   persisted-byte validation remains necessary. This is not a cross-process
   transaction. PR #663 remains Draft/unmerged; real dictionary GUI acceptance
   **OPEN / NOT PASSED**.
+
+### Round 118 (2026-10-27): ambiguous PDIC read after successful OCRed export
+
+- If OCRed export returns successfully but the subsequent PDIC read raises
+  `OSError` (including `PermissionError`), PDIC ownership is unknown:
+  an external editor or a patchable exporter may have replaced its bytes.
+  The publication helper now **does not revert OCRed alone** and does not
+  invoke the PDIC writer. It retains both on-disk files for explicit manual
+  reconciliation, consistent with other ambiguous-commit failure paths.
+- `tests/test_issue562_pdic_inspection_failure_round118_20261027.py`
+  injects the PDIC read fault on the post-export inspection, with PDIC
+  either unchanged or replaced during export. Both cases must preserve
+  exported OCRed and current PDIC, avoid the PDIC writer, and leave no
+  compensation temp file.
+- This is conservative recovery under indeterminate ownership, **not**
+  atomic two-file publication. Cooperative locking / cross-process CAS and
+  crash recovery remain open. PR #663 stays Draft/unmerged; physical GUI
+  dictionary scan, edit, save and reopen acceptance is **OPEN / NOT PASSED**.
