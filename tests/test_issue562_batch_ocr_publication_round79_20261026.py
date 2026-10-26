@@ -97,6 +97,5 @@ def test_atomic_sidecar_contract_is_physical_and_pdic_writer_remains_canonical()
     assert 'write_pdic=deps["write_pdic"]' in leaf
     assert "export_ocred(ocred_path, texts)" in publication
     assert "write_pdic(pdic_path, entries, image_width, pages_info)" in publication
-    assert "_restore_ocred_bytes(ocred_path, previous)" in publication
-    assert "write_text_atomic(" in writer
+    # Rollback is now guarded against edits arriving after OCRed export.\n    assert "_restore_ocred_if_unchanged(" in publication\n    assert "current_ocred != expected_exported_ocred_bytes" in publication\n    assert "write_text_atomic(" in writer
     assert "path.write_text(" not in writer
