@@ -205,7 +205,8 @@ def test_source_and_publisher_guards_are_both_wired():
     publisher = (root / "batch_publication.py").read_text(encoding="utf-8")
     assert "section_source_path = page_sections_read_path_for_image(page)" in worker
     assert "current_path != section_source_path" in worker
-    assert "validate_page_context=verify_section_source" in worker
+    assert "validate_page_context=verify_page_sources" in worker
+    assert "verify_section_source()" in worker
     assert publisher.count("validate_page_context()") == 2
     assert publisher.index("validate_page_context()") < publisher.index(
         "export_ocred(ocred_path, texts)"
