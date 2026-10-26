@@ -19,6 +19,7 @@ from picture_capture.ocr.text_io import export_ocred, render_ocred_bytes
 from picture_capture.persistence.page_sections import (
     PageSection, read_page_sections, write_page_sections,
 )
+from picture_capture.persistence.project_storage import page_sections_read_path_for_image
 
 
 PAGES = ("001", "@", "@")
@@ -32,7 +33,7 @@ def test_page_source_change_during_persisted_pdic_reopen(tmp_path, fault):
     Image.new("RGB", (100, 120), "white").save(page)
     original_image = page.read_bytes()
     write_page_sections(page, [PageSection(0, 75)])
-    section_path = page.with_suffix(".SECTION")
+    section_path = page_sections_read_path_for_image(page)
     pdic = page.with_suffix(".PDIC")
     write_pdic(pdic, [Entry("before", 17, 43)], 100, PAGES)
     ocred = tmp_path / "QT" / "001.OCRed"
@@ -49,12 +50,7 @@ def test_page_source_change_during_persisted_pdic_reopen(tmp_path, fault):
             if fault == "section_edit":
                 write_page_sections(page, [PageSection(0, 60)])
             elif fault == "section_remove":
-                # Resolve the canonical SECTION path, rather than relying on
-                # an extension assumption in managed project layouts.
-                from picture_capture.persistence.project_storage import (
-                    page_sections_read_path_for_image,
-                )
-                page_sections_read_path_for_image(page).unlink()
+                section_path.unlink()
             elif fault == "image_replace":
                 Image.new("RGB", (100, 120), "black").save(page)
             elif fault == "image_remove":
