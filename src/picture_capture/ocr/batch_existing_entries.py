@@ -158,6 +158,10 @@ def process_existing_pdic_page(
         image, effective_settings, index,
     )
     sections = deps["read_page_sections"](page)
+    # A custom SECTION reader can modify the source or switch the canonical
+    # path while returning stale lanes. Check provenance immediately after
+    # this patchable read, before sorting or launching expensive inference.
+    verify_page_sources()
     entries = deps["sort_entries_reading_order"](
         entries,
         deps["derive_geometry"](analysis_image, effective_settings),
