@@ -2554,3 +2554,29 @@ manual acceptance **OPEN / NOT PASSED**.
   platform CI and OCR Platform Smoke before marking this round verified.
   PR #663 must remain **Draft / unmerged**; representative real dictionary
   scan/edit/save/reopen manual acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 105 (2026-10-26): verify saved PDIC percentage/index fields
+
+- The Round 102 post-save check reopens PDIC with `read_pdic`, which
+  intentionally ignores columns 4/5 (X/Y percentages) and tolerates surplus
+  columns. A faulty writer can therefore persist correct words, original
+  X/Y pixels and page links while silently corrupting the downstream PicDic
+  index percentages. This is a data-integrity failure, not a coordinate
+  transformation request.
+- `ocr/batch_existing_entries.py` now compares all eight serialized PDIC
+  columns against the existing `write_pdic` contract, including the
+  image-width-based percentage formula and `:g` formatting. It decodes
+  the **same post-save byte snapshot** already protected by the Round 104
+  before/after parse checks, rather than reading an additional race-prone
+  version. It reports mismatch without unilateral OCRed compensation.
+- `tests/test_issue562_pdic_percent_fields_round105_20261026.py` injects
+  wrong X%, wrong Y%, nonnumeric %, extra column, wrong width and an
+  uncontended real-writer control. Checks original pixel X/Y, unchanged
+  source scan/SECTION, OCRed persistence and absence of rollback temps.
+- This verifies committed bytes; it is **not** a cross-process CAS or
+  crash-safe two-file transaction. Final-check races and non-cooperating
+  writers remain. Six-platform CI and three-OS OCR Smoke require exact-HEAD
+  confirmation. PR #663 stays **Draft / unmerged** and representative real
+  dictionary-page manual GUI/OCR/PDIC/PPP/save-reopen acceptance remains
+  **OPEN / NOT PASSED**.

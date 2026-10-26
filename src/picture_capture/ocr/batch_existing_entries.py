@@ -17,6 +17,7 @@ from typing import Any, Mapping
 from .batch_publication import publish_existing_pdic_ocr
 from .text_io import render_ocred_bytes
 from ..persistence.project_storage import page_sections_read_path_for_image
+from ..text.encoding import decode_text_bytes
 
 
 def _source_image_sha256(path: Path) -> bytes:
@@ -31,6 +32,43 @@ def _source_image_sha256(path: Path) -> bytes:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.digest()
+
+
+
+def _verify_pdic_serialized_rows(
+    snapshot: bytes,
+    entries: list[Any],
+    image_width: int,
+    pages_info: tuple[str, str, str],
+) -> None:
+    """Verify all eight persisted PDIC fields, including PicDic percentages.
+
+    read_pdic intentionally ignores the percentage columns and tolerates
+    extra fields. That is appropriate for imported legacy files, but a batch
+    writer must not report success when it persisted stale/invalid index
+    coordinates. Decode the already captured post-save bytes so this check
+    cannot accidentally inspect a different file version.
+    """
+    actual = [
+        line.split("#")
+        for line in decode_text_bytes(snapshot)[0].splitlines()
+        if line.strip()
+    ]
+    expected: list[list[str]] = []
+    for entry in entries:
+        x_percent = round(entry.x / image_width * 100, 2) if image_width else 0
+        y_percent = round(entry.y / image_width * 100, 2) if image_width else 0
+        word = entry.word.replace("\\r", " ").replace("\\n", " ").replace("#", "＃").strip()
+        expected.append([
+            word, str(entry.x), str(entry.y),
+            f"{x_percent:g}", f"{y_percent:g}", *pages_info,
+        ])
+    if actual != expected:
+        raise RuntimeError(
+            "PDIC 序列化字段与本次 OCR 结果不一致"
+            "（含 PicDic X/Y 比例、原图像素坐标及页面关联）；"
+            "未单独回滚 OCRed，请人工核查两份文件"
+        )
 
 
 def process_existing_pdic_page(
@@ -224,6 +262,13 @@ def process_existing_pdic_page(
             "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
             "请人工核查两份文件"
         )
+    # read_pdic ignores percentage columns (used by downstream PicDic) and
+    # accepts extra fields. Check the same captured PDIC version's full rows
+    # against write_pdic's canonical eight-field serialization as well.
+    _verify_pdic_serialized_rows(
+        pdic_after_reopen, entries, image.width, pages_info,
+    )
+
     # Reopening/parsing a large PDIC can take time. An external proofreader
     # may change or remove OCRed after the publication helper's final guard
     # but before the page worker reports success. Verify the canonical
