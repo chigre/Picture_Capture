@@ -166,10 +166,10 @@ def test_manual_ocred_edit_during_final_section_check_survives_rollback(
     def interleaved_read(path):
         if path == section_path:
             section_reads[0] += 1
-            # Snapshot, post-decode source check, pre-export check,
-            # then final pre-PDIC check. Round 91 added post-decode
-            # image/SECTION validation, so the final check is fourth.
-            if section_reads[0] == 4:
+            # Snapshot (1), post-decode (2-3), pre-export (4-5),
+            # then final pre-PDIC (6-7). Round 100 rechecks SECTION
+            # after each potentially slow image hash.
+            if section_reads[0] == 6:
                 ocred.write_bytes(latest)
                 write_page_sections(page, [PageSection(10, 85)])
         return real_read(path)
@@ -179,7 +179,7 @@ def test_manual_ocred_edit_during_final_section_check_survives_rollback(
         _run(page, lambda *_args, **_kwargs: ["fresh"], pdic_writes=writes)
     assert "OCRed 在批量 OCR 发布后被其他操作修改" in str(exc.value)
     assert writes == []
-    assert section_reads[0] == 4
+    assert section_reads[0] == 6
     assert ocred.read_bytes() == latest
     assert pdic.read_bytes() == old_pdic
 
@@ -205,14 +205,14 @@ def test_section_edit_at_final_pre_pdic_check_restores_only_batch_ocred(
     def edit_section_on_final_validation(path):
         if path == section_path:
             section_reads[0] += 1
-            if section_reads[0] == 4:
+            if section_reads[0] == 6:
                 write_page_sections(page, [PageSection(21, 90)])
         return real_read(path)
 
     monkeypatch.setattr(Path, "read_bytes", edit_section_on_final_validation)
     with pytest.raises(RuntimeError, match="SECTION 已被其他操作修改或切换来源"):
         _run(page, lambda *_args, **_kwargs: ["fresh"], pdic_writes=writes)
-    assert section_reads[0] == 4
+    assert section_reads[0] == 6
     assert writes == []
     assert pdic.read_bytes() == original_pdic
     assert (ocred.read_bytes() if ocred.exists() else None) == old_ocred
