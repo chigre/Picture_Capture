@@ -2157,3 +2157,40 @@ files still do not share a filesystem transaction. Full six-platform CI
 and three-platform OCR Smoke are required on the exact new HEAD; real
 scanned-dictionary manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance
 remains **OPEN / NOT PASSED**. PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 91: source-image content identity across batch OCR (2026-10-26)
+
+Round 90 guarded SECTION path/bytes, PDIC and OCRed, but the actual source
+scan could still be replaced or removed while an existing-marker OCR worker
+was running. This could silently publish OCR text decoded from stale pixels
+into a PDIC whose X/Y coordinates refer to a different image.
+
+`ocr/batch_existing_entries.py` now fingerprints the **original image file
+bytes** using streaming SHA-256 (1 MiB chunks, no full-image RAM copy).
+It checks the fingerprint immediately after image decode, then uses the
+existing paired publisher's `validate_page_context` callback to recheck
+**before OCRed export** and **after export before PDIC save**. The callback
+continues to validate the resolved SECTION source path and exact bytes.
+A replaced or deleted source image rejects the stale page. If the image
+changes during OCRed export, existing guarded compensation restores only
+the worker-owned OCRed bytes and never overwrites a concurrent manual
+OCRed correction. No stale PDIC write is started.
+
+`tests/test_issue562_batch_source_image_snapshot_round91_20261026.py`
+covers same-length BMP pixel rewrites, removal during inference, replacement
+during decode, replacement inside OCRed export with old/missing sidecars,
+simultaneous manual OCRed edits, and normal SECTION-aware publication with
+unchanged original X/Y marker coordinates. Round 90's source-structure
+assertion now expects the combined page-source validation callback; its
+SECTION behavior tests remain intact. This change does not alter legacy
+PPP/PDIC/OCRed formats, the Windows-spawn dependency map, or Tk ownership.
+
+**Boundaries:** four streaming reads add image I/O but avoid holding another
+scan copy in memory. Byte-identical rewrites are not distinguishable, and
+a change after the final check can still race with PDIC publication.
+SHA-256 is an identity check, not a cross-process lock or a two-file
+transaction. Six-platform CI and three-platform OCR Smoke must pass on
+the exact Round 91 HEAD before claiming verification. Real scanned-dictionary
+manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance stays **OPEN / NOT PASSED**;
+PR #663 remains **Draft**, unmerged.
