@@ -181,7 +181,7 @@ def process_existing_pdic_page(
     def record(entry: Any) -> tuple[Any, ...]:
         # Match write_pdic's historical text sanitization exactly. Do not
         # normalize X/Y: they must remain the original image-pixel values.
-        word = entry.word.replace("\\r", " ").replace("\\n", " ").replace("#", "＃").strip()
+        word = entry.word.replace("\r", " ").replace("\n", " ").replace("#", "＃").strip()
         return (word, entry.x, entry.y, *pages_info)
 
     expected_records = [record(entry) for entry in entries]
