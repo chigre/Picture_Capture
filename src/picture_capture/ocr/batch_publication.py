@@ -259,6 +259,63 @@ def publish_existing_pdic_ocr(
                 ) from context_error
             raise
 
+    # The SECTION/source-image validator may hash a large scan. Another
+    # window can update PDIC or OCRed while that last, expensive check runs.
+    # Recheck both sidecars after it returns, immediately before the writer.
+    # Legacy direct callers without a page-context validator retain their
+    # existing call sequence and optional snapshot semantics.
+    if validate_page_context is not None:
+        try:
+            final_pdic = pdic_path.read_bytes()
+        except FileNotFoundError:
+            final_pdic = None
+        except OSError as inspect_error:
+            try:
+                _restore_ocred_if_unchanged(
+                    ocred_path, previous, published_ocred,
+                )
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "页面来源核验后无法读取 PDIC，且 OCRed 回滚失败；"
+                    "未启动 PDIC 保存，请人工核查两份文件："
+                    f"PDIC={inspect_error!r}；OCRed={rollback_error!r}"
+                ) from inspect_error
+            raise RuntimeError(
+                "页面来源核验后无法读取 PDIC；已恢复原有 OCRed，"
+                "未启动 PDIC 保存："
+                f"核查={inspect_error!r}"
+            ) from inspect_error
+        if final_pdic != previous_pdic:
+            try:
+                _restore_ocred_if_unchanged(
+                    ocred_path, previous, published_ocred,
+                )
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "页面来源核验期间 PDIC 被修改，且 OCRed 回滚失败；"
+                    "未启动 PDIC 保存，请人工核查两份文件："
+                    f"OCRed={rollback_error!r}"
+                ) from rollback_error
+            raise RuntimeError(
+                "页面来源核验期间 PDIC 已被其他操作修改；"
+                "已恢复原有 OCRed，未覆盖人工校对的 PDIC"
+            )
+        try:
+            final_ocred = ocred_path.read_bytes()
+        except FileNotFoundError:
+            final_ocred = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "页面来源核验后无法读取 OCRed；"
+                "未启动 PDIC 保存，拒绝回滚无法确认归属的 OCRed："
+                f"核查={inspect_error!r}"
+            ) from inspect_error
+        if final_ocred != published_ocred:
+            raise RuntimeError(
+                "页面来源核验期间 OCRed 已被其他操作修改；"
+                "未启动 PDIC 保存，保留最新人工校对的 OCRed"
+            )
+
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
