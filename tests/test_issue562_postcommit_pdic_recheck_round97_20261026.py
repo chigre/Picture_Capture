@@ -14,7 +14,7 @@ def _setup(tmp_path):
     write_pdic(pdic, [Entry("old", 17, 43)], 100, ("001", "@", "@"))
     ocred = tmp_path / "QT" / "001.OCRed"
     ocred.parent.mkdir(parents=True, exist_ok=True)
-    ocred.write_bytes(b"\\xef\\xbb\\xbf000|\\x60manual-before\\r\\n")
+    ocred.write_bytes(b"\xef\xbb\xbf000|\x60manual-before\r\n")
     return pdic, ocred
 
 
