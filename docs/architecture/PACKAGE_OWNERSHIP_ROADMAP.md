@@ -2826,3 +2826,10 @@ manual acceptance **OPEN / NOT PASSED**.
   **failed**, not passed; only the new HEAD's checks can establish recovery.
   PR #663 remains Draft/unmerged. Manual dictionary GUI scan, proofread,
   save and reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 122 (2026-10-27): pre-export page-context race guard
+
+- Baseline HEAD `dcada9f0651afc0e9a7bb78da65b96e03e4d0983` was confirmed **green** for six-platform CI and three-platform OCR Platform Smoke before this change.
+- `src/picture_capture/ocr/batch_publication.py` now re-reads PDIC and OCRed **after** the potentially slow SECTION/source-image validation and **before** invoking the OCRed exporter. A concurrent manual sidecar edit during source-image hashing previously could be overwritten by OCRed export, and a subsequent compensation could restore the older pre-hash version. Changes or unreadable sidecars now abort before touching either artifact.
+- `tests/test_issue562_batch_preexport_context_race_round122_20261027.py` fault-injects PDIC/OCRed edits for initially existing/missing sidecars, permission failures during the post-context read, and an unchanged-context success path. Legacy callers with no context validator retain the old read/callback sequence.
+- This narrows an optimistic concurrency window, **not** a filesystem-level compare-and-swap or multi-file transaction. Non-cooperating writers can still race after the final check; process termination, crash consistency, and durable two-file commit remain unresolved. PR #663 stays Draft/unmerged. Real dictionary scan, manual correction, save and reopen acceptance stays **OPEN / NOT PASSED**.
