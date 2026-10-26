@@ -2492,3 +2492,14 @@ manual acceptance **OPEN / NOT PASSED**.
   ownership. Exact-HEAD six-platform CI and three-platform OCR Smoke must
   be checked. PR #663 remains **Draft / unmerged**; real scanned-dictionary
   manual GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
+
+- **Initial CI failure and repair:** first Round 102 CI
+  `https://github.com/chigre/Picture_Capture/actions/runs/40329119013`
+  failed in the Ubuntu 3.13 test job: two older test doubles
+  (`test_issue562_batch_ocr_page_owner_round70_20261025.py` and
+  `test_ui_detection_controller.py`) returned the synthetic *pre-save*
+  markers even after the real writer had persisted new PDIC rows. The new
+  verification correctly rejected those stale read results. Both test
+  doubles now use their synthetic entries only when PDIC is absent and
+  delegate to the real parser once PDIC exists. No production guard was
+  relaxed. The follow-up exact-HEAD CI is pending verification.
