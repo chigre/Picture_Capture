@@ -396,6 +396,10 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
     prompts: list[tuple] = []
 
     def fake_read_pdic(path):
+        # Preflight starts from synthetic source markers. After batch save,
+        # the new post-commit check must observe the real disk PDIC instead.
+        if Path(path).exists():
+            return real_read_pdic(path)
         return [Entry(word="", x=4, y=10)] if Path(path).stem == "001" else []
 
     monkeypatch.setattr(detection_module, "read_pdic", fake_read_pdic)
