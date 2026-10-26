@@ -2724,3 +2724,20 @@ manual acceptance **OPEN / NOT PASSED**.
 - No new production change in this round; cross-process atomicity and
   process-crash recovery remain outside the optimistic guard. PR #663 stays
   Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 116 (2026-10-27): immutable OCRed expectation across exporter callbacks
+
+- `ocr/batch_existing_entries.py` now freezes the canonical OCRed byte
+  expectation and recognized entry count before invoking the patchable
+  exporter/writer. An exporter may correctly publish OCRed and then mutate
+  its input `texts` list; post-save checks and the reported count must
+  continue to use the original OCR result, not mutable callback state.
+- `tests/test_issue562_mutable_export_texts_round116_20261027.py`
+  exercises exporter clearing, replacing or appending OCR texts *after*
+  correctly writing OCRed, plus an unchanged control. It checks the
+  persisted PDIC text, original pixel coordinates, canonical OCRed bytes
+  and returned count. Publication still rejects an exporter whose disk
+  output differs from the frozen expected bytes.
+- This does not add cross-process atomicity or replace manual GUI
+  acceptance; Draft PR #663 stays unmerged, real dictionary-page scan/
+  edit/save/reopen acceptance remains **OPEN / NOT PASSED**.
