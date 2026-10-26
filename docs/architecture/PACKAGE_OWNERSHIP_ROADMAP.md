@@ -2686,3 +2686,17 @@ manual acceptance **OPEN / NOT PASSED**.
   diagnostic remains visible. The unchanged new reader guard remains active.
 - This is a test timing correction, not a claim of cross-process atomicity.
   PR #663 stays Draft/unmerged; real GUI acceptance remains OPEN/NOT PASSED.
+
+### Round 113 (2026-10-27): exporter-failure PDIC ownership guard
+
+- In `ocr/batch_publication.py`, when a patchable OCRed exporter raises,
+  compare PDIC bytes with its pre-export snapshot **before** compensating
+  OCRed. If PDIC was replaced/deleted (or cannot be read), refuse one-sided
+  rollback and require manual reconciliation. An unchanged PDIC preserves
+  the existing byte-exact OCRed compensation behavior.
+- Fault injection in `test_issue562_exporter_failure_pdic_race_round113_20261027.py`
+  covers PDIC replacement, deletion and unchanged control, asserting the
+  PDIC writer is never called and no rollback temp file leaks.
+- This is optimistic conflict detection, not cross-process atomicity.
+  Draft PR #663 remains unmerged; real dictionary GUI acceptance is
+  **OPEN / NOT PASSED**.
