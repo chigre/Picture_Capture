@@ -2672,3 +2672,17 @@ manual acceptance **OPEN / NOT PASSED**.
   checkpoints, not at this exact early point. This is not atomic locking.
 - PR #663 remains Draft and unmerged; real dictionary GUI acceptance remains
   **OPEN / NOT PASSED**.
+
+### Round 112 (2026-10-27): restore final pre-PDIC rollback fault injection
+
+- CI on Round 111 HEAD `3bf490b` reported 4304 passing, one failing:
+  the Round 90 test injected an external OCRed/SECTION edit on SECTION read
+  #6, which is now the pre-export check because Round 110 added a new
+  post-reader SECTION check. That correctly rejects before publication, but
+  no longer exercises the intended post-export rollback-conflict path.
+- Both Round 90 final pre-PDIC fault-injection cases now inject at SECTION
+  read #7, preserving their original behavioral assertions: concurrent
+  human OCRed bytes survive, PDIC is unchanged, and the rollback-conflict
+  diagnostic remains visible. The unchanged new reader guard remains active.
+- This is a test timing correction, not a claim of cross-process atomicity.
+  PR #663 stays Draft/unmerged; real GUI acceptance remains OPEN/NOT PASSED.
