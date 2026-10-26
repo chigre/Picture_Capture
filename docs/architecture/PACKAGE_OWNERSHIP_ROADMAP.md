@@ -2503,3 +2503,29 @@ manual acceptance **OPEN / NOT PASSED**.
   doubles now use their synthetic entries only when PDIC is absent and
   delegate to the real parser once PDIC exists. No production guard was
   relaxed. The follow-up exact-HEAD CI is pending verification.
+
+### Round 103 (2026-10-26): detect OCRed changes during persisted-PDIC reopen
+
+- Round 102 introduced a post-save PDIC record read to verify actual
+  persisted words, source-image X/Y pixels, row order and page links. That
+  parser can be slow; a proofreader could edit or delete OCRed *during*
+  this final read, after the publication helper's last OCRed version check.
+  Previously the page worker could report success with mismatched sidecars.
+- `ocr/batch_existing_entries.py` now reads OCRed **after** the persisted
+  PDIC record comparison and requires the exact canonical bytes rendered
+  from this OCR job. Missing, modified or unreadable OCRed is reported
+  explicitly. Because PDIC is already committed, no unilateral rollback
+  or overwrite of human changes is attempted.
+- `tests/test_issue562_ocred_during_pdic_reopen_round103_20261026.py`
+  injects an external BOM/CRLF edit, deletion and read denial at the
+  second (post-commit) PDIC read, plus a successful uncontended reopen.
+  It checks persisted marker text, original pixel X/Y, page links,
+  original scan/SECTION and absence of leaked rollback temporaries.
+- **Boundary:** this is another optimistic last-read guard, **not** a
+  cross-process lock, atomic multi-file transaction or crash recovery.
+  Changes after the final read, byte-identical rewrites and non-cooperating
+  writers remain possible. Windows spawn/Tk behavior and PDIC/PPP/SECTION
+  schemas are unchanged. Exact-HEAD six-platform CI and three-platform
+  OCR Platform Smoke must be checked before calling this round green.
+  PR #663 remains **Draft / unmerged**; real dictionary-scan manual
+  GUI/OCR/PDIC/PPP/save-reopen acceptance stays **OPEN / NOT PASSED**.
