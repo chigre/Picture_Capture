@@ -62,3 +62,41 @@ def test_pdic_edit_during_failed_export_inspection_blocks_rollback(tmp_path, mon
             assert not pdic.exists()
     assert writer_calls == []
     assert not list(tmp_path.glob(".001.OCRed.*.tmp"))
+
+
+def test_pdic_read_error_just_before_failed_export_rollback_preserves_ocred(tmp_path, monkeypatch):
+    pdic = tmp_path / "001.PDIC"
+    ocred = tmp_path / "001.OCRed"
+    pdic.write_bytes(b"original PDIC")
+    ocred.write_bytes(b"original OCRed")
+    original_read = type(pdic).read_bytes
+    reads = {"pdic": 0}
+    writer_calls = []
+
+    def read_with_failure(path):
+        if path == pdic:
+            reads["pdic"] += 1
+            if reads["pdic"] == 3:
+                raise PermissionError("simulated PDIC read failure")
+        return original_read(path)
+
+    monkeypatch.setattr(type(pdic), "read_bytes", read_with_failure)
+
+    def failing_export(path, _texts):
+        path.write_bytes(b"new OCRed")
+        raise OSError("export failed")
+
+    with pytest.raises(RuntimeError, match="回滚前无法核验 PDIC"):
+        publish_existing_pdic_ocr(
+            ocred, pdic, ["recognized"], [], 100, ("001", "@", "@"),
+            export_ocred=failing_export,
+            write_pdic=lambda *args: writer_calls.append(True),
+            expected_pdic_bytes=b"original PDIC",
+            expected_ocred_bytes=b"original OCRed",
+            expected_exported_ocred_bytes=b"new OCRed",
+        )
+    assert reads["pdic"] == 3
+    assert original_read(pdic) == b"original PDIC"
+    assert original_read(ocred) == b"new OCRed"
+    assert writer_calls == []
+    assert not list(tmp_path.glob(".001.OCRed.*.tmp"))
