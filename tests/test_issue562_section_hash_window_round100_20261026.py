@@ -123,7 +123,7 @@ def test_section_mutated_during_image_hash_is_not_silent(
     assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
 
 
-def test_unchanged_section_survives_all_five_image_hashes(tmp_path, monkeypatch):
+def test_unchanged_section_survives_all_six_image_hashes(tmp_path, monkeypatch):
     writes = []
 
     def save(path, entries, width, pages):
@@ -142,7 +142,8 @@ def test_unchanged_section_survives_all_five_image_hashes(tmp_path, monkeypatch)
     assert worker.process_existing_pdic_page(
         page, 0, tmp_path, SimpleNamespace(), [], PAGES, deps=deps,
     ) == 1
-    assert len(hash_calls) == 5
+    # Round 106 adds one final source hash after persisted PDIC reopen.
+    assert len(hash_calls) == 6
     assert len(writes) == 1
     assert read_page_sections(page) == [PageSection(0, 75)]
     assert [(e.word, e.x, e.y) for e in read_pdic(pdic)] == [
