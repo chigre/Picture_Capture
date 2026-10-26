@@ -245,10 +245,13 @@ def test_source_and_publisher_guards_are_both_wired():
     assert "current_path != section_source_path" in worker
     assert "validate_page_context=verify_page_sources" in worker
     assert "verify_section_source()" in worker
-    assert publisher.count("validate_page_context()") == 2
-    assert publisher.index("validate_page_context()") < publisher.index(
-        "export_ocred(ocred_path, texts)"
-    )
-    assert publisher.rindex("validate_page_context()") < publisher.index(
+    # Round 94 adds a third provenance check after a successful PDIC
+    # commit. Keep both pre-commit checks and verify the new post-commit one.
+    assert publisher.count("validate_page_context()") == 3
+    export_at = publisher.index("export_ocred(ocred_path, texts)")
+    save_at = publisher.index(
         "write_pdic(pdic_path, entries, image_width, pages_info)"
     )
+    assert publisher.index("validate_page_context()") < export_at
+    assert export_at < publisher.index("validate_page_context()", export_at) < save_at
+    assert publisher.rindex("validate_page_context()") > save_at
