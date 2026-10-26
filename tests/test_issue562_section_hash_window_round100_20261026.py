@@ -36,7 +36,7 @@ def _run_page(tmp_path, *, write_callback):
     pdic = page.with_suffix(".PDIC")
     write_pdic(pdic, [Entry("old", 17, 43)], 100, PAGES)
     ocred = tmp_path / "QT" / "001.OCRed"
-    ocred.parent.mkdir(parents=True)
+    ocred.parent.mkdir(parents=True, exist_ok=True)
     ocred.write_bytes(ORIGINAL_OCRED)
 
     def ocr(_image, entries, _settings, _rules, **kwargs):
