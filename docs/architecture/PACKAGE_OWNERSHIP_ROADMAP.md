@@ -2364,3 +2364,23 @@ manual acceptance **OPEN / NOT PASSED**.
   Exact-HEAD six-platform CI and OCR Smoke still require verification.
   PR #663 remains **Draft / unmerged**; real dictionary-scan manual
   acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 98 (2026-10-26): repair legacy batch-OCR writer spies after Round 97
+
+- Exact Round 97 HEAD `672ed89d931c68624653cb4eba52b51ae0b8d17b`:
+  six-platform CI **failed** (all six matrix jobs) while OCR Platform Smoke
+  **passed** (Windows/macOS/Ubuntu). Two pre-existing tests
+  (`test_issue562_batch_ocr_page_owner_round70_20261025.py` and
+  `test_ui_detection_controller.py`) used `write_pdic` spies that recorded
+  arguments but never wrote a PDIC file. The new post-commit guard correctly
+  rejects a writer reporting success without a committed file. This is a
+  test-double contract violation, not grounds to weaken production checks.
+- Both spies now delegate to the real PDIC serializer after recording calls.
+  Behavioral assertions read the persisted PDIC back to verify OCR words,
+  source X/Y pixel coordinates and page-link fields. The missing-PDIC
+  fault-injection case remains covered separately by the Round 97 suite.
+- Require fresh exact-HEAD six-platform CI and OCR Platform Smoke before
+  claiming success. No schema or source-coordinate change. PR #663 stays
+  **Draft / unmerged**; representative real dictionary-scan acceptance stays
+  **OPEN / NOT PASSED**.

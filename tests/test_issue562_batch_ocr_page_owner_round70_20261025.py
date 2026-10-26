@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 from picture_capture.models import Entry
+from picture_capture.io.formats import read_pdic as real_read_pdic, write_pdic as real_write_pdic
 from picture_capture.ocr.batch_existing_entries import process_existing_pdic_page
 from picture_capture.ocr.text_io import export_ocred as real_export_ocred
 
@@ -28,6 +29,9 @@ def _test_deps(tmp_path: Path, events: list, *, fail_ocr: bool = False):
         events.append((
             "write", path, [(e.word, e.x, e.y) for e in entries], width, pages,
         ))
+        # Exercise the real disk contract: a successful callback must publish
+        # a PDIC file for the post-commit integrity checks to inspect.
+        real_write_pdic(path, entries, width, pages)
 
     return {
         "read_pdic": lambda _path: [
@@ -71,6 +75,12 @@ def test_existing_pdic_batch_page_preserves_order_source_xy_and_file_contract(tm
         "write", page.with_suffix(".PDIC"),
         [("alpha", 9, 14), ("beta", 42, 78)],
         80, ("001", "@", "002"),
+    )
+    assert [(e.word, e.x, e.y) for e in real_read_pdic(page.with_suffix(".PDIC"))] == [
+        ("alpha", 9, 14), ("beta", 42, 78),
+    ]
+    assert page.with_suffix(".PDIC").read_text(encoding="utf-8").splitlines()[0].endswith(
+        "#001#@#002"
     )
 
 

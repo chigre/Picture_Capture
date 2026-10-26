@@ -8,6 +8,7 @@ from PIL import Image
 
 import picture_capture.ui.controllers.detection as detection_module
 from picture_capture.models import AppSettings, Entry
+from picture_capture.io.formats import read_pdic as real_read_pdic, write_pdic as real_write_pdic
 from picture_capture.ui.controllers.detection import DetectionController
 from picture_capture.ocr.text_io import export_ocred as real_export_ocred
 
@@ -436,13 +437,12 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
         "export_ocred",
         record_export,
     )
-    monkeypatch.setattr(
-        detection_module,
-        "write_pdic",
-        lambda path, entries, width, pages: writes.append(
-            (path, [entry.word for entry in entries], width, pages)
-        ),
-    )
+    def record_write_pdic(path, entries, width, pages):
+        writes.append((path, [entry.word for entry in entries], width, pages))
+        # Keep the controller spy, but honor the real persistence contract.
+        return real_write_pdic(path, entries, width, pages)
+
+    monkeypatch.setattr(detection_module, "write_pdic", record_write_pdic)
 
     DetectionController(app).batch_ocr()
 
@@ -461,6 +461,9 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
     assert writes and writes[0][1] == ["alpha"]
     assert writes[0][2] == 80
     assert writes[0][3] == ("0", "@", "@")
+    assert [(e.word, e.x, e.y) for e in real_read_pdic(writes[0][0])] == [
+        ("alpha", 4, 10),
+    ]
 
     done(1, 1, False, [1], None)
 
