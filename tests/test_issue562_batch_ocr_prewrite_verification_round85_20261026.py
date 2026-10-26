@@ -85,7 +85,7 @@ def test_prewrite_verification_and_rollback_both_fail_reports_both(
     monkeypatch.setattr(Path, "read_bytes", fail_second_pdic_read)
     monkeypatch.setattr(
         publication, "_restore_ocred_bytes",
-        lambda *_args: (_ for _ in ()).throw(OSError("rollback denied")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("rollback denied")),
     )
     with pytest.raises(RuntimeError, match="无法核验导出后的 PDIC，且 OCRed 回滚失败") as caught:
         publish_existing_pdic_ocr(
