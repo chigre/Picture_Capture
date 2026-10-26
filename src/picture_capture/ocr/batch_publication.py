@@ -166,6 +166,40 @@ def publish_existing_pdic_ocr(
     # before touching OCRed, then again just before committing PDIC.
     if validate_page_context is not None:
         validate_page_context()
+        # A full SECTION/source-image check may hash a large scan. Another
+        # editor can replace either sidecar *during* that check, after our
+        # initial snapshots but before OCRed export. In particular, never
+        # overwrite a newly proofread OCRed file and then "restore" the stale
+        # pre-check version. Check PDIC first and OCRed last to narrow the
+        # window before export; this is still not a filesystem-level CAS.
+        try:
+            pdic_before_export = pdic_path.read_bytes()
+        except FileNotFoundError:
+            pdic_before_export = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "页面来源核验后无法再次读取 PDIC；"
+                "未启动 OCRed 导出或 PDIC 保存，请人工核查"
+            ) from inspect_error
+        if pdic_before_export != previous_pdic:
+            raise RuntimeError(
+                "页面来源核验期间 PDIC 已被其他操作修改；"
+                "未启动 OCRed 导出或 PDIC 保存，保留人工修改"
+            )
+        try:
+            ocred_before_export = ocred_path.read_bytes()
+        except FileNotFoundError:
+            ocred_before_export = None
+        except OSError as inspect_error:
+            raise RuntimeError(
+                "页面来源核验后无法再次读取 OCRed；"
+                "未启动 OCRed 导出或 PDIC 保存，请人工核查"
+            ) from inspect_error
+        if ocred_before_export != previous:
+            raise RuntimeError(
+                "页面来源核验期间 OCRed 已被其他操作修改；"
+                "未启动 OCRed 导出或 PDIC 保存，保留人工校对内容"
+            )
 
     # An exporter can atomically replace OCRed and then raise from a later
     # hook. PDIC has not been called yet; restore this sidecar before letting
