@@ -2123,3 +2123,37 @@ That test now checks for the guarded compensation and canonical-byte
 ownership check instead; the first attempt is not counted as passing.
 Real scanned-dictionary manual acceptance remains OPEN / NOT PASSED;
 PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 90: SECTION source version protects batch OCR reading order (2026-10-26)
+
+The existing-PDIC batch OCR worker now snapshots the **resolved SECTION
+read-path and exact bytes** before OCR inference. This is essential because
+SECTION defines the page's reading lanes and marker sort order even when the
+PDIC marker bytes remain unchanged. Managed-v2 projects can also switch from
+a migrated QT SECTION fallback to a canonical SECTION file: a path change
+is a conflict even if the two files have identical bytes.
+
+The worker passes a `verify_section_source` callback to the paired OCRed /
+PDIC publisher. The publisher invokes it **before OCRed export** and **after
+OCRed export but before PDIC save**. A stale SECTION rejects the page. If the
+SECTION changed during export, the publisher attempts to restore OCRed to
+its exact previous bytes; if OCRed has since been manually edited, the
+existing guarded compensation refuses to overwrite the new edit and
+reports both the SECTION conflict and failed compensation. No stale PDIC
+save is started. The optional callback preserves legacy direct publisher
+calls and existing Windows-spawn/Tk dependency injection.
+
+`tests/test_issue562_batch_section_snapshot_round90_20261026.py` covers
+SECTION create/edit/remove during inference, source-path switch with equal
+bytes, edit during OCRed export, simultaneous OCRed manual edit during final
+validation, byte-exact OCRed restoration (including BOM/CRLF), unchanged
+reading lanes and original marker X/Y coordinates.
+
+**Limitations:** optimistic path/byte checks cannot provide cross-process
+atomic compare-and-swap. An external writer may still race after the last
+check, and byte-identical replacement is not detectable. The two output
+files still do not share a filesystem transaction. Full six-platform CI
+and three-platform OCR Smoke are required on the exact new HEAD; real
+scanned-dictionary manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance
+remains **OPEN / NOT PASSED**. PR #663 stays Draft and unmerged.
