@@ -170,6 +170,17 @@ def process_existing_pdic_page(
     # Verify the saved records, original source-pixel coordinates, order and
     # page links before reporting this page as completed. PDIC has already
     # been committed at this point; never compensate OCRed alone on failure.
+    # A large PDIC parse can outlast an external proofreader's atomic
+    # replacement. Capture the committed bytes around the parse: a parser
+    # may return the original records even though the on-disk file changed
+    # before this worker reports success.
+    try:
+        pdic_before_reopen = pdic_file.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            "PDIC 已保存，但重新读取词条前无法核验磁盘版本；"
+            "未单独回滚 OCRed，请人工核查两份文件"
+        ) from error
     try:
         persisted = deps["read_pdic"](pdic_file)
     except Exception as error:
@@ -195,6 +206,23 @@ def process_existing_pdic_page(
             "PDIC 保存函数已返回，但磁盘词条与本次 OCR 结果不一致"
             "（文字、数量、顺序、原图像素坐标或页面关联）；"
             "未单独回滚 OCRed，请人工核查两份文件"
+        )
+    # The parser's returned records alone are not a stable file snapshot:
+    # a concurrent writer can replace or remove PDIC while parsing. Compare
+    # full bytes on both sides of that potentially slow operation. PDIC has
+    # already been committed, so a conflict must not roll back OCRed alone.
+    try:
+        pdic_after_reopen = pdic_file.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            "PDIC 保存后重新读取词条期间无法再次核验 PDIC；"
+            "未单独回滚 OCRed，请人工核查两份文件"
+        ) from error
+    if pdic_after_reopen != pdic_before_reopen:
+        raise RuntimeError(
+            "PDIC 保存后重新读取词条期间 PDIC 被其他操作修改；"
+            "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
+            "请人工核查两份文件"
         )
     # Reopening/parsing a large PDIC can take time. An external proofreader
     # may change or remove OCRed after the publication helper's final guard
