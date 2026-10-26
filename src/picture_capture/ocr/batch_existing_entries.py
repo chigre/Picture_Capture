@@ -289,4 +289,19 @@ def process_existing_pdic_page(
             "保留磁盘上的最新 OCRed 与 PDIC，未执行单侧回滚；"
             "请人工核查两份文件"
         )
+
+    # Parsing/validating a large persisted PDIC can outlast an external
+    # SECTION edit or source-image replacement. The publisher checked page
+    # provenance immediately after writing PDIC, but that check predates
+    # this post-save parse. Do not report success using now-stale lanes or
+    # source-pixel coordinates. Both sidecars are already committed, so
+    # never roll back either one independently on a late source conflict.
+    try:
+        verify_page_sources()
+    except Exception as source_error:
+        raise RuntimeError(
+            "PDIC 已保存，但保存后词条复核期间页面来源（SECTION/原始图像）"
+            "已变化或无法核验；未执行单侧回滚，"
+            "请人工核查 PDIC、OCRed 和页面来源"
+        ) from source_error
     return len(texts)
