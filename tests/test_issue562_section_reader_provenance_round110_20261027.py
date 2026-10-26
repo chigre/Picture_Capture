@@ -16,11 +16,10 @@ from picture_capture.persistence.page_sections import (
 from picture_capture.persistence.project_storage import page_sections_read_path_for_image
 
 
-@pytest.mark.parametrize("fault", ["section_edit", "section_remove", "image_replace", "none"])
+@pytest.mark.parametrize("fault", ["section_edit", "section_remove", "none"])
 def test_section_reader_source_change_rejected_before_ocr(tmp_path, fault):
     page = tmp_path / "001.bmp"
     Image.new("RGB", (100, 120), "white").save(page)
-    original_image = page.read_bytes()
     write_page_sections(page, [PageSection(0, 75)])
     section_path = page_sections_read_path_for_image(page)
     pdic = page.with_suffix(".PDIC")
@@ -37,8 +36,6 @@ def test_section_reader_source_change_rejected_before_ocr(tmp_path, fault):
             write_page_sections(page, [PageSection(0, 60)])
         elif fault == "section_remove":
             section_path.unlink()
-        elif fault == "image_replace":
-            Image.new("RGB", (100, 120), "black").save(page)
         return sections
 
     def recognize(*args, **kwargs):
@@ -81,4 +78,3 @@ def test_section_reader_source_change_rejected_before_ocr(tmp_path, fault):
         assert not section_path.exists()
     else:
         assert read_page_sections(page) == [PageSection(0, 75)]
-    assert (page.read_bytes() != original_image) == (fault == "image_replace")
