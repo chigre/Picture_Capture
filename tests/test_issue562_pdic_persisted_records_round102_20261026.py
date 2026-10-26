@@ -22,7 +22,7 @@ from picture_capture.persistence.page_sections import (
 
 
 PAGES = ("001", "@", "@")
-OLD_OCRED = b"\\xef\\xbb\\xbf000|\x60reviewed-before\\r\\n"
+OLD_OCRED = bytes.fromhex("efbbbf") + b"000|\x60reviewed-before\r\n"
 
 
 def _setup(tmp_path, writer):
@@ -70,7 +70,7 @@ def test_successful_writer_with_wrong_persisted_pdic_is_reported(
         if fault == "silent_noop":
             return None
         if fault == "malformed":
-            path.write_text("not-a-valid-record\\n", encoding="utf-8")
+            path.write_text("not-a-valid-record\n", encoding="utf-8")
             return None
         if fault == "wrong_word":
             entries = [Entry("incorrect", 17, 43)]
