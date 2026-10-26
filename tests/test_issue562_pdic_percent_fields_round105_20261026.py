@@ -36,7 +36,7 @@ def test_batch_reopen_verifies_full_pdic_serialization(tmp_path, fault):
     write_pdic(pdic, [Entry("before", 17, 43)], 100, PAGES)
     ocred = tmp_path / "QT" / "001.OCRed"
     ocred.parent.mkdir(parents=True, exist_ok=True)
-    ocred.write_bytes(b"000|`reviewed-before\\r\\n")
+    ocred.write_bytes(b"000|`reviewed-before\r\n")
 
     def writer(path, entries, width, pages):
         if fault == "wrong_width":
@@ -52,7 +52,7 @@ def test_batch_reopen_verifies_full_pdic_serialization(tmp_path, fault):
                 fields[3] = "NaN"
             elif fault == "extra_field":
                 fields.append("unexpected")
-            path.write_text("#".join(fields) + "\\n", encoding="utf-8")
+            path.write_text("#".join(fields) + "\n", encoding="utf-8")
         return result
 
     def recognize(_image, entries, _settings, _rules, **kwargs):

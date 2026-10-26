@@ -58,7 +58,7 @@ def _verify_pdic_serialized_rows(
     for entry in entries:
         x_percent = round(entry.x / image_width * 100, 2) if image_width else 0
         y_percent = round(entry.y / image_width * 100, 2) if image_width else 0
-        word = entry.word.replace("\\r", " ").replace("\\n", " ").replace("#", "＃").strip()
+        word = entry.word.replace("\r", " ").replace("\n", " ").replace("#", "＃").strip()
         expected.append([
             word, str(entry.x), str(entry.y),
             f"{x_percent:g}", f"{y_percent:g}", *pages_info,
