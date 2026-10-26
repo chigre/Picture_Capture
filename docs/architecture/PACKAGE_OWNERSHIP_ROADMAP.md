@@ -2431,3 +2431,29 @@ manual acceptance **OPEN / NOT PASSED**.
   remain outside the guarantee. Require exact-HEAD six-platform CI and
   three-OS OCR Platform Smoke; keep PR #663 **Draft / unmerged** and the real
   dictionary scan/manual GUI/save-reopen gate **OPEN / NOT PASSED**.
+
+
+### Round 101 (2026-10-26): recheck OCRed ownership after rollback staging
+
+- `ocr/batch_publication.py` now stages and fsyncs the original OCRed bytes
+  before performing a **second exact-byte ownership check immediately before
+  os.replace**. The earlier check in `_restore_ocred_if_unchanged` remains,
+  but a concurrent human correction can land while the temporary file is
+  written or fsynced. A changed sidecar is preserved and reported rather than
+  overwritten; the rollback temporary file is removed on every path.
+- For an OCRed sidecar that did not exist before the worker, the compensator
+  similarly rechecks the published bytes immediately before unlinking. Direct
+  legacy calls to `_restore_ocred_bytes(path, previous)` remain supported,
+  and a genuinely unchanged export still requires no rollback mutation.
+- `tests/test_issue562_rollback_stage_recheck_round101_20261026.py`
+  injects manual edits during rollback fsync and between the initial read
+  and unlink, including a real failed-PDIC publication path. It verifies
+  manual OCRed preservation, exact BOM/CRLF restoration when uncontended,
+  no leaked temporary files and unchanged PDIC source X/Y coordinates.
+- **Limits:** this reduces a genuine read-to-replace/unlink race but does
+  **not** provide atomic compare-and-swap, a cross-process transaction,
+  protection against non-cooperating writes after the last check, or
+  crash-safe two-file recovery. Require exact-HEAD six-platform CI and
+  Windows/macOS/Ubuntu OCR Platform Smoke. Keep PR #663 **Draft / unmerged**;
+  representative real dictionary-page GUI/OCR/PDIC/PPP/save-reopen manual
+  acceptance remains **OPEN / NOT PASSED**.
