@@ -2774,3 +2774,19 @@ manual acceptance **OPEN / NOT PASSED**.
   atomic two-file publication. Cooperative locking / cross-process CAS and
   crash recovery remain open. PR #663 stays Draft/unmerged; physical GUI
   dictionary scan, edit, save and reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 119 (2026-10-27): CI regression reconciliation for conservative recovery
+
+- Six-platform CI for Round 118 exposed six legacy Round 85 test failures on
+  Ubuntu default Python (4,313 passing). Those assertions still required an
+  OCRed-only rollback when the post-export PDIC read raises `PermissionError`,
+  contradicting the safer Round 118 behavior that treats PDIC ownership as
+  unknown. The production change is retained; the old test is revised to
+  require **preservation of exported OCRed and existing PDIC**, no PDIC writer,
+  and no attempted compensation. It covers both originally present/absent
+  PDIC and OCRed. The source-level guard assertion now explicitly rejects
+  a unilateral rollback in this ambiguous read-error branch.
+- The original Round 85 file name remains for traceability. The Round 118
+  failure-injection test additionally covers a PDIC replacement during export.
+  No assertion of a fully transactional two-file commit is made. PR #663
+  remains Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
