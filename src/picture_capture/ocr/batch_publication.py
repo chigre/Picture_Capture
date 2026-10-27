@@ -358,16 +358,14 @@ def publish_existing_pdic_ocr(
             f"核查={inspect_error!r}"
         ) from inspect_error
     if pdic_after_export != previous_pdic:
-        try:
-            _restore_ocred_if_unchanged(ocred_path, previous, published_ocred)
-        except Exception as rollback_error:
-            raise RuntimeError(
-                "PDIC 在 OCRed 导出期间被修改，且 OCRed 回滚失败："
-                f"回滚={rollback_error!r}"
-            ) from rollback_error
+        # PDIC no longer belongs to this worker. Even if the newly exported
+        # OCRed still matches our expected bytes, restoring an older OCRed
+        # would be a unilateral write against another process's PDIC edit.
+        # Preserve both observed disk versions for explicit reconciliation.
         raise RuntimeError(
             "PDIC 在 OCRed 导出期间被其他操作修改；"
-            "已恢复原有 OCRed，未覆盖人工校对的 PDIC"
+            "拒绝单侧回滚 OCRed，保留磁盘上的两份文件；"
+            "未启动 PDIC 保存，请人工核查"
         )
     # The PDIC read itself can take time (or be monkeypatched in legacy
     # callers). Reject a concurrent OCRed correction before touching PDIC.
@@ -445,19 +443,14 @@ def publish_existing_pdic_ocr(
                 f"核查={inspect_error!r}"
             ) from inspect_error
         if final_pdic != previous_pdic:
-            try:
-                _restore_ocred_if_unchanged(
-                    ocred_path, previous, published_ocred,
-                )
-            except Exception as rollback_error:
-                raise RuntimeError(
-                    "页面来源核验期间 PDIC 被修改，且 OCRed 回滚失败；"
-                    "未启动 PDIC 保存，请人工核查两份文件："
-                    f"OCRed={rollback_error!r}"
-                ) from rollback_error
+            # A source-image hash may overlap another editor's PDIC commit.
+            # Ownership is already lost: compensating OCRed alone could
+            # overwrite their matching sidecar or create a mismatched pair.
+            # This also avoids a second PDIC race during rollback staging.
             raise RuntimeError(
                 "页面来源核验期间 PDIC 已被其他操作修改；"
-                "已恢复原有 OCRed，未覆盖人工校对的 PDIC"
+                "拒绝单侧回滚 OCRed，保留磁盘上的两份文件；"
+                "未启动 PDIC 保存，请人工核查"
             )
         try:
             final_ocred = ocred_path.read_bytes()
