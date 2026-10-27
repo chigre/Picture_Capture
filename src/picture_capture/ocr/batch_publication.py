@@ -227,10 +227,15 @@ def _restore_ocred_if_unchanged(
         try:
             verify_before_mutation()
         except Exception as post_rollback_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "OCRed 回滚已完成，但回滚后 PDIC 版本发生变化或无法确认；"
                 "未再次修改 OCRed 或 PDIC，请人工核查两份文件"
-            ) from post_rollback_error
+            )
+            # The compensating write already finished. Recovery callers
+            # must retain the exact failed PDIC ownership-check exception
+            # instead of parsing a synthesized message or repeating I/O.
+            failure.verification_error = post_rollback_error
+            raise failure from post_rollback_error
         # The post-rollback PDIC ownership read can itself invoke a slow
         # filesystem hook. A proofreader may publish a new OCRed version
         # during that read, after the rollback's own disk-state check.
