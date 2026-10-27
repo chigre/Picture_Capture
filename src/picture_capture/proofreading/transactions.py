@@ -361,11 +361,28 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
     rollback_required = json.loads(marker.read_text(encoding="utf-8")).get(
         "rollback_required", False)
     if rollback_required or observed != [new for _, _, new in items]:
-        for path, before, _ in items:
+        for path, before, after in items:
+            # Recovery is not exclusive: a proofreader may update an owned
+            # file after the initial snapshot, including between two rollbacks.
+            # Never overwrite a byte version that is neither the staged old
+            # nor the staged new state. Avoid rewriting already-restored files.
+            current = _bytes_or_absent(path)
+            if current == before:
+                continue
+            if current != after:
+                return False
             _publish(path, before)
-        # A silently skipped rollback must retain the marker and quarantine
-        # page reloads rather than exposing a mixed persisted state.
+            if _bytes_or_absent(path) != before:
+                return False
+        # A silently skipped rollback or a late external edit must retain the
+        # recovery marker and quarantine page reloads.
         if any(_bytes_or_absent(path) != before for path, before, _ in items):
+            return False
+    else:
+        # Even a complete after-state can be externally edited after the
+        # initial observation. Do not discard the recovery journal without
+        # confirming every exact target byte value immediately beforehand.
+        if any(_bytes_or_absent(path) != after for path, _, after in items):
             return False
     marker.unlink()
     # A silent no-op unlink leaves the page quarantined.
