@@ -231,6 +231,25 @@ def _restore_ocred_if_unchanged(
                 "OCRed 回滚已完成，但回滚后 PDIC 版本发生变化或无法确认；"
                 "未再次修改 OCRed 或 PDIC，请人工核查两份文件"
             ) from post_rollback_error
+        # The post-rollback PDIC ownership read can itself invoke a slow
+        # filesystem hook. A proofreader may publish a new OCRed version
+        # during that read, after the rollback's own disk-state check.
+        # Observe OCRed once more before reporting a consistent old pair;
+        # never try to undo the newer version.
+        try:
+            final_ocred = _read_optional_ocred_bytes(path)
+        except OSError as inspect_error:
+            failure = RuntimeError(
+                "OCRed 回滚已完成，但回滚后无法再次读取 OCRed；"
+                "无法确认双文件状态，未再次修改 OCRed 或 PDIC，请人工核查"
+            )
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
+        if final_ocred != previous:
+            raise RuntimeError(
+                "OCRed 回滚已完成，但回滚后 PDIC 核验期间 OCRed 再次被修改；"
+                "未覆盖最新人工校对内容，请人工核查两份文件"
+            )
 
 
 def publish_existing_pdic_ocr(
