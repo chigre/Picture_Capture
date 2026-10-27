@@ -436,3 +436,165 @@ def test_silent_marker_unlink_cannot_report_success_and_rollback_on_restart(
     monkeypatch.setattr(Path, "unlink", real_unlink)
     assert storage.recover_pending_for_page(page, manual_path=manual)
     assert not marker.exists()
+
+
+# #503 G1 provenance hardening: distinguish record ownership from mere
+# coordinate equality, and avoid reusing shared OCR candidate IDs.
+@pytest.mark.parametrize("owner", ["second_row", "duplicate_fingerprint"])
+def test_candidate_delete_rejects_non_unique_entry_candidate_ownership(
+    tmp_path, owner,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    pdic = pdic_path(page)
+    before_pdic, before_simplified = pdic.read_bytes(), simplified.read_bytes()
+    if owner == "second_row":
+        rows[1].candidate_id = "ocr-id"
+        assert snapshot_review(review) is not None
+    else:
+        snapshot = snapshot_review(review)
+        assert snapshot is not None
+        from dataclasses import replace
+        # A forged/duplicated identity fingerprint must not become an
+        # authoritative 1:1 ownership mapping during preparation.
+        duplicate = replace(
+            snapshot, owner_ids=snapshot.owner_ids + ((id(rows[0]), "ocr-id"),)
+        )
+        assert prepare_candidate_delete(duplicate, rows[0], candidate) is None
+        return
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic.read_bytes() == before_pdic
+    assert simplified.read_bytes() == before_simplified
+    assert not manual.exists()
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not actions
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["foreign_source_word", "wrong_page", "wrong_format", "wrong_version",
+     "missing_version", "duplicate_xy", "bad_other_record"],
+)
+def test_candidate_delete_refuses_unowned_or_malformed_simplified_record(
+    tmp_path, mutation,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    pdic = pdic_path(page)
+    before_pdic = pdic.read_bytes()
+    doc = json.loads(simplified.read_text("utf-8"))
+    if mutation == "foreign_source_word":
+        # Same (x, y) but a different manual headword: never delete this.
+        doc["entries"][0]["source_word"] = "unrelated human revision"
+    elif mutation == "wrong_page":
+        doc["page"] = "another_page"
+    elif mutation == "wrong_format":
+        doc["format"] = "unrelated_data"
+    elif mutation == "wrong_version":
+        doc["format_version"] = 999
+    elif mutation == "missing_version":
+        del doc["format_version"]
+    elif mutation == "duplicate_xy":
+        doc["entries"].append(dict(doc["entries"][0]))
+    elif mutation == "bad_other_record":
+        doc["entries"][1]["y"] = "not a coordinate"
+    simplified.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    old_simplified = simplified.read_bytes()
+
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic.read_bytes() == before_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert not manual.exists()
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not actions
+
+
+@pytest.mark.parametrize(
+    "prior",
+    [
+        {"selected": True, "word": "somebody else's word"},
+        {"selected": False, "word": "head"},
+        {"selected": "true", "word": "head"},
+        {"word": "head"},
+        "not an override record",
+    ],
+)
+def test_candidate_delete_rejects_stale_or_unowned_manual_override(
+    tmp_path, prior,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    pdic = pdic_path(page)
+    initial = pdic.read_bytes()
+    manual.write_text(
+        json.dumps({
+            "version": 1, "page": page.stem,
+            "overrides": {"ocr-id": prior},
+        }), encoding="utf-8",
+    )
+    existing = manual.read_bytes()
+    simplified_before = simplified.read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert manual.read_bytes() == existing
+    assert pdic.read_bytes() == initial
+    assert simplified.read_bytes() == simplified_before
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not actions
+
+
+def test_candidate_delete_accepts_matching_manual_override_and_retains_other_decisions(
+    tmp_path,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    manual.write_text(
+        json.dumps({
+            "version": 1, "page": page.stem,
+            "overrides": {
+                "ocr-id": {"selected": True, "word": "head", "engine": "review"},
+                "other-id": {"selected": False, "word": "untouched", "engine": "manual"},
+            },
+        }), encoding="utf-8",
+    )
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    result = json.loads(manual.read_text("utf-8"))["overrides"]
+    assert result["other-id"] == {
+        "selected": False, "word": "untouched", "engine": "manual",
+    }
+    assert result["ocr-id"]["selected"] is False
+    assert [entry.word for entry in read_pdic(pdic_path(page))] == ["other"]
+    assert not storage._marker_present(storage._recovery_path(page))
+
+
+def test_candidate_delete_preserves_unmatched_simplified_text_and_metadata(
+    tmp_path,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    doc = json.loads(simplified.read_text("utf-8"))
+    # Simplified translation text is independently editable, and must not
+    # equal the original source headword merely to allow a safe delete.
+    doc["entries"][0]["text"] = "人工作业"
+    doc["entries"][1]["text"] = "人工保留"
+    doc["entries"][1]["manual"] = True
+    simplified.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    result = json.loads(simplified.read_text("utf-8"))["entries"]
+    assert len(result) == 1
+    assert result[0]["source_word"] == "other"
+    assert result[0]["text"] == "人工保留"
+    assert result[0]["manual"] is True
+
+
+def test_candidate_delete_allows_valid_simplified_document_without_target_row(
+    tmp_path,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    doc = json.loads(simplified.read_text("utf-8"))
+    doc["entries"] = [doc["entries"][1]]
+    simplified.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    old_simplified = simplified.read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert simplified.read_bytes() == old_simplified
+    assert [entry.word for entry in read_pdic(pdic_path(page))] == ["other"]
+    assert candidate["selected"] is False
+    assert not storage._marker_present(storage._recovery_path(page))
