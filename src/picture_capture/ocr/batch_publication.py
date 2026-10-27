@@ -58,7 +58,23 @@ def _restore_ocred_bytes(
         # Recheck the other side of the pair immediately before unlinking.
         if verify_before_mutation is not None:
             verify_before_mutation()
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as unlink_error:
+            # A patched/filesystem unlink may remove the file and then
+            # raise. Inspect the actual result instead of reporting a
+            # completed compensation as a failed deletion. A newer file
+            # appearing at the pathname is never ours to remove again.
+            try:
+                remaining = _read_optional_ocred_bytes(path)
+            except OSError as inspect_error:
+                raise RuntimeError(
+                    "OCRed 回滚删除报错，且无法确认删除是否完成；"
+                    "未再次删除文件，请人工核查 OCRed 与 PDIC："
+                    f"删除={unlink_error!r}；核查={inspect_error!r}"
+                ) from unlink_error
+            if remaining is not None:
+                raise
         return
 
     temp_path: Path | None = None
@@ -88,7 +104,26 @@ def _restore_ocred_bytes(
         # restore old OCRed if the PDIC version is no longer established.
         if verify_before_mutation is not None:
             verify_before_mutation()
-        os.replace(temp_path, path)
+        try:
+            os.replace(temp_path, path)
+        except Exception as replace_error:
+            # An injected hook may perform the atomic replace and then
+            # raise. If the staging pathname is gone AND the destination
+            # contains the exact intended old bytes, the compensation is
+            # already visible on disk. Do not misclassify it as failed or
+            # attempt another replace. If either condition is unproven,
+            # preserve the original exception and normal temp cleanup.
+            try:
+                staged_exists = temp_path.exists()
+                restored_bytes = _read_optional_ocred_bytes(path)
+            except OSError as inspect_error:
+                raise RuntimeError(
+                    "OCRed 回滚替换报错，且无法确认替换是否完成；"
+                    "请人工核查 OCRed、PDIC 和回滚临时文件："
+                    f"替换={replace_error!r}；核查={inspect_error!r}"
+                ) from replace_error
+            if staged_exists or restored_bytes != previous:
+                raise
         # os.replace moves the staged file into place. Once committed, the
         # temporary pathname is no longer ours to unlink; a late cleanup
         # error must not misreport a successful OCRed restoration as failed.
