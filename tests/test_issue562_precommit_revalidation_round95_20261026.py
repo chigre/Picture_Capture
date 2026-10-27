@@ -92,7 +92,7 @@ def test_ocred_manual_edit_during_final_source_check_survives(tmp_path):
     assert ocred.read_bytes() == HUMAN_OCRED
 
 
-def test_unreadable_final_pdic_is_explicit_and_compensates(tmp_path, monkeypatch):
+def test_unreadable_final_pdic_preserves_ambiguous_pair(tmp_path, monkeypatch):
     pdic, ocred = _files(tmp_path, OLD_OCRED)
     original_pdic = pdic.read_bytes()
     original_read = Path.read_bytes
@@ -119,7 +119,9 @@ def test_unreadable_final_pdic_is_explicit_and_compensates(tmp_path, monkeypatch
     assert "injected final PDIC read failure" in str(exc.value)
     assert saves == []
     assert original_read(pdic) == original_pdic
-    assert original_read(ocred) == OLD_OCRED
+    # The final PDIC read failed, so ownership is unknown: never roll back
+    # only OCRed after its export succeeded.
+    assert original_read(ocred) == render_ocred_bytes(["new"])
 
 
 def test_pdic_and_ocred_both_changed_refuses_unsafe_compensation(tmp_path):
