@@ -9,7 +9,7 @@ On baseline `e6c342b0c802f94c30e9d26f51b388306fec8d0b`, the six-platform CI and 
 
 `_restore_ocred_if_unchanged` performs a final PDIC ownership callback **after** an OCRed sidecar replacement or deletion has succeeded. If this callback raises, the program must not perform another OCRed or PDIC write: the pair's state is uncertain. The outer publication caller retains its original `publication_error` plus its `rollback_error`, and the rollback exception retains the failing PDIC verification error as its `__cause__`.
 
-Round 138 additionally assigns the exact exception object to `rollback_error.verification_error`, aligning this recovery path with other indeterminate OCRed/PDIC reads. This is an exception-diagnostic improvement only: no file format, transaction order, coordinates, public signature, Windows worker semantics or Tk behavior changes.
+Round 138 additionally assigns the exact exception object to `rollback_error.verification_error`, aligning this recovery path with other indeterminate OCRed/PDIC reads. When the PDIC ownership callback wraps an underlying filesystem failure, the recovery chain deliberately preserves both levels: `rollback_error.__cause__ is rollback_error.verification_error`, and `rollback_error.verification_error.__cause__` is the original I/O exception; callers must not assume these two exception objects are identical. This is an exception-diagnostic improvement only: no file format, transaction order, coordinates, public signature, Windows worker semantics or Tk behavior changes.
 
 Four parametrized fault-injection scenarios in `tests/test_issue562_ocred_post_rollback_error_identity_round138_20261027.py` cover:
 - existing versus newly created OCRed sidecars;
