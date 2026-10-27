@@ -33,9 +33,21 @@ def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
-    except Exception:
+    except Exception as publication_error:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                # Failure to remove an unfinished PDIC/PPP staging file must
+                # not hide the original write/replace error. Keep both exact
+                # exception objects available for safe manual recovery.
+                failure = RuntimeError(
+                    "Atomic sidecar publication failed and temporary-file "
+                    "cleanup also failed; inspect the target and .tmp file"
+                )
+                failure.publication_error = publication_error
+                failure.cleanup_error = cleanup_error
+                raise failure from publication_error
         raise
 
 
