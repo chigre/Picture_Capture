@@ -314,10 +314,16 @@ def publish_existing_pdic_ocr(
         except FileNotFoundError:
             pdic_after_failed_export = None
         except OSError as inspect_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "OCRed 导出失败，且无法核验 PDIC 是否被修改；"
                 "拒绝单侧回滚，请人工核查两份文件"
-            ) from inspect_error
+            )
+            # Neither failure proves which pair of bytes is current. Keep
+            # the export error and the later ownership-check error as
+            # distinct objects; do not attempt a second, unilateral write.
+            failure.publication_error = export_error
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
         if pdic_after_failed_export != previous_pdic:
             raise RuntimeError(
                 "OCRed 导出失败，且导出期间 PDIC 已被修改；"
@@ -572,11 +578,16 @@ def publish_existing_pdic_ocr(
         except FileNotFoundError:
             current_pdic = None
         except OSError as inspect_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "PDIC 保存报错，且无法读取 PDIC 确认是否已提交；"
                 "不执行仅 OCRed 回滚，以免造成文件版本不一致："
                 f"PDIC={pdic_error!r}；核查={inspect_error!r}"
-            ) from pdic_error
+            )
+            # An unreadable PDIC may already have been committed. Preserve
+            # both errors without trying another OCRed-only compensation.
+            failure.publication_error = pdic_error
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
         if current_pdic != previous_pdic:
             raise RuntimeError(
                 "PDIC 保存报错，但磁盘 PDIC 已发生变化；"
