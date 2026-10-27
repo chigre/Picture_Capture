@@ -155,5 +155,7 @@ def test_ambiguous_pdic_boundary_is_checked_before_ocred_compensation():
     # called. Restrict this ordering assertion to the PDIC error handler.
     pdic_handler = source.split("except Exception as pdic_error:", 1)[1]
     assert pdic_handler.index("if current_pdic != previous_pdic:") < pdic_handler.index(
-        "_restore_ocred_if_unchanged(ocred_path, previous, published_ocred)"
+        "_restore_ocred_if_unchanged("
     )
+    # Compensation now rechecks PDIC after staging, before replace/unlink.
+    assert "verify_before_mutation=verify_pdic_before_rollback" in pdic_handler
