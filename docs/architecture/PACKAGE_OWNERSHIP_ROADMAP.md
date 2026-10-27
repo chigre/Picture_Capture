@@ -2925,9 +2925,10 @@ manual acceptance **OPEN / NOT PASSED**.
   invoked on this path. Uncontended SECTION/image failure still restores
   old OCRed exactly (or deletes a newly exported sidecar).
 - `tests/test_issue562_context_rollback_pdic_race_round126_20261027.py`
-  adds 11 parameterized behavioral/fault-injection cases: PDIC replaced or
+  adds 13 parameterized behavioral/fault-injection cases: PDIC replaced or
   removed during validation, late read denial, edits during rollback fsync
-  or before unlink, no-conflict exact restoration and normal publication.
+  or before unlink, no-conflict exact restoration, unchanged-export no-op
+  compensation and normal publication.
 - This does **not** establish a cross-process atomic compare-and-swap,
   two-file transaction, power-loss recovery or ABA resistance. Last-read
   races remain possible; no manual GUI acceptance is implied. PR #663
