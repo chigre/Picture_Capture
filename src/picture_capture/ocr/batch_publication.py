@@ -384,11 +384,35 @@ def publish_existing_pdic_ocr(
         try:
             validate_page_context()
         except Exception as context_error:
-            # OCRed was already published; undo only our own unchanged export.
-            # A concurrent manual OCRed edit must not be overwritten here.
+            # SECTION/source-image validation may be slow or may invoke
+            # external callbacks. PDIC can change while it runs even though
+            # this worker has not called the PDIC writer. Rolling OCRed back
+            # alone would then pair stale OCRed with the newer PDIC.
+            def verify_pdic_before_context_rollback() -> None:
+                try:
+                    current_pdic = pdic_path.read_bytes()
+                except FileNotFoundError:
+                    current_pdic = None
+                except OSError as inspect_error:
+                    raise RuntimeError(
+                        "页面来源核验失败，回滚前无法确认 PDIC 版本；"
+                        "拒绝单侧回滚，请人工核查两份文件"
+                    ) from inspect_error
+                if current_pdic != previous_pdic:
+                    raise RuntimeError(
+                        "页面来源核验失败，PDIC 已被其他操作修改；"
+                        "拒绝单侧回滚，请人工核查两份文件"
+                    )
+
             try:
+                # Check before staging and again immediately before the
+                # compensating replace/unlink: fsync can outlast a manual
+                # PDIC edit. OCRed ownership is checked independently by
+                # the helper. This is not a cross-process atomic CAS.
+                verify_pdic_before_context_rollback()
                 _restore_ocred_if_unchanged(
                     ocred_path, previous, published_ocred,
+                    verify_before_mutation=verify_pdic_before_context_rollback,
                 )
             except Exception as rollback_error:
                 raise RuntimeError(
