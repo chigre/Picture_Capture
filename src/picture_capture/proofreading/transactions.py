@@ -259,6 +259,26 @@ def _valid_manual_path(page: Path, path: Path | None) -> bool:
     )
 
 
+def _create_exclusive_recovery_marker(marker: Path, data: bytes) -> None:
+    """Claim the recovery journal pathname once, without replacing a peer.
+
+    O_EXCL|O_CREAT makes marker ownership exclusive on cooperating local
+    filesystems, including Windows. A crash during writing can leave a
+    partial/empty marker: retain it to quarantine the page, never infer that
+    it is safe to start another transaction. The reader will reject invalid
+    JSON instead of deleting the marker or guessing rollback bytes.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    try:
+        descriptor = os.open(marker, flags, 0o600)
+    except FileExistsError as conflict:
+        raise RuntimeError("Unresolved R3 recovery marker; refusing new undo") from conflict
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def _stage_recovery(
     page: Path, changes: list[tuple[str, bytes | None, bytes | None]],
     *, manual_path: Path | None = None, rollback_required: bool = False,
@@ -289,7 +309,9 @@ def _stage_recovery(
     # The marker exists only during a multi-file commit and is deleted
     # immediately. It is NOT a persistent Undo/Redo journal.
     marker_bytes = json.dumps(doc, ensure_ascii=False).encode("utf-8")
-    _atomic_bytes(marker, marker_bytes)
+    # Do not os.replace() a journal after a non-atomic existence check:
+    # two R3 writers could otherwise each replace the other's recovery plan.
+    _create_exclusive_recovery_marker(marker, marker_bytes)
     # Never write owned page files unless the rollback intent is durable.
     if _bytes_or_absent(marker) != marker_bytes:
         raise RuntimeError("R3 recovery marker readback mismatch")
