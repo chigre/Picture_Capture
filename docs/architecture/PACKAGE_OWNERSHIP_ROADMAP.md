@@ -3130,3 +3130,28 @@ manual acceptance **OPEN / NOT PASSED**.
   scan, manual proofreading, save/reopen acceptance remains
   **OPEN / NOT PASSED**. Review new exact-head six-platform CI and OCR
   Platform Smoke before reporting this round as green.
+
+### Round 134 (2026-10-27): retain failed-export OCRed read diagnostics
+
+- Baseline exact HEAD `0e7a66de984b7423a6fd7acb301b08166c9b9ac6`: six-platform CI #40486489712
+  **SUCCESS** (6/6 and risk-tier gate), OCR Platform Smoke #40486489877
+  **SUCCESS** (3/3); documentation architecture check skipped.
+- After an OCRed exporter raised, a subsequent OCRed ownership read could
+  also raise (for example, permission denial). Previously the resulting
+  RuntimeError was explicitly chained only to the exporter, and the exact
+  OCRed read exception was unavailable through `verification_error`.
+- The failed-export OCRed read branch now retains both
+  `publication_error` (original exporter exception) and
+  `verification_error` (exact OCRed read exception), with the read error
+  as `__cause__`. Existing Chinese diagnostics and conservative behavior
+  are retained: no PDIC save and no OCRed-only rollback without ownership.
+- `tests/test_issue562_unreadable_ocred_diagnostics_round134_20261027.py`
+  injects the second OCRed read failure across four combinations of
+  existing/absent sidecar and exporter write/no-write. It checks exception
+  identity, byte preservation, no PDIC write, no compensation and no temp.
+- This is diagnostic recovery hardening, not cross-process atomic CAS or a
+  crash-safe OCRed/PDIC transaction. The true sidecar state remains uncertain
+  when the ownership read fails; manual reconciliation may be required.
+- PR #663 stays **Draft/Open/unmerged**. Representative real dictionary
+  scan, proofreading, save/reopen acceptance stays **OPEN / NOT PASSED**.
+  Verify both new exact-head workflows before reporting success.

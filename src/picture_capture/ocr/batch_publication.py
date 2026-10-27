@@ -334,11 +334,17 @@ def publish_existing_pdic_ocr(
         except FileNotFoundError:
             current_ocred = None
         except OSError as inspect_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "OCRed 导出报错，且无法核验 OCRed 是否已写入；"
                 "未启动 PDIC 保存，请核查 OCRed："
                 f"导出={export_error!r}；核查={inspect_error!r}"
-            ) from export_error
+            )
+            # The exporter may have replaced OCRed before raising. When its
+            # bytes cannot be read, never assume that a one-sided rollback is
+            # safe. Preserve both exact failures for manual recovery.
+            failure.publication_error = export_error
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
         if current_ocred != previous:
             # The worker supplies the canonical bytes for its own export.
             # If an external editor replaced OCRed before the exporter
