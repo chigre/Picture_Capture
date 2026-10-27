@@ -340,8 +340,8 @@ def publish_existing_pdic_ocr(
         )
 
     # OCRed export can take time or invoke patched filesystem hooks.
-    # If another editor writes PDIC during export, undo this OCRed sidecar
-    # and refuse to overwrite their latest PDIC file.
+    # If another editor writes PDIC during export, ownership of the pair
+    # is lost: preserve both versions and refuse to overwrite their PDIC.
     try:
         pdic_after_export = pdic_path.read_bytes()
     except FileNotFoundError:
