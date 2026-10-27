@@ -91,8 +91,11 @@ def test_pdic_save_failure_retains_original_and_post_compensation_error(
     rollback_error = caught.value.rollback_error
     assert caught.value.publication_error is save_error
     assert caught.value.__cause__ is rollback_error
-    assert rollback_error.verification_error is denied
-    assert rollback_error.__cause__ is denied
+    # The PDIC ownership callback intentionally adds a recovery message
+    # around the underlying I/O exception. Preserve both object identities
+    # across the final post-compensation wrapper, without flattening causes.
+    assert rollback_error.__cause__ is rollback_error.verification_error
+    assert rollback_error.verification_error.__cause__ is denied
     assert saved == [True]
     assert read_faults == [True]
     assert actual_read(pdic) == PDIC
