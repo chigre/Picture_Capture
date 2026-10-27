@@ -106,22 +106,27 @@ def test_exporter_raises_after_noncanonical_write_keeps_unknown_bytes(tmp_path):
 def test_manual_edit_between_export_error_inspection_and_rollback_survives(
     tmp_path, monkeypatch,
 ):
+    exporter_finished = []
     def export_then_fail(path, texts):
         export_ocred(path, texts)
+        # Atomic publication may read its destination for verification.
+        # Arm the injected proofreader edit only AFTER the exporter returns,
+        # so its own sidecar checks cannot consume the fault prematurely.
+        exporter_finished.append(True)
         raise OSError("post-export failure")
 
     ocred, pdic, pdic_before, calls, run = _publish(
         tmp_path, export_then_fail, old=OLD_BYTES,
     )
     original_read = Path.read_bytes
-    ocred_reads = [0]
+    post_export_reads = [0]
 
     def read_with_interleaved_proofreading(path):
-        if path == ocred:
-            ocred_reads[0] += 1
-            # 1: old snapshot; 2: exporter-error inspection;
-            # 3: optimistic compare before compensation.
-            if ocred_reads[0] == 3:
+        if path == ocred and exporter_finished:
+            post_export_reads[0] += 1
+            # 1: failed-export content inspection; 2: optimistic ownership
+            # comparison before compensation. Edit just before the second.
+            if post_export_reads[0] == 2:
                 path.write_bytes(MANUAL_BYTES)
         return original_read(path)
 
@@ -129,7 +134,7 @@ def test_manual_edit_between_export_error_inspection_and_rollback_survives(
     with pytest.raises(RuntimeError, match="原文件回滚也失败") as exc:
         run()
     assert "拒绝回滚覆盖人工校对内容" in str(exc.value)
-    assert ocred_reads[0] >= 3
+    assert post_export_reads[0] >= 2
     assert original_read(ocred) == MANUAL_BYTES
     assert original_read(pdic) == pdic_before
     assert calls == []
