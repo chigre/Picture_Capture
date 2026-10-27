@@ -371,10 +371,12 @@ def publish_existing_pdic_ocr(
             failure.verification_error = inspect_error
             raise failure from inspect_error
         if pdic_after_failed_export != previous_pdic:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "OCRed 导出失败，且导出期间 PDIC 已被修改；"
                 "拒绝单侧回滚，请人工核查两份文件"
-            ) from export_error
+            )
+            failure.publication_error = export_error
+            raise failure from export_error
         try:
             current_ocred = ocred_path.read_bytes()
         except FileNotFoundError:
@@ -402,11 +404,13 @@ def publish_existing_pdic_ocr(
                 expected_exported_ocred_bytes is not None
                 and current_ocred != expected_exported_ocred_bytes
             ):
-                raise RuntimeError(
+                failure = RuntimeError(
                     "OCRed 导出失败，磁盘内容与本次导出预期不符；"
                     "可能存在并发人工修改，拒绝回滚不明来源的 OCRed；"
                     f"导出={export_error!r}"
-                ) from export_error
+                )
+                failure.publication_error = export_error
+                raise failure from export_error
             # PDIC may change while OCRed is inspected or staged for
             # compensation. Recheck before any OCRed-only rollback.
             try:
@@ -414,15 +418,20 @@ def publish_existing_pdic_ocr(
             except FileNotFoundError:
                 pdic_before_compensation = None
             except OSError as inspect_error:
-                raise RuntimeError(
+                failure = RuntimeError(
                     "OCRed 导出失败，回滚前无法核验 PDIC；"
                     "拒绝单侧回滚，请人工核查两份文件"
-                ) from inspect_error
+                )
+                failure.publication_error = export_error
+                failure.verification_error = inspect_error
+                raise failure from inspect_error
             if pdic_before_compensation != previous_pdic:
-                raise RuntimeError(
+                failure = RuntimeError(
                     "OCRed 导出失败，回滚前 PDIC 已被其他操作修改；"
                     "拒绝单侧回滚，请人工核查两份文件"
-                ) from export_error
+                )
+                failure.publication_error = export_error
+                raise failure from export_error
             def verify_pdic_before_failed_export_rollback() -> None:
                 # Staging and fsyncing the OCRed compensation can outlast a
                 # concurrent PDIC replacement. The earlier check alone does
@@ -661,11 +670,13 @@ def publish_existing_pdic_ocr(
             failure.verification_error = inspect_error
             raise failure from inspect_error
         if current_pdic != previous_pdic:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "PDIC 保存报错，但磁盘 PDIC 已发生变化；"
                 "未单独回滚 OCRed，请核查两份文件："
                 f"PDIC={pdic_error!r}"
-            ) from pdic_error
+            )
+            failure.publication_error = pdic_error
+            raise failure from pdic_error
         def verify_pdic_before_rollback() -> None:
             # Restoring OCRed requires PDIC to remain at its pre-export
             # version, including while a rollback temp file is fsynced.
