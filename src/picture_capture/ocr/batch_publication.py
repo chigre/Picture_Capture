@@ -375,19 +375,15 @@ def publish_existing_pdic_ocr(
         except FileNotFoundError:
             final_pdic = None
         except OSError as inspect_error:
-            try:
-                _restore_ocred_if_unchanged(
-                    ocred_path, previous, published_ocred,
-                )
-            except Exception as rollback_error:
-                raise RuntimeError(
-                    "页面来源核验后无法读取 PDIC，且 OCRed 回滚失败；"
-                    "未启动 PDIC 保存，请人工核查两份文件："
-                    f"PDIC={inspect_error!r}；OCRed={rollback_error!r}"
-                ) from inspect_error
+            # An unreadable PDIC does not prove it still matches our
+            # pre-export snapshot. It may have been replaced during the
+            # second, potentially slow page-context validation. Reverting
+            # OCRed alone could then destroy the matching published pair.
+            # Treat this as an indeterminate commit and preserve both files.
             raise RuntimeError(
-                "页面来源核验后无法读取 PDIC；已恢复原有 OCRed，"
-                "未启动 PDIC 保存："
+                "页面来源核验后无法读取 PDIC，无法确认其版本；"
+                "拒绝单侧回滚 OCRed，未启动 PDIC 保存，"
+                "请人工核查两份文件："
                 f"核查={inspect_error!r}"
             ) from inspect_error
         if final_pdic != previous_pdic:
