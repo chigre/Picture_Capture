@@ -94,3 +94,45 @@ multi-file recovery OS-atomic or lock cooperating/uncooperating writers.
 Power-loss and the final observation-to-unlink race still require a
 durable, cross-process recovery protocol. Real Windows operator tests and
 R2/R3 acceptance remain NOT PERFORMED.
+
+
+## Follow-up: exclusive journal creation across cooperating processes (Round 148)
+
+Previously `_stage_recovery` did an optimistic marker-presence check and
+then called `_atomic_bytes(marker, json)`, which atomically **replaced** its
+destination. Two concurrent R3 writers could both pass the initial check;
+the later `os.replace` would overwrite the first writer's recovery plan.
+This was an ownership failure even when each JSON body was valid.
+
+Journal publication now uses `_create_exclusive_recovery_marker`:
+`os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_BINARY_if_available, 0o600)`,
+followed by a complete write, flush, and fsync. Only a process that
+atomically creates the new directory entry owns it. Another writer receives
+a fail-closed `Unresolved R3 recovery marker` exception whose cause is the
+original `FileExistsError`; it **cannot replace the earlier journal**.
+The JSON v1/v2 marker schema, exact-byte readback, project ownership checks,
+and journal name are unchanged.
+
+A machine crash during this direct write may leave an empty or partial
+marker instead of an atomically published full JSON document. That marker
+is **intentionally retained** and quarantines the page: the recovery reader
+rejects malformed JSON and never interprets it as an absent transaction.
+A failed fsync or denied create also fails without modifying PDIC,
+manual-selection, simplified, entry objects or OCR cache. Do not auto-delete
+an uncertain marker. This trades automatic recovery of rare pre-commit
+crashes for never losing a different process's recovery intent.
+
+`tests/test_issue503_exclusive_r3_marker_staging_20261028.py` asserts
+exclusive OS flags, normal recovery, deterministic competing-writer
+creation between preflight and open, unchanged earlier journal, a staging
+fsync failure, and permission denial. The existing candidate-delete
+missing-marker fault injection now targets the exclusive journal-writing
+boundary, preserving its no-op error coverage.
+
+**Limits:** O_EXCL coordinates creators on filesystems honoring exclusive
+creation; it does not provide a distributed lock over every subsequent
+PDIC/manual/simplified write. A process can still modify external files after
+the marker is created, and the final read/unlink remains optimistic. The
+journal still lacks crash-proof directory-entry fsync portability and
+multi-file OS atomicity. R3 real Windows operator checks and R2 W1–W11
+remain NOT PERFORMED; do not move #503/#483 to verified on synthetic CI.
