@@ -391,15 +391,15 @@ def test_missing_recovery_marker_silent_noop_refuses_bundle(tmp_path, monkeypatc
     page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
     old_pdic = pdic_path(page).read_bytes()
     old_simplified = simplified.read_bytes()
-    original_atomic = storage._atomic_bytes
     marker = storage._recovery_path(page)
 
-    def silent_marker_noop(path, data):
-        if path == marker:
-            return None
-        return original_atomic(path, data)
-
-    monkeypatch.setattr(storage, "_atomic_bytes", silent_marker_noop)
+    # The recovery journal now has an independent O_EXCL creation owner.
+    # Inject a silent no-op at that actual boundary, not the ordinary
+    # PDIC/simplified atomic-byte writer which no longer stages journals.
+    monkeypatch.setattr(
+        storage, "_create_exclusive_recovery_marker",
+        lambda path, data: None,
+    )
     assert delete_owned_review_candidate(review, 0, rows) == "break"
     assert pdic_path(page).read_bytes() == old_pdic
     assert simplified.read_bytes() == old_simplified

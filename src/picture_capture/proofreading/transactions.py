@@ -14,6 +14,7 @@ from pathlib import Path
 import base64
 import json
 import os
+import stat
 import tempfile
 from typing import Any
 
@@ -81,7 +82,7 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False, allow_evidence:
     try:
         pdic = pdic_path(page)
         digest = sha256_file(pdic)
-        if digest is None or _recovery_path(page).exists():
+        if digest is None or _marker_present(_recovery_path(page)):
             return None
         raw = pdic.read_bytes()
         if sha256_file(pdic) != digest:
@@ -224,6 +225,20 @@ def _recovery_path(page: Path) -> Path:
     return pdic_path(page).with_name(f".{pdic_path(page).name}.r3-inflight.json")
 
 
+def _marker_present(marker: Path) -> bool:
+    """Treat even dangling symlinks as pending R3 ownership.
+
+    Path.exists()/is_file() follow links, so both can return False for a
+    broken symlink. Only a genuinely absent directory entry means no journal.
+    Unreadable status must propagate and stop an unsafe page operation.
+    """
+    try:
+        marker.lstat()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def _encode(data: bytes | None) -> str | None:
     return None if data is None else base64.b64encode(data).decode("ascii")
 
@@ -244,12 +259,32 @@ def _valid_manual_path(page: Path, path: Path | None) -> bool:
     )
 
 
+def _create_exclusive_recovery_marker(marker: Path, data: bytes) -> None:
+    """Claim the recovery journal pathname once, without replacing a peer.
+
+    O_EXCL|O_CREAT makes marker ownership exclusive on cooperating local
+    filesystems, including Windows. A crash during writing can leave a
+    partial/empty marker: retain it to quarantine the page, never infer that
+    it is safe to start another transaction. The reader will reject invalid
+    JSON instead of deleting the marker or guessing rollback bytes.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    try:
+        descriptor = os.open(marker, flags, 0o600)
+    except FileExistsError as conflict:
+        raise RuntimeError("Unresolved R3 recovery marker; refusing new undo") from conflict
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def _stage_recovery(
     page: Path, changes: list[tuple[str, bytes | None, bytes | None]],
     *, manual_path: Path | None = None, rollback_required: bool = False,
 ) -> Path:
     marker = _recovery_path(page)
-    if marker.exists():
+    if _marker_present(marker):
         raise RuntimeError("Unresolved R3 recovery marker; refusing new undo")
     roles = [role for role, _, _ in changes]
     if len(roles) != len(set(roles)) or not roles or not set(roles) <= {"pdic", "simplified", "manual"}:
@@ -274,7 +309,9 @@ def _stage_recovery(
     # The marker exists only during a multi-file commit and is deleted
     # immediately. It is NOT a persistent Undo/Redo journal.
     marker_bytes = json.dumps(doc, ensure_ascii=False).encode("utf-8")
-    _atomic_bytes(marker, marker_bytes)
+    # Do not os.replace() a journal after a non-atomic existence check:
+    # two R3 writers could otherwise each replace the other's recovery plan.
+    _create_exclusive_recovery_marker(marker, marker_bytes)
     # Never write owned page files unless the rollback intent is durable.
     if _bytes_or_absent(marker) != marker_bytes:
         raise RuntimeError("R3 recovery marker readback mismatch")
@@ -285,8 +322,15 @@ def _verified_recovery(
     page: Path, *, manual_path: Path | None = None,
 ) -> tuple[Path, list[tuple[Path, bytes | None, bytes | None]]] | None:
     marker = _recovery_path(page)
-    if not marker.is_file():
+    try:
+        marker_mode = marker.lstat().st_mode
+    except FileNotFoundError:
         return None
+    # A directory or symbolic link is an unresolved/invalid transaction
+    # marker, *not* proof that there is no transaction. Never follow a
+    # link outside the project to obtain recovery bytes.
+    if not stat.S_ISREG(marker_mode):
+        raise ValueError("R3 recovery marker is not a regular file; manual recovery required")
     doc = json.loads(marker.read_text(encoding="utf-8"))
     if (not isinstance(doc, dict)
             or doc.get("format") != "picture_capture_r3_transient_recovery"
@@ -339,15 +383,32 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
     rollback_required = json.loads(marker.read_text(encoding="utf-8")).get(
         "rollback_required", False)
     if rollback_required or observed != [new for _, _, new in items]:
-        for path, before, _ in items:
+        for path, before, after in items:
+            # Recovery is not exclusive: a proofreader may update an owned
+            # file after the initial snapshot, including between two rollbacks.
+            # Never overwrite a byte version that is neither the staged old
+            # nor the staged new state. Avoid rewriting already-restored files.
+            current = _bytes_or_absent(path)
+            if current == before:
+                continue
+            if current != after:
+                return False
             _publish(path, before)
-        # A silently skipped rollback must retain the marker and quarantine
-        # page reloads rather than exposing a mixed persisted state.
+            if _bytes_or_absent(path) != before:
+                return False
+        # A silently skipped rollback or a late external edit must retain the
+        # recovery marker and quarantine page reloads.
         if any(_bytes_or_absent(path) != before for path, before, _ in items):
+            return False
+    else:
+        # Even a complete after-state can be externally edited after the
+        # initial observation. Do not discard the recovery journal without
+        # confirming every exact target byte value immediately beforehand.
+        if any(_bytes_or_absent(path) != after for path, _, after in items):
             return False
     marker.unlink()
     # A silent no-op unlink leaves the page quarantined.
-    return not marker.exists()
+    return not _marker_present(marker)
 
 
 def _rollback_failed_publish(
@@ -392,7 +453,7 @@ def _rollback_failed_publish(
         marker.unlink()
     except OSError:
         return False
-    return not marker.exists()
+    return not _marker_present(marker)
 
 
 def publish_owned_review_bundle(
@@ -422,7 +483,7 @@ def publish_owned_review_bundle(
             changes.append((role, old, new))
     if not (len(changes) >= 2 and any(role == "manual" for role, _, _ in changes)
             and any(role == "pdic" for role, _, _ in changes)
-            and not _recovery_path(page).exists()):
+            and not _marker_present(_recovery_path(page))):
         return False
 
     def source_unchanged() -> bool:
@@ -458,9 +519,9 @@ def publish_owned_review_bundle(
         try:
             marker.unlink()
         except OSError:
-            if marker.exists():
+            if _marker_present(marker):
                 raise
-        if marker.exists():
+        if _marker_present(marker):
             raise RuntimeError("R3 bundle recovery marker cleanup did not persist")
     except (OSError, RuntimeError, ValueError):
         # Report failure only after attempting exact before-state rollback.
@@ -485,7 +546,7 @@ def _publish_restored_snapshot(
     if not changes:
         return False
     if (not _undoable_committed_change(expected, target, allow_reversal=True)
-            or _recovery_path(page).exists()):
+            or _marker_present(_recovery_path(page))):
         return False
     # Revalidate exact bytes immediately before staging. An intervening writer
     # cannot be silently overwritten by a stale Undo snapshot.
@@ -519,9 +580,9 @@ def _publish_restored_snapshot(
         try:
             marker.unlink()
         except OSError:
-            if marker.exists():
+            if _marker_present(marker):
                 raise
-        if marker.exists():
+        if _marker_present(marker):
             raise RuntimeError("R3 restore recovery marker cleanup did not persist")
     except (OSError, RuntimeError, ValueError):
         try:
