@@ -3155,3 +3155,34 @@ manual acceptance **OPEN / NOT PASSED**.
 - PR #663 stays **Draft/Open/unmerged**. Representative real dictionary
   scan, proofreading, save/reopen acceptance stays **OPEN / NOT PASSED**.
   Verify both new exact-head workflows before reporting success.
+
+### Round 135 (2026-10-27): fail closed when the final pre-PDIC OCRed read is denied
+
+- Baseline exact HEAD `daf594194b936f651e77bd5f9d4d4ec8c5adeada`:
+  six-platform CI #40494422649 **SUCCESS** (6/6; risk-tier gate success),
+  OCR Platform Smoke #40494422910 **SUCCESS** (3/3); architecture
+  documentation check skipped.
+- Owner: `ocr/batch_publication.py:publish_existing_pdic_ocr`, called from
+  `ocr/batch_existing_entries.py` by the existing-PDIC batch OCR flow.
+  OCRed is the auxiliary text sidecar; PDIC remains the marker source of
+  truth. No serialization or UI contract changes.
+- The post-export OCRed read can succeed, then the subsequent PDIC ownership
+  check may take time, and the **last OCRed read before PDIC save** may fail.
+  Previously that `OSError` escaped without identifying the unverified
+  OCRed/PDIC pair or exposing a stable `verification_error` attribute.
+- The last-read failure now raises a contextual `RuntimeError` chained to
+  the original read exception, retaining it as `verification_error`.
+  Neither PDIC publication nor an OCRed-only rollback is attempted when
+  the latest OCRed ownership cannot be established.
+- `tests/test_issue562_ocred_pre_pdic_read_failure_round135_20261027.py`
+  injects the third OCRed read denial in four combinations of old OCRed
+  present/absent and exporter write/no-write. It verifies the exact
+  exception identity/cause, no PDIC writer or rollback, byte-exact disk
+  preservation and no compensation temp artifacts.
+- This is a conservative diagnostic boundary, not cross-process atomic
+  CAS. A non-cooperating writer can still change files after the final
+  successful read; crash-safe two-file commit and power-loss recovery
+  remain unresolved. PR #663 remains **Draft/Open/unmerged**; real scanned
+  dictionary manual GUI/OCR/PDIC/PPP/SECTION save/reopen acceptance remains
+  **OPEN / NOT PASSED**. Verify the new exact-head CI and OCR Smoke
+  separately before claiming a pass.
