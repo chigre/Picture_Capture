@@ -270,6 +270,7 @@ def _reject_unresolved_r3_marker(pdic_path: Path) -> None:
     except FileNotFoundError:
         return
     raise RuntimeError(
+        "Unresolved R3 transaction: "
         "存在未完成的 R3 页面恢复事务；拒绝批量 OCR 发布 OCRed/PDIC，"
         "请先核查并恢复页面事务"
     )
