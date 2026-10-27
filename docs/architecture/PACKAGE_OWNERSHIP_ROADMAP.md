@@ -2973,3 +2973,35 @@ manual acceptance **OPEN / NOT PASSED**.
   proofreading, save and reopen acceptance stays **OPEN / NOT PASSED**.
   Validate this exact HEAD's completed six-platform CI and OCR Smoke
   before declaring the round green.
+
+### Round 129 (2026-10-27): distinguish committed OCRed rollback from post-mutation exceptions
+
+- Baseline Round 128 HEAD `98a6843fc4a9f7015b88635653dc61370dfadbce`:
+  six-platform CI #40454083959 and OCR Platform Smoke #40454083974
+  both completed successfully before this round.
+- A filesystem wrapper may finish `os.replace(temp, OCRed)` or
+  `Path.unlink(OCRed)` and **then** raise. Previously the rollback helper
+  reported a failed compensation even though OCRed had already been restored
+  or removed. For replacement, the exception path also treated the moved
+  staging pathname as though it still belonged to the worker.
+- On a replacement exception, the helper now checks that the staging
+  pathname is absent **and** the OCRed destination contains the exact old
+  bytes. Only when both hold does it recognize completed compensation.
+  For a deletion exception, absence of OCRed likewise counts as the
+  completed target state. It never retries a destructive mutation.
+  An extant temp, unexpected OCRed bytes, or an unreadable post-error state
+  preserves the error (or reports indeterminate completion). An external
+  edit observed after a post-mutation error is not overwritten.
+- `tests/test_issue562_rollback_post_mutation_errors_round129_20261027.py`
+  adds ten parameterized filesystem/fault-injection cases: replace/unlink
+  exceptions before and after mutation, subsequent human edits, unreadable
+  verification, and end-to-end PDIC-save errors after a completed OCRed
+  compensation. The original PDIC-save failure remains the reported failure
+  when compensation is confirmed complete.
+- This establishes **observed final-state recovery**, not provenance of
+  which process caused the change: an external writer can mimic old bytes
+  or race after inspection. There is still no cross-process CAS, durable
+  two-file transaction, process/power-loss recovery or atomic ABA guard.
+  PR #663 remains Draft/Open/Unmerged. Real dictionary scan, human
+  proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
+  Only completed CI and OCR Smoke on the final HEAD can validate the round.
