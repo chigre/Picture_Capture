@@ -123,6 +123,8 @@ def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch
 
     original_read = Path.read_bytes
     count = {"pdic": 0}
+    writer_error = OSError("writer denied")
+    verification_error = PermissionError("PDIC read denied after writer error")
 
     def read_with_post_error(self):
         if self == pdic:
@@ -131,7 +133,7 @@ def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch
             # before calling the writer; read 3 verifies an ambiguous
             # writer failure. Inject at read 3 to exercise this contract.
             if count["pdic"] == 3:
-                raise PermissionError("PDIC read denied after writer error")
+                raise verification_error
         return original_read(self)
 
     monkeypatch.setattr(Path, "read_bytes", read_with_post_error)
@@ -140,9 +142,13 @@ def test_failed_pdic_verification_never_reverts_only_ocred(tmp_path, monkeypatch
             ocred, pdic, ["new"], [Entry("new", 1, 2)], 100,
             ("001", "@", "@"),
             export_ocred=export_ocred,
-            write_pdic=lambda *_args: (_ for _ in ()).throw(OSError("writer denied")),
+            write_pdic=lambda *_args: (_ for _ in ()).throw(writer_error),
         )
-    assert "writer denied" in str(caught.value.__cause__)
+    # The ownership read is the immediate failure, but both original
+    # exception objects must survive for recovery tooling.
+    assert caught.value.publication_error is writer_error
+    assert caught.value.verification_error is verification_error
+    assert caught.value.__cause__ is verification_error
     assert count["pdic"] == 3
     assert import_ocred(ocred) == ["new"]
     assert original_read(pdic) == b"old"
