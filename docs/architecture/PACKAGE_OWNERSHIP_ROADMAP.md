@@ -2943,3 +2943,33 @@ manual acceptance **OPEN / NOT PASSED**.
 - Closed two pre-commit compensation hazards in `ocr/batch_publication.py`: when PDIC changes during OCRed export, or during the second SECTION/source-image validation, the publisher no longer rolls back OCRed alone. It refuses PDIC publication and preserves both observed disk versions for manual reconciliation. The earlier rollback could replace a sidecar associated with the newly edited PDIC, even if OCRed was still byte-equal to this worker's export at the first inspection.
 - `test_issue562_pdic_conflict_no_compensation_round127_20261027.py` injects both races for existing and newly created OCRed, combined human PDIC/OCRed edits during validation, and an uncontended success path. The tests explicitly fail if a compensation helper is invoked on a PDIC ownership conflict. Updated the Round 84 and Round 95 behavior assertions to the conservative recovery policy.
 - Scope: this is **not** a cross-process atomic CAS, a durable two-file transaction, or process/power-loss recovery. PDIC can still change after the last optimistic read, and a pair already modified externally requires manual inspection. PR #663 stays Draft/open/unmerged. Real dictionary scan, human proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
+
+### Round 128 (2026-10-27): OCRed rollback temp-cleanup error provenance
+
+- Baseline Round 127 HEAD `b741257a38890e1d8238141dea6ccdf3560cfd66`:
+  six-platform CI #40448288152 and OCR Platform Smoke #40448288426
+  both completed successfully before this change.
+- `src/picture_capture/ocr/batch_publication.py` previously used a
+  `finally: temp_path.unlink(missing_ok=True)` after staging and replacing
+  a compensating OCRed file. If `os.fsync`, the last ownership guard, or
+  `os.replace` failed **and** deleting the rollback temp also raised,
+  cleanup could mask the original failure. A successful `os.replace`
+  unnecessarily attempted to unlink its already-moved temp pathname.
+- The rollback helper now transfers temp-path ownership on successful
+  `os.replace`, and only attempts cleanup on exceptional exits. If
+  cleanup also fails, it reports **both** the original rollback error and
+  the cleanup error, retaining the original exception as `__cause__`.
+  Interrupted `BaseException` paths retain their original signal.
+- `tests/test_issue562_ocred_rollback_cleanup_round128_20261027.py`
+  fault-injects failed replace, failed fsync, failed PDIC ownership guard
+  combined with denied temp cleanup; a normal successful restoration; and
+  end-to-end PDIC-save failure with rollback/cleanup double failure.
+  These tests assert original PDIC/OCRed bytes remain visible, failure
+  provenance is retained, and any orphan temp is explicitly detectable.
+- This does **not** provide crash-safe cleanup, cross-process CAS, a
+  durable dual-file transaction, or resolution of post-check external
+  writes. Temp files left after denied cleanup require manual inspection.
+  PR #663 stays Draft/open/unmerged. Real dictionary scan, manual
+  proofreading, save and reopen acceptance stays **OPEN / NOT PASSED**.
+  Validate this exact HEAD's completed six-platform CI and OCR Smoke
+  before declaring the round green.
