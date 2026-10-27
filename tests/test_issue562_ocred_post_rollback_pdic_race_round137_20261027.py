@@ -99,8 +99,8 @@ def test_failed_pdic_save_post_rollback_read_edits_ocred_without_second_rollback
         if path == pdic:
             pdic_reads.append(True)
             # 1 initial; 2 after export; 3 after PDIC save failure;
-            # 4 before compensation; 5 pre-mutation; 6 post-rollback.
-            if len(pdic_reads) == 6:
+            # 4 pre-mutation; 5 post-rollback.
+            if len(pdic_reads) == 5:
                 assert (actual_read(ocred) if ocred.exists() else None) == previous
                 ocred.write_bytes(FOREIGN)
                 injected.append(True)
@@ -128,7 +128,7 @@ def test_failed_pdic_save_post_rollback_read_edits_ocred_without_second_rollback
     assert error.value.publication_error is pdic_error
     assert error.value.__cause__ is error.value.rollback_error
     assert "回滚后 PDIC 核验期间 OCRed 再次被修改" in str(error.value.rollback_error)
-    assert len(pdic_reads) == 6
+    assert len(pdic_reads) == 5
     assert injected == [True]
     assert writes == [True]
     assert actual_read(pdic) == PDIC
