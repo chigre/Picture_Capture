@@ -63,3 +63,22 @@ source-pixel coordinates and crop/export manual acceptance remains
 
 Keep PR #663 **Draft / Open / Unmerged**. Verify exact-head six-platform CI
 and three-platform OCR Smoke independently before claiming completion.
+
+
+## First CI diagnosis and regression isolation
+
+On initial Round 142 HEAD `4ad7cd4e037446a99f94e8baa53adda21cc7dbc3`,
+Ubuntu normal and Python 3.10 jobs failed two historical tests. Both
+fault-injection hooks counted *every* OCRed read since worker entry.
+The additional post-replace verification read in the shared writer
+consumed their injected edits/read-denials inside the exporter, before
+the intended failed-export inspection/rollback. This changed the test
+failure message without demonstrating loss of manual proofreading.
+
+The existing Round 89 and Round 82 regression tests were repaired to arm
+their fault hooks only **after the exporter has completed its own atomic
+publication and is about to raise**. This retains their intended coverage
+of a foreign OCRed edit before compensation, and an unreadable OCRed
+during failed-export ownership inspection; no production safeguard or
+error-contract assertion was removed. Review the next exact-head CI,
+which must pass before the round is marked fully verified.
