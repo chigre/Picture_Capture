@@ -3037,3 +3037,34 @@ manual acceptance **OPEN / NOT PASSED**.
   Real dictionary GUI scan, human proofreading, save and reopen acceptance
   remains **OPEN / NOT PASSED**. Validate the exact final HEAD's six-platform
   CI and OCR Platform Smoke before claiming success.
+
+### Round 131 (2026-10-27): verify PDIC ownership after completed OCRed compensation
+
+- Baseline Round 130 HEAD `e5406c55562b78819ed937fedc9415e626f6618f`:
+  six-platform CI #40465636794 and OCR Platform Smoke #40465636849
+  both completed successfully before this change.
+- `ocr/batch_publication.py:_restore_ocred_if_unchanged` previously
+  verified PDIC only **before** the compensating OCRed `os.replace` or
+  `unlink`. A filesystem adapter can complete that operation and then
+  change PDIC (or make it unreadable) before returning. The caller could
+  then report only the original export/PDIC/SECTION error, incorrectly
+  implying the old two-file pair had been recovered.
+- After a *real* OCRed restoration or deletion, re-run the existing
+  PDIC ownership callback. If it fails, report that OCRed compensation
+  has already completed but the PDIC pair is now changed/indeterminate.
+  Preserve both observed disk files; **never retry** a destructive
+  rollback. An unchanged OCRed sidecar remains a no-op without a new
+  mutation/verification callback.
+- `tests/test_issue562_post_rollback_pdic_ownership_round131_20261027.py`
+  adds 12 cross-product fault-injection cases (PDIC-save error,
+  OCRed-export error, SECTION context error × restore/delete × changed/
+  unreadable PDIC), two normal compensation cases asserting both PDIC
+  checks, and a no-op case. It checks exact sidecar bytes, no repeat
+  mutation, no orphan rollback temp and conservative error reporting.
+- This detects only changes visible at the final optimistic check. It
+  does not implement atomic CAS, a durable OCRed/PDIC two-file transaction,
+  writer provenance, or process/power-loss recovery; a foreign write can
+  still race afterward. PR #663 remains Draft/Open/Unmerged. Real
+  dictionary scan, human proofreading, save and reopen acceptance is
+  **OPEN / NOT PASSED**. Review completed exact-HEAD six-platform CI and
+  OCR Platform Smoke before claiming the new round passed.
