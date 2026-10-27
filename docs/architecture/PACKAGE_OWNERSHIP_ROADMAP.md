@@ -2906,3 +2906,32 @@ manual acceptance **OPEN / NOT PASSED**.
   dictionary GUI scan, human proofreading, save and reopen acceptance stays
   **OPEN / NOT PASSED**. Verify this exact HEAD's six-platform CI and OCR
   Platform Smoke before claiming the round passed.
+
+### Round 126 (2026-10-27): failed SECTION/source validation cannot roll back OCRed over newer PDIC
+
+- Baseline Round 125 HEAD `c6970bd9d3d9b5e761f7c8f378d2a8267d2a564c`:
+  six-platform CI #40436747175 and OCR Platform Smoke #40436747169
+  were both completed successfully before this change.
+- The second `validate_page_context()` runs **after OCRed export** and can
+  hash a large source image. If it raises due to a changed SECTION/image,
+  a separate proofreader may also have updated PDIC during validation.
+  Previously the exception handler restored OCRed without rechecking PDIC;
+  that could pair an old OCRed with the newer PDIC.
+- The failed-page-context branch now checks PDIC's exact pre-export byte
+  snapshot before compensation and supplies a second PDIC ownership check
+  immediately before the compensating `os.replace` or `unlink`. A changed,
+  removed or unreadable PDIC refuses the one-sided rollback and preserves
+  both on-disk versions for explicit reconciliation. The PDIC writer is not
+  invoked on this path. Uncontended SECTION/image failure still restores
+  old OCRed exactly (or deletes a newly exported sidecar).
+- `tests/test_issue562_context_rollback_pdic_race_round126_20261027.py`
+  adds 11 parameterized behavioral/fault-injection cases: PDIC replaced or
+  removed during validation, late read denial, edits during rollback fsync
+  or before unlink, no-conflict exact restoration and normal publication.
+- This does **not** establish a cross-process atomic compare-and-swap,
+  two-file transaction, power-loss recovery or ABA resistance. Last-read
+  races remain possible; no manual GUI acceptance is implied. PR #663
+  remains Draft/Open/Unmerged; real dictionary scan, human proofread, save
+  and reopen acceptance remains **OPEN / NOT PASSED**. Only the latest
+  HEAD's completed six-platform CI and OCR Platform Smoke can validate
+  this round.
