@@ -2936,3 +2936,10 @@ manual acceptance **OPEN / NOT PASSED**.
   and reopen acceptance remains **OPEN / NOT PASSED**. Only the latest
   HEAD's completed six-platform CI and OCR Platform Smoke can validate
   this round.
+
+### Round 127 (2026-10-27): preserve both sidecars when PDIC ownership is lost before commit
+
+- Verified Round 126 HEAD `aa9896d667bad1b26f0a53156f8116385641087b`: six-platform CI `40443019356` and three-platform OCR Smoke `40443019336` both completed successfully.
+- Closed two pre-commit compensation hazards in `ocr/batch_publication.py`: when PDIC changes during OCRed export, or during the second SECTION/source-image validation, the publisher no longer rolls back OCRed alone. It refuses PDIC publication and preserves both observed disk versions for manual reconciliation. The earlier rollback could replace a sidecar associated with the newly edited PDIC, even if OCRed was still byte-equal to this worker's export at the first inspection.
+- `test_issue562_pdic_conflict_no_compensation_round127_20261027.py` injects both races for existing and newly created OCRed, combined human PDIC/OCRed edits during validation, and an uncontended success path. The tests explicitly fail if a compensation helper is invoked on a PDIC ownership conflict. Updated the Round 84 and Round 95 behavior assertions to the conservative recovery policy.
+- Scope: this is **not** a cross-process atomic CAS, a durable two-file transaction, or process/power-loss recovery. PDIC can still change after the last optimistic read, and a pair already modified externally requires manual inspection. PR #663 stays Draft/open/unmerged. Real dictionary scan, human proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
