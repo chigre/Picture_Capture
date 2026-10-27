@@ -1,3 +1,7 @@
+## 2026-10-28｜G1 批量修复：候选归属与侧写溯源（新一批，不是 R3 人工验收）
+
+新增 [G1 候选删除归属/冲突矩阵](../architecture/R3_G1_CANDIDATE_ID_SIDECAR_PROVENANCE_BATCH_20261028.md)：修复一个 candidate_id 被两个 Entry 认领、同坐标简体条目属于另一个来源词、简体 JSON 页面/格式错误、manual_selection 已保存但 selected/word 不一致时的误删风险。要求在**任何磁盘/Tk/Undo 修改前** fail-closed；合法旧版候选 selected 缺省、已有人工选中与 Delete→Undo→Redo 三文件字节一致仍被保留。新增 19 个参数化/端到端回归场景。此工作包代码已提交但必须查看**最新 HEAD** CI，未通过不得把 G1/B3/真实 Windows 人工验收标 completed。
+
 ## 2026-10-28｜R3 v1.3.0 最新范围/人机验收（取代旧「当前 PR #519/#542」入口）
 
 工程主交付 #542 已合并 main；**新增安全收口由唯一 Draft PR [#663](https://github.com/chigre/Picture_Capture/pull/663)** 承载 #503 与 #562。旧 #664 已 Closed / Unmerged、其提交并入双父 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac`。这版确证合成 [CI #40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) 6/6 与 [OCR Smoke #40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) 3/3；仅对应旧 HEAD。重要保护已存在：R3 marker O_EXCL 独占、非普通标记拒绝、逐文件 before/after 恢复核验、候选提交后再更新 UI、同会话最多20步 Undo/Redo；**并非全程跨进程原子双/三文件事务**。

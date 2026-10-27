@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-27T18:38:43.654Z",
+  "updated_at_utc": "2026-10-28T00:00:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,8 +24,8 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_R3_transaction_owner_and_operator_acceptance_audit",
-    "work_in_progress": false,
+    "active_work_item": "G1_R3_candidate_owned_delete_provenance_batch",
+    "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
       "url": "https://github.com/chigre/Picture_Capture/pull/663",
@@ -58,7 +58,7 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "G1: on sole Draft PR #663, audit candidate-linked Undo/Redo owner/PDIC+manual_selection+simplified save/reopen failure matrix, add only missing safety tests and fixes; preserve R3 human acceptance NOT PERFORMED and check exact-head six-platform CI + OCR Smoke after each batch.",
+    "required_next_action": "Verify exact-head six-platform CI and OCR Smoke for G1 candidate provenance package; repair any failures without weakening existing R3 safety. Then continue independent G1 Undo/Redo mixed edit and crash ownership auditing; Windows real dictionary operator gates remain NOT PERFORMED.",
     "last_test_evidence": "Consolidated Draft #663 exact HEAD 66ad88c276b6965c075eeb72583b42dd0aa7f3ac: CI #40559523622 completed/success Windows/macOS/Ubuntu normal and Python 3.10 6/6 with final Risk-tier gate success; OCR Platform Smoke #40559523187 completed/success 3/3. Earlier #542 CI remains historical, not latest main proof. No real Windows dictionary human acceptance.",
     "active_batch": "B3",
     "next_batch": "B4",
@@ -1036,5 +1036,25 @@
     ],
     "human_acceptance": "NOT_PERFORMED",
     "real_scanned_benchmark": "DEFERRED_BY_USER"
+  },
+  "g1_candidate_provenance_batch_20261028": {
+    "status": "implementation_submitted_pending_exact_head_ci",
+    "branch": "refactor/562-retire-root-image-utils-20261024",
+    "production_commit": "41ff2fc49ef6b198f356948477defc7eb6cee0b6",
+    "regression_commits": [
+      "1e8769044c5d888f8db631bf1b6f56286c4a1052",
+      "c77c1102a53cf91604837906e873ed0b17ea9bd7"
+    ],
+    "architecture_doc": "docs/architecture/R3_G1_CANDIDATE_ID_SIDECAR_PROVENANCE_BATCH_20261028.md",
+    "scope": [
+      "unique candidate_id / Entry ownership",
+      "exact simplified source_word and format/page",
+      "manual override selected/word conflict",
+      "Delete-Undo-Redo exact file bytes"
+    ],
+    "added_case_count": 19,
+    "human_acceptance": "NOT_PERFORMED",
+    "ci_status": "PENDING_FINAL_HEAD_RESULTS",
+    "note": "Do not mark G1 or #503 verified: this only closes the identified candidate delete preparation provenance gap."
   }
 }
