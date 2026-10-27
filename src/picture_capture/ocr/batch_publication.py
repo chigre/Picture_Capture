@@ -58,6 +58,17 @@ def _restore_ocred_bytes(
         # Recheck the other side of the pair immediately before unlinking.
         if verify_before_mutation is not None:
             verify_before_mutation()
+            # The PDIC ownership callback may run filesystem hooks or take
+            # long enough for another editor to update OCRed. Revalidate
+            # OCRed after that callback, before the destructive unlink.
+            if (
+                expected_current is not _UNSPECIFIED_OCRED_SNAPSHOT
+                and _read_optional_ocred_bytes(path) != expected_current
+            ):
+                raise RuntimeError(
+                    "OCRed 在 PDIC 核验期间被其他操作修改；"
+                    "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
+                )
         try:
             path.unlink(missing_ok=True)
         except Exception as unlink_error:
@@ -113,6 +124,17 @@ def _restore_ocred_bytes(
         # restore old OCRed if the PDIC version is no longer established.
         if verify_before_mutation is not None:
             verify_before_mutation()
+            # The PDIC check itself can race with a manual OCRed edit.
+            # Check the destination once more after it returns, not only
+            # before staging and before invoking the PDIC callback.
+            if (
+                expected_current is not _UNSPECIFIED_OCRED_SNAPSHOT
+                and _read_optional_ocred_bytes(path) != expected_current
+            ):
+                raise RuntimeError(
+                    "OCRed 在 PDIC 核验期间被其他操作修改；"
+                    "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
+                )
         try:
             os.replace(temp_path, path)
         except Exception as replace_error:
