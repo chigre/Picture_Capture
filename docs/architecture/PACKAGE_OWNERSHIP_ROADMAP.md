@@ -3005,3 +3005,35 @@ manual acceptance **OPEN / NOT PASSED**.
   PR #663 remains Draft/Open/Unmerged. Real dictionary scan, human
   proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
   Only completed CI and OCR Smoke on the final HEAD can validate the round.
+
+### Round 130 (2026-10-27): verify OCRed compensation after normal filesystem returns
+
+- Baseline Round 129 HEAD `61fe5bb1a27f8180f98a20b0c76d266ae6c383aa`:
+  six-platform CI #40459600289 and OCR Platform Smoke #40459600138
+  both completed successfully before this change.
+- `src/picture_capture/ocr/batch_publication.py` already inspected
+  `os.replace`/`Path.unlink` when those operations **raised** after
+  mutating OCRed. A different failure remained: a faulty filesystem wrapper
+  or test adapter could return **normally without doing the requested
+  mutation**, or an external writer could change the target before the
+  caller observed it. The rollback helper would then report success while
+  the old OCRed had not actually been restored or removed.
+- After a normally returning `unlink`, verify that OCRed is absent.
+  After a normally returning `os.replace`, verify that the staging
+  pathname is gone **and** OCRed contains the exact original bytes.
+  Unproven compensation raises a recovery error; an unmoved staging file
+  is cleaned through the existing exception cleanup path. No destructive
+  operation is retried against a possibly newer human edit.
+- `tests/test_issue562_ocred_rollback_success_verification_round130_20261027.py`
+  adds six parameterized filesystem/fault-injection cases: no-op replace
+  and unlink, a foreign edit immediately after successful replace/unlink,
+  and end-to-end PDIC-save failure with no-op compensation. Tests assert
+  that the exported sidecar is preserved when rollback did not happen,
+  PDIC is unchanged, both errors are reported, and no rollback temp remains.
+- This is a **post-operation observed-state check**, not proof of writer
+  identity, a cross-process atomic CAS, or crash-safe two-file commit.
+  A non-cooperating writer can still race after inspection; a matching
+  byte pattern does not prove provenance. PR #663 stays Draft/open/unmerged.
+  Real dictionary GUI scan, human proofreading, save and reopen acceptance
+  remains **OPEN / NOT PASSED**. Validate the exact final HEAD's six-platform
+  CI and OCR Platform Smoke before claiming success.
