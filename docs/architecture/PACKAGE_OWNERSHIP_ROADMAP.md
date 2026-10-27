@@ -3068,3 +3068,36 @@ manual acceptance **OPEN / NOT PASSED**.
   dictionary scan, human proofreading, save and reopen acceptance is
   **OPEN / NOT PASSED**. Review completed exact-HEAD six-platform CI and
   OCR Platform Smoke before claiming the new round passed.
+
+### Round 132 (2026-10-27): retain primary and compensation failure chains
+
+- Verified baseline exact HEAD `f23cab08e0778095a095b36a66749fd4ac90438d`:
+  six-platform CI #40472126753 completed **SUCCESS** (6/6; risk gate
+  successful), OCR Platform Smoke #40472126747 completed **SUCCESS** (3/3).
+- `ocr/batch_publication.py:publish_existing_pdic_ocr` previously used
+  `raise ... from context_error` when a SECTION validator failed *and*
+  compensating OCRed restoration failed. This made the original SECTION
+  failure the explicit exception cause, hiding the more important rollback
+  failure from programmatic traceback/cause inspection. Other publication
+  routes had a rollback cause but retained the primary exception only as
+  formatted text.
+- The three failure routes (OCRed export, SECTION/source context, PDIC save)
+  now preserve both original exception objects on the raised `RuntimeError`
+  as `publication_error` and `rollback_error`. All three explicitly chain
+  from `rollback_error`, preserving its nested PDIC ownership/permission
+  cause while keeping the original export/SECTION/PDIC exception available
+  for diagnostics. Existing Chinese error text and the success/no-op
+  compensation behavior are unchanged.
+- `tests/test_issue562_compensation_exception_chain_round132_20261027.py`
+  adds 12 real-sidecar fault-injection combinations (three failure routes,
+  replace/unlink compensation, and late PDIC edit/read denial). It checks
+  original exception identity, explicit cause chain, exact disk bytes,
+  absence of duplicate destructive rollback and temp-file leaks.
+- This improves failure reporting, **not** atomicity or durability.
+  Non-cooperating writers can still race after the last optimistic read;
+  cross-process CAS, two-file crash-safe commit and power-loss recovery
+  remain unresolved. PR #663 must stay Draft/Open/unmerged. Real scanned
+  dictionary-page GUI, proofreading, save/reopen acceptance is still
+  **OPEN / NOT PASSED**; do not substitute synthetic CI.
+- Verify **both** new exact-head CI and OCR Platform Smoke to completion
+  before reporting this round as green.
