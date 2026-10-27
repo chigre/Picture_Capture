@@ -390,11 +390,16 @@ def publish_existing_pdic_ocr(
                     verify_before_mutation=verify_pdic_before_failed_export_rollback,
                 )
             except Exception as rollback_error:
-                raise RuntimeError(
+                failure = RuntimeError(
                     "OCRed 导出失败，且原文件回滚也失败；"
                     "未启动 PDIC 保存："
                     f"导出={export_error!r}；回滚={rollback_error!r}"
-                ) from rollback_error
+                )
+                # Keep both original exception objects for recovery tooling,
+                # while the explicit cause identifies the failed compensation.
+                failure.publication_error = export_error
+                failure.rollback_error = rollback_error
+                raise failure from rollback_error
         raise
 
     # Capture the sidecar produced by this export. If an external editor
@@ -498,11 +503,17 @@ def publish_existing_pdic_ocr(
                     verify_before_mutation=verify_pdic_before_context_rollback,
                 )
             except Exception as rollback_error:
-                raise RuntimeError(
+                failure = RuntimeError(
                     "SECTION 发布前核验失败，且 OCRed 回滚失败；"
                     "未启动 PDIC 保存，请人工核查两份文件："
                     f"SECTION={context_error!r}；OCRed={rollback_error!r}"
-                ) from context_error
+                )
+                # The rollback failure (not the SECTION validator) is the
+                # immediate cause of the uncertain recovery state. Preserve
+                # the SECTION exception separately for diagnostics.
+                failure.publication_error = context_error
+                failure.rollback_error = rollback_error
+                raise failure from rollback_error
             raise
 
     # The SECTION/source-image validator may hash a large scan. Another
@@ -597,10 +608,13 @@ def publish_existing_pdic_ocr(
                 verify_before_mutation=verify_pdic_before_rollback,
             )
         except Exception as rollback_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "PDIC 保存失败，OCRed 回滚也失败："
                 f"PDIC={pdic_error!r}；OCRed={rollback_error!r}"
-            ) from rollback_error
+            )
+            failure.publication_error = pdic_error
+            failure.rollback_error = rollback_error
+            raise failure from rollback_error
         raise
 
     # Capture the committed PDIC before the potentially slow final source
