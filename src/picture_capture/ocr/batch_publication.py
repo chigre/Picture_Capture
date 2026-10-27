@@ -195,6 +195,20 @@ def _restore_ocred_if_unchanged(
         path, previous, expected_current=published,
         verify_before_mutation=verify_before_mutation,
     )
+    # A filesystem callback may finish the OCRed compensation and then
+    # publish a different PDIC version before returning. The pre-mutation
+    # ownership check alone would then let the caller report only the
+    # original export/PDIC error, falsely implying a consistent old pair.
+    # Recheck the PDIC after the observed OCRed restoration/deletion. Do
+    # not attempt another unilateral rollback if its version has changed.
+    if verify_before_mutation is not None:
+        try:
+            verify_before_mutation()
+        except Exception as post_rollback_error:
+            raise RuntimeError(
+                "OCRed 回滚已完成，但回滚后 PDIC 版本发生变化或无法确认；"
+                "未再次修改 OCRed 或 PDIC，请人工核查两份文件"
+            ) from post_rollback_error
 
 
 def publish_existing_pdic_ocr(
