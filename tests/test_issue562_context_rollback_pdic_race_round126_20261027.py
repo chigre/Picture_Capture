@@ -185,3 +185,33 @@ def test_unchanged_page_context_still_commits_both_sidecars(tmp_path):
     assert len(checks) == 3
     assert pdic.read_bytes() == b"committed PDIC"
     assert ocred.read_bytes() == EXPORTED_OCRED
+
+
+@pytest.mark.parametrize("pdic_changed", [False, True], ids=["unchanged-pdic", "edited-pdic"])
+def test_context_failure_with_noop_ocred_export_never_replaces_or_unlinks(
+    tmp_path, monkeypatch, pdic_changed,
+):
+    # If OCRed already equals the exported bytes, no compensating filesystem
+    # mutation is necessary. Still reject a PDIC edit during validation.
+    pdic, ocred = _setup(tmp_path, EXPORTED_OCRED)
+    calls, checks = [], []
+
+    def validate():
+        checks.append(True)
+        if len(checks) == 2:
+            if pdic_changed:
+                pdic.write_bytes(NEW_PDIC)
+            raise RuntimeError("SECTION changed")
+
+    def forbidden_mutation(*_args, **_kwargs):
+        raise AssertionError("no-op OCRed compensation must not mutate disk")
+
+    monkeypatch.setattr(publication.os, "replace", forbidden_mutation)
+    monkeypatch.setattr(Path, "unlink", forbidden_mutation)
+    expected_error = "PDIC 已被其他操作修改" if pdic_changed else "SECTION changed"
+    with pytest.raises(RuntimeError, match=expected_error):
+        _run(pdic, ocred, EXPORTED_OCRED, validate, calls)
+    assert calls == ["export"]
+    assert len(checks) == 2
+    assert ocred.read_bytes() == EXPORTED_OCRED
+    assert pdic.read_bytes() == (NEW_PDIC if pdic_changed else OLD_PDIC)
