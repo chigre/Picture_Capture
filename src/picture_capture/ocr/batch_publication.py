@@ -89,9 +89,26 @@ def _restore_ocred_bytes(
         if verify_before_mutation is not None:
             verify_before_mutation()
         os.replace(temp_path, path)
-    finally:
+        # os.replace moves the staged file into place. Once committed, the
+        # temporary pathname is no longer ours to unlink; a late cleanup
+        # error must not misreport a successful OCRed restoration as failed.
+        temp_path = None
+    except BaseException as restore_error:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                # Do not mask the original staging/replace failure with a
+                # secondary cleanup error. Both failures matter: the temp
+                # may remain on disk and the OCRed pair needs inspection.
+                if not isinstance(restore_error, Exception):
+                    raise restore_error from cleanup_error
+                raise RuntimeError(
+                    "OCRed 回滚未完成，且临时文件清理失败；"
+                    "请人工核查 OCRed、PDIC 及遗留的回滚 .tmp 文件："
+                    f"回滚={restore_error!r}；清理={cleanup_error!r}"
+                ) from restore_error
+        raise
 
 
 def _restore_ocred_if_unchanged(
