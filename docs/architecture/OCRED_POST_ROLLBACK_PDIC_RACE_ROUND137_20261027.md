@@ -12,7 +12,7 @@ Round 136 protected the *pre-mutation* PDIC callback: an editor could change OCR
 
 After a successful post-rollback PDIC check, the helper now re-reads OCRed and compares its observed bytes (including absence for newly created sidecars) with the pre-export snapshot. If OCRed differs, it reports an indeterminate pair and **never** attempts another compensation. If OCRed cannot be read, it exposes the exact `verification_error` and explicit exception cause without performing further writes. This is an additional observation, not an atomic ownership guarantee. The existing post-rollback PDIC conflict error retains precedence when that callback itself fails.
 
-`tests/test_issue562_ocred_post_rollback_pdic_race_round137_20261027.py` contains eight scenarios: replace/delete with an OCRed edit in the second PDIC callback; replace/delete with the final OCRed read denied; replace/delete through the complete failed-PDIC-save path with a proofreader edit during the sixth PDIC read; and both unchanged normal-error paths. The tests assert the preserved foreign bytes, PDIC bytes, error object identity, exception chain, single PDIC save attempt and no temporary artifacts.
+`tests/test_issue562_ocred_post_rollback_pdic_race_round137_20261027.py` contains eight scenarios: replace/delete with an OCRed edit in the second PDIC callback; replace/delete with the final OCRed read denied; replace/delete through the complete failed-PDIC-save path with a proofreader edit during the fifth PDIC read; and both unchanged normal-error paths. The tests assert the preserved foreign bytes, PDIC bytes, error object identity, exception chain, single PDIC save attempt and no temporary artifacts.
 
 ## Remaining risks and acceptance
 
@@ -20,4 +20,4 @@ This is still optimistic version checking, **not** cross-process atomic compare-
 
 PR #663 must remain **Draft / Open / Unmerged**. Representative real dictionary scan, proofreading, PPP/SECTION/PDIC save and reopen manual acceptance remains **OPEN / NOT PASSED**. Synthetic fault-injection tests cannot close that gate.
 
-Check the newly committed exact-head six-platform CI and OCR Platform Smoke independently before declaring this round green.
+The initial full CI run [#40518192846](https://github.com/chigre/Picture_Capture/actions/runs/40518192846) exposed two failures in the new integration test on macOS and Windows: the fault was injected on PDIC read #6, but the actual post-rollback callback is read #5 (initial, after export, after failed save, pre-mutation, post-rollback). Corrected the test and its read-count assertions without changing production logic. Recheck the corrected exact HEAD before declaring this round green.
