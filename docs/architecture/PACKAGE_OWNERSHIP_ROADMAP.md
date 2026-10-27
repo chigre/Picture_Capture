@@ -2833,3 +2833,25 @@ manual acceptance **OPEN / NOT PASSED**.
 - `src/picture_capture/ocr/batch_publication.py` now re-reads PDIC and OCRed **after** the potentially slow SECTION/source-image validation and **before** invoking the OCRed exporter. A concurrent manual sidecar edit during source-image hashing previously could be overwritten by OCRed export, and a subsequent compensation could restore the older pre-hash version. Changes or unreadable sidecars now abort before touching either artifact.
 - `tests/test_issue562_batch_preexport_context_race_round122_20261027.py` fault-injects PDIC/OCRed edits for initially existing/missing sidecars, permission failures during the post-context read, and an unchanged-context success path. Legacy callers with no context validator retain the old read/callback sequence.
 - This narrows an optimistic concurrency window, **not** a filesystem-level compare-and-swap or multi-file transaction. Non-cooperating writers can still race after the final check; process termination, crash consistency, and durable two-file commit remain unresolved. PR #663 stays Draft/unmerged. Real dictionary scan, manual correction, save and reopen acceptance stays **OPEN / NOT PASSED**.
+
+### Round 123 (2026-10-27): ambiguous final pre-commit PDIC inspection
+
+- Verified baseline Round 122 HEAD `f2e25229f29de07d8b3868b4e678bf8b034a873c`:
+  six-platform CI #40417710849 and OCR Platform Smoke #40417710738
+  both completed successfully before this round.
+- `src/picture_capture/ocr/batch_publication.py` previously attempted an
+  OCRed-only rollback when the **final** PDIC read, after the second
+  potentially slow SECTION/source-image validator, raised `OSError`.
+  This is unsafe: a concurrent editor may have replaced PDIC while the
+  validator ran, and an unreadable PDIC does not establish ownership.
+  The branch now preserves both on-disk versions, refuses the PDIC writer,
+  and reports an indeterminate pair requiring manual reconciliation.
+- `tests/test_issue562_final_pdic_inspection_round123_20261027.py`
+  injects `PermissionError` on that exact fourth PDIC read, covering
+  prior OCRed present/absent and concurrent PDIC unchanged/replaced. It
+  asserts that newly exported OCRed and latest PDIC survive unchanged,
+  no writer runs, and no rollback temp file is left behind.
+- This corrects one ambiguous failure branch, **not** cross-process atomic
+  publication, cooperative locking or process-crash recovery. PR #663
+  remains Draft/unmerged. Real dictionary GUI scan, proofread, save and
+  reopen acceptance remains **OPEN / NOT PASSED**.
