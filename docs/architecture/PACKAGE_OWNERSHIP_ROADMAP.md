@@ -3186,3 +3186,12 @@ manual acceptance **OPEN / NOT PASSED**.
   dictionary manual GUI/OCR/PDIC/PPP/SECTION save/reopen acceptance remains
   **OPEN / NOT PASSED**. Verify the new exact-head CI and OCR Smoke
   separately before claiming a pass.
+
+
+### Round 147 (2026-10-27): verify postcommit PDIC for no-validator OCR batch callers
+
+- Exact pre-change PR HEAD `85b0ef9ee07912fb7cbc7d9d42537cd8d82b9d0e` had six-platform CI [40547867122](https://github.com/chigre/Picture_Capture/actions/runs/40547867122) **SUCCESS 6/6** and OCR Platform Smoke [40547867098](https://github.com/chigre/Picture_Capture/actions/runs/40547867098) **SUCCESS 3/3**. These results do not validate Round 147; check new exact-head workflows separately.
+- Owner: `ocr/batch_publication.py:publish_existing_pdic_ocr`. Existing-PDIC batch OCR publishes OCRed first, then PDIC. The optional `validate_page_context` checks SECTION/source-image provenance, but legacy/direct callers may omit it. Previously the post-writer PDIC read and late PDIC recheck were conditional on that callback; a writer that returned normally after deleting PDIC, or a concurrent PDIC change during the post-writer OCRed read, could be reported as a clean pair.
+- After the writer returns, **all callers** now read back PDIC and require it to exist. No-validator callers additionally re-read PDIC after the postcommit OCRed check. Missing/unreadable or changed PDIC refuses success **without reverting either already-published file**. Read-denial diagnostics retain the original exception via `verification_error`. Existing validator-enabled call order and final provenance checks remain unchanged.
+- Regression: `tests/test_issue562_no_validator_postcommit_pdic_round147_20261027.py` covers silent PDIC removal, first/final postcommit PDIC read failure, concurrent replace/delete during the OCRed read, and normal no-validator publication. These are synthetic real-filesystem fault injections, not actual scanned-page acceptance.
+- Limitation: exact intended PDIC output bytes are not available to this owner, so a writer that silently leaves a *valid but stale* PDIC file unchanged cannot be distinguished by these checks. Optimistic readbacks are **not** cross-process CAS/locking or power-loss-atomic OCRed+PDIC commit. Real scanned dictionary GUI/OCR/PDIC/PPP/SECTION/crop/export manual gate stays **OPEN / NOT PASSED**. PR #663 must stay **Draft / Open / Unmerged**.
