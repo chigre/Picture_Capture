@@ -29,7 +29,13 @@ def prepare_candidate_delete(
     cid = str(candidate.get("candidate_id") or "")
     if not cid or str(getattr(entry, "candidate_id", "") or "") != cid:
         return None
-    if dict(snapshot.owner_ids).get(id(entry)) != cid:
+    # The on-disk manual override belongs to one candidate, never to a
+    # shared candidate_id attached to two live Entry objects. A plain dict
+    # lookup would silently accept the second owner and deselect both.
+    owners = dict(snapshot.owner_ids)
+    if (len(owners) != len(snapshot.owner_ids)
+            or owners.get(id(entry)) != cid
+            or sum(owner == cid for owner in owners.values()) != 1):
         return None
     # Legacy OCR caches need not store a "selected" flag. The owned live
     # Entry is stronger evidence of selection; an explicit false still vetoes.
@@ -68,10 +74,15 @@ def prepare_candidate_delete(
         if str(manual.get("page") or snapshot.page.stem) != snapshot.page.stem:
             return None
         prior = manual["overrides"].get(cid)
-        if prior is not None and (
-            not isinstance(prior, dict) or prior.get("selected") is False
-        ):
-            return None
+        if prior is not None:
+            # A preexisting explicit override must still describe this
+            # exact selected word. Do not silently turn a stale/foreign
+            # override for the same candidate_id into a deletion.
+            if (not isinstance(prior, dict)
+                    or prior.get("selected") is not True
+                    or ("word" in prior
+                        and prior["word"] != str(entry.word))):
+                return None
         manual["page"] = snapshot.page.stem
         manual["overrides"][cid] = {
             "selected": False,
@@ -83,7 +94,11 @@ def prepare_candidate_delete(
         target_simplified = snapshot.simplified_bytes
         if target_simplified is not None:
             simplified = json.loads(target_simplified.decode("utf-8"))
-            if not isinstance(simplified, dict) or not isinstance(simplified.get("entries"), list):
+            if (not isinstance(simplified, dict)
+                    or simplified.get("format") != "picture_capture_simplified_review"
+                    or simplified.get("format_version") != 1
+                    or simplified.get("page") != snapshot.page.stem
+                    or not isinstance(simplified.get("entries"), list)):
                 return None
             matches = []
             for i, record in enumerate(simplified["entries"]):
@@ -91,6 +106,11 @@ def prepare_candidate_delete(
                     return None
                 x, y = int(record["x"]), int(record["y"])
                 if x == int(entry.x) and y == int(entry.y):
+                    # Coordinates alone do not prove that the simplified
+                    # record belongs to the selected headword; a later
+                    # manual edit or stale sidecar can reuse the same key.
+                    if record.get("source_word") != str(entry.word):
+                        return None
                     matches.append(i)
             if len(matches) > 1:
                 return None
