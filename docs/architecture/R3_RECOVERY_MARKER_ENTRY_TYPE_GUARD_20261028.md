@@ -61,3 +61,36 @@ Windows dictionary-page manual edit, candidate checkbox, Undo×N/Redo×N,
 FocusOut, close/reopen and recovery testing remain **NOT PERFORMED**.
 R2/#483 W1–W11 also remain pending. Never merge / mark Ready automatically
 without resolving the applicable gates.
+
+
+## Follow-up: interleaved external edits during recovery (Round 147)
+
+A separate nonlocking recovery gap was found in
+`recover_pending_for_page`: the initial all-file `before/after` read did
+not remain authoritative once rollback started. A human could alter the next
+PDIC, manual-selection or simplified file between two sequential
+`_publish` operations, and the next rollback used to overwrite those
+new bytes using an obsolete initial snapshot.
+
+Now each owned file is re-read **immediately before that file's restoration**.
+A file already at its exact before-state is not rewritten, a file at the
+expected after-state is restored and its bytes checked, and any third-party
+version fails closed **without replacing it**. The recovery marker remains
+present after a detected conflict or silent no-op. When all journal files
+initially appear at the after-state, an additional complete target-byte
+recheck precedes marker cleanup, reducing the window for incorrectly
+announcing the page restored.
+
+`tests/test_issue503_r3_interleaved_recovery_20261028.py` injects an
+external edit after PDIC restoration but before the next simplified or
+manual-selection rollback, including the real three-file owner set. It
+verifies no overwrite, page quarantine, and successful recovery only after
+explicit human reconciliation. It also covers a human edit before a
+completed-state marker cleanup, avoids unnecessary writes to already
+restored files, and retains the marker after a silent rollback no-op.
+
+**Limit:** these checks narrow optimistic windows; they do not make
+multi-file recovery OS-atomic or lock cooperating/uncooperating writers.
+Power-loss and the final observation-to-unlink race still require a
+durable, cross-process recovery protocol. Real Windows operator tests and
+R2/R3 acceptance remain NOT PERFORMED.
