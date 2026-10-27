@@ -36,6 +36,7 @@ def _restore_ocred_bytes(
     previous: bytes | None,
     *,
     expected_current: bytes | None | object = _UNSPECIFIED_OCRED_SNAPSHOT,
+    verify_before_mutation: Callable[[], None] | None = None,
 ) -> None:
     """Stage compensation first, then recheck ownership just before mutation.
 
@@ -53,6 +54,10 @@ def _restore_ocred_bytes(
                 "OCRed 在回滚前被其他操作修改；"
                 "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
             )
+        # PDIC may change while an OCRed deletion is being prepared.
+        # Recheck the other side of the pair immediately before unlinking.
+        if verify_before_mutation is not None:
+            verify_before_mutation()
         path.unlink(missing_ok=True)
         return
 
@@ -79,6 +84,10 @@ def _restore_ocred_bytes(
                 "OCRed 在回滚暂存期间被其他操作修改；"
                 "拒绝回滚覆盖人工校对内容，请人工核查两份文件"
             )
+        # Staging/fsync can outlast a concurrent PDIC write. Refuse to
+        # restore old OCRed if the PDIC version is no longer established.
+        if verify_before_mutation is not None:
+            verify_before_mutation()
         os.replace(temp_path, path)
     finally:
         if temp_path is not None:
@@ -87,6 +96,8 @@ def _restore_ocred_bytes(
 
 def _restore_ocred_if_unchanged(
     path: Path, previous: bytes | None, published: bytes | None,
+    *,
+    verify_before_mutation: Callable[[], None] | None = None,
 ) -> None:
     """Do not compensate over a sidecar edited after our export returned.
 
@@ -109,7 +120,10 @@ def _restore_ocred_if_unchanged(
     # filesystem mutation. Still perform the read above to detect conflicts.
     if previous == published:
         return
-    _restore_ocred_bytes(path, previous, expected_current=published)
+    _restore_ocred_bytes(
+        path, previous, expected_current=published,
+        verify_before_mutation=verify_before_mutation,
+    )
 
 
 def publish_existing_pdic_ocr(
@@ -436,8 +450,30 @@ def publish_existing_pdic_ocr(
                 "未单独回滚 OCRed，请核查两份文件："
                 f"PDIC={pdic_error!r}"
             ) from pdic_error
+        def verify_pdic_before_rollback() -> None:
+            # Restoring OCRed requires PDIC to remain at its pre-export
+            # version, including while a rollback temp file is fsynced.
+            # This is a final optimistic read, not a filesystem CAS.
+            try:
+                current = pdic_path.read_bytes()
+            except FileNotFoundError:
+                current = None
+            except OSError as inspect_error:
+                raise RuntimeError(
+                    "OCRed 回滚即将写入时无法核验 PDIC；"
+                    "拒绝单侧回滚，请人工核查两份文件"
+                ) from inspect_error
+            if current != previous_pdic:
+                raise RuntimeError(
+                    "OCRed 回滚暂存期间 PDIC 已被其他操作修改；"
+                    "拒绝单侧回滚，请人工核查两份文件"
+                )
+
         try:
-            _restore_ocred_if_unchanged(ocred_path, previous, published_ocred)
+            _restore_ocred_if_unchanged(
+                ocred_path, previous, published_ocred,
+                verify_before_mutation=verify_pdic_before_rollback,
+            )
         except Exception as rollback_error:
             raise RuntimeError(
                 "PDIC 保存失败，OCRed 回滚也失败："
