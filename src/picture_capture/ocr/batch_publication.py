@@ -257,6 +257,24 @@ def _restore_ocred_if_unchanged(
             )
 
 
+def _reject_unresolved_r3_marker(pdic_path: Path) -> None:
+    """Reject overlapping R3 recovery without following marker symlinks.
+
+    R3 review transactions place a per-PDIC marker before publishing owned
+    files. The marker's existence, even if malformed or unreadable, means a
+    batch OCR worker cannot assume it owns the PDIC/OCRed pair.
+    """
+    marker = pdic_path.with_name(f".{pdic_path.name}.r3-inflight.json")
+    try:
+        marker.lstat()
+    except FileNotFoundError:
+        return
+    raise RuntimeError(
+        "存在未完成的 R3 页面恢复事务；拒绝批量 OCR 发布 OCRed/PDIC，"
+        "请先核查并恢复页面事务"
+    )
+
+
 def publish_existing_pdic_ocr(
     ocred_path: Path,
     pdic_path: Path,
@@ -273,6 +291,10 @@ def publish_existing_pdic_ocr(
     validate_page_context: Callable[[], None] | None = None,
 ) -> None:
     """Publish OCRed then PDIC, compensating OCRed on PDIC write errors."""
+    # A pending R3 review transaction may own PDIC and linked sidecars.
+    # Refuse before exporting OCRed; the shared PDIC writer's later marker
+    # check alone is too late to protect an already changed OCRed.
+    _reject_unresolved_r3_marker(pdic_path)
     try:
         previous = ocred_path.read_bytes()
     except FileNotFoundError:
@@ -352,6 +374,18 @@ def publish_existing_pdic_ocr(
     try:
         export_ocred(ocred_path, texts)
     except Exception as export_error:
+        # An R3 recovery marker can appear during a failing exporter callback.
+        # It may own PDIC already, so do not compensate OCRed unilaterally.
+        try:
+            _reject_unresolved_r3_marker(pdic_path)
+        except RuntimeError as marker_error:
+            failure = RuntimeError(
+                "OCRed 导出失败且 R3 恢复事务已出现；"
+                "拒绝单侧回滚 OCRed，请核查页面事务与两份文件"
+            )
+            failure.publication_error = export_error
+            failure.verification_error = marker_error
+            raise failure from marker_error
         # A patchable exporter may have changed PDIC before raising. If so,
         # reverting only OCRed would leave an inconsistent committed pair.
         # Preserve both disk versions for manual recovery instead.
@@ -651,6 +685,11 @@ def publish_existing_pdic_ocr(
                 "未启动 PDIC 保存，保留最新人工校对的 OCRed"
             )
 
+    # R3 may become pending while OCRed export or page-context hashing
+    # runs. This last optimistic pre-write check is necessary even when a
+    # test/legacy writer callback bypasses the shared write_pdic guard.
+    # Preserve OCRed as-is on conflict: an R3 publisher may already own PDIC.
+    _reject_unresolved_r3_marker(pdic_path)
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
