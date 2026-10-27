@@ -66,3 +66,32 @@ no cross-process CAS, no durable two-file OCRed/PDIC crash transaction,
 and races after the final marker or byte observation.
 
 Keep PR #663 **Draft / Open / Unmerged**; do not mark Ready or merge.
+
+## Round 144 — R3 appearing inside the PDIC writer or compensation
+
+The earlier pre-writer check cannot detect a recovery marker staged *inside*
+the PDIC writer callback. If that callback subsequently raises without changing
+PDIC bytes, the previous compensation logic would incorrectly consider OCRed
+safe to restore. The publisher now checks the R3 marker immediately after a
+failed PDIC writer **before** reading PDIC for a rollback decision, and after
+a normally returning writer **before** reporting a clean commit. In the
+failure case it preserves both the exact writer `publication_error` and
+marker `verification_error`; no unilateral OCRed rollback is attempted.
+
+All three PDIC-ownership verification callbacks used before compensating
+OCRed (failed exporter, failed SECTION/source-image validation, failed PDIC
+writer) now check the marker again. This also covers R3 starting while a
+rollback temporary file is being staged/fsynced. Any conflict aborts
+compensation and preserves the pending R3 marker for explicit review.
+
+`tests/test_issue562_r3_pdic_writer_race_round144_20261028.py`
+injects six real-filesystem cases: writer raises after staging R3, writer
+returns after staging R3, and R3 appears only during the rollback ownership
+callback, each with previously absent and existing OCRed. The tests assert
+unchanged ownership, exact exception identities, no unintended compensating
+write, and no leaked rollback temporary files.
+
+These checks remain optimistic: a non-cooperating writer can create/remove a
+marker after a check, and the two sidecars are not committed atomically.
+Manual real-dictionary acceptance remains **OPEN / NOT PASSED**; PR #663 must
+remain Draft, Open and Unmerged.
