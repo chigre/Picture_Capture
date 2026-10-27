@@ -95,3 +95,15 @@ These checks remain optimistic: a non-cooperating writer can create/remove a
 marker after a check, and the two sidecars are not committed atomically.
 Manual real-dictionary acceptance remains **OPEN / NOT PASSED**; PR #663 must
 remain Draft, Open and Unmerged.
+
+
+## CI compatibility fix: stable R3 error identifier
+
+The first exact-head Round 144 Ubuntu CI found a historical Round 80
+regression expecting the R3 refusal to contain the stable diagnostic
+identifier `Unresolved R3 transaction`. The new guard's Chinese-only
+message preserved behavior but broke this existing contract. Keep that
+English identifier as the leading prefix **and** retain the descriptive
+Chinese recovery instructions. The Round 143 pre-existing-marker test now
+asserts both the stable identifier and the expected refusal; no R3 lock,
+marker removal, write, rollback or acceptance requirement changed.
