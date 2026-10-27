@@ -38,8 +38,8 @@ Seven new fault-injection cases in
 five source types (PDIC, manual_selection, OCR, SECTION, Profile) changed
 *during* journal staging; a human simplified edit between ordinary PDIC and
 simplified writes; a human manual override between candidate PDIC and manual
-writes. The latter two assert exact third-party bytes, no Entry mutation,
-and a retained quarantine marker. Existing normal Undo/Redo, 20-step
+writes. The latter two assert exact third-party bytes, the still-landed PDIC
+target, no Entry mutation, and a retained quarantine marker. Existing normal Undo/Redo, 20-step
 history, candidate Delete→Undo→Redo, failure rollback, Windows/Tk and OCR
 smoke remain mandatory.
 

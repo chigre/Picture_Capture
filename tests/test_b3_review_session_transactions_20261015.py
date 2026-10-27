@@ -919,7 +919,11 @@ def test_undo_refuses_human_simplified_edit_between_two_file_writes(
 
     monkeypatch.setattr(module, "_publish", race_after_pdic)
     assert not history.undo(review)
-    assert pdic_path(page).read_bytes() == committed
+    # A conflicting human sidecar makes the whole bundle unresolved. The
+    # rollback policy intentionally leaves the already-landed PDIC target
+    # in place instead of silently treating a partial rollback as complete.
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert pdic_path(page).read_bytes() != committed
     assert simplified.read_bytes() == human_bytes
     assert rows[0].word == "ONE"
     assert module._recovery_path(page).exists()
@@ -949,7 +953,9 @@ def test_candidate_bundle_refuses_human_manual_edit_after_pdic_publication(
             manual_bytes=b'{"overrides":{"candidate":{"selected":false}}}',
             simplified_bytes=before.simplified_bytes,
         )
-    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    # Preserve the mixed on-disk state for explicit recovery; a third-party
+    # manual override prevents claiming that the PDIC rollback completed.
+    assert pdic_path(page).read_bytes() == target_pdic
     assert override.read_bytes() == human_bytes
     assert [row.word for row in rows] == ["one", "two"]
     assert module._recovery_path(page).exists()

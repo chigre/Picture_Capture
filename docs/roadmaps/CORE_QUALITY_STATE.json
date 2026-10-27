@@ -1063,7 +1063,7 @@
     ]
   },
   "g1_restore_race_batch_20261028": {
-    "status": "code_and_regressions_submitted_pending_exact_head_ci",
+    "status": "regression_expectation_repaired_pending_new_exact_head_ci",
     "parent_sha": "1915a8242d46c131bf60eccda7c88fe5571dc58a",
     "owner": "src/picture_capture/proofreading/transactions.py",
     "test_file": "tests/test_b3_review_session_transactions_20261015.py",
@@ -1076,6 +1076,16 @@
       "pre-next-file and final exact source readback"
     ],
     "risk": "optimistic byte checks do not establish OS cross-file atomicity; conflicting third-party bytes retain R3 marker",
-    "human_acceptance": "NOT_PERFORMED"
+    "human_acceptance": "NOT_PERFORMED",
+    "initial_ci": {
+      "url": "https://github.com/chigre/Picture_Capture/actions/runs/40566524302",
+      "conclusion": "failure",
+      "reason": "Two new tests incorrectly expected automatic PDIC rollback despite an unknown third-party sidecar; production correctly quarantines mixed state. Expectations changed to require target PDIC + exact third-party bytes + marker; no guard weakening."
+    },
+    "ocr_ci_initial": {
+      "url": "https://github.com/chigre/Picture_Capture/actions/runs/40566524021",
+      "conclusion": "success",
+      "os_jobs": 3
+    }
   }
 }
