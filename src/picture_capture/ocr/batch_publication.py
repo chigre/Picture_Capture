@@ -475,6 +475,18 @@ def publish_existing_pdic_ocr(
         current_ocred = ocred_path.read_bytes()
     except FileNotFoundError:
         current_ocred = None
+    except OSError as inspect_error:
+        # The PDIC ownership read above may be slow. If OCRed becomes
+        # unreadable before PDIC publication, we cannot prove that its
+        # exported bytes still belong to this worker. Do not write PDIC or
+        # compensate a sidecar whose current version is unknown.
+        failure = RuntimeError(
+            "OCRed 导出后、PDIC 保存前无法再次读取 OCRed；"
+            "未启动 PDIC 保存，拒绝回滚无法确认归属的 OCRed；"
+            "请人工核查两份文件"
+        )
+        failure.verification_error = inspect_error
+        raise failure from inspect_error
     if current_ocred != published_ocred:
         raise RuntimeError(
             "OCRed 在导出后、PDIC 保存前被其他操作修改；"
