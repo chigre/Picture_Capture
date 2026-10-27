@@ -2855,3 +2855,27 @@ manual acceptance **OPEN / NOT PASSED**.
   publication, cooperative locking or process-crash recovery. PR #663
   remains Draft/unmerged. Real dictionary GUI scan, proofread, save and
   reopen acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 124 (2026-10-27): PDIC-save-failure compensation race
+
+- A failed PDIC writer can leave the original PDIC intact at the first error
+  inspection, but a different process may update PDIC while the compensating
+  OCRed temp file is being staged and fsynced. A single pre-staging check was
+  insufficient: restoring old OCRed after that PDIC edit could mismatch the
+  pair. This round adds a **second PDIC byte-version check immediately before**
+  the rollback `os.replace` or `unlink`. An unreadable or changed PDIC
+  refuses the one-sided rollback, preserves the exported OCRed and latest PDIC,
+  and reports manual-recovery guidance.
+- The optional verification callback preserves existing direct-restorer
+  signatures and no-conflict rollback semantics. The new Round 124 tests
+  inject PDIC replacement during fsync, deletion-path races, late PDIC read
+  failure, and successful old/absent OCRed compensation. No new UI/spawn
+  imports or serialization changes.
+- This remains **optimistic**, not a cross-process compare-and-swap or
+  crash-safe two-file transaction: a non-cooperating writer may race between
+  the final read and filesystem mutation. PR #663 remains Draft/unmerged.
+  Real dictionary scan, human proofread, save and reopen acceptance remains
+  **OPEN / NOT PASSED**; synthetic regression tests are not that gate.
+- Verify the exact Round 124 HEAD's six-platform CI and OCR Platform Smoke
+  before treating this change as passing. Never inherit prior HEAD results.
