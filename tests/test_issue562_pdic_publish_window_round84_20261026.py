@@ -20,7 +20,7 @@ def _pdic_entry(path: Path, word: str, x: int = 14, y: int = 29) -> None:
 
 
 @pytest.mark.parametrize("sidecar_preexisting", [True, False])
-def test_conflicting_pdic_during_ocred_export_restores_sidecar_and_keeps_manual_edit(
+def test_conflicting_pdic_during_ocred_export_preserves_both_for_review(
     tmp_path, sidecar_preexisting,
 ):
     pdic = tmp_path / "001.PDIC"
@@ -28,10 +28,8 @@ def test_conflicting_pdic_during_ocred_export_restores_sidecar_and_keeps_manual_
     original_pdic = pdic.read_bytes()
     ocred = tmp_path / "QT" / "001.OCRed"
     ocred.parent.mkdir(parents=True, exist_ok=True)
-    old_ocred = None
     if sidecar_preexisting:
         ocred.write_bytes(b"\xef\xbb\xbf000|`old-manual\r\n")
-        old_ocred = ocred.read_bytes()
     calls = []
 
     def export_with_interleaved_manual_edit(path, texts):
@@ -54,10 +52,9 @@ def test_conflicting_pdic_during_ocred_export_restores_sidecar_and_keeps_manual_
     assert [(e.word, e.x, e.y) for e in read_pdic(pdic)] == [
         ("proofread-latest", 23, 44)
     ]
-    if old_ocred is None:
-        assert not ocred.exists()
-    else:
-        assert ocred.read_bytes() == old_ocred
+    # PDIC ownership is lost: even a byte-exact rollback of OCRed would
+    # be a unilateral write against the concurrent PDIC correction.
+    assert import_ocred(ocred) == ["stale-OCR"]
     assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
 
 
@@ -134,7 +131,7 @@ def test_legacy_direct_publisher_still_accepts_no_snapshot_argument(tmp_path):
     assert [(e.word, e.x, e.y) for e in read_pdic(pdic)] == [("legacy", 9, 22)]
 
 
-def test_pdic_change_during_export_compensation_failure_is_explicit(tmp_path, monkeypatch):
+def test_pdic_change_during_export_never_attempts_ocred_compensation(tmp_path, monkeypatch):
     import picture_capture.ocr.batch_publication as publication
 
     pdic = tmp_path / "001.PDIC"
@@ -149,7 +146,7 @@ def test_pdic_change_during_export_compensation_failure_is_explicit(tmp_path, mo
 
     monkeypatch.setattr(publication, "_restore_ocred_bytes",
                         lambda *_args: (_ for _ in ()).throw(OSError("rollback denied")))
-    with pytest.raises(RuntimeError, match="PDIC 在 OCRed 导出期间被修改，且 OCRed 回滚失败"):
+    with pytest.raises(RuntimeError, match="拒绝单侧回滚 OCRed"):
         publish_existing_pdic_ocr(
             ocred, pdic, ["new"], [Entry("new", 14, 29)],
             100, ("001", "@", "@"),
@@ -158,6 +155,7 @@ def test_pdic_change_during_export_compensation_failure_is_explicit(tmp_path, mo
             expected_pdic_bytes=before,
         )
     assert read_pdic(pdic)[0].word == "user-edited"
+    assert import_ocred(ocred) == ["new"]
 
 
 def test_round84_publication_guards_both_interference_windows():
