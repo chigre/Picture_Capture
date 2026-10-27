@@ -117,19 +117,24 @@ def test_post_export_ocred_unreadable_reports_ambiguity_without_pdic(
     pdic = tmp_path / "001.PDIC"
     calls = []
     real_read = Path.read_bytes
-    reads = {"ocred": 0}
+    post_export_reads = []
+    exporter_finished = []
 
-    def read_ocred_twice(self):
-        if self == ocred:
-            reads["ocred"] += 1
-            if reads["ocred"] == 2:
-                raise PermissionError("sidecar unreadable")
+    def read_ocred_after_export(self):
+        # Keep this fault tied to the failed-export ownership inspection.
+        # The shared atomic writer legitimately re-reads OCRed to verify
+        # its newly committed bytes; denying that earlier read would test
+        # a different failure and obscure the original recovery contract.
+        if self == ocred and exporter_finished:
+            post_export_reads.append(True)
+            raise PermissionError("sidecar unreadable")
         return real_read(self)
 
-    monkeypatch.setattr(Path, "read_bytes", read_ocred_twice)
+    monkeypatch.setattr(Path, "read_bytes", read_ocred_after_export)
 
     def exporter(path, texts):
         export_ocred(path, texts)
+        exporter_finished.append(True)
         raise OSError("late export error")
 
     with pytest.raises(RuntimeError, match="无法核验 OCRed 是否已写入") as err:
@@ -140,7 +145,7 @@ def test_post_export_ocred_unreadable_reports_ambiguity_without_pdic(
             write_pdic=lambda *_args: calls.append("pdic"),
         )
     assert "late export error" in str(err.value)
-    assert reads["ocred"] == 2
+    assert post_export_reads == [True]
     assert calls == []
     assert not pdic.exists()
     # Fail closed: retain the newly exported bytes until recoverable.
