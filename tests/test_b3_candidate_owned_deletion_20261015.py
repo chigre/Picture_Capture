@@ -598,3 +598,75 @@ def test_candidate_delete_allows_valid_simplified_document_without_target_row(
     assert [entry.word for entry in read_pdic(pdic_path(page))] == ["other"]
     assert candidate["selected"] is False
     assert not storage._marker_present(storage._recovery_path(page))
+
+
+def test_owned_candidate_delete_undo_redo_preserves_preexisting_human_overrides(
+    tmp_path,
+):
+    from picture_capture.ui.review_transaction_actions import _history
+
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    other = {"selected": False, "word": "user kept", "engine": "hand-reviewed"}
+    manual.write_text(
+        json.dumps({
+            "version": 1, "page": page.stem,
+            "overrides": {
+                "ocr-id": {"selected": True, "word": "head", "engine": "review"},
+                "unrelated-id": other,
+            },
+        }, ensure_ascii=False), encoding="utf-8",
+    )
+    before = {
+        "pdic": pdic_path(page).read_bytes(),
+        "manual": manual.read_bytes(),
+        "simplified": simplified.read_bytes(),
+    }
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    after = {
+        "pdic": pdic_path(page).read_bytes(),
+        "manual": manual.read_bytes(),
+        "simplified": simplified.read_bytes(),
+    }
+    assert before["pdic"] != after["pdic"]
+    assert before["manual"] != after["manual"]
+    history = _history(review)
+    assert len(history.undo_stack) == 1
+
+    review.vars = [Var(entry.word) for entry in review.parent.entries]
+    assert history.undo(review) is True
+    assert pdic_path(page).read_bytes() == before["pdic"]
+    assert manual.read_bytes() == before["manual"]
+    assert simplified.read_bytes() == before["simplified"]
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+
+    review.vars = [Var(entry.word) for entry in review.parent.entries]
+    assert history.redo(review) is True
+    assert pdic_path(page).read_bytes() == after["pdic"]
+    assert manual.read_bytes() == after["manual"]
+    assert simplified.read_bytes() == after["simplified"]
+    assert candidate["selected"] is False
+    assert review.parent.candidate_check_vars["ocr-id"].get() is False
+    assert json.loads(manual.read_text("utf-8"))["overrides"]["unrelated-id"] == other
+    assert not storage._marker_present(storage._recovery_path(page))
+
+
+def test_stale_simplified_provenance_must_not_change_candidate_history_or_undo(
+    tmp_path,
+):
+    from picture_capture.ui.review_transaction_actions import _history
+
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    doc = json.loads(simplified.read_text("utf-8"))
+    doc["entries"][0]["source_word"] = "foreign editorial headword"
+    simplified.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    before_pdic = pdic_path(page).read_bytes()
+    before_simplified = simplified.read_bytes()
+
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert _history(review).undo_stack == []
+    assert pdic_path(page).read_bytes() == before_pdic
+    assert simplified.read_bytes() == before_simplified
+    assert not manual.exists()
+    assert candidate["selected"] is True
+    assert not actions
