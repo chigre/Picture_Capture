@@ -3101,3 +3101,32 @@ manual acceptance **OPEN / NOT PASSED**.
   **OPEN / NOT PASSED**; do not substitute synthetic CI.
 - Verify **both** new exact-head CI and OCR Platform Smoke to completion
   before reporting this round as green.
+
+### Round 133 (2026-10-27): preserve ambiguous PDIC ownership-read diagnostics
+
+- Baseline exact HEAD `5f27e361d91e41b1a8abd859237f057aff4d40cc`:
+  six-platform CI #40479077409 **SUCCESS** (6/6; risk gate success),
+  OCR Platform Smoke #40479077387 **SUCCESS** (3/3).
+- When OCRed export raised and the subsequent PDIC ownership read failed,
+  the original exporter exception was previously lost from the raised
+  exception object. Conversely, when PDIC save raised and its post-error
+  ownership read failed, the read exception was only formatted into text
+  and not available as the explicit exception cause.
+- `ocr/batch_publication.py` now attaches `publication_error` (the original
+  export/save failure) and `verification_error` (the exact PDIC read failure)
+  to the resulting `RuntimeError`, with `__cause__` pointing to the
+  verification error. Existing conservative no-unilateral-rollback behavior
+  and Chinese user-facing error messages are retained.
+- `tests/test_issue562_uncertain_pdic_diagnostics_round133_20261027.py`
+  injects read denial after export or save failure, for both existing and
+  newly created OCRed files (four combinations), and asserts both exception
+  identities, no rollback or duplicate PDIC write, unchanged PDIC bytes,
+  preserved exported OCRed bytes, and no rollback temp artifacts.
+- This change improves recovery diagnostics, **not** two-file atomicity,
+  crash consistency or cross-process CAS. An unreadable PDIC may already
+  have changed. Do not infer successful compensation from the absence of a
+  second write.
+- PR #663 remains **Draft/Open/unmerged**. Representative real dictionary
+  scan, manual proofreading, save/reopen acceptance remains
+  **OPEN / NOT PASSED**. Review new exact-head six-platform CI and OCR
+  Platform Smoke before reporting this round as green.
