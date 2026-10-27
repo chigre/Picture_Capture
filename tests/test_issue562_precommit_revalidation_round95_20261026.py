@@ -45,7 +45,7 @@ def _publish(pdic, ocred, check, writer=write_pdic, *, old_ocred=None):
 
 
 @pytest.mark.parametrize("old_ocred", [None, OLD_OCRED])
-def test_pdic_edit_during_final_source_check_restores_only_owned_ocred(
+def test_pdic_edit_during_final_source_check_preserves_both_versions(
     tmp_path, old_ocred,
 ):
     pdic, ocred = _files(tmp_path, old_ocred)
@@ -66,7 +66,7 @@ def test_pdic_edit_during_final_source_check_restores_only_owned_ocred(
     assert checks == ["check", "check"]
     assert saves == []
     assert pdic.read_bytes() == human_pdic
-    assert (ocred.read_bytes() if ocred.exists() else None) == old_ocred
+    assert ocred.read_bytes() == render_ocred_bytes(["new"])
     assert not list(ocred.parent.glob(".001.OCRed.*.tmp"))
 
 
@@ -136,7 +136,7 @@ def test_pdic_and_ocred_both_changed_refuses_unsafe_compensation(tmp_path):
             pdic.write_bytes(human_pdic)
             ocred.write_bytes(HUMAN_OCRED)
 
-    with pytest.raises(RuntimeError, match="PDIC 被修改，且 OCRed 回滚失败"):
+    with pytest.raises(RuntimeError, match="页面来源核验期间 PDIC 已被其他操作修改"):
         _publish(
             pdic, ocred, check, lambda *_args: saves.append("pdic"),
             old_ocred=OLD_OCRED,
