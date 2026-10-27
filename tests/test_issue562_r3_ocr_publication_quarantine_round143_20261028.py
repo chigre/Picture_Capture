@@ -51,12 +51,14 @@ def test_preexisting_r3_marker_blocks_export_before_any_disk_write(
         marker.mkdir()
     calls = []
 
-    with pytest.raises(RuntimeError, match="R3 页面恢复事务"):
+    with pytest.raises(RuntimeError, match="R3 页面恢复事务") as caught:
         _publish(
             ocred, pdic, previous=previous,
             export=lambda *_args: calls.append("export"),
             save=lambda *_args: calls.append("pdic"),
         )
+    # Existing OCR/R3 callers match this stable identifier in diagnostics.
+    assert "Unresolved R3 transaction" in str(caught.value)
     assert calls == []
     assert pdic.read_bytes() == OLD_PDIC
     assert (ocred.read_bytes() if ocred.exists() else None) == previous
