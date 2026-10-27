@@ -368,6 +368,12 @@ def publish_existing_pdic_ocr(
                 "页面来源核验期间 OCRed 已被其他操作修改；"
                 "未启动 OCRed 导出或 PDIC 保存，保留人工校对内容"
             )
+        # The SECTION/source-image validation and two sidecar reads can
+        # take long enough for R3 review to stage its recovery marker after
+        # our initial preflight. Reject here, *before* touching OCRed,
+        # rather than waiting for the later pre-PDIC writer quarantine.
+        # This check is observational, not an interprocess lock.
+        _reject_unresolved_r3_marker(pdic_path)
 
     # An exporter can atomically replace OCRed and then raise from a later
     # hook. PDIC has not been called yet; restore this sidecar before letting
