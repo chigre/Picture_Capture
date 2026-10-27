@@ -467,6 +467,7 @@ def publish_existing_pdic_ocr(
                 failure.publication_error = export_error
                 raise failure from export_error
             def verify_pdic_before_failed_export_rollback() -> None:
+                _reject_unresolved_r3_marker(pdic_path)
                 # Staging and fsyncing the OCRed compensation can outlast a
                 # concurrent PDIC replacement. The earlier check alone does
                 # not authorize a later one-sided replace/unlink.
@@ -594,6 +595,7 @@ def publish_existing_pdic_ocr(
             # this worker has not called the PDIC writer. Rolling OCRed back
             # alone would then pair stale OCRed with the newer PDIC.
             def verify_pdic_before_context_rollback() -> None:
+                _reject_unresolved_r3_marker(pdic_path)
                 try:
                     current_pdic = pdic_path.read_bytes()
                 except FileNotFoundError:
@@ -693,6 +695,18 @@ def publish_existing_pdic_ocr(
     try:
         write_pdic(pdic_path, entries, image_width, pages_info)
     except Exception as pdic_error:
+        # A failing writer may stage an R3 bundle before raising. PDIC
+        # equality alone cannot authorize an OCRed-only compensation.
+        try:
+            _reject_unresolved_r3_marker(pdic_path)
+        except Exception as marker_error:
+            failure = RuntimeError(
+                "PDIC 保存失败且 R3 恢复事务已出现或无法核验；"
+                "拒绝单侧回滚 OCRed，请核查页面事务与两份文件"
+            )
+            failure.publication_error = pdic_error
+            failure.verification_error = marker_error
+            raise failure from marker_error
         try:
             current_pdic = pdic_path.read_bytes()
         except FileNotFoundError:
@@ -717,6 +731,7 @@ def publish_existing_pdic_ocr(
             failure.publication_error = pdic_error
             raise failure from pdic_error
         def verify_pdic_before_rollback() -> None:
+            _reject_unresolved_r3_marker(pdic_path)
             # Restoring OCRed requires PDIC to remain at its pre-export
             # version, including while a rollback temp file is fsynced.
             # This is a final optimistic read, not a filesystem CAS.
@@ -749,6 +764,10 @@ def publish_existing_pdic_ocr(
             failure.rollback_error = rollback_error
             raise failure from rollback_error
         raise
+
+    # A successful writer can still leave an R3 recovery marker behind.
+    # Do not report a clean pair while another page bundle is unresolved.
+    _reject_unresolved_r3_marker(pdic_path)
 
     # Capture the committed PDIC before the potentially slow final source
     # image hash. Detect a later external PDIC edit without rolling back
