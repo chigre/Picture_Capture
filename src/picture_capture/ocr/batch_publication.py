@@ -378,9 +378,9 @@ def publish_existing_pdic_ocr(
         # It may own PDIC already, so do not compensate OCRed unilaterally.
         try:
             _reject_unresolved_r3_marker(pdic_path)
-        except RuntimeError as marker_error:
+        except Exception as marker_error:
             failure = RuntimeError(
-                "OCRed 导出失败且 R3 恢复事务已出现；"
+                "OCRed 导出失败且 R3 恢复事务已出现或无法核验；"
                 "拒绝单侧回滚 OCRed，请核查页面事务与两份文件"
             )
             failure.publication_error = export_error
