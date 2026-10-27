@@ -32,7 +32,29 @@ def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
+        # Compare against the *actual* staged bytes, not a separately
+        # reconstructed text encoding (notably on Windows with CRLF).
+        expected_bytes = temp_path.read_bytes()
         os.replace(temp_path, path)
+        # A filesystem adapter may return normally without moving the staged
+        # file. A concurrent writer may also replace the destination after
+        # our call. Neither case can be reported as a successful PDIC/PPP
+        # publication: fail closed and never overwrite a foreign version.
+        try:
+            staging_remains = temp_path.exists()
+            committed_bytes = path.read_bytes()
+        except OSError as verification_error:
+            failure = RuntimeError(
+                "Atomic sidecar replace returned but its disk state cannot "
+                "be verified; inspect the target and .tmp file"
+            )
+            failure.verification_error = verification_error
+            raise failure from verification_error
+        if staging_remains or committed_bytes != expected_bytes:
+            raise RuntimeError(
+                "Atomic sidecar replace returned without a verified byte-exact "
+                "publication; inspect the target and .tmp file"
+            )
     except Exception as publication_error:
         if temp_path is not None:
             try:
