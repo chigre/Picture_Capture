@@ -468,11 +468,13 @@ def publish_existing_pdic_ocr(
     except FileNotFoundError:
         published_ocred = None
     except OSError as inspect_error:
-        raise RuntimeError(
+        failure = RuntimeError(
             "OCRed 导出后无法核验其文件版本；"
             "未启动 PDIC 保存，请人工核查 OCRed："
             f"核查={inspect_error!r}"
-        ) from inspect_error
+        )
+        failure.verification_error = inspect_error
+        raise failure from inspect_error
 
     # The worker knows the exact canonical bytes that its exporter must
     # produce. If a different value appears (including a manual edit inside
@@ -500,11 +502,13 @@ def publish_existing_pdic_ocr(
         # OCRed could corrupt an already changed pair. Preserve both disk
         # versions for manual recovery, matching the failed-export and
         # uncertain-PDIC-save policies. Do not invoke the PDIC writer.
-        raise RuntimeError(
+        failure = RuntimeError(
             "OCRed 已导出，但无法核验导出后的 PDIC 是否被修改；"
             "拒绝单侧回滚，未启动 PDIC 保存，请人工核查两份文件："
             f"核查={inspect_error!r}"
-        ) from inspect_error
+        )
+        failure.verification_error = inspect_error
+        raise failure from inspect_error
     if pdic_after_export != previous_pdic:
         # PDIC no longer belongs to this worker. Even if the newly exported
         # OCRed still matches our expected bytes, restoring an older OCRed
@@ -602,12 +606,14 @@ def publish_existing_pdic_ocr(
             # second, potentially slow page-context validation. Reverting
             # OCRed alone could then destroy the matching published pair.
             # Treat this as an indeterminate commit and preserve both files.
-            raise RuntimeError(
+            failure = RuntimeError(
                 "页面来源核验后无法读取 PDIC，无法确认其版本；"
                 "拒绝单侧回滚 OCRed，未启动 PDIC 保存，"
                 "请人工核查两份文件："
                 f"核查={inspect_error!r}"
-            ) from inspect_error
+            )
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
         if final_pdic != previous_pdic:
             # A source-image hash may overlap another editor's PDIC commit.
             # Ownership is already lost: compensating OCRed alone could
@@ -623,11 +629,13 @@ def publish_existing_pdic_ocr(
         except FileNotFoundError:
             final_ocred = None
         except OSError as inspect_error:
-            raise RuntimeError(
+            failure = RuntimeError(
                 "页面来源核验后无法读取 OCRed；"
                 "未启动 PDIC 保存，拒绝回滚无法确认归属的 OCRed："
                 f"核查={inspect_error!r}"
-            ) from inspect_error
+            )
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
         if final_ocred != published_ocred:
             raise RuntimeError(
                 "页面来源核验期间 OCRed 已被其他操作修改；"
