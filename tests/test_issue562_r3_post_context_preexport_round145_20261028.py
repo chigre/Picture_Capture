@@ -64,13 +64,14 @@ def test_r3_created_during_first_context_check_stops_export_without_mutations(
             marker.write_bytes(b"R3 unfinished review transaction")
 
     def read_with_concurrent_r3(path):
-        data = original_read(path)
-        # The OCRed read following validation is the latest sidecar
-        # snapshot before export. Do not depend on a brittle read count:
-        # arm the injection after the provenance callback ran.
-        if path == ocred and validations and when == "during_snapshot_read":
-            marker.write_bytes(b"R3 began during sidecar revalidation")
-        return data
+        try:
+            return original_read(path)
+        finally:
+            # The revalidation read still takes place when OCRed is absent
+            # and read_bytes raises FileNotFoundError. Both presence states
+            # must exercise the same marker-creation race.
+            if path == ocred and validations and when == "during_snapshot_read":
+                marker.write_bytes(b"R3 began during sidecar revalidation")
 
     monkeypatch.setattr(Path, "read_bytes", read_with_concurrent_r3)
 
