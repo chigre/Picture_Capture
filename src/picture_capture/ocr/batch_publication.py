@@ -776,25 +776,27 @@ def publish_existing_pdic_ocr(
     # Do not report a clean pair while another page bundle is unresolved.
     _reject_unresolved_r3_marker(pdic_path)
 
-    # Capture the committed PDIC before the potentially slow final source
-    # image hash. Detect a later external PDIC edit without rolling back
-    # either artifact once the PDIC writer has returned successfully.
-    if validate_page_context is not None:
-        try:
-            committed_pdic = pdic_path.read_bytes()
-        except FileNotFoundError:
-            committed_pdic = None
-        except OSError as inspect_error:
-            raise RuntimeError(
-                "PDIC 已保存，但无法核验提交后的 PDIC 版本；"
-                "未执行单侧回滚，请人工核查两份文件："
-                f"核查={inspect_error!r}"
-            ) from inspect_error
-        if committed_pdic is None:
-            raise RuntimeError(
-                "PDIC 保存函数已返回，但提交后的 PDIC 文件不存在；"
-                "未执行单侧回滚，请人工核查两份文件"
-            )
+    # Observe the committed PDIC even for legacy callers without a page
+    # context validator. A writer can return normally after silently removing
+    # PDIC; a clean OCRed export alone does not establish a valid pair.
+    # This is a read-only check after publication, never an OCRed-only rollback.
+    try:
+        committed_pdic = pdic_path.read_bytes()
+    except FileNotFoundError:
+        committed_pdic = None
+    except OSError as inspect_error:
+        failure = RuntimeError(
+            "PDIC 已保存，但无法核验提交后的 PDIC 版本；"
+            "未执行单侧回滚，请人工核查两份文件："
+            f"核查={inspect_error!r}"
+        )
+        failure.verification_error = inspect_error
+        raise failure from inspect_error
+    if committed_pdic is None:
+        raise RuntimeError(
+            "PDIC 保存函数已返回，但提交后的 PDIC 文件不存在；"
+            "未执行单侧回滚，请人工核查两份文件"
+        )
 
     # The PDIC writer can return successfully while another window edits or
     # removes OCRed during the save callback. A pre-save version check alone
@@ -867,6 +869,29 @@ def publish_existing_pdic_ocr(
         if final_pdic != committed_pdic:
             raise RuntimeError(
                 "PDIC 已保存，但页面来源核验期间 PDIC 被其他操作修改；"
+                "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
+                "请人工核查两份文件"
+            )
+
+    else:
+        # Legacy no-validator callers still perform a final PDIC read after
+        # the OCRed check. A concurrent editor may replace or remove PDIC
+        # while that OCRed read is in progress. Do not report a clean pair.
+        try:
+            final_pdic = pdic_path.read_bytes()
+        except FileNotFoundError:
+            final_pdic = None
+        except OSError as inspect_error:
+            failure = RuntimeError(
+                "PDIC 已保存，但最后核验无法再次读取 PDIC；"
+                "未执行单侧回滚，请人工核查两份文件："
+                f"核查={inspect_error!r}"
+            )
+            failure.verification_error = inspect_error
+            raise failure from inspect_error
+        if final_pdic != committed_pdic:
+            raise RuntimeError(
+                "PDIC 已保存，但最后核验期间 PDIC 被其他操作修改；"
                 "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
                 "请人工核查两份文件"
             )
