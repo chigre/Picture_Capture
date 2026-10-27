@@ -2879,3 +2879,30 @@ manual acceptance **OPEN / NOT PASSED**.
   **OPEN / NOT PASSED**; synthetic regression tests are not that gate.
 - Verify the exact Round 124 HEAD's six-platform CI and OCR Platform Smoke
   before treating this change as passing. Never inherit prior HEAD results.
+
+### Round 125 (2026-10-27): failed OCRed export rollback staging PDIC race
+
+- Baseline Round 124 HEAD `5947fce4a0f491770d7220e88ec7849133ce68be`:
+  six-platform CI #40430877017 and OCR Platform Smoke #40430877054
+  both completed successfully before this change.
+- When an OCRed exporter publishes a sidecar and subsequently raises,
+  `batch_publication.py` already checked PDIC before compensation, but
+  unlike the PDIC-save-failure path it did **not** recheck PDIC after
+  byte-exact OCRed rollback temp staging/fsync (or immediately before
+  unlink of a newly created OCRed). An external editor could change PDIC
+  during that interval and the stale one-sided compensation could run.
+- The failed-export branch now passes a PDIC-version verification callback
+  to `_restore_ocred_if_unchanged`. The callback checks exact bytes just
+  before `os.replace` or `unlink`; a changed, removed, or unreadable PDIC
+  rejects compensation and preserves the latest disk versions for manual
+  reconciliation. The original exporter error is still propagated after
+  successful no-conflict compensation. The PDIC writer is never called.
+- `tests/test_issue562_failed_export_rollback_stage_round125_20261027.py`
+  adds six fault-injection/positive cases: existing/new OCRed, a concurrent
+  PDIC edit during rollback staging/deletion, a late PDIC read error, and
+  uncontended exact-byte restoration. Tests assert no orphan rollback temp.
+- This is an optimistic last-read guard, **not** cross-process CAS or a
+  crash-safe dual-file transaction. PR #663 remains Draft/unmerged; real
+  dictionary GUI scan, human proofreading, save and reopen acceptance stays
+  **OPEN / NOT PASSED**. Verify this exact HEAD's six-platform CI and OCR
+  Platform Smoke before claiming the round passed.
