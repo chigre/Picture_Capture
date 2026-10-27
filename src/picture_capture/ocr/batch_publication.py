@@ -75,6 +75,15 @@ def _restore_ocred_bytes(
                 ) from unlink_error
             if remaining is not None:
                 raise
+        else:
+            # A filesystem adapter can return normally without deleting the
+            # target. Never report completed compensation based only on its
+            # return value: the OCRed/PDIC pair would remain inconsistent.
+            if _read_optional_ocred_bytes(path) is not None:
+                raise RuntimeError(
+                    "OCRed 回滚删除函数已返回，但磁盘文件仍存在；"
+                    "未确认回滚完成，请人工核查 OCRed 与 PDIC"
+                )
         return
 
     temp_path: Path | None = None
@@ -124,6 +133,16 @@ def _restore_ocred_bytes(
                 ) from replace_error
             if staged_exists or restored_bytes != previous:
                 raise
+        else:
+            # A patched or faulty replace may return normally without moving
+            # the staged file, or a concurrent editor may immediately change
+            # the destination. Require both the moved staging pathname and
+            # the exact restored bytes before reporting successful rollback.
+            if temp_path.exists() or _read_optional_ocred_bytes(path) != previous:
+                raise RuntimeError(
+                    "OCRed 回滚替换函数已返回，但无法确认原始内容已恢复；"
+                    "未确认回滚完成，请人工核查 OCRed、PDIC 和临时文件"
+                )
         # os.replace moves the staged file into place. Once committed, the
         # temporary pathname is no longer ours to unlink; a late cleanup
         # error must not misreport a successful OCRed restoration as failed.
