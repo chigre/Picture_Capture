@@ -1,3 +1,15 @@
+## 2026-10-28｜v1.3.0 全库复审后唯一执行入口（取代以下旧接力状态）
+
+**从现在起仅推进 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)**，同时跟踪 [#503](https://github.com/chigre/Picture_Capture/issues/503) R3 与 [#562](https://github.com/chigre/Picture_Capture/issues/562) 架构；旧 #664 关闭未合并，完整提交历史通过双父合并 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac` 纳入 #663。旧文本中「新建 #503 实施 PR」「#542 仍当前 PR」「重新从 B0 启动」均为历史，不再作为可执行指令。
+
+每次恢复**先**读取 `CORE_QUALITY_UPGRADE_PLAN.md` v1.3.0、`CORE_QUALITY_STATE.json` 中 `audit_20261028` 及 [全库复审](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md)，**再读取 GitHub 真实 PR HEAD 和 CI**（它们高于本文快照）。最近审计基线 `66ad88c276b6965c075eeb72583b42dd0aa7f3ac`：[#40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) CI completed/success 6/6、[#40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) OCR Smoke completed/success 3/3。只保证**该旧 HEAD**，不能直接用作下一次新提交证明。
+
+**唯一下一主题 G1：#503 R3 候选归属、manual_selection/PDIC/simplified、Undo/Redo 和崩溃恢复的所有权/版本失败矩阵；**不重复已存在的 O_EXCL、非普通标记拒绝或多文件核验。其次 G2 `app.py`/大 owner 有限抽取、G3 R5 parity 与 R4 默认关闭可解释优先队列。禁止依赖源码行数声称性能提升；R6 没有经人工 verified 的标签保持 blocked；R8/真实扫描 PR-B 继续用户延后。
+
+每个包：HEAD/CI/是否并发修改检查 → 责任 owner / 反例 → 源码、回归、架构文档 → 实际提交 → 新 HEAD 六平台 CI、OCR Smoke、按需 CodeQL 与人工门禁分别记录 → 两个 Issue 同步。**PR #663 维持 Draft/Open/Unmerged，不标 Ready，不合并 main**。真实 Windows 字典 R3 20-step Undo/Redo、候选checkbox、FocusOut、PDIC/PPP/SECTION/crop、source-image X/Y 人工验收 **NOT PERFORMED**；R2 #483 W1–W11 未验收。可因安全 blocker 停下，不可补造测试结论。
+
+---
+
 ## 2026-10-17｜main postmerge CI 最终结果：成功（Windows runner 重试后）
 
 - R3 #542 已合并主干 `e12a9db4cc9199069e93d2c3ef12df97fcafd403`。该 SHA [postmerge CI 39013602419](https://github.com/chigre/Picture_Capture/actions/runs/39013602419) 在第一次 Windows hosted Tcl `init.tcl` 初始化异常后，**attempt 2 重跑失败 Windows 作业成功，最终四平台 SUCCESS**；[main CodeQL 39013601837](https://github.com/chigre/Picture_Capture/actions/runs/39013601837) SUCCESS。首次失败不能冒充未发生；是已记录的运行器异常。

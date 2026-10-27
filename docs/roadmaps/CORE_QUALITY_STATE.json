@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "plan_id": "PC-CQ-20261014",
-  "plan_version": "1.2.0",
+  "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-17T07:30:48.744Z",
+  "updated_at_utc": "2026-10-27T18:38:43.654Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,19 +24,26 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "R3.2",
+    "active_work_item": "G1_R3_transaction_owner_and_operator_acceptance_audit",
     "work_in_progress": false,
     "implementation_pr": {
-      "number": 542,
-      "url": "https://github.com/chigre/Picture_Capture/pull/542",
-      "branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
-      "status": "merged_engineering_human_waiver_not_tested",
+      "number": 663,
+      "url": "https://github.com/chigre/Picture_Capture/pull/663",
+      "branch": "refactor/562-retire-root-image-utils-20261024",
+      "status": "draft_open_unmerged_single_active_development_pr",
       "units": [
         "R3.1",
-        "R3.2"
-      ]
+        "R3.2",
+        "R4.1",
+        "R4.2",
+        "R5.1",
+        "R5.2",
+        "R7.1",
+        "R7.3"
+      ],
+      "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "f80daf07d7421f5bd8d20cce0c86fce160813697",
+    "implementation_head_sha": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -51,10 +58,10 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Protected main: verify documentation-only PR #548 latest-head CI/CodeQL and merge only after green; then verify docs postmerge main CI. #542 R3 engineering delivered/merged. Human Windows #503 and R2 W1-W11 #483 explicitly not performed (user waiver), keep issues open.",
-    "last_test_evidence": "#542 final PR f80daf07: CI https://github.com/chigre/Picture_Capture/actions/runs/39013417928 SUCCESS all Windows/macOS/Ubuntu/Python3.10; PR CodeQL 39013415268 SUCCESS; squash main e12a9db4cc9199069e93d2c3ef12df97fcafd403; postmerge main CI https://github.com/chigre/Picture_Capture/actions/runs/39013602419 SUCCESS on attempt 2 after Windows hosted Tcl init.tcl transient failure attempt 1; main CodeQL https://github.com/chigre/Picture_Capture/actions/runs/39013601837 SUCCESS. Real Windows operator checks R3/#503 and R2/#483 explicitly NOT PERFORMED; waived for R3 engineering merge only; OS cross-file atomicity not claimed.",
+    "required_next_action": "G1: on sole Draft PR #663, audit candidate-linked Undo/Redo owner/PDIC+manual_selection+simplified save/reopen failure matrix, add only missing safety tests and fixes; preserve R3 human acceptance NOT PERFORMED and check exact-head six-platform CI + OCR Smoke after each batch.",
+    "last_test_evidence": "Consolidated Draft #663 exact HEAD 66ad88c276b6965c075eeb72583b42dd0aa7f3ac: CI #40559523622 completed/success Windows/macOS/Ubuntu normal and Python 3.10 6/6 with final Risk-tier gate success; OCR Platform Smoke #40559523187 completed/success 3/3. Earlier #542 CI remains historical, not latest main proof. No real Windows dictionary human acceptance.",
     "active_batch": "B3",
-    "next_batch": "B3",
+    "next_batch": "B4",
     "r3_patch_chain": {
       "scope": "v4-v8",
       "status": "engineering_merged_main_ci_success_human_waived",
@@ -104,7 +111,33 @@
       "claim_of_passed_tests": false,
       "issue": "https://github.com/chigre/Picture_Capture/issues/503"
     },
-    "merge_commit_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403"
+    "merge_commit_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
+    "observed_pr_base_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
+    "human_windows_r3": "not_performed",
+    "operator_acceptance_r2": "#483 W1-W11 not_performed",
+    "consolidated_20261028": {
+      "single_active_pr": 663,
+      "head_sha": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac",
+      "merged_into_main": false,
+      "draft": true,
+      "former_pr_664": {
+        "state": "closed_unmerged_superseded",
+        "head": "fa67026d72f34d003385d6c92afadba5fa02d41a",
+        "preserved_two_parent_merge": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac"
+      },
+      "ci": {
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/40559523622",
+        "status": "completed",
+        "conclusion": "success",
+        "os_test_jobs_success": 6
+      },
+      "ocr_smoke": {
+        "url": "https://github.com/chigre/Picture_Capture/actions/runs/40559523187",
+        "status": "completed",
+        "conclusion": "success",
+        "os_jobs_success": 3
+      }
+    }
   },
   "units": {
     "R0.1": "verified",
@@ -729,7 +762,17 @@
     "all_units_need_acceptance_evidence": true,
     "can_split_oversized_bundle": true,
     "splitting_requires_state_update": true,
-    "post_merge_main_ci_for_verified": true
+    "post_merge_main_ci_for_verified": true,
+    "single_active_pr_override_20261028": {
+      "active_pr": 663,
+      "topics": [
+        "#503 R3 review transaction",
+        " #562 architecture and OCR safety"
+      ],
+      "no_second_production_pr": true,
+      "follow_internal_work_packets": "G0-G6",
+      "reason": "Explicit user request 2026-10-28 to consolidate two PRs; preserve original safety and human acceptance requirements"
+    }
   },
   "batches": {
     "B0": {
@@ -860,7 +903,7 @@
       "status": "engineering_merged_human_deferred",
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/542",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": "R3 engineering #542 delivered and merged, PR and postmerge main CI green (39013602419 attempt 2; main CodeQL 39013601837). R3 human Windows NOT PERFORMED per user waiver, #503 remains open; R2/B2 #483 W1–W11 pending.",
+      "blocker": "R3 engineering #542 delivered and merged, PR and postmerge main CI green (39013602419 attempt 2; main CodeQL 39013601837). R3 human Windows NOT PERFORMED per user waiver, #503 remains open; R2/B2 #483 W1–W11 pending. Follow-up #503 consolidated into Draft PR #663 at 66ad88c276b6965c075eeb72583b42dd0aa7f3ac; R3 real Windows human tests remain NOT PERFORMED. Separate source PR #664 superseded/closed without main merge.",
       "active_implementation_branch": "feat/pc-cq-b3-candidate-undo-redo-20261015",
       "active_head_sha": "f80daf07d7421f5bd8d20cce0c86fce160813697",
       "unit_evidence": {
@@ -887,7 +930,10 @@
       },
       "latest_merged_pr": "https://github.com/chigre/Picture_Capture/pull/519",
       "latest_merge_sha": "6987a4a2eac37a6b3524e6c63ae87a1b60f5ad7a",
-      "next_issue": "https://github.com/chigre/Picture_Capture/issues/503"
+      "next_issue": "https://github.com/chigre/Picture_Capture/issues/503",
+      "followup_pr": "https://github.com/chigre/Picture_Capture/pull/663",
+      "followup_head_sha": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac",
+      "followup_status": "draft_open_engineering_recovery_hardening_human_not_performed"
     },
     "B4": {
       "units": [
@@ -897,7 +943,8 @@
       "status": "todo",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": null,
+      "current_planning": "todo: R4 deterministic priority queue could reuse ui/focused_filter_workflow.py, but no existing verified risk tiers or human time savings"
     },
     "B5": {
       "units": [
@@ -907,7 +954,8 @@
       "status": "todo",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": null,
+      "current_planning": "todo with partial #562 code extraction: score vs q pure parity and per-field fixture DoD still open; do not mark verified"
     },
     "B6": {
       "units": [
@@ -918,7 +966,7 @@
       "status": "todo",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": "Reliable R2 human-verified source-consistent labels and project/dictionary-level partition not yet evidenced; NO training or shadow deployment"
     },
     "B7a": {
       "units": [
@@ -928,7 +976,8 @@
       "status": "todo",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": null,
+      "current_planning": "todo: profiling required, bytes/filesize are not speed benchmarks"
     },
     "B7b": {
       "units": [
@@ -937,7 +986,8 @@
       "status": "todo",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": null,
+      "current_planning": "todo: source/canonical/transformed exact coordinate contract and PDIC/PPP/SECTION crop roundtrip"
     },
     "B8": {
       "units": [
@@ -948,7 +998,7 @@
       "status": "deferred_by_user",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null
+      "blocker": "User-deferred PR-B real scanned dictionary benchmark. Do not start or mark verified without explicit permission."
     }
   },
   "policy_revision_pr": {
@@ -957,5 +1007,34 @@
     "status": "open",
     "branch": "docs/pc-cq-grouped-pr-policy-20261014",
     "version": "1.1.0"
+  },
+  "audit_20261028": {
+    "path": "docs/audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md",
+    "main_base_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
+    "pr_head_sha": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac",
+    "evidence_level": "complete Git recursive tree inventory, targeted code boundary reading, fixed-head synthetic CI; no human operator/performance benchmark",
+    "stats": {
+      "root_python_files_main": 15,
+      "root_python_files_pr": 5,
+      "app_bytes_main": 348586,
+      "app_bytes_pr": 152962,
+      "src_python_files_main": 398,
+      "src_python_files_pr": 551,
+      "test_python_files_main": 443,
+      "test_python_files_pr": 614,
+      "pr_commits": 711,
+      "pr_changed_files": 551
+    },
+    "priority": [
+      "G0 exact-head CI/inventory",
+      "G1 R3 #503 failure/data ownership/Windows human gate",
+      "G2 #562 app/runtime canonical owner and compatibility",
+      "G3 R5 scoring parity + R4 opt-in priority",
+      "G4 #483 R2 human and A/C requirements audit",
+      "G5 R6 blocked on verified labels",
+      "G6 R7 measured profiling+geometry; R8 deferred"
+    ],
+    "human_acceptance": "NOT_PERFORMED",
+    "real_scanned_benchmark": "DEFERRED_BY_USER"
   }
 }

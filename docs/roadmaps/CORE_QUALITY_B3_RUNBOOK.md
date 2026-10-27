@@ -1,3 +1,11 @@
+## 2026-10-28｜R3 v1.3.0 最新范围/人机验收（取代旧「当前 PR #519/#542」入口）
+
+工程主交付 #542 已合并 main；**新增安全收口由唯一 Draft PR [#663](https://github.com/chigre/Picture_Capture/pull/663)** 承载 #503 与 #562。旧 #664 已 Closed / Unmerged、其提交并入双父 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac`。这版确证合成 [CI #40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) 6/6 与 [OCR Smoke #40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) 3/3；仅对应旧 HEAD。重要保护已存在：R3 marker O_EXCL 独占、非普通标记拒绝、逐文件 before/after 恢复核验、候选提交后再更新 UI、同会话最多20步 Undo/Redo；**并非全程跨进程原子双/三文件事务**。
+
+**真人 Windows 手工验收仍 NOT PERFORMED**：实际有版权授权的词典页上逐项验证候选 checkbox / 唯一 candidate_id、删除与撤销重做、保存后的 manual_selection / PDIC / 简体副本精确回读、重复 Undo×20/Redo×20、改写后 redo 清空、FocusOut/自动保存、翻页/关窗/重新打开、临时恢复标记故障、原图 X/Y 以及 PPP/SECTION/crop parity。每项保留输入 SHA、操作、预期与实际字节/UI；真实页不可用时只可记录 BLOCKED，不得用 Tk 合成 CI 冒称 PASSED。详细参阅 [全库复审和 G1–G6 路线](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md)。
+
+---
+
 ## 2026-10-17｜main postmerge CI 最终结果：成功（Windows runner 重试后）
 
 - R3 #542 已合并主干 `e12a9db4cc9199069e93d2c3ef12df97fcafd403`。该 SHA [postmerge CI 39013602419](https://github.com/chigre/Picture_Capture/actions/runs/39013602419) 在第一次 Windows hosted Tcl `init.tcl` 初始化异常后，**attempt 2 重跑失败 Windows 作业成功，最终四平台 SUCCESS**；[main CodeQL 39013601837](https://github.com/chigre/Picture_Capture/actions/runs/39013601837) SUCCESS。首次失败不能冒充未发生；是已记录的运行器异常。
