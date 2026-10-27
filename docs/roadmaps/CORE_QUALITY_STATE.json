@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_R3_candidate_owned_delete_provenance_batch",
+    "active_work_item": "G1_R3_post_stage_source_drift_and_multifile_publication_guard",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "66ad88c276b6965c075eeb72583b42dd0aa7f3ac",
+    "implementation_head_sha": "1915a8242d46c131bf60eccda7c88fe5571dc58a",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,7 +58,7 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify exact-head six-platform CI and OCR Smoke for G1 candidate provenance package; repair any failures without weakening existing R3 safety. Then continue independent G1 Undo/Redo mixed edit and crash ownership auditing; Windows real dictionary operator gates remain NOT PERFORMED.",
+    "required_next_action": "Validate the new G1 post-stage source drift guard at its final exact HEAD (6 platform jobs, 3 OCR smoke, Risk-tier, CodeQL); if failing, repair on #663. Then continue R3 20-step mixed Undo/Redo and Windows operator gates; do not mark human verified.",
     "last_test_evidence": "Consolidated Draft #663 exact HEAD 66ad88c276b6965c075eeb72583b42dd0aa7f3ac: CI #40559523622 completed/success Windows/macOS/Ubuntu normal and Python 3.10 6/6 with final Risk-tier gate success; OCR Platform Smoke #40559523187 completed/success 3/3. Earlier #542 CI remains historical, not latest main proof. No real Windows dictionary human acceptance.",
     "active_batch": "B3",
     "next_batch": "B4",
@@ -1054,7 +1054,28 @@
     ],
     "added_case_count": 19,
     "human_acceptance": "NOT_PERFORMED",
-    "ci_status": "PENDING_FINAL_HEAD_RESULTS",
-    "note": "Do not mark G1 or #503 verified: this only closes the identified candidate delete preparation provenance gap."
+    "ci_status": "EXACT_HEAD_SUCCESS_1915a8242d46c131bf60eccda7c88fe5571dc58a",
+    "note": "Do not mark G1 or #503 verified: this only closes the identified candidate delete preparation provenance gap.",
+    "ci_urls": [
+      "https://github.com/chigre/Picture_Capture/actions/runs/40564368791",
+      "https://github.com/chigre/Picture_Capture/actions/runs/40564368813",
+      "https://github.com/chigre/Picture_Capture/actions/runs/40564362696"
+    ]
+  },
+  "g1_restore_race_batch_20261028": {
+    "status": "code_and_regressions_submitted_pending_exact_head_ci",
+    "parent_sha": "1915a8242d46c131bf60eccda7c88fe5571dc58a",
+    "owner": "src/picture_capture/proofreading/transactions.py",
+    "test_file": "tests/test_b3_review_session_transactions_20261015.py",
+    "architecture_doc": "docs/architecture/R3_G1_POST_STAGE_SOURCE_RACE_BATCH_20261028.md",
+    "regression_cases": 7,
+    "scope": [
+      "ordinary Undo post-journal-stage source drift",
+      "ordinary two-file PDIC/simplified inter-write human edit",
+      "candidate three-file PDIC/manual inter-write human edit",
+      "pre-next-file and final exact source readback"
+    ],
+    "risk": "optimistic byte checks do not establish OS cross-file atomicity; conflicting third-party bytes retain R3 marker",
+    "human_acceptance": "NOT_PERFORMED"
   }
 }

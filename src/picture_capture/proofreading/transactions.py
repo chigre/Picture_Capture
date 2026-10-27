@@ -456,6 +456,31 @@ def _rollback_failed_publish(
     return not _marker_present(marker)
 
 
+def _snapshot_sources_match(
+    expected: SavedSnapshot, *, published: dict[str, bytes | None] | None = None,
+) -> bool:
+    """Recheck every owned file and read-only source at a publication boundary.
+
+    Published roles are the *only* permitted changes from the frozen snapshot.
+    This is optimistic protection, not an OS-level cross-file atomic CAS.
+    """
+    published = published or {}
+    page = expected.page
+    return bool(
+        sha256_file(page) == expected.image_sha
+        and _bytes_or_absent(pdic_path(page))
+            == published.get("pdic", expected.pdic_bytes)
+        and _bytes_or_absent(simplified_review_path_for_image(page))
+            == published.get("simplified", expected.simplified_bytes)
+        and _bytes_or_absent(expected.manual_path)
+            == published.get("manual", expected.manual_bytes)
+        and _bytes_or_absent(expected.ocr_path) == expected.ocr_bytes
+        and page_sections_read_path_for_image(page) == expected.section_path
+        and _bytes_or_absent(expected.section_path) == expected.section_bytes
+        and _bytes_or_absent(expected.profile_path) == expected.profile_bytes
+    )
+
+
 def publish_owned_review_bundle(
     expected: SavedSnapshot,
     *, pdic_bytes: bytes,
@@ -486,18 +511,9 @@ def publish_owned_review_bundle(
             and not _marker_present(_recovery_path(page))):
         return False
 
-    def source_unchanged() -> bool:
-        return bool(
-            sha256_file(page) == expected.image_sha
-            and _bytes_or_absent(pdic_path(page)) == expected.pdic_bytes
-            and _bytes_or_absent(manual_path) == expected.manual_bytes
-            and _bytes_or_absent(simplified_review_path_for_image(page))
-                == expected.simplified_bytes
-            and _bytes_or_absent(expected.ocr_path) == expected.ocr_bytes
-            and page_sections_read_path_for_image(page) == expected.section_path
-            and _bytes_or_absent(expected.section_path) == expected.section_bytes
-            and _bytes_or_absent(expected.profile_path) == expected.profile_bytes
-        )
+    def source_unchanged(published: dict[str, bytes | None] | None = None) -> bool:
+        return _snapshot_sources_match(expected, published=published)
+
     if not source_unchanged():
         return False
     paths = {
@@ -510,12 +526,17 @@ def publish_owned_review_bundle(
         marker.unlink()
         return False
     try:
+        published: dict[str, bytes | None] = {}
         for role, _, data in changes:
+            # A human may edit PDIC/manual/simplified or a read-only OCR
+            # dependency after the journal was staged or a prior role landed.
+            if not source_unchanged(published):
+                raise RuntimeError("R3 bundle source drift before next file publication")
             _publish(paths[role], data)
-        # Do not advance Entry/candidate/Tk state on a silent storage no-op.
-        if any(_bytes_or_absent(paths[role]) != data
-               for role, _, data in changes):
-            raise RuntimeError("R3 bundle post-publication bytes mismatch")
+            published[role] = data
+        # Also verify untouched dependencies after the final replacement.
+        if not source_unchanged(published):
+            raise RuntimeError("R3 bundle post-publication source drift")
         try:
             marker.unlink()
         except OSError:
@@ -550,33 +571,24 @@ def _publish_restored_snapshot(
         return False
     # Revalidate exact bytes immediately before staging. An intervening writer
     # cannot be silently overwritten by a stale Undo snapshot.
-    if (sha256_file(page) != expected.image_sha
-            or _bytes_or_absent(pdic_path(page)) != expected.pdic_bytes
-            or _bytes_or_absent(simplified_review_path_for_image(page))
-               != expected.simplified_bytes
-            # OCR and manual-selection are read-only dependencies for the
-            # original R3 safe scope. Recheck immediately before publication;
-            # snapshot-time checks alone leave a TOCTOU window.
-            or _bytes_or_absent(expected.manual_path) != expected.manual_bytes
-            or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
-            or page_sections_read_path_for_image(page) != expected.section_path
-            or _bytes_or_absent(expected.section_path) != expected.section_bytes
-            or _bytes_or_absent(expected.profile_path) != expected.profile_bytes):
+    if not _snapshot_sources_match(expected):
         return False
     # Even single-file replacement can land and then raise; the GUI cannot
     # advance until success is proven, so stage both single and multi-file edits.
     marker = _stage_recovery(page, changes, rollback_required=True)
     try:
+        published: dict[str, bytes | None] = {}
+        # The earlier preflight is not enough: staging the recovery marker
+        # performs I/O, during which another proofreader can change sources.
         for role, _, data in changes:
+            if not _snapshot_sources_match(expected, published=published):
+                raise RuntimeError("R3 restore source drift after journal staging")
             path = (pdic_path(page) if role == "pdic"
                     else simplified_review_path_for_image(page))
             _publish(path, data)
-        if any(
-            _bytes_or_absent(pdic_path(page) if role == "pdic"
-                             else simplified_review_path_for_image(page)) != data
-            for role, _, data in changes
-        ):
-            raise RuntimeError("R3 restore bytes mismatch")
+            published[role] = data
+        if not _snapshot_sources_match(expected, published=published):
+            raise RuntimeError("R3 restore post-publication source drift")
         try:
             marker.unlink()
         except OSError:

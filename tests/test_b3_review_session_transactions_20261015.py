@@ -846,3 +846,111 @@ def test_single_file_write_then_raise_undo_restores_before_state(tmp_path, monke
     assert review.vars[0].get() == "ONE"
     assert len(history.undo_stack) == 1
     assert not module._recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("source", ["pdic", "manual", "ocr", "section", "profile"])
+def test_undo_refuses_source_drift_during_recovery_marker_stage(
+    tmp_path, monkeypatch, source,
+):
+    """No staged ordinary Undo may overwrite a later human/source version."""
+    from picture_capture.persistence.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    drift_path = {
+        "pdic": pdic_path(page),
+        "manual": tmp_path / "manual_selection.json",
+        "ocr": tmp_path / "cache.json",
+        "section": page_sections_path_for_image(page),
+        "profile": profile_path(tmp_path),
+    }[source]
+    human_bytes = b"independent-human-or-source-version"
+    stage = module._stage_recovery
+
+    def stage_then_external_edit(*args, **kwargs):
+        marker = stage(*args, **kwargs)
+        drift_path.parent.mkdir(parents=True, exist_ok=True)
+        drift_path.write_bytes(human_bytes)
+        return marker
+
+    monkeypatch.setattr(module, "_stage_recovery", stage_then_external_edit)
+    assert not history.undo(review)
+    assert drift_path.read_bytes() == human_bytes
+    assert rows[0].word == "ONE"
+    assert review.vars[0].get() == "ONE"
+    assert len(history.undo_stack) == 1
+    if source == "pdic":
+        # A third-party PDIC version cannot be auto-reconciled as old/new.
+        assert module._recovery_path(page).exists()
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert pdic_path(page).read_bytes() == committed
+        assert not module._recovery_path(page).exists()
+
+
+def test_undo_refuses_human_simplified_edit_between_two_file_writes(
+    tmp_path, monkeypatch,
+):
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    page, rows, review = _case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b'{"entries":[]}')
+    before = snapshot_review(review)
+    rows[0].word = "ONE"
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    review.vars[0].set("ONE")
+    simplified.write_bytes(b'{"entries":[{"text":"saved"}]}')
+    after = snapshot_review(review)
+    history = ReviewSessionHistory()
+    assert history.record(before, after)
+    committed = pdic_path(page).read_bytes()
+    human_bytes = b"human-edited-simplified-after-first-publish"
+    publish = module._publish
+
+    def race_after_pdic(path, data):
+        result = publish(path, data)
+        if path == pdic_path(page) and data == before.pdic_bytes:
+            simplified.write_bytes(human_bytes)
+        return result
+
+    monkeypatch.setattr(module, "_publish", race_after_pdic)
+    assert not history.undo(review)
+    assert pdic_path(page).read_bytes() == committed
+    assert simplified.read_bytes() == human_bytes
+    assert rows[0].word == "ONE"
+    assert module._recovery_path(page).exists()
+    assert not module.recover_pending_for_page(page)
+
+
+def test_candidate_bundle_refuses_human_manual_edit_after_pdic_publication(
+    tmp_path, monkeypatch,
+):
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before is not None
+    target_pdic = before.pdic_bytes.replace(b"one", b"ONE")
+    human_bytes = b"third-party-manual-choice"
+    publish = module._publish
+
+    def race_after_pdic(path, data):
+        result = publish(path, data)
+        if path == pdic_path(page) and data == target_pdic:
+            override.write_bytes(human_bytes)
+        return result
+
+    monkeypatch.setattr(module, "_publish", race_after_pdic)
+    with pytest.raises(RuntimeError, match="source drift"):
+        module.publish_owned_review_bundle(
+            before, pdic_bytes=target_pdic,
+            manual_bytes=b'{"overrides":{"candidate":{"selected":false}}}',
+            simplified_bytes=before.simplified_bytes,
+        )
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert override.read_bytes() == human_bytes
+    assert [row.word for row in rows] == ["one", "two"]
+    assert module._recovery_path(page).exists()
+    assert not module.recover_pending_for_page(page, manual_path=override)
