@@ -870,3 +870,11 @@ def publish_existing_pdic_ocr(
                 "保留磁盘上的最新 PDIC 和 OCRed，未执行单侧回滚；"
                 "请人工核查两份文件"
             )
+
+    # The successful PDIC writer was checked earlier, but the subsequent
+    # OCRed read and (optional) final source/SECTION validation can be slow.
+    # R3 may stage its recovery marker in that post-commit observation
+    # window. Do not report the OCRed/PDIC pair as clean while R3 owns it.
+    # This is a final optimistic observation, not an interprocess lock/CAS.
+    # Both files have already been published: never undo only one here.
+    _reject_unresolved_r3_marker(pdic_path)
