@@ -745,6 +745,9 @@ class ReviewSessionHistory:
         cache = getattr(review, "_simplified_page_cache", None)
         if isinstance(cache, dict):
             cache.pop(expected.page.stem, None)
+        pins = review.__dict__.get("_r3_simplified_source_bytes")
+        if isinstance(pins, dict):
+            pins.pop(expected.page.stem, None)
         getattr(review, "_simplified_dirty_pages", set()).discard(expected.page.stem)
         stack.pop()
         (self.undo_stack if redo else self.redo_stack).append(frame)

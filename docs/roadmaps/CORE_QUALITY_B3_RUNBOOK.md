@@ -1,3 +1,14 @@
+## 2026-10-28｜G1 原图 X/Y 与 source_word 同一人工校对归属 + Undo 缓存重新绑定
+
+- 具体数据归属风险：`review_workspace_workflow.render_rows` 旧代码按 source X/Y 直接取回人工简体记录，但没有验证其 `source_word` 与当前 PDIC 词条的对应关系。OCR 或第三方人工在原像素位置替换词条后，旧人工文字可能被错误显示为新词条的已保存校对。失配的简体旧记录保持原字节，不自动纠正、迁移或删除。
+- 同一纵向修复：`simplified_review.source_word_conflicts` 和 `validate_source_word_binding` 核验源词身份；普通成对写盘验证 pre-edit snapshot 的来源词和 post-edit proposal 的新词；独立简体写盘读取并固定 PDIC 原始字节、在预览后/恢复标记后/发布后复核，防止第三方中途替换同坐标原词。来源不符立即拒绝，不借用一个位置相同就重新绑定人工文字。
+- GUI 渲染源冲突使用显式“⚠来源词条不一致”占位提示，禁用该简体字段；FocusOut、KeyRelease、自动重算和整页重新简体化不覆盖冲突行。正常匹配和过去无对应 PDIC 的孤立旧侧记录允许保留，无自动迁移；确需归属调整应有人工作业核实。
+- 普通和 OCR candidate Undo/Redo 成功恢复文件后，除了移除过期简体缓存，还移除绑定它的来源 byte pin，下一次页面绘制才可从已恢复版本重新建立可信归属。
+- 新回归 `tests/test_b3_sidecar_source_word_identity_20261028.py`（正常/冲突、目标错误、同坐标重绑定、PDIC 发布竞态、旧 Tk 按键/FocusOut/整页重算、孤立人工记录），并扩展两套既有 Undo/Redo 回归。架构记录 `docs/architecture/R3_G1_SOURCE_WORD_PIXEL_OWNER_AND_HISTORY_RELOAD_20261028.md`。
+- 此时只有既有 baseline CI 6/6、OCR 3/3、CodeQL 2/2；新 HEAD 仍需完整验证。真实 Windows 人工词典、候选 checkbox、20 步 Undo/Redo、PDIC/PPP/SECTION 保存重开、crop 原图坐标、R2 #483 W1–W11 继续 OPEN / NOT PERFORMED。OS 原子 CAS 与断电保证不成立。
+
+---
+
 ## 2026-10-28｜G1 普通校对成对保存：缓存来源与人工 JSON 无损合同
 
 - 生产缺口：`snapshot_review` 只证明**快照创建时**的 sidecar 磁盘字节，`review_bundle.commit_review_bundle` 却直接用本窗口较早缓存的行来覆盖它。如果另一校对者修改 sidecar 在快照之前（而缓存读取在修改之前），所有已有的后续字节复核仍可通过，导致第三方人工文字丢失。

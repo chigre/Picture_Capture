@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T13:49:10.362Z",
+  "updated_at_utc": "2026-10-28T14:22:39.086Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_review_bundle_cache_disk_provenance_and_semantic_loss_guard",
+    "active_work_item": "G1_original_pixel_source_word_identity_plus_history_source_pin_reload",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "4add61c3090405cf2cbdc098a1b4f61eae754050",
+    "implementation_head_sha": "fe770876be2303b7109c2fcb44f8b2053423ebd6",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Check exact new head 6-platform CI+Risk gate, OCR 3 OS and CodeQL; fix any test-contract/real regressions in same source provenance packet. Real E3 OPEN.",
-    "last_test_evidence": "Baseline PR #663@4add61c3090405cf2cbdc098a1b4f61eae754050 CI #40697171882 success 6/6+Risk-tier gate, OCR #40697171800 3/3, CodeQL #40697163893 2/2. New late-snapshot sidecar owner packet needs exact-HEAD CI. Genuine Windows E3 NOT PERFORMED.",
+    "required_next_action": "Verify after commit exact HEAD full Windows/macOS/Ubuntu × 3.13/3.10 CI, Risk-tier, OCR 3 OS, CodeQL and GUI smoke. Real E3 remains OPEN / NOT PERFORMED; fix true CI regressions within this one identity packet.",
+    "last_test_evidence": "Baseline PR #663@fe770876be2303b7109c2fcb44f8b2053423ebd6 CI #40700070402 successful 6/6+Risk-tier, OCR #40700070443 successful 3/3, CodeQL #40700064028 successful 2/2. New source_word and source-X/Y identity packet exact HEAD CI pending; no real dictionary operator E3.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1300,5 +1300,34 @@
     },
     "previous_evidence": "Source packet #663@e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d CI #40696349131 first Ubuntu test 12 failures: 9 new tests blocked by incorrect relative import picture_capture.ui.review_bundle; 3 legacy static checks required unsafe direct save/by-value remove/old readback. Correct import and preserve tests by updating assertions for paired journal, identity and per-role source rechecks. New exact HEAD pending. OCR #40696349123 3/3 success; CodeQL #40696341227 in progress.",
     "limits": "Optimistic byte pin is not atomic OS CAS; no operator E3 or power-loss cross-file durability evidence."
+  },
+  "g1_source_word_xy_history_pin_20261028": {
+    "status": "source_and_synthetic_tests_submitted_exact_head_ci_pending",
+    "before_head_sha": "fe770876be2303b7109c2fcb44f8b2053423ebd6",
+    "owner_files": [
+      "src/picture_capture/proofreading/simplified_review.py",
+      "src/picture_capture/proofreading/review_bundle.py",
+      "src/picture_capture/ui/review_workspace_workflow.py",
+      "src/picture_capture/ui/review_simplified_workflow.py",
+      "src/picture_capture/proofreading/transactions.py",
+      "src/picture_capture/proofreading/candidate_history.py"
+    ],
+    "tests": [
+      "tests/test_b3_sidecar_source_word_identity_20261028.py",
+      "tests/test_b3_review_session_transactions_20261015.py",
+      "tests/test_b3_candidate_history_20261015.py"
+    ],
+    "architecture": "docs/architecture/R3_G1_SOURCE_WORD_PIXEL_OWNER_AND_HISTORY_RELOAD_20261028.md",
+    "root_cause": "Stored simplified/manual text is rendered by X/Y alone, even when source_word points to a different PDIC headword at the same source pixel. A saved bundle/source-only write can propagate or rewrite the mismatch. After Undo/Redo cache invalidation did not clear its associated source-byte pin.",
+    "behavior": [
+      "Reject source PDIC row word mismatch with existing human sidecar at same original X/Y, preserving unknown/orphan coordinates",
+      "Validate original frozen PDIC+sidecar word ownership and proposed post-edit word ownership before paired publication",
+      "Pin and recheck PDIC bytes during independent sidecar publication, so late OCR/manual PDIC replacement never receives stale simplified text",
+      "Display explicit source conflict instead of attaching another word's manual correction, block stale FocusOut, key edit, refresh and explicit regeneration from overwriting record",
+      "After successful ordinary/candidate Undo/Redo invalidate both simplified cached page and its disk source-byte pin; require fresh render binding"
+    ],
+    "tests_intent": "synthetic normal/damaged source-word, orphan, original XY, delayed PDIC mutation, GUI events and undo/redo reload; actual E3 NOT PERFORMED",
+    "prior_success_evidence": "Baseline PR #663@4add61c3090405cf2cbdc098a1b4f61eae754050 CI #40697171882 success 6/6+Risk-tier gate, OCR #40697171800 3/3, CodeQL #40697163893 2/2. New late-snapshot sidecar owner packet needs exact-HEAD CI. Genuine Windows E3 NOT PERFORMED.",
+    "limits": "not OS CAS, not power-loss multi-file atomicity, no real scanned dictionary/operator E3"
   }
 }

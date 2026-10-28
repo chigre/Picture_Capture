@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..proofreading.simplified_review import source_word_conflicts
+
 if TYPE_CHECKING:
     import tkinter as tk
     from ..models import Entry as WordEntry
@@ -89,6 +91,8 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
     records = self._simplified_page_records(stem)
     for i, entry in enumerate(rendered_entries):
         key = simplified_entry_key(entry.x, entry.y)
+        if source_word_conflicts(records.get(key), entry.word):
+            continue
         manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
         actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
         display = self.simplified_vars[i].get().strip()
@@ -262,12 +266,23 @@ def on_simplified_key(self, deps: ReviewSimplifiedDeps, _event: tk.Event, index:
         # into a manual override merely because a KeyRelease event occurred.
         if value == expected:
             return
+    if source_word_conflicts(
+        self._simplified_page_records(self._rendered_page_stem).get(
+            simplified_entry_key(entry.x, entry.y),
+        ), entry.word,
+    ):
+        return
     if not self.parent._claim_page_for_manual_edit():
         return
     fresh = _owned_rendered_simplified_rows(self)
     if (fresh is None or fresh[index] is not entry
             or self.vars[index].get().strip() != original_word
-            or self.simplified_vars[index].get().strip() != value):
+            or self.simplified_vars[index].get().strip() != value
+            or source_word_conflicts(
+                self._simplified_page_records(self._rendered_page_stem).get(
+                    simplified_entry_key(entry.x, entry.y),
+                ), entry.word,
+            )):
         return
     actual = original_word if value == "√" else value
     stem = self._rendered_page_stem
@@ -308,6 +323,12 @@ def _refresh_simplified_for_index(self, deps: ReviewSimplifiedDeps, index: int) 
     self.simplified_vars[index].set(self._simplified_display_from_value(original, actual, False))
     stem = self._rendered_page_stem
     entry = rows[index]
+    if source_word_conflicts(
+        self._simplified_page_records(stem).get(
+            simplified_entry_key(entry.x, entry.y),
+        ), entry.word,
+    ):
+        return
     self._simplified_page_records(stem)[simplified_entry_key(entry.x, entry.y)] = {
         "x": int(entry.x), "y": int(entry.y),
         "source_word": original, "text": "" if actual is None else str(actual),
@@ -351,6 +372,15 @@ def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None
 
     stem = self._rendered_page_stem
     records = self._simplified_page_records(stem)
+    if any(source_word_conflicts(
+        records.get(simplified_entry_key(entry.x, entry.y)), entry.word,
+    ) for entry in row_entries):
+        messagebox.showerror(
+            "重新简体化",
+            "本页原词与简体来源不一致，已拒绝覆盖，请核对旧人工数据。",
+            parent=self,
+        )
+        return
     # A source-pinned persist may refuse a third-party human edit. Freeze the
     # entire visible/manual/cache state BEFORE changing anything, so a failed
     # whole-page regeneration cannot leave OpenCC results masquerading as saved

@@ -17,7 +17,9 @@ from .transactions import (
     _bytes_or_absent, _publish, _recovery_path, _rollback_failed_publish,
     _stage_recovery, _snapshot_sources_match,
 )
-from .simplified_review import validate_source_for_rewrite, write_records
+from .simplified_review import (
+    validate_source_for_rewrite, validate_source_word_binding, write_records,
+)
 
 
 def commit_review_bundle(review: Any, source) -> None:
@@ -47,7 +49,13 @@ def commit_review_bundle(review: Any, source) -> None:
     if (pinned is None or pinned[0] != simplified.resolve()
             or pinned[1] != source.simplified_bytes):
         raise RuntimeError("R3 简体缓存来源与本次人工副本快照不一致，拒绝覆盖")
-    validate_source_for_rewrite(source.simplified_bytes, page.stem)
+    # Compare original sidecar source_word against the *frozen pre-edit*
+    # PDIC row identity. Pending editor word changes are legitimate, but an
+    # already stale human correction at the same source pixel is not.
+    validate_source_word_binding(
+        source.simplified_bytes, page.stem,
+        [(word, x, y) for _entry, word, x, y in source.entries],
+    )
     if not sources_match():
         raise RuntimeError("R3 简体来源验证期间文件变化，拒绝保存")
 
@@ -65,6 +73,13 @@ def commit_review_bundle(review: Any, source) -> None:
         )
         target_pdic = proposal_pdic.read_bytes()
         target_sidecar = proposal_sidecar.read_bytes()
+    # New serialized human records must describe the *post-edit* Entry.
+    # This must happen while files are still proposals, before the first
+    # recoverable canonical file publication.
+    validate_source_word_binding(
+        target_sidecar, page.stem,
+        [(entry.word, entry.x, entry.y) for entry in app.entries],
+    )
     changes = [
         (role, former, latter)
         for role, former, latter in (

@@ -1080,3 +1080,26 @@ def test_r3_untouched_marker_recovery_preserves_complete_after_state(tmp_path):
     assert module.recover_pending_for_page(page)
     assert pdic_path(page).read_bytes() == target
     assert not marker.exists()
+
+
+def test_plain_undo_redo_discards_stale_simplified_cache_and_origin_pin(tmp_path):
+    """Restoring disk bytes must force the next Tk render to re-pin that version."""
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    before, after = _save_words(page, rows, review, "ONE", "two")
+    assert history.record(before, after)
+    review._simplified_page_cache = {page.stem: {"10,20": {
+        "x": 10, "y": 20, "source_word": "ONE", "text": "stale manual",
+        "manual": True,
+    }}}
+    review._r3_simplified_source_bytes = {page.stem: (
+        page.with_suffix(".review.json"), b"stale source bytes",
+    )}
+    assert history.undo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes
+    review._simplified_page_cache[page.stem] = {"10,20": {"source_word": "one"}}
+    review._r3_simplified_source_bytes[page.stem] = (page, b"old")
+    assert history.redo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes

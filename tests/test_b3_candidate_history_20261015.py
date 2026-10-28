@@ -282,3 +282,22 @@ def test_candidate_delete_twenty_repeated_undo_redo_roundtrips(tmp_path):
         assert candidate["selected"] is False
     assert len(history.undo_stack) == 1
     assert len(history.redo_stack) == 0
+
+
+def test_candidate_undo_redo_clears_stale_manual_sidecar_origin_pin(tmp_path):
+    """A verified multi-file replay must invalidate both cached data and pin."""
+    page, owned, review, candidate, manual = setup_case(tmp_path, count=2)
+    history, before, after = committed_delete(page, owned, review, candidate)
+    review._simplified_page_cache[page.stem] = {"10,20": {
+        "source_word": "head", "text": "stale manual correction",
+    }}
+    review._r3_simplified_source_bytes = {page.stem: (page, b"wrong version")}
+    assert history.undo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes
+    review.vars = [Var(e.word) for e in review.parent.entries]
+    review._simplified_page_cache[page.stem] = {"10,20": {"source_word": "head"}}
+    review._r3_simplified_source_bytes[page.stem] = (page, b"wrong again")
+    assert history.redo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes
