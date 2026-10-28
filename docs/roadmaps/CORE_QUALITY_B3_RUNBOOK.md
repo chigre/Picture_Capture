@@ -1,3 +1,37 @@
+## 2026-10-29｜G1 人工 candidate choice / 同词头多位置失败矩阵（仅 E2）
+
+**原根因与红灯：** `apply_candidate_choice` 在校验 OCR 数值、保存
+PDIC 前立即写入 manual_selection；`set_candidate_selected` 在兄弟
+选择全部暂存前改变 Entry、checkbox。红灯提交
+`b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b`，
+[Ubuntu 失败 CI #40750612646](https://github.com/chigre/Picture_Capture/actions/runs/40750612646)
+记录新注入 **7 failed / 4722 passed / 3 skipped**；不能将历史红灯洗白。
+旧 V2.8.18 原始 Y 兼容用例还暴露按邻近 XY 在旧兄弟未移除前误认
+目标 Entry 的风险，因而使用严格 candidate_id owner，来源不明拒绝。
+
+**同一 UI owner + 一组测试：**
+`ui/review_selection_workflow.py`、
+`tests/test_g1_candidate_choice_position_switch_transaction_20261029.py`；
+旧原始 Y fixture 坚持真实组切换和 Entry/candidate/checkbox identity。
+标准场景：坏 OCR y/confidence/score；PDIC 写前磁盘满；
+位置兄弟 override 首次成功第二次失败；来源被第三方插入；
+计时调度异常；真实 candidate_id 不唯一或邻近 XY 冲突；
+合法位置切换两条人工决策一起暂存、正常人工 OCR 选择保存
+PDIC+manual；PDIC 已落盘却抛异常时暂停写入不自动回退；
+PDIC 写后人工 sidecar 被改写则保留第三方字节、隔离等待人工；
+未提交 checkbox 不可加入 ReviewWindow 保存 Undo 历史。
+检查所有错误场景时的 PDIC/manual 字节、候选对象 identity、
+Entry、checkbox、待保存队列和 Evidence。只记录合成 E2。
+
+**尚待 E3:** 真人 Windows 字典页候选/20 步 Undo/Redo、Redo 分叉、
+FocusOut/自动保存、跨页关闭重开、PDIC/PPP/SECTION、source X/Y
+与 crop roundtrip；#483 W1–W11 仍 NOT PERFORMED。不得把源字节
+乐观检查宣称跨文件 OS CAS、断电原子事务、节时/性能或真实精度提升。
+#663 仍唯一 Draft，#503/#562 Open。**CI 结果取最新 GitHub HEAD，
+不可复用本节或先前 HEAD。**
+
+---
+
 ## 2026-10-29｜G1 manual_selection：首次 exact-head CI 兼容测试合同返修
 
 - HEAD `f0bbd51949520cb8c23af2f68f0ffa3fc14a602d` [CI #40731357381](https://github.com/chigre/Picture_Capture/actions/runs/40731357381)：六平台 Job 均报告同一旧用例 `tests/test_core.py::test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action` 的单条失败，其他每个平台约 4700 条测试通过。该用例通过 `PictureCaptureApp.__new__` 创建没有 `project/current_page` 的假对象；新安全合同必须在修改 Entry/checkbox 前验证本页 `manual_selection` 原始来源，所以正确拒绝了假对象。Risk-tier gate 因测试失败未通过；首次红灯保留。

@@ -217,3 +217,52 @@ def test_new_choice_refuses_foreign_entry_at_identical_source_pixels(tmp_path):
     selection.apply_candidate_choice(app, deps, original, "paddle", "foreign choice")
     assert _snapshot(app, manual) == before
     assert messages and "坐标" in messages[-1]
+
+
+
+def test_choice_write_then_raise_quarantines_without_replaying_old_state(tmp_path):
+    app, deps, page, manual, refined, _, messages = _scene(tmp_path)
+    old = pdic_path(page).read_bytes()
+    def committed_then_error(**_kwargs):
+        write_pdic(pdic_path(page), app.entries, 100, app.pages_tuple())
+        raise OSError("injected error after PDIC replace")
+    app.save_pdic = committed_then_error
+    selection.apply_candidate_choice(app, deps, refined, "paddle", "chosen")
+    committed = pdic_path(page).read_bytes()
+    assert committed != old
+    assert [e.word for e in read_pdic(pdic_path(page))] == ["chosen"]
+    assert app._deferred_save_uncertain is True
+    assert not manual.exists()
+    assert app._pending_manual_override_payload["overrides"]["refined"]["word"] == "chosen"
+    selection.apply_candidate_choice(app, deps, refined, "paddle", "not retried")
+    assert pdic_path(page).read_bytes() == committed
+    assert not manual.exists()
+    assert messages and "不确定" in messages[-1]
+
+
+def test_choice_concurrent_human_sidecar_after_pdic_is_never_overwritten(tmp_path):
+    app, deps, page, manual, refined, _, messages = _scene(tmp_path)
+    foreign = b'{"version":1,"page":"page","overrides":{"third_party":{"selected":true,"word":"kept"}}}'
+    def conflicting_save(**_kwargs):
+        write_pdic(pdic_path(page), app.entries, 100, app.pages_tuple())
+        manual.write_bytes(foreign)
+        app._flush_pending_manual_override()
+    app.save_pdic = conflicting_save
+    selection.apply_candidate_choice(app, deps, refined, "paddle", "chosen")
+    assert manual.read_bytes() == foreign
+    assert [row.word for row in read_pdic(pdic_path(page))] == ["chosen"]
+    assert app._deferred_save_uncertain is True
+    assert app._pending_manual_override_payload is not None
+    assert messages and "不确定" in messages[-1]
+
+
+def test_review_undo_snapshot_refuses_uncommitted_candidate_choice(tmp_path):
+    from picture_capture.proofreading.transactions import snapshot_review
+    app, deps, page, manual, refined, original, messages = _scene(tmp_path)
+    assert selection.set_candidate_selected(app, deps, original, True) is True
+    assert app._pending_manual_override_payload is not None
+    review = SimpleNamespace(
+        parent=app, _filter_rows_active=False, _rendered_page_stem=page.stem,
+    )
+    assert snapshot_review(review) is None
+    assert not manual.exists()

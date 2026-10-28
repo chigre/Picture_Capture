@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T18:09:00Z",
+  "updated_at_utc": "2026-10-28T19:10:51Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_manual_selection_checkbox_source_pin_legacy_position_switch_fixture_repair",
+    "active_work_item": "G1_candidate_choice_position_switch_owner_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "af5cc288239bfda27cabc72db6b9c98025e87ec1",
+    "implementation_head_sha": "7f9fec1ad70aabc00e2b6f88ba081d6fdcf5743e",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify new exact-head six-platform CI+Risk gate, 3 OS OCR Smoke and CodeQL. If a real Tk/PDIC/manual bug appears, repair in the same G1 packet. E3 OPEN.",
-    "last_test_evidence": "Previous exact HEAD af5cc288239bfda27cabc72db6b9c98025e87ec1: CI #40742880719 completed success (six OS/Python), Risk-tier success; OCR #40742881834 3/3 completed success; CodeQL Python/Actions completed success; documentation architecture check skipped. New G1 checkbox PDIC/manual publication packet awaits its own exact-HEAD CI. Human E3 NOT PERFORMED.",
+    "required_next_action": "Verify final docs HEAD 6/6 CI + Risk-tier, OCR 3/3 and CodeQL Python/Actions; repair only same G1 packet failures. R3 E3 OPEN; PR #663 Draft/Open/Unmerged.",
+    "last_test_evidence": "Fail-first HEAD b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b CI #40750612646 Ubuntu 3.13: 7 new fault tests failed, 4722 passed, 3 skipped. Intermediate HEAD 585719af... synthetic faults passed but one historical original-Y switch exposed near-XY sibling misownership; strict candidate_id owner fix committed as 7f9fec1ad70aabc00e2b6f88ba081d6fdcf5743e. Final docs HEAD CI pending. Prior exact successful baseline 6344a1d356769e0fdac46da886bdd9fbcdcd1de4 CI #40747592633 6/6, OCR #40747592177 3/3, CodeQL #40747585405 success. Human E3 not performed.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1428,5 +1428,24 @@
     "risk": "P0 foreign source overwrite / write-then-raise stale PDIC retry / mixed PDIC-manual publication",
     "controls": "first-click PDIC source pin, full manual source preflight before PDIC, postwrite uncertainty quarantine, no premature metadata/snapshot clear",
     "limitations": "optimistic bytes check only, no OS CAS, no directory fsync, no 3-file atomicity; human E3 and R2 W1-W11 remain NOT PERFORMED"
+  },
+  "g1_candidate_choice_position_switch_20261029": {
+    "status": "code_tests_docs_committed_final_head_ci_pending",
+    "before_head_sha": "6344a1d356769e0fdac46da886bdd9fbcdcd1de4",
+    "fail_first_head_sha": "b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b",
+    "fail_first_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40750612646",
+    "observed_fail_first": "Ubuntu Python3.13 seven newly injected failures, 4722 passed, 3 skipped",
+    "production_fix_head_sha": "7f9fec1ad70aabc00e2b6f88ba081d6fdcf5743e",
+    "owner_files": [
+      "src/picture_capture/ui/review_selection_workflow.py"
+    ],
+    "test_files": [
+      "tests/test_g1_candidate_choice_position_switch_transaction_20261029.py",
+      "tests/test_core.py"
+    ],
+    "risk": "P0 premature manual_selection publication; partial sibling Entry/checkbox mutation; approximate near-XY owner capture",
+    "fix": "prevalidate OCR; in-memory stage all sibling/target decisions before model mutation; strict candidate_id-owned entry matching and exact-source-pixel occupancy refusal; defer choice sidecar until PDIC, rollback prepublication in-memory state and quarantine mixed/postreplace outcomes",
+    "limitations": "Optimistic byte origin and per-file atomic replacement not OS CAS; no multi-file powerloss atomicity; actual Windows E3, Undo/Redo 20, FocusOut, PDIC/PPP/SECTION/crop NOT PERFORMED",
+    "latest_ci": "pending (look up GitHub exact PR #663 head)"
   }
 }

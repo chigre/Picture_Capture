@@ -104,3 +104,49 @@ Targeted tests cover external PDIC/manual edits, post-replace exceptions,
 pre-replace retry, subsequent refusal, normal coalesced save and direct-save
 preflight/quarantine. This is an **optimistic** check, not OS CAS nor a
 power-loss / cross-file atomic transaction. Human E3 is still NOT PERFORMED.
+
+## G1 candidate choice + position-switch grouped source ownership (2026-10-29)
+
+One R3 UI owner `ui/review_selection_workflow.py`, no new persistence
+protocol or root facades. **Fail-first** regression HEAD
+`b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b`:
+[CI #40750612646](https://github.com/chigre/Picture_Capture/actions/runs/40750612646)
+Ubuntu Python 3.13 reports **7 new failures, 4,722 passed, 3 skipped**
+(invalid OCR confidence/y/score, choice manual-first then PDIC disk full,
+sibling override writer fault, foreign human sidecar between siblings,
+timer failure). These were executable failures, not extrapolated from source.
+
+Prior `apply_candidate_choice` immediately committed manual_selection
+before parsing alternative OCR numeric fields and before PDIC could save.
+A malformed OCR choice or PDIC failure left a manual-only persisted decision.
+The position-switch callback mutated sibling Entry, selected flag and checkbox
+before its second manual override could fail; a source race could leave
+a partial in-memory switch. The first staged implementation encountered a
+legacy V2.8.18 fixture failure because approximate OCR entry lookup tried to
+use the original sibling Entry as the target *before* sibling removal,
+which is a genuine ownership ambiguity, not a reason to relax the guard.
+
+The owner now pre-validates alternatives; stages candidate/sibling human
+decisions together only in memory; requires a unique candidate_id and a
+strictly candidate_id-owned Entry (no nearby X/Y ownership guessing), and
+rejects foreign/anonymous rows occupying the candidate's exact source X/Y.
+Only then can it update the shared candidate/Entry/checkbox state. Staging
+failure restores the prior queued human decisions/evidence without modifying
+third-party saved bytes. A deferred timer/widget failure restores the old
+membership and forbids stale retries. Immediate candidate choice defers
+manual_selection until the existing guarded PDIC save. Before-PDIC failure
+restores the prior UI decision and pending state; PDIC-committed/manual-failed
+or postreplace uncertainty remains quarantined and needs human reconciliation.
+No OS-level cross-file CAS, three-file atomicity or power-loss durability
+is claimed. The **actual source-pixel X/Y** is used; no visual-neighbor
+lookup is authorized for candidate-owned mutation.
+
+`tests/test_g1_candidate_choice_position_switch_transaction_20261029.py`
+exercises input failures, writer injection, external manual race,
+position-switch staging/scheduler failures, neighboring-owner ambiguity,
+normal choice/position switch, postreplace quarantine, and pending
+ReviewWindow Undo refusal. Historical original-Y switch contract in
+`tests/test_core.py` is preserved with a more informative assertion
+on failures. This is E2 synthetic only; real Windows dictionary
+checkbox/20-step Undo/Redo, FocusOut, source crop, PDIC/PPP/SECTION and
+R2 W1-W11 remain **NOT PERFORMED**. Keep #503/#562 Open, #663 Draft.

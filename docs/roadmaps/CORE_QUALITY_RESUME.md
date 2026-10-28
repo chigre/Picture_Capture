@@ -1,3 +1,30 @@
+## 2026-10-29｜G1 OCR candidate choice + 原图 Y 位置切换（此节为最新执行接力）
+
+本次仅在 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) 内处理
+`ui/review_selection_workflow.py` 一个 UI owner 的真实顺序错误：
+人工 candidate choice 曾在 OCR 数值校验和 PDIC 保存前先落盘 manual_selection，
+位置切换在兄弟候选完整暂存前就撤掉 Entry/checkbox。
+先提交回归 HEAD `b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b`，
+[CI 40750612646](https://github.com/chigre/Picture_Capture/actions/runs/40750612646)
+Ubuntu/Python3.13 **7 failed / 4722 passed / 3 skipped**，均为新故障注入反例。
+随后修复为先校验、候选和兄弟人工作业内存批量暂存、严格
+`candidate_id` 归属（禁止附近 X/Y 认领）、PDIC 优先持久化，
+失败则依磁盘实际字节恢复 UI 或隔离不确定状态，**不擅自覆盖第三方人工字节**。
+测试覆盖健康流程、写前/写后错误、外部人工竞争、旧版原始 Y 切换和
+ReviewWindow 未提交时不准 Undo。详见
+`docs/architecture/R3_G1_MANUAL_SELECTION_ORIGIN_AND_CHECKBOX_20261029.md`。
+
+以 GitHub **最新 #663 HEAD 的 exact-head 六平台 CI/Risk、OCR 3 OS、
+CodeQL Python/Actions** 为本包完成证据；queued、skipped、旧 SHA 通过均不可计入。
+本节是新代码/测试提交记录，不能代替最新 CI 或 R3 真人 E3。
+#663 保持 Draft/Open/Unmerged；#503/#562/#483 均不因合成测试关闭，
+真实 Windows candidate/Undo/Redo×20/FocusOut、PDIC/PPP/SECTION、原图裁切
+和 R2 W1–W11 **NOT PERFORMED**。先审查最终 CI，若失败只修本包。
+若通过，下一安全包是剩余 FocusOut/自动保存和 ReviewWindow 历史
+交叉边界；无复现实证则只读阻塞而非机械迁移。
+
+---
+
 ## 2026-10-28｜v1.3.0 全库复审后唯一执行入口（取代以下旧接力状态）
 
 **从现在起仅推进 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)**，同时跟踪 [#503](https://github.com/chigre/Picture_Capture/issues/503) R3 与 [#562](https://github.com/chigre/Picture_Capture/issues/562) 架构；旧 #664 关闭未合并，完整提交历史通过双父合并 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac` 纳入 #663。旧文本中「新建 #503 实施 PR」「#542 仍当前 PR」「重新从 B0 启动」均为历史，不再作为可执行指令。
