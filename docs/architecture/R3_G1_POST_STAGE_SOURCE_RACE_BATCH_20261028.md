@@ -51,3 +51,21 @@ power-loss durability, or true Windows human verification is claimed.
 Real dictionary candidate checkbox, 20× Undo/Redo, FocusOut/autosave,
 PDIC/PPP/SECTION/crop/source X/Y, close/reopen and #483 W1–W11 are
 **NOT PERFORMED**. #663 remains Draft/Open/Unmerged; R8 remains deferred.
+
+
+## Additional fail-closed recovery schema check (same Draft PR)
+
+During a post-stage source audit, the transient R3 journal decoder accepted a
+file record with omitted `before` or `after` and silently interpreted it as
+`None` (an absent file). A JSON boolean `version: true` also passed as
+schema version 1 because Python booleans compare equal to integers. Such
+corrupt or partially reconstructed records must not count as a committed
+before/after state. The recovery decoder now requires each file record's
+explicit `role`, `before` and `after` keys and an actual integer
+version 1 or 2. A missing field or boolean version raises `ValueError`,
+leaves the marker in place and performs no PDIC/sidecar write.
+
+Four synthetic post-publication fault-injection cases assert byte-exact
+quarantine for each malformed form. These tests are **not** evidence of
+real-dictionary scanning or OS-level atomicity. Actual Windows operator
+acceptance remains OPEN / NOT PASSED, and PR #663 remains Draft.
