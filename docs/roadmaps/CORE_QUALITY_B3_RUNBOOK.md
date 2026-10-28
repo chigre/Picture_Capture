@@ -1,3 +1,13 @@
+## 2026-10-28｜G1 普通校对成对保存：缓存来源与人工 JSON 无损合同
+
+- 生产缺口：`snapshot_review` 只证明**快照创建时**的 sidecar 磁盘字节，`review_bundle.commit_review_bundle` 却直接用本窗口较早缓存的行来覆盖它。如果另一校对者修改 sidecar 在快照之前（而缓存读取在修改之前），所有已有的后续字节复核仍可通过，导致第三方人工文字丢失。
+- 在成对保存前要求缓存原始路径及原始字节 pin 与冻结磁盘快照一致，并再次比对磁盘内容；没有来源 pin 即 fail-closed。健康的首次缓存加载会自动建立 pin，成功提交后更新 pin；不更改 Tk/主窗口公开接口。
+- 第二类关联风险：UI 的 `read_records` 为展示而容忍重复 X/Y、重复字段、未知人工字段和损坏 JSON，写盘规范化会静默丢弃这些数据。将无损源 JSON 验证集中到 `simplified_review.validate_source_for_rewrite`，供普通 PDIC+simplified bundle 与独立简体安全写盘共同调用；允许标准格式，拒绝来源不明确数据，不自动删除/迁移人工字段。
+- 回归在 `tests/test_b3_review_bundle_save_20261017.py`：快照前外部同一行／其他行／删除、重复坐标和字段、非数值/布尔坐标、未知人工元数据、丢字段/错误页、正常兼容保存及缺失 pin。文档见 `docs/architecture/R3_G1_REVIEW_BUNDLE_SIDECAR_ORIGIN_AND_SEMANTIC_LOSS_20261028.md`。
+- 新提交 exact-head 六平台 CI、Risk-tier、OCR3 OS、CodeQL 尚待实际完成；跨文件 OS CAS/断电持久性与真实 Windows 候选/Undo×20/Redo×20/PDIC/PPP/SECTION/source XY/crop/#483 W1–W11 **OPEN / NOT PERFORMED**。
+
+---
+
 ## 2026-10-28｜G1 普通词条删除：首次 CI 合同修复
 
 - HEAD `e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d` 的六平台 CI [#40696349131](https://github.com/chigre/Picture_Capture/actions/runs/40696349131) 首个 Ubuntu Job 报 12 个失败：9 个新故障/正常场景因错误相对导入 `ui.review_bundle` 而无法进入测试主体；另 3 个历史静态用例仍要求旧的直接 `save_pdic`、按值 `entries.remove` 和未跟踪跨文件人工作业来源的读回条件。

@@ -43,6 +43,9 @@ def case(tmp_path):
         _filter_rows_active=False, _bound_row_entries=lambda: app.entries,
         _simplified_page_cache={page.stem: records},
         _simplified_dirty_pages={page.stem},
+        _r3_simplified_source_bytes={page.stem: (
+            simplified_review_path_for_image(page).resolve(), None,
+        )},
         simplified_manual_flags=[True], simplified_actual_values=["manual"],
         _simplified_page_records=lambda stem: review._simplified_page_cache[stem],
     )
@@ -130,3 +133,152 @@ def test_r2_opt_in_source_can_commit_but_undo_remains_denied(tmp_path):
         commit_review_bundle(review, before)
     assert entry.word == "new"
     assert snapshot_review(review) is None
+
+
+def _seed_existing_sidecar(page, review):
+    from picture_capture.proofreading.simplified_review import write_records
+    path = simplified_review_path_for_image(page)
+    # Reuse the exact dict owned by case()._commit_edits so pending editor
+    # source-word changes are represented in the real proposal cache.
+    records = review._simplified_page_cache[page.stem]
+    records["10,20"]["text"] = "human edited text"
+    records["10,20"]["manual"] = True
+    write_records(path, page.stem, records)
+    review._r3_simplified_source_bytes[page.stem] = (
+        path.resolve(), path.read_bytes(),
+    )
+    return path
+
+
+@pytest.mark.parametrize("scenario", ["same_row", "extra_row", "external_deletion"])
+def test_external_human_edit_before_snapshot_never_uses_stale_review_cache(
+    tmp_path, scenario,
+):
+    """Late disk snapshot must NOT legitimize stale ReviewWindow cached rows."""
+    from picture_capture.proofreading.simplified_review import read_records, write_records
+    page, entry, review = case(tmp_path)
+    path = _seed_existing_sidecar(page, review)
+    old_pdic = pdic_path(page).read_bytes()
+    if scenario == "external_deletion":
+        path.unlink()
+        foreign = None
+    else:
+        changed = read_records(path)
+        if scenario == "same_row":
+            changed["10,20"]["text"] = "new external manual text"
+        else:
+            changed["50,60"] = {
+                "x": 50, "y": 60, "source_word": "foreign",
+                "text": "another person's note", "manual": True,
+            }
+        write_records(path, page.stem, changed)
+        foreign = path.read_bytes()
+    source = snapshot_review(review)  # snapshot is LATER than external edit
+    assert source is not None
+    assert source.simplified_bytes == foreign
+    with pytest.raises(RuntimeError, match="缓存来源"):
+        with protect_review_pdic_commit(review):
+            review._commit_edits()
+            commit_review_bundle(review, source)
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert (path.read_bytes() if path.exists() else None) == foreign
+    assert entry.word == "old"
+    assert not _recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("bad", [
+    "duplicate_coordinate", "unknown_entry_field", "unknown_top_field",
+    "missing_entry_field", "bool_coordinate", "string_coordinate",
+    "duplicate_json_member", "nan_literal", "wrong_page",
+])
+def test_unowned_human_sidecar_semantics_refuse_both_bundle_and_direct_save(
+    tmp_path, bad,
+):
+    """Display-normalized records cannot erase unparseable/ambiguous human data."""
+    import json
+    from picture_capture.proofreading.simplified_review import (
+        guarded_write_records, read_records,
+    )
+    page, entry, review = case(tmp_path)
+    path = _seed_existing_sidecar(page, review)
+    doc = json.loads(path.read_text("utf-8"))
+    row = doc["entries"][0]
+    if bad == "duplicate_coordinate":
+        doc["entries"].append(dict(row, text="other human edit"))
+    elif bad == "unknown_entry_field":
+        row["human_comment"] = "DO NOT LOSE"
+    elif bad == "unknown_top_field":
+        doc["manual_note"] = "DO NOT LOSE"
+    elif bad == "missing_entry_field":
+        del row["manual"]
+    elif bad == "bool_coordinate":
+        row["x"] = True
+    elif bad == "string_coordinate":
+        row["x"] = "10"
+    elif bad == "wrong_page":
+        doc["page"] = "another-page"
+    if bad == "duplicate_json_member":
+        raw = path.read_bytes().replace(b'"page":', b'"page":"shadow", "page":', 1)
+    elif bad == "nan_literal":
+        raw = path.read_bytes().replace(b'"format_version": 1', b'"format_version": NaN')
+    else:
+        raw = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+    path.write_bytes(raw)
+    # UI display reader is intentionally permissive; it may already have
+    # discarded unknown fields. Pin still matches bytes, so semantic guard is
+    # necessary in addition to version pinning.
+    review._simplified_page_cache[page.stem] = read_records(path)
+    review._r3_simplified_source_bytes[page.stem] = (path.resolve(), raw)
+    original_pdic = pdic_path(page).read_bytes()
+    snapshot = snapshot_review(review)
+    assert snapshot is not None
+    with pytest.raises(RuntimeError, match="简体人工"):
+        with protect_review_pdic_commit(review):
+            review._commit_edits()
+            commit_review_bundle(review, snapshot)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert path.read_bytes() == raw
+    assert entry.word == "old"
+    assert not _recovery_path(page).exists()
+    with pytest.raises(RuntimeError, match="简体人工"):
+        guarded_write_records(page, path, page.stem, read_records(path), raw)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert path.read_bytes() == raw
+    assert not _recovery_path(page).exists()
+
+
+def test_healthy_existing_human_sidecar_and_matching_pin_commits_without_loss(tmp_path):
+    from picture_capture.proofreading.simplified_review import read_records
+    page, entry, review = case(tmp_path)
+    path = _seed_existing_sidecar(page, review)
+    before = read_records(path)
+    old_bytes = path.read_bytes()
+    source = snapshot_review(review)
+    assert source is not None and source.simplified_bytes == old_bytes
+    with protect_review_pdic_commit(review):
+        review._commit_edits()
+        commit_review_bundle(review, source)
+    updated = read_records(path)
+    assert updated["10,20"]["text"] == before["10,20"]["text"]
+    assert updated["10,20"]["manual"] is True
+    assert updated["10,20"]["source_word"] == "new"
+    assert b"new#" in pdic_path(page).read_bytes()
+    assert review._r3_simplified_source_bytes[page.stem] == (
+        path.resolve(), path.read_bytes(),
+    )
+    assert not _recovery_path(page).exists()
+
+
+def test_missing_pin_does_not_allow_a_prepopulated_legacy_cache_to_be_saved(tmp_path):
+    page, entry, review = case(tmp_path)
+    path = _seed_existing_sidecar(page, review)
+    before = path.read_bytes()
+    review._r3_simplified_source_bytes.clear()
+    snapshot = snapshot_review(review)
+    with pytest.raises(RuntimeError, match="缓存来源"):
+        with protect_review_pdic_commit(review):
+            review._commit_edits()
+            commit_review_bundle(review, snapshot)
+    assert entry.word == "old"
+    assert path.read_bytes() == before
+    assert not _recovery_path(page).exists()

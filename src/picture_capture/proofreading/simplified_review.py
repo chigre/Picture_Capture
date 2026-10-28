@@ -81,6 +81,44 @@ def write_records(path: Path, page: str, records: dict[str, dict]) -> None:
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
 
+
+def validate_source_for_rewrite(raw: bytes | None, stem: str) -> None:
+    """Reject sidecars that display-only normalization would irreversibly lose."""
+    if raw is None:
+        return
+    from .candidate_delete import _load_unambiguous_json
+
+    try:
+        doc = _load_unambiguous_json(raw)
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise RuntimeError("R3 简体人工副本无法无损解析，拒绝规范化覆盖") from exc
+    if (
+        not isinstance(doc, dict)
+        or set(doc) != {"format", "format_version", "page", "entries"}
+        or doc.get("format") != "picture_capture_simplified_review"
+        or type(doc.get("format_version")) is not int
+        or doc["format_version"] != FORMAT_VERSION
+        or doc.get("page") != stem
+        or not isinstance(doc.get("entries"), list)
+    ):
+        raise RuntimeError("R3 简体人工副本格式或人工扩展字段不明确，拒绝覆盖")
+    seen: set[tuple[int, int]] = set()
+    for row in doc["entries"]:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"x", "y", "source_word", "text", "manual"}
+            or type(row["x"]) is not int or type(row["y"]) is not int
+            or not isinstance(row["source_word"], str)
+            or not isinstance(row["text"], str)
+            or type(row["manual"]) is not bool
+        ):
+            raise RuntimeError("R3 简体人工行存在无法保留的字段或坐标，拒绝覆盖")
+        key = (row["x"], row["y"])
+        if key in seen:
+            raise RuntimeError("R3 简体人工行有重复原图坐标，拒绝覆盖")
+        seen.add(key)
+
+
 def guarded_write_records(
     page: Path, path: Path, stem: str, records: dict[str, dict],
     expected: bytes | None, *, writer=None,
@@ -90,7 +128,6 @@ def guarded_write_records(
     Optimistic check + O_EXCL intent is not atomic cross-process file CAS.
     """
     from tempfile import TemporaryDirectory
-    from .candidate_delete import _load_unambiguous_json
     from . import transactions as tx
 
     page, path = Path(page), Path(path)
@@ -100,20 +137,7 @@ def guarded_write_records(
         raise RuntimeError("R3 存在其他事务恢复标记或页面已改变")
     if tx._bytes_or_absent(path) != expected:
         raise RuntimeError("R3 简体人工副本由其他人修改，拒绝覆盖")
-    if expected is not None:
-        # The UI reader tolerates corrupt legacy data for display; a writer
-        # must not silently collapse duplicated human JSON or invalid data.
-        try:
-            original_doc = _load_unambiguous_json(expected)
-        except (UnicodeError, ValueError, TypeError) as exc:
-            raise RuntimeError("R3 简体人工副本不能无损解析，拒绝覆盖") from exc
-        if (not isinstance(original_doc, dict)
-                or original_doc.get("format") != "picture_capture_simplified_review"
-                or type(original_doc.get("format_version")) is not int
-                or original_doc["format_version"] != FORMAT_VERSION
-                or original_doc.get("page") != stem
-                or not isinstance(original_doc.get("entries"), list)):
-            raise RuntimeError("R3 简体人工副本格式不可信，拒绝覆盖")
+    validate_source_for_rewrite(expected, stem)
 
     with TemporaryDirectory(prefix="pc-r3-simplified-") as directory:
         proposal = Path(directory) / "proposal.json"

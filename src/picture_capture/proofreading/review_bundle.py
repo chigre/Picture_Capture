@@ -17,7 +17,7 @@ from .transactions import (
     _bytes_or_absent, _publish, _recovery_path, _rollback_failed_publish,
     _stage_recovery, _snapshot_sources_match,
 )
-from .simplified_review import write_records
+from .simplified_review import validate_source_for_rewrite, write_records
 
 
 def commit_review_bundle(review: Any, source) -> None:
@@ -40,6 +40,17 @@ def commit_review_bundle(review: Any, source) -> None:
     if _recovery_path(page).exists() or not sources_match():
         raise RuntimeError("R3 原图/PDIC/人工决定指纹变化或存在恢复标记，拒绝保存")
 
+    # A disk snapshot may be newer than this ReviewWindow's cached human text.
+    # Both versions must match BEFORE writing any canonical file.
+    records = review._simplified_page_records(page.stem)
+    pinned = getattr(review, "_r3_simplified_source_bytes", {}).get(page.stem)
+    if (pinned is None or pinned[0] != simplified.resolve()
+            or pinned[1] != source.simplified_bytes):
+        raise RuntimeError("R3 简体缓存来源与本次人工副本快照不一致，拒绝覆盖")
+    validate_source_for_rewrite(source.simplified_bytes, page.stem)
+    if not sources_match():
+        raise RuntimeError("R3 简体来源验证期间文件变化，拒绝保存")
+
     app._sort_entries_reading_order()
     # Use the actual production serializers for byte-exact Windows/macOS/Linux
     # representation; preview files are transient and never overwrite PDIC.
@@ -50,7 +61,7 @@ def commit_review_bundle(review: Any, source) -> None:
             proposal_pdic, app.entries, int(app.image.width), app.pages_tuple(),
         )
         write_records(
-            proposal_sidecar, page.stem, review._simplified_page_records(page.stem),
+            proposal_sidecar, page.stem, records,
         )
         target_pdic = proposal_pdic.read_bytes()
         target_sidecar = proposal_sidecar.read_bytes()

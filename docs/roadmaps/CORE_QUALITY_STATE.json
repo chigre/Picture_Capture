@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T13:29:58.920Z",
+  "updated_at_utc": "2026-10-28T13:49:10.362Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_plain_non_candidate_delete_bundle_CI_contract_repair",
+    "active_work_item": "G1_review_bundle_cache_disk_provenance_and_semantic_loss_guard",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d",
+    "implementation_head_sha": "4add61c3090405cf2cbdc098a1b4f61eae754050",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Rerun final exact-head six-platform CI, Risk-tier, OCR 3 OS, CodeQL after import+static contract repair; fix any subsequent real behavior failures in this same packet. E3 NOT PERFORMED.",
-    "last_test_evidence": "Source packet #663@e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d CI #40696349131 first Ubuntu test 12 failures: 9 new tests blocked by incorrect relative import picture_capture.ui.review_bundle; 3 legacy static checks required unsafe direct save/by-value remove/old readback. Correct import and preserve tests by updating assertions for paired journal, identity and per-role source rechecks. New exact HEAD pending. OCR #40696349123 3/3 success; CodeQL #40696341227 in progress.",
+    "required_next_action": "Check exact new head 6-platform CI+Risk gate, OCR 3 OS and CodeQL; fix any test-contract/real regressions in same source provenance packet. Real E3 OPEN.",
+    "last_test_evidence": "Baseline PR #663@4add61c3090405cf2cbdc098a1b4f61eae754050 CI #40697171882 success 6/6+Risk-tier gate, OCR #40697171800 3/3, CodeQL #40697163893 2/2. New late-snapshot sidecar owner packet needs exact-HEAD CI. Genuine Windows E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1269,5 +1269,36 @@
       ],
       "repair": "Fix module import without changing recovery design; retain historical tests and update them to assert paired bundle, identity deletion, and published-role source validation."
     }
+  },
+  "g1_review_bundle_sidecar_provenance_20261028": {
+    "status": "source_and_failure_matrix_submitted_exact_head_ci_pending",
+    "before_head_sha": "4add61c3090405cf2cbdc098a1b4f61eae754050",
+    "owner_files": [
+      "src/picture_capture/proofreading/review_bundle.py",
+      "src/picture_capture/proofreading/simplified_review.py"
+    ],
+    "regression_file": "tests/test_b3_review_bundle_save_20261017.py",
+    "architecture_doc": "docs/architecture/R3_G1_REVIEW_BUNDLE_SIDECAR_ORIGIN_AND_SEMANTIC_LOSS_20261028.md",
+    "risk": "A late snapshot_review may freeze updated human disk JSON while ReviewWindow keeps old simplified text, enabling silent lost updates. Permissive read_records collapses duplicate coordinates/unknown fields upon canonical write.",
+    "fix": "Require pinned UI cache source path+bytes to match frozen snapshot before paired commit; centralize strict semantic sidecar source validation across paired bundle and independent guarded sidecar writer; refuse any rewrite that drops ambiguous human records.",
+    "test_matrix": [
+      "external same-row manual edit before snapshot",
+      "external unrelated-row human edit before snapshot",
+      "external deletion before snapshot",
+      "duplicate coordinate",
+      "unknown row or top-level human metadata",
+      "missing fields and unexpected coordinate types",
+      "duplicate JSON keys and nonfinite values",
+      "wrong source page",
+      "normal existing human sidecar and source pin advance",
+      "missing source provenance"
+    ],
+    "baseline": {
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40697171882",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40697171800",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40697163893"
+    },
+    "previous_evidence": "Source packet #663@e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d CI #40696349131 first Ubuntu test 12 failures: 9 new tests blocked by incorrect relative import picture_capture.ui.review_bundle; 3 legacy static checks required unsafe direct save/by-value remove/old readback. Correct import and preserve tests by updating assertions for paired journal, identity and per-role source rechecks. New exact HEAD pending. OCR #40696349123 3/3 success; CodeQL #40696341227 in progress.",
+    "limits": "Optimistic byte pin is not atomic OS CAS; no operator E3 or power-loss cross-file durability evidence."
   }
 }
