@@ -196,3 +196,24 @@ def test_position_switch_failed_deferred_scheduling_restores_memory_and_pending(
     assert _snapshot(app, manual) == before
     assert app._pending_manual_override_payload is None
     assert messages and "候选" in messages[-1]
+
+def test_position_switch_never_adopts_nearby_sibling_entry_without_candidate_id(tmp_path):
+    app, deps, page, manual, refined, original, messages = _scene(tmp_path)
+    former = app.entries[0]
+    # The old read-side OCR lookup can map a nearby Y to the wrong Entry.
+    # Destructive selection must never call that approximate lookup.
+    app._entry_for_candidate = lambda candidate: former
+    assert selection.set_candidate_selected(app, deps, original, True) is True
+    assert former not in app.entries
+    assert len(app.entries) == 1 and app.entries[0].candidate_id == "original"
+    assert app.entries[0].y == 35
+    assert app.candidate_check_vars["refined"].get() is False
+
+
+def test_new_choice_refuses_foreign_entry_at_identical_source_pixels(tmp_path):
+    app, deps, page, manual, refined, original, messages = _scene(tmp_path)
+    original["source_y"] = 20
+    before = _snapshot(app, manual)
+    selection.apply_candidate_choice(app, deps, original, "paddle", "foreign choice")
+    assert _snapshot(app, manual) == before
+    assert messages and "坐标" in messages[-1]

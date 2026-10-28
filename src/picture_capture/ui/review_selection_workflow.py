@@ -431,6 +431,34 @@ def _restore_pending_evidence(self, previous: tuple[bool, object]) -> None:
         self.__dict__.pop("_pending_evidence_toggle", None)
 
 
+def _owned_entry_for_candidate(self, cand: dict):
+    """Return only a uniquely candidate_id-owned Entry; never infer via near X/Y.
+
+    Read-only OCR menu lookup permits approximate visual matching, but a
+    destructive position switch/choice cannot adopt a neighboring headword.
+    """
+    cid = str(cand.get("candidate_id") or "")
+    if not cid:
+        raise RuntimeError("候选缺少可信唯一 ID")
+    owners = [
+        row for row in self.entries
+        if str(getattr(row, "candidate_id", "") or "") == cid
+    ]
+    if len(owners) != 1 and owners:
+        raise RuntimeError("同一候选 ID 关联多条词头，拒绝误归属")
+    if owners:
+        return owners[0]
+    # No verified owner: do not create a second Entry at an occupied
+    # coordinate under a different/legacy blank candidate_id.
+    try:
+        xy = (int(cand.get("source_x", 0)), int(cand.get("source_y", 0)))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("候选缺少可信原图 X/Y") from exc
+    if any((int(row.x), int(row.y)) == xy for row in self.entries):
+        raise RuntimeError("候选原图坐标已由其他或无主词头占用")
+    return None
+
+
 def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected: bool) -> bool:
     WordEntry = deps.WordEntry
     if not self._claim_page_for_manual_edit():
@@ -484,7 +512,7 @@ def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected
     self._sync_entry_editor_texts()
     pending_before = _remember_pending_manual(self)
     try:
-        entry = self._entry_for_candidate(cand)
+        entry = _owned_entry_for_candidate(self, cand)
         planned_entry = entry
         if selected and entry is None:
             # Parse untrusted OCR numeric fields BEFORE staging any sibling
@@ -544,7 +572,7 @@ def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected
     added_entries: list[WordEntry] = []
     try:
         for sibling in siblings:
-            sibling_entry = self._entry_for_candidate(sibling)
+            sibling_entry = _owned_entry_for_candidate(self, sibling)
             if sibling_entry is not None and sibling_entry in self.entries:
                 self.entries.remove(sibling_entry)
                 removed_entries.append(sibling_entry)
@@ -649,7 +677,11 @@ def apply_candidate_choice(
         return
 
     self._sync_entry_editor_texts()
-    old_entry = self._entry_for_candidate(cand)
+    try:
+        old_entry = _owned_entry_for_candidate(self, cand)
+    except RuntimeError as exc:
+        self.status_var.set(f"候选未更改：{exc}")
+        return
     original_entries = list(self.entries)
     original_candidate = deepcopy(cand)
     pending_before = _remember_pending_manual(self)
