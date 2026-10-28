@@ -111,17 +111,38 @@ def _read_manual_overrides(self, deps: ReviewSelectionDeps) -> dict:
     return payload
 
 
+def verify_pending_manual_source(self, page_stem: str) -> None:
+    """Read-only preflight before *any* PDIC publication paired with a manual edit.
+
+    Do not clear pending edits on failure. This is an optimistic source guard,
+    not a cross-file CAS; races after the check must still be quarantined.
+    """
+    state = self.__dict__
+    path = state.get("_pending_manual_override_path")
+    payload = state.get("_pending_manual_override_payload")
+    origin = state.get("_pending_manual_override_origin")
+    if path is None and payload is None and origin is None:
+        return
+    if (
+        not isinstance(path, Path)
+        or not isinstance(payload, dict)
+        or payload.get("page") != page_stem
+        or not isinstance(origin, tuple) or len(origin) != 2
+        or origin[0] != path.resolve()
+    ):
+        raise RuntimeError("R3 延迟人工选择页归属或来源锁定不可信，拒绝 PDIC 保存")
+    raw, _ = _validated_manual_selection(path, page_stem)
+    if raw != origin[1] or _bytes_or_absent(path) != origin[1]:
+        raise RuntimeError("R3 人工选择来源已被其他人修改，拒绝 PDIC 保存")
+
+
 def _flush_pending_manual_override(self, deps: ReviewSelectionDeps) -> None:
     path = self.__dict__.get("_pending_manual_override_path")
     payload = self.__dict__.get("_pending_manual_override_payload")
     if path is None or payload is None:
         return
-    source_pin = self.__dict__.get("_pending_manual_override_origin")
-    if source_pin is None or source_pin[0] != path.resolve():
-        raise RuntimeError("R3 延迟候选人工选择缺少可信来源，拒绝保存")
-    raw, _ = _validated_manual_selection(path, str(payload.get("page", "")))
-    if raw != source_pin[1]:
-        raise RuntimeError("R3 人工候选选择文件已被其他人修改，拒绝覆盖")
+    verify_pending_manual_source(self, str(payload.get("page", "")))
+    source_pin = self.__dict__["_pending_manual_override_origin"]
     # A same-file atomic replace avoids truncating the original on I/O
     # failure. Byte preflight is optimistic, NOT an OS atomic compare-and-swap.
     encoded = deps.json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -347,6 +368,20 @@ def _schedule_deferred_page_save(self, deps: ReviewSelectionDeps, *, sync_editor
     # duplicate widget walk here.
     if sync_editors:
         self._sync_entry_editor_texts()
+    old_snapshot = self.__dict__.get("_deferred_save_snapshot")
+    old_pin = self.__dict__.get("_deferred_save_pdic_origin")
+    if old_snapshot is not None:
+        if (
+            old_snapshot[0] != current_page
+            or not isinstance(old_pin, tuple) or len(old_pin) != 2
+            or old_pin[0] != current_page
+        ):
+            raise RuntimeError("R3 旧页延迟 PDIC 来源未完成，拒绝改写新页")
+        source_pin = old_pin
+    else:
+        # Freeze the *first* checkbox's PDIC bytes. Coalesced same-page
+        # clicks must never refresh the pin to an intervening writer's file.
+        source_pin = (current_page, _bytes_or_absent(deps.pdic_path(current_page)))
     snapshot = (
         current_page,
         [replace(entry) for entry in self.entries],
@@ -356,6 +391,7 @@ def _schedule_deferred_page_save(self, deps: ReviewSelectionDeps, *, sync_editor
     )
     self._deferred_save_page = current_page
     self._deferred_save_snapshot = snapshot
+    self._deferred_save_pdic_origin = source_pin
     deferred_job = self.__dict__.get("_deferred_save_job")
     if deferred_job is not None:
         try:

@@ -49,6 +49,20 @@ def save_pdic(self, silent: bool = False, sync_editors: bool = True, *, deps: di
         raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
     if self.__dict__.get("_deferred_save_uncertain", False):
         raise RuntimeError("R3 PDIC write outcome uncertain; reload/recover before saving")
+    # A queued checkbox's manual source and original PDIC must be intact
+    # before any regular save can consume the same in-memory edits.
+    from .review_selection_workflow import verify_pending_manual_source
+    from ..proofreading.transactions import _bytes_or_absent
+    verify_pending_manual_source(self, self.current_page.stem)
+    pending = self.__dict__.get("_deferred_save_snapshot")
+    pin = self.__dict__.get("_deferred_save_pdic_origin")
+    if pending is not None and pin is not None:
+        if (
+            not isinstance(pin, tuple) or len(pin) != 2
+            or pin[0] != self.current_page
+            or _bytes_or_absent(pdic_path(self.current_page)) != pin[1]
+        ):
+            raise RuntimeError("R3 当前 PDIC 已被其他人修改，拒绝覆盖延迟校对")
     # Commit live state; cancel any older queued checkbox snapshot.
     deferred_job = self.__dict__.get("_deferred_save_job")
     if deferred_job is not None:
@@ -68,8 +82,15 @@ def save_pdic(self, silent: bool = False, sync_editors: bool = True, *, deps: di
     self.__dict__["_deferred_save_snapshot"] = None
     self.__dict__["_deferred_save_page"] = None
     self.__dict__["_deferred_save_uncertain"] = False
+    self.__dict__.pop("_deferred_save_pdic_origin", None)
     self._last_pdic_write_changed = changed
-    self._flush_pending_manual_override()
+    try:
+        self._flush_pending_manual_override()
+    except Exception:
+        # PDIC has already committed; do not permit another stale PDIC
+        # publication while this human sidecar is unverified.
+        self.__dict__["_deferred_save_uncertain"] = True
+        raise
     self._flush_proofreading_candidate_evidence()
     self._flush_proofreading_add_evidence()
     if changed:

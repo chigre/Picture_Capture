@@ -83,3 +83,24 @@ engineering-verified.
 ## 2026-10-28 G1 / candidate-delete whole-page provenance closure
 
 `prepare_candidate_delete` formerly checked only the simplified row at the deleted X/Y and accepted coercible coordinates in unrelated human rows; it could reserialize a sidecar with string/float/bool coordinates, unknown human metadata, or a different source word for another live PDIC row. The candidate's manual-selection document also accepted an explicit unsupported `version` and rewrote it. The owner now reuses the existing `simplified_review.validate_source_word_binding` contract for the **entire** saved simplified document against frozen PDIC entries (strict coordinate types, no unknown fields/duplicates, exact source-word provenance), and rejects explicit non-v1 manual schema while retaining legacy version-absent input. These are pre-publication fail-closed checks: PDIC/manual/simplified bytes, Entry identity, checkbox and undo history stay untouched on rejection. Tests cover malformed and healthy legacy data. This is not an OS-level CAS, genuine Windows human acceptance, or a claim of cross-file atomicity.
+
+## G1 checkbox → delayed PDIC/manual publication boundary (2026-10-29)
+
+A new source-derived failure matrix found that `deferred_save.flush_deferred_page_save`
+wrote PDIC before checking the queued manual-selection bytes. A foreign human
+manual edit could therefore reject sidecar publication *after* PDIC had landed,
+with the queued snapshot already cleared. A PDIC writer that replaced data
+then raised could also leave a retryable stale snapshot. The regular
+`save_pdic` route had the same post-PDIC manual failure ambiguity.
+
+The UI owner now freezes the first checkbox's PDIC source bytes and retains
+that pin across coalesced clicks. Both regular and timer save preflight the
+pending human source before PDIC. Deferred writes reject stale PDIC bytes,
+preserve the queue on prepublication failure, and quarantine any write-then-
+raise or PDIC-committed/manual-failed state as `_deferred_save_uncertain`.
+Derived page-row metadata is refreshed only after both files commit.
+Existing PDIC/manual JSON formats and the Tk callback surface are unchanged.
+Targeted tests cover external PDIC/manual edits, post-replace exceptions,
+pre-replace retry, subsequent refusal, normal coalesced save and direct-save
+preflight/quarantine. This is an **optimistic** check, not OS CAS nor a
+power-loss / cross-file atomic transaction. Human E3 is still NOT PERFORMED.

@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "f0bbd51949520cb8c23af2f68f0ffa3fc14a602d",
+    "implementation_head_sha": "af5cc288239bfda27cabc72db6b9c98025e87ec1",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -59,7 +59,7 @@
       }
     ],
     "required_next_action": "Verify new exact-head six-platform CI+Risk gate, 3 OS OCR Smoke and CodeQL. If a real Tk/PDIC/manual bug appears, repair in the same G1 packet. E3 OPEN.",
-    "last_test_evidence": "First manual_selection source guard HEAD f0bbd51949520cb8c23af2f68f0ffa3fc14a602d CI #40731357381 completed failure 6/6 test jobs due to 1 common legacy test fixture lacking real project/current_page for newly mandatory source preflight; ~4700 other tests pass on each OS. Risk tier success, gate failure. CodeQL #40731349494 2/2 success; OCR #40731357507 Windows/Ubuntu succeeded, macOS queued. Repair legacy fixture to include a real synthetic page/path (preserving physical Y-switch assertions) pending new exact HEAD.",
+    "last_test_evidence": "Previous exact HEAD af5cc288239bfda27cabc72db6b9c98025e87ec1: CI #40742880719 completed success (six OS/Python), Risk-tier success; OCR #40742881834 3/3 completed success; CodeQL Python/Actions completed success; documentation architecture check skipped. New G1 checkbox PDIC/manual publication packet awaits its own exact-HEAD CI. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1390,7 +1390,7 @@
     }
   },
   "g1_candidate_delete_whole_page_source_20261028": {
-    "status": "code_committed_exact_head_ci_pending",
+    "status": "code_committed_exact_head_ci_success",
     "before_head_sha": "55f442135f7c178a18a2ffb447d3ee39d955f187",
     "owner_files": [
       "src/picture_capture/proofreading/candidate_delete.py"
@@ -1411,6 +1411,22 @@
       "normal owned candidate delete and undo/redo retained"
     ],
     "human_acceptance": "NOT_PERFORMED",
-    "limitations": "Synthetic-only, no OS-level multi-file CAS, no true Windows R3/PDIC/PPP/SECTION/source crop E3"
+    "limitations": "Synthetic-only, no OS-level multi-file CAS, no true Windows R3/PDIC/PPP/SECTION/source crop E3",
+    "verified_head_sha": "af5cc288239bfda27cabc72db6b9c98025e87ec1",
+    "exact_head_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40742880719",
+    "exact_head_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40742881834"
+  },
+  "g1_checkbox_pdic_manual_boundary_20261029": {
+    "status": "code_prepared_exact_head_ci_pending",
+    "before_head_sha": "af5cc288239bfda27cabc72db6b9c98025e87ec1",
+    "owner_files": [
+      "src/picture_capture/ui/review_selection_workflow.py",
+      "src/picture_capture/proofreading/deferred_save.py",
+      "src/picture_capture/ui/main_pdic_persistence.py"
+    ],
+    "test_file": "tests/test_b3_checkbox_pdic_manual_boundary_20261029.py",
+    "risk": "P0 foreign source overwrite / write-then-raise stale PDIC retry / mixed PDIC-manual publication",
+    "controls": "first-click PDIC source pin, full manual source preflight before PDIC, postwrite uncertainty quarantine, no premature metadata/snapshot clear",
+    "limitations": "optimistic bytes check only, no OS CAS, no directory fsync, no 3-file atomicity; human E3 and R2 W1-W11 remain NOT PERFORMED"
   }
 }
