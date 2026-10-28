@@ -400,95 +400,199 @@ def _schedule_deferred_page_save(self, deps: ReviewSelectionDeps, *, sync_editor
             pass
     self._deferred_save_job = self.after(self._deferred_save_delay_ms, self._flush_deferred_page_save)
 
+_PENDING_MANUAL_KEYS = (
+    "_pending_manual_override_path",
+    "_pending_manual_override_payload",
+    "_pending_manual_override_origin",
+)
+
+
+def _remember_pending_manual(self) -> dict:
+    """Retain an in-memory staging snapshot, never copy or rewrite disk bytes."""
+    return {
+        key: deepcopy(self.__dict__[key])
+        for key in _PENDING_MANUAL_KEYS if key in self.__dict__
+    }
+
+
+def _restore_pending_manual(self, previous: dict) -> None:
+    for key in _PENDING_MANUAL_KEYS:
+        if key in previous:
+            self.__dict__[key] = previous[key]
+        else:
+            self.__dict__.pop(key, None)
+
+
+def _restore_pending_evidence(self, previous: tuple[bool, object]) -> None:
+    present, value = previous
+    if present:
+        self.__dict__["_pending_evidence_toggle"] = value
+    else:
+        self.__dict__.pop("_pending_evidence_toggle", None)
+
+
 def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected: bool) -> bool:
     WordEntry = deps.WordEntry
     if not self._claim_page_for_manual_edit():
         return False
+    if self.__dict__.get("_deferred_save_uncertain", False):
+        self.status_var.set("候选未更改：当前页上次保存结果不确定，请先重开核对。")
+        return False
+    cid = str(cand.get("candidate_id") or "")
+    candidates = getattr(self, "ocr_review_candidates", ())
+    if (not cid or sum(
+            str(row.get("candidate_id") or "") == cid
+            for row in candidates if isinstance(row, dict)
+        ) != 1):
+        self.status_var.set("候选未更改：候选 ID 缺失或归属不唯一。")
+        return False
+    group = str(cand.get("position_group_id", ""))
+    siblings = [
+        row for row in candidates
+        if selected and group and row is not cand and isinstance(row, dict)
+        and str(row.get("position_group_id", "")) == group
+    ]
     try:
         if not _manual_override_preflight(self, cand):
             return False
-    except (OSError, ValueError, RuntimeError) as exc:
+        for sibling in siblings:
+            if not _manual_override_preflight(self, sibling):
+                return False
+        # An already queued checkbox owns the FIRST PDIC version. Failure
+        # must occur before changing any Entry, checkbox or candidate flag.
+        queued = self.__dict__.get("_deferred_save_snapshot")
+        if queued is not None:
+            pin = self.__dict__.get("_deferred_save_pdic_origin")
+            page = getattr(self, "current_page", None)
+            path_fn = getattr(deps, "pdic_path", None)
+            if (page is None or not callable(path_fn)
+                    or not isinstance(pin, tuple) or len(pin) != 2
+                    or pin[0] != page
+                    or _bytes_or_absent(path_fn(page)) != pin[1]):
+                raise RuntimeError("R3 先前延迟 PDIC 归属已变化")
+    except (OSError, ValueError, TypeError, RuntimeError) as exc:
         self.status_var.set(f"候选未更改：{exc}")
         return False
-    # A position switch may overwrite several sibling candidate decisions.
-    # Verify their existing human override owners before mutating *any*
-    # Entry, checkbox, or in-memory pending sidecar.
-    group_id_for_preflight = str(cand.get("position_group_id", ""))
-    if selected and group_id_for_preflight:
-        try:
-            for sibling in self.ocr_review_candidates:
-                if (sibling is not cand
-                        and str(sibling.get("position_group_id", "")) == group_id_for_preflight):
-                    if not _manual_override_preflight(self, sibling):
-                        return False
-        except (OSError, ValueError, RuntimeError) as exc:
-            self.status_var.set(f"候选未更改：{exc}")
-            return False
+
+    # Retain legacy R2 evidence order: pre-edit snapshot, editor sync, then
+    # manual staging. A refusal discards only this attempted evidence.
+    evidence_before = (
+        "_pending_evidence_toggle" in self.__dict__,
+        self.__dict__.get("_pending_evidence_toggle"),
+    )
     self._queue_proofreading_candidate_evidence(cand, selected)
-    # Commit every visible editor by object identity before changing the
-    # entries list. This prevents a middle-row removal from reassigning the
-    # following editor texts to earlier entries.
     self._sync_entry_editor_texts()
-    removed_entries: list[WordEntry] = []
-    added_entries: list[WordEntry] = []
-
-    # Refined-Y and original/anchor-Y fallback rows are two positions for
-    # the same physical headword. Selecting either is a one-click switch.
-    group_id = str(cand.get("position_group_id", ""))
-    if selected and group_id:
-        for sibling in self.ocr_review_candidates:
-            if sibling is cand or str(sibling.get("position_group_id", "")) != group_id:
-                continue
-            sibling_entry = self._entry_for_candidate(sibling)
-            if sibling_entry is not None and sibling_entry in self.entries:
-                self.entries.remove(sibling_entry)
-                removed_entries.append(sibling_entry)
-            sibling["selected"] = False
-            sibling_var = self.candidate_check_vars.get(str(sibling.get("candidate_id", "")))
-            if sibling_var is not None:
-                sibling_var.set(False)
-            self._write_manual_override(
-                sibling, selected=False,
-                word=str(sibling.get("word", "")), engine="position_switch", defer=True,
-            )
-
-    entry = self._entry_for_candidate(cand)
-    if selected:
-        if entry is None:
-            entry = WordEntry(
-                str(cand.get("word", "")), int(cand.get("source_x", 0)), int(cand.get("source_y", 0)),
+    pending_before = _remember_pending_manual(self)
+    try:
+        entry = self._entry_for_candidate(cand)
+        planned_entry = entry
+        if selected and entry is None:
+            # Parse untrusted OCR numeric fields BEFORE staging any sibling
+            # override or changing model membership.
+            planned_entry = WordEntry(
+                str(cand.get("word", "")),
+                int(cand.get("source_x", 0)), int(cand.get("source_y", 0)),
                 confidence=(float(cand.get("confidence")) if cand.get("confidence") is not None else None),
                 ocr_source=str(cand.get("final_engine", "manual")),
                 alphabetical_warning=str(cand.get("alphabetical_warning", "")),
-                candidate_id=str(cand.get("candidate_id", "")),
+                candidate_id=cid,
                 final_engine=str(cand.get("final_engine", "")),
                 issue_type=",".join(str(x) for x in cand.get("issue_types", []) or []),
                 parser_score=(float(cand.get("score")) if cand.get("score") is not None else None),
                 manually_selected=True,
             )
-            self.entries.append(entry)
-            added_entries.append(entry)
-        cand["selected"] = True
-    else:
-        if entry is not None and entry in self.entries:
-            self.entries.remove(entry)
-            removed_entries.append(entry)
-        cand["selected"] = False
-    self._sort_entries_reading_order()
-    self._write_manual_override(
-        cand, selected=selected,
-        word=(entry.word if entry else str(cand.get("word", ""))),
-        engine="manual_checkbox", defer=True,
-    )
-    target_var = self.candidate_check_vars.get(str(cand.get("candidate_id", "")))
-    if target_var is not None:
-        target_var.set(bool(selected))
+        # Every sibling/target decision must stage successfully as one
+        # in-memory payload before the first Tk or Entry membership mutation.
+        # No manual_selection bytes are published here; the existing paired
+        # deferred/regular PDIC writer owns final publication.
+        for sibling in siblings:
+            self._write_manual_override(
+                sibling, selected=False,
+                word=str(sibling.get("word", "")),
+                engine="position_switch", defer=True,
+            )
+        self._write_manual_override(
+            cand, selected=selected,
+            word=(planned_entry.word if planned_entry else str(cand.get("word", ""))),
+            engine="manual_checkbox", defer=True,
+        )
+        page = getattr(self, "current_page", None)
+        if page is not None:
+            verify_pending_manual_source(self, page.stem)
+    except (OSError, ValueError, TypeError, RuntimeError, AttributeError) as exc:
+        _restore_pending_manual(self, pending_before)
+        _restore_pending_evidence(self, evidence_before)
+        self.status_var.set(f"候选未更改：人工选择未能完整暂存，{exc}")
+        return False
 
-    # The data model is already final at this point. Only the affected entry
-    # overlay is changed; the cached background and unrelated editors stay
-    # untouched. Disk I/O is coalesced below.
-    self._update_entry_overlays_local(removed=removed_entries, added=added_entries)
-    self._schedule_deferred_page_save(sync_editors=False)
+    original_entries = list(self.entries)
+    original_selections = [
+        (row, "selected" in row, row.get("selected"))
+        for row in [cand, *siblings]
+    ]
+    original_checks = []
+    for row, _, _ in original_selections:
+        variable = getattr(self, "candidate_check_vars", {}).get(
+            str(row.get("candidate_id") or "")
+        )
+        if variable is not None:
+            try:
+                original_checks.append((variable, variable.get()))
+            except (ValueError, RuntimeError, AttributeError):
+                pass
+    removed_entries: list[WordEntry] = []
+    added_entries: list[WordEntry] = []
+    try:
+        for sibling in siblings:
+            sibling_entry = self._entry_for_candidate(sibling)
+            if sibling_entry is not None and sibling_entry in self.entries:
+                self.entries.remove(sibling_entry)
+                removed_entries.append(sibling_entry)
+            sibling["selected"] = False
+            sibling_var = self.candidate_check_vars.get(
+                str(sibling.get("candidate_id", ""))
+            )
+            if sibling_var is not None:
+                sibling_var.set(False)
+        if selected:
+            if entry is None:
+                self.entries.append(planned_entry)
+                added_entries.append(planned_entry)
+            cand["selected"] = True
+        else:
+            if entry is not None and entry in self.entries:
+                self.entries.remove(entry)
+                removed_entries.append(entry)
+            cand["selected"] = False
+        self._sort_entries_reading_order()
+        target_var = self.candidate_check_vars.get(cid)
+        if target_var is not None:
+            target_var.set(bool(selected))
+        self._update_entry_overlays_local(
+            removed=removed_entries, added=added_entries,
+        )
+        self._schedule_deferred_page_save(sync_editors=False)
+    except Exception as exc:
+        # A failed Tk row update/timer must not strand a partially switched
+        # physical headword or an in-memory staged sibling override.
+        self.entries[:] = original_entries
+        for row, had_selected, former in original_selections:
+            if had_selected:
+                row["selected"] = former
+            else:
+                row.pop("selected", None)
+        for variable, value in original_checks:
+            try:
+                variable.set(value)
+            except Exception:
+                pass
+        _restore_pending_manual(self, pending_before)
+        _restore_pending_evidence(self, evidence_before)
+        # A previous timer may already have been cancelled. Refuse further
+        # stale writes rather than guessing whether that callback survives.
+        self.__dict__["_deferred_save_uncertain"] = True
+        self.status_var.set(f"候选未更改：界面/延迟保存失败，请重开页面核对：{exc}")
+        return False
     variant = str(cand.get("position_variant", "refined"))
     if selected and variant in {"original", "anchor"}:
         self.status_var.set("已切回原始 Y / 图像锚点 Y")
@@ -496,43 +600,109 @@ def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected
         self.status_var.set("已使用精修 Y")
     return True
 
-def apply_candidate_choice(self, deps: ReviewSelectionDeps, cand: dict, engine: str, word: str) -> None:
+
+def apply_candidate_choice(
+    self, deps: ReviewSelectionDeps, cand: dict, engine: str, word: str,
+) -> None:
     WordEntry = deps.WordEntry
     if not self._claim_page_for_manual_edit():
+        return
+    if self.__dict__.get("_deferred_save_uncertain", False):
+        self.status_var.set("候选未更改：先前 PDIC/人工选择保存不确定，请重开页面核对。")
         return
     try:
         if not _manual_override_preflight(self, cand):
             return
-    except (OSError, ValueError, RuntimeError) as exc:
-        self.status_var.set(f"候选未更改：{exc}")
+        # OCR numerical metadata is not trusted: a malformed alternative
+        # must never publish a human decision before int/float conversion.
+        updated = dict(cand)
+        side = cand.get(engine, {}) if engine in {"paddle", "tesseract", "lens"} else {}
+        if side and not isinstance(side, dict):
+            raise ValueError("候选 OCR 替代字段格式不可信")
+        if side:
+            for key, attr, convert in (
+                ("y", "source_y", int),
+                ("confidence", "confidence", float),
+                ("score", "score", float),
+            ):
+                if side.get(key) is not None:
+                    updated[attr] = convert(side[key])
+        updated["word"] = word
+        updated["final_engine"] = engine
+        updated["selected"] = True
+        updated["decision_reason"] = "manual_review_choice"
+        issues = list(cand.get("issue_types", []) or [])
+        if "MANUAL_OVERRIDE" not in issues:
+            issues.append("MANUAL_OVERRIDE")
+        updated["issue_types"] = issues
+        new_entry = WordEntry(
+            word, int(updated.get("source_x", 0)),
+            int(updated.get("source_y", 0)),
+            confidence=(float(updated.get("confidence")) if updated.get("confidence") is not None else None),
+            ocr_source=engine, candidate_id=str(updated.get("candidate_id", "")),
+            final_engine=engine, issue_type=",".join(issues),
+            parser_score=(float(updated.get("score")) if updated.get("score") is not None else None),
+            manually_selected=True,
+        )
+    except (OSError, ValueError, TypeError, RuntimeError, AttributeError) as exc:
+        self.status_var.set(f"候选未更改：OCR 替代来源无效，{exc}")
         return
+
     self._sync_entry_editor_texts()
-    # Persist against the ORIGINAL candidate word before replacing its live
-    # owner. A source failure must not first rewrite the candidate/Entry UI.
-    self._write_manual_override(cand, selected=True, word=word, engine=engine)
-    side = cand.get(engine, {}) if engine in {"paddle", "tesseract", "lens"} else {}
-    if engine in {"paddle", "tesseract", "lens"} and side:
-        if side.get("y") is not None: cand["source_y"] = int(side.get("y"))
-        if side.get("confidence") is not None: cand["confidence"] = float(side.get("confidence"))
-        if side.get("score") is not None: cand["score"] = float(side.get("score"))
-    cand["word"] = word
-    cand["final_engine"] = engine
-    cand["selected"] = True
-    cand["decision_reason"] = "manual_review_choice"
-    issues = list(cand.get("issue_types", []) or [])
-    if "MANUAL_OVERRIDE" not in issues: issues.append("MANUAL_OVERRIDE")
-    cand["issue_types"] = issues
-    old = self._entry_for_candidate(cand)
-    if old is not None: self.entries.remove(old)
-    entry = WordEntry(
-        word, int(cand.get("source_x", 0)), int(cand.get("source_y", 0)),
-        confidence=(float(cand.get("confidence")) if cand.get("confidence") is not None else None),
-        ocr_source=engine, candidate_id=str(cand.get("candidate_id", "")), final_engine=engine,
-        issue_type=",".join(issues), parser_score=(float(cand.get("score")) if cand.get("score") is not None else None),
-        manually_selected=True,
-    )
-    self.entries.append(entry); self._sort_entries_reading_order()
-    self.save_pdic(silent=True); self.redraw()
+    old_entry = self._entry_for_candidate(cand)
+    original_entries = list(self.entries)
+    original_candidate = deepcopy(cand)
+    pending_before = _remember_pending_manual(self)
+    page = getattr(self, "current_page", None)
+    path_fn = getattr(deps, "pdic_path", None)
+    try:
+        if page is None or not callable(path_fn):
+            raise RuntimeError("候选选择缺少可信 PDIC 页面")
+        before_pdic = _bytes_or_absent(path_fn(page))
+        # Defer *all* manual bytes until PDIC save. A failed PDIC writer
+        # must never leave a durable manual-only candidate choice.
+        self._write_manual_override(
+            cand, selected=True, word=word, engine=engine, defer=True,
+        )
+        verify_pending_manual_source(self, page.stem)
+    except (OSError, ValueError, TypeError, RuntimeError, AttributeError) as exc:
+        _restore_pending_manual(self, pending_before)
+        self.status_var.set(f"候选未更改：人工决定未完成暂存，{exc}")
+        return
+
+    try:
+        cand.clear()
+        cand.update(updated)
+        if old_entry is not None and old_entry in self.entries:
+            self.entries.remove(old_entry)
+        self.entries.append(new_entry)
+        self._sort_entries_reading_order()
+        # This save preflights BOTH first-click PDIC and human source pins,
+        # and commits manual_selection only after PDIC publication.
+        self.save_pdic(silent=True)
+        if self.__dict__.get("_pending_manual_override_payload") is not None:
+            raise RuntimeError("人工选择文件尚未完成保存")
+    except Exception as exc:
+        # Never roll back a file to guessed bytes. If PDIC has not changed,
+        # restore the old UI and in-memory staging; otherwise quarantine
+        # the mixed state and require explicit reload/reconciliation.
+        try:
+            unchanged = _bytes_or_absent(path_fn(page)) == before_pdic
+        except OSError:
+            unchanged = False
+        if unchanged and not self.__dict__.get("_deferred_save_uncertain", False):
+            self.entries[:] = original_entries
+            cand.clear()
+            cand.update(original_candidate)
+            _restore_pending_manual(self, pending_before)
+            self.status_var.set(f"候选未保存：PDIC 未提交，已保留原候选状态：{exc}")
+        else:
+            self.__dict__["_deferred_save_uncertain"] = True
+            self.status_var.set(
+                f"候选保存结果不确定：PDIC/人工决定需重新打开核对：{exc}"
+            )
+        return
+    self.redraw()
 
 def candidate_checkbox_changed(self, deps: ReviewSelectionDeps, candidate_id: str, var: tk.BooleanVar) -> None:
     cand = self.get_review_candidate(candidate_id)
