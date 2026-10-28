@@ -1,3 +1,11 @@
+## 2026-10-28｜G1 整页重新简体化：重复 Windows 3.13 Tcl 宿主环境失败与测试合同隔离
+
+- 源码工作包 HEAD `4371c027f8781e288b60bb63bbea025ea6caf0b3` 的 CI [#40692254312](https://github.com/chigre/Picture_Capture/actions/runs/40692254312) attempt 1/2 均 Windows 3.13 单条 `test_settings_help_legacy_cleanup_20261013.py::test_state_initialization_requires_no_visual_widgets_and_binds_traces_once` 的 `tk.Tcl()` 初始化失败：托管解释器不能读取 `init.tcl`；4637 passed、1 failed、2 skipped，其他五平台全成功。首次和重试均保留为失败证据。
+- 该测试只检查不创建视觉小部件时的 quick-state 初始化、变量数量、首建 trace 和二次调用不重复 trace；改为可验证 `get/set/trace_add` 的纯状态变量替身。真实 `scripts/gui_smoke.py`、PDIC/PPP Tk 重开、B2/R3 Tk smoke **全部保留且不标 skip**。其所在 Windows 3.13 Job 仍需跑完这些真实 Tk 步骤才能通过。
+- 此处不是借机跳过 Tk；新提交需 exact-head 完整六平台 CI、Risk-tier gate、OCR Smoke 3 OS、CodeQL 均成功才算工程验证。真实用户词典 E3 依旧 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 整页重新简体化失败时的人工 UI/缓存回滚
 
 - 高价值缺陷：`regenerate_simplified_current_page` 原先先覆盖整个页面的简体 Tk 字段、actual、manual/auto 标记和 X/Y sidecar 缓存，再调用已加固的 `_persist_simplified_page`。当另一校对者在读取后修改磁盘 sidecar，受保护写盘会拒绝，但没有自动还原页面显示与内存人工结果。

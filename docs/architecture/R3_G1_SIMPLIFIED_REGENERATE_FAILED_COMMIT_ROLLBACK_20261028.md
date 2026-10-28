@@ -54,3 +54,20 @@ rather than OS atomic CAS, and not proof of crash/power-loss durable multi-file
 transactions. True Windows dictionary E3 candidate/checkbox, Undo/Redo ×20,
 PDIC/PPP/SECTION save/reopen, original X/Y/crop, and #483 W1–W11 remain
 OPEN / NOT PERFORMED. #663 remains Draft/Open/Unmerged and #503/#562 open.
+
+## Exact-head CI failure: hosted Tcl path vs pure quick-state contract
+
+At source HEAD `4371c027f8781e288b60bb63bbea025ea6caf0b3`, CI [#40692254312](https://github.com/chigre/Picture_Capture/actions/runs/40692254312) attempts 1 and 2 repeatedly failed
+Windows Python 3.13's `test_state_initialization_requires_no_visual_widgets_and_binds_traces_once`
+before executing its trace-ownership assertions: the runner could not read
+its installed Tcl `init.tcl`. 4637 other tests passed; the other five test
+jobs and OCR/CodeQL succeeded. This history is **not** treated as a pass.
+
+The affected test is a pure quick-state variable/binding contract. Replace
+only its dependence on a real Tcl interpreter with a test variable that
+explicitly implements and validates `get`, `set`, `trace_add` and callback
+count; its assertions about once-only traces and parameter routing remain.
+Dedicated real Tk Windows/macOS GUI creation and managed PDIC/PPP,
+proofreading, R3 candidate Tk smokes **remain active in the same CI workflow**.
+If a real Tk smoke fails, the job must remain red; it must not be marked as
+a user dictionary-page or Power-loss E3 acceptance pass.
