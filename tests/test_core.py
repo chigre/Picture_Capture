@@ -3365,7 +3365,7 @@ def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action(tmp_pat
 
     PictureCaptureApp.set_candidate_selected(app, original, True)
 
-    assert refined["selected"] is False
+    assert refined["selected"] is False, app.status_var.messages
     assert original["selected"] is True
     assert len(app.entries) == 1
     assert app.entries[0].y == 104
