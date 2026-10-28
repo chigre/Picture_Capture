@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from picture_capture import app as shell
 from picture_capture.models import Entry as WordEntry
 from picture_capture.ui import review_selection_workflow as selection
@@ -87,7 +89,10 @@ def test_pending_manual_override_flush_is_page_scoped_and_disk_reads_are_safe(tm
     view._flush_pending_manual_override()
     assert json.loads(path_b.read_text(encoding="utf-8"))["page"] == "b"
     path_b.write_text("not json", encoding="utf-8")
-    assert view._read_manual_overrides() == {"version": 1, "overrides": {}}
+    # A malformed human sidecar cannot authorize an empty rewrite.
+    with pytest.raises(RuntimeError, match="损坏"):
+        view._read_manual_overrides()
+    assert path_b.read_bytes() == b"not json"
 
 
 def test_selection_changes_local_model_before_deferred_persistence():

@@ -8,6 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from copy import deepcopy
+from pathlib import Path
+
+from ..proofreading.candidate_delete import _load_unambiguous_json
+from ..proofreading.transactions import _atomic_bytes, _bytes_or_absent
+
 if TYPE_CHECKING:
     import tkinter as tk
     from pathlib import Path
@@ -38,57 +44,111 @@ def _manual_selection_path(self, deps: ReviewSelectionDeps) -> Path | None:
     cache = self._paddle_cache_path()
     return cache.with_name(f"{cache.stem}_manual_selection.json") if cache else None
 
-def _read_manual_overrides(self, deps: ReviewSelectionDeps) -> dict:
-    json = deps.json
-    path = self._manual_selection_path()
-    if (
-        path is not None
-        and self._pending_manual_override_path == path
-        and self._pending_manual_override_payload is not None
-    ):
-        return self._pending_manual_override_payload
-    if not path or not path.exists():
-        return {"version": 1, "overrides": {}}
+def _validated_manual_selection(path: Path, stem: str) -> tuple[bytes | None, dict]:
+    """A display fallback must never authorize wiping human selection bytes."""
+    source = _bytes_or_absent(path)
+    if source is None:
+        return None, {"version": 1, "overrides": {}}
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError
-        raw.setdefault("version", 1)
-        raw.setdefault("overrides", {})
-        return raw
-    except Exception:
+        document = _load_unambiguous_json(source)
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise RuntimeError("R3 人工候选选择文件损坏或含歧义字段，拒绝覆盖") from exc
+    if (
+        not isinstance(document, dict)
+        or type(document.get("version", 1)) is not int
+        or document.get("version", 1) != 1
+        or ("page" in document and document["page"] != stem)
+        or not isinstance(document.get("overrides"), dict)
+    ):
+        raise RuntimeError("R3 人工候选选择格式或页归属不可信，拒绝覆盖")
+    document.setdefault("version", 1)
+    return source, document
+
+
+def _manual_override_preflight(self, cand: dict | None = None) -> bool:
+    """Validate persisted/pending human decisions before checkbox model edits."""
+    path_fn = getattr(self, "_manual_selection_path", None)
+    if not callable(path_fn):
+        # Existing isolated UI tests can exercise model logic with a mocked
+        # writer; production must always provide the real path binding.
+        return True
+    path = path_fn()
+    if path is None:
+        return False
+    if self.__dict__.get("_pending_manual_override_path") not in (None, path):
+        self._flush_pending_manual_override()
+    source, payload = _validated_manual_selection(path, self.current_page.stem)
+    if self.__dict__.get("_pending_manual_override_path") == path:
+        original = self.__dict__.get("_pending_manual_override_origin")
+        if original != (path.resolve(), source):
+            raise RuntimeError("R3 延迟候选人工决策的原始来源已变化，拒绝覆盖")
+        payload = self.__dict__["_pending_manual_override_payload"]
+        if not isinstance(payload, dict):
+            raise RuntimeError("R3 延迟候选人工决策内容不可信")
+    if cand:
+        prior = payload["overrides"].get(str(cand.get("candidate_id") or ""))
+        if prior is not None and (
+            not isinstance(prior, dict)
+            or set(prior) - {"selected", "word", "engine"}
+            or ("word" in prior and prior["word"] != str(cand.get("word", "")))
+        ):
+            raise RuntimeError("R3 该候选有未知人工扩展字段或来源词不一致，拒绝覆盖")
+    return True
+
+
+def _read_manual_overrides(self, deps: ReviewSelectionDeps) -> dict:
+    path = self._manual_selection_path()
+    if path is None:
         return {"version": 1, "overrides": {}}
+    source, payload = _validated_manual_selection(path, self.current_page.stem)
+    if (self.__dict__.get("_pending_manual_override_path") == path
+            and self.__dict__.get("_pending_manual_override_payload") is not None):
+        if self.__dict__.get("_pending_manual_override_origin") != (
+            path.resolve(), source,
+        ):
+            raise RuntimeError("R3 延迟候选人工决策来源已被其他人修改")
+        return deepcopy(self._pending_manual_override_payload)
+    return payload
+
 
 def _flush_pending_manual_override(self, deps: ReviewSelectionDeps) -> None:
-    json = deps.json
     path = self.__dict__.get("_pending_manual_override_path")
     payload = self.__dict__.get("_pending_manual_override_payload")
     if path is None or payload is None:
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    source_pin = self.__dict__.get("_pending_manual_override_origin")
+    if source_pin is None or source_pin[0] != path.resolve():
+        raise RuntimeError("R3 延迟候选人工选择缺少可信来源，拒绝保存")
+    raw, _ = _validated_manual_selection(path, str(payload.get("page", "")))
+    if raw != source_pin[1]:
+        raise RuntimeError("R3 人工候选选择文件已被其他人修改，拒绝覆盖")
+    # A same-file atomic replace avoids truncating the original on I/O
+    # failure. Byte preflight is optimistic, NOT an OS atomic compare-and-swap.
+    encoded = deps.json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    if _bytes_or_absent(path) != source_pin[1]:
+        raise RuntimeError("R3 写入前人工候选来源变化，拒绝覆盖")
+    _atomic_bytes(path, encoded)
     self._pending_manual_override_path = None
     self._pending_manual_override_payload = None
+    self.__dict__.pop("_pending_manual_override_origin", None)
+
 
 def _write_manual_override(
     self, deps: ReviewSelectionDeps, cand: dict, *, selected: bool, word: str | None = None,
     engine: str | None = None, defer: bool = False,
 ) -> None:
-    json = deps.json
     path = self._manual_selection_path()
     if not path:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # If another page somehow still has a queued sidecar write, commit it
-    # before switching the in-memory payload. Normal navigation already
-    # force-flushes, but this guard prevents cross-page contamination.
-    if self._pending_manual_override_path not in {None, path}:
+        raise RuntimeError("R3 无人工候选选择路径，拒绝写入")
+    if self.__dict__.get("_pending_manual_override_path") not in (None, path):
         self._flush_pending_manual_override()
+    _manual_override_preflight(self, cand)
+    source, _ = _validated_manual_selection(path, self.current_page.stem)
     payload = self._read_manual_overrides()
     cid = str(cand.get("candidate_id", ""))
     if not cid:
-        return
-    payload["page"] = self.current_page.stem if self.current_page else ""
+        raise RuntimeError("R3 候选没有唯一 ID，拒绝人工选择落盘")
+    payload["page"] = self.current_page.stem
     payload["overrides"][cid] = {
         "selected": bool(selected),
         "word": str(word if word is not None else cand.get("word", "")),
@@ -97,11 +157,19 @@ def _write_manual_override(
     if defer:
         self._pending_manual_override_path = path
         self._pending_manual_override_payload = payload
+        self.__dict__["_pending_manual_override_origin"] = (path.resolve(), source)
     else:
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        if self._pending_manual_override_path == path:
+        # No deferred source pin: revalidate in case another proofreader wrote
+        # while the UI was preparing the candidate payload.
+        if _bytes_or_absent(path) != source:
+            raise RuntimeError("R3 人工候选选择来源已变化，拒绝覆盖")
+        _atomic_bytes(
+            path, deps.json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        )
+        if self.__dict__.get("_pending_manual_override_path") == path:
             self._pending_manual_override_path = None
             self._pending_manual_override_payload = None
+            self.__dict__.pop("_pending_manual_override_origin", None)
 
 def _queue_proofreading_add_evidence(self, deps: ReviewSelectionDeps, x: int, y: int) -> None:
     """Stage a user canvas click, NOT a durable event until PDIC commits."""
@@ -300,6 +368,26 @@ def set_candidate_selected(self, deps: ReviewSelectionDeps, cand: dict, selected
     WordEntry = deps.WordEntry
     if not self._claim_page_for_manual_edit():
         return False
+    try:
+        if not _manual_override_preflight(self, cand):
+            return False
+    except (OSError, ValueError, RuntimeError) as exc:
+        self.status_var.set(f"候选未更改：{exc}")
+        return False
+    # A position switch may overwrite several sibling candidate decisions.
+    # Verify their existing human override owners before mutating *any*
+    # Entry, checkbox, or in-memory pending sidecar.
+    group_id_for_preflight = str(cand.get("position_group_id", ""))
+    if selected and group_id_for_preflight:
+        try:
+            for sibling in self.ocr_review_candidates:
+                if (sibling is not cand
+                        and str(sibling.get("position_group_id", "")) == group_id_for_preflight):
+                    if not _manual_override_preflight(self, sibling):
+                        return False
+        except (OSError, ValueError, RuntimeError) as exc:
+            self.status_var.set(f"候选未更改：{exc}")
+            return False
     self._queue_proofreading_candidate_evidence(cand, selected)
     # Commit every visible editor by object identity before changing the
     # entries list. This prevents a middle-row removal from reassigning the
@@ -376,7 +464,16 @@ def apply_candidate_choice(self, deps: ReviewSelectionDeps, cand: dict, engine: 
     WordEntry = deps.WordEntry
     if not self._claim_page_for_manual_edit():
         return
+    try:
+        if not _manual_override_preflight(self, cand):
+            return
+    except (OSError, ValueError, RuntimeError) as exc:
+        self.status_var.set(f"候选未更改：{exc}")
+        return
     self._sync_entry_editor_texts()
+    # Persist against the ORIGINAL candidate word before replacing its live
+    # owner. A source failure must not first rewrite the candidate/Entry UI.
+    self._write_manual_override(cand, selected=True, word=word, engine=engine)
     side = cand.get(engine, {}) if engine in {"paddle", "tesseract", "lens"} else {}
     if engine in {"paddle", "tesseract", "lens"} and side:
         if side.get("y") is not None: cand["source_y"] = int(side.get("y"))
@@ -399,7 +496,6 @@ def apply_candidate_choice(self, deps: ReviewSelectionDeps, cand: dict, engine: 
         manually_selected=True,
     )
     self.entries.append(entry); self._sort_entries_reading_order()
-    self._write_manual_override(cand, selected=True, word=word, engine=engine)
     self.save_pdic(silent=True); self.redraw()
 
 def candidate_checkbox_changed(self, deps: ReviewSelectionDeps, candidate_id: str, var: tk.BooleanVar) -> None:

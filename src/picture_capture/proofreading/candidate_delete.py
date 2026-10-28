@@ -104,7 +104,11 @@ def prepare_candidate_delete(
             if (not isinstance(prior, dict)
                     or prior.get("selected") is not True
                     or ("word" in prior
-                        and prior["word"] != str(entry.word))):
+                        and prior["word"] != str(entry.word))
+                    or set(prior) - {"selected", "word", "engine"}):
+                # This candidate owns the selection state, NOT arbitrary
+                # extra human annotations in the existing override. A
+                # replacement would silently discard those extra bytes.
                 return None
         manual["page"] = snapshot.page.stem
         manual["overrides"][cid] = {

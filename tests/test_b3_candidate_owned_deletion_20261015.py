@@ -737,3 +737,36 @@ def test_candidate_delete_quarantines_ambiguous_human_json_without_rewrite(
     assert review.parent.candidate_check_vars["ocr-id"].get() is True
     assert not storage._marker_present(storage._recovery_path(page))
     assert not actions
+
+
+@pytest.mark.parametrize("extra", ["human_comment", "reviewer_name", "manual_score"])
+def test_candidate_delete_refuses_own_override_with_unknown_human_metadata(
+    tmp_path, extra,
+):
+    """A candidate owns its checkbox, not arbitrary fields on an existing note."""
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    original_pdic = pdic_path(page).read_bytes()
+    original_simplified = simplified.read_bytes()
+    manual.write_text(
+        json.dumps({
+            "version": 1, "page": page.stem,
+            "overrides": {
+                "ocr-id": {
+                    "selected": True, "word": "head", "engine": "manual",
+                    extra: "must remain exact human annotation",
+                },
+                "independent": {
+                    "selected": False, "word": "human choice",
+                    "engine": "manual",
+                },
+            },
+        }, ensure_ascii=False), encoding="utf-8",
+    )
+    before = manual.read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert manual.read_bytes() == before
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert simplified.read_bytes() == original_simplified
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not storage._marker_present(storage._recovery_path(page))

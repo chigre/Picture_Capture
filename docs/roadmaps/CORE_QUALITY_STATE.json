@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T14:36:37.473Z",
+  "updated_at_utc": "2026-10-28T16:57:48.559Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_source_word_pixel_identity_exact_race_phase_and_positive_control",
+    "active_work_item": "G1_manual_selection_checkbox_source_pin_and_lossless_candidate_owner",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "be76035cb363017ad8497e53869e983c14ea8046",
+    "implementation_head_sha": "0afc1328ddcc03a9f67869b924a71daaa835aeb3",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Recheck exact new HEAD 6 platform CI, Risk-tier gate, OCR 3 OS, CodeQL. Source-word binding must show healthy independent sidecar journal commit plus late PDIC source drift refusal. Real dictionary E3 not performed.",
-    "last_test_evidence": "PR #663 source-word packet: first HEAD e7d3a5d... CI #40705467706 Ubuntu/macOS 5 test-contract failures; follow-up be76035cb... CI #40706851786 Ubuntu 1 failed, 4676 passed: fault injection assumed post-journal but safe preflight prevented interceptor. Updated race to explicit PDIC readback after preview, added positive actual journal publication; new exact HEAD pending. OCR 40706851784 3/3; CodeQL 40706843986 in progress/verify separately. Human E3 OPEN.",
+    "required_next_action": "Verify this exact after-commit HEAD 6-platform CI/Risk-tier gate, OCR Windows/macOS/Ubuntu, CodeQL; repair actual failed tests inside same manual_selection packet. True Windows operator E3 OPEN.",
+    "last_test_evidence": "Before this packet, PR #663@0afc1328ddcc03a9f67869b924a71daaa835aeb3 CI #40707763580 completed success 6/6+Risk-tier gate; OCR #40707763618 success 3/3; CodeQL #40707753657 success 2/2. This candidate checkbox/manual_selection source guard packet requires its own new exact-head validation. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1348,5 +1348,38 @@
       "ubuntu": "one test contract failure: after_journal_stage hook did not run because PDIC preflight already refused; 4676 passed/3 skipped",
       "repair": "Move inject to exact third PDIC readback after preview, and assert a separate healthy save reaches the real stage and publishes. Preserve first+second red CI and source code safeguards."
     }
+  },
+  "g1_manual_selection_checkbox_source_pin_20261029": {
+    "status": "source_tests_docs_submitted_new_exact_head_ci_pending",
+    "before_head_sha": "0afc1328ddcc03a9f67869b924a71daaa835aeb3",
+    "owner_files": [
+      "src/picture_capture/ui/review_selection_workflow.py",
+      "src/picture_capture/proofreading/candidate_delete.py"
+    ],
+    "test_files": [
+      "tests/test_b3_manual_selection_source_pin_20261029.py",
+      "tests/test_issue562_review_selection_owner_20261023.py",
+      "tests/test_b3_candidate_owned_deletion_20261015.py"
+    ],
+    "architecture_doc": "docs/architecture/R3_G1_MANUAL_SELECTION_ORIGIN_AND_CHECKBOX_20261029.md",
+    "observed_risk": "_read_manual_overrides caught corrupt/ambiguous manual JSON and returned a new empty dict; checkbox writes/deferred flush would overwrite original user decision bytes. Deferred source was unpinned; another proofreader could update page after click and be overwritten at flush. Existing candidate delete replaced its own selected override and dropped unknown human annotations.",
+    "owned_fix": "Strict duplicate-key/nonfinite/page/version/overrides validation on read, source-byte pin during deferred checkbox writes, frozen original-page validation on flush, preflight prior to checkbox/position-switch and explicit choice mutation, atomic single-file replace on flush, fail-closed on unknown preexisting candidate human fields. Scope does not alter PDIC format, OCR, or three-file CAS.",
+    "regression_matrix": [
+      "malformed duplicate JSON and nonfinite prior human data",
+      "foreign same-candidate/unrelated-candidate/delete/create between checkbox and delayed flush",
+      "valid chained deferred toggles and unrelated human decisions",
+      "page-switch preserving pending old page",
+      "before-replace I/O failure",
+      "invalid human source blocking model/checkbox before mutation",
+      "position-switch sibling unknown human fields before mutation",
+      "owned candidate delete must preserve unknown human note by refusing operation"
+    ],
+    "baseline_exact_head_ci": {
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40707763580",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40707763618",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40707753657"
+    },
+    "historical_preceding_evidence": "PR #663 source-word packet: first HEAD e7d3a5d... CI #40705467706 Ubuntu/macOS 5 test-contract failures; follow-up be76035cb... CI #40706851786 Ubuntu 1 failed, 4676 passed: fault injection assumed post-journal but safe preflight prevented interceptor. Updated race to explicit PDIC readback after preview, added positive actual journal publication; new exact HEAD pending. OCR 40706851784 3/3; CodeQL 40706843986 in progress/verify separately. Human E3 OPEN.",
+    "limitations": "Optimistic source pin + atomic single-file replace is not OS CAS; full PDIC + manual_selection + simplified durability not proven; when flush fails after PDIC, human reconciliation needed. True E3 OPEN."
   }
 }

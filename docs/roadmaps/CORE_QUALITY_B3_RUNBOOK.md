@@ -1,3 +1,12 @@
+## 2026-10-29｜G1 checkbox/manual_selection 人工决策来源字节完整性
+
+- 真实数据损坏路径：`ui/review_selection_workflow._read_manual_overrides` 旧逻辑在 `*_manual_selection.json` JSON 损坏时返回 `{"version":1,"overrides":{}}`；checkbox 或手动 OCR 选择随后将空表写回，**已有人工选择会被清空**。另外 `_flush_pending_manual_override` 旧逻辑不比较点击时的磁盘原始字节；延迟期间另一位校对者的决定可能被覆盖。
+- 本包只改一个物理 UI owner + 候选删除的同一人工所有权边界：严格拒绝损坏/重复 JSON 字段、NaN、错误页/版本、非法 `overrides`；绑定每个待提交 page/path 的完整原始字节指纹，多次 checkbox 编辑共享该来源，跨页先按原页独立安全 flush；落盘前再次复核版本并使用单文件原子替换，失败时保留 pending 状态。checkbox、位置切换和显式人工词条选择在修改 Entry/checkbox 前完成来源预检。若现有候选人工记录含未知独立注释，保留旧文件、拒绝由 candidate delete 或新 checkbox 覆盖。
+- `tests/test_b3_manual_selection_source_pin_20261029.py` + 历史 owner/候选删除用例验证失败和正常路径；架构记录 `docs/architecture/R3_G1_MANUAL_SELECTION_ORIGIN_AND_CHECKBOX_20261029.md`。
+- 仅是单文件乐观版本核验，**不等于**跨进程 OS CAS、多文件系统原子事务或断电保证。PDIC 可能先于延迟 manual_selection 成功，来源冲突会拒绝后者并要求人工核对。新 HEAD CI、OCR、CodeQL 必须完成后才报告结果。真实 Windows 词典、candidate checkbox、20 Undo/Redo、FocusOut、PDIC/PPP/SECTION 重开、source crop、#483 W1–W11 全部 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 source_word 原图归属：第二轮 CI 的注入阶段校正
 
 - HEAD `be76035cb363017ad8497e53869e983c14ea8046` 的 [CI #40706851786](https://github.com/chigre/Picture_Capture/actions/runs/40706851786) Ubuntu 4,676 passed、1 failed：唯一失败是新测试在来源校验已经拒绝之后仍假设“日志建立后”注入器已执行，外部 PDIC 注入未发生。旧 Tk 回滚模拟修复已通过。
