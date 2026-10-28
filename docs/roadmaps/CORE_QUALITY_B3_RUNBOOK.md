@@ -1,3 +1,11 @@
+## 2026-10-28｜G1/G2 简体校对稳定 Entry/X-Y 归属批次（精确 HEAD CI 待验证）
+
+- 工作包以 `ui/review_simplified_workflow.py` 为唯一生产 owner：Keys、剪贴板延迟回调、自动刷新、整页重新简体化都以当前页面和已渲染 `row_entries` 的 Entry 对象及原图坐标为准，不再从当下排序列表行号推断归属。来源跨页/排序后的旧 Tk 回调、绑定缺失/重复或半渲染严格拒绝；不改变公共 ReviewWindow 签名、持久化格式、原图 X/Y。
+- `tests/test_b3_simplified_rendered_owner_20261028.py` 成组验证实际坐标键、重排序、伪旧 widget、FocusOut 前延迟粘贴、异步页面变化、部分渲染、重复行与坐标、正常刷新及整页再生成。详见 `docs/architecture/R3_G1_SIMPLIFIED_RENDERED_ENTRY_PIXEL_OWNER_20261028.md`。
+- 本批代码提交后必须用**新精确 HEAD** 六平台/py3.10、OCR 3 OS、Risk-tier 和 CodeQL 核验；旧 CI 不可替代。真人 Windows 词典、R3 20 步 Undo/Redo、PDIC/PPP/SECTION/crop 重开及 R2 W1-W11 仍 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 侧写 JSON 重复键拒绝：人工校对字节保护（非真人验收）
 
 - 单一 Draft [PR #663](https://github.com/chigre/Picture_Capture/pull/663) 中，源码包 `f8065fc125ff0fa8addc80a8213734a2aeae6e0f`：`proofreading/candidate_delete.py` 对 manual_selection 和 simplified JSON 的**所有层级重复键**、非标准 NaN/Infinity 常量 fail-closed，防止 Python 默认解析吞掉其他候选/其他行的人工作业字段后重写整个 sidecar。
