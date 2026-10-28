@@ -1,3 +1,11 @@
+## 2026-10-28｜G1 普通词条删除：首次 CI 合同修复
+
+- HEAD `e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d` 的六平台 CI [#40696349131](https://github.com/chigre/Picture_Capture/actions/runs/40696349131) 首个 Ubuntu Job 报 12 个失败：9 个新故障/正常场景因错误相对导入 `ui.review_bundle` 而无法进入测试主体；另 3 个历史静态用例仍要求旧的直接 `save_pdic`、按值 `entries.remove` 和未跟踪跨文件人工作业来源的读回条件。
+- 仅纠正 `..proofreading.review_bundle` 所有权导入；更新历史静态测试为**保留**并要求成对提交、原对象身份删除、逐角色来源核验，且继续保持 R3 原有恢复日志。保留初次 CI 失败记录，不误称已通过。
+- 新 HEAD 必须完整验证六平台、Risk-tier gate、OCR 3 OS、CodeQL，若新故障注入揭示生产问题仍在本包返修。真实 Windows E3、PDIC/PPP/SECTION/crop、候选×20 Undo/Redo 和 R2 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 非候选删除的 PDIC＋简体副本整体事务
 
 - 证实源码顺序风险：`ui/review_entry_actions.delete_review_entry` 旧逻辑先从内存移除 Entry，再 `save_pdic` 写盘，最后独立 `_persist_simplified_page`；如果来源字节在后者被外部人工修改，PDIC 已删但 sidecar 仍保留该词条，Undo/历史无法完整记录。

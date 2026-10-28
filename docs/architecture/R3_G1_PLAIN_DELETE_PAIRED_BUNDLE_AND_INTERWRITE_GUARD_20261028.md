@@ -53,3 +53,17 @@ Real Windows dictionary pages, manual candidate checkboxes, 20 Undo/Redo
 steps, FocusOut/PDIC/PPP/SECTION save/reopen, source-image XY/crop and
 R2 #483 W1–W11 remain **OPEN / NOT PERFORMED**. PR #663 remains
 Draft/Open/Unmerged, #503 and #562 remain open; PR-B real scans deferred.
+
+## Initial exact-head CI feedback and repair
+
+Source head `e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d`: [CI #40696349131](https://github.com/chigre/Picture_Capture/actions/runs/40696349131) initially
+reported 12 Ubuntu failures. Nine new behavioral test cases were blocked
+before assertions by an incorrectly qualified module import
+(`ui.review_bundle` rather than the existing
+`proofreading.review_bundle`). Three legacy static tests expected the
+obsolete sequential parent save, object-equality-based Entry removal, and
+single-file-only readback condition. Correct the import; update the same
+historical assertions to require paired R3 commit, strict Entry identity,
+and per-role source rechecks. **No tests deleted and no production source
+protection weakened.** Recheck all exact-head workflows; never count this
+first CI as success.

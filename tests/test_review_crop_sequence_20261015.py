@@ -168,7 +168,8 @@ def test_render_and_delete_bindings_stay_in_existing_review_window():
     assert "self._review_row_pictures.append(picture)" in render
     assert "for child in self.rows.winfo_children():" in render
     assert "child.destroy()" in render
-    assert "self.parent.entries.remove(entry)" in remove
+    assert "row for row in self.parent.entries if row is not entry" in remove
+    assert "commit_review_bundle(self, transaction_before)" in remove
     assert "self._request_render_rows(focus_index=self.active_index)" in remove
 
 

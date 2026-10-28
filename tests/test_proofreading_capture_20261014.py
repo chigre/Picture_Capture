@@ -236,7 +236,9 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
     ).read_text(encoding="utf-8")
     assert "_stage_recovery(page, changes, rollback_required=True)" in bundle
     assert "_rollback_failed_publish(page)" in bundle
-    assert "_bytes_or_absent(owned[role]) != new" in bundle
+    assert "if not sources_match(published):" in bundle
+    assert "published[role] = new" in bundle
+    assert "_snapshot_sources_match(source, published=published)" in bundle
     assert "proofreading_event_capture" in review
 
 

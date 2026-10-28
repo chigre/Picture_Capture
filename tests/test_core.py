@@ -6535,7 +6535,9 @@ def test_v21122_hotfix5_review_rows_expose_x_delete_and_grave_shortcut():
     assert 'command=lambda i=index: self.delete_review_entry(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'editor.bind("<KeyPress-grave>", lambda _e, i=index: self.delete_review_entry(i))' in REVIEW_WORKSPACE_SOURCE
     assert "def delete_review_entry(self, index: int) -> str:" in review
-    assert "self.parent.save_pdic(silent=True, sync_editors=False)" in REVIEW_ENTRY_SOURCE
+    assert "commit_review_bundle(self, transaction_before)" in REVIEW_ENTRY_SOURCE
+    assert "protect_review_pdic_commit(self)" in REVIEW_ENTRY_SOURCE
+    assert "self.parent.save_pdic(silent=True, sync_editors=False)" not in REVIEW_ENTRY_SOURCE
     assert "self.parent.redraw()" in REVIEW_ENTRY_SOURCE
 
 

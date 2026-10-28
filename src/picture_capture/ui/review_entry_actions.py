@@ -172,7 +172,7 @@ def delete_review_entry(self, deps: ReviewEntryDeps, index: int) -> str:
     # a normal ReviewWindow save. Sequential save_pdic then sidecar write is
     # unsafe: a refused second write would leave a committed deletion in PDIC.
     from .review_transaction_actions import capture_review_before, record_review_after
-    from .review_bundle import commit_review_bundle
+    from ..proofreading.review_bundle import commit_review_bundle
     from ..proofreading.save_safety import protect_review_pdic_commit
     transaction_before = capture_review_before(self)
     entry = row_entries[int(index)]
