@@ -1,6 +1,7 @@
 """R3: conservative same-window undo/redo of committed PDIC-only text edits."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -960,3 +961,31 @@ def test_candidate_bundle_refuses_human_manual_edit_after_pdic_publication(
     assert [row.word for row in rows] == ["one", "two"]
     assert module._recovery_path(page).exists()
     assert not module.recover_pending_for_page(page, manual_path=override)
+
+
+@pytest.mark.parametrize("damage", [
+    "missing_before", "missing_after", "missing_both", "boolean_version",
+])
+def test_r3_incomplete_journal_keeps_quarantine(tmp_path, damage):
+    """A syntactically valid but incomplete recovery intent is never trusted."""
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    published = original.replace(b"one", b"ONE")
+    assert published != original
+    marker = module._stage_recovery(page, [
+        ("pdic", original, published),
+    ])
+    module._publish(pdic_path(page), published)
+    document = json.loads(marker.read_text(encoding="utf-8"))
+    if damage in {"missing_before", "missing_both"}:
+        del document["files"][0]["before"]
+    if damage in {"missing_after", "missing_both"}:
+        del document["files"][0]["after"]
+    if damage == "boolean_version":
+        document["version"] = True  # bool is an int subclass in Python.
+    marker.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="R3 recovery"):
+        module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == published
+    assert marker.is_file()  # Manual intervention, never silent unquarantine.
