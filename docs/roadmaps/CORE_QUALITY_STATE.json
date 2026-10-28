@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T17:05:32.070Z",
+  "updated_at_utc": "2026-10-28T18:09:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -1388,5 +1388,29 @@
       "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40731349494",
       "repair": "tests/test_core.py original Y switch test now uses tmp_path project + current_page; all original position-switch assertions retained."
     }
+  },
+  "g1_candidate_delete_whole_page_source_20261028": {
+    "status": "code_committed_exact_head_ci_pending",
+    "before_head_sha": "55f442135f7c178a18a2ffb447d3ee39d955f187",
+    "owner_files": [
+      "src/picture_capture/proofreading/candidate_delete.py"
+    ],
+    "test_files": [
+      "tests/test_b3_candidate_owned_deletion_20261015.py"
+    ],
+    "architecture_doc": "docs/architecture/R3_G1_MANUAL_SELECTION_ORIGIN_AND_CHECKBOX_20261029.md",
+    "confirmed_source_gap": "candidate delete only checked target simplified source_word and int-coerced all sidecar X/Y; unrelated human row source/fields and explicit unsupported manual version could be rewritten",
+    "fix": "validate entire simplified sidecar strict schema and live PDIC source-word bindings before any publish; reject explicit unsupported manual schema; allow legacy missing version",
+    "regression_matrix": [
+      "string/float/bool X/Y in human sidecar",
+      "unknown human metadata in unrelated row",
+      "foreign source_word in unrelated live PDIC row",
+      "boolean simplified schema version",
+      "explicit unsupported manual schema versions",
+      "legacy version-absent manual healthy deletion",
+      "normal owned candidate delete and undo/redo retained"
+    ],
+    "human_acceptance": "NOT_PERFORMED",
+    "limitations": "Synthetic-only, no OS-level multi-file CAS, no true Windows R3/PDIC/PPP/SECTION/source crop E3"
   }
 }

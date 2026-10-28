@@ -78,3 +78,8 @@ Production fail-closed preflight is not relaxed; the first CI failure is
 preserved. A different final commit HEAD must pass its **own** six-platform
 Risk-tier, OCR Smoke and CodeQL gates before the packet is considered
 engineering-verified.
+
+
+## 2026-10-28 G1 / candidate-delete whole-page provenance closure
+
+`prepare_candidate_delete` formerly checked only the simplified row at the deleted X/Y and accepted coercible coordinates in unrelated human rows; it could reserialize a sidecar with string/float/bool coordinates, unknown human metadata, or a different source word for another live PDIC row. The candidate's manual-selection document also accepted an explicit unsupported `version` and rewrote it. The owner now reuses the existing `simplified_review.validate_source_word_binding` contract for the **entire** saved simplified document against frozen PDIC entries (strict coordinate types, no unknown fields/duplicates, exact source-word provenance), and rejects explicit non-v1 manual schema while retaining legacy version-absent input. These are pre-publication fail-closed checks: PDIC/manual/simplified bytes, Entry identity, checkbox and undo history stay untouched on rejection. Tests cover malformed and healthy legacy data. This is not an OS-level CAS, genuine Windows human acceptance, or a claim of cross-file atomicity.

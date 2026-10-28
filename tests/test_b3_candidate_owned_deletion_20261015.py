@@ -473,7 +473,9 @@ def test_candidate_delete_rejects_non_unique_entry_candidate_ownership(
 @pytest.mark.parametrize(
     "mutation",
     ["foreign_source_word", "wrong_page", "wrong_format", "wrong_version",
-     "missing_version", "duplicate_xy", "bad_other_record"],
+     "missing_version", "duplicate_xy", "bad_other_record",
+     "numeric_string_xy", "float_xy", "bool_xy", "foreign_other_source_word",
+     "unknown_other_human_field", "bool_format_version"],
 )
 def test_candidate_delete_refuses_unowned_or_malformed_simplified_record(
     tmp_path, mutation,
@@ -497,6 +499,18 @@ def test_candidate_delete_refuses_unowned_or_malformed_simplified_record(
         doc["entries"].append(dict(doc["entries"][0]))
     elif mutation == "bad_other_record":
         doc["entries"][1]["y"] = "not a coordinate"
+    elif mutation == "numeric_string_xy":
+        doc["entries"][0]["x"] = "10"
+    elif mutation == "float_xy":
+        doc["entries"][0]["y"] = 20.0
+    elif mutation == "bool_xy":
+        doc["entries"][1]["x"] = True
+    elif mutation == "foreign_other_source_word":
+        doc["entries"][1]["source_word"] = "third-party renamed"
+    elif mutation == "unknown_other_human_field":
+        doc["entries"][1]["reviewer_note"] = "must preserve"
+    elif mutation == "bool_format_version":
+        doc["format_version"] = True
     simplified.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     old_simplified = simplified.read_bytes()
 
@@ -542,6 +556,42 @@ def test_candidate_delete_rejects_stale_or_unowned_manual_override(
     assert review.parent.candidate_check_vars["ocr-id"].get() is True
     assert not actions
 
+
+
+
+@pytest.mark.parametrize("version", [2, True, "1", None])
+def test_candidate_delete_refuses_explicit_foreign_manual_schema_version(tmp_path, version):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    manual.write_text(json.dumps({
+        "version": version, "page": page.stem, "overrides": {
+            "ocr-id": {"selected": True, "word": "head", "engine": "manual"},
+            "other-id": {"selected": False, "word": "keep", "engine": "human"},
+        },
+    }), encoding="utf-8")
+    old_manual = manual.read_bytes()
+    old_pdic = pdic_path(page).read_bytes()
+    old_simplified = simplified.read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert manual.read_bytes() == old_manual
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert simplified.read_bytes() == old_simplified
+    assert review.parent.entries == rows and candidate["selected"] is True
+    assert not actions
+
+
+def test_candidate_delete_keeps_legacy_manual_without_version(tmp_path):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    manual.write_text(json.dumps({
+        "page": page.stem, "overrides": {
+            "ocr-id": {"selected": True, "word": "head", "engine": "manual"},
+            "other-id": {"selected": False, "word": "keep", "engine": "human"},
+        },
+    }), encoding="utf-8")
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    saved = json.loads(manual.read_text("utf-8"))
+    assert saved["overrides"]["ocr-id"]["selected"] is False
+    assert saved["overrides"]["other-id"]["word"] == "keep"
+    assert [row.word for row in read_pdic(pdic_path(page))] == ["other"]
 
 def test_candidate_delete_accepts_matching_manual_override_and_retains_other_decisions(
     tmp_path,

@@ -96,6 +96,12 @@ def prepare_candidate_delete(
             return None
         if str(manual.get("page") or snapshot.page.stem) != snapshot.page.stem:
             return None
+        # The legacy file may omit version, but an explicit incompatible
+        # version must never be silently rewritten as a v1 human decision.
+        if "version" in manual and (
+            type(manual["version"]) is not int or manual["version"] != 1
+        ):
+            return None
         prior = manual["overrides"].get(cid)
         if prior is not None:
             # A preexisting explicit override must still describe this
@@ -127,11 +133,17 @@ def prepare_candidate_delete(
                     or simplified.get("page") != snapshot.page.stem
                     or not isinstance(simplified.get("entries"), list)):
                 return None
+            # This is a human-edited sidecar, not a permissive display cache.
+            # Validate *every* row and its live PDIC source owner before a
+            # target-row deletion can normalize or discard any saved bytes.
+            from .simplified_review import validate_source_word_binding
+            validate_source_word_binding(
+                target_simplified, snapshot.page.stem,
+                [(word, x, y) for _, word, x, y in snapshot.entries],
+            )
             matches = []
             for i, record in enumerate(simplified["entries"]):
-                if not isinstance(record, dict):
-                    return None
-                x, y = int(record["x"]), int(record["y"])
+                x, y = record["x"], record["y"]
                 if x == int(entry.x) and y == int(entry.y):
                     # Coordinates alone do not prove that the simplified
                     # record belongs to the selected headword; a later
@@ -146,7 +158,7 @@ def prepare_candidate_delete(
                 target_simplified = json.dumps(
                     simplified, ensure_ascii=False, indent=2,
                 ).encode("utf-8")
-    except (UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+    except (UnicodeError, ValueError, TypeError, KeyError, AttributeError, RuntimeError):
         return None
     return CandidateDeletePlan(
         candidate_id=cid, pdic_bytes=target_pdic,
