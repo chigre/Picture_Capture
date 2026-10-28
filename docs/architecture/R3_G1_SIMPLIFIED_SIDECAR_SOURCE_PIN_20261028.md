@@ -46,3 +46,18 @@ or proof of real Windows user acceptance. Real dictionary operations,
 20 Undo/Redo steps, PDIC/PPP/SECTION save-reopen, original crop X/Y and
 R2 #483 W1–W11 remain OPEN / NOT PERFORMED. #663 stays Draft/Open/Unmerged;
 #503 and #562 remain open.
+
+## First exact-head CI failure and same-packet repair
+
+Initial source commit `3789709121bea206b0934537624c7cbe377a84a4`
+[CI #40675528437](https://github.com/chigre/Picture_Capture/actions/runs/40675528437)
+failed in three test-contract checks: (1) an old-page FocusOut fault
+fixture did not supply `simplified_entry_key`, while the callback read the
+dependency **before** rejecting an obsolete page; (2–3) two historical
+static assertions required the obsolete unguarded
+`write_simplified_records` call at UI/main write sites. Production now
+validates stale row ownership before accessing the conversion key and the
+two static tests assert use of `guarded_write_records` with the injected
+writer. **No source-pinning or journaling requirement was removed.**
+Re-run exact-head CI before declaring packet success; preserve the initial
+failure in this audit trail.

@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T10:51:25.602Z",
+  "updated_at_utc": "2026-10-28T10:55:26.942Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_simplified_sidecar_source_pinning_and_journaled_write",
+    "active_work_item": "G1_simplified_sidecar_source_pinning_CI_contract_repair",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "50fd56ef98f2d9036057c615752a16bb18175e30",
+    "implementation_head_sha": "3789709121bea206b0934537624c7cbe377a84a4",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify new exact PR #663 HEAD six-platform CI, Risk-tier, OCR three OS and CodeQL; repair failed jobs in same G1 simplified source packet. Human E3 stays OPEN.",
-    "last_test_evidence": "Before new packet: #663@50fd56ef98f2d9036057c615752a16bb18175e30 CI #40669451778 attempt 2 success six platform+Risk-tier; OCR #40669451215 3/3; CodeQL #40669443771 Python+Actions success. New source-pinned sidecar writer needs exact-head CI. E3 NOT PERFORMED.",
+    "required_next_action": "After repairing initial CI, verify exact next HEAD six-platform matrix, Risk-tier gate, OCR three OS and CodeQL; repair any new true regression. Human E3 blocked.",
+    "last_test_evidence": "Source packet HEAD 3789709121bea206b0934537624c7cbe377a84a4 CI #40675528437 first attempt Ubuntu 3 failures: stale FocusOut accesses dependency before owner gate, two legacy static direct-writer assertions. Same packet code/test contract repair staged; new exact-head verification pending. OCR #40675528439 3/3 and CodeQL #40675523282 2/2 success for prior HEAD. No human E3.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1168,7 +1168,7 @@
     }
   },
   "g1_simplified_sidecar_source_pin_20261028": {
-    "status": "implementation_regressions_documented_exact_head_ci_pending",
+    "status": "initial_ci_failed_stale_focusout_and_static_contract_same_packet_repair_pending_recheck",
     "before_head_sha": "50fd56ef98f2d9036057c615752a16bb18175e30",
     "owner_files": [
       "src/picture_capture/proofreading/simplified_review.py",
@@ -1183,6 +1183,17 @@
       "no main-window fallback after guarded refusal",
       "source-drift during preview/publication, fail-closed corrupt JSON and stale FocusOut"
     ],
-    "safety_limits": "optimistic byte comparison is NOT atomic CAS; genuine Windows E3 remains OPEN"
+    "safety_limits": "optimistic byte comparison is NOT atomic CAS; genuine Windows E3 remains OPEN",
+    "initial_ci": {
+      "head_sha": "3789709121bea206b0934537624c7cbe377a84a4",
+      "url": "https://github.com/chigre/Picture_Capture/actions/runs/40675528437",
+      "observed_failure_count": 3,
+      "failures": [
+        "stale FocusOut test missing simplified_entry_key, callback fetched dependency before owner veto",
+        "legacy static UI test still required unguarded direct writer",
+        "legacy static main delete test still required unguarded direct writer"
+      ],
+      "repair": "Move KeyRelease conversion-key resolution after stale owner gate; update two static assertions to require shared guarded writer with original injected serializer."
+    }
   }
 }

@@ -6889,7 +6889,8 @@ def test_v2124_review_simplified_is_editable_saved_and_has_network_button():
     assert 'text="网查"' in REVIEW_WORKSPACE_SOURCE
     assert 'command=lambda i=index: self.lookup_simplified_online(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _persist_simplified_page' in review
-    assert 'write_simplified_records(' in REVIEW_SIMPLIFIED_SOURCE
+    assert 'guarded_write_records(' in REVIEW_SIMPLIFIED_SOURCE
+    assert 'writer=deps.write_simplified_records' in REVIEW_SIMPLIFIED_SOURCE
     assert 'def on_simplified_key' in review
 
 
@@ -6923,7 +6924,8 @@ def test_v2125_main_delete_path_removes_aligned_simplified_record():
     body = text[start:]
     assert "simplified_entry_key(entry.x, entry.y)" in body
     assert "read_simplified_records(path)" in body
-    assert "write_simplified_records(path, stem, records)" in body
+    assert "guarded_write_records(" in body
+    assert "writer=write_simplified_records" in body
     assert "self._delete_aligned_simplified_entry(entry)" in body
     assert "review.render_rows()" in body
 

@@ -77,7 +77,6 @@ def _auto_simplified_value(self, deps: ReviewSimplifiedDeps, original: str, fall
 
 
 def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str | None = None) -> None:
-    simplified_entry_key = deps.simplified_entry_key
     stem = str(page_stem or "")
     if (not stem or not getattr(self, "simplified_vars", [])
             or self.__dict__.get("_r3_simplified_capture_blocked", False)):
@@ -86,6 +85,7 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
     rendered_entries = _owned_rendered_simplified_rows(self)
     if rendered_entries is None or self.parent.current_page.stem != stem:
         return
+    simplified_entry_key = deps.simplified_entry_key
     records = self._simplified_page_records(stem)
     for i, entry in enumerate(rendered_entries):
         key = simplified_entry_key(entry.x, entry.y)
