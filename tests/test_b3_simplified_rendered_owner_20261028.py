@@ -232,3 +232,96 @@ def test_regenerate_claim_race_does_not_replace_human_values(fault):
     assert records == {} and ("persist", "page") not in calls
     assert view.simplified_actual_values == [None, None]
     assert view.simplified_manual_flags == [False, False]
+
+
+@pytest.mark.parametrize("dirty_before", [False, True])
+@pytest.mark.parametrize("failure", ["before_publish", "after_partial_ui", "foreign_in_cache"])
+def test_regenerate_failed_persist_restores_existing_manual_page(
+    dirty_before, failure,
+):
+    """A refused whole-page save must not masquerade as regenerated manual text."""
+    view, deps, rows, records, calls, _ = case()
+    original = {
+        "10:20": {"x": 10, "y": 20, "source_word": "word0",
+                  "text": "hand0", "manual": True},
+        "20:30": {"x": 20, "y": 30, "source_word": "word1",
+                  "text": "hand1", "manual": True},
+        "999:999": {"text": "unrelated human entry"},
+    }
+    records.update({k: dict(v) for k, v in original.items()})
+    for i in range(2):
+        view.simplified_vars[i].set(f"hand{i}")
+    view.simplified_actual_values[:] = ["hand0", "hand1"]
+    view.simplified_manual_flags[:] = [True, True]
+    view.simplified_auto_refresh_flags[:] = [True, True]
+    if dirty_before:
+        view._simplified_dirty_pages.add("page")
+    def persist(_stem):
+        calls.append("persist_called")
+        if failure == "foreign_in_cache":
+            # Simulate synchronous editor reentrancy while disk commit refuses.
+            records["999:999"] = {"text": "third-party newer edit"}
+        raise RuntimeError(failure)
+    view._persist_simplified_page = persist
+    with pytest.raises(RuntimeError, match=failure):
+        owner.regenerate_simplified_current_page(view, deps)
+    assert [v.get() for v in view.simplified_vars] == ["hand0", "hand1"]
+    assert view.simplified_actual_values == ["hand0", "hand1"]
+    assert view.simplified_manual_flags == [True, True]
+    assert view.simplified_auto_refresh_flags == [True, True]
+    assert records["10:20"] == original["10:20"]
+    assert records["20:30"] == original["20:30"]
+    assert records["999:999"] == (
+        {"text": "third-party newer edit"} if failure == "foreign_in_cache"
+        else original["999:999"]
+    )
+    assert view._simplified_dirty_pages == (
+        {"page"} if dirty_before or failure == "foreign_in_cache" else set()
+    )
+    assert not any(isinstance(x, tuple) and x[0] == "refresh" for x in calls)
+    assert not view.parent.status_var.get().startswith("已重新简体化")
+
+
+def test_regenerate_widget_exception_midpage_restores_prior_human_values():
+    view, deps, _, records, calls, _ = case()
+    before = {"10:20": {"text": "human0"}, "20:30": {"text": "human1"}}
+    records.update({k: dict(v) for k, v in before.items()})
+    view.simplified_manual_flags[:] = [True, True]
+    view.simplified_actual_values[:] = ["human0", "human1"]
+    view.simplified_auto_refresh_flags[:] = [True, True]
+    class FailingOnce(Var):
+        def __init__(self, value):
+            super().__init__(value)
+            self.fail = True
+        def set(self, value):
+            if self.fail:
+                self.fail = False
+                raise RuntimeError("Tk widget removed mid-regeneration")
+            super().set(value)
+    view.simplified_vars[1] = FailingOnce("manual1")
+    with pytest.raises(RuntimeError, match="Tk widget removed"):
+        owner.regenerate_simplified_current_page(view, deps)
+    assert [v.get() for v in view.simplified_vars] == ["manual0", "manual1"]
+    assert view.simplified_actual_values == ["human0", "human1"]
+    assert view.simplified_manual_flags == [True, True]
+    assert view.simplified_auto_refresh_flags == [True, True]
+    assert records == before
+    assert "page" not in view._simplified_dirty_pages
+    assert not any(isinstance(x, tuple) and x[0] == "persist" for x in calls)
+
+
+def test_regenerate_failure_preserves_newer_reentrant_widget_text():
+    view, deps, _, records, calls, _ = case()
+    records["10:20"] = {"text": "human0"}
+    view.simplified_manual_flags[:] = [True, True]
+    view.simplified_actual_values[:] = ["human0", "human1"]
+    def persist(_stem):
+        view.simplified_vars[0].set("newer typing")
+        records["10:20"] = {"text": "newer saved edit", "manual": True}
+        raise RuntimeError("concurrent edit")
+    view._persist_simplified_page = persist
+    with pytest.raises(RuntimeError, match="concurrent edit"):
+        owner.regenerate_simplified_current_page(view, deps)
+    assert view.simplified_vars[0].get() == "newer typing"
+    assert records["10:20"]["text"] == "newer saved edit"
+    assert "page" in view._simplified_dirty_pages

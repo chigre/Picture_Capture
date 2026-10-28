@@ -351,28 +351,92 @@ def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None
 
     stem = self._rendered_page_stem
     records = self._simplified_page_records(stem)
-    for index, (entry, original, actual) in enumerate(
-        zip(row_entries, originals, regenerated)
-    ):
-        if index < len(self.simplified_actual_values):
-            self.simplified_actual_values[index] = actual
-        if index < len(self.simplified_manual_flags):
+    # A source-pinned persist may refuse a third-party human edit. Freeze the
+    # entire visible/manual/cache state BEFORE changing anything, so a failed
+    # whole-page regeneration cannot leave OpenCC results masquerading as saved
+    # manual corrections. Keep unrelated cached rows and existing dirty state.
+    previous_display = [var.get() for var in self.simplified_vars]
+    previous_actual = list(self.simplified_actual_values)
+    previous_manual = list(self.simplified_manual_flags)
+    previous_auto = list(getattr(self, "simplified_auto_refresh_flags", ()))
+    was_dirty = stem in self._simplified_dirty_pages
+    proposals = [
+        (simplified_entry_key(entry.x, entry.y), {
+            "x": int(entry.x), "y": int(entry.y),
+            "source_word": original, "text": str(actual), "manual": False,
+        }, self._simplified_display_from_value(original, actual, False))
+        for entry, original, actual in zip(row_entries, originals, regenerated)
+    ]
+    previous_records = {
+        key: (key in records, records.get(key)) for key, _, _ in proposals
+    }
+    # Edits to unrelated source-coordinate rows may arrive synchronously
+    # through a Tk callback while a protected persistence attempt runs.
+    untouched_rows = {
+        key: value for key, value in records.items()
+        if key not in previous_records
+    }
+    try:
+        for index, (key, proposed_record, display) in enumerate(proposals):
+            self.simplified_actual_values[index] = regenerated[index]
             self.simplified_manual_flags[index] = False
-        if index < len(self.simplified_auto_refresh_flags):
-            self.simplified_auto_refresh_flags[index] = False
-        self.simplified_vars[index].set(
-            self._simplified_display_from_value(original, actual, False)
-        )
-        records[simplified_entry_key(entry.x, entry.y)] = {
-            "x": int(entry.x),
-            "y": int(entry.y),
-            "source_word": original,
-            "text": str(actual),
-            "manual": False,
-        }
-
-    self._simplified_dirty_pages.add(stem)
-    self._persist_simplified_page(stem)
+            if index < len(previous_auto):
+                self.simplified_auto_refresh_flags[index] = False
+            self.simplified_vars[index].set(display)
+            records[key] = proposed_record
+        self._simplified_dirty_pages.add(stem)
+        self._persist_simplified_page(stem)
+    except Exception:
+        # Do not erase a newer local edit if a synchronous Tk callback changed
+        # it while persistence ran. Restore only values still owned by this
+        # regeneration, and retain dirty state if any rollback is uncertain.
+        restored = True
+        for index, (key, proposed_record, display) in enumerate(proposals):
+            current_actual = self.simplified_actual_values[index]
+            if current_actual == regenerated[index]:
+                self.simplified_actual_values[index] = previous_actual[index]
+            elif current_actual != previous_actual[index]:
+                restored = False
+            current_manual = self.simplified_manual_flags[index]
+            if current_manual is False:
+                self.simplified_manual_flags[index] = previous_manual[index]
+            elif current_manual != previous_manual[index]:
+                restored = False
+            if index < len(previous_auto):
+                current_auto = self.simplified_auto_refresh_flags[index]
+                if current_auto is False:
+                    self.simplified_auto_refresh_flags[index] = previous_auto[index]
+                elif current_auto != previous_auto[index]:
+                    restored = False
+            current_display = self.simplified_vars[index].get()
+            if current_display == display:
+                try:
+                    self.simplified_vars[index].set(previous_display[index])
+                except Exception:
+                    restored = False
+            elif current_display != previous_display[index]:
+                restored = False
+            existed, original_record = previous_records[key]
+            if records.get(key) == proposed_record:
+                if existed:
+                    records[key] = original_record
+                else:
+                    records.pop(key, None)
+            elif (key in records) != existed or (
+                existed and records[key] != original_record
+            ):
+                # A different/newer cache entry must not be overwritten.
+                restored = False
+        if {
+            key: value for key, value in records.items()
+            if key not in previous_records
+        } != untouched_rows:
+            restored = False
+        if not was_dirty and restored:
+            self._simplified_dirty_pages.discard(stem)
+        else:
+            self._simplified_dirty_pages.add(stem)
+        raise
     self._refresh_cc_simplified_comparison(self.active_index)
     self.parent.status_var.set(
         f"已重新简体化当前页：{self.parent.current_page.name}｜覆盖 {count} 条简体结果"

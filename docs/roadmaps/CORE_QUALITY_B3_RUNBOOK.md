@@ -1,3 +1,12 @@
+## 2026-10-28｜G1 整页重新简体化失败时的人工 UI/缓存回滚
+
+- 高价值缺陷：`regenerate_simplified_current_page` 原先先覆盖整个页面的简体 Tk 字段、actual、manual/auto 标记和 X/Y sidecar 缓存，再调用已加固的 `_persist_simplified_page`。当另一校对者在读取后修改磁盘 sidecar，受保护写盘会拒绝，但没有自动还原页面显示与内存人工结果。
+- 同一 owner 内冻结所有对应 Entry 的显示值、实际值、人工/自动标记、原始 sidecar 缓存行和 dirty 状态；成功后保持原流程；写盘失败或中途 Tk 更新失败时，仅回滚仍与本次重新生成目标完全匹配的本地值，避免覆盖同步回调产生的新人工输入，必要时保持 dirty。不改变来源校验、R3 O_EXCL、候选/PDIC/SECTION/PPP、原图坐标或 GUI 方法签名。
+- 回归：`tests/test_b3_simplified_rendered_owner_20261028.py` 增加保存异常、半页 Tk 更新失败、同回调中较新人工输入；`tests/test_b3_simplified_sidecar_source_pin_20261028.py` 增加真实 sidecar 字节外部修改后的拒绝与 UI 回滚以及正常整页落盘的组合测试。细节见 `docs/architecture/R3_G1_SIMPLIFIED_REGENERATE_FAILED_COMMIT_ROLLBACK_20261028.md`。
+- 最终 exact-head CI 6 平台 / Risk-tier / OCR 3 OS / CodeQL 均需复核。真实 Windows 用户词典、候选 checkbox、20 步 Undo/Redo、FocusOut/重新打开、PDIC/PPP/SECTION/crop 和 R2 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 简体 sidecar 来源锁定首次 CI 反馈及本包修复
 
 - 首次 HEAD `3789709121bea206b0934537624c7cbe377a84a4` 的 CI #40675528437 出现 3 个失败：过期页 FocusOut 在校验 Entry/page 身份前访问注入依赖，以及两个旧静态测试仍检查不安全的直接写盘符号。过期回调改为先拒绝、再解析依赖；静态测试改为核验共享受保护 writer（并保留 monkeypatch writer 注入）。不削弱原始字节比对、O_EXCL 恢复标记。

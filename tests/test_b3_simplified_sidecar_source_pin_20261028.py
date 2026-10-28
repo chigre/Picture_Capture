@@ -209,3 +209,113 @@ def test_main_window_without_review_uses_same_guarded_writer(tmp_path):
     main._delete_aligned_simplified_entry(app, main_deps, row)
     assert read_records(path) == {}
     assert not tx._marker_present(tx._recovery_path(page))
+
+
+@pytest.mark.parametrize("external", ["same_row", "new_other_row", "delete_file"])
+def test_regenerate_external_manual_edit_rejection_restores_gui_cache(
+    tmp_path, external,
+):
+    from picture_capture.proofreading.simplified_review import entry_key
+    page, path, review, deps = scene(tmp_path)
+    source_records = review._simplified_page_records(page.stem)
+    original_record = dict(source_records["10,20"])
+    old_bytes = path.read_bytes()
+    row = SimpleNamespace(x=10, y=20, word="head")
+    class Buffer:
+        def __init__(self, text):
+            self.text = text
+        def get(self):
+            return self.text
+        def set(self, value):
+            self.text = value
+    review.parent.entries = [row]
+    review.parent._claim_page_for_manual_edit = lambda: True
+    review.parent.status_var = Buffer("")
+    review.row_entries = [row]
+    review.vars = [Buffer("head")]
+    review.simplified_vars = [Buffer("manual original")]
+    review.simplified_actual_values = ["manual original"]
+    review.simplified_manual_flags = [True]
+    review.simplified_auto_refresh_flags = [False]
+    review.active_index = -1
+    review._simplified_display_from_value = lambda original, actual, manual: actual
+    review._refresh_cc_simplified_comparison = lambda index: None
+    review._persist_simplified_page = lambda stem: ui._persist_simplified_page(review, deps, stem)
+    if external == "delete_file":
+        path.unlink()
+        third_party = None
+    else:
+        changed = read_records(path)
+        if external == "same_row":
+            changed["10,20"]["text"] = "externally corrected"
+        else:
+            changed["40,50"] = {"x": 40, "y": 50, "source_word": "other",
+                                "text": "foreign manual", "manual": True}
+        write_records(path, page.stem, changed)
+        third_party = path.read_bytes()
+        assert third_party != old_bytes
+    regen_deps = SimpleNamespace(
+        simplified_entry_key=entry_key,
+        simplify_text=lambda text: "regen:" + text,
+        messagebox=SimpleNamespace(showerror=lambda *args, **kw: None),
+    )
+    with pytest.raises(RuntimeError, match="修改"):
+        ui.regenerate_simplified_current_page(review, regen_deps)
+    assert tx._bytes_or_absent(path) == third_party
+    assert source_records["10,20"] == original_record
+    assert [x.get() for x in review.simplified_vars] == ["manual original"]
+    assert review.simplified_manual_flags == [True]
+    assert review.simplified_actual_values == ["manual original"]
+    assert review.simplified_auto_refresh_flags == [False]
+    assert review._simplified_dirty_pages == {page.stem}
+    assert review._r3_simplified_source_bytes[page.stem][1] == old_bytes
+    assert not tx._marker_present(tx._recovery_path(page))
+    assert "已重新简体化" not in review.parent.status_var.get()
+
+
+def test_regenerate_healthy_commit_updates_disk_and_ui_once(tmp_path):
+    from picture_capture.proofreading.simplified_review import entry_key
+    page, path, review, deps = scene(tmp_path)
+    original = review._simplified_page_records(page.stem)
+    before = path.read_bytes()
+    row = SimpleNamespace(x=10, y=20, word="head")
+    class Buffer:
+        def __init__(self, value):
+            self.value = value
+        def get(self):
+            return self.value
+        def set(self, value):
+            self.value = value
+    review.parent.entries = [row]
+    review.parent.status_var = Buffer("")
+    review.parent._claim_page_for_manual_edit = lambda: True
+    review.row_entries = [row]
+    review.vars = [Buffer("head")]
+    review.simplified_vars = [Buffer("manual original")]
+    review.simplified_actual_values = ["manual original"]
+    review.simplified_manual_flags = [True]
+    review.simplified_auto_refresh_flags = [True]
+    review.active_index = -1
+    review._simplified_display_from_value = lambda original, actual, manual: actual
+    review._refresh_cc_simplified_comparison = lambda index: None
+    review._persist_simplified_page = lambda stem: ui._persist_simplified_page(review, deps, stem)
+    regen_deps = SimpleNamespace(
+        simplified_entry_key=entry_key,
+        simplify_text=lambda text: "converted:" + text,
+        messagebox=SimpleNamespace(showerror=lambda *args, **kw: None),
+    )
+    ui.regenerate_simplified_current_page(review, regen_deps)
+    assert path.read_bytes() != before
+    assert read_records(path)["10,20"] == {
+        "x": 10, "y": 20, "source_word": "head",
+        "text": "converted:head", "manual": False,
+    }
+    assert original["10,20"]["text"] == "converted:head"
+    assert [v.get() for v in review.simplified_vars] == ["converted:head"]
+    assert review.simplified_actual_values == ["converted:head"]
+    assert review.simplified_manual_flags == [False]
+    assert review.simplified_auto_refresh_flags == [False]
+    assert not review._simplified_dirty_pages
+    assert review._r3_simplified_source_bytes[page.stem][1] == path.read_bytes()
+    assert not tx._marker_present(tx._recovery_path(page))
+    assert review.parent.status_var.get().startswith("已重新简体化")
