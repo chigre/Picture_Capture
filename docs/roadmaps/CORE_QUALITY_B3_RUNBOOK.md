@@ -1,3 +1,10 @@
+## 2026-10-28｜G1 侧写 JSON 重复键拒绝：人工校对字节保护（非真人验收）
+
+- 单一 Draft [PR #663](https://github.com/chigre/Picture_Capture/pull/663) 中，源码包 `f8065fc125ff0fa8addc80a8213734a2aeae6e0f`：`proofreading/candidate_delete.py` 对 manual_selection 和 simplified JSON 的**所有层级重复键**、非标准 NaN/Infinity 常量 fail-closed，防止 Python 默认解析吞掉其他候选/其他行的人工作业字段后重写整个 sidecar。
+- `tests/test_b3_candidate_owned_deletion_20261015.py` 新增 **8** 组反例；拒绝时 PDIC/manual/simplified 原始字节、Entry、candidate.selected、checkbox 和 Tk 行为均不变。保留原有效侧写和候选 Undo/Redo 回归。详细根因与界限见 [G1 JSON 审计](../../docs/architecture/R3_G1_DUPLICATE_JSON_SIDECAR_20261028.md)。
+- 源码 HEAD [CI 40662405403](https://github.com/chigre/Picture_Capture/actions/runs/40662405403) 在本次状态提交时 Windows 作业仍在运行；Ubuntu 3.13 **4578 passed, 3 skipped**，三平台 [OCR Smoke 40662405192](https://github.com/chigre/Picture_Capture/actions/runs/40662405192) **3/3 success**，独立 [CodeQL 40662399852](https://github.com/chigre/Picture_Capture/actions/runs/40662399852) Python/Actions success。**此状态/文档提交将生成新 HEAD，必须重新核其完整 CI**。
+- 真实 Windows 人工候选、20步 Undo/Redo、FocusOut、PDIC/PPP/SECTION、原图裁剪和 #483 W1–W11 均 **NOT PERFORMED**。不是跨文件 OS 原子性证明；#503/#562 不关闭，PR 不合并、不转 Ready。
+
 ## 2026-10-28｜G1 批量修复：候选归属与侧写溯源（新一批，不是 R3 人工验收）
 
 新增 [G1 候选删除归属/冲突矩阵](../architecture/R3_G1_CANDIDATE_ID_SIDECAR_PROVENANCE_BATCH_20261028.md)：修复一个 candidate_id 被两个 Entry 认领、同坐标简体条目属于另一个来源词、简体 JSON 页面/格式错误、manual_selection 已保存但 selected/word 不一致时的误删风险。要求在**任何磁盘/Tk/Undo 修改前** fail-closed；合法旧版候选 selected 缺省、已有人工选中与 Delete→Undo→Redo 三文件字节一致仍被保留。新增 19 个参数化/端到端回归场景。此工作包代码已提交但必须查看**最新 HEAD** CI，未通过不得把 G1/B3/真实 Windows 人工验收标 completed。
