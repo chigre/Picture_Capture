@@ -1,3 +1,13 @@
+## 2026-10-28｜G1 简体人工副本外部修改保护与两条写盘路径统一
+
+- 缓存建立时记录 sidecar 的原始字节并复核，独立保存前二次比对。第三方人工编辑、外部删除、不可无损解析来源、缺失历史绑定均拒绝旧缓存覆盖。
+- `simplified_review.guarded_write_records`：用生产序列化器制作预览文件，冻结来源、建立 R3 O_EXCL 恢复标记、提交后回读；错误时按 R3 意图尝试回滚或保留隔离。此协议并非跨进程文件系统原子 CAS。
+- 主窗口删除词条的简体副本路径不再在 ReviewWindow 保存失败后降级成原始写盘；无窗口路径也使用来源复核。FocusOut/旧 Tk 行的捕获只接受当前页且身份完整的渲染 Entry。
+- 新行为及故障注入：`tests/test_b3_simplified_sidecar_source_pin_20261028.py`；架构边界：`docs/architecture/R3_G1_SIMPLIFIED_SIDECAR_SOURCE_PIN_20261028.md`。不改变 PDIC/PPP/SECTION、简体 JSON schema、公有 GUI 函数签名、OCR 仲裁权重或默认排序。
+- 新 HEAD 的六平台、Risk-tier、OCR 3 OS、CodeQL 尚需实际 CI 复核；真人 Windows 词典、候选、20 步 Undo/Redo、FocusOut/保存重开及 R2 W1–W11 依然 **OPEN / NOT PERFORMED**。
+
+---
+
 ## 2026-10-28｜G1/G2 首轮 CI 的测试合同修复（非生产保护降级）
 
 - 旧源码 HEAD `dec92473a088b472623a4af69ddb559a8d2027a7` 的 CI #40668995327 在 macOS Python 3.10 上出现 3 个失败：两个历史 mock 缺少可信当前页/渲染行/live Entry 绑定，另一个把简体显示符号 `√` 错写为真实转换内容。已只修测试 fixture/断言并记录首次失败；**不删测试、不放宽生产身份校验**。

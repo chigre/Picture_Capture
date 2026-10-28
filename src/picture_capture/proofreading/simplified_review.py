@@ -80,3 +80,71 @@ def write_records(path: Path, page: str, records: dict[str, dict]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
+
+def guarded_write_records(
+    page: Path, path: Path, stem: str, records: dict[str, dict],
+    expected: bytes | None, *, writer=None,
+) -> bytes:
+    """Preserve exact human bytes via a source-pinned R3 recovery journal.
+
+    Optimistic check + O_EXCL intent is not atomic cross-process file CAS.
+    """
+    from tempfile import TemporaryDirectory
+    from .candidate_delete import _load_unambiguous_json
+    from . import transactions as tx
+
+    page, path = Path(page), Path(path)
+    if writer is None:
+        writer = write_records
+    if stem != page.stem or tx._marker_present(tx._recovery_path(page)):
+        raise RuntimeError("R3 存在其他事务恢复标记或页面已改变")
+    if tx._bytes_or_absent(path) != expected:
+        raise RuntimeError("R3 简体人工副本由其他人修改，拒绝覆盖")
+    if expected is not None:
+        # The UI reader tolerates corrupt legacy data for display; a writer
+        # must not silently collapse duplicated human JSON or invalid data.
+        try:
+            original_doc = _load_unambiguous_json(expected)
+        except (UnicodeError, ValueError, TypeError) as exc:
+            raise RuntimeError("R3 简体人工副本不能无损解析，拒绝覆盖") from exc
+        if (not isinstance(original_doc, dict)
+                or original_doc.get("format") != "picture_capture_simplified_review"
+                or type(original_doc.get("format_version")) is not int
+                or original_doc["format_version"] != FORMAT_VERSION
+                or original_doc.get("page") != stem
+                or not isinstance(original_doc.get("entries"), list)):
+            raise RuntimeError("R3 简体人工副本格式不可信，拒绝覆盖")
+
+    with TemporaryDirectory(prefix="pc-r3-simplified-") as directory:
+        proposal = Path(directory) / "proposal.json"
+        writer(proposal, stem, records)
+        target = proposal.read_bytes()
+    if tx._bytes_or_absent(path) != expected:
+        raise RuntimeError("R3 简体预览期间外部修改了人工副本")
+    if target == expected:
+        return target
+
+    marker = tx._stage_recovery(
+        page, [("simplified", expected, target)], rollback_required=True,
+    )
+    try:
+        marker_bytes = marker.read_bytes()
+        if (not tx._recovery_marker_unchanged(marker, marker_bytes)
+                or tx._bytes_or_absent(path) != expected):
+            raise RuntimeError("R3 简体来源或恢复意图已变化")
+        tx._publish(path, target)
+        if (tx._bytes_or_absent(path) != target
+                or not tx._recovery_marker_unchanged(marker, marker_bytes)):
+            raise RuntimeError("R3 简体保存回读或恢复意图不一致")
+        marker.unlink()
+        if tx._marker_present(marker):
+            raise RuntimeError("R3 简体恢复标记未能清除")
+    except Exception:
+        if tx._marker_present(marker):
+            try:
+                tx._rollback_failed_publish(page)
+            except (OSError, RuntimeError, ValueError):
+                # An unresolved journal must quarantine subsequent writers.
+                pass
+        raise
+    return target

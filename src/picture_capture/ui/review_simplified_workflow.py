@@ -45,8 +45,18 @@ def _simplified_page_records(self, deps: ReviewSimplifiedDeps, page_stem: str | 
                     break
         if page is None and self.parent.current_page and self.parent.current_page.stem == stem:
             page = self.parent.current_page
-        records = read_simplified_records(simplified_review_path_for_image(page)) if page else {}
+        if page is None:
+            return {}
+        from ..proofreading.transactions import _bytes_or_absent
+        path = simplified_review_path_for_image(page)
+        old_bytes = _bytes_or_absent(path)
+        records = read_simplified_records(path)
+        if _bytes_or_absent(path) != old_bytes:
+            raise RuntimeError("R3 简体副本读取期间发生外部修改")
         self._simplified_page_cache[stem] = records
+        self.__dict__.setdefault("_r3_simplified_source_bytes", {})[stem] = (
+            path.resolve(), old_bytes,
+        )
     return self._simplified_page_cache[stem]
 
 
@@ -72,15 +82,12 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
     if (not stem or not getattr(self, "simplified_vars", [])
             or self.__dict__.get("_r3_simplified_capture_blocked", False)):
         return
-    records = self._simplified_page_records(stem)
-    # Preserve rendered row identities across section-order changes.
-    rendered_entries = self._bound_row_entries()
-    # Only capture against the currently rendered page.  During navigation
-    # parent.current_page may already refer to the next page while the old
-    # widgets are still being destroyed.
-    if self.parent.current_page and self.parent.current_page.stem != stem:
+    # Old FocusOut / asynchronous Tk rows may not mutate another page cache.
+    rendered_entries = _owned_rendered_simplified_rows(self)
+    if rendered_entries is None or self.parent.current_page.stem != stem:
         return
-    for i, entry in enumerate(rendered_entries[:len(self.simplified_vars)]):
+    records = self._simplified_page_records(stem)
+    for i, entry in enumerate(rendered_entries):
         key = simplified_entry_key(entry.x, entry.y)
         manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
         actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
@@ -104,15 +111,26 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
 
 def _persist_simplified_page(self, deps: ReviewSimplifiedDeps, page_stem: str | None = None) -> None:
     simplified_review_path_for_image = deps.simplified_review_path_for_image
-    write_simplified_records = deps.write_simplified_records
     stem = str(page_stem or (self.parent.current_page.stem if self.parent.current_page else ""))
     if not stem or not self.parent.project:
         return
     page = next((item for item in self.parent.project.images if item.stem == stem), None)
-    if page is None:
-        return
+    if (page is None or self.parent.current_page != page
+            or getattr(self, "_rendered_page_stem", "") != stem):
+        raise RuntimeError("R3 不是当前校对页面，拒绝简体副本写入")
     records = self._simplified_page_records(stem)
-    write_simplified_records(simplified_review_path_for_image(page), stem, records)
+    path = simplified_review_path_for_image(page)
+    pinned = self.__dict__.get("_r3_simplified_source_bytes", {}).get(stem)
+    if pinned is None or pinned[0] != path.resolve():
+        raise RuntimeError("R3 无可信简体人工副本来源，拒绝覆盖")
+    from ..proofreading.simplified_review import guarded_write_records
+    committed = guarded_write_records(
+        page, path, stem, records, pinned[1],
+        writer=deps.write_simplified_records,
+    )
+    self.__dict__["_r3_simplified_source_bytes"][stem] = (
+        path.resolve(), committed,
+    )
     self._simplified_dirty_pages.discard(stem)
 
 

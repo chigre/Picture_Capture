@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T10:05:49.688Z",
+  "updated_at_utc": "2026-10-28T10:51:25.602Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_G2_simplified_rendered_Entry_pixel_owner_CI_fixture_repair",
+    "active_work_item": "G1_simplified_sidecar_source_pinning_and_journaled_write",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "dec92473a088b472623a4af69ddb559a8d2027a7",
+    "implementation_head_sha": "50fd56ef98f2d9036057c615752a16bb18175e30",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "On this test contract repair exact HEAD, re-run full Windows/macOS/Ubuntu Python 3.13/3.10 CI, Risk-tier, OCR smoke, CodeQL. Repair real regressions only; do not weaken owner guard. E3 Windows manual remains OPEN.",
-    "last_test_evidence": "Prior source packet HEAD dec92473a088b472623a4af69ddb559a8d2027a7: CI #40668995327 failure in 3 contract fixtures (2 legacy without required live bindings; 1 new display text vs actual), repair submitted. OCR/CodeQL conclusions must be checked on new repair HEAD. E3 NOT PERFORMED.",
+    "required_next_action": "Verify new exact PR #663 HEAD six-platform CI, Risk-tier, OCR three OS and CodeQL; repair failed jobs in same G1 simplified source packet. Human E3 stays OPEN.",
+    "last_test_evidence": "Before new packet: #663@50fd56ef98f2d9036057c615752a16bb18175e30 CI #40669451778 attempt 2 success six platform+Risk-tier; OCR #40669451215 3/3; CodeQL #40669443771 Python+Actions success. New source-pinned sidecar writer needs exact-head CI. E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1166,5 +1166,23 @@
       ],
       "repair": "Only strengthen legacy fixtures to represent real row identity; correct display-versus-actual assertion. Production data-owner guards unchanged."
     }
+  },
+  "g1_simplified_sidecar_source_pin_20261028": {
+    "status": "implementation_regressions_documented_exact_head_ci_pending",
+    "before_head_sha": "50fd56ef98f2d9036057c615752a16bb18175e30",
+    "owner_files": [
+      "src/picture_capture/proofreading/simplified_review.py",
+      "src/picture_capture/ui/review_simplified_workflow.py",
+      "src/picture_capture/ui/main_entry_actions.py"
+    ],
+    "regression_test": "tests/test_b3_simplified_sidecar_source_pin_20261028.py",
+    "architecture_doc": "docs/architecture/R3_G1_SIMPLIFIED_SIDECAR_SOURCE_PIN_20261028.md",
+    "scope": [
+      "exact source byte pin on per-page cache population",
+      "single-sidecar O_EXCL recovery marker save",
+      "no main-window fallback after guarded refusal",
+      "source-drift during preview/publication, fail-closed corrupt JSON and stale FocusOut"
+    ],
+    "safety_limits": "optimistic byte comparison is NOT atomic CAS; genuine Windows E3 remains OPEN"
   }
 }

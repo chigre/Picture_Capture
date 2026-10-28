@@ -130,7 +130,10 @@ def test_simplified_manual_edit_keeps_rendered_coordinate_identity():
     source = SimpleNamespace(x=42, y=91, word="甲")
     records = {}
     view = SimpleNamespace(
-        parent=SimpleNamespace(current_page=SimpleNamespace(stem="page")),
+        parent=SimpleNamespace(current_page=SimpleNamespace(stem="page"),
+                               entries=[source]),
+        row_entries=[source], _rendered_page_stem="page",
+        vars=[SimpleNamespace(get=lambda: "甲")],
         simplified_vars=[SimpleNamespace(get=lambda: "乙")],
         simplified_manual_flags=[False],
         simplified_actual_values=["甲"],
@@ -145,21 +148,30 @@ def test_simplified_manual_edit_keeps_rendered_coordinate_identity():
     assert "page" in view._simplified_dirty_pages
 
 
-def test_simplified_persist_uses_original_page_path_and_clears_dirty_only_after_write():
-    written = []
-    page = Path("/tmp/project/page.png")
+def test_simplified_persist_uses_original_page_path_and_clears_dirty_only_after_write(tmp_path):
+    from picture_capture.io.formats import pdic_path
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    from picture_capture.proofreading.simplified_review import read_records, write_records
+
+    page = tmp_path / "page.png"
+    page.write_bytes(b"source")
+    pdic_path(page).parent.mkdir(parents=True, exist_ok=True)
+    path = simplified_review_path_for_image(page)
+    records = {"42,91": {"x": 42, "y": 91, "source_word": "甲",
+                         "text": "乙", "manual": True}}
     view = SimpleNamespace(
         parent=SimpleNamespace(project=SimpleNamespace(images=[page]), current_page=page),
+        _rendered_page_stem="page", _simplified_page_cache={"page": records},
+        _r3_simplified_source_bytes={"page": (path.resolve(), None)},
         _simplified_dirty_pages={"page"},
-        _simplified_page_records=lambda stem: {"42:91": {"text": "乙"}},
     )
-    deps = SimpleNamespace(
-        simplified_review_path_for_image=lambda p: p.with_suffix(".review.json"),
-        write_simplified_records=lambda path, stem, records: written.append((path,stem,records)),
-    )
+    view._simplified_page_records = lambda stem: view._simplified_page_cache[stem]
+    deps = SimpleNamespace(simplified_review_path_for_image=simplified_review_path_for_image,
+                           write_simplified_records=write_records)
     simplified._persist_simplified_page(view, deps, "page")
-    assert written == [(page.with_suffix(".review.json"), "page", {"42:91": {"text": "乙"}})]
+    assert read_records(path) == records
     assert view._simplified_dirty_pages == set()
+    assert view._r3_simplified_source_bytes["page"][1] == path.read_bytes()
 
 
 def test_ocr_comparison_uses_selected_engine_while_preserving_empty_neutral():
