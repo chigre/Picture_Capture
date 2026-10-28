@@ -175,7 +175,10 @@ def test_auto_refresh_normal_reordered_rows_uses_original_pixel_identity():
     owner._refresh_simplified_for_index(view, deps, 0)
     assert records == {"10:20": {"x": 10, "y": 20, "source_word": "word0",
                                  "text": "auto:word0", "manual": False}}
-    assert view.simplified_vars[0].get() == "auto:word0"
+    # The rendered display can legitimately be a check-mark placeholder;
+    # the actual converted bytes and source X/Y must still match.
+    assert view.simplified_vars[0].get() == "√"
+    assert view.simplified_actual_values[0] == "auto:word0"
 
 
 @pytest.mark.parametrize("fault", [

@@ -1,3 +1,10 @@
+## 2026-10-28｜G1/G2 首轮 CI 的测试合同修复（非生产保护降级）
+
+- 旧源码 HEAD `dec92473a088b472623a4af69ddb559a8d2027a7` 的 CI #40668995327 在 macOS Python 3.10 上出现 3 个失败：两个历史 mock 缺少可信当前页/渲染行/live Entry 绑定，另一个把简体显示符号 `√` 错写为真实转换内容。已只修测试 fixture/断言并记录首次失败；**不删测试、不放宽生产身份校验**。
+- 新修复提交必须重新触发六平台/Risk-tier/OCR 及 CodeQL。真人 Windows 扫描和人工校对仍 NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1/G2 简体校对稳定 Entry/X-Y 归属批次（精确 HEAD CI 待验证）
 
 - 工作包以 `ui/review_simplified_workflow.py` 为唯一生产 owner：Keys、剪贴板延迟回调、自动刷新、整页重新简体化都以当前页面和已渲染 `row_entries` 的 Entry 对象及原图坐标为准，不再从当下排序列表行号推断归属。来源跨页/排序后的旧 Tk 回调、绑定缺失/重复或半渲染严格拒绝；不改变公共 ReviewWindow 签名、持久化格式、原图 X/Y。

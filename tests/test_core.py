@@ -7397,6 +7397,13 @@ def test_v21211_new_unsaved_simplified_can_still_follow_original_during_session(
     review._auto_simplified_value = lambda original, fallback=None: "校对"
     records = {}
     review._simplified_page_records = lambda stem: records
+    # Model a fully rendered ReviewWindow page, including its stable
+    # Entry identity, rather than a pre-row-binding synthetic shell.
+    review.row_entries = [entry]
+    review.parent = SimpleNamespace(
+        current_page=SimpleNamespace(stem="0001"), entries=[entry],
+        _ordered_entries_reading_order=lambda: [entry],
+    )
 
     app_module.ReviewWindow._refresh_simplified_for_index(review, 0)
     assert review.simplified_vars[0].get() == "校对"
@@ -7431,11 +7438,13 @@ def test_v2140_regenerate_simplified_current_page_overwrites_saved_and_manual_re
     review._rendered_page_stem = "0001"
     review.active_index = 0
     review._bound_row_entries = lambda: entries
+    review.row_entries = list(entries)  # Exactly the rendered, live Tk rows.
     review._simplified_page_records = lambda stem: records
     review._persist_simplified_page = lambda stem: persisted.append(stem)
     review._refresh_cc_simplified_comparison = lambda index: None
     review.parent = SimpleNamespace(
         current_page=SimpleNamespace(stem="0001", name="0001.png"),
+        entries=entries,
         _claim_page_for_manual_edit=lambda: True,
         status_var=SimpleNamespace(set=lambda value: statuses.append(value)),
     )
