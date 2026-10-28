@@ -670,3 +670,70 @@ def test_stale_simplified_provenance_must_not_change_candidate_history_or_undo(
     assert not manual.exists()
     assert candidate["selected"] is True
     assert not actions
+
+# #503 G1: Python's permissive JSON parser silently collapses duplicate
+# keys (including unrelated human decisions) when the sidecar is rewritten.
+# Such ambiguous sidecars must remain byte-identical; no UI state may change.
+@pytest.mark.parametrize("mutation", [
+    "manual_duplicate_root",
+    "manual_duplicate_target",
+    "manual_duplicate_other_human",
+    "manual_nonfinite_other_human",
+    "simplified_duplicate_root",
+    "simplified_duplicate_target",
+    "simplified_duplicate_other_human",
+    "simplified_nonfinite_other_human",
+])
+def test_candidate_delete_quarantines_ambiguous_human_json_without_rewrite(
+    tmp_path, mutation,
+):
+    page, rows, review, candidate, manual, simplified, actions = _case(tmp_path)
+    pdic = pdic_path(page)
+    original_pdic = pdic.read_bytes()
+    original_simplified = simplified.read_bytes()
+    if mutation.startswith("manual"):
+        values = {
+            "manual_duplicate_root":
+                '{"version":1,"page":"synthetic","overrides":{},'
+                '"overrides":{"ocr-id":{"selected":true,"word":"head"}}}',
+            "manual_duplicate_target":
+                '{"version":1,"page":"synthetic","overrides":{'
+                '"ocr-id":{"selected":true,"selected":true,"word":"head"}}}',
+            "manual_duplicate_other_human":
+                '{"version":1,"page":"synthetic","overrides":{'
+                '"other-id":{"selected":true,"word":"人工原值","word":"人工后值"}}}',
+            "manual_nonfinite_other_human":
+                '{"version":1,"page":"synthetic","overrides":{'
+                '"other-id":{"selected":true,"word":"人工原值","score":NaN}}}',
+        }
+        manual.write_text(values[mutation], encoding="utf-8")
+    else:
+        raw = simplified.read_text("utf-8")
+        if mutation == "simplified_duplicate_root":
+            raw = raw.replace('"entries": [', '"entries": [], "entries": [', 1)
+        elif mutation == "simplified_duplicate_target":
+            raw = raw.replace(
+                '"source_word": "head"',
+                '"source_word": "head", "source_word": "head"', 1,
+            )
+        elif mutation == "simplified_duplicate_other_human":
+            raw = raw.replace(
+                '"text": "other"',
+                '"text": "人工原值", "text": "人工后值"', 1,
+            )
+        else:
+            raw = raw.replace(
+                '"text": "other"', '"text": "other", "quality": NaN', 1,
+            )
+        simplified.write_text(raw, encoding="utf-8")
+    original_manual = manual.read_bytes() if manual.exists() else None
+    original_simplified = simplified.read_bytes()
+    assert delete_owned_review_candidate(review, 0, rows) == "break"
+    assert pdic.read_bytes() == original_pdic
+    assert (manual.read_bytes() if manual.exists() else None) == original_manual
+    assert simplified.read_bytes() == original_simplified
+    assert review.parent.entries == rows
+    assert candidate["selected"] is True
+    assert review.parent.candidate_check_vars["ocr-id"].get() is True
+    assert not storage._marker_present(storage._recovery_path(page))
+    assert not actions

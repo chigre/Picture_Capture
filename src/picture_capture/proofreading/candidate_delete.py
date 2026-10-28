@@ -22,6 +22,29 @@ class CandidateDeletePlan:
     simplified_bytes: bytes | None
 
 
+def _unique_json_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous manual fields instead of dropping a human JSON value."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON object member in proofreading sidecar")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json(value: str) -> Any:
+    raise ValueError(f"Non-finite JSON constant in proofreading sidecar: {value}")
+
+
+def _load_unambiguous_json(raw: bytes) -> Any:
+    """Never reserialize a sidecar that would lose duplicate human fields."""
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_unique_json_members,
+        parse_constant=_reject_nonfinite_json,
+    )
+
+
 def prepare_candidate_delete(
     snapshot: SavedSnapshot, entry: Any, candidate: dict[str, Any],
 ) -> CandidateDeletePlan | None:
@@ -68,7 +91,7 @@ def prepare_candidate_delete(
         if snapshot.manual_bytes is None:
             manual = {"version": 1, "overrides": {}}
         else:
-            manual = json.loads(snapshot.manual_bytes.decode("utf-8"))
+            manual = _load_unambiguous_json(snapshot.manual_bytes)
         if not isinstance(manual, dict) or not isinstance(manual.get("overrides"), dict):
             return None
         if str(manual.get("page") or snapshot.page.stem) != snapshot.page.stem:
@@ -93,7 +116,7 @@ def prepare_candidate_delete(
 
         target_simplified = snapshot.simplified_bytes
         if target_simplified is not None:
-            simplified = json.loads(target_simplified.decode("utf-8"))
+            simplified = _load_unambiguous_json(target_simplified)
             if (not isinstance(simplified, dict)
                     or simplified.get("format") != "picture_capture_simplified_review"
                     or simplified.get("format_version") != 1
