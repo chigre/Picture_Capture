@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T13:08:37.716Z",
+  "updated_at_utc": "2026-10-28T13:24:20.624Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_regenerate_simplified_rollback_windows_tcl_pure_state_test_isolation",
+    "active_work_item": "G1_plain_non_candidate_delete_paired_PDiC_simplified_commit",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "4371c027f8781e288b60bb63bbea025ea6caf0b3",
+    "implementation_head_sha": "265b56f43eefc70d2368b70f83840da5d856cdb3",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Recheck exact next HEAD CI six platform+Risk-tier (especially real Windows Tk GUI smoke), OCR 3 OS, CodeQL. If real Tk smoke fails, report as genuine runner/Tcl blocker, not pass. Real human E3 OPEN.",
-    "last_test_evidence": "Source regeneration packet #663@4371c027f8781e288b60bb63bbea025ea6caf0b3 CI #40692254312 attempts 1 and 2 both failed Windows Python3.13 init.tcl in pure quick-state test (4637 passed, 1 failed, 2 skipped); other 5/6 test jobs success; Risk-tier gate failure. OCR #40692254339 3/3 and CodeQL #40692246514 2/2 successful; isolated pure state trace fixture patch pending new exact head. No real E3.",
+    "required_next_action": "Verify new exact HEAD six-platform, Risk-tier gate, OCR 3 OS, CodeQL; fix failures in same G1 noncandidate deletion bundle. Real operator E3 remains OPEN.",
+    "last_test_evidence": "Baseline #663@265b56f43eefc70d2368b70f83840da5d856cdb3: CI #40693875759 completed success 6/6+Risk-tier, OCR #40693875707 3/3, CodeQL #40693867945 2/2. New noncandidate delete bundle pending new exact-head CI. True Windows E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1233,5 +1233,31 @@
       "diagnosis": "Pure quick-state trace test unnecessarily invoked tk.Tcl() as variable backend; actual Tk construction remains separately checked by GUI smoke",
       "repair": "Test only: deterministic trace variable double exercising read/write and once-only callbacks; retain separate Windows/macOS GUI construction and PDIC/PPP Tk smoke unmodified"
     }
+  },
+  "g1_plain_review_delete_bundle_20261028": {
+    "status": "source_and_synthetic_regressions_submitted_exact_head_ci_pending",
+    "before_head_sha": "265b56f43eefc70d2368b70f83840da5d856cdb3",
+    "owner_files": [
+      "src/picture_capture/ui/review_entry_actions.py",
+      "src/picture_capture/proofreading/review_bundle.py"
+    ],
+    "test_files": [
+      "tests/test_b3_plain_review_delete_bundle_20261028.py",
+      "tests/test_proofreading_capture_20261014.py"
+    ],
+    "architecture_doc": "docs/architecture/R3_G1_PLAIN_DELETE_PAIRED_BUNDLE_AND_INTERWRITE_GUARD_20261028.md",
+    "observed_root_cause": "Previously noncandidate ReviewWindow deletion committed PDIC then independently persisted simplified sidecar, leaving PDIC deletion when protected sidecar write refused. Existing review_bundle lacked per-publish source recheck before second role.",
+    "repair": "Reuse existing R3 source snapshot, protective in-memory context and two-role recovery journal; commit both roles before model/history status; recheck provenance after each published role, rotate sidecar provenance after saved bundle; preserve foreign sidecar on interfile race by marker quarantine",
+    "test_matrix": [
+      "ordinary noncandidate deletion",
+      "pending other row text saved with delete",
+      "pre/post PDIC and simplified publication failures",
+      "external human PDIC before snapshot",
+      "foreign simplified human bytes after PDIC before simplified",
+      "cross-page stale callback"
+    ],
+    "risks": "No OS-level CAS, no power-loss cross-file atomicity; unresolved foreign write leaves marker and requires operator recovery; REAL E3 NOT PERFORMED",
+    "previous_test_evidence": "Source regeneration packet #663@4371c027f8781e288b60bb63bbea025ea6caf0b3 CI #40692254312 attempts 1 and 2 both failed Windows Python3.13 init.tcl in pure quick-state test (4637 passed, 1 failed, 2 skipped); other 5/6 test jobs success; Risk-tier gate failure. OCR #40692254339 3/3 and CodeQL #40692246514 2/2 successful; isolated pure state trace fixture patch pending new exact head. No real E3.",
+    "new_exact_head_evidence": "pending"
   }
 }

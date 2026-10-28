@@ -112,9 +112,12 @@ def test_review_delete_only_attempts_capture_after_successful_save():
     start = code.index("def delete_review_entry(")
     end = code.index("\ndef _save_digit_map(", start)
     block = code[start:end]
-    assert block.index("self.parent.save_pdic(silent=True, sync_editors=False)") < block.index(
+    assert block.index("commit_review_bundle(self, transaction_before)") < block.index(
         "capture_saved_review_deletion("
     )
+    assert "protect_review_pdic_commit" in block
+    assert "self.parent.save_pdic(silent=True, sync_editors=False)" not in block
+    assert "self._persist_simplified_page(self._rendered_page_stem)" not in block
     assert "proofreading_event_capture" in block
     assert "capture_failed = True" in block
 

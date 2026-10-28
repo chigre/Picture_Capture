@@ -1,3 +1,13 @@
+## 2026-10-28｜G1 非候选删除的 PDIC＋简体副本整体事务
+
+- 证实源码顺序风险：`ui/review_entry_actions.delete_review_entry` 旧逻辑先从内存移除 Entry，再 `save_pdic` 写盘，最后独立 `_persist_simplified_page`；如果来源字节在后者被外部人工修改，PDIC 已删但 sidecar 仍保留该词条，Undo/历史无法完整记录。
+- 改为先冻结 R3 当前页唯一来源、验证 Entry 属于当前页面，借用已存在的 `protect_review_pdic_commit` 和 `commit_review_bundle`：在内存准备更改后一次提交 PDIC＋simplified 角色，全部成功才更新画布、删除操作历史和日志；失败时由既有安全上下文恢复内存（仅限原 PDIC 可证实未变）或保留恢复标记隔离。仍支持同时保存其他行尚未提交的文字，不把旧 UI 编辑器缓冲覆盖 PDIC。
+- `review_bundle` 复用原有 `_snapshot_sources_match`，每次角色发表前后复核预期源字节及只读 OCR/manual/SECTION/Profile；两次写入之间的新人工简体字节不能被第二次文件提交覆盖。成功时更新本页 simplified 来源 pin，避免同一窗口后续误认自身保存为第三方修改。
+- 成组回归：`tests/test_b3_plain_review_delete_bundle_20261028.py`；旧静态保存顺序测试同步验证成对提交。文件 owner、边界和恢复剩余风险见 `docs/architecture/R3_G1_PLAIN_DELETE_PAIRED_BUNDLE_AND_INTERWRITE_GUARD_20261028.md`。当前 HEAD CI 尚待执行，不得冒充绿色。
+- 真正 Windows 词典、checkbox、Undo/Redo×20、PDIC/PPP/SECTION 关窗重开、原图 X/Y/crop、#483 W1–W11 均 OPEN / NOT PERFORMED；R8 PR-B 仍用户延后。
+
+---
+
 ## 2026-10-28｜G1 整页重新简体化：重复 Windows 3.13 Tcl 宿主环境失败与测试合同隔离
 
 - 源码工作包 HEAD `4371c027f8781e288b60bb63bbea025ea6caf0b3` 的 CI [#40692254312](https://github.com/chigre/Picture_Capture/actions/runs/40692254312) attempt 1/2 均 Windows 3.13 单条 `test_settings_help_legacy_cleanup_20261013.py::test_state_initialization_requires_no_visual_widgets_and_binds_traces_once` 的 `tk.Tcl()` 初始化失败：托管解释器不能读取 `init.tcl`；4637 passed、1 failed、2 skipped，其他五平台全成功。首次和重试均保留为失败证据。
