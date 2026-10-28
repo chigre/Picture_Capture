@@ -3324,7 +3324,8 @@ def test_v2818_position_variants_are_mutually_exclusive_after_overrides():
     assert rows[1]["selected"] is True
 
 
-def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action():
+def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action(tmp_path):
+    from types import SimpleNamespace
     from picture_capture.app import PictureCaptureApp
     from picture_capture.models import AppSettings, Entry
 
@@ -3348,6 +3349,10 @@ def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action():
     }
     app = PictureCaptureApp.__new__(PictureCaptureApp)
     app.settings = AppSettings()
+    # Source ownership now requires a real page-scoped manual-selection path.
+    # Keep the actual switch behavior and all original assertions unchanged.
+    app.project = SimpleNamespace(root=tmp_path)
+    app.current_page = tmp_path / "synthetic.png"
     app.entries = [Entry("信", 20, 92, candidate_id="base")]
     app.ocr_review_candidates = [refined, original]
     app.candidate_check_vars = {"base": FakeVar(True), "base-rawy": FakeVar(False)}

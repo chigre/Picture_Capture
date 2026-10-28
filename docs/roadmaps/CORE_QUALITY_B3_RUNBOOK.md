@@ -1,3 +1,11 @@
+## 2026-10-29｜G1 manual_selection：首次 exact-head CI 兼容测试合同返修
+
+- HEAD `f0bbd51949520cb8c23af2f68f0ffa3fc14a602d` [CI #40731357381](https://github.com/chigre/Picture_Capture/actions/runs/40731357381)：六平台 Job 均报告同一旧用例 `tests/test_core.py::test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action` 的单条失败，其他每个平台约 4700 条测试通过。该用例通过 `PictureCaptureApp.__new__` 创建没有 `project/current_page` 的假对象；新安全合同必须在修改 Entry/checkbox 前验证本页 `manual_selection` 原始来源，所以正确拒绝了假对象。Risk-tier gate 因测试失败未通过；首次红灯保留。
+- 只更新历史测试夹具：使用 `tmp_path` 项目和合成页面，将测试从无来源 UI 改为有合法来源的同一交互；保留原始 Y 一键切换、checkbox 状态、Entry Y 与候选身份的全部断言。**不放宽生产来源预检**，新 HEAD 六平台、Risk-tier、OCR 3 OS、CodeQL 重新执行。
+- 该失败不代表真实 Windows 字典人工 E3；该验收继续 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-29｜G1 checkbox/manual_selection 人工决策来源字节完整性
 
 - 真实数据损坏路径：`ui/review_selection_workflow._read_manual_overrides` 旧逻辑在 `*_manual_selection.json` JSON 损坏时返回 `{"version":1,"overrides":{}}`；checkbox 或手动 OCR 选择随后将空表写回，**已有人工选择会被清空**。另外 `_flush_pending_manual_override` 旧逻辑不比较点击时的磁盘原始字节；延迟期间另一位校对者的决定可能被覆盖。

@@ -59,3 +59,22 @@ uncertain post-PDIC state. Real Windows dictionary E3, 20-step Undo/Redo,
 PDIC/PPP/SECTION save/reopen, source pixel/crop and R2 #483 W1–W11
 remain OPEN / NOT PERFORMED. Single Draft PR #663 Open/Unmerged,
 Issues #503/#562 Open, old #664 Closed/Unmerged.
+
+## First new-head CI and no-weakening contract repair
+
+Source HEAD `f0bbd51949520cb8c23af2f68f0ffa3fc14a602d` [CI #40731357381](https://github.com/chigre/Picture_Capture/actions/runs/40731357381)
+reported one shared failure across all six OS/Python pytest jobs, while
+~4700 other tests in each job passed. The failing historical V2.8.18
+single-click original-Y switch test constructed a real app subclass with
+`PictureCaptureApp.__new__` but omitted `project` and `current_page`.
+Before this packet, that invalid owner could still change an Entry;
+mandatory manual_selection source preflight correctly refused, so the
+legacy fixture's success assertion became impossible.
+
+The test now supplies a temporary project root and synthetic current page,
+retains all original mutually-exclusive candidate and object/XY assertions,
+and exercises the original click path under a legitimate source owner.
+Production fail-closed preflight is not relaxed; the first CI failure is
+preserved. A different final commit HEAD must pass its **own** six-platform
+Risk-tier, OCR Smoke and CodeQL gates before the packet is considered
+engineering-verified.
