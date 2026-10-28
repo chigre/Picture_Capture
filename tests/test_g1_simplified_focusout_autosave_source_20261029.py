@@ -105,3 +105,25 @@ def test_pending_page_save_claims_unreported_simplified_change(tmp_path, monkeyp
     deps = SimpleNamespace(settings_path=lambda root: root / "settings.json")
     assert review_page_lifecycle.save(review, deps, redraw_main=False) is True
     assert events == ["claim", "commit", "bundle"]
+
+
+def test_unchanged_manual_focusout_remains_readonly(tmp_path):
+    from picture_capture.ui import review_simplified_workflow
+
+    review, _visible, events = make_review(tmp_path, manual=True)
+    review._simplified_page_records = lambda _stem: {}
+    review.active_index = -1
+    deps = SimpleNamespace(simplified_entry_key=lambda x, y: f"{x}:{y}")
+    review_simplified_workflow.on_simplified_key(
+        review, deps, SimpleNamespace(), 0,
+    )
+    assert events == []
+    assert review._simplified_dirty_pages == set()
+
+
+def test_simplified_editor_has_focusout_fallback_binding():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src/picture_capture/ui/review_workspace_workflow.py"
+    ).read_text(encoding="utf-8")
+    assert 'simplified_editor.bind("<FocusOut>"' in source

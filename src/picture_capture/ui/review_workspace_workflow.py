@@ -936,6 +936,8 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         simplified_editor.bind("<<Paste>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
         simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
         simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
+        # IME/text-service and native menu edits may not emit KeyRelease.
+        simplified_editor.bind("<FocusOut>", lambda e, i=index: self.on_simplified_key(e, i))
         simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
         for widget in (picture, sequence_label, crop_row, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
             widget.bind("<MouseWheel>", self.scroll_rows)

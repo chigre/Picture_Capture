@@ -245,6 +245,12 @@ def on_simplified_key(self, deps: ReviewSimplifiedDeps, _event: tk.Event, index:
     value = self.simplified_vars[index].get().strip()
     original_word = self.vars[index].get().strip()
     already_manual = bool(self.simplified_manual_flags[index]) if index < len(self.simplified_manual_flags) else False
+    # FocusOut also calls this handler; simply leaving an already-saved
+    # manual editor must not create a new dirty transaction.
+    if already_manual and index < len(self.simplified_actual_values):
+        actual = original_word if value == "√" else value
+        if actual == self.simplified_actual_values[index]:
+            return
     if not already_manual:
         original = self.vars[index].get().strip() if index < len(self.vars) else ""
         auto_refresh = (
