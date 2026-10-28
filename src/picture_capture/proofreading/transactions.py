@@ -334,7 +334,8 @@ def _verified_recovery(
     doc = json.loads(marker.read_text(encoding="utf-8"))
     if (not isinstance(doc, dict)
             or doc.get("format") != "picture_capture_r3_transient_recovery"
-            or doc.get("version") not in {1, 2}
+            or type(doc.get("version")) is not int
+            or doc["version"] not in {1, 2}
             or doc.get("page") != str(page.resolve())):
         raise ValueError("R3 recovery marker does not match current page")
     values = doc.get("files")
@@ -351,6 +352,10 @@ def _verified_recovery(
     for row in values:
         if not isinstance(row, dict) or row.get("role") not in known:
             raise ValueError("R3 recovery contains unknown file")
+        # A torn/hand-edited journal must not reinterpret a missing before
+        # or after field as an intentional deletion (JSON null).
+        if not {"role", "before", "after"} <= row.keys():
+            raise ValueError("R3 recovery contains incomplete file record")
         role = row["role"]
         if role in found:
             raise ValueError("R3 recovery contains duplicate file")
