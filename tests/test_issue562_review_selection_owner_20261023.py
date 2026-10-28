@@ -122,12 +122,16 @@ def test_selection_changes_local_model_before_deferred_persistence():
     assert [row[0] for row in event[:4]] == ["queue", "sync", "override", "overlay"]
 
 
-def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch):
+def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch, tmp_path):
     from dataclasses import replace
     cancelled, jobs = [], []
+    page = tmp_path / "page.png"
+    page.write_bytes(b"synthetic page; not a real dictionary scan")
+    pdic = tmp_path / "page.PDIC"
+    pdic.write_bytes(b"original human PDIC bytes")
     view = SimpleNamespace(
-        project=SimpleNamespace(root=Path(".")),
-        current_page=Path("page.png"), image=SimpleNamespace(width=200),
+        project=SimpleNamespace(root=tmp_path),
+        current_page=page, image=SimpleNamespace(width=200),
         entries=[WordEntry(word="a", x=2, y=3)],
         current_index=0, _deferred_save_job="old",
         _deferred_save_delay_ms=120,
@@ -137,11 +141,14 @@ def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch):
         _flush_deferred_page_save=lambda: None,
     )
     selection._schedule_deferred_page_save(
-        view, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError), replace=replace),
+        view, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError), replace=replace,
+                        pdic_path=lambda _page: pdic),
         sync_editors=False,
     )
     assert cancelled == ["old"] and jobs == [(120, view._flush_deferred_page_save)]
     assert view._deferred_save_job == "new"
-    assert view._deferred_save_page == Path("page.png")
-    assert view._deferred_save_snapshot[0] == Path("page.png")
+    assert view._deferred_save_page == page
+    assert view._deferred_save_snapshot[0] == page
+    assert view._deferred_save_pdic_origin == (page, b"original human PDIC bytes")
+    assert pdic.read_bytes() == b"original human PDIC bytes"
     assert view._deferred_save_snapshot[1][0] is not view.entries[0]
