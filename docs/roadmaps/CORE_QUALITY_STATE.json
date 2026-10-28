@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_candidate_choice_position_switch_owner_20261029",
+    "active_work_item": "G1_simplified_focusout_autosave_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "7f9fec1ad70aabc00e2b6f88ba081d6fdcf5743e",
+    "implementation_head_sha": "c3018bf16294acbac61f0e39a1a251c481d38aa7",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify final docs HEAD 6/6 CI + Risk-tier, OCR 3/3 and CodeQL Python/Actions; repair only same G1 packet failures. R3 E3 OPEN; PR #663 Draft/Open/Unmerged.",
-    "last_test_evidence": "Fail-first HEAD b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b CI #40750612646 Ubuntu 3.13: 7 new fault tests failed, 4722 passed, 3 skipped. Intermediate HEAD 585719af... synthetic faults passed but one historical original-Y switch exposed near-XY sibling misownership; strict candidate_id owner fix committed as 7f9fec1ad70aabc00e2b6f88ba081d6fdcf5743e. Final docs HEAD CI pending. Prior exact successful baseline 6344a1d356769e0fdac46da886bdd9fbcdcd1de4 CI #40747592633 6/6, OCR #40747592177 3/3, CodeQL #40747585405 success. Human E3 not performed.",
+    "required_next_action": "Check exact final PR HEAD CI 6/6 + Risk-tier, OCR Smoke 3/3, CodeQL 2/2; repair any same-G1 regressions. Actual Windows FocusOut/IME/autosave and #503 E3, #483 W1–W11 remain NOT PERFORMED; PR #663 must stay Draft/Open/Unmerged.",
+    "last_test_evidence": "Fail-first tests-only d0a23b10aa5b5d325cbbe724ad0ab7b1c3972530 CI #40765333001 Ubuntu3.13: 2 newly injected failures, 4735 passed, 3 skipped. Failures: missed unreported simplified editor change during autosave; pending-page save refused to claim changed page. G1 production fix c3018bf16294acbac61f0e39a1a251c481d38aa7 CI #40765585006 / OCR #40765585028 still to be verified. E3 not performed.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1447,5 +1447,23 @@
     "fix": "prevalidate OCR; in-memory stage all sibling/target decisions before model mutation; strict candidate_id-owned entry matching and exact-source-pixel occupancy refusal; defer choice sidecar until PDIC, rollback prepublication in-memory state and quarantine mixed/postreplace outcomes",
     "limitations": "Optimistic byte origin and per-file atomic replacement not OS CAS; no multi-file powerloss atomicity; actual Windows E3, Undo/Redo 20, FocusOut, PDIC/PPP/SECTION/crop NOT PERFORMED",
     "latest_ci": "pending (look up GitHub exact PR #663 head)"
+  },
+  "g1_simplified_focusout_autosave_20261029": {
+    "status": "production_fix_committed_exact_final_head_gates_pending",
+    "fail_first_head_sha": "d0a23b10aa5b5d325cbbe724ad0ab7b1c3972530",
+    "fail_first_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40765333001",
+    "observed_fail_first": "Ubuntu Python 3.13: 2 new failed assertions, 4735 passed, 3 skipped; unchanged dirty flag skips live simplified edit in autosave and pending-page save.",
+    "production_code_head_sha": "c3018bf16294acbac61f0e39a1a251c481d38aa7",
+    "fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40765585006",
+    "fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40765585028",
+    "owner_files": [
+      "src/picture_capture/ui/review_page_lifecycle.py",
+      "src/picture_capture/ui/review_simplified_workflow.py",
+      "src/picture_capture/ui/review_workspace_workflow.py"
+    ],
+    "test_file": "tests/test_g1_simplified_focusout_autosave_source_20261029.py",
+    "architecture_note": "docs/architecture/R3_G1_SIMPLIFIED_FOCUSOUT_AUTOSAVE_20261029.md",
+    "correction": "Read-only source-bound visible simplified text comparison at autosave and pending-page save; FocusOut fallback; idempotent saved-manual callback. No new persistence format or file writer.",
+    "limits": "Synthetic-only E2; no OS-level multi-file CAS, power-loss durability, nor real Windows operator validation. #503/#562/#483 remain open, #663 Draft/Open/Unmerged."
   }
 }
