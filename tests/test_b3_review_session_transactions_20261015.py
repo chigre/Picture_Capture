@@ -989,3 +989,94 @@ def test_r3_incomplete_journal_keeps_quarantine(tmp_path, damage):
         module.recover_pending_for_page(page)
     assert pdic_path(page).read_bytes() == published
     assert marker.is_file()  # Manual intervention, never silent unquarantine.
+
+
+@pytest.mark.parametrize("operation", ["restart_recovery", "failed_live_publish"])
+@pytest.mark.parametrize("tamper", ["rollback_policy", "owned_file_intent"])
+def test_r3_journal_replacement_quarantines_after_parse(
+    tmp_path, monkeypatch, operation, tamper,
+):
+    """A peer's new intent must not be combined with our old file list."""
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    target = original.replace(b"one", b"ONE")
+    assert target != original
+    marker = module._stage_recovery(page, [
+        ("pdic", original, target),
+    ], rollback_required=True)
+    module._publish(pdic_path(page), target)
+    verified = module._verified_recovery
+
+    def change_journal_after_parse(*args, **kwargs):
+        result = verified(*args, **kwargs)
+        doc = json.loads(marker.read_text(encoding="utf-8"))
+        if tamper == "rollback_policy":
+            doc["rollback_required"] = False
+        else:
+            doc["files"][0]["before"] = module._encode(b"wrong-owner-data")
+        marker.write_text(json.dumps(doc), encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(module, "_verified_recovery", change_journal_after_parse)
+    if operation == "restart_recovery":
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert not module._rollback_failed_publish(page)
+    assert pdic_path(page).read_bytes() == target
+    assert marker.is_file()
+    assert not module.snapshot_review(_review)
+
+
+@pytest.mark.parametrize("operation", ["restart_recovery", "failed_live_publish"])
+@pytest.mark.parametrize("tamper", ["rollback_policy", "owned_file_intent"])
+def test_r3_journal_replacement_during_first_rollback_stops_next_file(
+    tmp_path, monkeypatch, operation, tamper,
+):
+    """Do not finish an old transaction or erase a newly changed marker."""
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    page, _rows, _review = _case(tmp_path)
+    companion = simplified_review_path_for_image(page)
+    companion.parent.mkdir(parents=True, exist_ok=True)
+    old_companion, new_companion = b"manual-old", b"manual-new"
+    companion.write_bytes(old_companion)
+    old_pdic = pdic_path(page).read_bytes()
+    new_pdic = old_pdic.replace(b"one", b"ONE")
+    marker = module._stage_recovery(page, [
+        ("pdic", old_pdic, new_pdic),
+        ("simplified", old_companion, new_companion),
+    ], rollback_required=True)
+    module._publish(pdic_path(page), new_pdic)
+    module._publish(companion, new_companion)
+    actual_publish = module._publish
+
+    def replace_journal_after_first_file(path, data):
+        actual_publish(path, data)
+        if path == pdic_path(page) and data == old_pdic:
+            doc = json.loads(marker.read_text(encoding="utf-8"))
+            if tamper == "rollback_policy":
+                doc["rollback_required"] = False
+            else:
+                doc["files"][1]["after"] = module._encode(b"other-owned-version")
+            marker.write_text(json.dumps(doc), encoding="utf-8")
+
+    monkeypatch.setattr(module, "_publish", replace_journal_after_first_file)
+    if operation == "restart_recovery":
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert not module._rollback_failed_publish(page)
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert companion.read_bytes() == new_companion
+    assert marker.is_file()
+
+
+def test_r3_untouched_marker_recovery_preserves_complete_after_state(tmp_path):
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    target = original.replace(b"one", b"ONE")
+    marker = module._stage_recovery(page, [
+        ("pdic", original, target),
+    ], rollback_required=False)
+    module._publish(pdic_path(page), target)
+    assert module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == target
+    assert not marker.exists()

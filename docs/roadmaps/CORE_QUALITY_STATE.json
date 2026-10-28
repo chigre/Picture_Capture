@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T00:00:00Z",
+  "updated_at_utc": "2026-10-28T09:01:20.070Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_R3_post_stage_source_drift_and_multifile_publication_guard",
+    "active_work_item": "G1_R3_journal_snapshot_consistency_across_restart_and_live_rollback",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "1915a8242d46c131bf60eccda7c88fe5571dc58a",
+    "implementation_head_sha": "9b82443aefdb20aec5c557c98a39d4117ec3fb43",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Validate the new G1 post-stage source drift guard at its final exact HEAD (6 platform jobs, 3 OCR smoke, Risk-tier, CodeQL); if failing, repair on #663. Then continue R3 20-step mixed Undo/Redo and Windows operator gates; do not mark human verified.",
-    "last_test_evidence": "Consolidated Draft #663 exact HEAD 66ad88c276b6965c075eeb72583b42dd0aa7f3ac: CI #40559523622 completed/success Windows/macOS/Ubuntu normal and Python 3.10 6/6 with final Risk-tier gate success; OCR Platform Smoke #40559523187 completed/success 3/3. Earlier #542 CI remains historical, not latest main proof. No real Windows dictionary human acceptance.",
+    "required_next_action": "Review exact new Draft #663 head six-platform CI, Risk-tier, OCR smoke and failed job logs; if failing repair this journal-coherence packet. After passing, audit G1 mixed candidate Undo/Redo and user-operated Windows gates; no E3 claim.",
+    "last_test_evidence": "Before G1 journal-coherence packet: #663@9b82443aefdb20aec5c557c98a39d4117ec3fb43 CI #40635263076 completed/success 6/6 and Risk-tier gate success; OCR Smoke #40635262911 completed/success 3/3. New package exact-head CI not yet verified. Human R2/R3 remain NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1087,5 +1087,21 @@
       "conclusion": "success",
       "os_jobs": 3
     }
+  },
+  "g1_journal_snapshot_coherence_20261028": {
+    "status": "code_tests_docs_submitted_exact_head_ci_pending",
+    "before_head_sha": "9b82443aefdb20aec5c557c98a39d4117ec3fb43",
+    "owner": "src/picture_capture/proofreading/transactions.py",
+    "test_owner": "tests/test_b3_review_session_transactions_20261015.py",
+    "architecture_doc": "docs/architecture/R3_G1_JOURNAL_SNAPSHOT_COHERENCE_20261028.md",
+    "regression_cases": 9,
+    "scope": [
+      "single parsed policy and file intent bytes on crash recovery",
+      "same journal before and after each inter-file rollback",
+      "live failed-publication journal drift quarantine",
+      "compatibility unchanged false-policy complete-after recovery"
+    ],
+    "risk": "optimistic byte equality is not atomic CAS; real Windows human acceptance OPEN",
+    "human_acceptance": "NOT_PERFORMED"
   }
 }

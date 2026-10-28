@@ -320,7 +320,7 @@ def _stage_recovery(
 
 def _verified_recovery(
     page: Path, *, manual_path: Path | None = None,
-) -> tuple[Path, list[tuple[Path, bytes | None, bytes | None]]] | None:
+) -> tuple[Path, list[tuple[Path, bytes | None, bytes | None]], bool, bytes] | None:
     marker = _recovery_path(page)
     try:
         marker_mode = marker.lstat().st_mode
@@ -331,7 +331,8 @@ def _verified_recovery(
     # link outside the project to obtain recovery bytes.
     if not stat.S_ISREG(marker_mode):
         raise ValueError("R3 recovery marker is not a regular file; manual recovery required")
-    doc = json.loads(marker.read_text(encoding="utf-8"))
+    raw = marker.read_bytes()
+    doc = json.loads(raw)
     if (not isinstance(doc, dict)
             or doc.get("format") != "picture_capture_r3_transient_recovery"
             or type(doc.get("version")) is not int
@@ -365,7 +366,21 @@ def _verified_recovery(
         raise ValueError("R3 recovery marker/manual path schema mismatch")
     if not isinstance(doc.get("rollback_required", False), bool):
         raise ValueError("Invalid R3 recovery rollback policy")
-    return marker, result
+    return marker, result, doc.get("rollback_required", False), raw
+
+
+def _recovery_marker_unchanged(marker: Path, raw: bytes) -> bool:
+    """Optimistic journal identity gate, including an unsafe symlink swap.
+
+    We must never use a new journal's rollback policy with the old journal's
+    file rows. This cannot replace a cross-process lock or atomic file CAS.
+    """
+    try:
+        if not stat.S_ISREG(marker.lstat().st_mode):
+            return False
+        return marker.read_bytes() == raw
+    except FileNotFoundError:
+        return False
 
 
 def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> bool:
@@ -378,17 +393,21 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
     pending = _verified_recovery(page, manual_path=manual_path)
     if pending is None:
         return True
-    marker, items = pending
+    marker, items, rollback_required, raw = pending
+    if not _recovery_marker_unchanged(marker, raw):
+        return False
     observed = [_bytes_or_absent(path) for path, _, _ in items]
     for current, (_, before, after) in zip(observed, items):
         if current not in (before, after):
             return False
-    # If a live GUI action reported failure, even a complete after-state
-    # must be restored before the page can be reopened.
-    rollback_required = json.loads(marker.read_text(encoding="utf-8")).get(
-        "rollback_required", False)
+    # The rollback policy and owned paths come from the SAME parsed bytes.
+    # A replacement journal detected after parsing quarantines the page.
+    if not _recovery_marker_unchanged(marker, raw):
+        return False
     if rollback_required or observed != [new for _, _, new in items]:
         for path, before, after in items:
+            if not _recovery_marker_unchanged(marker, raw):
+                return False
             # Recovery is not exclusive: a proofreader may update an owned
             # file after the initial snapshot, including between two rollbacks.
             # Never overwrite a byte version that is neither the staged old
@@ -399,6 +418,8 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
             if current != after:
                 return False
             _publish(path, before)
+            if not _recovery_marker_unchanged(marker, raw):
+                return False
             if _bytes_or_absent(path) != before:
                 return False
         # A silently skipped rollback or a late external edit must retain the
@@ -411,6 +432,8 @@ def recover_pending_for_page(page: Path, *, manual_path: Path | None = None) -> 
         # confirming every exact target byte value immediately beforehand.
         if any(_bytes_or_absent(path) != after for path, _, after in items):
             return False
+    if not _recovery_marker_unchanged(marker, raw):
+        return False
     marker.unlink()
     # A silent no-op unlink leaves the page quarantined.
     return not _marker_present(marker)
@@ -427,21 +450,27 @@ def _rollback_failed_publish(
     pending = _verified_recovery(page, manual_path=manual_path)
     if pending is None:
         return False
-    marker, items = pending
-    raw = marker.read_bytes()
-    doc = json.loads(raw)
-    if marker.read_bytes() != raw:
+    marker, items, rollback_required, raw = pending
+    if not _recovery_marker_unchanged(marker, raw):
         return False
-    if doc.get("rollback_required") is not True:
+    if not rollback_required:
+        # Keep legacy false-policy recovery markers compatible, but do not
+        # re-publish their intent when a peer changed the journal after parse.
+        doc = json.loads(raw)
         doc["rollback_required"] = True
         policy = json.dumps(doc, ensure_ascii=False).encode("utf-8")
+        if not _recovery_marker_unchanged(marker, raw):
+            return False
         _atomic_bytes(marker, policy)
-        if _bytes_or_absent(marker) != policy:
+        raw = policy
+        if not _recovery_marker_unchanged(marker, raw):
             return False
     if any(_bytes_or_absent(path) not in (before, after)
            for path, before, after in items):
         return False
     for path, before, after in items:
+        if not _recovery_marker_unchanged(marker, raw):
+            return False
         current = _bytes_or_absent(path)
         if current == before:
             continue
@@ -452,7 +481,11 @@ def _rollback_failed_publish(
         except (OSError, RuntimeError, ValueError):
             # The write may have succeeded immediately before raising.
             pass
+        if not _recovery_marker_unchanged(marker, raw):
+            return False
     if any(_bytes_or_absent(path) != before for path, before, _ in items):
+        return False
+    if not _recovery_marker_unchanged(marker, raw):
         return False
     try:
         marker.unlink()
