@@ -476,7 +476,8 @@ def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
     # The parent is told that the current PDIC has already been saved, which
     # also prevents stale main-canvas Entry widgets from overwriting the
     # newer proofreading text during navigation.
-    self.save(redraw_main=False)
+    if self.save(redraw_main=False) is False:
+        return
     preloaded = self._take_prefetched_page(target)
     self.parent.change_page(
         delta, preloaded=preloaded, current_already_saved=True, async_allowed=False

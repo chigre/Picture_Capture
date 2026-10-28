@@ -23,11 +23,12 @@ def _live_review(app: Any) -> Any | None:
     return None
 
 
-def save_review_before_page_change(app: Any, index: int, *, already_saved: bool = False) -> bool:
+def save_review_before_page_change(app: Any, index: int, *, already_saved: bool = False) -> bool | None:
     """Persist old-page edits, avoiding stale row-to-new-page misalignment.
 
-    Return True if the review owned the page commit; callers must not resync
-    the main canvas' potentially stale inline text over those edits.
+    Return True if the review committed, False if no review save was needed,
+    and None when ReviewWindow explicitly refused to save. A refused save
+    MUST NOT allow navigation or stale main-canvas editor synchronization.
     """
     review = _live_review(app)
     page = getattr(app, "current_page", None)
@@ -37,7 +38,8 @@ def save_review_before_page_change(app: Any, index: int, *, already_saved: bool 
         or getattr(review, "_rendered_page_stem", None) != page.stem
     ):
         return False
-    review.save(redraw_main=False)
+    if review.save(redraw_main=False) is False:
+        return None
     return True
 
 

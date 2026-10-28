@@ -917,7 +917,7 @@ def _request_page_load(
 def load_page(
     self, deps: ProjectSessionDeps, index: int, reset_zoom: bool = False, *,
     preloaded: dict | None = None, skip_current_save: bool = False,
-) -> None:
+) -> bool | None:
     Image = deps.Image
     ImageTk = deps.ImageTk
     json = deps.json
@@ -935,6 +935,13 @@ def load_page(
     if self._batch_active and not self._can_save_current_during_batch_navigation():
         skip_current_save = True
     review_saved = save_review_before_page_change(self, index, already_saved=skip_current_save)
+    if review_saved is None:
+        # A refused save must not discard the old ReviewWindow editor state,
+        # even when the new page was decoded asynchronously beforehand.
+        self._pending_page_index = None
+        self._set_page_list_selection(self.current_index, ensure_visible=True)
+        self.status_var.set("校对内容尚未成功保存，已取消切换页面；请检查当前页并重试。")
+        return False
     self._pending_page_index = None
     self._invalidate_ui_worker("page-load")
     self._flush_deferred_page_save()

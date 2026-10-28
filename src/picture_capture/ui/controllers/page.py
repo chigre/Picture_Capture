@@ -179,12 +179,14 @@ class PageController:
                 target,
                 current_already_saved=current_already_saved,
             )
-        app.load_page(
+        changed = app.load_page(
             target,
             preloaded=preloaded,
             skip_current_save=current_already_saved,
         )
-        return True
+        # Older app/test adapters returned None on successful loading.
+        # Only an explicit False indicates refusal to leave the dirty page.
+        return changed is not False
 
 
 __all__ = ["PageController"]

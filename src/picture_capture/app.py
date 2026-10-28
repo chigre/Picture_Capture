@@ -2498,7 +2498,7 @@ class PictureCaptureApp(tk.Tk):
     def load_page(
         self, index: int, reset_zoom: bool = False, *,
         preloaded: dict | None = None, skip_current_save: bool = False,
-    ) -> None:
+    ) -> bool | None:
         return _project_session.load_page(self, _project_session_deps(), index, reset_zoom=reset_zoom, preloaded=preloaded, skip_current_save=skip_current_save)
 
     def change_page(
