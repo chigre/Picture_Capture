@@ -79,6 +79,8 @@ def test_deferred_io_failure_keeps_exact_snapshot_for_retry(tmp_path, monkeypatc
         _deferred_save_job=None,
         _deferred_save_snapshot=snapshot,
         _deferred_save_page=page,
+        # A missing PDIC is a valid first-click source, frozen as absent.
+        _deferred_save_pdic_origin=(page, None),
         project=None,
         _flush_pending_manual_override=lambda: None,
         _flush_proofreading_candidate_evidence=lambda: None,
