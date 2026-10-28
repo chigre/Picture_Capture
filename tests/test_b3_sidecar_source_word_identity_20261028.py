@@ -184,7 +184,7 @@ def test_simplified_only_rejects_wrong_target_source_word(tmp_path):
     assert not tx._marker_present(tx._recovery_path(page))
 
 
-@pytest.mark.parametrize("when", ["during_preview", "after_sidecar_publish"])
+@pytest.mark.parametrize("when", ["during_preview", "after_journal_stage"])
 def test_independent_sidecar_write_never_binds_stale_pdic_after_race(
     tmp_path, monkeypatch, when,
 ):
@@ -204,14 +204,20 @@ def test_independent_sidecar_write_never_binds_stale_pdic_after_race(
         with pytest.raises(RuntimeError, match="PDIC"):
             guarded_write_records(page, path, page.stem, proposed, old_sidecar, writer=writer)
     else:
-        original = tx._publish
-        def publish(target, data):
+        # Explicitly inject after R3 journal creation but before any sidecar
+        # publication. This exercises source-drift post-stage without
+        # monkeypatching the rollback publisher itself.
+        original_stage = tx._stage_recovery
+        def staged(page_arg, changes, *, rollback_required=False):
             nonlocal external_pdic
-            original(target, data)
+            marker = original_stage(
+                page_arg, changes, rollback_required=rollback_required,
+            )
             entry.word = "new foreign headword"
             write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
             external_pdic = pdic_path(page).read_bytes()
-        monkeypatch.setattr(tx, "_publish", publish)
+            return marker
+        monkeypatch.setattr(tx, "_stage_recovery", staged)
         with pytest.raises(RuntimeError, match="PDIC"):
             guarded_write_records(page, path, page.stem, proposed, old_sidecar)
     assert path.read_bytes() == old_sidecar

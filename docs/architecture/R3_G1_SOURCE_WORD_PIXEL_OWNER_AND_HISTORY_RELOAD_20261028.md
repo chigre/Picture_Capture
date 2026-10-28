@@ -60,3 +60,21 @@ steps, manual_selection/PDIC/PPP/SECTION reopen, source crop/X/Y pixel tests and
 R2 #483 W1–W11 remain **OPEN / NOT PERFORMED**. No cross-process CAS, power-loss
 durability or performance/recognition accuracy claim. PR #663 remains
 Draft/Open/Unmerged; #503/#562 Open; PR-B scans deferred.
+
+## Initial CI test-contract failure and repair
+
+The implementation HEAD `e7d3a5def11ec41c31a9314d648a2a275b1c92b0` first CI
+[#40705467706](https://github.com/chigre/Picture_Capture/actions/runs/40705467706)
+exposed five focused failures in Ubuntu and macOS defaults, not a general
+pytest skip: two older regeneration fault tests used human rows missing
+`source_word`; two older core mocks omitted the rendered Entry's `word`;
+the new after-publish race expected to reach its interception but a stricter
+early PDIC guard had already refused it. These are preserved in the first
+red CI evidence.
+
+The repair gives existing synthetic rows the current real source-word/Entry
+identity so the intended UI rollback path remains exercised, and injects
+the PDIC race immediately **after** the real exclusive R3 journal is staged
+but **before** canonical sidecar publication. Both source-byte and original
+pixel ownership protections remain untouched. A new exact-head workflow
+must finish successfully before this engineering packet is marked green.

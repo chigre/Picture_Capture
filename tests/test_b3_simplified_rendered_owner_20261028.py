@@ -284,7 +284,10 @@ def test_regenerate_failed_persist_restores_existing_manual_page(
 
 def test_regenerate_widget_exception_midpage_restores_prior_human_values():
     view, deps, _, records, calls, _ = case()
-    before = {"10:20": {"text": "human0"}, "20:30": {"text": "human1"}}
+    before = {
+        "10:20": {"text": "human0", "source_word": "word0"},
+        "20:30": {"text": "human1", "source_word": "word1"},
+    }
     records.update({k: dict(v) for k, v in before.items()})
     view.simplified_manual_flags[:] = [True, True]
     view.simplified_actual_values[:] = ["human0", "human1"]
@@ -312,7 +315,7 @@ def test_regenerate_widget_exception_midpage_restores_prior_human_values():
 
 def test_regenerate_failure_preserves_newer_reentrant_widget_text():
     view, deps, _, records, calls, _ = case()
-    records["10:20"] = {"text": "human0"}
+    records["10:20"] = {"text": "human0", "source_word": "word0"}
     view.simplified_manual_flags[:] = [True, True]
     view.simplified_actual_values[:] = ["human0", "human1"]
     def persist(_stem):

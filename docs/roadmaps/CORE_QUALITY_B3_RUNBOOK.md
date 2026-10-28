@@ -1,3 +1,11 @@
+## 2026-10-28｜G1 source_word/X-Y 身份工作包：首次 CI 失败与同包测试合同修复
+
+- 源码提交 HEAD `e7d3a5def11ec41c31a9314d648a2a275b1c92b0` 的 [CI #40705467706](https://github.com/chigre/Picture_Capture/actions/runs/40705467706) 首次 Ubuntu/macOS 常规分别 5 个失败（其中 4 个旧 Tk 模拟失去新要求的 `source_word` 或 `Entry.word`，所以正常被 fail-closed 拒绝，故障注入逻辑未触发；另 1 条新竞态测试把提前拒绝误判为已完成发布阶段）。
+- 保留旧测试及 Tk 回滚断言、补齐完整模拟归属；新竞态改为在**成功建立 R3 独占恢复日志之后、sidecar 正式发布之前**改写 PDIC，从而核验原始人工作业不会被覆盖。生产端 `source_word` 归属验证、PDIC raw byte 固定、Undo/Redo pin 清理均不削弱。
+- 必须在修复后的 exact HEAD 完整重跑六平台 CI、Risk-tier、OCR 3 OS、CodeQL。首次 CI 失败保留证据；人工作业 E3、OS 原子 CAS 与 #483 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 原图 X/Y 与 source_word 同一人工校对归属 + Undo 缓存重新绑定
 
 - 具体数据归属风险：`review_workspace_workflow.render_rows` 旧代码按 source X/Y 直接取回人工简体记录，但没有验证其 `source_word` 与当前 PDIC 词条的对应关系。OCR 或第三方人工在原像素位置替换词条后，旧人工文字可能被错误显示为新词条的已保存校对。失配的简体旧记录保持原字节，不自动纠正、迁移或删除。

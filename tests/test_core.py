@@ -7387,7 +7387,7 @@ def test_v21211_new_unsaved_simplified_can_still_follow_original_during_session(
         def get(self): return self.value
         def set(self, value): self.value = value
 
-    entry = SimpleNamespace(x=10, y=20)
+    entry = SimpleNamespace(x=10, y=20, word="校對")
     review = object.__new__(app_module.ReviewWindow)
     review.vars = [Var("校對")]
     review.simplified_vars = [Var("旧")]
@@ -7425,7 +7425,10 @@ def test_v2140_regenerate_simplified_current_page_overwrites_saved_and_manual_re
         def get(self): return self.value
         def set(self, value): self.value = value
 
-    entries = [SimpleNamespace(x=10, y=20), SimpleNamespace(x=30, y=40)]
+    entries = [
+        SimpleNamespace(x=10, y=20, word="舊詞"),
+        SimpleNamespace(x=30, y=40, word="測試"),
+    ]
     records = {
         "10,20": {"x": 10, "y": 20, "source_word": "舊詞", "text": "人工旧值", "manual": True},
         "30,40": {"x": 30, "y": 40, "source_word": "測試", "text": "旧测试", "manual": False},
