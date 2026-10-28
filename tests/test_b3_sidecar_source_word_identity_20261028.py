@@ -184,7 +184,7 @@ def test_simplified_only_rejects_wrong_target_source_word(tmp_path):
     assert not tx._marker_present(tx._recovery_path(page))
 
 
-@pytest.mark.parametrize("when", ["during_preview", "after_journal_stage"])
+@pytest.mark.parametrize("when", ["during_preview", "late_preview_readback"])
 def test_independent_sidecar_write_never_binds_stale_pdic_after_race(
     tmp_path, monkeypatch, when,
 ):
@@ -204,22 +204,25 @@ def test_independent_sidecar_write_never_binds_stale_pdic_after_race(
         with pytest.raises(RuntimeError, match="PDIC"):
             guarded_write_records(page, path, page.stem, proposed, old_sidecar, writer=writer)
     else:
-        # Explicitly inject after R3 journal creation but before any sidecar
-        # publication. This exercises source-drift post-stage without
-        # monkeypatching the rollback publisher itself.
-        original_stage = tx._stage_recovery
-        def staged(page_arg, changes, *, rollback_required=False):
+        # Freeze PDIC provenance, finish the preview, THEN emulate a foreign
+        # replacement at the independent writer's final source readback.
+        # This is a separate boundary from the injected serializer callback
+        # above; it must refuse before creating a journal or changing sidecar.
+        original_read = tx._bytes_or_absent
+        checked = [0]
+        def readback(target):
             nonlocal external_pdic
-            marker = original_stage(
-                page_arg, changes, rollback_required=rollback_required,
-            )
-            entry.word = "new foreign headword"
-            write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
-            external_pdic = pdic_path(page).read_bytes()
-            return marker
-        monkeypatch.setattr(tx, "_stage_recovery", staged)
+            if target == pdic_path(page):
+                checked[0] += 1
+                if checked[0] == 3:
+                    entry.word = "new foreign headword"
+                    write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
+                    external_pdic = pdic_path(page).read_bytes()
+            return original_read(target)
+        monkeypatch.setattr(tx, "_bytes_or_absent", readback)
         with pytest.raises(RuntimeError, match="PDIC"):
             guarded_write_records(page, path, page.stem, proposed, old_sidecar)
+        assert checked[0] >= 3
     assert path.read_bytes() == old_sidecar
     assert pdic_path(page).read_bytes() == external_pdic
     assert not tx._marker_present(tx._recovery_path(page))
@@ -269,3 +272,26 @@ def test_regeneration_refuses_old_manual_source_word_without_saving(tmp_path):
     assert review._simplified_page_cache[page.stem]["10,20"] == before
     assert review.simplified_manual_flags == [True]
     assert not review._simplified_dirty_pages
+
+
+def test_independent_sidecar_healthy_same_word_reaches_journal_and_commits(
+    tmp_path, monkeypatch,
+):
+    """Positive control: the fail-closed source-word guard is not a blanket veto."""
+    page, path, entry, app, review = case(tmp_path)
+    original = path.read_bytes()
+    proposed = read_records(path)
+    proposed["10,20"]["text"] = "confirmed newer manual"
+    observed = []
+    actual_stage = tx._stage_recovery
+    def staged(*args, **kwargs):
+        observed.append(tuple(x[0] for x in args[1]))
+        return actual_stage(*args, **kwargs)
+    monkeypatch.setattr(tx, "_stage_recovery", staged)
+    committed = guarded_write_records(page, path, page.stem, proposed, original)
+    assert observed == [("simplified",)]
+    assert committed == path.read_bytes() != original
+    assert read_records(path)["10,20"]["text"] == "confirmed newer manual"
+    assert read_records(path)["90,90"]["text"] == "old orphan human text"
+    assert pdic_path(page).read_bytes() is not None
+    assert not tx._marker_present(tx._recovery_path(page))

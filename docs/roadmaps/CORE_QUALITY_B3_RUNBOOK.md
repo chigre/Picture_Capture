@@ -1,3 +1,11 @@
+## 2026-10-28｜G1 source_word 原图归属：第二轮 CI 的注入阶段校正
+
+- HEAD `be76035cb363017ad8497e53869e983c14ea8046` 的 [CI #40706851786](https://github.com/chigre/Picture_Capture/actions/runs/40706851786) Ubuntu 4,676 passed、1 failed：唯一失败是新测试在来源校验已经拒绝之后仍假设“日志建立后”注入器已执行，外部 PDIC 注入未发生。旧 Tk 回滚模拟修复已通过。
+- 不是人工字节被覆盖：sidecar 原始字节未动，PDIC 保留原值；但单靠拒绝无法证明注入阶段。把第二个竞态改为**简体预览已生成后、最终 PDIC readback 时**注入第三方 PDIC 修改，显式断言注入触发且不建立恢复日志。另新增健康保存的正向对照：来源词匹配时必须真正调用原 R3 O_EXCL 日志并完成更新。保留原“预览序列化器中途注入”覆盖。
+- 生产源码、原图 X/Y、source_word 严格拒绝与 Undo/Redo 缓存清理均未放宽。下一 HEAD 必须重新完整六平台/Risk-tier/OCR/CodeQL；真人 E3 仍 OPEN / NOT PERFORMED。
+
+---
+
 ## 2026-10-28｜G1 source_word/X-Y 身份工作包：首次 CI 失败与同包测试合同修复
 
 - 源码提交 HEAD `e7d3a5def11ec41c31a9314d648a2a275b1c92b0` 的 [CI #40705467706](https://github.com/chigre/Picture_Capture/actions/runs/40705467706) 首次 Ubuntu/macOS 常规分别 5 个失败（其中 4 个旧 Tk 模拟失去新要求的 `source_word` 或 `Entry.word`，所以正常被 fail-closed 拒绝，故障注入逻辑未触发；另 1 条新竞态测试把提前拒绝误判为已完成发布阶段）。

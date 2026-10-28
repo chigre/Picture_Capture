@@ -78,3 +78,22 @@ the PDIC race immediately **after** the real exclusive R3 journal is staged
 but **before** canonical sidecar publication. Both source-byte and original
 pixel ownership protections remain untouched. A new exact-head workflow
 must finish successfully before this engineering packet is marked green.
+
+## Second exact-head CI: phase-accurate fault injection
+
+At intermediate HEAD `be76035cb363017ad8497e53869e983c14ea8046`, [CI #40706851786](https://github.com/chigre/Picture_Capture/actions/runs/40706851786)
+returned 4,676 passing Ubuntu tests and one failed synthetic assertion.
+The old `after_journal_stage` test injected through a marker-stage hook
+that was never reached because the existing PDIC fail-closed check already
+refused. Human sidecar bytes were not overwritten; nonetheless, the claimed
+injection phase was unproved.
+
+The same packet corrects its second fault case to inject PDIC changes on
+the exact **post-preview PDIC readback** and explicitly requires the injected
+callback to have run. A new positive control requires healthy
+`guarded_write_records` to call the real R3 journal stage and commit a
+new human simplified text while keeping an orphan source-coordinate row.
+This retains the original preview-writer injection and prevents a mere
+blanket refusal from masquerading as coverage. No production guard was
+disabled. Recheck all CI on a new exact head; do not report this red
+attempt as green.
