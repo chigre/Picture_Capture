@@ -116,3 +116,17 @@ def test_cli_capture_and_compare_without_acceptance_claim(tmp_path):
             "--output", str(report)]
     assert subprocess.run(args, text=True, capture_output=True).returncode == 0
     assert json.loads(report.read_text("utf-8"))["manual_acceptance"] == "UNVERIFIED_REQUIRES_HUMAN"
+
+
+def test_cli_rejects_output_equal_to_missing_artifact_slot(tmp_path):
+    """A report must NEVER create a fake manual-selection/PDIC sidecar."""
+    paths = fixtures(tmp_path)
+    assert not paths["manual"].exists()
+    args = [sys.executable, str(SCRIPT), "capture", "--stage", "before",
+            "--revision", SHA]
+    for name, path in paths.items():
+        args.extend(["--" + name, str(path)])
+    args.extend(["--output", str(paths["manual"])])
+    result = subprocess.run(args, capture_output=True, text=True)
+    assert result.returncode == 2
+    assert not paths["manual"].exists()
