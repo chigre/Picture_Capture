@@ -27,7 +27,21 @@ def apply_focused_review_page_updates(
     Image = deps.Image
     _write_pdic_atomic = deps._write_pdic_atomic
     target_path = pdic_path(page)
+
+    def disk_bytes() -> bytes | None:
+        try:
+            return target_path.read_bytes()
+        except FileNotFoundError:
+            return None
+
+    # A source page/XY alone cannot authorize overwriting newer PDIC text.
+    # Capture actual bytes (not mtime or normalized Entry objects), and
+    # re-check immediately before publication. This is an optimistic guard,
+    # not a cross-process OS-level atomic compare-and-swap.
+    original_bytes = disk_bytes()
     original_entries = read_pdic(target_path)
+    if disk_bytes() != original_bytes:
+        raise RuntimeError("筛选校对 PDIC 读取期间已变化，拒绝覆盖")
     working = [replace(entry) for entry in original_entries]
     used: set[int] = set()
     planned: list[tuple[int, int, int, str]] = []
@@ -50,6 +64,11 @@ def apply_focused_review_page_updates(
             conflicts.append(f"{page.name}: ({x},{y}) {original_word}")
             continue
         entry_index = exact[0]
+        if str(working[entry_index].word) != original_word:
+            # Even a unique exact coordinate is stale if a different user
+            # or editing view already changed its original headword.
+            conflicts.append(f"{page.name}: ({x},{y}) 原词已变化：{original_word}")
+            continue
         used.add(entry_index)
         working[entry_index].word = new_word
         planned.append((int(page_index), x, y, new_word))
@@ -62,19 +81,21 @@ def apply_focused_review_page_updates(
         pages[page_index - 1].stem if page_index > 0 else "@",
         pages[page_index + 1].stem if page_index + 1 < len(pages) else "@",
     )
-    try:
-        _write_pdic_atomic(target_path, working, image_width, page_links)
-        verified = read_pdic(target_path)
-        if len(verified) != len(working):
-            raise RuntimeError("保存后 PDIC 行数发生变化")
-        expected = {(row[1], row[2]): row[3] for row in planned}
-        actual: dict[tuple[int, int], list[str]] = {}
-        for entry in verified:
-            actual.setdefault((int(entry.x), int(entry.y)), []).append(entry.word)
-        for key, value in expected.items():
-            if actual.get(key, []).count(value) != 1:
-                raise RuntimeError(f"保存后坐标 {key} 的文本校验失败")
-    except Exception:
-        _write_pdic_atomic(target_path, original_entries, image_width, page_links)
-        raise
+    if disk_bytes() != original_bytes:
+        raise RuntimeError("筛选校对 PDIC 保存前已变化，拒绝覆盖")
+    _write_pdic_atomic(target_path, working, image_width, page_links)
+    verified = read_pdic(target_path)
+    if len(verified) != len(working):
+        raise RuntimeError("保存后 PDIC 行数发生变化")
+    expected = {(row[1], row[2]): row[3] for row in planned}
+    actual: dict[tuple[int, int], list[str]] = {}
+    for entry in verified:
+        actual.setdefault((int(entry.x), int(entry.y)), []).append(entry.word)
+    for key, value in expected.items():
+        if actual.get(key, []).count(value) != 1:
+            # Another writer may have changed the file after publication.
+            # NEVER blindly restore an earlier snapshot over foreign bytes.
+            # Preserve the exception and the visible Tk corrections for
+            # deliberate operator inspection and guarded explicit retry.
+            raise RuntimeError(f"保存后坐标 {key} 的文本校验失败")
     return planned, []
