@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_review_navigation_refused_save_20261029",
+    "active_work_item": "G1_filtered_pending_writer_navigation_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "d7e7c2637f3fab914b465f298226f1a060a64d69",
+    "implementation_head_sha": "161939f03bb20baaff2f4fe106576e2609333820",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify full 6/6 OS×Python CI #40767283343 and OCR #40767283256 / CodeQL #40767276464 for production SHA d7e7c263; repair only same G1 packet failures. E3 real Windows and #483 W1–W11 NOT PERFORMED. Keep #663 Draft/Open/Unmerged.",
-    "last_test_evidence": "Fail-first a2dec00b2fcc36690254fc4cebc14e92218e9364 CI #40766993642 Ubuntu Python3.13: four newly injected failures, 4739 passed, 3 skipped (save return ignored, main load_page abort missing, ReviewWindow pager continued, controller returned success). Corrected production d7e7c2637f3fab914b465f298226f1a060a64d69, CI #40767283343 Ubuntu3.13 success; remaining final jobs pending at checkpoint. OCR #40767283256 and CodeQL #40767276464 pending final conclusion. E3 not performed.",
+    "required_next_action": "Verify final exact-head six-matrix Windows/macOS/Ubuntu Python3.10/3.13 CI, OCR 3/3 and CodeQL Python/Actions for the filtered navigation packet; repair same-G1 failures only. R3 Windows human E3 and #483 W1-W11 NOT PERFORMED; PR #663 remains Draft/Open/Unmerged.",
+    "last_test_evidence": "Baseline f95eed1d9c6f3d272a125a3bda9b6080515c8372 fully verified E2: CI #40767600967 6/6, OCR #40767601148 3/3, CodeQL #40767596143 Python+Actions success. Filter fail-first fcf32587328391b37e205606e1f4199617bcae09 CI #40821194406 macOS Python3.10: 4 newly injected failures /4745 passed/2 skipped, before production fix c9c9e69c80a48ba6e529e0a22b9971c8c44eb8e0. Filter-batch fail-first 3eacbe04886e401a43604fe452db4abb609db7c2 CI #40821567049 started. Combined code head 161939f03bb20baaff2f4fe106576e2609333820 CI #40821622467 and OCR #40821622537 pending at checkpoint. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1486,5 +1486,35 @@
     "doc": "docs/architecture/R3_G1_REVIEW_NAVIGATION_SAVE_REFUSAL_20261029.md",
     "fix": "Explicit False save refusal prevents main/page/review navigation; restores page-list selection, leaves old Tk editor and PDIC untouched, propagates refusal to synchronous controller. Legacy successful adapters returning None remain compatible.",
     "limitations": "Only explicit False refusal fixed. No format or source-coordinate changes, no multi-file atomic guarantee, no real Windows E3 or #483 W1–W11 human acceptance. Draft PR #663 unmerged."
+  },
+  "g1_filtered_pending_writer_navigation_20261029": {
+    "status": "production_fixes_committed_exact_head_gates_pending",
+    "baseline_verified_head": "f95eed1d9c6f3d272a125a3bda9b6080515c8372",
+    "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40767600967",
+    "baseline_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40767601148",
+    "baseline_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40767596143",
+    "fail_first_mode_page": "fcf32587328391b37e205606e1f4199617bcae09",
+    "fail_first_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40821194406",
+    "fail_first_observed": "macOS Python3.10 4 expected failures; 4745 passed, 2 skipped. Filtered pending save skipped before main page or single-mode navigation.",
+    "fix_page_mode_sha": "c9c9e69c80a48ba6e529e0a22b9971c8c44eb8e0",
+    "fail_first_batch": "3eacbe04886e401a43604fe452db4abb609db7c2",
+    "fail_first_batch_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40821567049",
+    "fix_batch_sha": "161939f03bb20baaff2f4fe106576e2609333820",
+    "production_code_head": "161939f03bb20baaff2f4fe106576e2609333820",
+    "code_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40821622467",
+    "code_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40821622537",
+    "codeql": "look up GitHub PR #663 exact final SHA, not yet verified",
+    "owners": [
+      "src/picture_capture/ui/review_page_sync.py",
+      "src/picture_capture/ui/review_workspace_workflow.py",
+      "src/picture_capture/ui/focused_filter_workflow.py"
+    ],
+    "tests": [
+      "tests/test_g1_filter_unsaved_navigation_gate_20261029.py",
+      "tests/test_g1_filter_batch_pending_writer_20261029.py"
+    ],
+    "architecture_doc": "docs/architecture/R3_G1_FILTER_UNSAVED_NAVIGATION_GATE_20261029.md",
+    "change": "Fail-closed filter save for main-page navigation, exit to single-mode, and next/prev filter batch until asynchronous writer finishes. Preserve source page/XY identity and existing single writer.",
+    "limits": "No OS cross-file CAS/power-loss atomicity, no real Windows dictionary E3, no R3 Undo/Redo 20, PDIC/PPP/SECTION/crop E3, no #483 W1-W11. Draft/Open/Unmerged; never equate CI and human acceptance."
   }
 }
