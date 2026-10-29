@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_Windows_E3_local_readonly_evidence_helper_20261030",
+    "active_work_item": "G1_Windows_E3_local_readonly_evidence_no_input_slot_collision_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "b98dd6b7b15c2ca11a2a32df821937df0b40a0d7",
+    "implementation_head_sha": "6317e73e6498372b7572619a43bbd60a5fe8b58b",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify this exact final HEAD's CI Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR Smoke 3/3 and PR CodeQL Python/Actions 2/2. Fix any evidence-backed regression in new E3 evidence tool without loosening gates. For real Windows E3, use docs/roadmaps/R3_WINDOWS_E3_LOCAL_EVIDENCE_RUNBOOK_20261030.md and authorized human Windows source, keep artifacts local, never auto claim acceptance. #483 W1-W11 and E3 NOT PERFORMED until actual manual test. Keep sole PR #663 Draft/Open/Unmerged; main unchanged.",
-    "last_test_evidence": "Last fully green exact-head cb18e64607915739c61e0dab0762b489b8148bf6 CI #40944024409 Windows/macOS/Ubuntu × Python3.10/3.13 6/6 plus Risk-tier successful, OCR #40944024511 3/3 successful, PR CodeQL #40944019867 2/2 successful. New b98dd6b7b15c2ca11a2a32df821937df0b40a0d7 local read-only E3 hash tool + eight synthetic tests + Windows human operator runbook; CI #40947875601 and OCR #40947875427 in progress. New final checkpoint exact-head CI/OCR/CodeQL needs fresh verification. Real Windows scanned-dictionary E3 and #483 W1-W11 NOT PERFORMED.",
+    "required_next_action": "Verify exact final checkpoint-head six CI jobs Windows/macOS/Ubuntu × Python3.10/3.13 6/6 plus Risk-tier, OCR3/3 and PR CodeQL Python+Actions 2/2; first red fail-first evidence retained. Real Windows scan E3 must be manually performed with licensed source, report kept local, E3 and #483 W1–W11 NOT PERFORMED until real human actions. Keep #663 Draft/Open/Unmerged, main unchanged.",
+    "last_test_evidence": "Last fully green cb18e64607915739c61e0dab0762b489b8148bf6: CI #40944024409 6/6 + Risk-tier, OCR #40944024511 3/3, PR CodeQL #40944019867 Python+Actions 2/2 success. E3 helper first source b98dd6b7b15c2ca11a2a32df821937df0b40a0d7 CI #40947875601 and OCR #40947875427 (3/3) ; follow-up test-only 6ad65191bee5252df9517dff249b4da117643c96 CI #40948412990 Ubuntu Python3.13 1 FAILED/4814 passed/3 skipped and macOS Python3.13 1 FAILED/4815 passed/2 skipped: output path equal to not-yet-created manual sidecar accidentally created fake sidecar JSON (returncode 0). Fix 6317e73e6498372b7572619a43bbd60a5fe8b58b checks resolved report pathname against all six artifact input slots before writing. CI #40948625207 + OCR #40948625209 pending. Real Windows E3 and #483 W1-W11 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1746,7 +1746,7 @@
     "limitations": "Conservative synchronous input guard only, not a full per-property version ledger, cross-process atomic CAS, OS lock or multi-file crash atomicity. Real Windows E3 and #483 W1–W11 NOT PERFORMED; PR #663 Draft/Open/Unmerged, main unchanged."
   },
   "g1_windows_e3_local_readonly_evidence_helper_20261030": {
-    "status": "evidence_tool_committed_new_exact_head_E2_pending_human_E3_NOT_PERFORMED",
+    "status": "input_slot_collision_fix_committed_exact_final_head_CI_pending_human_E3_NOT_PERFORMED",
     "prior_green_head": "cb18e64607915739c61e0dab0762b489b8148bf6",
     "prior_green_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40944024409",
     "prior_green_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40944024511",
@@ -1759,7 +1759,14 @@
     "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40947875427",
     "exact_head_codeql": "discover PR CodeQL at final checkpoint SHA",
     "tool_limits": "Only local SHA256/size/existence of six explicitly supplied input paths; no image, word, path or file contents copied to report; output exclusive create; no manual PASS verdict. Compares before/after/reopen and source image stability, but not pixel X/Y, crops, IME, Undo history, sidecar semantic ownership or OS multi-file atomicity.",
-    "human_acceptance": "Real Windows authorized dictionary E3 NOT PERFORMED. #483 W1-W11 NOT PERFORMED. Do not share private hashes/screenshots without separate permission.",
-    "governance": "PR #663 Draft/Open/Unmerged, main unchanged, #503/#562/#483 OPEN."
+    "human_acceptance": "Real Windows E3 NOT PERFORMED; #483 W1-W11 NOT PERFORMED.",
+    "governance": "PR #663 Draft/Open/Unmerged, main unchanged, #503/#562/#483 OPEN.",
+    "failfirst_sha": "6ad65191bee5252df9517dff249b4da117643c96",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40948412990",
+    "observed_fail": "Ubuntu py3.13 1 failed / 4814 passed / 3 skipped, macOS py3.13 1 failed / 4815 passed / 2 skipped: report --output equal missing manual sidecar was erroneously created; no intentional PASS claim.",
+    "bounded_fix_sha": "6317e73e6498372b7572619a43bbd60a5fe8b58b",
+    "bounded_fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40948625207",
+    "bounded_fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40948625209",
+    "bounded_fix": "Resolve report destination and all six source artifact paths and reject any collision before calling capture or creating output, including absent sidecar slots; preserve O_EXCL and user project inputs."
   }
 }
