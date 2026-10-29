@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_Windows_E3_local_readonly_evidence_no_input_slot_collision_20261030",
+    "active_work_item": "G1_Windows_E3_local_evidence_private_path_error_redaction_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "6317e73e6498372b7572619a43bbd60a5fe8b58b",
+    "implementation_head_sha": "c0cd4f1884223935acaddff155e75ff58ff34699",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify exact final checkpoint-head six CI jobs Windows/macOS/Ubuntu × Python3.10/3.13 6/6 plus Risk-tier, OCR3/3 and PR CodeQL Python+Actions 2/2; first red fail-first evidence retained. Real Windows scan E3 must be manually performed with licensed source, report kept local, E3 and #483 W1–W11 NOT PERFORMED until real human actions. Keep #663 Draft/Open/Unmerged, main unchanged.",
-    "last_test_evidence": "Last fully green cb18e64607915739c61e0dab0762b489b8148bf6: CI #40944024409 6/6 + Risk-tier, OCR #40944024511 3/3, PR CodeQL #40944019867 Python+Actions 2/2 success. E3 helper first source b98dd6b7b15c2ca11a2a32df821937df0b40a0d7 CI #40947875601 and OCR #40947875427 (3/3) ; follow-up test-only 6ad65191bee5252df9517dff249b4da117643c96 CI #40948412990 Ubuntu Python3.13 1 FAILED/4814 passed/3 skipped and macOS Python3.13 1 FAILED/4815 passed/2 skipped: output path equal to not-yet-created manual sidecar accidentally created fake sidecar JSON (returncode 0). Fix 6317e73e6498372b7572619a43bbd60a5fe8b58b checks resolved report pathname against all six artifact input slots before writing. CI #40948625207 + OCR #40948625209 pending. Real Windows E3 and #483 W1-W11 NOT PERFORMED.",
+    "required_next_action": "Verify final exact checkpoint HEAD CI Windows/macOS/Ubuntu x Python3.10/3.13 6/6 plus Risk-tier, OCR Smoke 3/3 and PR CodeQL Python/Actions 2/2. Fix any evidence-backed E3 helper regression without altering source PDIC/PPP/SECTION or user input. Real Windows authorized scanned-dictionary E3 and #483 W1-W11 NOT PERFORMED; keep PR #663 Draft/Open/Unmerged, main unchanged.",
+    "last_test_evidence": "Prior exact head 0ffcaa4731254b30828ceae5e68d8661d12e3538 fully green: CI #40948859389 6/6 Windows/macOS/Ubuntu x Python3.10/3.13 + Risk-tier, OCR #40948859172 3/3, PR CodeQL #40948849199 2/2. Test-only 42285de5de7b11ed1da0ece4b8f562f6afef1f78 CI #40950383226 confirmed 2 fail, 4815 pass, 3 skip on Ubuntu py3.13: CLI printed private dictionary path in stderr when output directory missing or compare source report missing; other OS jobs also expected red. Fix c0cd4f1884223935acaddff155e75ff58ff34699 CI #40950743883 and OCR #40950744019 pending. Real E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1768,5 +1768,23 @@
     "bounded_fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40948625207",
     "bounded_fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40948625209",
     "bounded_fix": "Resolve report destination and all six source artifact paths and reject any collision before calling capture or creating output, including absent sidecar slots; preserve O_EXCL and user project inputs."
+  },
+  "g1_windows_e3_local_private_path_error_redaction_20261030": {
+    "status": "fix_committed_exact_head_E2_pending_human_E3_NOT_PERFORMED",
+    "last_fully_green_head": "0ffcaa4731254b30828ceae5e68d8661d12e3538",
+    "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40948859389",
+    "baseline_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40948859172",
+    "baseline_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40948849199",
+    "failfirst_sha": "42285de5de7b11ed1da0ece4b8f562f6afef1f78",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40950383226",
+    "observed_red": "Ubuntu Python3.13 2 failed/4815 passed/3 skipped: error message echoed PRIVATE_DICTIONARY strings from nonexistent output directory and missing compare input report paths; synthetic controls pass.",
+    "fix_sha": "c0cd4f1884223935acaddff155e75ff58ff34699",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40950743883",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40950744019",
+    "code_owner": "scripts/r3_e3_local_evidence.py",
+    "regression": "tests/test_r3_e3_local_evidence_20261030.py",
+    "doc": "docs/roadmaps/R3_WINDOWS_E3_LOCAL_EVIDENCE_RUNBOOK_20261030.md",
+    "fix": "CLI catches OSError/ValueError/RuntimeError; prints type and errno without raw exception string, which contains filenames. Kept report schema, fingerprint source handling and output collision refusal unchanged.",
+    "limits": "CLI tool errors sanitized; operator PowerShell command history/logs and source SHA hashes remain potentially sensitive. Does not verify human E3; real Windows E3 and #483 W1-W11 NOT PERFORMED. PR Draft/Open/Unmerged and main unchanged."
   }
 }
