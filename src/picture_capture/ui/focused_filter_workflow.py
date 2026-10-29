@@ -1077,6 +1077,45 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 if saved_word is not None:
                     change["original_word"] = saved_word
 
+        # If a user returned a row to its pre-write original while this
+        # worker was running, the old queue legitimately became empty.
+        # Once the older snapshot *successfully* commits, that user's
+        # reversion is now a new change relative to the committed PDIC.
+        # Preserve any separately queued newer edit as the stronger owner.
+        for target in self.filtered_targets:
+            point = (
+                int(target["page_index"]), int(target["x"]), int(target["y"])
+            )
+            saved_word = saved_map.get(point)
+            if saved_word is None or "current_word" not in target:
+                continue
+            page_index, x, y = point
+            current_word = (
+                str(target["current_word"] or "")
+                .replace("\r", " ").replace("\n", " ")
+                .replace("#", "＃").strip()
+            )
+            row_key = (x, y)
+            queued = self._filter_pending_changes.get(page_index, {}).get(row_key)
+            if queued is not None:
+                # A newer, serialized edit already owns the page/XY.
+                # Drop only a redundant edit to precisely the saved text.
+                if (
+                    str(queued.get("new_word") or "") == saved_word
+                    and current_word == saved_word
+                ):
+                    changes = self._filter_pending_changes[page_index]
+                    changes.pop(row_key, None)
+                    if not changes:
+                        self._filter_pending_changes.pop(page_index, None)
+            elif current_word != saved_word:
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = {
+                    "page_index": page_index,
+                    "x": x, "y": y,
+                    "original_word": saved_word,
+                    "new_word": current_word,
+                }
+
         # The writer returns no saved rows for a page with source-coordinate
         # conflicts. Never drop that page's original human corrections or
         # overwrite edits made after this snapshot was dispatched.
