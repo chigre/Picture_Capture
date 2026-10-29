@@ -1,3 +1,11 @@
+## 2026-10-30｜G3 R5.1 candidate score immutable/pure checkpoint（最新执行入口）
+
+同一 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) 中，基于 `50a913ef` 已完成 G2 全平台绿灯的基线，先提交 fail-first `9426de03`（缺模块导致预期 collection error），再在 `33fbef91` 将候选过滤器12项打分布尔特征抽为冻结可序列化快照和纯函数（精确保留原加法顺序，不改接受/拒绝/原图XY/保存逻辑），新增穷举4096组合、三个OCR来源及拉丁/CJK等合成差分用例。第一个 CI 暴露测试误以为所有 diagnostics 都是候选，实际另有合法页面级 meta；仅修正测试、绝不删改产品 meta，最新源和测试 HEAD `f63d8805d54100adafb802ed2bedd1ff91dd226f`。
+
+**恢复动作：**核对该确切源 HEAD 的 [六平台 CI #40965305404](https://github.com/chigre/Picture_Capture/actions/runs/40965305404)、[OCR 3OS #40965305118](https://github.com/chigre/Picture_Capture/actions/runs/40965305118)、CodeQL Python+Actions；排队/运行中不是通过。有失败按真实日志修复；全绿后才能标记 R5.1 E2 完成，再启动 **R5.2 独立仲裁 q** 的纯函数/缺失值、边界强度、修复数、forced status及 Lens diagnostic-only 差分验证。**R4 默认 OFF，R6 未核标签 blocked，R3 Windows E3 / #483 W1–W11 NOT PERFORMED，PR 保持 Draft 不合并 main**。详细见 `docs/architecture/G3_R5_SCORE_Q_PARITY_AUDIT_20261030.md`。
+
+---
+
 ## 2026-10-29｜G1 OCR candidate choice + 原图 Y 位置切换（此节为最新执行接力）
 
 本次仅在 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) 内处理
