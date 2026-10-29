@@ -43,8 +43,13 @@ def test_e3_legacy_path_resolver_uses_active_case_insensitive_pdic_ppp(tmp_path)
     actual = e3.project_paths_for_page(page)
     assert set(actual) == set(e3.LABELS)
     assert actual["image"] == page
-    assert actual["pdic"] == pdic_path_for_image(page) == pdic
-    assert actual["ppp"] == ppp_read_path_for_image(page) == ppp
+    # Case-insensitive macOS/Windows filesystems may return the canonical
+    # lower-case pathname as an alias of the existing upper-case file.
+    # The active file identity matters, not spelling of that alias.
+    assert actual["pdic"] == pdic_path_for_image(page)
+    assert actual["ppp"] == ppp_read_path_for_image(page)
+    assert actual["pdic"].samefile(pdic)
+    assert actual["ppp"].samefile(ppp)
     assert actual["section"] == page_sections_read_path_for_image(page)
     assert actual["simplified"] == simplified_review_path_for_image(page)
     assert actual["manual"] == qt_root(tmp_path) / "PaddleOCR" / "001_manual_selection.json"
