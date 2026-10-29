@@ -130,3 +130,43 @@ def test_cli_rejects_output_equal_to_missing_artifact_slot(tmp_path):
     result = subprocess.run(args, capture_output=True, text=True)
     assert result.returncode == 2
     assert not paths["manual"].exists()
+
+
+
+def test_cli_capture_io_error_never_prints_private_output_directory(tmp_path):
+    """OS failure messages contain filenames; avoid leaking a local scan path."""
+    paths = fixtures(tmp_path)
+    secret = "PRIVATE_DICTIONARY_DONT_DISCLOSE"
+    output = tmp_path / secret / "nested" / "before.json"
+    assert not output.parent.exists()
+    args = [sys.executable, str(SCRIPT), "capture", "--stage", "before",
+            "--revision", SHA]
+    for name, source in paths.items():
+        args.extend(["--" + name, str(source)])
+    args.extend(["--output", str(output)])
+    run = subprocess.run(args, text=True, capture_output=True)
+    assert run.returncode == 2
+    assert "E3 local evidence error" in run.stderr
+    assert secret not in run.stderr
+    assert str(output) not in run.stderr
+    assert not output.exists()
+
+
+def test_cli_compare_missing_report_never_prints_private_source_path(tmp_path):
+    """Even malformed/broken operator inputs should not leak paths in logs."""
+    secret = "PRIVATE_DICTIONARY_DO_NOT_LOG"
+    missing = tmp_path / secret / "before.json"
+    output = tmp_path / "comparison.json"
+    run = subprocess.run(
+        [sys.executable, str(SCRIPT), "compare",
+         "--before", str(missing),
+         "--after", str(tmp_path / "after.json"),
+         "--reopen", str(tmp_path / "reopen.json"),
+         "--output", str(output)],
+        text=True, capture_output=True,
+    )
+    assert run.returncode == 2
+    assert "E3 local evidence error" in run.stderr
+    assert secret not in run.stderr
+    assert str(missing) not in run.stderr
+    assert not output.exists()
