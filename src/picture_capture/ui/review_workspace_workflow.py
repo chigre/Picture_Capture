@@ -982,6 +982,17 @@ def _change_review_mode(self, deps: ReviewWorkspaceDeps) -> None:
         self.parent.status_var.set("已选择筛选模式；设置条件后点击【筛选】才会刷新工作区。")
         return
     self._flush_focused_changes_now()
+    if getattr(self, "_filter_rows_active", False) and (
+        self._filter_save_running or self._filter_pending_changes
+    ):
+        # The save was scheduled asynchronously, not committed. Preserve
+        # its visible editor rows and their original page/XY ownership until
+        # completion; a failed worker restores pending edits for retry.
+        self.review_mode_var.set("filter")
+        self.parent.status_var.set(
+            "筛选校对修改尚未保存完成，暂不能切换单页模式。"
+        )
+        return
     self._filter_rows_active = False
     self._set_filter_navigation(False)
     self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")

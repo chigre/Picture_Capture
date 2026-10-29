@@ -32,11 +32,19 @@ def save_review_before_page_change(app: Any, index: int, *, already_saved: bool 
     """
     review = _live_review(app)
     page = getattr(app, "current_page", None)
-    if (
-        review is None or already_saved or page is None
-        or getattr(review, "_filter_rows_active", False)
-        or getattr(review, "_rendered_page_stem", None) != page.stem
-    ):
+    if review is None or already_saved or page is None:
+        return False
+    if getattr(review, "_filter_rows_active", False):
+        # Filtered rows span multiple pages, so a rendered-page-stem check
+        # cannot prove that their background save has finished. Explicitly
+        # fence a pending/running filtered save before changing main pages.
+        if review.save(redraw_main=False) is False:
+            return None
+        # Keep the existing main canvas save/sync responsibility when no
+        # filtered work is outstanding; do not pretend to own single-page
+        # rendered rows from a cross-page filter.
+        return False
+    if getattr(review, "_rendered_page_stem", None) != page.stem:
         return False
     if review.save(redraw_main=False) is False:
         return None
