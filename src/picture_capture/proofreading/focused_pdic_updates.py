@@ -99,6 +99,33 @@ def apply_focused_review_page_updates(
     ]
     if verified_rows != expected_rows:
         raise RuntimeError("保存后 PDIC 全部词条、坐标或顺序校验失败")
+    # PDIC stores eight sidecar fields, not just words and source X/Y.
+    # A foreign writer can corrupt x/y percentages or prev/next page
+    # links without changing any of the Entry fields compared above.
+    # The existing PDIC serializer emits UTF-8 with two-decimal percent
+    # precision and g formatting; compare every ordered serialized field.
+    expected_fields = []
+    for entry in working:
+        x, y = int(entry.x), int(entry.y)
+        word = (
+            str(entry.word).replace("\r", " ").replace("\n", " ")
+            .replace("#", "＃").strip()
+        )
+        x_pct = round(x / image_width * 100, 2) if image_width else 0
+        y_pct = round(y / image_width * 100, 2) if image_width else 0
+        expected_fields.append([
+            word, str(x), str(y), f"{x_pct:g}", f"{y_pct:g}",
+            *page_links,
+        ])
+    published_fields = [
+        line.split("#")
+        for line in target_path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ]
+    if published_fields != expected_fields:
+        # No rollback: after publication, a discrepancy may be a newer
+        # writer's version. Fail closed without destroying their changes.
+        raise RuntimeError("保存后 PDIC 百分比坐标或页码链接校验失败")
     expected = {(row[1], row[2]): row[3] for row in planned}
     actual: dict[tuple[int, int], list[str]] = {}
     for entry in verified:
