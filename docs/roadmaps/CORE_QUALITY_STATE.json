@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-29T22:43:42.349Z",
+  "updated_at_utc": "2026-10-29T23:17:46.066Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G3_R5_2_engine_q_pure_scoring_source_E2_pending_20261030",
+    "active_work_item": "G3_R4_1_provenance_triage_source_E2_pending_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,9 +43,9 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "e57346968a48372a0cb633cc63c6fce8fe0f0db9",
+    "implementation_head_sha": "460383db864663854905e7f8d2dd1abd665e26ca",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
-    "last_completed_work_item": "G3_R5_1_candidate_score_E2_full_platform_verified",
+    "last_completed_work_item": "G3_R5_2_q_pure_score_E2_verified",
     "blockers": [
       {
         "type": "r2_human_acceptance_pending",
@@ -58,7 +58,7 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Complete exact source e57346968a48372a0cb633cc63c6fce8fe0f0db9 CI #40967756737 six OS/Python matrix, OCR Smoke #40967756750 3 OS, CodeQL python/actions and Risk-tier; source R5.2 q pure immutable score module implemented with 512 direct score parity and 15 full arbitration differential cases; do not label verified while queued/in_progress. Check final documentation HEAD too. After all E2 green, proceed provenance-safe, default-OFF R4 focused review risk queue. Maintain sole Draft PR #663, main unchanged; real Windows R3 E3 and #483 W1-W11 NOT PERFORMED; R6 verified labels absent.",
+    "required_next_action": "R5.2 exact 11aa70a0 E2 verified: CI #40968076780 6/6+Risk-tier, OCR #40968076632 3/3, CodeQL #40968072905 2/2. R4.1 source 460383db E2 pending: CI #40971810563, OCR #40971810731, CodeQL #40971805624, and final documentation HEAD need exact SHA checks. R4.2 strict current OCR/PDIC SHA and unique project/page/SECTION/source XY provenance adapter + explicitly OFF UI queue not yet wired. R3 E3 and #483 W1-W11 NOT PERFORMED. Keep sole Draft PR #663 and main unchanged.",
     "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed. G3 R5.1 red 9426de03 expected ModuleNotFoundError; source 33fbef91 six-platform CI found 1 test-only wrong assertion counting meta diagnostic; corrected source/tests f63d8805d54100adafb802ed2bedd1ff91dd226f. Exact source CI #40965305404 and OCR #40965305118 PENDING at docs authoring; no R5.1 E2 green claim, no R5.2 q implementation. R5.1 final docs/head 234870694bca285117deb6a863c11bd705f3891c: CI #40965627205 Windows/macOS/Ubuntu Python3.10/3.13 6/6, Risk-tier success, OCR #40965627204 3/3, CodeQL python+actions success. R5.2 red 5cd39dddc278553b10ded5d0efb57ff54f9375f3 absent module expected error; production source e57346968a48372a0cb633cc63c6fce8fe0f0db9 q extraction; #40967756737 full CI still pending, #40967756750 OCR 3/3 success, Risk-tier success at checkpoint; no R5.2 E2 verified claim.",
     "active_batch": "B3",
     "next_batch": "B4",
@@ -159,6 +159,26 @@
       "actual_windows_E3": "deferred_not_performed",
       "issue_483_W1_W11": "deferred_not_performed",
       "pr_663": "draft_open_unmerged"
+    },
+    "g3_r5_2_e2": {
+      "sha": "11aa70a0a9327b7bac6080f863aa212da1af27de",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40968076780",
+      "ci_result": "6/6_and_risk_tier_success",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40968076632",
+      "ocr_result": "3/3_success",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40968072905",
+      "codeql_result": "python_actions_2/2_success",
+      "human": "NOT_PERFORMED"
+    },
+    "g3_r4_1": {
+      "source_sha": "460383db864663854905e7f8d2dd1abd665e26ca",
+      "failfirst_sha": "c3caec35fa19e8aad01b66169ff0494d8e29d1ba",
+      "failfirst": "Ubuntu3.13 expected ModuleNotFoundError job 123789938199",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40971810563",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40971810731",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40971805624",
+      "status": "source_committed_E2_pending_UI_not_wired",
+      "human": "R3 E3 and #483 W1-W11 NOT_PERFORMED"
     }
   },
   "units": {
@@ -172,10 +192,10 @@
     "R2.3": "in_progress",
     "R3.1": "in_progress",
     "R3.2": "in_progress",
-    "R4.1": "todo",
+    "R4.1": "in_progress",
     "R4.2": "todo",
-    "R5.1": "todo",
-    "R5.2": "todo",
+    "R5.1": "in_progress",
+    "R5.2": "in_progress",
     "R6.1": "todo",
     "R6.2": "todo",
     "R6.3": "todo",
@@ -773,6 +793,18 @@
       "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40962958001",
       "status": "E2_success_human_E3_deferred",
       "note": "UI pure policy extraction, old app facades unchanged; 5 root Python modules; source head fully green. #483 W1-W11 and R3 E3 NOT PERFORMED."
+    },
+    {
+      "type": "g3_r5_2_verified_r4_1_source_pending",
+      "r5_2_sha": "11aa70a0a9327b7bac6080f863aa212da1af27de",
+      "r5_2_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40968076780",
+      "r5_2_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40968076632",
+      "r5_2_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40968072905",
+      "r4_1_failfirst": "c3caec35fa19e8aad01b66169ff0494d8e29d1ba",
+      "r4_1_source": "460383db864663854905e7f8d2dd1abd665e26ca",
+      "r4_1_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40971810563",
+      "r4_1_e2": "pending",
+      "human": "NOT_PERFORMED"
     }
   ],
   "rules_for_updates": {
@@ -984,22 +1016,22 @@
         "R4.1",
         "R4.2"
       ],
-      "status": "todo",
-      "implementation_pr": null,
+      "status": "in_progress",
+      "implementation_pr": 663,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "todo: R4 deterministic priority queue could reuse ui/focused_filter_workflow.py, but no existing verified risk tiers or human time savings"
+      "current_planning": "R4.1 pure source-anchored triage committed, exact-head E2 pending; R4.2 UI/default-OFF queue not implemented."
     },
     "B5": {
       "units": [
         "R5.1",
         "R5.2"
       ],
-      "status": "todo",
-      "implementation_pr": null,
+      "status": "in_progress",
+      "implementation_pr": 663,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "todo with partial #562 code extraction: score vs q pure parity and per-field fixture DoD still open; do not mark verified"
+      "current_planning": "R5.1 and R5.2 synthetic E2 independently green on sole Draft PR #663; not merged or real human E3 verified."
     },
     "B6": {
       "units": [

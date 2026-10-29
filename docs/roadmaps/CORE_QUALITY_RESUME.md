@@ -1,3 +1,7 @@
+## G3 R5.2 exact E2 + R4.1 fail-closed triage（2026-10-30）
+
+R5.2 `11aa70a0a9327b7bac6080f863aa212da1af27de` 已核实 [CI 40968076780](https://github.com/chigre/Picture_Capture/actions/runs/40968076780) 六平台+Risk-tier、[OCR 40968076632](https://github.com/chigre/Picture_Capture/actions/runs/40968076632) 三平台、[CodeQL 40968072905](https://github.com/chigre/Picture_Capture/actions/runs/40968072905) Python/Actions 全部 SUCCESS，仅合成 E2。R4.1 红先行 `c3caec35` 预期 ModuleNotFoundError；源码 `460383db864663854905e7f8d2dd1abd665e26ca` 增加只读 `proofreading/review_risk.py`：需独立核验 OCR+PDIC SHA、project/page/SECTION、唯一 source XY，才输出 priority/normal，否则 unknown。源 [CI 40971810563](https://github.com/chigre/Picture_Capture/actions/runs/40971810563)、[OCR 40971810731](https://github.com/chigre/Picture_Capture/actions/runs/40971810731)、[CodeQL 40971805624](https://github.com/chigre/Picture_Capture/actions/runs/40971805624) 及最终文档 HEAD 必须核实结论。R4.2 UI 尚未接入，默认排序不变。详见 [R4 来源审计](../architecture/G3_R4_PROVENANCE_REVIEW_TRIAGE_20261030.md)。PR #663 唯一 Draft/Open/Unmerged；main 不变；Windows R3 E3、#483 W1–W11 **NOT PERFORMED**；无 R6 训练或真实扫描基准。
+
 ## 2026-10-30｜G3 R5.2 独立 OCR 仲裁 q 快照/纯函数（最新接力）
 
 基线 R5.1 已在 `234870694bca285117deb6a863c11bd705f3891c` 确认六平台 CI #40965627205 6/6、Risk-tier、OCR #40965627204 3/3、CodeQL Python+Actions 2/2 全部成功。**仅为 E2 自动化，不等于真人 E3**。
