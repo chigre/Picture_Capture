@@ -122,3 +122,71 @@ def test_real_filter_records_use_pure_score_without_changing_diagnostic_contract
         assert all(entry.x == 12 and entry.y >= 45 for entry in entries)
     finally:
         image.close()
+
+
+@pytest.mark.parametrize("engine", ["paddle", "tesseract", "lens"])
+@pytest.mark.parametrize(
+    ("text", "language", "min_score", "force_reject"),
+    [
+        ("árbol m. tree", "spa", 0.0, False),
+        ("árbol m. tree", "spa", 100.0, False),
+        ("árbol m. tree", "spa", 0.0, True),
+        ("中", "chi_tra", 0.0, False),
+        ("【中文】", "chi_tra", 0.0, False),
+        ("incomplete continuation", "spa", 0.0, False),
+    ],
+)
+def test_legacy_math_and_extracted_math_yield_identical_full_filter_outputs(
+    monkeypatch, engine, text, language, min_score, force_reject,
+):
+    # Differential E2 test: every downstream acceptance/reject decision,
+    # diagnostics feature, repaired source coordinate and Entry is compared.
+    # This is NOT a human ground-truth OCR accuracy test.
+    from PIL import Image
+    from picture_capture import paddle_headwords_core as core
+    from picture_capture.models import AppSettings
+    from picture_capture.ocr import candidate_filter
+    from picture_capture.ocr.headword_models import OCRRecord
+
+    def old_score(f):
+        return (
+            (2.0 if f.parsed else 0.0)
+            + (2.0 if f.left_evidence else 0.0)
+            + (3.0 if f.selected_pos else 0.0)
+            + (2.0 if f.selected_inflection else 0.0)
+            + (1.5 if f.selected_variant else 0.0)
+            + (1.5 if f.selected_pronunciation else 0.0)
+            + (3.0 if f.selected_descriptor else 0.0)
+            + (1.0 if f.front_structure_cue else 0.0)
+            + (0.75 if f.large else 0.0)
+            + (1.0 if f.bold else 0.0)
+            + (0.5 if f.separated else 0.0)
+            + (0.75 if f.cjk_candidate_right_sparse else 0.0)
+        )
+
+    settings = AppSettings(ocr_language=language)
+    settings.paddle_min_candidate_score = min_score
+    rules = (
+        core.parse_headword_filter_rules("reject_lemma_exact: árbol")
+        if force_reject else []
+    )
+    image = Image.new("RGB", (160, 130), "white")
+    try:
+        original = candidate_filter.score_candidate
+        monkeypatch.setattr(candidate_filter, "score_candidate", old_score)
+        reference = core.filter_headword_records(
+            [OCRRecord(text, .99, (2, 18, 140, 35))],
+            image, source_top=50, source_column_x=11,
+            settings=settings, user_rules=rules, engine_name=engine,
+        )
+        monkeypatch.setattr(candidate_filter, "score_candidate", original)
+        after = core.filter_headword_records(
+            [OCRRecord(text, .99, (2, 18, 140, 35))],
+            image, source_top=50, source_column_x=11,
+            settings=settings, user_rules=rules, engine_name=engine,
+        )
+        assert after == reference
+        assert all(row["source_y"] >= 50 and row["coarse_source_y"] >= 50 for row in after[1])
+        assert all(entry.x == 11 and entry.ocr_source == engine for entry in after[0])
+    finally:
+        image.close()
