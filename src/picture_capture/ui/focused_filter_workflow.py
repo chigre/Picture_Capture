@@ -796,8 +796,28 @@ def _render_filter_batch(
             style="PCR.Compact.TButton",
         ).pack(side="right", padx=(5, 0))
         self.filter_editors.append(editor)
+
+        def commit_bound_filter_var(
+            *_trace_args, i=index, expected_var=variable, expected_target=target,
+        ) -> None:
+            # A Tk StringVar write captures paste, cut, replacement and IME
+            # commits even when the platform emits no KeyRelease. An old
+            # variable may still outlive a batch redraw: never reuse its
+            # row index for a newly rendered page/XY owner.
+            if (
+                not getattr(self, "_filter_rows_active", False)
+                or i >= len(self.filter_vars)
+                or self.filter_vars[i] is not expected_var
+                or i >= len(self._filter_current_batch_targets)
+                or self._filter_current_batch_targets[i] is not expected_target
+            ):
+                return
+            self._commit_filter_editor_value(i)
+
+        variable.trace_add("write", commit_bound_filter_var)
         editor.bind("<FocusIn>", lambda _event, i=index: self._set_filter_active(i))
         editor.bind("<KeyRelease>", lambda event, i=index: self._on_filter_key(event, i))
+        editor.bind("<FocusOut>", lambda _event, callback=commit_bound_filter_var: callback())
         editor.bind("<Return>", lambda _event, i=index: self._focus_filter_index(i + 1))
         editor.bind("<Up>", lambda _event, i=index: self._focus_filter_index(i - 1))
         editor.bind("<Down>", lambda _event, i=index: self._focus_filter_index(i + 1))
@@ -890,6 +910,13 @@ def _commit_filter_editor_value(self, deps: FocusedFilterDeps, index: int) -> No
     target = self._filter_current_batch_targets[index]
     editor = self.filter_editors[index]
     value = self.filter_vars[index].get().strip()
+    current = str(
+        target.get("current_word", target.get("original_word", ""))
+    ).strip()
+    if value == current:
+        # StringVar.trace_add already committed this exact editor value.
+        # A later KeyRelease / FocusOut must not reschedule an extra writer.
+        return
     target["current_word"] = value
     in_reference = value in set(self.parent._project_words)
     color = "#b3fddd" if in_reference else "#fce5e8"
