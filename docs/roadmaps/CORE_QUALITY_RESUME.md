@@ -1,4 +1,14 @@
-## 2026-10-30｜G3 R5.1 candidate score immutable/pure checkpoint（最新执行入口）
+## 2026-10-30｜G3 R5.2 独立 OCR 仲裁 q 快照/纯函数（最新接力）
+
+基线 R5.1 已在 `234870694bca285117deb6a863c11bd705f3891c` 确认六平台 CI #40965627205 6/6、Risk-tier、OCR #40965627204 3/3、CodeQL Python+Actions 2/2 全部成功。**仅为 E2 自动化，不等于真人 E3**。
+
+本轮仍在唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)，先做 fail-first `5cd39dddc278553b10ded5d0efb57ff54f9375f3`（预期缺少 q 纯评分模块），再提交源代码 `e57346968a48372a0cb633cc63c6fce8fe0f0db9`：新增 `ocr/engine_quality_scoring.py` 的不可变、可 JSON 序列化的 11 字段快照及有序纯评分函数；`ocr/pairing_arbitration.py` 保持 pair/前缀转换及 monkeypatch 入口、三引擎投票逻辑、Lens diagnostic-only、并列 tie、门槛和原图坐标不变。新增 512 组纯 q 浮点逐项对比、异常值/边界值、P/T/L 及 15 个全量输出差分场景。
+
+**唯一恢复动作：**检查源代码 [CI #40967756737](https://github.com/chigre/Picture_Capture/actions/runs/40967756737) 六平台、[OCR #40967756750](https://github.com/chigre/Picture_Capture/actions/runs/40967756750) 三平台及 CodeQL Python/Actions 的最终 conclusion；有失败立即查日志修本包，不能将 queued/in_progress 当 success。当前本节提交前 OCR 3/3 和 Risk-tier 已成功，完整源 CI 未完成。随后核对最新文档 HEAD 全套检查并将 R5.2 E2 标为 verified，方可启动 R4 priority/normal/unknown + 默认 OFF 队列。人工 E3、#483 W1–W11 仍 NOT PERFORMED，R6 标签阻塞，R8 真实扫描延后，不合并、不标 Ready、不关闭 #503/#562/#483。
+
+---
+
+## 2026-10-30｜G3 R5.1 candidate score immutable/pure checkpoint（历史完成证据）
 
 同一 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) 中，基于 `50a913ef` 已完成 G2 全平台绿灯的基线，先提交 fail-first `9426de03`（缺模块导致预期 collection error），再在 `33fbef91` 将候选过滤器12项打分布尔特征抽为冻结可序列化快照和纯函数（精确保留原加法顺序，不改接受/拒绝/原图XY/保存逻辑），新增穷举4096组合、三个OCR来源及拉丁/CJK等合成差分用例。第一个 CI 暴露测试误以为所有 diagnostics 都是候选，实际另有合法页面级 meta；仅修正测试、绝不删改产品 meta，最新源和测试 HEAD `f63d8805d54100adafb802ed2bedd1ff91dd226f`。
 

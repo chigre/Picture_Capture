@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-29T22:24:09.029Z",
+  "updated_at_utc": "2026-10-29T22:43:42.349Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G3_R5_1_candidate_score_source_exact_head_E2_pending_20261030",
+    "active_work_item": "G3_R5_2_engine_q_pure_scoring_source_E2_pending_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,9 +43,9 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "f63d8805d54100adafb802ed2bedd1ff91dd226f",
+    "implementation_head_sha": "e57346968a48372a0cb633cc63c6fce8fe0f0db9",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
-    "last_completed_work_item": "G2_app_ui_pure_policy_owner_extraction_E2_verified",
+    "last_completed_work_item": "G3_R5_1_candidate_score_E2_full_platform_verified",
     "blockers": [
       {
         "type": "r2_human_acceptance_pending",
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Check exact source HEAD f63d8805d54100adafb802ed2bedd1ff91dd226f CI #40965305404 six OS/Python jobs, OCR #40965305118 3 OS, CodeQL python/actions and architecture Risk-tier; queued/in-progress not verified. R5.1 immutable 12-bool candidate score extraction and complete diagnostic differential synthetic tests implemented. If source gates all pass, proceed with separate R5.2 engine q pure-scoring parity before default-OFF R4 risk queue; do not adjust weights, acceptance, source XY or OCR/persistence ABI. User paused real Windows R3 E3 and #483 W1-W11; do not merge/Ready/close PR/Issues.",
-    "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed. G3 R5.1 red 9426de03 expected ModuleNotFoundError; source 33fbef91 six-platform CI found 1 test-only wrong assertion counting meta diagnostic; corrected source/tests f63d8805d54100adafb802ed2bedd1ff91dd226f. Exact source CI #40965305404 and OCR #40965305118 PENDING at docs authoring; no R5.1 E2 green claim, no R5.2 q implementation.",
+    "required_next_action": "Complete exact source e57346968a48372a0cb633cc63c6fce8fe0f0db9 CI #40967756737 six OS/Python matrix, OCR Smoke #40967756750 3 OS, CodeQL python/actions and Risk-tier; source R5.2 q pure immutable score module implemented with 512 direct score parity and 15 full arbitration differential cases; do not label verified while queued/in_progress. Check final documentation HEAD too. After all E2 green, proceed provenance-safe, default-OFF R4 focused review risk queue. Maintain sole Draft PR #663, main unchanged; real Windows R3 E3 and #483 W1-W11 NOT PERFORMED; R6 verified labels absent.",
+    "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed. G3 R5.1 red 9426de03 expected ModuleNotFoundError; source 33fbef91 six-platform CI found 1 test-only wrong assertion counting meta diagnostic; corrected source/tests f63d8805d54100adafb802ed2bedd1ff91dd226f. Exact source CI #40965305404 and OCR #40965305118 PENDING at docs authoring; no R5.1 E2 green claim, no R5.2 q implementation. R5.1 final docs/head 234870694bca285117deb6a863c11bd705f3891c: CI #40965627205 Windows/macOS/Ubuntu Python3.10/3.13 6/6, Risk-tier success, OCR #40965627204 3/3, CodeQL python+actions success. R5.2 red 5cd39dddc278553b10ded5d0efb57ff54f9375f3 absent module expected error; production source e57346968a48372a0cb633cc63c6fce8fe0f0db9 q extraction; #40967756737 full CI still pending, #40967756750 OCR 3/3 success, Risk-tier success at checkpoint; no R5.2 E2 verified claim.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
