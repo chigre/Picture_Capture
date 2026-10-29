@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_R3_marker_dangling_symlink_pre_UI_mutation_20261030",
+    "active_work_item": "G1_unreadable_postfailure_PDic_readback_quarantine_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "56fe9f1c8d1896e5bffa23e42b39e2266cd0489a",
+    "implementation_head_sha": "68f606b84008ff1d16365cde4d1bd8af6c79b044",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Complete exact final checkpoint-head CI Windows/macOS/Ubuntu × Python 3.10/3.13 6/6 + Risk-tier, OCR Smoke 3/3 and PR CodeQL Python+Actions 2/2. Repair any evidence-backed failure without weakening R3 quarantine. Real Windows scanned dictionary E3 (CJK IME/paste/FocusOut, 20-step Undo/Redo, PDIC/PPP/SECTION reopening and source X/Y/crop parity) and #483 W1–W11 NOT PERFORMED; keep sole #663 Draft/Open/Unmerged and main unchanged.",
-    "last_test_evidence": "Prior fully-green exact HEAD f4610df820d234cef23a77ff776529b21d137f21: CI #40930550475 Windows/macOS/Ubuntu Python 3.10+3.13 six-matrix + Risk-tier success; OCR #40930550351 3/3 success; PR Safety #40930542620 Python+Actions CodeQL 2/2 success. New fail-first test-only 2382f8a12f3ccce4a66a93df7e92d225262f54d6 CI #40936947491 macOS Python3.13 3 failed, 4795 passed, 2 skipped: app-save manual preflight, deferred manual preflight and ReviewWindow Entry/simplified commit allowed dangling R3 marker to pass Path.exists. Normal R3 marker and no-marker review control passed. Minimal source fix 56fe9f1c8d1896e5bffa23e42b39e2266cd0489a CI #40937129300 in progress and OCR #40937129426 3/3 SUCCESS; new exact-head CodeQL pending. E3 NOT PERFORMED.",
+    "required_next_action": "Verify final exact-head CI Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR Smoke 3/3, PR Safety CodeQL Python+Actions 2/2; fix only evidence-backed same G1 tests if failing. Native Windows scanned-dictionary E3 (IME/paste/FocusOut, Undo×20/Redo×20, PDIC/PPP/SECTION reopen, source X/Y and crop parity), #483 W1–W11 NOT PERFORMED. Keep #663 Draft/Open/Unmerged and main untouched.",
+    "last_test_evidence": "Prior fully green exact SHA 99631c4d99480aa55abb931882425126f31ea061: CI #40937388871 Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier SUCCESS, OCR #40937388863 3/3 SUCCESS, PR CodeQL #40937381553 Python+Actions 2/2 SUCCESS. New fail-first tests-only dba7b81dd82c4794a46281540e904bae62cbeaeb CI #40941302401 Ubuntu Python3.13 2 FAILED / 4799 passed /3 skipped and macOS Python3.10 2 FAILED/4800 passed/2 skipped: original disk-full error masked by second PermissionError from diagnostic PDIC readback, app+review guards lacked quarantine. Positive unchanged-disk rollback controls passed. Source fix 68f606b84008ff1d16365cde4d1bd8af6c79b044 CI #40941541265 started; OCR #40941541262 three OS SUCCESS. Final checkpoint SHA E2 remains to verify. E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1707,5 +1707,23 @@
     "architecture_note": "docs/architecture/R3_G1_R3_MARKER_PREMUTATION_UI_OWNER_20261030.md",
     "guard": "All three R3 preflight checks use existing transactions._marker_present (lstat): block unresolved regular or dangling symlink marker before any manual source checks, Entry mutation or sidecar capture. Unreadable status propagates.",
     "limitations": "Precheck only; not cross-process OS CAS, lock, or power-loss atomic multi-file publication. Native Windows E3 and #483 W1–W11 NOT PERFORMED. PR #663 Draft/Open/Unmerged, main unchanged."
+  },
+  "g1_unreadable_postfailure_PDic_readback_quarantine_20261030": {
+    "status": "source_fix_committed_exact_head_CI_pending",
+    "last_fully_green_sha": "99631c4d99480aa55abb931882425126f31ea061",
+    "prior_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40937388871",
+    "prior_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40937388863",
+    "prior_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40937381553",
+    "failfirst_sha": "dba7b81dd82c4794a46281540e904bae62cbeaeb",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40941302401",
+    "failfirst_observed": "Ubuntu Python3.13 2 failed 4799 passed 3 skipped; macOS Python3.10 2 failed 4800 passed 2 skipped: same writer OSError incorrectly masked by second PermissionError at PDIC readback. Existing positive verified-unchanged rollback controls passed.",
+    "production_fix_sha": "68f606b84008ff1d16365cde4d1bd8af6c79b044",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40941541265",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40941541262",
+    "regression_file": "tests/test_g1_save_safety_unreadable_postfailure_readback_20261030.py",
+    "production_file": "src/picture_capture/proofreading/save_safety.py",
+    "architecture_note": "docs/architecture/R3_G1_UNREADABLE_PDIC_POSTFAILURE_READBACK_20261030.md",
+    "behavior": "Both protect_app_pdic_commit and protect_review_pdic_commit authorize rollback only upon successful matching readback on unchanged page; if postfailure diagnostic read itself raises OSError, original writer exception must survive and app._deferred_save_uncertain=True; no forced memory rollback or disk overwrite.",
+    "limitations": "Optimistic single-file byte check, not cross-process OS CAS/lock/multi-file power-loss guarantee. Native Windows E3 and #483 W1–W11 NOT PERFORMED; PR #663 Draft/Open/Unmerged, main unchanged."
   }
 }
