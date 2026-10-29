@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_filtered_worker_failure_conflict_preservation_20261029",
+    "active_work_item": "G1_filtered_Tk_StringVar_focusout_clipboard_IME_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "90f4a5c375e3423a1a4ddb17e81ab56f518fa1b2",
+    "implementation_head_sha": "bb6e75410cd18712018e20d4f49e5f7308a25f9e",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Check exact-head CI 6/6 Windows/macOS/Ubuntu Python 3.10/3.13 and Risk-tier gate, OCR 3/3, PR CodeQL Python+Actions 2/2; repair only same G1 regression if any. Then audit filtered-editor FocusOut/IME/clipboard unreported text with fail-first proof. Windows human E3 and #483 W1-W11 remain NOT PERFORMED, #663 Draft/Open/Unmerged.",
-    "last_test_evidence": "Previous exact-head 44a2992f55ffd1de9e4e3c85658533cafb6eaded passed CI 40822033343 6/6 + Risk-tier, OCR 40822033287 3/3, CodeQL 40822028662 2/2. Fail-first tests-only 53a1d30900db3de706b77c6d12778ae98d865cef CI 40830499233 Ubuntu Python3.13: 4 newly introduced failures, 4753 passed, 3 skipped (stale snapshot overwrote newer same-XY edit, failed writer retained deferred close, XY conflict discarded unsaved snapshot and auto-closed, latest revert resurrected). Clean success control passed. Repair 90f4a5c375e3423a1a4ddb17e81ab56f518fa1b2: CI #40830719790 Ubuntu3.13, macOS3.10, Ubuntu3.10 successes observed, other jobs pending. OCR #40830719780 3/3 and PR safety #40830713993 Python+Actions 2/2 successes. Human E3 NOT PERFORMED.",
+    "required_next_action": "Verify exact final SHA CI 6/6 Windows/macOS/Ubuntu Python 3.10/3.13 and Risk-tier gate, OCR Smoke 3/3, CodeQL Python+Actions 2/2. Fix only evidence-backed G1 regressions. Real Windows scanned dictionary E3 FocusOut/IME, Undo20/Redo20, PDIC/PPP/SECTION save/reopen and source pixels/crop, plus #483 W1-W11 remain NOT PERFORMED. Keep #663 Draft/Open/Unmerged.",
+    "last_test_evidence": "Previous e62a81b322a1863c92ca2f30734711249eede1a0 fully green: CI #40831014183 OS×Python 6/6 + risk gate; OCR #40831014178 3/3; PR CodeQL #40831009663 Python+Actions 2/2. Tests-only 7d249868e724a736f78edc1ab9d603a560caec39 fail-first CI #40896995150 macOS Python3.13: 4 failed/4759 passed/2 skipped for no-KeyRelease input, missing FocusOut, missed reversion and stale row variable; untouched row control passed. Production source fix bb6e75410cd18712018e20d4f49e5f7308a25f9e CI #40897231099 and OCR #40897231192 running at checkpoint. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1547,5 +1547,24 @@
     "protection": "Exact-page/XY source snapshot restored only where not already committed, not superseded by newer pending edit, and not reverted to original. Conflict and failure prevent delayed auto-close. Unresolved conflict retains edits, no infinite automatic retry.",
     "limitations": "No OS cross-file CAS/power-loss durability; actual Windows R3 dictionary E3 FocusOut/IME, 20-step Undo/Redo, PDIC/PPP/SECTION reopens, pixel/crop parity and #483 W1-W11 unperformed. Keep PR #663 Draft/Open/Unmerged.",
     "next_audit": "Filter-mode editor currently binds KeyRelease but no FocusOut; unreported clipboard/IME changes need fresh source-callback fail-first proof before patch."
+  },
+  "g1_filtered_tk_stringvar_focusout_clipboard_ime_20261029": {
+    "status": "source_fix_committed_exact_head_e2_pending",
+    "fully_green_prior_head": "e62a81b322a1863c92ca2f30734711249eede1a0",
+    "prior_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40831014183",
+    "prior_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40831014178",
+    "prior_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40831009663",
+    "red_test_head": "7d249868e724a736f78edc1ab9d603a560caec39",
+    "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40896995150",
+    "red_observed": "macOS Python3.13: 4 expected new failures, 4759 passes, 2 skips; initial render control passed.",
+    "source_fix_head": "bb6e75410cd18712018e20d4f49e5f7308a25f9e",
+    "fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40897231099",
+    "fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40897231192",
+    "fix_codeql": "Exact production head PR #663 PR Safety to verify",
+    "production_owner": "src/picture_capture/ui/focused_filter_workflow.py",
+    "regression_test": "tests/test_g1_filter_tk_var_clipboard_ime_20261029.py",
+    "doc": "docs/architecture/R3_G1_FILTER_TK_VAR_CLIPBOARD_IME_20261029.md",
+    "fix": "Record filtered StringVar write as page/XY-bound pending correction even without KeyRelease; guard callback by current batch variable+target object identity; FocusOut shares guarded commit; unchanged value does not double-queue.",
+    "limits": "Synthetic E2 does not prove Windows CJK IME composition correctness or native clipboard UX; no source-XY fallback, no PDIC/PPP/SECTION format changes, no multi-file OS CAS, no power-loss atomicity. #663 Draft/Open/Unmerged, #503/#562/#483 open, human E3 unperformed."
   }
 }
