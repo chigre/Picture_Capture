@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_unreadable_postfailure_PDic_readback_quarantine_20261030",
+    "active_work_item": "G1_save_failure_newer_Tk_and_ReviewWindow_human_input_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "68f606b84008ff1d16365cde4d1bd8af6c79b044",
+    "implementation_head_sha": "86ffc2d5961846f6a11571e4f3197b4cbcd667e4",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify final exact-head CI Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR Smoke 3/3, PR Safety CodeQL Python+Actions 2/2; fix only evidence-backed same G1 tests if failing. Native Windows scanned-dictionary E3 (IME/paste/FocusOut, Undo×20/Redo×20, PDIC/PPP/SECTION reopen, source X/Y and crop parity), #483 W1–W11 NOT PERFORMED. Keep #663 Draft/Open/Unmerged and main untouched.",
-    "last_test_evidence": "Prior fully green exact SHA 99631c4d99480aa55abb931882425126f31ea061: CI #40937388871 Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier SUCCESS, OCR #40937388863 3/3 SUCCESS, PR CodeQL #40937381553 Python+Actions 2/2 SUCCESS. New fail-first tests-only dba7b81dd82c4794a46281540e904bae62cbeaeb CI #40941302401 Ubuntu Python3.13 2 FAILED / 4799 passed /3 skipped and macOS Python3.10 2 FAILED/4800 passed/2 skipped: original disk-full error masked by second PermissionError from diagnostic PDIC readback, app+review guards lacked quarantine. Positive unchanged-disk rollback controls passed. Source fix 68f606b84008ff1d16365cde4d1bd8af6c79b044 CI #40941541265 started; OCR #40941541262 three OS SUCCESS. Final checkpoint SHA E2 remains to verify. E3 NOT PERFORMED.",
+    "required_next_action": "Verify exact final HEAD six CI jobs across Windows/macOS/Ubuntu Python3.10/3.13 + Risk-tier gate, OCR 3/3 and PR CodeQL Python+Actions 2/2. Investigate only real regression failure in this bounded G1 package. Native Windows scanned-dictionary E3 (CJK IME/FocusOut/paste, Undo/Redo×20, PDIC/PPP/SECTION reopen and source X/Y/crop parity), #483 W1–W11 NOT PERFORMED. Maintain sole PR #663 Draft/Open/Unmerged and main unchanged.",
+    "last_test_evidence": "Previous exact green 8a16c60fad2a34e8020db63edf5f3d77027db8ab: CI #40941754532 6/6 Windows/macOS/Ubuntu Python3.10+3.13 and Risk-tier SUCCESS, OCR #40941754438 3/3 SUCCESS, PR CodeQL #40941748674 2/2 SUCCESS. New tests-only 4cbccfba2a5f3cd429d1d081cf4852f96a9fa405 CI #40943370182 Ubuntu Python3.10/3.13 each 3 FAILED, 4803 passed, 3 skipped; main editor newer input overwritten; ReviewWindow newer var/simplified cache overwritten; review main editor newer input overwritten. Two unchanged-input+same-PDIC rollback controls PASSED. Source fix 86ffc2d5961846f6a11571e4f3197b4cbcd667e4 CI #40943816519 + OCR #40943816667 pending. Exact final checkpoint E2 pending, native E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1725,5 +1725,24 @@
     "architecture_note": "docs/architecture/R3_G1_UNREADABLE_PDIC_POSTFAILURE_READBACK_20261030.md",
     "behavior": "Both protect_app_pdic_commit and protect_review_pdic_commit authorize rollback only upon successful matching readback on unchanged page; if postfailure diagnostic read itself raises OSError, original writer exception must survive and app._deferred_save_uncertain=True; no forced memory rollback or disk overwrite.",
     "limitations": "Optimistic single-file byte check, not cross-process OS CAS/lock/multi-file power-loss guarantee. Native Windows E3 and #483 W1–W11 NOT PERFORMED; PR #663 Draft/Open/Unmerged, main unchanged."
+  },
+  "g1_save_failure_newer_Tk_and_ReviewWindow_human_input_20261030": {
+    "status": "source_fix_committed_exact_head_E2_pending",
+    "prior_green_sha": "8a16c60fad2a34e8020db63edf5f3d77027db8ab",
+    "prior_green_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40941754532",
+    "prior_green_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40941754438",
+    "prior_green_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40941748674",
+    "failfirst_sha": "4cbccfba2a5f3cd429d1d081cf4852f96a9fa405",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40943370182",
+    "observed_red": "Ubuntu Python3.10+3.13: each 3 expected fails, 4803 passed, 3 skipped. Stale rollback overwrote a newer main editor word, ReviewWindow simplified manual cache+flags after newer var text, and newer main editor buffer while review saving; positive unchanged UI/PDIC rollback controls passed.",
+    "source_fix_sha": "86ffc2d5961846f6a11571e4f3197b4cbcd667e4",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40943816519",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40943816667",
+    "source_codeql": "Verify CodeQL Python+Actions for final checkpoint SHA",
+    "regression": "tests/test_g1_save_failure_newer_ui_input_20261030.py",
+    "production": "src/picture_capture/proofreading/save_safety.py",
+    "architecture_note": "docs/architecture/R3_G1_SAVE_FAILURE_NEWER_UI_INPUT_20261030.md",
+    "behavior": "Main and review protectors restore earlier in-memory words/editor/cache only after byte-exact same-page PDIC readback AND stable original editor binding identities/text; review also requires stable original vars identities/text. Input version drift causes quarantine _deferred_save_uncertain=True; original write exception propagates; no old GUI values copied over newer values.",
+    "limitations": "Conservative synchronous input guard only, not a full per-property version ledger, cross-process atomic CAS, OS lock or multi-file crash atomicity. Real Windows E3 and #483 W1–W11 NOT PERFORMED; PR #663 Draft/Open/Unmerged, main unchanged."
   }
 }
