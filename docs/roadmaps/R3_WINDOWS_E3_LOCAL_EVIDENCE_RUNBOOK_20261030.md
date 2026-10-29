@@ -91,3 +91,19 @@ required observations, label R3 E3 NOT PERFORMED and #483 W1-W11
 NOT PERFORMED even if all GitHub CI is green. This helper does not
 provide cross-process OS CAS, a filesystem lock or multi-file
 power-loss atomicity.
+
+## Failed command output and privacy
+
+When a file cannot be opened or a report is malformed, the tool exits
+with code 2 and deliberately prints only the **exception class** and
+a numeric OS error code (where available). It does not echo the
+operating-system exception's original string, which may otherwise
+include an absolute dictionary/project path in terminal logs. Use
+the original locally issued command to identify the failing slot.
+
+**Important:** PowerShell command history, screenshots, shell transcripts
+and user-created diagnostics may themselves include the six input
+paths. Do not upload these to GitHub or paste them into public issues.
+The SHA-256 of a private scan can also serve as a file identifier:
+even JSON hash-only manifests remain sensitive local evidence and
+require independent permission before sharing.

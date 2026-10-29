@@ -138,7 +138,17 @@ def main(argv=None) -> int:
         if args.mode == "compare" and (not result["image_hash_stable"] or not result["sidecars_stable_after_reopen"]):
             return 1
     except (OSError, ValueError, RuntimeError) as exc:
-        print("E3 local evidence error: " + str(exc), file=sys.stderr)
+        # OSError.__str__ includes the original Windows file path. E3
+        # reports deliberately omit private paths; CLI error logs must
+        # not become a second channel for leaking those locations.
+        detail = type(exc).__name__
+        if isinstance(exc, OSError) and exc.errno is not None:
+            detail += f" (errno={exc.errno})"
+        print(
+            "E3 local evidence error: " + detail
+            + "; check local input/output paths, permissions and report format",
+            file=sys.stderr,
+        )
         return 2
     return 0
 
