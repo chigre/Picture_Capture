@@ -984,6 +984,40 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     self._filter_save_running = True
     pages = list(project.images)
 
+    def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
+        """Requeue only unsaved snapshot entries, without erasing newer edits.
+
+        A second edit at the same source page/XY can arrive while the writer
+        is running. That newer pending value owns the coordinate. A revert
+        to the original text also takes precedence over an old snapshot.
+        """
+        visible_targets = {
+            (int(target["page_index"]), int(target["x"]), int(target["y"])): target
+            for target in getattr(self, "filtered_targets", ())
+        }
+        recovered = False
+        for page_index, changes in snapshot.items():
+            for change in changes:
+                x, y = int(change["x"]), int(change["y"])
+                point = (int(page_index), x, y)
+                row_key = (x, y)
+                if point in committed:
+                    continue
+                if row_key in self._filter_pending_changes.get(page_index, {}):
+                    # An in-flight edit is newer than the failed write.
+                    continue
+                target = visible_targets.get(point)
+                if (
+                    target is not None and "current_word" in target
+                    and str(target["current_word"]).strip()
+                    == str(change.get("original_word") or "").strip()
+                ):
+                    # An explicit user reversion supersedes the old snapshot.
+                    continue
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = change
+                recovered = True
+        return recovered
+
     def worker():
         saved: list[tuple[int, int, int, str]] = []
         conflicts: list[str] = []
@@ -1015,6 +1049,15 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 saved_word = saved_map.get((int(page_index), int(key[0]), int(key[1])))
                 if saved_word is not None:
                     change["original_word"] = saved_word
+
+        # The writer returns no saved rows for a page with source-coordinate
+        # conflicts. Never drop that page's original human corrections or
+        # overwrite edits made after this snapshot was dispatched.
+        recovered = restore_unwritten(set(saved_map))
+        if conflicts:
+            # A pending close request must not survive a failed/conflicted
+            # write and silently close after some unrelated later autosave.
+            self._filter_close_after_save = False
 
         current_index = int(self.parent.current_index)
         current_saved = {
@@ -1052,19 +1095,19 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             f"筛选校对已保存 {len(saved)} 条修改"
             + (f"；{len(conflicts)} 条冲突" if conflicts else "")
         )
-        if self._filter_pending_changes:
+        if self._filter_pending_changes and not conflicts and not recovered:
+            # Newer edits after a successful write can be serialized next.
             self._filter_save_job = self.after(1, self._flush_focused_changes)
-        elif self._filter_close_after_save:
+        elif self._filter_close_after_save and not self._filter_pending_changes:
             self._filter_close_after_save = False
             self._finish_close_review()
 
     def failed(exc, detail) -> None:
         self._filter_save_running = False
-        # Put the snapshot back so a later explicit save can retry.
-        for page_index, changes in snapshot.items():
-            target = self._filter_pending_changes.setdefault(page_index, {})
-            for change in changes:
-                target[(int(change["x"]), int(change["y"]))] = change
+        self._filter_close_after_save = False
+        # Restore unsaved work for explicit retry, never overwrite a later
+        # edit or an explicit reversion made while the worker was running.
+        restore_unwritten(set())
         if detail:
             print(detail)
         self.parent.status_var.set(f"筛选校对保存失败：{exc}")
