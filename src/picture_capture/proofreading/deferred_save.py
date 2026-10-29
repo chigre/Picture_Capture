@@ -22,8 +22,8 @@ def flush_deferred_page_save(app, *, write_pdic, pdic_path) -> None:
         raise RuntimeError("R3 PDIC write outcome uncertain; refusing stale deferred save")
     snapshot = getattr(app, "_deferred_save_snapshot", None)
     if snapshot is not None:
-        from .transactions import _recovery_path
-        if _recovery_path(snapshot[0]).exists():
+        from .transactions import _recovery_path, _marker_present
+        if _marker_present(_recovery_path(snapshot[0])):
             raise RuntimeError("Unresolved R3 transaction; refusing deferred save")
         page, entries, image_width, pages, page_index = snapshot
         # Both source pins must still describe the first checkbox click.

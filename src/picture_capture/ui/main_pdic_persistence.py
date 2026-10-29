@@ -44,8 +44,8 @@ def save_pdic(self, silent: bool = False, sync_editors: bool = True, *, deps: di
     if not self.project or not self.current_page or self.image is None: return
     if self.__dict__.get("_batch_active", False) and not self._can_save_current_during_batch_navigation():
         return
-    from ..proofreading.transactions import _recovery_path
-    if _recovery_path(self.current_page).exists():
+    from ..proofreading.transactions import _recovery_path, _marker_present
+    if _marker_present(_recovery_path(self.current_page)):
         raise RuntimeError("Unresolved R3 transaction; refusing PDIC save")
     if self.__dict__.get("_deferred_save_uncertain", False):
         raise RuntimeError("R3 PDIC write outcome uncertain; reload/recover before saving")
