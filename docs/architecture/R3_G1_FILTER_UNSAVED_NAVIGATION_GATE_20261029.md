@@ -22,6 +22,10 @@ visible editing view. This is a race, not a proven OS-level atomicity failure.
 - `review_workspace_workflow` does not discard current filter rows when
   `_filter_save_running` or `_filter_pending_changes` remains after flush.
   It restores the `filter` radio state and gives an operator message.
+- The filtered next/previous-batch pager uses the same pending/running save
+  fence before advancing its batch index or repainting the editor rows.
+  Regression is `tests/test_g1_filter_batch_pending_writer_20261029.py`,
+  following tests-only `3eacbe04886e401a43604fe452db4abb609db7c2`.
 - No extra autosave worker, bypassed source check, guessed XY, OCR rerun,
   persisted format, new root facade or changed background worker semantics.
 

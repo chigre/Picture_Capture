@@ -622,6 +622,15 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
             self._schedule_filter_next_batch_preload()
         return
     self._flush_focused_changes_now()
+    if self._filter_save_running or self._filter_pending_changes:
+        # A background writer being scheduled does not mean the original
+        # batch's human corrections have reached PDIC. Preserve its visible
+        # editors on write failure/uncertainty instead of losing the source
+        # batch as soon as the worker starts.
+        self.parent.status_var.set(
+            "筛选校对修改尚未保存完成，暂不能切换下一批。"
+        )
+        return
     self.filtered_batch_index = target
     self._request_filter_batch_render()
 
