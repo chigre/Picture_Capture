@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_focused_pdic_complete_row_readback_20261029",
+    "active_work_item": "G1_filtered_PDic_eight_field_metadata_readback_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "b5846d4fecb93b61b2caadd182e8bffc2b71f6ff",
+    "implementation_head_sha": "60ad5f3457a216cb349c18b0fbeb56f4b472add1",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify exact final HEAD six OS×Python CI tests + Risk-tier, OCR 3/3 and PR CodeQL Python/Actions 2/2; fix same G1 regression only if needed. Native Windows E3 FocusOut/IME, Undo/Redo20, PDIC/PPP/SECTION reopen and pixel/crop parity plus #483 W1–W11 are NOT PERFORMED. Keep #663 Draft/Open/Unmerged.",
-    "last_test_evidence": "Prior exact 004d4bd50f8aaad2c403a476bc9ec45ed7219cc8 CI #40901455963 six matrix + Risk-tier success, OCR #40901455841 3/3 success, CodeQL #40901448276 Python+Actions 2/2 success. New tests-only fd9f9d8c03fd39c94caef884ff82f543bf0122dc CI #40907127089 Ubuntu Python3.13: 3 failed, 4774 passed, 3 skipped (foreign unrelated row text, coordinate drift, row order post-publish passed old narrow readback); normal readback control passed. Source fix b5846d4fecb93b61b2caadd182e8bffc2b71f6ff CI #40907377484 and OCR #40907377510 started. E3 NOT PERFORMED.",
+    "required_next_action": "Verify exact final HEAD CI Windows/macOS/Ubuntu × Python3.10/3.13 6/6 + Risk-tier, OCR 3/3, CodeQL Python+Actions 2/2; resolve only evidence-backed G1 regressions. Existing 05e0d54 full CI still pending macOS Python3.10 at last check. Native Windows dictionary E3, 20x Undo/Redo, FocusOut/IME, PDIC/PPP/SECTION reopens, pixel/crop parity and #483 W1–W11 NOT PERFORMED. Keep #663 Draft/Open/Unmerged.",
+    "last_test_evidence": "Prior fully green source/checkpoint 004d4bd50f8aaad2c403a476bc9ec45ed7219cc8: CI #40901455963 6/6 Risk, OCR #40901455841 3/3, CodeQL #40901448276 2/2. Intermediate 05e0d548dc4594d10f612f9387249fd195e80dc6 CI #40907591618 5/6 completed successful, macOS Python3.10 pending; OCR #40907591612 3/3 and CodeQL #40907579711 2/2 SUCCESS. Fail-first metadata tests-only commit 84e6c4f64cff6df6466da07d3e8073047374febf CI #40909773122 Ubuntu Python3.13: five failures, 4779 passed, 3 skipped for corrupt x/y percentage or current/prev/next page fields; clean control passed. Source patch 60ad5f3457a216cb349c18b0fbeb56f4b472add1 CI #40910151942 and OCR #40910151694 started; final E2 NOT yet certified; E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1625,5 +1625,26 @@
     "architecture_note": "docs/architecture/R3_G1_FILTER_PDIC_FULL_ROW_READBACK_20261029.md",
     "guard": "Check complete ordered (word, original-image x, original-image y) sequence read back after filtered PDIC publication; avoid claiming success if any other row was edited, moved, or reordered. Preserve disk bytes on failure; no blind rollback.",
     "limits": "Does not prove OS-level CAS, postverification race absence, PDIC arbitrary metadata fields, or power-loss atomicity. Real Windows E3 and #483 W1–W11 not performed; #663 Draft/Open/Unmerged and #503/#562/#483 remain open."
+  },
+  "g1_filtered_pdic_eight_field_metadata_readback_20261030": {
+    "status": "source_fix_committed_exact_checkpoint_CI_pending",
+    "previous_full_green_sha": "004d4bd50f8aaad2c403a476bc9ec45ed7219cc8",
+    "previous_full_green_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40901455963",
+    "intermediate_sha": "05e0d548dc4594d10f612f9387249fd195e80dc6",
+    "intermediate_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40907591618",
+    "intermediate_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40907591612",
+    "intermediate_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40907579711",
+    "fail_first_sha": "84e6c4f64cff6df6466da07d3e8073047374febf",
+    "fail_first_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40909773122",
+    "observed_red": "Ubuntu Python3.13, 5 failed 4779 passed 3 skipped; five mutations to percent X/Y and current/previous/next page links passed previous limited (word,x,y) readback; clean eight-field control and actual format controls passed.",
+    "fix_sha": "60ad5f3457a216cb349c18b0fbeb56f4b472add1",
+    "fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40910151942",
+    "fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40910151694",
+    "fix_codeql": "Discover PR #663 exact HEAD CodeQL, do not assume",
+    "production_owner": "src/picture_capture/proofreading/focused_pdic_updates.py",
+    "regression_test": "tests/test_g1_filtered_pdic_metadata_readback_20261030.py",
+    "architecture_note": "docs/architecture/R3_G1_FILTER_PDIC_EIGHT_FIELD_READBACK_20261030.md",
+    "correction": "After existing full (word,x,y)/order readback, compare every serialized PDIC record's eight fields word/x/y/x%/y%/current/prev/next against exact canonical writer representation. Raise on metadata discrepancy, no blind rollback.",
+    "limitations": "Verification only at readback, not cross-process CAS or multi-file power-loss atomicity. Native Windows E3 and #483 W1–W11 NOT PERFORMED. PR #663 Draft/Open/Unmerged and #503/#562/#483 remain open."
   }
 }
