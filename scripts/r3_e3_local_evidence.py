@@ -35,6 +35,42 @@ def fingerprint(path: Path) -> dict:
     return {"present": True, "size": initial.st_size, "sha256": digest.hexdigest()}
 
 
+def project_paths_for_page(page: Path) -> dict[str, Path]:
+    """Resolve one root-level scanned page using the application's storage rules.
+
+    Managed/legacy PDIC and PPP, managed vs legacy Simplified, OCR
+    manual-selection and migrated SECTION read fallback are intentionally
+    resolved by their production owners, not inferred by filename guesses.
+    This is read-only. Project page discovery currently scans root-level
+    images; nested pages require the six explicit paths instead.
+    """
+    page = Path(page)
+    if page.is_symlink() or not page.is_file():
+        raise ValueError("project page must exist as a regular source image")
+    from picture_capture.persistence.project_storage import (
+        ocr_cache_root, page_sections_read_path_for_image,
+        pdic_path_for_image, ppp_read_path_for_image,
+        simplified_review_path_for_image,
+    )
+    root = page.parent
+    return {
+        "image": page,
+        "pdic": pdic_path_for_image(page),
+        "ppp": ppp_read_path_for_image(page),
+        "section": page_sections_read_path_for_image(page),
+        "manual": ocr_cache_root(root) / f"{page.stem}_manual_selection.json",
+        "simplified": simplified_review_path_for_image(page),
+    }
+
+
+def _reject_report_at_artifact_slot(output: Path, paths: dict[str, Path]) -> None:
+    # An absent sidecar still owns its pathname. Never let a report
+    # masquerade as the application's real content at that destination.
+    slot = output.resolve(strict=False)
+    if any(p.resolve(strict=False) == slot for p in paths.values()):
+        raise ValueError("evidence output collides with an input artifact slot")
+
+
 def capture(stage: str, revision: str, paths: dict[str, Path]) -> dict:
     if stage not in ("before", "after", "reopen") or not SHA40.fullmatch(revision):
         raise ValueError("invalid stage or exact forty-digit Git revision")
@@ -116,20 +152,27 @@ def main(argv=None) -> int:
     for name in LABELS:
         c.add_argument("--" + name, type=Path, required=True)
     c.add_argument("--output", type=Path, required=True)
+    cp = sub.add_parser(
+        "capture-page",
+        help="Resolve six slots from a project-root scanned image without guessing paths",
+    )
+    cp.add_argument("--page", type=Path, required=True)
+    cp.add_argument("--stage", choices=("before", "after", "reopen"), required=True)
+    cp.add_argument("--revision", required=True)
+    cp.add_argument("--output", type=Path, required=True)
     d = sub.add_parser("compare")
     for name in ("before", "after", "reopen"):
         d.add_argument("--" + name, type=Path, required=True)
     d.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        if args.mode == "capture":
-            paths = {name: getattr(args, name) for name in LABELS}
-            # O_EXCL alone blocks overwriting an existing artifact, but
-            # an optional, not-yet-created sidecar is also an owned output
-            # SLOT. Never create the evidence report at any of six inputs.
-            report_slot = args.output.resolve(strict=False)
-            if any(path.resolve(strict=False) == report_slot for path in paths.values()):
-                raise ValueError("evidence output collides with an input artifact slot")
+        if args.mode in ("capture", "capture-page"):
+            paths = (
+                project_paths_for_page(args.page)
+                if args.mode == "capture-page"
+                else {name: getattr(args, name) for name in LABELS}
+            )
+            _reject_report_at_artifact_slot(args.output, paths)
             result = capture(args.stage, args.revision, paths)
         else:
             result = compare(*(load_report(getattr(args, stage), stage)

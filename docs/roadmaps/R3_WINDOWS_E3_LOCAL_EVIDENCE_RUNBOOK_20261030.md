@@ -26,6 +26,44 @@ does NOT record the original paths or dictionary words, and cannot
 declare acceptance. Its JSON outputs must be kept LOCAL outside the
 repository and must not be auto-uploaded.
 
+## Preferred: automatic path resolution using the actual application owners
+
+When the scanned page resides directly inside the opened project root,
+prefer `capture-page`. Unlike copying six guessed paths from an example,
+this entry point calls the same read-only path resolvers as the running
+application: case-insensitive legacy PDIC/PPP, managed-v2 PDIC/PPP and
+simplified locations, managed OCR manual-selection, and the active
+SECTION read route (canonical or migrated historical fallback).
+It detects an absent sidecar but will **not create it**.
+
+Run this from the project's installed development environment, such as
+`uv run --locked python`, so `picture_capture` is importable.
+Use a private, authorized Windows source and a local evidence folder
+**outside the dictionary project and Git repository**:
+
+    $REV = (git rev-parse HEAD).Trim()
+    $PAGE = "D:\\AuthorizedProject\\001.png"
+    $EVID = "D:\\Private-E3-Evidence"
+    New-Item -ItemType Directory -Force -Path $EVID | Out-Null
+
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage before --revision $REV --output "$EVID\\before.json"
+    # Complete actual human operations and save. Not a simulated test.
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage after --revision $REV --output "$EVID\\after.json"
+    # Quit and reopen the app, independently inspect the persisted state.
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage reopen --revision $REV --output "$EVID\\reopen.json"
+    uv run --locked python scripts/r3_e3_local_evidence.py compare --before "$EVID\\before.json" --after "$EVID\\after.json" --reopen "$EVID\\reopen.json" --output "$EVID\\comparison.json"
+
+If the image is not a normal root-level project page, the running
+application is using a custom storage location, or the operator cannot
+confirm the active project, use explicit six-path `capture` and verify
+each path against the GUI first. The auto mode never searches a
+different directory or chooses nearest-name candidates. A migrated
+managed SECTION may switch from historical read fallback to canonical
+after a write; each stage resolves the *currently active* read path.
+Record this change explicitly in the human worksheet. No report
+includes raw/private paths or word content, but shell command history
+may include `$PAGE`.
+
 ## Sample PowerShell procedure
 
 Replace ALL six placeholder paths below with the active project's
