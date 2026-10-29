@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_filter_target_R3_marker_temp_writer_20261030",
+    "active_work_item": "G1_shared_PDic_r3_dangling_symlink_marker_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "77d60e8d1bf64766c792146ceb8e4b26d2518938",
+    "implementation_head_sha": "2e5525481dc245afe66cf81b1513f78a8366e78a",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify exact final HEAD CI Windows/macOS/Ubuntu × Python 3.10/3.13 6/6 + Risk-tier, OCR 3/3 and PR CodeQL Python/Actions 2/2. Fix only evidence-backed G1 regressions. Real Windows scanned dictionary E3 (CJK paste/IME/FocusOut, 20-step Undo/Redo, PDIC/PPP/SECTION reopen, pixel/crop parity), #483 W1–W11 NOT PERFORMED. Keep sole PR #663 Draft/Open/Unmerged and main unchanged.",
-    "last_test_evidence": "Previous exact head 79d0a039f15f1a44ddc8936a143afcd8df66f4f7 full E2 verified: CI #40910334619 Windows/macOS/Ubuntu Python3.10/3.13 6/6+Risk-tier, OCR #40910334225 3/3, PR CodeQL #40910327222 Python+Actions 2/2. New tests-only 697ff2d7c881841c57c28280439deb658ee02a35 CI #40913149406 Ubuntu Python3.13: 3 failed, 4785 passed, 3 skipped; existing target R3 marker, marker appearing during staging and dangling symlink marker were bypassed; healthy writer control passed. Production fix 77d60e8d1bf64766c792146ceb8e4b26d2518938 CI #40913337329, OCR #40913337543 pending. E3 NOT PERFORMED.",
+    "required_next_action": "Verify final exact-HEAD CI Windows/macOS/Ubuntu Python3.10/3.13 6/6+Risk-tier, OCR Smoke 3/3, PR CodeQL Python/Actions 2/2. Repair same G1 defect only on evidence. Real Windows scanned dictionary E3 (CJK IME/paste/FocusOut, 20x Undo/Redo, PDIC/PPP/SECTION reopen and source X/Y/crop parity) plus #483 W1–W11 NOT PERFORMED. Sole #663 Draft/Open/Unmerged; main unchanged.",
+    "last_test_evidence": "Previous fully green exact head c560afb77600754d57ed433d6ed86a17b91bbc21: CI #40913565412 Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR #40913565519 3/3, PR Safety #40913558940 CodeQL Python+Actions 2/2 success. New test-only 21b75ab731b6001ff2c28e8a5bf35db5509ee344 CI #40930064708 Ubuntu Python3.13 2 failed, 4790 passed, 3 skipped (dangling R3 marker symlink bypass, unreadable marker lstat not failclosed); regular marker and no-marker success control passed. Source fix 2e5525481dc245afe66cf81b1513f78a8366e78a CI #40930331763 and OCR #40930331736 in progress. Latest HEAD gate NOT yet certified; native Windows E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1665,5 +1665,24 @@
     "architecture_note": "docs/architecture/R3_G1_FILTER_TARGET_R3_MARKER_20261030.md",
     "fix": "Before writing temp and immediately before replacing the real PDIC target, use transactions._marker_present (lstat, including dangling symlinks) on real target .r3-inflight.json. Do not bypass the pending R3 journal by validating the temporary name only.",
     "excluded": "Guard is optimistic, not a cross-process OS CAS or multi-file crash atomicity. Native Windows E3 and #483 W1–W11 unperformed. PR #663 Draft/Open/Unmerged, #503/#562/#483 open, main unchanged."
+  },
+  "g1_shared_pdic_r3_dangling_symlink_marker_20261030": {
+    "status": "source_fix_committed_exact_checkpoint_gate_pending",
+    "prior_green_head": "c560afb77600754d57ed433d6ed86a17b91bbc21",
+    "prior_green_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40913565412",
+    "prior_green_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40913565519",
+    "prior_green_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40913558940",
+    "failfirst_sha": "21b75ab731b6001ff2c28e8a5bf35db5509ee344",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40930064708",
+    "observed_red": "Ubuntu Python3.13 2 expected failures, 4790 passed, 3 skipped. Dangling symlink marker was treated as absent by Path.exists; simulated marker.lstat PermissionError not raised because old guard never checked lstat. Existing marker and healthy/identical write controls passed.",
+    "source_fix_sha": "2e5525481dc245afe66cf81b1513f78a8366e78a",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40930331763",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40930331736",
+    "exact_final_codeql": "Discover actual PR Safety run for final checkpoint SHA, do not assume success.",
+    "owner": "src/picture_capture/io/formats.py",
+    "regression": "tests/test_g1_shared_pdic_r3_dangling_marker_20261030.py",
+    "architecture_note": "docs/architecture/R3_G1_SHARED_PDIC_R3_DANGLING_MARKER_20261030.md",
+    "scope": "Use Path.lstat on shared PDIC writer's actual .r3-inflight.json marker; only FileNotFoundError permits write, existing regular/symlink marker blocks and unreadable marker status propagates without mutation. No public API/file format change.",
+    "explicit_limit": "Guard is prewrite and optimistic, not OS-level atomic CAS/lock or multi-file power-loss atomicity. Real Windows E3 and #483 W1–W11 not done; #663 Draft/Open/Unmerged, #503/#562/#483 open."
   }
 }
