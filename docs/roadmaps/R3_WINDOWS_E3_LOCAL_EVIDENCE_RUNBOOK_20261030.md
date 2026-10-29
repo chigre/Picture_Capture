@@ -19,7 +19,9 @@ Pass expected paths even when sidecar files do not yet exist.
 The Python standard-library helper scripts/r3_e3_local_evidence.py
 reads source files without modifying or copying them. It captures
 only six labels, existence, byte length and SHA-256. It refuses
-symlink input and existing output names, records the commit revision,
+symlink inputs, existing output names and any output path colliding
+with one of the six input file slots (including not-yet-created
+sidecars), records the commit revision,
 does NOT record the original paths or dictionary words, and cannot
 declare acceptance. Its JSON outputs must be kept LOCAL outside the
 repository and must not be auto-uploaded.

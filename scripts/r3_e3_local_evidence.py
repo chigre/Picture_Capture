@@ -123,7 +123,14 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.mode == "capture":
-            result = capture(args.stage, args.revision, {name: getattr(args, name) for name in LABELS})
+            paths = {name: getattr(args, name) for name in LABELS}
+            # O_EXCL alone blocks overwriting an existing artifact, but
+            # an optional, not-yet-created sidecar is also an owned output
+            # SLOT. Never create the evidence report at any of six inputs.
+            report_slot = args.output.resolve(strict=False)
+            if any(path.resolve(strict=False) == report_slot for path in paths.values()):
+                raise ValueError("evidence output collides with an input artifact slot")
+            result = capture(args.stage, args.revision, paths)
         else:
             result = compare(*(load_report(getattr(args, stage), stage)
                                for stage in ("before", "after", "reopen")))
