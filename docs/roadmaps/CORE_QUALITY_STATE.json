@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_E3_real_project_path_auto_resolution_20261030",
+    "active_work_item": "G1_R3_undo_redo_snapshot_none_unreadable_disk_diagnostics_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "56658f4f8f5c52bea8267393da337a5660a7d0fa",
+    "implementation_head_sha": "284755145064237b4ccb782545e6ef169be5d01a",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify newest exact-head CI matrix Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR Smoke3/3, CodeQL Python+Actions2/2. Fix any real failure without weakening file identity checks or source file safety. Human authorized Windows E3 and #483 W1-W11 NOT PERFORMED; #663 Draft/Open/Unmerged and main unchanged.",
-    "last_test_evidence": "Previous fully-green exact SHA 0707b6201f93843e5cb0369f6d902029ea107e37 CI #40950919097 6/6+Risk-tier, OCR #40950918946 3/3, CodeQL #40950910681 2/2 SUCCESS. Auto-resolver fail-first 5cf04227139ec5373f27a6d03a005914d8e0fe85 CI #40952334445 Ubuntu3.13 4 expected FAILED/4819 passed/3 skipped. Production 81464293470cb085be5d31ea6b9fb5249666253d CI #40952563626 identified a macOS test-only case-insensitive filesystem mismatch: actual filename 001.PDIC but resolved Path('001.pdic') is a valid alias; Python3.10+3.13 test incorrectly demanded identical string pathname. Test fixed 56658f4f8f5c52bea8267393da337a5660a7d0fa using actual storage owner path equality plus .samefile() to verify correct file identity on macOS/Windows/Ubuntu; production storage code unchanged. Exact new state checkpoint's six CI + OCR3/3 + PR CodeQL pending. Real Windows E3 / #483 W1-W11 NOT PERFORMED.",
+    "required_next_action": "Verify final exact-checkpoint HEAD six-matrix Windows/macOS/Ubuntu Python3.10/3.13 CI 6/6 + Risk-tier, OCR Platform Smoke 3/3 and CodeQL Python+Actions 2/2. Repair any real regression from diagnostic OSError safety guard only. Continue G1 next after all green; G2 bounded extraction and G3 R5 parity/R4 opt-in remain sequential and not implemented this slice. User explicitly paused native Windows E3 and #483 W1-W11; they remain NOT PERFORMED and are not blockers for independent E2-only work. Preserve sole Draft/Open/Unmerged PR #663, main unchanged.",
+    "last_test_evidence": "Previous exact green HEAD fb2658014e2d78e5bc1cf5267a44b97d0d5f393b: CI #40953238895 Windows/macOS/Ubuntu Python3.10/3.13 six-matrix 6/6 + Risk-tier completed success, OCR #40953239173 3/3 success, PR CodeQL #40953230351 Python+Actions 2/2 success. User 2026-10-30 explicitly pauses real Windows E3 and #483 W1-W11 to continue independent engineering; manual statuses NOT PERFORMED, not passed. Fail-first tests-only 5ee9d06e15e8276886fde9c838b182d985e45688 CI #40955489916: Ubuntu Python3.13 2 FAILED/4826 passed/3 skipped; macOS Python3.10 2 FAILED/4827 passed/2 skipped: Undo PermissionError PDIC diagnostic and Redo PermissionError simplified diagnostic after snapshot_review returned None. Healthy transient Tk retry and genuine source-drift controls passed. Source fix 284755145064237b4ccb782545e6ef169be5d01a CI #40955750248 Ubuntu Python3.13 success + OCR #40955750314 3/3 success; exact checkpoint CI/OCR/CodeQL still to verify.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1808,5 +1808,26 @@
     "portable_test_sha": "56658f4f8f5c52bea8267393da337a5660a7d0fa",
     "macos_regression": "Source-fix CI #40952563626 and prior checkpoint CI #40952815377 macOS py3.10/3.13 had ONLY case-sensitive test assertion assuming actual upper-case spelling; valid case-insensitive file alias returned lower-case pathname. Revised test checks matching owner path and .samefile() identity, not string casing.",
     "human_e3": "NOT PERFORMED"
+  },
+  "g1_r3_undo_redo_unreadable_diagnostic_20261030": {
+    "status": "source_fix_committed_exact_final_checkpoint_E2_pending_human_E3_DEFERRED_NOT_PERFORMED",
+    "baseline_verified_sha": "fb2658014e2d78e5bc1cf5267a44b97d0d5f393b",
+    "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40953238895",
+    "baseline_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40953239173",
+    "baseline_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40953230351",
+    "failfirst_sha": "5ee9d06e15e8276886fde9c838b182d985e45688",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40955489916",
+    "red_observed": "Ubuntu Python3.13 2 failed/4826 passed/3 skipped; macOS Python3.10 2 failed/4827 passed/2 skipped. PDIC and simplified PermissionError escape snapshot_review(None) diagnostic in ReviewSessionHistory._apply on Undo/Redo. Healthy unchanged-source and foreign-drift controls passed.",
+    "fix_sha": "284755145064237b4ccb782545e6ef169be5d01a",
+    "fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40955750248",
+    "fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40955750314",
+    "fix_codeql": "verify PR CodeQL Python+Actions final checkpoint",
+    "test": "tests/test_g1_r3_undo_redo_unreadable_diagnostic_20261030.py",
+    "owner": "src/picture_capture/proofreading/transactions.py",
+    "architecture": "docs/architecture/R3_G1_UNDO_REDO_UNREADABLE_DIAGNOSTIC_20261030.md",
+    "behavior": "Unverifiable second readback due to OSError causes False and history invalidation, never attempts disk publication or throws diagnostic PermissionError. Same PDIC/simplified bytes and transient Tk binding failure retains 20-step history for retry, while foreign source drift invalidates history.",
+    "limitations": "Readback optimism is not cross-process OS CAS or multi-file crash atomicity; no user-owned PDIC/PPP/SECTION/OCR serialization or source image coordinates changed.",
+    "human": "2026-10-30 explicit user request: pause/skip manual acceptance, continue later independent tasks. Real Windows E3 NOT PERFORMED; #483 W1-W11 NOT PERFORMED. No verified human labels; R6, R8 blocked.",
+    "governance": "Only Draft PR #663 Open/Unmerged, main unchanged, #503/#562/#483 OPEN."
   }
 }
