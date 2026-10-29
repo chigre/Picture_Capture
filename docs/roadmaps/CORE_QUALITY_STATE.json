@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_filtered_async_save_navigation_and_canvas_editor_20261029",
+    "active_work_item": "G1_filtered_worker_failure_conflict_preservation_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "5f12e8d8685e077032182b7c1e04952125c545ee",
+    "implementation_head_sha": "90f4a5c375e3423a1a4ddb17e81ab56f518fa1b2",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify final-head CI 6/6 Windows/macOS/Ubuntu Python 3.10/3.13, Risk-tier gate, OCR 3/3, CodeQL Python/Actions. If any fails, fix only this filtered-G1 packet. Real Windows E3 and #483 W1-W11 NOT PERFORMED. Keep #663 Draft/Open/Unmerged, main unchanged.",
-    "last_test_evidence": "Last fully verified baseline f95eed1d9c6f3d272a125a3bda9b6080515c8372: CI #40767600967 6/6, OCR #40767601148 3/3, PR safety #40767596143 2/2. Filter navigation fail-first fcf32587328391b37e205606e1f4199617bcae09: CI #40821194406 macOS Python 3.10 4 failed/4745 passed/2 skipped. Filter batch fail-first 3eacbe04886e401a43604fe452db4abb609db7c2: CI #40821567049 macOS Python 3.13 2 failed/4750 passed/2 skipped. Stale canvas editor fail-first 91205544658da6f203cee94aa2821f42faf8a6aa: CI #40821887307 running. Production 5f12e8d8685e077032182b7c1e04952125c545ee CI #40821948878 and OCR #40821948851 pending. Human E3 NOT PERFORMED.",
+    "required_next_action": "Check exact-head CI 6/6 Windows/macOS/Ubuntu Python 3.10/3.13 and Risk-tier gate, OCR 3/3, PR CodeQL Python+Actions 2/2; repair only same G1 regression if any. Then audit filtered-editor FocusOut/IME/clipboard unreported text with fail-first proof. Windows human E3 and #483 W1-W11 remain NOT PERFORMED, #663 Draft/Open/Unmerged.",
+    "last_test_evidence": "Previous exact-head 44a2992f55ffd1de9e4e3c85658533cafb6eaded passed CI 40822033343 6/6 + Risk-tier, OCR 40822033287 3/3, CodeQL 40822028662 2/2. Fail-first tests-only 53a1d30900db3de706b77c6d12778ae98d865cef CI 40830499233 Ubuntu Python3.13: 4 newly introduced failures, 4753 passed, 3 skipped (stale snapshot overwrote newer same-XY edit, failed writer retained deferred close, XY conflict discarded unsaved snapshot and auto-closed, latest revert resurrected). Clean success control passed. Repair 90f4a5c375e3423a1a4ddb17e81ab56f518fa1b2: CI #40830719790 Ubuntu3.13, macOS3.10, Ubuntu3.10 successes observed, other jobs pending. OCR #40830719780 3/3 and PR safety #40830713993 Python+Actions 2/2 successes. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1525,5 +1525,27 @@
     "canvas_regression": "tests/test_g1_filter_saved_canvas_editor_consistency_20261029.py",
     "additional_fix": "After guarded filter worker reports saved page/XY, align only exact saved live Entry identities into same main-canvas editor bindings before later main save can reserialize stale text.",
     "human_acceptance": "NOT_PERFORMED"
+  },
+  "g1_filtered_worker_failure_conflict_preservation_20261029": {
+    "status": "source_fix_e2_partial_gate_verified",
+    "previous_fully_green_head": "44a2992f55ffd1de9e4e3c85658533cafb6eaded",
+    "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40822033343",
+    "baseline_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40822033287",
+    "baseline_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40822028662",
+    "failfirst_test_sha": "53a1d30900db3de706b77c6d12778ae98d865cef",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40830499233",
+    "observed_failures": "Ubuntu Python 3.13 4 failed 4753 passed 3 skipped; four failures of 5 tests, one clean success passed.",
+    "source_fix_sha": "90f4a5c375e3423a1a4ddb17e81ab56f518fa1b2",
+    "code_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40830719790",
+    "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40830719780",
+    "pr_safety": "https://github.com/chigre/Picture_Capture/actions/runs/40830713993",
+    "files": [
+      "src/picture_capture/ui/focused_filter_workflow.py",
+      "tests/test_g1_filter_failed_worker_conflict_latest_edits_20261029.py",
+      "docs/architecture/R3_G1_FILTER_WORKER_FAILED_CONFLICT_RECOVERY_20261029.md"
+    ],
+    "protection": "Exact-page/XY source snapshot restored only where not already committed, not superseded by newer pending edit, and not reverted to original. Conflict and failure prevent delayed auto-close. Unresolved conflict retains edits, no infinite automatic retry.",
+    "limitations": "No OS cross-file CAS/power-loss durability; actual Windows R3 dictionary E3 FocusOut/IME, 20-step Undo/Redo, PDIC/PPP/SECTION reopens, pixel/crop parity and #483 W1-W11 unperformed. Keep PR #663 Draft/Open/Unmerged.",
+    "next_audit": "Filter-mode editor currently binds KeyRelease but no FocusOut; unreported clipboard/IME changes need fresh source-callback fail-first proof before patch."
   }
 }
