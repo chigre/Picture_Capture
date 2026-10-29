@@ -770,7 +770,7 @@
       "source_head_sha": "089c7334f97fed34869c17b252ef749c55086d62",
       "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40962965881",
       "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40962965552",
-      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40962955828",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40962958001",
       "status": "E2_success_human_E3_deferred",
       "note": "UI pure policy extraction, old app facades unchanged; 5 root Python modules; source head fully green. #483 W1-W11 and R3 E3 NOT PERFORMED."
     }
