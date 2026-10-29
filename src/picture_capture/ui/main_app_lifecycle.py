@@ -61,6 +61,16 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
         self.destroy()
 
 
+# The source-coordinate safety policy is pure and belongs with the main UI
+# guard, not with the Tk composition root.  Keep the historical app function
+# as a live delegate because external users may patch it at call time.
+def transformed_geometry_pending(settings: Any) -> bool:
+    """Refuse editing when the configured image transform lacks an adapter."""
+    return str(getattr(settings, "layout_transform", "identity") or "identity") not in {
+        "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
+    }
+
+
 # Main editing guard retains the original Tk/worker transaction policy.
 
 def guard(self, *, deps: dict[str, Any]) -> bool:

@@ -325,10 +325,8 @@ def project_language_from_ocr(ocr_language: str) -> str:
     )
 
 def transformed_geometry_pending(settings: AppSettings) -> bool:
-    """Return whether a configured transform is unknown to the geometry adapter."""
-    return str(getattr(settings, "layout_transform", "identity") or "identity") not in {
-        "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
-    }
+    """Historical app safety API; resolve the current UI owner on each call."""
+    return _main_app_lifecycle.transformed_geometry_pending(settings)
 
 OCR_SCOPE_LABELS = {"current": "当前页", "all": "全部页面"}
 OCR_SCOPE_VALUES = {label: value for value, label in OCR_SCOPE_LABELS.items()}
@@ -716,12 +714,8 @@ class SettingsDialog(tk.Toplevel):
         self.parent.show_environment_center()
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
-    """Default proofreading window size: 60% screen width and 70% screen height."""
-    screen_w = max(1, int(screen_w))
-    screen_h = max(1, int(screen_h))
-    width = min(screen_w, max(560, int(round(screen_w * 0.60))))
-    height = min(screen_h, max(420, int(round(screen_h * 0.70))))
-    return width, height
+    """Historical app API; dispatch to the current review UI owner."""
+    return _review_window_initialization.review_window_dimensions(screen_w, screen_h)
 
 def _focused_filter_deps() -> _focused_filter.FocusedFilterDeps:
     """Retain original live app module patchpoints on focused UI dispatch."""
