@@ -87,6 +87,18 @@ def apply_focused_review_page_updates(
     verified = read_pdic(target_path)
     if len(verified) != len(working):
         raise RuntimeError("保存后 PDIC 行数发生变化")
+    # A committed target word and matching row count are not enough to
+    # establish that the rest of the PDIC page survived unchanged.
+    # Verify every row's word, source X/Y and order before announcing
+    # success to the Tk callback. Never roll back a foreign publication.
+    expected_rows = [
+        (str(entry.word), int(entry.x), int(entry.y)) for entry in working
+    ]
+    verified_rows = [
+        (str(entry.word), int(entry.x), int(entry.y)) for entry in verified
+    ]
+    if verified_rows != expected_rows:
+        raise RuntimeError("保存后 PDIC 全部词条、坐标或顺序校验失败")
     expected = {(row[1], row[2]): row[3] for row in planned}
     actual: dict[tuple[int, int], list[str]] = {}
     for entry in verified:
