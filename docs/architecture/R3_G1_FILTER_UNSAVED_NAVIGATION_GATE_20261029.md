@@ -26,6 +26,11 @@ visible editing view. This is a race, not a proven OS-level atomicity failure.
   fence before advancing its batch index or repainting the editor rows.
   Regression is `tests/test_g1_filter_batch_pending_writer_20261029.py`,
   following tests-only `3eacbe04886e401a43604fe452db4abb609db7c2`.
+- On successful filtered PDIC worker completion, reconcile only the
+  **saved live Entry identities** into main-canvas Tk editors. Otherwise the
+  ordinary subsequent page save reads stale canvas text and rolls back the
+  human filter correction. Fail-first `91205544658da6f203cee94aa2821f42faf8a6aa`;
+  `tests/test_g1_filter_saved_canvas_editor_consistency_20261029.py`.
 - No extra autosave worker, bypassed source check, guessed XY, OCR rerun,
   persisted format, new root facade or changed background worker semantics.
 

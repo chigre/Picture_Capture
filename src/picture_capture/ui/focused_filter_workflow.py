@@ -1023,6 +1023,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             if int(page_index) == current_index
         }
         if current_saved:
+            saved_entries = []
             for entry in self.parent.entries:
                 value = current_saved.get((int(entry.x), int(entry.y)))
                 if value is not None:
@@ -1031,6 +1032,13 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     entry.ocr_source = "manual"
                     entry.final_engine = "manual"
                     entry.manually_selected = True
+                    saved_entries.append(entry)
+            # Filtered writes finish off-thread. The main window retains its
+            # own Tk editor buffers; ordinary page navigation would otherwise
+            # copy the stale buffer over the newly committed PDIC Entry.word.
+            # Reconcile only saved, live Entry object identities.
+            from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
+            reconcile_main_editors_after_review(self.parent, saved_entries)
 
         if conflicts:
             messagebox.showwarning(
