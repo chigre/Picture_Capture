@@ -42,16 +42,16 @@ Use a private, authorized Windows source and a local evidence folder
 **outside the dictionary project and Git repository**:
 
     $REV = (git rev-parse HEAD).Trim()
-    $PAGE = "D:\\AuthorizedProject\\001.png"
-    $EVID = "D:\\Private-E3-Evidence"
+    $PAGE = "D:\AuthorizedProject\001.png"
+    $EVID = "D:\Private-E3-Evidence"
     New-Item -ItemType Directory -Force -Path $EVID | Out-Null
 
-    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage before --revision $REV --output "$EVID\\before.json"
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage before --revision $REV --output "$EVID\before.json"
     # Complete actual human operations and save. Not a simulated test.
-    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage after --revision $REV --output "$EVID\\after.json"
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage after --revision $REV --output "$EVID\after.json"
     # Quit and reopen the app, independently inspect the persisted state.
-    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage reopen --revision $REV --output "$EVID\\reopen.json"
-    uv run --locked python scripts/r3_e3_local_evidence.py compare --before "$EVID\\before.json" --after "$EVID\\after.json" --reopen "$EVID\\reopen.json" --output "$EVID\\comparison.json"
+    uv run --locked python scripts/r3_e3_local_evidence.py capture-page --page $PAGE --stage reopen --revision $REV --output "$EVID\reopen.json"
+    uv run --locked python scripts/r3_e3_local_evidence.py compare --before "$EVID\before.json" --after "$EVID\after.json" --reopen "$EVID\reopen.json" --output "$EVID\comparison.json"
 
 If the image is not a normal root-level project page, the running
 application is using a custom storage location, or the operator cannot
