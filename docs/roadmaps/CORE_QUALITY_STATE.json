@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "81464293470cb085be5d31ea6b9fb5249666253d",
+    "implementation_head_sha": "56658f4f8f5c52bea8267393da337a5660a7d0fa",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify final exact-checkpoint SHA full six-matrix CI, Risk-tier, OCR3/3 and PR CodeQL2/2. For E3 real authorized Windows scan, prefer capture-page using application path owners and check same-page managed/legacy read routing; use explicit six paths only for custom layouts. File-hash helper alone is not real E3, and #483 W1-W11 remain NOT PERFORMED. Keep sole PR #663 Draft/Open/Unmerged and main unchanged.",
-    "last_test_evidence": "Prior fully green exact SHA 0707b6201f93843e5cb0369f6d902029ea107e37: CI #40950919097 six Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier SUCCESS, OCR #40950918946 3/3 SUCCESS, CodeQL #40950910681 Python+Actions 2/2 SUCCESS. E3 capture-page test-only 5cf04227139ec5373f27a6d03a005914d8e0fe85 CI #40952334445 Ubuntu3.13 4 expected failed/4819 passed/3 skipped: missing actual storage resolver and CLI subcommand. Two negative controls already pass. Source fix 81464293470cb085be5d31ea6b9fb5249666253d CI #40952563626 running, OCR #40952563652 3/3 success. Exact final state checkpoint's CI/CodeQL pending. Real Windows human E3 and #483 W1-W11 NOT PERFORMED.",
+    "required_next_action": "Verify newest exact-head CI matrix Windows/macOS/Ubuntu Python3.10/3.13 6/6 + Risk-tier, OCR Smoke3/3, CodeQL Python+Actions2/2. Fix any real failure without weakening file identity checks or source file safety. Human authorized Windows E3 and #483 W1-W11 NOT PERFORMED; #663 Draft/Open/Unmerged and main unchanged.",
+    "last_test_evidence": "Previous fully-green exact SHA 0707b6201f93843e5cb0369f6d902029ea107e37 CI #40950919097 6/6+Risk-tier, OCR #40950918946 3/3, CodeQL #40950910681 2/2 SUCCESS. Auto-resolver fail-first 5cf04227139ec5373f27a6d03a005914d8e0fe85 CI #40952334445 Ubuntu3.13 4 expected FAILED/4819 passed/3 skipped. Production 81464293470cb085be5d31ea6b9fb5249666253d CI #40952563626 identified a macOS test-only case-insensitive filesystem mismatch: actual filename 001.PDIC but resolved Path('001.pdic') is a valid alias; Python3.10+3.13 test incorrectly demanded identical string pathname. Test fixed 56658f4f8f5c52bea8267393da337a5660a7d0fa using actual storage owner path equality plus .samefile() to verify correct file identity on macOS/Windows/Ubuntu; production storage code unchanged. Exact new state checkpoint's six CI + OCR3/3 + PR CodeQL pending. Real Windows E3 / #483 W1-W11 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1788,7 +1788,7 @@
     "limits": "CLI tool errors sanitized; operator PowerShell command history/logs and source SHA hashes remain potentially sensitive. Does not verify human E3; real Windows E3 and #483 W1-W11 NOT PERFORMED. PR Draft/Open/Unmerged and main unchanged."
   },
   "g1_e3_real_project_path_auto_resolution_20261030": {
-    "status": "source_fix_committed_exact_final_head_E2_pending_human_E3_NOT_PERFORMED",
+    "status": "portable_regression_test_fixed_exact_head_E2_pending_human_E3_NOT_PERFORMED",
     "previous_green_sha": "0707b6201f93843e5cb0369f6d902029ea107e37",
     "previous_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40950919097",
     "previous_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40950918946",
@@ -1804,6 +1804,9 @@
     "runbook": "docs/roadmaps/R3_WINDOWS_E3_LOCAL_EVIDENCE_RUNBOOK_20261030.md",
     "behavior": "New read-only capture-page --page uses actual project_storage owners: pdic_path_for_image, ppp_read_path_for_image, page_sections_read_path_for_image, simplified_review_path_for_image, ocr_cache_root; computes correct legacy vs managed files, historical SECTION fallback and manual_selection. Six explicit paths mode retained; output/input path collision guarded. No private absolute input paths, image bytes or words in report.",
     "limits": "Normal scanned images are root-level project files. Custom/nested external layouts must use six explicit verified paths. Active canonical SECTION may change after save. Hash consistency cannot verify source pixel X/Y/crop, real IME, Undo20/Redo20, semantic ownership, OS multi-file atomicity or human E3. Real Windows E3 and #483 W1-W11 NOT PERFORMED.",
-    "governance": "PR #663 Draft/Open/Unmerged, main unchanged, #503/#562/#483 open."
+    "governance": "PR #663 Draft/Open/Unmerged, main unchanged, #503/#562/#483 open.",
+    "portable_test_sha": "56658f4f8f5c52bea8267393da337a5660a7d0fa",
+    "macos_regression": "Source-fix CI #40952563626 and prior checkpoint CI #40952815377 macOS py3.10/3.13 had ONLY case-sensitive test assertion assuming actual upper-case spelling; valid case-insensitive file alias returned lower-case pathname. Revised test checks matching owner path and .samefile() identity, not string casing.",
+    "human_e3": "NOT PERFORMED"
   }
 }
