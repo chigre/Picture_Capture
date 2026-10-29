@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_filtered_Tk_StringVar_focusout_clipboard_IME_20261029",
+    "active_work_item": "G1_filter_inflight_success_reversion_20261029",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,7 +43,7 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "bb6e75410cd18712018e20d4f49e5f7308a25f9e",
+    "implementation_head_sha": "a8f198a310987d71d902afa81ce8012bb80e3067",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
     "last_completed_work_item": "R3.2_engineering_merged",
     "blockers": [
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify exact final SHA CI 6/6 Windows/macOS/Ubuntu Python 3.10/3.13 and Risk-tier gate, OCR Smoke 3/3, CodeQL Python+Actions 2/2. Fix only evidence-backed G1 regressions. Real Windows scanned dictionary E3 FocusOut/IME, Undo20/Redo20, PDIC/PPP/SECTION save/reopen and source pixels/crop, plus #483 W1-W11 remain NOT PERFORMED. Keep #663 Draft/Open/Unmerged.",
-    "last_test_evidence": "Previous e62a81b322a1863c92ca2f30734711249eede1a0 fully green: CI #40831014183 OS×Python 6/6 + risk gate; OCR #40831014178 3/3; PR CodeQL #40831009663 Python+Actions 2/2. Tests-only 7d249868e724a736f78edc1ab9d603a560caec39 fail-first CI #40896995150 macOS Python3.13: 4 failed/4759 passed/2 skipped for no-KeyRelease input, missing FocusOut, missed reversion and stale row variable; untouched row control passed. Production source fix bb6e75410cd18712018e20d4f49e5f7308a25f9e CI #40897231099 and OCR #40897231192 running at checkpoint. Human E3 NOT PERFORMED.",
+    "required_next_action": "Verify final exact HEAD CI six OS×Python matrix, risk tier gate, OCR 3/3, PR CodeQL Python/Actions 2/2. If any regressions, repair strictly within the same G1 writer-success/revert scope. Human Windows scanned dictionary E3, 20 Undo/Redo, PDIC/PPP/SECTION save/reopen, original-source pixel/crop and #483 W1–W11 not performed; #663 stays Draft/Open/Unmerged.",
+    "last_test_evidence": "Prior exact head be117760de3168a88d0c56fb7c5175ae0b78c7e7 fully green: CI #40897462369 6/6+Risk-tier, OCR #40897462357 3/3, PR Safety #40897454027 CodeQL Python+Actions 2/2. New tests-only 1c24cdddb56bdb5632f8092a38bdc1632be2aec7 Ubuntu Python3.13 fail-first CI #40898881113: 3 failed, 4764 passed, 3 skipped (inflight revert lost, unauthorized auto-close, redundant queued edit not removed); newer distinct edit and legacy owner controls passed. Source fix a8f198a310987d71d902afa81ce8012bb80e3067 CI #40899126197 matrix running; OCR #40899126004 3/3 success. Human E3 NOT PERFORMED.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -1566,5 +1566,24 @@
     "doc": "docs/architecture/R3_G1_FILTER_TK_VAR_CLIPBOARD_IME_20261029.md",
     "fix": "Record filtered StringVar write as page/XY-bound pending correction even without KeyRelease; guard callback by current batch variable+target object identity; FocusOut shares guarded commit; unchanged value does not double-queue.",
     "limits": "Synthetic E2 does not prove Windows CJK IME composition correctness or native clipboard UX; no source-XY fallback, no PDIC/PPP/SECTION format changes, no multi-file OS CAS, no power-loss atomicity. #663 Draft/Open/Unmerged, #503/#562/#483 open, human E3 unperformed."
+  },
+  "g1_filter_inflight_success_reversion_20261029": {
+    "status": "source_fix_exact_head_e2_pending",
+    "prior_e2_verified_head": "be117760de3168a88d0c56fb7c5175ae0b78c7e7",
+    "prior_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40897462369",
+    "prior_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40897462357",
+    "prior_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40897454027",
+    "failfirst_sha": "1c24cdddb56bdb5632f8092a38bdc1632be2aec7",
+    "failfirst_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40898881113",
+    "failfirst_observed": "Ubuntu Python3.13 3 failed, 4764 passed, 3 skipped. Lost in-flight revert after old worker successful commit, unsafe pending-close, redundant same-word pending. New distinct edit and legacy missing-current-word controls passed.",
+    "source_fix_sha": "a8f198a310987d71d902afa81ce8012bb80e3067",
+    "fix_ci": "https://github.com/chigre/Picture_Capture/actions/runs/40899126197",
+    "fix_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40899126004",
+    "fix_codeql": "Discover exact SHA PR #663 action run, not assumed successful.",
+    "owner": "src/picture_capture/ui/focused_filter_workflow.py",
+    "regression": "tests/test_g1_filter_inflight_success_revert_20261029.py",
+    "doc": "docs/architecture/R3_G1_FILTER_INFLIGHT_SUCCESS_REVERT_20261029.md",
+    "correction": "On successfully reported saved page/XY compare latest visible current_word against committed saved_word: when no newer pending edit exists, queue change from newly committed source word to last user intent; preserve newer queued owner; discard only precisely redundant pending edit.",
+    "exclusion": "No new writer, no nearest XY guess, no new PDIC/PPP/SECTION schema, no OS-level cross-file CAS/powerloss guarantee. Native Windows E3 and #483 W1-W11 unperformed. Keep #663 Draft/Open/Unmerged, #503/#562 open."
   }
 }
