@@ -90,3 +90,35 @@ assert 'picture_capture.paddle_headwords_core' not in sys.modules
 assert 'paddle' not in sys.modules
 assert 'tkinter' not in sys.modules
 """], check=True)
+
+
+def test_real_filter_records_use_pure_score_without_changing_diagnostic_contract(monkeypatch):
+    from PIL import Image
+    from picture_capture import paddle_headwords_core as core
+    from picture_capture.models import AppSettings
+    from picture_capture.ocr import candidate_filter
+    from picture_capture.ocr.headword_models import OCRRecord
+
+    observed = []
+    real_score = candidate_filter.score_candidate
+
+    def track_score(snapshot):
+        observed.append(snapshot)
+        return real_score(snapshot)
+
+    monkeypatch.setattr(candidate_filter, "score_candidate", track_score)
+    image = Image.new("RGB", (160, 120), "white")
+    try:
+        entries, diagnostics = core.filter_headword_records(
+            [OCRRecord("árbol m. tree", 0.99, (2, 20, 135, 35))],
+            image, source_top=45, source_column_x=12, settings=AppSettings(),
+        )
+        assert len(observed) == len(diagnostics) == 1
+        row = diagnostics[0]
+        assert row["score"] == round(real_score(observed[0]), 3)
+        assert row["features"]["at_left"] is True
+        assert row["source_y"] >= 45 and row["coarse_source_y"] >= 45
+        assert row["accepted"] is False or row["reject_reason"] == ""
+        assert all(entry.x == 12 and entry.y >= 45 for entry in entries)
+    finally:
+        image.close()
