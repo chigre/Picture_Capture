@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-28T19:10:51Z",
+  "updated_at_utc": "2026-10-29T22:10:35.298Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "G1_R3_undo_redo_snapshot_none_unreadable_disk_diagnostics_20261030",
+    "active_work_item": "G3_R5_pure_score_quality_parity_source_audit_20261030",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,9 +43,9 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "284755145064237b4ccb782545e6ef169be5d01a",
+    "implementation_head_sha": "089c7334f97fed34869c17b252ef749c55086d62",
     "latest_verified_main_sha": "e12a9db4cc9199069e93d2c3ef12df97fcafd403",
-    "last_completed_work_item": "R3.2_engineering_merged",
+    "last_completed_work_item": "G2_app_ui_pure_policy_owner_extraction_E2_verified",
     "blockers": [
       {
         "type": "r2_human_acceptance_pending",
@@ -58,8 +58,8 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify final exact-checkpoint HEAD six-matrix Windows/macOS/Ubuntu Python3.10/3.13 CI 6/6 + Risk-tier, OCR Platform Smoke 3/3 and CodeQL Python+Actions 2/2. Repair any real regression from diagnostic OSError safety guard only. Continue G1 next after all green; G2 bounded extraction and G3 R5 parity/R4 opt-in remain sequential and not implemented this slice. User explicitly paused native Windows E3 and #483 W1-W11; they remain NOT PERFORMED and are not blockers for independent E2-only work. Preserve sole Draft/Open/Unmerged PR #663, main unchanged.",
-    "last_test_evidence": "Previous exact green HEAD fb2658014e2d78e5bc1cf5267a44b97d0d5f393b: CI #40953238895 Windows/macOS/Ubuntu Python3.10/3.13 six-matrix 6/6 + Risk-tier completed success, OCR #40953239173 3/3 success, PR CodeQL #40953230351 Python+Actions 2/2 success. User 2026-10-30 explicitly pauses real Windows E3 and #483 W1-W11 to continue independent engineering; manual statuses NOT PERFORMED, not passed. Fail-first tests-only 5ee9d06e15e8276886fde9c838b182d985e45688 CI #40955489916: Ubuntu Python3.13 2 FAILED/4826 passed/3 skipped; macOS Python3.10 2 FAILED/4827 passed/2 skipped: Undo PermissionError PDIC diagnostic and Redo PermissionError simplified diagnostic after snapshot_review returned None. Healthy transient Tk retry and genuine source-drift controls passed. Source fix 284755145064237b4ccb782545e6ef169be5d01a CI #40955750248 Ubuntu Python3.13 success + OCR #40955750314 3/3 success; exact checkpoint CI/OCR/CodeQL still to verify.",
+    "required_next_action": "Proceed within sole Draft PR #663 to G3: R5.1 distinguish parser/visual candidate score in ocr/candidate_filter.py from arbitration q in ocr/pairing_arbitration.py; characterize serialized immutable feature snapshot and pure scoring with exact per-field parity before moving any gating or enabling R4. R4 optional risk queue stays default OFF, no threshold changes. Real Windows R3 E3 and #483 W1-W11 NOT PERFORMED by explicit user pause; never assert human acceptance or train R6 from unverified labels. Preserve PDIC/PPP/SECTION, source XY, historical monkeypatch contracts and main; do not merge or mark PR ready.",
+    "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed.",
     "active_batch": "B3",
     "next_batch": "B4",
     "r3_patch_chain": {
@@ -137,6 +137,28 @@
         "conclusion": "success",
         "os_jobs_success": 3
       }
+    },
+    "g2_ui_policy_owner_20261030": {
+      "status": "synthetic_E2_verified_real_E3_deferred",
+      "source_head_sha": "089c7334f97fed34869c17b252ef749c55086d62",
+      "fail_first_sha": "5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0",
+      "initial_source_sha": "732cb511b5296d1f34f6057fafb926f7824a27cb",
+      "strict_guard_correction_sha": "089c7334f97fed34869c17b252ef749c55086d62",
+      "test": "tests/test_g2_app_ui_policy_owners_20261030.py",
+      "owners": [
+        "src/picture_capture/ui/main_app_lifecycle.py",
+        "src/picture_capture/ui/review_layout_events.py"
+      ],
+      "historical_api": "src/picture_capture/app.py",
+      "direct_root_python_modules": 5,
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40962965881",
+      "ci_status": "success_6_of_6_plus_risk_tier",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40962965552",
+      "ocr_status": "success_3_of_3",
+      "codeql_status": "success_python_and_actions",
+      "actual_windows_E3": "deferred_not_performed",
+      "issue_483_W1_W11": "deferred_not_performed",
+      "pr_663": "draft_open_unmerged"
     }
   },
   "units": {
@@ -742,6 +764,15 @@
       "regressions": 8,
       "real_windows": "NOT_PERFORMED",
       "note": "Manual/simplified duplicate JSON and NaN refused before any multi-file transaction; final documentation SHA must be rechecked."
+    },
+    {
+      "type": "g2_pure_app_policy_owner_extraction",
+      "source_head_sha": "089c7334f97fed34869c17b252ef749c55086d62",
+      "ci": "https://github.com/chigre/Picture_Capture/actions/runs/40962965881",
+      "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/40962965552",
+      "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40962955828",
+      "status": "E2_success_human_E3_deferred",
+      "note": "UI pure policy extraction, old app facades unchanged; 5 root Python modules; source head fully green. #483 W1-W11 and R3 E3 NOT PERFORMED."
     }
   ],
   "rules_for_updates": {
