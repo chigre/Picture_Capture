@@ -706,13 +706,20 @@ class ReviewSessionHistory:
             # history; only unchanged saved bytes with temporarily stale Tk
             # bindings are allowed to retry after async repaint.
             page = getattr(review.parent, "current_page", None)
-            if (
-                page != expected.page
-                or sha256_file(expected.page) != expected.image_sha
-                or _bytes_or_absent(pdic_path(expected.page)) != expected.pdic_bytes
-                or _bytes_or_absent(simplified_review_path_for_image(expected.page))
-                   != expected.simplified_bytes
-            ):
+            try:
+                stale_source = (
+                    page != expected.page
+                    or sha256_file(expected.page) != expected.image_sha
+                    or _bytes_or_absent(pdic_path(expected.page)) != expected.pdic_bytes
+                    or _bytes_or_absent(simplified_review_path_for_image(expected.page))
+                       != expected.simplified_bytes
+                )
+            except OSError:
+                # Snapshot failure may itself have been caused by a denied
+                # PDIC or simplified read. That is NOT a verified unchanged
+                # source; quarantine old history, do not crash the Tk action.
+                stale_source = True
+            if stale_source:
                 self.invalidate()
             return False
         if not _same_live_state(current, expected):
