@@ -22,6 +22,21 @@ def _bytes_or_absent(path):
         return None
 
 
+def _verified_same_disk_snapshot(app: Any, page, path, before) -> bool:
+    """Only a successful byte readback may authorize an in-memory rollback.
+
+    After an original PDIC writer error, a second readback can fail too.
+    Never let that diagnostic I/O error mask the original exception or
+    pretend that failed verification proves a pre-publication state.
+    """
+    if app.current_page != page:
+        return False
+    try:
+        return _bytes_or_absent(path) == before
+    except OSError:
+        return False
+
+
 def _editor_state(app: Any):
     result = []
     for editor, entry in tuple(app.__dict__.get("entry_editor_bindings", ())):
@@ -54,7 +69,7 @@ def protect_app_pdic_commit(app: Any):
     try:
         yield
     except Exception:
-        if app.current_page == page and _bytes_or_absent(path) == before:
+        if _verified_same_disk_snapshot(app, page, path, before):
             app.entries[:] = entries
             for entry, word in words:
                 entry.word = word
@@ -84,7 +99,7 @@ def protect_review_pdic_commit(review: Any):
     try:
         yield
     except Exception:
-        if app.current_page == page and _bytes_or_absent(path) == before:
+        if _verified_same_disk_snapshot(app, page, path, before):
             app.entries[:] = entries
             for entry, word in words:
                 entry.word = word
