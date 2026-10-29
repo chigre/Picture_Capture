@@ -715,7 +715,7 @@ class SettingsDialog(tk.Toplevel):
 
 def _review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
     """Historical app API; dispatch to the current review UI owner."""
-    return _review_window_initialization.review_window_dimensions(screen_w, screen_h)
+    return _review_layout_events.review_window_dimensions(screen_w, screen_h)
 
 def _focused_filter_deps() -> _focused_filter.FocusedFilterDeps:
     """Retain original live app module patchpoints on focused UI dispatch."""

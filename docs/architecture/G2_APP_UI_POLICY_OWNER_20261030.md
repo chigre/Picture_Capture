@@ -5,7 +5,7 @@
 In the single Draft PR #663, moved two **pure UI policies** out of `src/picture_capture/app.py` without creating new owner modules or root alias files:
 
 - `transformed_geometry_pending` now executes in `ui/main_app_lifecycle.py`, alongside `_guard_transformed_geometry`, which continues to guard writes when a coordinate adapter is unsupported.
-- `review_window_dimensions` now executes in `ui/review_window_initialization.py`, with the original 60% screen-width / 70% screen-height clamp and minimum-size behavior.
+- `review_window_dimensions` now executes in `ui/review_layout_events.py`, with the original 60% screen-width / 70% screen-height clamp and minimum-size behavior.
 
 The historical `app.transformed_geometry_pending(settings)` and `app._review_window_dimensions(screen_w, screen_h)` callable names and signatures remain, forwarding to the current owner **at call time**. Tk window construction still uses the original injected app callback, so live app-global patching remains available. No window is constructed by importing the pure policies.
 

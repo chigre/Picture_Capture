@@ -5,11 +5,11 @@ No Tk root, licensed scan, PDIC/PPP/SECTION file, or user acceptance is involved
 from types import SimpleNamespace
 
 from picture_capture import app
-from picture_capture.ui import main_app_lifecycle, review_window_initialization
+from picture_capture.ui import main_app_lifecycle, review_layout_events
 
 
 def test_review_window_dimensions_physical_owner_and_boundary_parity():
-    owner = getattr(review_window_initialization, "review_window_dimensions", None)
+    owner = getattr(review_layout_events, "review_window_dimensions", None)
     assert callable(owner), "review window dimension logic must live in the UI owner"
     for screen_w, screen_h, expected in (
         (1920, 1080, (1152, 756)),
@@ -41,7 +41,7 @@ def test_transformed_geometry_pending_physical_owner_and_fail_closed_parity():
 
 
 def test_app_legacy_wrappers_resolve_live_owner_and_guard_patchpoints(monkeypatch):
-    monkeypatch.setattr(review_window_initialization, "review_window_dimensions",
+    monkeypatch.setattr(review_layout_events, "review_window_dimensions",
                         lambda _w, _h: (321, 432))
     assert app._review_window_dimensions(1920, 1080) == (321, 432)
 

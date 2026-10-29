@@ -11,6 +11,15 @@ if TYPE_CHECKING:
     import tkinter as tk
     from tkinter import ttk
 
+def review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
+    """Default proofreading window: 60% × 70%, clamped to the screen."""
+    screen_w = max(1, int(screen_w))
+    screen_h = max(1, int(screen_h))
+    width = min(screen_w, max(560, int(round(screen_w * 0.60))))
+    height = min(screen_h, max(420, int(round(screen_h * 0.70))))
+    return width, height
+
+
 def _review_flat_button(
     self, parent: tk.Misc, text: str, command, *, role: str = "neutral",
     width: int | None = None, anchor: str = "center",

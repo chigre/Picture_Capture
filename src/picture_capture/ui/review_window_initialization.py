@@ -11,15 +11,6 @@ if TYPE_CHECKING:
     from ..models import AppSettings, Entry as WordEntry
 
 
-def review_window_dimensions(screen_w: int, screen_h: int) -> tuple[int, int]:
-    """Default proofreading window: 60% × 70%, clamped to the screen."""
-    screen_w = max(1, int(screen_w))
-    screen_h = max(1, int(screen_h))
-    width = min(screen_w, max(560, int(round(screen_w * 0.60))))
-    height = min(screen_h, max(420, int(round(screen_h * 0.70))))
-    return width, height
-
-
 def initialize_review_window(self: Any, parent: Any, *, deps: dict[str, Any]) -> None:
     tk = deps["tk"]
     font = deps["font"]
