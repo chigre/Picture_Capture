@@ -113,8 +113,10 @@ def test_real_filter_records_use_pure_score_without_changing_diagnostic_contract
             [OCRRecord("árbol m. tree", 0.99, (2, 20, 135, 35))],
             image, source_top=45, source_column_x=12, settings=AppSettings(),
         )
-        assert len(observed) == len(diagnostics) == 1
-        row = diagnostics[0]
+        candidates = [row for row in diagnostics if "score" in row]
+        assert len(observed) == len(candidates) == 1
+        assert diagnostics[0].get("meta", {}).get("line_count") == 1
+        row = candidates[0]
         assert row["score"] == round(real_score(observed[0]), 3)
         assert row["features"]["at_left"] is True
         assert row["source_y"] >= 45 and row["coarse_source_y"] >= 45
@@ -186,7 +188,8 @@ def test_legacy_math_and_extracted_math_yield_identical_full_filter_outputs(
             settings=settings, user_rules=rules, engine_name=engine,
         )
         assert after == reference
-        assert all(row["source_y"] >= 50 and row["coarse_source_y"] >= 50 for row in after[1])
+        assert all(row["source_y"] >= 50 and row["coarse_source_y"] >= 50
+                   for row in after[1] if "score" in row)
         assert all(entry.x == 11 and entry.ocr_source == engine for entry in after[0])
     finally:
         image.close()
