@@ -3,8 +3,8 @@
 This owner runs only AFTER an actual successful PDIC write, at an explicit
 default-off call site. It never changes OCR, PDIC, PPP, SECTION or labels.
 No legacy OCR cache can be retroactively given a genuine source-time witness.
-With any SECTION sidecar present, skip all witness capture until canonical
-source-geometry SECTION attribution is independently proven (next gate).
+SECTION v2 candidates are attested only after strict original-image geometry
+attribution; missing, overlapping or malformed sections remain unprovable.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from ..persistence.project_storage import (
     ocr_cache_root, page_sections_read_path_for_image, pdic_path_for_image,
 )
 from .review_risk_queue import ReviewRiskWitness
+from .review_section_provenance import section_key_for_source_point
 
 _FORMAT = "picture-capture-review-risk-origin-v1"
 
@@ -38,6 +39,31 @@ def _snapshot(cache_path: Path, pdic_file: Path) -> tuple[bytes, bytes] | None:
     except OSError:
         return None
 
+
+
+
+def _sources_current(
+    *,
+    project_page: Path,
+    cache: Path,
+    pdic: Path,
+    section: Path,
+    cache_pdic_snapshot: tuple[bytes, bytes],
+    image_bytes: bytes,
+    section_bytes: bytes | None,
+) -> bool:
+    """Verify the same source paths and byte snapshots across publication."""
+    try:
+        if page_sections_read_path_for_image(project_page).resolve() != section.resolve():
+            return False
+        current_section = section.read_bytes() if section.exists() else None
+        return (
+            _snapshot(cache, pdic) == cache_pdic_snapshot
+            and current_section == section_bytes
+            and project_page.read_bytes() == image_bytes
+        )
+    except OSError:
+        return False
 
 def publish_review_risk_witnesses(
     *,
@@ -65,9 +91,10 @@ def publish_review_risk_witnesses(
     ):
         return 0
     section = page_sections_read_path_for_image(page)
-    # Existing explicit/migrated SECTION geometry needs a separate trusted
-    # source XY -> section mapping. Never claim "whole-page" for that page.
-    if section.exists():
+    try:
+        section_bytes = section.read_bytes() if section.exists() else None
+        image_bytes = page.read_bytes()
+    except OSError:
         return 0
     initial = _snapshot(cache, pdic)
     if initial is None:
@@ -85,7 +112,11 @@ def publish_review_risk_witnesses(
         saved = read_pdic(pdic)
     except (OSError, UnicodeError, ValueError, TypeError, OverflowError):
         return 0
-    if _snapshot(cache, pdic) != initial or section.exists():
+    if not _sources_current(
+        project_page=page, cache=cache, pdic=pdic, section=section,
+        cache_pdic_snapshot=initial, image_bytes=image_bytes,
+        section_bytes=section_bytes,
+    ):
         return 0
 
     candidate_ids = Counter(
@@ -118,24 +149,41 @@ def publish_review_risk_witnesses(
             or row["word"].strip() != str(saved_by_xy[x, y].word).strip()
         ):
             continue
+        section_key = (
+            section_key_for_source_point(page, section, x, y)
+            if section_bytes is not None else "whole-page"
+        )
+        if section_key is None:
+            continue
         witnessed.append({
             "candidate_id": cid, "source_x": x, "source_y": y,
+            "section_key": section_key,
         })
     if not witnessed:
         return 0
     record = {
         "format": _FORMAT, "project_key": str(project),
-        "page_key": page.name, "section_key": "whole-page",
+        "page_key": page.name,
         "cache_sha256": _sha(raw_cache), "pdic_sha256": _sha(raw_pdic),
-        "section_sha256": None, "witnesses": witnessed,
+        "section_sha256": _sha(section_bytes) if section_bytes is not None else None,
+        "image_sha256": _sha(image_bytes),
+        "witnesses": witnessed,
     }
     # Re-check all observed files immediately before publishing, and after
     # atomic publication; later mutations invalidate readers via byte hashes.
-    if _snapshot(cache, pdic) != initial or section.exists():
+    if not _sources_current(
+        project_page=page, cache=cache, pdic=pdic, section=section,
+        cache_pdic_snapshot=initial, image_bytes=image_bytes,
+        section_bytes=section_bytes,
+    ):
         raise RuntimeError("OCR/PDIC/SECTION source changed before provenance publication")
     target = review_risk_witness_path(cache)
     write_text_atomic(target, json.dumps(record, ensure_ascii=False, separators=(",", ":")))
-    if _snapshot(cache, pdic) != initial or section.exists():
+    if not _sources_current(
+        project_page=page, cache=cache, pdic=pdic, section=section,
+        cache_pdic_snapshot=initial, image_bytes=image_bytes,
+        section_bytes=section_bytes,
+    ):
         raise RuntimeError("OCR/PDIC/SECTION source changed during provenance publication")
     return len(witnessed)
 
@@ -162,8 +210,6 @@ def load_review_risk_witness(
             not isinstance(project_key, str) or not project_key
             or not isinstance(page_key, str) or not page_key
             or Path(page_key).name != page_key
-            or record.get("section_key") != "whole-page"
-            or record.get("section_sha256") is not None
         ):
             return None
         project = Path(project_key).resolve()
@@ -172,6 +218,11 @@ def load_review_risk_witness(
             return None
         section = page_sections_read_path_for_image(page)
         if section.exists():
+            if _sha(section.read_bytes()) != record.get("section_sha256"):
+                return None
+        elif record.get("section_sha256") is not None:
+            return None
+        if _sha(page.read_bytes()) != record.get("image_sha256"):
             return None
         pdic = pdic_path_for_image(page)
         snapshot = _snapshot(cache, pdic)
@@ -190,12 +241,27 @@ def load_review_risk_witness(
         row = found[0]
         if type(row.get("source_x")) is not int or type(row.get("source_y")) is not int:
             return None
+        section_key = (
+            section_key_for_source_point(
+                page, section, row["source_x"], row["source_y"]
+            ) if section.exists() else "whole-page"
+        )
+        if section_key is None or section_key != row.get("section_key"):
+            return None
+        if not _sources_current(
+            project_page=page, cache=cache, pdic=pdic, section=section,
+            cache_pdic_snapshot=snapshot,
+            image_bytes=page.read_bytes(),
+            section_bytes=section.read_bytes() if section.exists() else None,
+        ):
+            return None
         return ReviewRiskWitness(
             project_key=str(project), page_key=page_key,
-            section_key="whole-page", candidate_id=candidate_id,
+            section_key=section_key, candidate_id=candidate_id,
             source_x=row["source_x"], source_y=row["source_y"],
             cache_sha256=record["cache_sha256"],
-            pdic_sha256=record["pdic_sha256"], section_sha256=None,
+            pdic_sha256=record["pdic_sha256"],
+            section_sha256=record.get("section_sha256"),
         )
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError):
         return None

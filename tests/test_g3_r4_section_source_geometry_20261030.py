@@ -26,7 +26,7 @@ from picture_capture.proofreading.review_risk_queue import review_risk_from_file
 
 def _fixture(tmp_path, transform="identity"):
     project = tmp_path / "project"
-    project.mkdir()
+    project.mkdir(parents=True)
     page = project / "001.png"
     Image.new("RGB", (200, 300), "white").save(page)
     cache = project / "QT" / "PaddleOCR" / "001.json"
@@ -74,7 +74,7 @@ def test_strict_source_xy_maps_to_correct_section_under_every_layout_transform(t
     lambda p: p.update({"sections": [{"index": 1}]}),
 ])
 def test_malformed_stale_overlapping_or_partial_section_data_never_maps(tmp_path, mutation):
-    *_, page, cache, pdic, section, row = (None, *_fixture(tmp_path))
+    project, page, cache, pdic, section, row = _fixture(tmp_path)
     payload = json.loads(section.read_text("utf-8"))
     mutation(payload)
     section.write_text(json.dumps(payload), encoding="utf-8")
