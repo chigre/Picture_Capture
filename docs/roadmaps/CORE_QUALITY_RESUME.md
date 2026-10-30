@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 可选风险优先队列已接入重点筛选（最新恢复入口）
+
+前一 `e60c59f9bb5a4a1656457f4e056c63986f5f39f6` 已由 GitHub exact SHA 验证 CI 六平台 6/6、OCR 3/3、Risk-tier 与 CodeQL Python/Actions 2/2 全绿，SECTION 原图 XY 归属可作为来源快照基础；仍无人工真值。
+
+本轮 `155727da9783178f8e9257e8e72a17682edb73df` 是 red-first（Ubuntu CI 41072980340 预期缺 review_risk_snapshot 模块），生产 `9ac248699e05b1524ca56cbe24a8b06f2729a18c` 把默认 **OFF** 的高风险优先选项实际接入 Tk「重点筛选」，并提供第二个默认 OFF 的「下次批量 OCR 记录来源证明」选项。仅在重新点击「筛选」后保存设置并捕获新 worker epoch，已经显示的编辑器不会被切换开关直接重排；尚未保存或仍在后台保存的编辑会阻止清空和重新筛选。每页合并读取来源 witness、OCR/PDIC/图像/SECTION、严格唯一源XY，并复检哈希；风险判定为 priority/normal/unknown，只在同页连续 SECTION 内稳定排序，缺少来源不能凭旧缓存认定高风险。默认 OFF 保留原列表和无额外页面读取。无需更改人工 PDIC、PPP、SECTION 或 OCR JSON。
+
+**恢复动作：**核查生产 [CI #41073344700](https://github.com/chigre/Picture_Capture/actions/runs/41073344700) 六平台和 Risk、[OCR #41073344750](https://github.com/chigre/Picture_Capture/actions/runs/41073344750) 三平台、CodeQL 2/2 的 exact HEAD conclusion；有失败必须读对应 jobs logs 修复。**再**核对文档最终 HEAD 完整 CI。后续仅在自动化门禁绿时继续 R4.2 local-only aggregate timing / 明确 Windows E3 验收材料，不能凭 pytest 替代真实 GUI 操作与用户 W1–W11。#663 必须 Draft/Open/Unmerged、main 不动；R6 无可用人工核验标签，R8 真实扫描延后。
+
+---
+
 ## 2026-10-30｜G3 R4.2 SECTION 原图几何严格归属（最新接力）
 
 前一个 `b49d1ef181828f1699e2fc9e5304bac4cfb23d0c` 已由 GitHub 验证全部 CI 6/6 + Risk、OCR 3/3、CodeQL Python/Actions 2/2 SUCCESS。现仍唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)，main 不动。
