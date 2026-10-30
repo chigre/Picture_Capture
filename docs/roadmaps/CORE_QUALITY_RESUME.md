@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 SECTION 原图几何严格归属（最新接力）
+
+前一个 `b49d1ef181828f1699e2fc9e5304bac4cfb23d0c` 已由 GitHub 验证全部 CI 6/6 + Risk、OCR 3/3、CodeQL Python/Actions 2/2 SUCCESS。现仍唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)，main 不动。
+
+本轮 test-first `cd7aa3f055515e0e3785c05ef8cedb36329dee66` 预期缺 `review_section_provenance`；源 `ffbe5ded4c8b4de6f8b47bc01a8045a259cd1332` 新增严格 SECTION v2 原图 X/Y 归属，不用历史 UI 的最近区域逻辑：核对原图 EXIF 后尺寸、四种 layout transform、每条 source segment 与真实区间、序号与无重叠，再确认点唯一落在半开区间内。不在区域、边界歧义、坏文件、跨SECTION 不能认领。来源时 witness 增加原图SHA、SECTION SHA、候选所属 `section-N`，读取时复检旧图/缓存/PDIC/SECTION；只写软件自有可选来源 sidecar，设置继续默认 OFF；**未接 Tk 队列**。4 种变换与恶意损坏/间隙/同尺寸换图均有合成测试。
+
+**恢复动作：**查询源 [CI #41068586911](https://github.com/chigre/Picture_Capture/actions/runs/41068586911)、[OCR #41068587040](https://github.com/chigre/Picture_Capture/actions/runs/41068587040)、CodeQL Python/Actions 的所有 exact-SHA conclusion，并核验最终文档 HEAD 6+3+2+Risk；任何错误查 job logs 修正，不能因 Ubuntu py3.13 `4961 passed, 3 skipped` 和 OCR 已绿就提前宣布全部完成。源全绿后才考虑 R4.2 Tk 选配队列的每页快照与 worker serial/cancellation、安全定位和 local-only timing。Windows R3 E3、#483 W1–W11 NOT PERFORMED；无人工真值或真实基准，R6 blocked、R8 deferred；不合并、不开 Ready、不关闭 #503/#562/#483。
+
+---
+
 ## 2026-10-30｜G3 R4.2 来源时 witness 只读选配提交（最新恢复入口）
 
 上一 checkpoint `f8d2d48acb68df3f11b83445d7ef2f0155ff8e99` 已经由 GitHub exact SHA 验证六平台 CI 6/6、OCR 3 OS 3/3、Risk-tier 和 CodeQL Python/Actions 2/2 全绿，**只是无 Tk 接线的 R4.2 基础模块**。
