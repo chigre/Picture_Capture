@@ -1,0 +1,25 @@
+# G3 R4.2 — Focused review priority and local aggregate timing: operator runbook (2026-10-30)
+
+This is a **pending, not performed** Windows E3 operator checklist. It is *separate* from issue [#483](https://github.com/chigre/Picture_Capture/issues/483) B2 W1–W11 and [#503](https://github.com/chigre/Picture_Capture/issues/503) B3/Undo acceptance; passing this checklist does not close those issues. Do not upload real dictionary images, PDIC, OCR caches, screenshots containing words, Profile, or private project files to public GitHub.
+
+## Preflight and expected invariants
+
+Use a **disposable local copy** of a dictionary project, with backed-up PDIC/PPP/SECTION, saved manual choices and original image bytes. Record only the app commit, OS/Python, pass/fail/unknown and text-free operational observations. With default settings, risk priority, post-PDIC witness capture, and local aggregate timing are all **OFF**; ordinary focused review ordering, worker behavior and disk writes remain the baseline. The risk tier is a triage signal, **not a true OCR error**, while `normal` means only dual-engine diagnostic agreement, never human-confirmed correctness.
+
+**Explicit operator actions; all NOT PERFORMED:**
+
+1. **Legacy/first launch:** open both a pre-existing project config and a fresh project; verify all three R4 options OFF; open/close the panel, change pages and restart without new source witness/metrics files or altered PDIC/PPP/SECTION.
+2. **Default filter parity:** record filtered page/source X/Y order and first-batch availability with toggles OFF; compare against the previous stable behavior. No extra risk I/O is expected.
+3. **Source-time witness:** explicitly enable only `下次 OCR 批量画线记录来源证明`, click 筛选 to persist, then run the authorized *next* batch OCR/combined job on a local disposable project. Confirm no witness was retroactively created for old caches and the new one is derived only from saved OCR+PDIC and original image/SECTION revisions. Confirm no real raw data leaves the machine.
+4. **Opt-in sorting:** switch on `已核验来源的高风险优先`, click 筛选 again and verify `priority/normal/unknown` diagnostics. Confirm stable order for same tier, same-page/contiguous SECTION sorting only and all original source XY crop targets retained.
+5. **Unknown/stale:** with a second disposable copy only, change cache, PDIC, image bytes, or SECTION; verify the risk priority no longer relies on stale evidence, that malformed/overlapping/gap SECTION does not get nearest-boundary ownership, and no file is repaired/overwritten silently.
+6. **Worker epoch cancellation:** trigger a long first filter run, change filter conditions and click 筛选 again; verify old first-batch callbacks, later scan chunks and prefetched crop callbacks do not overwrite new results or cached previews. Compare actual row count, page and source XY.
+7. **Streaming navigation:** while additional pages scan, move to the available next batch, wait for prefetched crops, and return; check that partial batches are hidden until complete and no stale crop is substituted after a new scan.
+8. **Unsaved edit safety:** edit a visible word, immediately change risk/timing checkbox and click 筛选/下一批; ensure uncommitted or in-flight saves block erasure/navigation; test successful save, save failure/retry, and a newer second edit while writer runs. Verify exact saved PDIC and intact manual selection/other sidecars; do not infer a recovered write without readback.
+9. **SECTION and geometry:** run identity, mirror, cw90 and ccw90 layout projects only where operator can confirm source XY/crop mapping; inspect two SECTIONs and a gap/boundary; an uncertain candidate should not be assigned to an adjacent SECTION by proximity.
+10. **Timing OFF and ON:** when OFF, no added timer text or data. When ON, verify local-only text-free aggregates for scan, provenance check, crop preparation and saved PDIC changes. `风险校验` is a subset of `扫描`, **not additive**. Timing includes worker processing, not active human proofreading or a measured speed advantage; it is volatile memory and not an automatic disk log.
+11. **Close/reopen and history:** with clean saved work only, close/reopen project, compare PDIC/PPP/SECTION/manual selections, Undo/Redo, crop/source XY and originally selected rows. Run [#483 W1–W11](https://github.com/chigre/Picture_Capture/blob/main/docs/roadmaps/CORE_QUALITY_B2_RUNBOOK.md) and [#503](https://github.com/chigre/Picture_Capture/issues/503) independently; do not mark either verified here.
+
+## Evidence and stop conditions
+
+For each case write only **PASS / FAIL / NOT PERFORMED**, tested OS/app SHA, and a source-free note. **Do not include** dictionary words, file paths, original images, OCR text, page stems, settings secrets, or screenshots of private data. On a failed save/incorrect XY or source ownership, stop further runs, keep user files unchanged or backed up, preserve logs locally, and report the minimal reproduce steps. No automated CI is a substitute for an actual human operator on Windows. Keep PR [#663](https://github.com/chigre/Picture_Capture/pull/663) Draft/Open/Unmerged until an explicitly separate release decision.

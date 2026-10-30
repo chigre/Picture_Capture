@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 大批次：匿名计时、旧预取防串代次与 Windows 人工验收包（最新恢复入口）
+
+GitHub verified previous exact baseline `efed96356e1bb69a490525d927a062f40d10ff09`: [CI 41074662522](https://github.com/chigre/Picture_Capture/actions/runs/41074662522) 6/6 + Risk, [OCR 41074662499](https://github.com/chigre/Picture_Capture/actions/runs/41074662499) 3/3, CodeQL Python/Actions 2/2 全绿。#663 保持 Draft/Open/unmerged，main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未改。
+
+本轮测试先行 `a5414d69071a8c9fdb4e0d12fbb7f3939790f473` 缺 review_timing 模块 red；代码 `af797e858a2795e41eb51b7f9a435b9c0d096f7e` 新增 `ReviewTimingSession`：扫描/来源风险校验/预览生成/PDIC 保存的**本地内存**秒数和数量，仅包含聚合整数+浮点，无词条、原图、坐标、页面名、文件自动写入、网络上传；非人工主动校对时间，risk 含于 scan，不得相加宣称加速。第三个 GUI 默认 OFF 开关 `focused_review_timing_enabled=False`，只有点击「筛选」后新 epoch 采样；界面标签显示汇总。新增初始 worker invalidate、render serial advance、预取与渲染同时固定 scan epoch，旧扫描的迟到 done/failed 不能更新新一轮缓存或清除其 key；保存与人工修改仍用原可靠队列和源 X/Y。
+
+源 [CI 41077510554](https://github.com/chigre/Picture_Capture/actions/runs/41077510554) Ubuntu py3.13 **4978 passed / 3 skipped**、Risk-tier、CodeQL 2/2 SUCCESS；[OCR 41077510565](https://github.com/chigre/Picture_Capture/actions/runs/41077510565) Ubuntu 成功，Windows job 在安装 setup-uv 的 GitHub 版本 API 报 Server Error、**测试未执行，不能视为通过**；macOS pending。其他 full OS/Python CI 仍 pending。**下一步先核对最新文档 HEAD 的全部 matrix 和安全门禁**；如果失败按日志修，非本地网络问题不改无关功能。Windows 操作者流程已写 `docs/architecture/G3_R4_2_OPERATOR_ACCEPTANCE_20261030.md`，全是 NOT PERFORMED，#483 W1–W11、R3 E3、#503 压力 Undo/Redo 仍另行验收。没有人工标签不启动 R6，R8 真实扫描延后。
+
+---
+
 ## 2026-10-30｜G3 R4.2 重点筛选 Tk 可选队列：旧设置兼容修复（最新恢复入口）
 
 #663 最新的选配 UI source `9ac248699e05b1524ca56cbe24a8b06f2729a18c` 完成 Tk 高风险优先与来源时证明采集两个默认 OFF 开关，但 CI 发现旧 `SimpleNamespace` 不具备两个新 Tk BooleanVar，导致旧测试 `test_focused_setting_write_validation_and_clamp` 抛 AttributeError。此失败是**真实回归，不是预期 RED**。已提交小修 `f7cba75de0dadb755b8eaa7505e39e31ce9f0f44`：缺少新控件时保留原设置或默认 False，真实窗口仍按 Checkbox 值保存。复测 [CI #41074003807](https://github.com/chigre/Picture_Capture/actions/runs/41074003807) Ubuntu py3.13 **4971 passed, 3 skipped**，OCR [#41074003632](https://github.com/chigre/Picture_Capture/actions/runs/41074003632) 3/3、Risk-tier、CodeQL Python/Actions 2/2 成功；其他 Python/OS 仍须读取 exact-head conclusion，不能预先宣布 E2 全部通过。
