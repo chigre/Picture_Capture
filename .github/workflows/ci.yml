@@ -131,6 +131,14 @@ jobs:
         if: runner.os != 'Linux'
         run: uv run --locked python scripts/gui_r3_candidate_delete_smoke.py
 
+      - name: G3 focused risk/timing opt-in real Tk synthetic smoke (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a uv run --locked python scripts/gui_g3_focused_controls_smoke.py
+
+      - name: G3 focused risk/timing opt-in real Tk synthetic smoke (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: uv run --locked python scripts/gui_g3_focused_controls_smoke.py
+
       - name: Run compatibility test runner
         run: uv run --locked python run_tests.py
 
