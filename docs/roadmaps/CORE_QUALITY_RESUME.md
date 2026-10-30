@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 重点筛选 Tk 可选队列：旧设置兼容修复（最新恢复入口）
+
+#663 最新的选配 UI source `9ac248699e05b1524ca56cbe24a8b06f2729a18c` 完成 Tk 高风险优先与来源时证明采集两个默认 OFF 开关，但 CI 发现旧 `SimpleNamespace` 不具备两个新 Tk BooleanVar，导致旧测试 `test_focused_setting_write_validation_and_clamp` 抛 AttributeError。此失败是**真实回归，不是预期 RED**。已提交小修 `f7cba75de0dadb755b8eaa7505e39e31ce9f0f44`：缺少新控件时保留原设置或默认 False，真实窗口仍按 Checkbox 值保存。复测 [CI #41074003807](https://github.com/chigre/Picture_Capture/actions/runs/41074003807) Ubuntu py3.13 **4971 passed, 3 skipped**，OCR [#41074003632](https://github.com/chigre/Picture_Capture/actions/runs/41074003632) 3/3、Risk-tier、CodeQL Python/Actions 2/2 成功；其他 Python/OS 仍须读取 exact-head conclusion，不能预先宣布 E2 全部通过。
+
+上一严格 SECTION `e60c59f9bb5a4a1656457f4e056c63986f5f39f6` 全绿自动化基线。默认 OFF 时筛选顺序、身份与 IO 不变；ON 时每页批量验证 OCR/PDIC/image/SECTION 与来源侧记录，只对已证明来源的诊断在同页连续 SECTION 内稳定排序，unknown 不冒充 normal；不能扫描未保存修改的可见批次，勾选变化需按「筛选」开启新 serial，不会中途重排编辑器。来源捕获仅下次批量 OCR/combined PDIC 成功落盘后才可选写文件。
+
+**恢复动作：**先确认修复源 `f7cba75...` 六 CI 6/6、Risk、OCR 3OS、CodeQL 2/2；再确认最新文档 HEAD exact CI；若失败查日志修复，不推 merge。后续 local-only anonymous aggregate timing + GUI 工作者序列和 SECTION 人工 W1–W11 在获真实用户许可后进行。#663 Draft/Open/Unmerged、main 未修改；R3 E3、#483 W1–W11 仍 NOT PERFORMED；R6 人工标签缺失、R8 真实扫描 deferred。
+
+---
+
 ## 2026-10-30｜G3 R4.2 可选风险优先队列已接入重点筛选（最新恢复入口）
 
 前一 `e60c59f9bb5a4a1656457f4e056c63986f5f39f6` 已由 GitHub exact SHA 验证 CI 六平台 6/6、OCR 3/3、Risk-tier 与 CodeQL Python/Actions 2/2 全绿，SECTION 原图 XY 归属可作为来源快照基础；仍无人工真值。
