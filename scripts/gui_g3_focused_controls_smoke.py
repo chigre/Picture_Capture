@@ -205,6 +205,32 @@ def run():
                   "pending human edit vanished during blocked Tk re-filter")
             review._filter_pending_changes.clear()
 
+            # Switching all optional controls back OFF must require a
+            # successful new filter epoch, not retain stale ON preferences.
+            # This also exercises a second native async scan after a
+            # rejected re-filter without changing saved source data.
+            action.invoke()
+            _pump_until(
+                app,
+                lambda: review._filter_scan_complete
+                and len(review.filtered_targets) == 2
+                and not review._filter_rows_active,
+                seconds=35, description="G3 native Tk opt-out rescan",
+            )
+            reloaded = AppSettings.from_json(settings_path(root))
+            for _label, variable, field in toggles:
+                check(
+                    not getattr(review, variable).get()
+                    and getattr(reloaded, field) is False,
+                    f"successful Tk opt-out did not persist OFF for {field}",
+                )
+            check(
+                [(x["original_word"], x["x"], x["y"]) for x in review.filtered_targets]
+                == [("synthetic-alpha", 80, 76), ("synthetic-beta", 85, 182)],
+                "second native filter changed original source XY or ordering",
+            )
+            check(not origin.exists(), "opt-out rescan unexpectedly created OCR provenance")
+
             check([p.read_bytes() for p in (page1, page2)] == before_image,
                   "native UI smoke unexpectedly modified synthetic source image")
             check(
