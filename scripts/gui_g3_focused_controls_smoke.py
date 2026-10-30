@@ -209,12 +209,14 @@ def run():
             # successful new filter epoch, not retain stale ON preferences.
             # This also exercises a second native async scan after a
             # rejected re-filter without changing saved source data.
+            prior_epoch = review._filter_scan_serial
             action.invoke()
             _pump_until(
                 app,
-                lambda: review._filter_scan_complete
+                lambda: review._filter_scan_serial > prior_epoch
+                and review._filter_scan_complete
                 and len(review.filtered_targets) == 2
-                and not review._filter_rows_active,
+                and review._filter_rows_active,
                 seconds=35, description="G3 native Tk opt-out rescan",
             )
             reloaded = AppSettings.from_json(settings_path(root))
