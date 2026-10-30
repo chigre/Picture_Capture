@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 后续：被拒绝筛选不写入设置 + 风险来源文件竞态防护（最新恢复入口）
+
+已核验起点 `1611f7c60a5f3f93ca191e01b9ee7cc47248c493`：CI 6/6、OCR 3/3、CodeQL 2/2、Risk gate 全 SUCCESS，仅 E2。新 `12fa0cd4bc800ab740e0cb148d6874698924ad31` 负向测试复现非法 batch size 仍修改部分 AppSettings、OCR 风险来源 sidecar 被并发换字节后仍可排序的缺口；其中 4 个早期 guard 测试有缺漏的 mock deps，`3252a949d615af1a819441778db2bd6c3f4f84c7` 仅补齐测试依赖，无变更业务断言。修复源 `691bcee0da9adc3b8a108ac737a2216ac03a5a9c` 让 pending/saving 编辑拒绝点提前到任何设置写入之前；特定字符为空不保存改动；所有设置字段在 batch size 成功验证后才统一提交；风险快照开始与结束复读原 `*_risk_origin_v1.json` 字节，来源变化则保留原顺序并拒绝认证。
+
+**接力下一步：**先查看 corrected-test [CI #41082255201](https://github.com/chigre/Picture_Capture/actions/runs/41082255201) 六平台 + Risk、[OCR #41082255256](https://github.com/chigre/Picture_Capture/actions/runs/41082255256) 三平台和 CodeQL Python/Actions 2/2；再核查最新文档 HEAD exact SHA 所有检查。红灯必须读 job log 修复，不因早期 mock 错误声称全部测试先行成功。已保留真实两类失败证据。默认风险优先/来源采集/匿名计时三个选项继续 OFF；不修改 PDIC/PPP/SECTION/OCR、不产生人工真值、不上传用户内容。
+
+后续剩余真正门槛为人工 Windows R3 E3、#483 W1–W11 和 #503 Undo/Redo；准备好的 [R4.2 Windows 操作者 runbook](https://github.com/chigre/Picture_Capture/blob/1611f7c60a5f3f93ca191e01b9ee7cc47248c493/docs/architecture/G3_R4_2_OPERATOR_ACCEPTANCE_20261030.md) 尚未执行。R6 标签不齐，R8 真实扫描待用户决定。保持唯一 Draft #663 不合并，不开启 Ready，不改 main，不关闭 #483/#503/#562。
+
+---
+
 ## 2026-10-30｜G3 R4.2 大批次：匿名计时、旧预取防串代次与 Windows 人工验收包（最新恢复入口）
 
 GitHub verified previous exact baseline `efed96356e1bb69a490525d927a062f40d10ff09`: [CI 41074662522](https://github.com/chigre/Picture_Capture/actions/runs/41074662522) 6/6 + Risk, [OCR 41074662499](https://github.com/chigre/Picture_Capture/actions/runs/41074662499) 3/3, CodeQL Python/Actions 2/2 全绿。#663 保持 Draft/Open/unmerged，main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未改。

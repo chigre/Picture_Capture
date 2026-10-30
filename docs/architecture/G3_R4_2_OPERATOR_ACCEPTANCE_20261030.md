@@ -23,3 +23,9 @@ Use a **disposable local copy** of a dictionary project, with backed-up PDIC/PPP
 ## Evidence and stop conditions
 
 For each case write only **PASS / FAIL / NOT PERFORMED**, tested OS/app SHA, and a source-free note. **Do not include** dictionary words, file paths, original images, OCR text, page stems, settings secrets, or screenshots of private data. On a failed save/incorrect XY or source ownership, stop further runs, keep user files unchanged or backed up, preserve logs locally, and report the minimal reproduce steps. No automated CI is a substitute for an actual human operator on Windows. Keep PR [#663](https://github.com/chigre/Picture_Capture/pull/663) Draft/Open/Unmerged until an explicitly separate release decision.
+
+## Additional refusal checks (2026-10-30, still NOT PERFORMED)
+
+12. With an unsaved focused editor edit or a PDIC write worker in flight, change the risk priority, next-batch source witness and aggregate timing checkboxes, then press **筛选**. The request must be refused **without persisting any of those new option values**, clearing editors or changing source files. Once the edit is saved successfully, re-run and verify the options take effect at the next scan epoch.
+13. Enter a noninteger batch size or select **含特定字符** with no characters, then press **筛选**. Invalid input must not partially overwrite persisted options or start/cancel a scan. Correct the input and check the normal 1..500 clamp still works.
+14. On a local disposable project copy only, change the optional `*_risk_origin_v1.json` bytes while a risk calculation is running (or replace the sidecar before a second run). The page must fail closed to original order; this verifies optimistic byte consistency, **not cryptographic authenticity**. Do not upload a real project or paste words into GitHub.
