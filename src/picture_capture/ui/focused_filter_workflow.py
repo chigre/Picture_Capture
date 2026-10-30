@@ -859,11 +859,17 @@ def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
         self.focused_exclude_reference_var.get()
     )
     settings.focused_review_characters = self.focused_characters_var.get().strip()
-    settings.focused_review_risk_queue_enabled = bool(
-        self.focused_risk_priority_var.get()
+    # Legacy/test ReviewWindow stand-ins have no newly added Tk controls.
+    # Preserve the existing persisted/default-OFF values in that case.
+    priority_var = getattr(self, "focused_risk_priority_var", None)
+    capture_var = getattr(self, "focused_risk_capture_var", None)
+    settings.focused_review_risk_queue_enabled = (
+        bool(priority_var.get()) if priority_var is not None
+        else bool(getattr(settings, "focused_review_risk_queue_enabled", False))
     )
-    settings.focused_review_risk_witness_capture = bool(
-        self.focused_risk_capture_var.get()
+    settings.focused_review_risk_witness_capture = (
+        bool(capture_var.get()) if capture_var is not None
+        else bool(getattr(settings, "focused_review_risk_witness_capture", False))
     )
     try:
         batch_size = int(self.focused_batch_size_var.get().strip())
