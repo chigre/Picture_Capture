@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 来源时 witness 只读选配提交（最新恢复入口）
+
+上一 checkpoint `f8d2d48acb68df3f11b83445d7ef2f0155ff8e99` 已经由 GitHub exact SHA 验证六平台 CI 6/6、OCR 3 OS 3/3、Risk-tier 和 CodeQL Python/Actions 2/2 全绿，**只是无 Tk 接线的 R4.2 基础模块**。
+
+本轮先发 red-first `a81075569ed32e2c4d4618cc1c4bfcf9d8e1ce66`，Ubuntu CI 41064417899 预期 ModuleNotFoundError；随后实现 `2985eb6610aa54f070bf07eb919bf792678b6f67`：新增 `proofreading/review_risk_witness_storage.py`，以及 settings 默认 **False** 的 `focused_review_risk_witness_capture`。批量 OCR/combined 的 PDIC 已经落盘后才可选地生成 OCR/PDIC SHA256 来源时 witness，只支持**无 SECTION sidecar**，有 SECTION 或无法唯一证明候选ID、原图XY、词文本归属时跳过。文件保存前后复验；按真实当前文件复核旧 witness。不会改写 OCR JSON/PDIC/PPP/SECTION，默认不生成 sidecar，界面仍未接高风险优先排序。
+
+**恢复动作：**核对源 [CI 41064630984](https://github.com/chigre/Picture_Capture/actions/runs/41064630984) 六平台 + Risk、[OCR 41064630989](https://github.com/chigre/Picture_Capture/actions/runs/41064630989) 3OS、CodeQL Python/Actions，失败按日志修复；另核对最新文档 HEAD，不以旧提交成功替代。继续 R4.2 SECTION 几何严格归属和默认 OFF Tk 实际接线之前，不能称 UI 高风险优先功能完成，不能把此 witness 当 OCR 错误真值。main 不动，#663 Draft，不合并，Windows R3 E3/#483 W1–W11 仍 NOT PERFORMED。
+
+---
+
 ## 2026-10-30｜G3 R4.2 只读来源证据与默认 OFF 的稳定队列（最新接力）
 
 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) 当前以 `c6426614e112e0d8bc7a4d80aae941575e301b47` 全绿作为 R4.1 E2 基线：CI 六平台 6/6 + Risk-tier、OCR 3OS 3/3、CodeQL Python/Actions 2/2 成功。R4.1 不是人工真值分类。
