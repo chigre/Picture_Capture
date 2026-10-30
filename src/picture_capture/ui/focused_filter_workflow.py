@@ -80,6 +80,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     include_chars = bool(self.focused_include_characters_var.get())
     exclude_single = bool(self.focused_exclude_single_var.get())
     exclude_reference = bool(self.focused_exclude_reference_var.get())
+    # The queue option is fixed for this scan epoch; toggling the checkbox
+    # never reorders visible editors or changes the in-flight worker.
+    risk_queue_enabled = bool(self.focused_risk_priority_var.get())
     tokens = _focused_review_character_tokens(self.focused_characters_var.get())
     if include_chars and not tokens:
         messagebox.showinfo(
@@ -89,6 +92,11 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         )
         return
 
+    if getattr(self, "_filter_rows_active", False) and (
+        self._filter_save_running or self._filter_pending_changes
+    ):
+        self.parent.status_var.set("请先完成重点校对修改保存，再重新筛选。")
+        return
     if not getattr(self, "_filter_rows_active", False):
         self.save(redraw_main=False)
     self.review_mode_var.set("filter")
@@ -195,6 +203,12 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 "ocr_words": ocr_words,
                 "reasons": tuple(reasons),
             })
+        if risk_queue_enabled and targets:
+            from ..proofreading.review_risk_snapshot import prioritized_focused_page_targets
+            targets = prioritized_focused_page_targets(
+                targets, project_root=project_root, page=page,
+                cache_path=cache, pdic_path=pdic_path(page), enabled=True,
+            )
         return targets, missing_ocr
 
     def first_worker():
@@ -845,6 +859,12 @@ def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
         self.focused_exclude_reference_var.get()
     )
     settings.focused_review_characters = self.focused_characters_var.get().strip()
+    settings.focused_review_risk_queue_enabled = bool(
+        self.focused_risk_priority_var.get()
+    )
+    settings.focused_review_risk_witness_capture = bool(
+        self.focused_risk_capture_var.get()
+    )
     try:
         batch_size = int(self.focused_batch_size_var.get().strip())
     except ValueError as exc:

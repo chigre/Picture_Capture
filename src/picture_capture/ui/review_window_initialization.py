@@ -234,6 +234,12 @@ def initialize_review_window(self: Any, parent: Any, *, deps: dict[str, Any]) ->
             or "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
         )
     )
+    self.focused_risk_priority_var = tk.BooleanVar(
+        value=bool(getattr(parent.settings, "focused_review_risk_queue_enabled", False))
+    )
+    self.focused_risk_capture_var = tk.BooleanVar(
+        value=bool(getattr(parent.settings, "focused_review_risk_witness_capture", False))
+    )
     self.focused_batch_size_var = tk.StringVar(
         value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 20) or 20)))
     )

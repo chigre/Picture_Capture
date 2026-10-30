@@ -154,6 +154,21 @@ def _build(self, deps: ReviewWorkspaceDeps) -> None:
         filter_row2, from_=1, to=500, increment=1, width=6,
         textvariable=self.focused_batch_size_var, style="PCR.Compact.TSpinbox",
     ).pack(side="left")
+    filter_risk_row = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
+    filter_risk_row.pack(fill="x", pady=(3, 0))
+    ttk.Checkbutton(
+        filter_risk_row,
+        text="本次筛选：已核验来源的高风险优先（默认关闭）",
+        variable=self.focused_risk_priority_var,
+    ).pack(side="left")
+    ttk.Checkbutton(
+        filter_risk_row,
+        text="下次 OCR 批量画线记录来源证明（需重新识别，默认关闭）",
+        variable=self.focused_risk_capture_var,
+    ).pack(side="left", padx=(9, 0))
+    ttk.Label(
+        filter_risk_row, text="勾选变化后请点击「筛选」生效。"
+    ).pack(side="left", padx=(7, 0))
     # Main review strip: vertical previous/next buttons flank the scrollable rows.
     strip = ttk.Frame(left, style="PCR.Surface.TFrame")
     strip.pack(fill="both", expand=True, padx=(4, 4), pady=(0, 4))

@@ -299,6 +299,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     focused_review_batch_size: int = 20
     # Opt-in post-PDIC R4 source witness; does not enable risk ordering/UI.
     focused_review_risk_witness_capture: bool = False
+    # User-visible risk-first focused review is opt-in, default-OFF.
+    focused_review_risk_queue_enabled: bool = False
     # Auxiliary headword reference list used by the review window and main-view membership styling.
     # Relative paths are resolved from the project root; absolute paths are also supported.
     wordslist_path: str = "wordslist.txt"

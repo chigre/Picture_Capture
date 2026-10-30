@@ -46,56 +46,72 @@ def _v(value: Any, transform: LayoutTransform, source_size: tuple[int, int]) -> 
     return v
 
 
-def section_key_for_source_point(
-    image_path: Path, section_path: Path, x: int, y: int,
-) -> str | None:
-    """Return exact 1-based SECTION identity or None on *any* uncertainty.
+def section_keys_for_source_points(
+    image_path: Path, section_path: Path, points: list[tuple[int, int]],
+) -> dict[tuple[int, int], str | None]:
+    """Validate a SECTION v2 snapshot once and resolve every original XY.
 
-    Uses saved v2 source-coordinate line segments, strict layout transform
-    and actual EXIF-oriented image dimensions. Boundaries use [top, bottom).
-    Adjacent sections are unambiguous; gaps and outside points are unknown.
+    A malformed or overlapping sidecar fails closed for *all* points. Unlike
+    UI nearest-section behavior, no source XY outside a saved interval is
+    automatically assigned to a SECTION. Images are opened once per page.
     """
-    if type(x) is not int or type(y) is not int:
-        return None
+    unknown = {point: None for point in points}
     try:
         payload = json.loads(Path(section_path).read_text("utf-8"))
         if (
             not isinstance(payload, dict)
             or payload.get("format") != PAGE_SECTIONS_FORMAT
-            or type(payload.get("version")) is not int
-            or payload["version"] != 2
+            or type(payload.get("version")) is not int or payload["version"] != 2
             or payload.get("coordinate_space") != SOURCE_COORDINATE_SPACE
             or type(payload.get("source_width")) is not int
             or type(payload.get("source_height")) is not int
             or not isinstance(payload.get("sections"), list)
             or not payload["sections"]
         ):
-            return None
+            return unknown
         with Image.open(image_path) as opened:
             source_size = ImageOps.exif_transpose(opened).size
-        if (
-            source_size != (payload["source_width"], payload["source_height"])
-            or not (0 <= x < source_size[0] and 0 <= y < source_size[1])
-        ):
-            return None
+        if source_size != (payload["source_width"], payload["source_height"]):
+            return unknown
         transform = LayoutTransform(payload.get("layout_transform_internal"))
         spans: list[tuple[int, int, int]] = []
         for index, row in enumerate(payload["sections"], 1):
             if (
                 not isinstance(row, dict)
-                or type(row.get("index")) is not int
-                or row["index"] != index
+                or type(row.get("index")) is not int or row["index"] != index
             ):
-                return None
+                return unknown
             top = _v(row.get("top_source_segment_xyxy"), transform, source_size)
             bottom = _v(row.get("bottom_source_segment_xyxy"), transform, source_size)
             if top is None or bottom is None or bottom <= top:
-                return None
+                return unknown
             if spans and top < spans[-1][2]:
-                return None
+                return unknown
             spans.append((index, top, bottom))
-        _u, v = transform.source_to_canonical_point(x, y, source_size)
-        matches = [index for index, top, bottom in spans if top <= v < bottom]
-        return f"section-{matches[0]}" if len(matches) == 1 else None
+        result: dict[tuple[int, int], str | None] = {}
+        for point in points:
+            x, y = point
+            if (
+                type(x) is not int or type(y) is not int
+                or not (0 <= x < source_size[0] and 0 <= y < source_size[1])
+            ):
+                result[point] = None
+                continue
+            _u, v = transform.source_to_canonical_point(x, y, source_size)
+            matches = [
+                index for index, top, bottom in spans
+                if top <= v < bottom
+            ]
+            result[point] = f"section-{matches[0]}" if len(matches) == 1 else None
+        return result
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError):
-        return None
+        return unknown
+
+
+def section_key_for_source_point(
+    image_path: Path, section_path: Path, x: int, y: int,
+) -> str | None:
+    """Single-point SECTION identity with the exact same strict semantics."""
+    return section_keys_for_source_points(
+        image_path, section_path, [(x, y)]
+    ).get((x, y))
