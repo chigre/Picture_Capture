@@ -301,6 +301,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     focused_review_risk_witness_capture: bool = False
     # User-visible risk-first focused review is opt-in, default-OFF.
     focused_review_risk_queue_enabled: bool = False
+    # Volatile local aggregate stage timing only; no per-word or disk log.
+    focused_review_timing_enabled: bool = False
     # Auxiliary headword reference list used by the review window and main-view membership styling.
     # Relative paths are resolved from the project root; absolute paths are also supported.
     wordslist_path: str = "wordslist.txt"

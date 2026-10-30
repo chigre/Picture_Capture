@@ -6,7 +6,10 @@ Worker scheduling, cancel serials, cache contents and Tk-thread behavior unchang
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import TYPE_CHECKING
+
+from ..proofreading.review_timing import ReviewTimingSession
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -49,6 +52,24 @@ class FocusedFilterDeps:
     _apply_focused_review_page_updates: object
 
 
+def _record_focused_timing(
+    self, session: ReviewTimingSession | None,
+    stage: str, elapsed: float | None, count: int = 1,
+) -> None:
+    """Record in Tk callback only, and only for the still-active scan epoch."""
+    if (
+        session is None or elapsed is None
+        or getattr(self, "_focused_timing_session", None) is not session
+        or getattr(self, "_filter_scan_serial", None) != session.epoch
+        or not getattr(self, "_filter_rows_active", False)
+    ):
+        return
+    if session.add(stage, elapsed, count, epoch=session.epoch):
+        var = getattr(self, "focused_timing_summary_var", None)
+        if var is not None:
+            var.set(session.label)
+
+
 def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     """Render the first batch early, then stream and pre-render later batches."""
     messagebox = deps.messagebox
@@ -83,6 +104,8 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     # The queue option is fixed for this scan epoch; toggling the checkbox
     # never reorders visible editors or changes the in-flight worker.
     risk_queue_enabled = bool(self.focused_risk_priority_var.get())
+    timing_var = getattr(self, "focused_timing_var", None)
+    timing_enabled = bool(timing_var.get()) if timing_var is not None else False
     tokens = _focused_review_character_tokens(self.focused_characters_var.get())
     if include_chars and not tokens:
         messagebox.showinfo(
@@ -103,9 +126,12 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     self._filter_rows_active = True
     self._set_filter_navigation(True)
     self.parent._invalidate_ui_worker(self._review_render_worker_key)
+    # An old initial scan or prefetched crop must not publish in a new epoch.
+    self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-prefetch-{id(self)}")
+    self._filter_render_serial += 1
     self._filter_batch_render_cache.clear()
     self._filter_prefetch_key = None
     self._filter_scan_complete = False
@@ -115,6 +141,11 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     self.filter_batch_var.set("正在筛选首批…")
     self._filter_scan_serial += 1
     serial = self._filter_scan_serial
+    timing_session = ReviewTimingSession(epoch=serial) if timing_enabled else None
+    self._focused_timing_session = timing_session
+    summary_var = getattr(self, "focused_timing_summary_var", None)
+    if summary_var is not None:
+        summary_var.set(timing_session.label if timing_session is not None else "")
 
     pages = list(project.images)
     project_root = project.root
@@ -127,7 +158,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     )
     first_batch_size = self._focused_batch_size()
 
-    def scan_page(page_index: int) -> tuple[list[dict], bool]:
+    def scan_page(
+        page_index: int, sample: dict[str, float] | None = None,
+    ) -> tuple[list[dict], bool]:
         """Fast filter pass using only PDIC and OCR JSON, never page pixels."""
         page = pages[page_index]
         entries = read_pdic(pdic_path(page))
@@ -204,26 +237,39 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 "reasons": tuple(reasons),
             })
         if risk_queue_enabled and targets:
+            risk_start = perf_counter() if sample is not None else None
             from ..proofreading.review_risk_snapshot import prioritized_focused_page_targets
             targets = prioritized_focused_page_targets(
                 targets, project_root=project_root, page=page,
                 cache_path=cache, pdic_path=pdic_path(page), enabled=True,
             )
+            if risk_start is not None:
+                sample["risk"] += perf_counter() - risk_start
+                sample["risk_pages"] += 1
         return targets, missing_ocr
 
+    first_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
+
     def first_worker():
+        started = perf_counter() if timing_session is not None else None
         targets: list[dict] = []
         pages_without_ocr = 0
         next_position = len(indices)
         for position, page_index in enumerate(indices):
-            page_targets, missing_ocr = scan_page(page_index)
+            page_targets, missing_ocr = scan_page(
+                page_index, first_sample if timing_session is not None else None
+            )
             targets.extend(page_targets)
             pages_without_ocr += int(missing_ocr)
+            if started is not None:
+                first_sample["pages"] += 1
             # Stop at a page boundary as soon as one complete UI batch is
             # available. Later pages are streamed in batch-sized chunks.
             if len(targets) >= first_batch_size:
                 next_position = position + 1
                 break
+        if started is not None:
+            first_sample["scan"] = perf_counter() - started
         return targets, pages_without_ocr, next_position
 
     def start_remaining_scan(
@@ -249,18 +295,27 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         remainder = int(initial_count) % first_batch_size
         needed_for_next = first_batch_size - remainder if remainder else first_batch_size
 
+        remaining_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
+
         def remaining_worker():
+            started = perf_counter() if timing_session is not None else None
             additions: list[dict] = []
             missing_total = pages_without_ocr
             next_position = len(indices)
             for position in range(start_position, len(indices)):
                 page_index = indices[position]
-                page_targets, missing_ocr = scan_page(page_index)
+                page_targets, missing_ocr = scan_page(
+                    page_index, remaining_sample if timing_session is not None else None
+                )
                 additions.extend(page_targets)
                 missing_total += int(missing_ocr)
+                if started is not None:
+                    remaining_sample["pages"] += 1
                 if len(additions) >= needed_for_next:
                     next_position = position + 1
                     break
+            if started is not None:
+                remaining_sample["scan"] = perf_counter() - started
             return additions, missing_total, next_position
 
         def remaining_done(payload) -> None:
@@ -270,6 +325,16 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             ):
                 return
             additions, missing_total, next_position = payload
+            _record_focused_timing(
+                self, timing_session, "scan",
+                remaining_sample["scan"] if timing_session else None,
+                int(remaining_sample["pages"]),
+            )
+            _record_focused_timing(
+                self, timing_session, "risk",
+                remaining_sample["risk"] if timing_session else None,
+                int(remaining_sample["risk_pages"]),
+            )
             had_available = self._filter_available_target_count()
             self.filtered_targets.extend(additions)
             self._filter_scan_complete = next_position >= len(indices)
@@ -321,6 +386,15 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         ):
             return
         targets, pages_without_ocr, next_position = payload
+        _record_focused_timing(
+            self, timing_session, "scan",
+            first_sample["scan"] if timing_session else None, int(first_sample["pages"]),
+        )
+        _record_focused_timing(
+            self, timing_session, "risk",
+            first_sample["risk"] if timing_session else None,
+            int(first_sample["risk_pages"]),
+        )
         self.filtered_targets = list(targets)
         self.filtered_batch_index = 0
         self._filter_scan_complete = next_position >= len(indices)
@@ -585,6 +659,9 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         return
     self._filter_prefetch_key = cache_key
     worker_key = f"focused-filter-prefetch-{id(self)}"
+    scan_epoch = getattr(self, "_filter_scan_serial", None)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    crop_seconds = [None]
 
     ReviewWindow = deps.ReviewWindow
 
@@ -593,13 +670,20 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         local_viewer_width=viewer_width, local_available_width=available_width,
         local_review_zoom=review_zoom, local_review_zoom_auto=review_zoom_auto,
     ):
-        return ReviewWindow._prepare_filter_batch_payload(
+        started = perf_counter() if timing_session is not None else None
+        result = ReviewWindow._prepare_filter_batch_payload(
             local_targets, local_pages, local_settings,
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        if started is not None:
+            crop_seconds[0] = perf_counter() - started
+        return result
 
     def done(payload, local_key=cache_key, local_index=next_index) -> None:
+        if scan_epoch != getattr(self, "_filter_scan_serial", None):
+            return
+        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         if self._filter_prefetch_key == local_key:
             self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
@@ -611,6 +695,8 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
     def failed(exc, detail, local_key=cache_key) -> None:
+        if scan_epoch != getattr(self, "_filter_scan_serial", None):
+            return
         if detail:
             print(detail)
         if self._filter_prefetch_key == local_key:
@@ -678,6 +764,9 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
 
     self._filter_render_serial += 1
     serial = self._filter_render_serial
+    scan_epoch = getattr(self, "_filter_scan_serial", None)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    crop_seconds = [None]
     cached = self._filter_batch_render_cache.get(cache_key)
     if cached is not None:
         self._apply_filter_batch_payload(
@@ -698,18 +787,24 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         local_viewer_width=viewer_width, local_available_width=available_width,
         local_review_zoom=review_zoom, local_review_zoom_auto=review_zoom_auto,
     ):
-        return ReviewWindow._prepare_filter_batch_payload(
+        started = perf_counter() if timing_session is not None else None
+        result = ReviewWindow._prepare_filter_batch_payload(
             local_targets, local_pages, local_settings,
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        if started is not None:
+            crop_seconds[0] = perf_counter() - started
+        return result
 
     def done(payload, local_index=int(self.filtered_batch_index), local_key=cache_key) -> None:
         if (
             serial != self._filter_render_serial
+            or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
         ):
             return
+        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         self._cache_filter_batch_payload(local_key, payload)
         self._apply_filter_batch_payload(local_index, local_key, payload)
 
@@ -870,6 +965,11 @@ def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
     settings.focused_review_risk_witness_capture = (
         bool(capture_var.get()) if capture_var is not None
         else bool(getattr(settings, "focused_review_risk_witness_capture", False))
+    )
+    timing_var = getattr(self, "focused_timing_var", None)
+    settings.focused_review_timing_enabled = (
+        bool(timing_var.get()) if timing_var is not None
+        else bool(getattr(settings, "focused_review_timing_enabled", False))
     )
     try:
         batch_size = int(self.focused_batch_size_var.get().strip())
@@ -1036,6 +1136,8 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     self._filter_pending_changes.clear()
     self._filter_save_running = True
     pages = list(project.images)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    save_seconds = [None]
 
     def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
         """Requeue only unsaved snapshot entries, without erasing newer edits.
@@ -1072,6 +1174,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         return recovered
 
     def worker():
+        started = perf_counter() if timing_session is not None else None
         saved: list[tuple[int, int, int, str]] = []
         conflicts: list[str] = []
         for page_index, changes in sorted(snapshot.items()):
@@ -1080,11 +1183,16 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             )
             saved.extend(page_saved)
             conflicts.extend(page_conflicts)
+        if started is not None:
+            save_seconds[0] = perf_counter() - started
         return saved, conflicts
 
     def done(payload) -> None:
         self._filter_save_running = False
         saved, conflicts = payload
+        _record_focused_timing(
+            self, timing_session, "save", save_seconds[0], len(saved),
+        )
         saved_map = {
             (int(page_index), int(x), int(y)): str(word)
             for page_index, x, y, word in saved

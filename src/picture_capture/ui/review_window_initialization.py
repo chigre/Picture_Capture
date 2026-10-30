@@ -240,6 +240,11 @@ def initialize_review_window(self: Any, parent: Any, *, deps: dict[str, Any]) ->
     self.focused_risk_capture_var = tk.BooleanVar(
         value=bool(getattr(parent.settings, "focused_review_risk_witness_capture", False))
     )
+    self.focused_timing_var = tk.BooleanVar(
+        value=bool(getattr(parent.settings, "focused_review_timing_enabled", False))
+    )
+    self.focused_timing_summary_var = tk.StringVar(value="")
+    self._focused_timing_session = None
     self.focused_batch_size_var = tk.StringVar(
         value=str(max(1, int(getattr(parent.settings, "focused_review_batch_size", 20) or 20)))
     )

@@ -169,6 +169,18 @@ def _build(self, deps: ReviewWorkspaceDeps) -> None:
     ttk.Label(
         filter_risk_row, text="勾选变化后请点击「筛选」生效。"
     ).pack(side="left", padx=(7, 0))
+    filter_timing_row = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
+    filter_timing_row.pack(fill="x", pady=(3, 0))
+    ttk.Checkbutton(
+        filter_timing_row,
+        text="记录本次筛选阶段耗时（仅本地内存，不保存文字；默认关闭）",
+        variable=self.focused_timing_var,
+    ).pack(side="left")
+    ttk.Label(
+        filter_timing_row,
+        textvariable=self.focused_timing_summary_var,
+        wraplength=650, justify="left",
+    ).pack(side="left", padx=(10, 0))
     # Main review strip: vertical previous/next buttons flank the scrollable rows.
     strip = ttk.Frame(left, style="PCR.Surface.TFrame")
     strip.pack(fill="both", expand=True, padx=(4, 4), pady=(0, 4))
