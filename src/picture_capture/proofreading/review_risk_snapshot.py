@@ -51,7 +51,8 @@ def _snapshot(
     try:
         if not origin.is_file():
             return {}
-        record = json.loads(origin.read_text("utf-8"))
+        origin_bytes = origin.read_bytes()
+        record = json.loads(origin_bytes.decode("utf-8"))
         if (
             not isinstance(record, dict)
             or record.get("format") != _FORMAT
@@ -154,7 +155,8 @@ def _snapshot(
             )
         # Invalidate the entire page if any file changed during decoding.
         if (
-            cache.read_bytes() != cache_bytes
+            origin.read_bytes() != origin_bytes
+            or cache.read_bytes() != cache_bytes
             or pdic.read_bytes() != pdic_bytes
             or image.read_bytes() != image_bytes
             or (section.read_bytes() if section.exists() else None) != section_bytes

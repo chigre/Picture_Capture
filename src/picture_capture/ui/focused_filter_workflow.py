@@ -85,6 +85,13 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     project = self.parent.project
     if project is None:
         return
+    # Re-filter may destroy visible editor rows. Refuse *before* modifying
+    # persisted settings, even when the new checkbox differs from this epoch.
+    if getattr(self, "_filter_rows_active", False) and (
+        self._filter_save_running or self._filter_pending_changes
+    ):
+        self.parent.status_var.set("请先完成重点校对修改保存，再重新筛选。")
+        return
     try:
         # Reuse the main-window 【指定】 parser exactly. This preserves
         # filename-number matching, leading zeroes, mixed comma ranges and
@@ -92,7 +99,6 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         indices = self.parent._parse_page_spec(
             self.focused_page_range_var.get()
         )
-        self._persist_focused_filter_settings()
     except Exception as exc:
         messagebox.showerror("筛选条件无效", str(exc), parent=self)
         return
@@ -115,10 +121,13 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         )
         return
 
-    if getattr(self, "_filter_rows_active", False) and (
-        self._filter_save_running or self._filter_pending_changes
-    ):
-        self.parent.status_var.set("请先完成重点校对修改保存，再重新筛选。")
+    # Commit changed preferences only after all requested filter conditions
+    # are valid and no human edit/save is outstanding. A refused scan has no
+    # user-settings side effects.
+    try:
+        self._persist_focused_filter_settings()
+    except Exception as exc:
+        messagebox.showerror("筛选条件无效", str(exc), parent=self)
         return
     if not getattr(self, "_filter_rows_active", False):
         self.save(redraw_main=False)
@@ -940,34 +949,26 @@ def _render_filter_batch(
 
 
 def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
+    """Validate first; never partially change settings on invalid input."""
     settings = self.parent.settings
-    settings.focused_review_include_ocr_mismatch = bool(
-        self.focused_include_mismatch_var.get()
-    )
-    settings.focused_review_include_characters = bool(
-        self.focused_include_characters_var.get()
-    )
-    settings.focused_review_exclude_single_character = bool(
-        self.focused_exclude_single_var.get()
-    )
-    settings.focused_review_exclude_reference_words = bool(
-        self.focused_exclude_reference_var.get()
-    )
-    settings.focused_review_characters = self.focused_characters_var.get().strip()
-    # Legacy/test ReviewWindow stand-ins have no newly added Tk controls.
-    # Preserve the existing persisted/default-OFF values in that case.
+    include_mismatch = bool(self.focused_include_mismatch_var.get())
+    include_chars = bool(self.focused_include_characters_var.get())
+    exclude_single = bool(self.focused_exclude_single_var.get())
+    exclude_reference = bool(self.focused_exclude_reference_var.get())
+    characters = self.focused_characters_var.get().strip()
+    # Older adapter/test owners legitimately lack these optional Tk controls.
     priority_var = getattr(self, "focused_risk_priority_var", None)
     capture_var = getattr(self, "focused_risk_capture_var", None)
-    settings.focused_review_risk_queue_enabled = (
+    timing_var = getattr(self, "focused_timing_var", None)
+    risk_enabled = (
         bool(priority_var.get()) if priority_var is not None
         else bool(getattr(settings, "focused_review_risk_queue_enabled", False))
     )
-    settings.focused_review_risk_witness_capture = (
+    capture_enabled = (
         bool(capture_var.get()) if capture_var is not None
         else bool(getattr(settings, "focused_review_risk_witness_capture", False))
     )
-    timing_var = getattr(self, "focused_timing_var", None)
-    settings.focused_review_timing_enabled = (
+    timing_enabled = (
         bool(timing_var.get()) if timing_var is not None
         else bool(getattr(settings, "focused_review_timing_enabled", False))
     )
@@ -975,8 +976,17 @@ def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
         batch_size = int(self.focused_batch_size_var.get().strip())
     except ValueError as exc:
         raise ValueError("单批显示数量必须是整数。") from exc
-    settings.focused_review_batch_size = max(1, min(500, batch_size))
-    self.focused_batch_size_var.set(str(settings.focused_review_batch_size))
+    validated_size = max(1, min(500, batch_size))
+    settings.focused_review_include_ocr_mismatch = include_mismatch
+    settings.focused_review_include_characters = include_chars
+    settings.focused_review_exclude_single_character = exclude_single
+    settings.focused_review_exclude_reference_words = exclude_reference
+    settings.focused_review_characters = characters
+    settings.focused_review_risk_queue_enabled = risk_enabled
+    settings.focused_review_risk_witness_capture = capture_enabled
+    settings.focused_review_timing_enabled = timing_enabled
+    settings.focused_review_batch_size = validated_size
+    self.focused_batch_size_var.set(str(validated_size))
     self.parent.save_settings()
 
 
