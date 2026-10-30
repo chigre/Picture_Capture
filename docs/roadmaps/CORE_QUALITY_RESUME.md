@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 真正 Tk 合成集成测出来的首屏 R3 来源竞态（最新恢复入口）
+
+之前文档最终 HEAD `58a8108c461efae36cda3fc9c677bc85e249bb5b` 全部 CI 6/6、OCR 3/3、CodeQL 2/2、Risk-tier SUCCESS，仅自动化 E2。新 `c65f3fbbe7f3263b798d49846eb1e7a9a343816e` 把真实 Tk 校对窗口+三个默认 OFF 开关+「筛选」按钮的合成临时项目集成测试加进 `.github/workflows/ci.yml` Python 3.13 的 Windows/macOS/Linux 三平台。首次脚本将标签中带「筛选」的复选框误当按钮，`e952f5737346f576e38b2ec163a2d65e2f6174e7` 只修测试 selector。随后 Mac/Windows GUI smoke 通过，Ubuntu **真正暴露产品时序缺口**：异步首屏校对来源/词条尚未建立时单页保存被原有 R3 `commit_review_bundle` 正确拒绝，原筛选回调未捕捉，导致挂起/超时。
+
+修复生产 `bd796fd73a2906d4e083fbd43ff83caacc57472d`：首次筛选前要求 `current_page.stem==_rendered_page_stem`；首屏未就绪显示提示并保持人工文字/设置；R3 保存 RuntimeError/OSError/ValueError 或明确 False 时停止，**不持久化新的风险/证据/计时选项，也不启动筛选**；只有 R3 保存成功才保存筛选设置并开始下一轮 worker serial。预先检验批次整数防止失败筛选误保存。在 `tests/test_g3_r4_rejected_scan_and_origin_race_20261030.py` 新增未渲染/来源保存异常/False return 三条回归；真实 Tk 集成 smoke 则覆盖主动模拟未就绪拒绝→等待真实首屏 bound→成功筛选→未保存人工编辑拒绝重筛。所有测试只用自动生成项目，不能替代真人 Windows E3。
+
+**恢复动作：**核对源 [CI #41094402643](https://github.com/chigre/Picture_Capture/actions/runs/41094402643) 六平台 OS/Python (Ubuntu 3.13 **4987 passed 3 skipped，Xvfb real Tk G3 smoke OK**)、[OCR #41094402645](https://github.com/chigre/Picture_Capture/actions/runs/41094402645) 3 OS、CodeQL Python/Actions、Risk-tier；若失败查相应 job logs 修复。再核对最新文档 HEAD 的完整 exact CI，不以过去代码绿灯代替新 HEAD。R3 Windows真人 E3/#483 W1–W11/#503 人工 Undo 全部 NOT PERFORMED，R6 可信人工标签缺，R8 真实扫描延期。保留 #663 唯一 Draft/Open/Unmerged，main 不动，不合并不 Ready 不关事项。
+
+---
+
 ## 2026-10-30｜G3 R4.2 后续：被拒绝筛选不写入设置 + 风险来源文件竞态防护（最新恢复入口）
 
 已核验起点 `1611f7c60a5f3f93ca191e01b9ee7cc47248c493`：CI 6/6、OCR 3/3、CodeQL 2/2、Risk gate 全 SUCCESS，仅 E2。新 `12fa0cd4bc800ab740e0cb148d6874698924ad31` 负向测试复现非法 batch size 仍修改部分 AppSettings、OCR 风险来源 sidecar 被并发换字节后仍可排序的缺口；其中 4 个早期 guard 测试有缺漏的 mock deps，`3252a949d615af1a819441778db2bd6c3f4f84c7` 仅补齐测试依赖，无变更业务断言。修复源 `691bcee0da9adc3b8a108ac737a2216ac03a5a9c` 让 pending/saving 编辑拒绝点提前到任何设置写入之前；特定字符为空不保存改动；所有设置字段在 batch size 成功验证后才统一提交；风险快照开始与结束复读原 `*_risk_origin_v1.json` 字节，来源变化则保留原顺序并拒绝认证。
