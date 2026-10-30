@@ -124,9 +124,41 @@ def run():
                   "invalid Tk filter rewrote user PDIC")
             check(not review._filter_rows_active, "invalid Tk filter started scanning")
 
+            # An early click cannot bypass R3's async initial source
+            # snapshot. Simulate a not-yet-bound window even on fast runners;
+            # then wait for real native source rows to finish painting.
+            review.focused_characters_var.set("synthetic")
+            saved_stem = review._rendered_page_stem
+            review._rendered_page_stem = ""
+            action.invoke()
+            check(
+                not review._filter_rows_active
+                and settings_path(root).read_bytes() == baseline_settings,
+                "not-ready R3 proofreading window started a filter or persisted settings",
+            )
+            review._rendered_page_stem = saved_stem
+            _pump_until(
+                app,
+                lambda: review._rendered_page_stem == page1.stem
+                and len(review.vars) == len(app.entries),
+                seconds=35, description="G3 initial R3 native crop/source binding",
+            )
+
+            # A R3 source refusal must not persist new options, start any
+            # filter or silently repair user-owned PDIC/manual content.
+            with patch.object(
+                review, "save", side_effect=RuntimeError("synthetic stale source")
+            ):
+                action.invoke()
+            check(
+                not review._filter_rows_active
+                and settings_path(root).read_bytes() == baseline_settings
+                and pdic_path(page1).read_bytes() == baseline_pdic,
+                "failed R3 guarded save mutated setting or PDIC",
+            )
+
             # The real success path persists explicit options and executes
             # an OCR-free page filter. Old OCR caches remain un-attested.
-            review.focused_characters_var.set("synthetic")
             action.invoke()
             _pump_until(
                 app,

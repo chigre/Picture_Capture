@@ -121,16 +121,49 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         )
         return
 
-    # Commit changed preferences only after all requested filter conditions
-    # are valid and no human edit/save is outstanding. A refused scan has no
-    # user-settings side effects.
+    # A rejected first scan must not persist options or erase single-page
+    # edits. ReviewWindow paints its first crop asynchronously; R3 forbids a
+    # save until the real page/Entry/sidecar source snapshot has rendered.
+    # Never bypass R3 merely to make an early filter click succeed.
+    if not getattr(self, "_filter_rows_active", False):
+        current_page = getattr(self.parent, "current_page", None)
+        if (
+            current_page is None
+            or getattr(self, "_rendered_page_stem", "") != current_page.stem
+        ):
+            self.parent.status_var.set(
+                "本页校对尚未加载完成，请待词条显示后重新筛选。"
+            )
+            return
+    try:
+        int(self.focused_batch_size_var.get().strip())
+    except (ValueError, TypeError, AttributeError):
+        messagebox.showerror(
+            "筛选条件无效", "单批显示数量必须是整数。", parent=self
+        )
+        return
+    if not getattr(self, "_filter_rows_active", False):
+        try:
+            saved = self.save(redraw_main=False)
+        except (RuntimeError, OSError, ValueError):
+            # Source mismatch, recovery marker and file-write failures belong
+            # to R3. Keep the current editing surface and its settings as-is.
+            self.parent.status_var.set(
+                "本页保存失败或来源未通过验证，筛选已取消；请核对后重试。"
+            )
+            return
+        if saved is False:
+            self.parent.status_var.set(
+                "本页校对尚未保存完成，筛选已取消。"
+            )
+            return
+    # Persist filter options only after a successful R3-protected save,
+    # valid options and no outstanding focused human edit.
     try:
         self._persist_focused_filter_settings()
     except Exception as exc:
         messagebox.showerror("筛选条件无效", str(exc), parent=self)
         return
-    if not getattr(self, "_filter_rows_active", False):
-        self.save(redraw_main=False)
     self.review_mode_var.set("filter")
     self._filter_rows_active = True
     self._set_filter_navigation(True)

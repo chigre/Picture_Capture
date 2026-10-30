@@ -181,3 +181,51 @@ def test_changed_origin_sidecar_during_snapshot_invalidates_whole_page(monkeypat
     assert [row["original_word"] for row in result] == ["word0", "word1"]
     assert all(row is old for row, old in zip(result, targets))
     assert origin.read_bytes() == old_bytes + b" "
+
+
+def test_unready_native_source_refuses_before_settings_or_save():
+    review, deps, parsed, persisted, statuses, messages = _guard_review(
+        active=False, saving=False, pending=False,
+    )
+    review.focused_characters_var.set("valid")
+    deps._focused_review_character_tokens = lambda text: [text]
+    review.parent.current_page = Path("/tmp/synthetic/001.png")
+    review._rendered_page_stem = ""
+    review.focused_batch_size_var = Var("20")
+    saves = []
+    review.save = lambda **kw: saves.append(kw) or True
+    owner.run_focused_filter(review, deps)
+    assert parsed == ["1"] and persisted == [] and saves == []
+    assert "加载" in statuses[-1]
+
+
+def test_failing_r3_guarded_save_refuses_without_persisting_filter_settings():
+    review, deps, parsed, persisted, statuses, messages = _guard_review(
+        active=False, saving=False, pending=False,
+    )
+    review.focused_characters_var.set("valid")
+    deps._focused_review_character_tokens = lambda text: [text]
+    review.parent.current_page = Path("/tmp/synthetic/001.png")
+    review._rendered_page_stem = "001"
+    review.focused_batch_size_var = Var("20")
+    review.save = lambda **kw: (_ for _ in ()).throw(
+        RuntimeError("synthetic blocked R3 source")
+    )
+    owner.run_focused_filter(review, deps)
+    assert parsed == ["1"] and persisted == []
+    assert "保存失败" in statuses[-1]
+
+
+def test_refused_r3_false_save_is_not_treated_as_success():
+    review, deps, parsed, persisted, statuses, messages = _guard_review(
+        active=False, saving=False, pending=False,
+    )
+    review.focused_characters_var.set("valid")
+    deps._focused_review_character_tokens = lambda text: [text]
+    review.parent.current_page = Path("/tmp/synthetic/001.png")
+    review._rendered_page_stem = "001"
+    review.focused_batch_size_var = Var("20")
+    review.save = lambda **kw: False
+    owner.run_focused_filter(review, deps)
+    assert parsed == ["1"] and persisted == []
+    assert "未保存" in statuses[-1]
