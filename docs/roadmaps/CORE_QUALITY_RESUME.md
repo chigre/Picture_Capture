@@ -1,3 +1,13 @@
+## 2026-10-30｜G3 R4.2 只读来源证据与默认 OFF 的稳定队列（最新接力）
+
+[Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) 当前以 `c6426614e112e0d8bc7a4d80aae941575e301b47` 全绿作为 R4.1 E2 基线：CI 六平台 6/6 + Risk-tier、OCR 3OS 3/3、CodeQL Python/Actions 2/2 成功。R4.1 不是人工真值分类。
+
+本轮先提交测试 `c155a8dda3cf032b43e93ba396fcc2ba7b2d8dff`，Ubuntu 预期缺少模块导致 red；再提交生产 `898d90261727b3c5515cba43e5255b294e7135df`：新增 `proofreading/review_risk_queue.py`，只读检查 OCR/PDIC 实际 SHA-256、候选ID和原图X/Y唯一归属、SECTION sidecar 版本指纹与几何 SECTION 来源，同时提供只按原始页与连续 SECTION 段内稳定排序的函数，默认 OFF。缺少独立**来源时** witness 的老缓存一律 unknown；不能在校对时自行生成证据冒充来源。**尚未接线 Tk、尚未建立持久化来源证明，也不产生真实界面优先队列。** 保留原重点筛选、批次导航、Undo/Redo、用户所有文件与主分支不变。
+
+**恢复动作：**源 [CI #41059425448](https://github.com/chigre/Picture_Capture/actions/runs/41059425448)、[OCR #41059425445](https://github.com/chigre/Picture_Capture/actions/runs/41059425445)、CodeQL Python/Actions 要确认 exact SHA 6+3+2+Risk 全绿；本段提交时源 Ubuntu py3.13、OCR 3/3、Risk 成功，其余 pending。再检查最新文档 HEAD 的全部 CI。随后单独研究可靠来源时 witness 的可选采集、SECTION geometry、界面明确 OFF 开关与 worker cancellation，不可直接对所有旧缓存排序。Windows R3 E3、#483 W1–W11 仍 NOT PERFORMED；R6 标签、R8 真实扫描 blocked；#663 仍 Draft 不合并。
+
+---
+
 ## G3 R5.2 exact E2 + R4.1 fail-closed triage（2026-10-30）
 
 R5.2 `11aa70a0a9327b7bac6080f863aa212da1af27de` 已核实 [CI 40968076780](https://github.com/chigre/Picture_Capture/actions/runs/40968076780) 六平台+Risk-tier、[OCR 40968076632](https://github.com/chigre/Picture_Capture/actions/runs/40968076632) 三平台、[CodeQL 40968072905](https://github.com/chigre/Picture_Capture/actions/runs/40968072905) Python/Actions 全部 SUCCESS，仅合成 E2。R4.1 红先行 `c3caec35` 预期 ModuleNotFoundError；源码 `460383db864663854905e7f8d2dd1abd665e26ca` 增加只读 `proofreading/review_risk.py`：需独立核验 OCR+PDIC SHA、project/page/SECTION、唯一 source XY，才输出 priority/normal，否则 unknown。源 [CI 40971810563](https://github.com/chigre/Picture_Capture/actions/runs/40971810563)、[OCR 40971810731](https://github.com/chigre/Picture_Capture/actions/runs/40971810731)、[CodeQL 40971805624](https://github.com/chigre/Picture_Capture/actions/runs/40971805624) 及最终文档 HEAD 必须核实结论。R4.2 UI 尚未接入，默认排序不变。详见 [R4 来源审计](../architecture/G3_R4_PROVENANCE_REVIEW_TRIAGE_20261030.md)。PR #663 唯一 Draft/Open/Unmerged；main 不变；Windows R3 E3、#483 W1–W11 **NOT PERFORMED**；无 R6 训练或真实扫描基准。
