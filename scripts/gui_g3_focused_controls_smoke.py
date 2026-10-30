@@ -205,6 +205,39 @@ def run():
                   "pending human edit vanished during blocked Tk re-filter")
             review._filter_pending_changes.clear()
 
+            # Native Tk invalid batch-size refusal during an active focused
+            # epoch must not advance its serial, clear the current results,
+            # persist newly unchecked options, or rewrite saved PDIC.
+            # Exercise the actual button/error callback rather than bypassing
+            # UI validation with a direct model invocation.
+            pre_invalid_epoch = review._filter_scan_serial
+            pre_invalid_targets = review.filtered_targets
+            pre_invalid_settings = settings_path(root).read_bytes()
+            pre_invalid_pdic = pdic_path(page1).read_bytes()
+            previous_batch_text = review.focused_batch_size_var.get()
+            review.focused_batch_size_var.set("not-an-integer")
+            batch_errors = []
+            with patch.object(
+                module.messagebox, "showerror",
+                side_effect=lambda title, *_a, **_kw: batch_errors.append(title),
+            ):
+                action.invoke()
+            review.update()
+            check(batch_errors == ["筛选条件无效"],
+                  "native Tk invalid batch size was not rejected")
+            check(
+                review._filter_scan_serial == pre_invalid_epoch
+                and review.filtered_targets is pre_invalid_targets
+                and review._filter_rows_active,
+                "invalid batch size replaced the active filter epoch",
+            )
+            check(
+                settings_path(root).read_bytes() == pre_invalid_settings
+                and pdic_path(page1).read_bytes() == pre_invalid_pdic,
+                "invalid batch size rewrote saved settings or PDIC",
+            )
+            review.focused_batch_size_var.set(previous_batch_text)
+
             # Switching all optional controls back OFF must require a
             # successful new filter epoch, not retain stale ON preferences.
             # This also exercises a second native async scan after a
