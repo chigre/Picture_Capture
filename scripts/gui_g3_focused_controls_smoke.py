@@ -33,9 +33,11 @@ def find_controls(parent, label):
     while pending:
         current = pending.pop()
         for child in current.winfo_children():
-            if isinstance(child, ttk.Button) or isinstance(child, ttk.Checkbutton):
-                if label in str(child.cget("text")):
+            if label == "筛选":
+                if isinstance(child, ttk.Button) and str(child.cget("text")) == label:
                     matches.append(child)
+            elif isinstance(child, ttk.Checkbutton) and label in str(child.cget("text")):
+                matches.append(child)
             pending.append(child)
     check(len(matches) == 1, f"expected one native Tk control for {label!r}, got {len(matches)}")
     return matches[0]
