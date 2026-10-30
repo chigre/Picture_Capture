@@ -22,7 +22,7 @@ from picture_capture.proofreading.review_risk_queue import review_risk_from_file
 
 def setup_files(tmp_path, *, duplicates=False):
     project = tmp_path / "project"
-    project.mkdir()
+    project.mkdir(parents=True)
     page = project / "p001.png"
     page.write_bytes(b"synthetic image placeholder")
     cache = project / "QT" / "PaddleOCR" / "p001.json"

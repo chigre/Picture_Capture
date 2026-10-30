@@ -225,6 +225,23 @@ def detect_pages(self, indices: list[int], *, method: str, force_refresh: bool, 
                 )
             except (OSError, ValueError, TypeError) as exc:
                 result["final_audit_error"] = f"{type(exc).__name__}: {exc}"
+        # Optional R4 source-time attestation: only after successful PDIC write
+        # and final-audit attempt. Never synthesize this at review/open time.
+        if (
+            method in {"paddleocr", "combined"}
+            and cache_path is not None
+            and settings.focused_review_risk_witness_capture
+        ):
+            try:
+                from ..proofreading.review_risk_witness_storage import (
+                    publish_review_risk_witnesses,
+                )
+                result["review_risk_witnesses"] = publish_review_risk_witnesses(
+                    project_root=project.root, page=page,
+                    cache_path=cache_path, pdic_path=saved_pdic,
+                )
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
+                result["review_risk_witness_error"] = f"{type(exc).__name__}: {exc}"
         if method in {"paddleocr", "combined"} and settings.ocr_resume_completed_pages:
             if not resume_dependencies:
                 # A forced OCR rerun bypasses prior checkpoints but still

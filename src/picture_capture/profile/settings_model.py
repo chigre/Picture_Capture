@@ -297,6 +297,8 @@ class AppSettings(metaclass=_AppSettingsMeta):
     focused_review_exclude_reference_words: bool = False
     focused_review_characters: str = "椿,彝,壯,鳥,傅,顔,彝,榖,歴,内,脱,書,鳴"
     focused_review_batch_size: int = 20
+    # Opt-in post-PDIC R4 source witness; does not enable risk ordering/UI.
+    focused_review_risk_witness_capture: bool = False
     # Auxiliary headword reference list used by the review window and main-view membership styling.
     # Relative paths are resolved from the project root; absolute paths are also supported.
     wordslist_path: str = "wordslist.txt"
