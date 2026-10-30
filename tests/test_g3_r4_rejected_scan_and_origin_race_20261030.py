@@ -89,6 +89,16 @@ def _guard_review(*, active=True, saving=False, pending=True, include_chars=Fals
             showinfo=lambda *a, **kw: messages.append(("info", a)),
         ),
         _focused_review_character_tokens=lambda _: [],
+        # The physical owner resolves live dependencies before rejecting a
+        # scan. Supply the full set, so this test observes the real guard.
+        read_pdic=lambda *args: [],
+        pdic_path=lambda *args: None,
+        ocr_cache_root=lambda *args: None,
+        json=json,
+        _focused_review_is_single_character=lambda *args: False,
+        _candidate_for_entry_from_list=lambda *args, **kw: None,
+        _candidate_word_for_ocr_source=lambda *args: "",
+        _review_similarity_key=lambda value: value,
     )
     return review, deps, parsed, persisted, statuses, messages
 
