@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 真实 Tk 输入框＋受控后台保存中的撤回测试（合成 E2 待最终 HEAD 核验）
+
+- 继续唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)，`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 未动。上一组异步撤回来源指纹修复最终 `ea66f9009815d322d7d29dced90dafc9596e4ce8` [CI #41177039367](https://github.com/chigre/Picture_Capture/actions/runs/41177039367) **6/6+Risk SUCCESS**、[OCR #41177039325](https://github.com/chigre/Picture_Capture/actions/runs/41177039325) **3/3 SUCCESS**、[CodeQL #41177036541](https://github.com/chigre/Picture_Capture/actions/runs/41177036541) **2/2 SUCCESS**（纯合成 E2）。
+- 测试-only `1c45f308f29064161ea8d850af10825ff43d07ca` 在已成功的 G3 native Tk GUI smoke 中增加第二条**真实 Tk→后台 worker**链：第一笔 PDIC worker 在测试专用 Event 门控暂缓物理写入，前台 StringVar 撤回到原词，释放后验证后台实际连续进行了两笔写入；最终磁盘 PDIC 字节恢复初始状态，主界面词条与原始 X/Y、原图/PPP/SECTION/设置均不变。门控 30s 超时并有 `finally` 释放；不生成真实词典标签、不改生产任何代码。
+- 源 [CI #41177444432](https://github.com/chigre/Picture_Capture/actions/runs/41177444432) macOS Python3.13 `5027 passed/2 skipped` 且新 native Tk in-flight reversion 实际输出 OK；其他 OS 和 Python3.10 当时待执行；[OCR #41177444434](https://github.com/chigre/Picture_Capture/actions/runs/41177444434) 3/3 SUCCESS；[CodeQL #41177440534](https://github.com/chigre/Picture_Capture/actions/runs/41177440534) 当时待终核。手册：[G3_R4_2_INFLIGHT_REVERSION_SOURCE_20261031.md](../architecture/G3_R4_2_INFLIGHT_REVERSION_SOURCE_20261031.md)。**docs HEAD 必须另核 exact-head CI/Risk/OCR/CodeQL**，不可将源 HEAD 绿灯转用于文档。
+- 真人 Windows R3 E3、#483 W1–W11、#503 Undo/Redo、G3 实页/真实 TIFF 大图性能 **NOT PERFORMED**；R6 人工标签、R8 真实扫描 **DEFERRED**。不 Ready、不合并、不关 issue、不碰 main。
+
 ## 2026-10-31｜G3 R4.2 后台保存过程中撤回词条：来源指纹与二次保存归属（E2 待最终 HEAD 核验）
 
 - 唯一 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged；`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 未动。上轮「原生 Tk 拒绝→来源恢复→成功重试」最终 `65cdbb6a37f4416018fa90d3efe7af442edc2fcb` [CI #41175831057](https://github.com/chigre/Picture_Capture/actions/runs/41175831057) **6/6+Risk**、[OCR #41175831062](https://github.com/chigre/Picture_Capture/actions/runs/41175831062) **3/3**、[CodeQL #41175827419](https://github.com/chigre/Picture_Capture/actions/runs/41175827419) **2/2** 通过，仅合成 E2。
