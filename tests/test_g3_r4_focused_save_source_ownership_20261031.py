@@ -582,3 +582,116 @@ def test_two_page_late_writer_error_keeps_uncertain_edits_no_rollback(tmp_path):
     status = review.parent.status_var.get()
     assert "保存失败" in status and "已保留" in status
     assert "PRIVATE_" not in status + str(alerts)
+
+
+@pytest.mark.parametrize("change_after", ["page1_publication", "page2_publication"])
+@pytest.mark.parametrize("newer_second_edit", [False, True])
+def test_two_page_section_drift_after_preflight_keeps_uncertain_work(
+    tmp_path, change_after, newer_second_edit,
+):
+    """Do not mistake preflight for an atomic all-page disk transaction.
+
+    A SECTION change may happen after a first-page publication, or during
+    page-2 publication before its post-write source check. In both cases
+    the final worker result is uncertain; the failure callback must
+    preserve human edits without rolling back foreign disk state.
+    """
+    (p1, d1, t1), (p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
+    section2 = page_sections_read_path_for_image(p2)
+    before1, before2 = d1.read_bytes(), d2.read_bytes()
+    original_page2_section = section2.read_bytes()
+    # Word and source witnesses are captured from displayed crops, never
+    # manufactured from the disk after the edited SECTION has drifted.
+    first_display_witness = t1["_focused_save_source_witness"]
+    second_display_witness = t2["_focused_save_source_witness"]
+    writes, alerts = [], []
+    deps, error_alerts = _save_deps(p1, writes)
+    real_commit = deps._apply_focused_review_page_updates
+    change_count = []
+
+    def drift_second_page():
+        assert not change_count
+        _replace_without_metadata_change(section2, b'{"revision":"B"}')
+        change_count.append(1)
+
+    if change_after == "page1_publication":
+        def commit_after_first(page, pages, index, changes):
+            result = real_commit(page, pages, index, changes)
+            if index == 0:
+                drift_second_page()
+            return result
+        deps._apply_focused_review_page_updates = commit_after_first
+    else:
+        def write_then_change_section(path, entries, image_width, page_links):
+            writes.append(1)
+            published = write_pdic(path, entries, image_width, page_links)
+            if path == d2:
+                drift_second_page()
+            return published
+        physical_deps = FocusedPdicDeps(
+            pdic_path=pdic_path_for_image, read_pdic=read_pdic,
+            replace=replace, Image=Image,
+            _write_pdic_atomic=write_then_change_section,
+        )
+        def commit_with_post_write_check(page, pages, index, changes):
+            return apply_focused_review_page_updates(
+                page, pages, index, changes, deps=physical_deps
+            )
+        deps._apply_focused_review_page_updates = commit_with_post_write_check
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+
+    if newer_second_edit:
+        # A later human correction takes precedence over any old failed
+        # snapshot. The first page still needs conservative reconciliation.
+        t2["current_word"] = "edit-two-newer"
+        review._filter_pending_changes[1] = {
+            (3, 4): {
+                "page_index": 1, "x": 3, "y": 4,
+                "original_word": "old", "new_word": "edit-two-newer",
+                "_focused_save_source_witness": second_display_witness,
+            }
+        }
+
+    with pytest.raises(RuntimeError, match="(来源|变化|拒绝|SECTION)"):
+        worker()
+    assert change_count == [1]
+    assert writes == ([1] if change_after == "page1_publication" else [1, 1])
+    assert d1.read_bytes() != before1
+    assert read_pdic(d1)[0].word == "edit-one"
+    if change_after == "page1_publication":
+        assert d2.read_bytes() == before2
+    else:
+        # Source post-verification failure can follow a real second write;
+        # even then it is NOT a verified global success from the Tk view.
+        assert d2.read_bytes() != before2
+        assert read_pdic(d2)[0].word == "edit-two"
+    assert section2.read_bytes() != original_page2_section
+
+    failed(
+        RuntimeError("PRIVATE_CHANGED_SECTION_PAGE2_PATH"),
+        "PRIVATE_CHANGED_SECTION_PAGE2_TRACEBACK",
+    )
+    assert not review._filter_save_running
+    assert not review._filter_close_after_save
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "edit-one"
+    assert review._filter_pending_changes[1][(3, 4)]["new_word"] == (
+        "edit-two-newer" if newer_second_edit else "edit-two"
+    )
+    assert review._filter_pending_changes[0][(3, 4)][
+        "_focused_save_source_witness"
+    ] == first_display_witness
+    assert review._filter_pending_changes[1][(3, 4)][
+        "_focused_save_source_witness"
+    ] == second_display_witness
+    assert t1["original_word"] == t2["original_word"] == "old"
+    assert review.parent.entries[0].word == "old"
+    assert not alerts and len(error_alerts) == 1
+    status = review.parent.status_var.get()
+    assert "保存失败" in status and "已保留" in status
+    assert "PRIVATE_" not in status + str(error_alerts)
+    # No rollback of a possibly independently published PDIC file.
+    assert d1.read_bytes() != before1
+    assert section2.read_bytes() != original_page2_section
