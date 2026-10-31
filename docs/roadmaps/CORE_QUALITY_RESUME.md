@@ -1,3 +1,10 @@
+## 2026-10-31｜R3/#503 候选删除 Undo/Redo 已提交后的 Tk 状态刷新异常（红灯已实测，最终 HEAD 仍待验）
+
+- 上一基线 `683b06bed6fe0750ec94f6b4f65f2b89adda075a` 的 Windows/macOS/Ubuntu × Python3.10/3.13 CI **6/6 + Risk-tier gate 成功**，OCR **3/3**、CodeQL Python/Actions **2/2** 成功；仅合成 E2。
+- 新增测试提交 `8f528a4f4c991682833e85dda84840be5951f5ab`，在 [CI #41197223626](https://github.com/chigre/Picture_Capture/actions/runs/41197223626) Ubuntu Python3.13 **8 failed / 5168 passed / 3 skipped**、macOS Python3.13 **8 failed / 5169 passed / 2 skipped**；测试覆盖候选 Undo/Redo × 词条计数/页面行刷新 × RuntimeError/TclError。提交后 Tk 异常原可让已经写盘的重放帧未移动并暴露异常。红灯提交不等于验收。
+- 产品最小修复：`proofreading/candidate_history.py` 在权威 PDIC/manual/simplified bundle 与 Entry/candidate 确认后先完成 history stack 转移，再对派生页面状态/原生 Tk 回调做提交后异常隔离；原有源检查、原图 XY、持久化事务和默认设置不动。审计见 [R3_G1_CANDIDATE_POSTCOMMIT_TK_REFRESH_20261031.md](../architecture/R3_G1_CANDIDATE_POSTCOMMIT_TK_REFRESH_20261031.md)。
+- **最终代码/文档 HEAD 必须另核 exact-head CI 6/6＋Risk-tier、OCR 3/3、CodeQL Python/Actions 2/2。** 真人 Windows R3 E3、#483 W1–W11、#503 全复合 Undo/Redo、G3 真实扫描及性能均 NOT PERFORMED；R6 真标签、R8 真扫描 DEFERRED。唯一 #663 保持 Draft/Open/Unmerged，main 不动。
+
 ## 2026-10-31｜R3/#503 复合回放 Tk 行所有权 + 来源路径锁定 + 销毁控件 fail-closed（46 个自动化合成场景；最终 HEAD E2 待核）
 
 - **基准已验收** `e7a721bf83fdd85c274cdd824e78a2505877259a`：[CI #41194141243](https://github.com/chigre/Picture_Capture/actions/runs/41194141243) Windows/macOS/Ubuntu × Python3.10/3.13 六组合 6/6＋Risk-tier CI gate、[OCR #41194141209](https://github.com/chigre/Picture_Capture/actions/runs/41194141209) 3/3、[CodeQL #41194138864](https://github.com/chigre/Picture_Capture/actions/runs/41194138864) 2/2。唯一 Draft #663，main `ec20989e` 未变。

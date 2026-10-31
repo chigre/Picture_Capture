@@ -239,15 +239,24 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             pins.pop(expected.page.stem, None)
         getattr(review, "_simplified_dirty_pages", set()).discard(expected.page.stem)
         app._last_pdic_write_changed = True
+        # The owned PDIC/manual/simplified bundle and Entry/candidate models
+        # have already committed. Move the replay frame before any derived
+        # word-count/page-row refresh so an old frame cannot be replayed again
+        # if the Tk window was torn down after publication.
+        stack.pop()
+        (self.undo_stack if redo else self.redo_stack).append(frame)
         try:
             app._refresh_word_fill_check_from_line_count(
                 app.current_index, len(app.entries), persist=True,
             )
             app._update_page_row(app.current_index)
-        except (OSError, ValueError, AttributeError):
+        except Exception:
+            # This is only the post-commit derived status/UI refresh boundary.
+            # TclError/RuntimeError from destroyed Tk widgets (or a failed
+            # optional metadata refresh) must never turn a durable replay into
+            # an exposed private exception or an unadvanced history frame.
+            # The owned bundle writer and its precommit refusal are unchanged.
             pass
-        stack.pop()
-        (self.undo_stack if redo else self.redo_stack).append(frame)
         return True
 
 

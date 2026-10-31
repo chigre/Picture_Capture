@@ -2501,5 +2501,29 @@
     "R8_real_scans": "DEFERRED",
     "pr_663": "DRAFT_OPEN_UNMERGED",
     "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
+  },
+  "r3_g1_candidate_postcommit_tk_refresh_20261031": {
+    "status": "TEST_FIRST_EIGHT_TARGET_FAILURES_SEEN_PRODUCT_FIX_AND_AUDIT_COMMITTED_FINAL_EXACT_HEAD_GATES_PENDING",
+    "baseline_green_sha": "683b06bed6fe0750ec94f6b4f65f2b89adda075a",
+    "red_test_sha": "8f528a4f4c991682833e85dda84840be5951f5ab",
+    "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41197223626",
+    "observed_ubuntu_py313": "8 failed, 5168 passed, 3 skipped",
+    "observed_macos_py313": "8 failed, 5169 passed, 2 skipped",
+    "red_cases": "candidate undo/redo x word-count/page-row postcommit callback x RuntimeError/TclError",
+    "production": "src/picture_capture/proofreading/candidate_history.py",
+    "tests": "tests/test_r3_mixed_replay_membership_and_path_binding_20261031.py",
+    "audit": "docs/architecture/R3_G1_CANDIDATE_POSTCOMMIT_TK_REFRESH_20261031.md",
+    "change": "After durable owned-bundle publication and Entry/candidate reconciliation, advance replay stack before derived status/Tk refresh; contain only postcommit refresh exception to prevent false error/private path and stale frame.",
+    "final_exact_head_ci": "PENDING",
+    "final_exact_head_ocr": "PENDING",
+    "final_exact_head_codeql": "PENDING",
+    "human_windows_E3": "NOT_PERFORMED",
+    "issue_483_W1_W11": "NOT_PERFORMED",
+    "issue_503_composite": "NOT_PERFORMED",
+    "real_scan": "NOT_PERFORMED",
+    "R6_human_truth": "DEFERRED",
+    "R8_real_scans": "DEFERRED",
+    "pr_663": "DRAFT_OPEN_UNMERGED",
+    "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
   }
 }
