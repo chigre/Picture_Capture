@@ -295,3 +295,138 @@ def test_prefetch_worker_detects_source_change_during_crop(tmp_path):
     _worker_name, worker, _done, _failed = case.workers[0]
     with pytest.raises((OSError, ValueError)):
         worker()
+
+
+def _direct_case(tmp_path):
+    """Start an owned visible direct render with disposable real source sidecars."""
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_prefetch_key = None
+    case.review._request_filter_batch_render()
+    assert len(case.workers) == 2
+    assert case.workers[1][0].startswith("focused-filter-render-")
+    return case
+
+
+@pytest.mark.parametrize("source", ("image", "pdic", "section"))
+def test_direct_render_success_does_not_cache_source_drift(
+    tmp_path, source, capsys,
+):
+    case = _direct_case(tmp_path)
+    review = case.review
+    old_key = review._filter_batch_snapshot(1)[0]
+    _key, worker, done, _failed = case.workers[1]
+    payload = worker()  # Crop finished before disk changes and delayed Tk done.
+    page = case.images[1]
+    if source == "image":
+        replacement = tmp_path / "replacement.bmp"
+        Image.new("RGB", (8, 8), "red").save(replacement)
+        _same_size_replace(page, replacement.read_bytes())
+    elif source == "pdic":
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+    else:
+        _same_size_replace(
+            page_sections_read_path_for_image(page), b'{"revision":"B"}',
+        )
+    assert review._filter_batch_snapshot(1)[0] != old_key
+    done(payload)
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "重新筛选" in case.status.get()
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_direct_render_worker_rejects_source_drift_while_cropping(tmp_path):
+    case = _direct_case(tmp_path)
+    page = case.images[1]
+    original = case.deps.ReviewWindow._prepare_filter_batch_payload
+
+    def produce_after_drift(*args):
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+        return original(*args)
+
+    case.deps.ReviewWindow._prepare_filter_batch_payload = produce_after_drift
+    with pytest.raises((OSError, ValueError)):
+        case.workers[1][1]()
+    assert case.review._filter_batch_render_cache == {}
+
+
+@pytest.mark.parametrize("pending", ("edit", "save"))
+def test_direct_render_success_does_not_overwrite_human_or_inflight_save(
+    tmp_path, pending,
+):
+    case = _direct_case(tmp_path)
+    _key, worker, done, _failed = case.workers[1]
+    payload = worker()
+    if pending == "edit":
+        edits = {1: {(3, 4): {"new_word": "human"}}}
+        case.review._filter_pending_changes = edits
+    else:
+        case.review._filter_save_running = True
+    case.workspace.append("HUMAN_EDITOR")
+    done(payload)
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert case.review._filter_batch_render_cache == {}
+    if pending == "edit":
+        assert case.review._filter_pending_changes is edits
+        assert edits[1][(3, 4)]["new_word"] == "human"
+
+
+@pytest.mark.parametrize("pending", ("edit", "save"))
+def test_direct_render_failure_does_not_clear_human_or_inflight_save(
+    tmp_path, pending, capsys,
+):
+    case = _direct_case(tmp_path)
+    if pending == "edit":
+        edits = {1: {(3, 4): {"new_word": "human"}}}
+        case.review._filter_pending_changes = edits
+    else:
+        case.review._filter_save_running = True
+    case.workspace.append("HUMAN_EDITOR")
+    case.workers[1][3](OSError("PRIVATE_PAGE"), "PRIVATE_TRACE")
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert case.status.get() == "existing"
+    if pending == "edit":
+        assert case.review._filter_pending_changes is edits
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_direct_cached_payload_cannot_repaint_pending_human_edit(tmp_path):
+    case = _direct_case(tmp_path)
+    valid_key = case.review._filter_batch_snapshot(1)[0]
+    case.review._filter_batch_render_cache[valid_key] = (
+        [object()], 1.0, [(1, 1)],
+    )
+    edits = {1: {(3, 4): {"new_word": "human"}}}
+    case.review._filter_pending_changes = edits
+    case.workspace.append("HUMAN_EDITOR")
+    case.review._request_filter_batch_render()
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert edits[1][(3, 4)]["new_word"] == "human"
+
+
+def test_direct_render_stable_source_still_publishes_once(tmp_path):
+    case = _direct_case(tmp_path)
+    valid_key = case.review._filter_batch_snapshot(1)[0]
+    _key, worker, done, _failed = case.workers[1]
+    done(worker())
+    assert list(case.review._filter_batch_render_cache) == [valid_key]
+    assert len(case.applied) == 1
+    assert case.applied[0][0:2] == (1, valid_key)
+
+
+def test_direct_render_old_serial_success_cannot_publish(tmp_path):
+    case = _direct_case(tmp_path)
+    previous_key, old_worker, old_done, _old_failed = case.workers[1]
+    assert previous_key.startswith("focused-filter-render-")
+    case.review._request_filter_batch_render()
+    assert len(case.workers) == 3
+    old_done(old_worker())
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
