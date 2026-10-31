@@ -1,3 +1,10 @@
+## 2026-10-31｜R3/G3 筛选校对关闭时同步触发保存异常，安全拒绝（E2 exact-head 待核）
+
+- 此前最终 `f1d436be` 已**实际核实**：CI [#41185135896](https://github.com/chigre/Picture_Capture/actions/runs/41185135896) Windows/macOS/Ubuntu × Python3.10/3.13 **6/6**、Risk-tier gate SUCCESS，OCR [#41185135720](https://github.com/chigre/Picture_Capture/actions/runs/41185135720) **3/3**，CodeQL [#41185132099](https://github.com/chigre/Picture_Capture/actions/runs/41185132099) Python/Actions **2/2**。独立 Documentation architecture 作业 SKIPPED，不计成功。
+- 新发现同步边界：普通 ReviewWindow 关闭已经捕获脱敏异常，但筛选模式 `_flush_focused_changes_now()` 的同步异常原本可从 Tk 关闭回调传播。新增先测 `f6626b6b`（两种旧 close intent），保护用户未保存文本、窗口继续开启、禁止私有路径/词条异常泄露；生产最小修复 `8761355f` 捕获异常、清除旧自动关闭意图、只显示通用失败状态和弹窗。**不清空待提交人工作业，也不假设后台提交已成功或可回滚。**
+- 审计 `docs/architecture/G3_R4_2_SYNC_CLOSE_TRIGGER_FAIL_CLOSED_20261031.md`；红灯 [CI #41186527418](https://github.com/chigre/Picture_Capture/actions/runs/41186527418) 在撰写时进行中，需先实际核对而非声称已红。**本轮文档 HEAD 仍需核验 exact-head CI 6/6+Risk、OCR3/3、CodeQL2/2**，再可称自动化 E2 完成。
+- 唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged，`main@ec20989e` 不动；真人 Windows R3 E3、#483 W1–W11、#503 复杂 Undo/Redo、G3 真扫描和大图性能均 NOT PERFORMED。R6 人工真值和 R8 实扫均 DEFERRED，不 Ready / merge。
+
 ## 2026-10-31｜R3/G3 native Tk 完整异步等待条件硬化（旧 macOS 失败保留，待 exact HEAD 核验）
 
 - 生产关闭失败脱敏及未确认写入后取消旧 close intent：`fa2ec8377b9c118f7bb1a32d5aedc354dc8889b3` [CI #41183802964](https://github.com/chigre/Picture_Capture/actions/runs/41183802964) **6/6+Risk 已通过**；红灯 `7881848c` Ubuntu 4 targeted failed/5039 passed 是有效旧实现缺陷证明。
