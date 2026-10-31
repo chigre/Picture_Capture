@@ -172,4 +172,5 @@ def test_recovered_but_uncommitted_save_disarms_stale_close_intent():
     assert not closed and not dialogs
     assert review._filter_pending_changes[0][point]["new_word"] == "human-edit"
     assert not review._filter_close_after_save
+    assert "尚有未确认修改" in review.parent.status_var.get()
     assert not scheduled

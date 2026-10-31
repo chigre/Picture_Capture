@@ -16,8 +16,17 @@ def close_review(review: Any, *, showerror: Callable) -> None:
     try:
         if review.save() is False:
             return
-    except Exception as exc:
-        review.parent.status_var.set(f"校对保存失败，窗口保持打开：{exc}")
-        showerror("校对未保存", f"保存失败，校对窗口不会关闭。\\n{exc}", parent=review)
+    except Exception:
+        # Save errors can embed absolute patient-source paths, headwords, or
+        # private sidecar contents. A failed/uncertain save must keep the UI
+        # open, but must never surface the exception string to Tk or stdout.
+        review.parent.status_var.set(
+            "校对保存失败或状态未确认，窗口保持打开；请核对项目文件。"
+        )
+        showerror(
+            "校对未保存",
+            "保存失败或状态未确认，校对窗口不会关闭。请核对项目文件后重试。",
+            parent=review,
+        )
         return
     review._finish_close_review()

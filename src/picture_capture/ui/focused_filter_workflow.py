@@ -1414,9 +1414,10 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         # conflicts. Never drop that page's original human corrections or
         # overwrite edits made after this snapshot was dispatched.
         recovered = restore_unwritten(set(saved_map))
-        if conflicts:
-            # A pending close request must not survive a failed/conflicted
-            # write and silently close after some unrelated later autosave.
+        if conflicts or recovered:
+            # A close request belongs only to its fully confirmed save.
+            # Conflicts OR silently unwritten recovered rows must disarm it;
+            # otherwise a later unrelated autosave could close unexpectedly.
             self._filter_close_after_save = False
 
         current_index = int(self.parent.current_index)
@@ -1454,6 +1455,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         self.parent.status_var.set(
             f"筛选校对已保存 {len(saved)} 条修改"
             + (f"；{len(conflicts)} 条冲突" if conflicts else "")
+            + ("；尚有未确认修改，请核对后重试" if recovered else "")
         )
         if self._filter_pending_changes and not conflicts and not recovered:
             # Newer edits after a successful write can be serialized next.
