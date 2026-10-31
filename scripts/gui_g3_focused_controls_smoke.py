@@ -754,38 +754,61 @@ def run():
                 and review._filter_save_running,
                 "native positive close was not tied to the actual save worker",
             )
+            # Window destruction alone is not a physical-save oracle:
+            # unrelated main-app autosave/editor reconciliation may still
+            # be draining on the Tk event loop. Require five consecutive
+            # event pumps with *all* authoritative disk/source/Tk checks,
+            # not a transient status message or just an empty worker queue.
+            def final_source_checks():
+                try:
+                    final_fields = [
+                        line.split("#")
+                        for line in pdic_path(page1).read_text(
+                            encoding="utf-8"
+                        ).splitlines()
+                        if line.strip()
+                    ]
+                    return {
+                        "pdic_row_count": len(final_fields) == 2,
+                        "pdic_word": len(final_fields) >= 1
+                        and final_fields[0][0] == "synthetic-close-committed",
+                        "pdic_other_fields": len(final_fields) >= 1
+                        and final_fields[0][1:] == before_drift_rows[0][1:],
+                        "pdic_other_row": len(final_fields) >= 2
+                        and final_fields[1] == before_drift_rows[1],
+                        "main_entries": [(e.word, e.x, e.y) for e in app.entries]
+                        == [("synthetic-close-committed", 80, 76),
+                            ("synthetic-beta", 85, 182)],
+                        "ppp": ppp_read_path_for_image(page1).read_bytes() == before_ppp,
+                        "settings": settings_path(root).read_bytes() == before_settings,
+                        "section": (section_path.read_bytes()
+                                    if section_original is not None else None)
+                        == section_original,
+                        "images": [p.read_bytes() for p in (page1, page2)] == before_image,
+                        "no_ocr_origin": not origin.exists(),
+                    }
+                except (OSError, UnicodeError):
+                    # A transient file read during a concurrent save is not
+                    # proof of success; retry until stable or fail on timeout.
+                    return {"source_readable": False}
+
+            consecutive_complete = [0]
+            def verified_close_stable():
+                if (review.winfo_exists()
+                        or app.review_window is not None
+                        or not all(final_source_checks().values())):
+                    consecutive_complete[0] = 0
+                    return False
+                consecutive_complete[0] += 1
+                return consecutive_complete[0] >= 5
+
             _pump_until(
                 app,
-                lambda: not review.winfo_exists()
-                and app.review_window is None,
+                verified_close_stable,
                 seconds=35,
-                description="G3 native focused close after verified PDIC commit",
+                description="G3 native close and five stable source-owned PDIC/Tk observations",
             )
-            final_fields = [
-                line.split("#")
-                for line in pdic_path(page1).read_text(
-                    encoding="utf-8"
-                ).splitlines()
-                if line.strip()
-            ]
-            # Report only fixed synthetic outcome labels, never source paths
-            # or headwords, so cross-platform failures reveal *which* owner
-            # diverged without weakening any assertion.
-            final_checks = {
-                "pdic_word": final_fields[0][0] == "synthetic-close-committed",
-                "pdic_other_fields": final_fields[0][1:] == before_drift_rows[0][1:],
-                "pdic_other_row": final_fields[1] == before_drift_rows[1],
-                "main_entries": [(e.word, e.x, e.y) for e in app.entries]
-                == [("synthetic-close-committed", 80, 76),
-                    ("synthetic-beta", 85, 182)],
-                "ppp": ppp_read_path_for_image(page1).read_bytes() == before_ppp,
-                "settings": settings_path(root).read_bytes() == before_settings,
-                "section": (section_path.read_bytes()
-                            if section_original is not None else None)
-                == section_original,
-                "images": [p.read_bytes() for p in (page1, page2)] == before_image,
-                "no_ocr_origin": not origin.exists(),
-            }
+            final_checks = final_source_checks()
             check(
                 all(final_checks.values()),
                 "native successful focused close source ownership mismatch: "
