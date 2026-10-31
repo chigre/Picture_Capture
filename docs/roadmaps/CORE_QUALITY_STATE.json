@@ -4,7 +4,7 @@
   "plan_version": "1.3.0",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-10-31T10:49:00Z",
+  "updated_at_utc": "2026-10-31T11:24:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -24,7 +24,7 @@
   "current_state": {
     "status": "in_progress",
     "active_phase": "R3",
-    "active_work_item": "R3_G1_plain_record_complete_source_owner_chain_testfirst_E2_final_docs_head_pending_20261031",
+    "active_work_item": "R3_B3_mixed_plain_candidate_replay_Tk_owner_source_path_and_destroyed_UI_E2_final_docs_HEAD_pending_20261031",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,9 +43,9 @@
       ],
       "note": "Units R4/R5/R7 enumerated for future work only; NOT verified or necessarily implemented"
     },
-    "implementation_head_sha": "259f5f15a3b57948ed1c7d1c6659b90ed868cd41",
+    "implementation_head_sha": "1bdb41868e6f2d3ec6749c05e5f81e4681ed3999",
     "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
-    "last_completed_work_item": "R3_G1_plain_history_complete_source_provenance_E2_VERIFIED_20261031",
+    "last_completed_work_item": "R3_G1_plain_record_chain_complete_ownership_E2_VERIFIED_20261031",
     "blockers": [
       {
         "type": "r2_human_acceptance_pending",
@@ -58,7 +58,7 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Verify test-only 95b91b18 CI #41193829573 actual 5 targeted red Ubuntu/macOS and correct fix 259f5f15 + actual PDIC source-rebind integration 31864105. Then check exact final docs HEAD Windows/macOS/Ubuntu Python3.10/3.13 CI 6/6+Risk-tier gate, OCR 3/3, CodeQL Python/Actions 2/2, sole Draft/Unmerged #663, zero unresolved PR review threads and unchanged main ec20989e. No Ready/merge or human E3 claims.",
+    "required_next_action": "Check actual latest sole Draft PR #663 final exact docs HEAD CI Windows/macOS/Ubuntu Python3.10/3.13 6/6+Risk gate, OCR3/3, CodeQL Python/Actions2/2; inspect 46 newly added mixed candidate/plain replay tests and old reorder legacy Tk repaint test; native Tk G3 smoke; main ec20989e unchanged, zero unresolved review threads. Test-only f1338c18/094b885f intentionally RED, code repaired db16a6ee+ee90b3ed+1bdb4186; no E3/real data/merge/Ready claims.",
     "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed. G3 R5.1 red 9426de03 expected ModuleNotFoundError; source 33fbef91 six-platform CI found 1 test-only wrong assertion counting meta diagnostic; corrected source/tests f63d8805d54100adafb802ed2bedd1ff91dd226f. Exact source CI #40965305404 and OCR #40965305118 PENDING at docs authoring; no R5.1 E2 green claim, no R5.2 q implementation. R5.1 final docs/head 234870694bca285117deb6a863c11bd705f3891c: CI #40965627205 Windows/macOS/Ubuntu Python3.10/3.13 6/6, Risk-tier success, OCR #40965627204 3/3, CodeQL python+actions success. R5.2 red 5cd39dddc278553b10ded5d0efb57ff54f9375f3 absent module expected error; production source e57346968a48372a0cb633cc63c6fce8fe0f0db9 q extraction; #40967756737 full CI still pending, #40967756750 OCR 3/3 success, Risk-tier success at checkpoint; no R5.2 E2 verified claim. R4.1 exact final head c6426614e112e0d8bc7a4d80aae941575e301b47: six OS/Python CI 6/6, 3OS OCR 3/3, Risk-tier and CodeQL Python/Actions 2/2 successful. R4.2 red c155a8dda3cf032b43e93ba396fcc2ba7b2d8dff expected ModuleNotFoundError; source 898d90261727b3c5515cba43e5255b294e7135df CI #41059425448 pending at checkpoint, OCR #41059425445 3/3 success, Risk-tier success, source module read-only/default-OFF not Tk wired; E2 pending. R4.2 read-only source foundation final head f8d2d48acb68df3f11b83445d7ef2f0155ff8e99 CI #41059839013 6/6 and Risk-tier, OCR #41059838822 3/3, CodeQL 2/2 success. Red-first source-time witness a81075569ed32e2c4d4618cc1c4bfcf9d8e1ce66 expected missing-module failure in Ubuntu job 124092044094; source 2985eb6610aa54f070bf07eb919bf792678b6f67 CI #41064630984 pending as of authoring. Optional default OFF, no Tk queue. G3 R4.2 prior exact docs head b49d1ef181828f1699e2fc9e5304bac4cfb23d0c CI #41064932750 6/6 + Risk, OCR three OS and CodeQL Python+Actions successes (automated only). SECTION red cd7aa3f055515e0e3785c05ef8cedb36329dee66, source ffbe5ded4c8b4de6f8b47bc01a8045a259cd1332 Ubuntu py3.13 4961 passed 3 skipped, OCR 3/3, Risk succeeded, remaining CI and CodeQL pending. no Tk queue. R4.2 section source final doc head e60c59f9bb5a4a1656457f4e056c63986f5f39f6 six CI 6/6 + Risk, 3OS OCR 3/3, CodeQL 2/2 SUCCESS. R4.2 Tk queue red test 155727da9783178f8e9257e8e72a17682edb73df expected ModuleNotFoundError; source 9ac248699e05b1524ca56cbe24a8b06f2729a18c OCR 3/3 + Risk success; full CI E2 pending exact source/document HEAD. UI queue source 9ac248699e05b1524ca56cbe24a8b06f2729a18c had actual old regression AttributeError in test_issue562_focused_filter_save_owner_20261023.py; hotfix f7cba75de0dadb755b8eaa7505e39e31ce9f0f44 Ubuntu py3.13 4971 passed 3 skipped, OCR 3/3, Risk and CodeQL Python+Actions 2/2 successful; exact six-platform CI E2 still pending at checkpoint. R4.2 large batch red test a5414d69071a8c9fdb4e0d12fbb7f3939790f473 expected missing review_timing. Source af797e858a2795e41eb51b7f9a435b9c0d096f7e Ubuntu 3.13 pytest 4978 passed 3 skipped, Risk-tier+CodeQL 2/2 success, Windows OCR setup-uv 'Server Error' before tests, remaining jobs pending. Final doc head exact checks pending. R4.2 follow-up test-first 12fa0cd4bc800ab740e0cb148d6874698924ad31 red Ubuntu 6 failures (2 genuine missing invariants, 4 incomplete mock deps); production 691bcee0da9adc3b8a108ac737a2216ac03a5a9c source tests Ubuntu 4980 passed, 4 incomplete mock deps errors; corrected test-only 3252a949d615af1a819441778db2bd6c3f4f84c7 CI pending. G3 R4.2 actual Tk synthetic test c65f3fbbe7f3263b798d49846eb1e7a9a343816e CI test selector false positive, fixed e952f5737346f576e38b2ec163a2d65e2f6174e7; Mac/Windows native smoke passed but Ubuntu detected early R3 no source snapshot and 35s timeout. Source bd796fd73a2906d4e083fbd43ff83caacc57472d Ubuntu py3.13 4987 passed 3 skipped and actual Xvfb Tk synthetic smoke OK, OCR all3 success, others pending. No human E3.",
     "active_batch": "B3",
     "next_batch": "B4",
@@ -2429,7 +2429,7 @@
     "final_e2": "CI_6_OF_6_PLUS_RISK_OCR_3_OF_3_CODEQL_2_OF_2_VERIFIED"
   },
   "r3_g1_plain_record_chain_complete_ownership_20261031": {
-    "status": "TEST_FIRST_RED_SOURCE_FIX_AND_REAL_SNAPSHOT_INTEGRATION_COMMITTED_EXACT_DOCS_HEAD_E2_PENDING",
+    "status": "E2_VERIFIED_FINAL_HEAD_e7a721bf",
     "baseline_verified_sha": "e12ce5908a2c40a60a5fc6a1914160e42e0d8c94",
     "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41192253305",
     "test_only_sha": "95b91b183fe416c5cf287593c49d3853484dc179",
@@ -2452,6 +2452,50 @@
     "human_windows_E3": "NOT_PERFORMED",
     "issue_483_W1_W11": "NOT_PERFORMED",
     "issue_503_compound": "NOT_PERFORMED",
+    "real_scanned_G3": "NOT_PERFORMED",
+    "R6_human_labels": "DEFERRED",
+    "R8_real_scans": "DEFERRED",
+    "pr_663": "DRAFT_OPEN_UNMERGED",
+    "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
+    "final_head": "e7a721bf83fdd85c274cdd824e78a2505877259a",
+    "final_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41194141243",
+    "final_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41194141209",
+    "final_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41194138864",
+    "final_e2": "CI_6_OF_6_PLUS_RISK_OCR_3_OF_3_CODEQL_2_OF_2_VERIFIED"
+  },
+  "r3_b3_compound_replay_tk_owners_and_source_paths_20261031": {
+    "status": "TEST_FIRST_RED_AND_IMPLEMENTATION_PLUS_AUDIT_COMMITTED_EXACT_FINAL_DOCS_HEAD_E2_PENDING",
+    "baseline_verified_sha": "e7a721bf83fdd85c274cdd824e78a2505877259a",
+    "test_initial_sha": "f1338c181e3590aa7c780b6cea22f153ca4fd693",
+    "initial_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41195919532",
+    "initial_red_ubuntu_py313": "22 failed, 5128 passed, 3 skipped",
+    "test_expanded_sha": "094b885fb34ecc6a1c46dec160bc9d5cb2a241da",
+    "expanded_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41196070214",
+    "expanded_red_ubuntu_py313": "30 failed, 5130 passed, 3 skipped",
+    "test_total_parametrized": 46,
+    "fixed_plain_sha": "db16a6ee78eb0a7f12cff89f8baa5783bf80d3a2",
+    "fixed_candidate_sha": "ee90b3ed1e904a12ff9220d98c985a9d7cb5fb7a",
+    "native_reader_test_sha": "7c2a960ce2986ea19e12ec03e9753be6cc388240",
+    "fixed_snapshot_reader_sha": "1bdb41868e6f2d3ec6749c05e5f81e4681ed3999",
+    "existing_test_repaint_contract_sha": "99aca482ade89aaa32006ab02ea832176e9dc682",
+    "source_modules": [
+      "src/picture_capture/proofreading/transactions.py",
+      "src/picture_capture/proofreading/candidate_history.py"
+    ],
+    "test_modules": [
+      "tests/test_r3_mixed_replay_membership_and_path_binding_20261031.py",
+      "tests/test_b3_review_session_transactions_20261015.py",
+      "tests/test_r3_plain_history_missing_sidecar_provenance_20261031.py"
+    ],
+    "audit": "docs/architecture/R3_COMPOUND_REPLAY_TK_BINDING_AND_PROVENANCE_20261031.md",
+    "cases": "4 old Tk row identity;4 post-commit setter exception;16 same-byte sidecar path rebound;4 unchanged source retry;8 precommit getter/bind errors;2 mixed compound sequence undo2/redo2;8 real snapshot Tk TclError/RuntimeError =46",
+    "scope_limits": "Synthetic E2 only; exact file transaction unchanged, UI source-old Entry Var pairing frozen, source resolver rebind refuses, failed read-only Tk snapshot returns None, post-commit presentation exception contained. Not simultaneous dirty multi-owner transaction or E3.",
+    "final_exact_head_ci": "PENDING",
+    "final_exact_head_ocr": "PENDING",
+    "final_exact_head_codeql": "PENDING",
+    "human_windows_E3": "NOT_PERFORMED",
+    "issue_483_W1_W11": "NOT_PERFORMED",
+    "issue_503_general_compound_dirty_ops": "NOT_PERFORMED",
     "real_scanned_G3": "NOT_PERFORMED",
     "R6_human_labels": "DEFERRED",
     "R8_real_scans": "DEFERRED",
