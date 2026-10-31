@@ -457,7 +457,89 @@ def run():
                 "native positive retry mutated PPP, settings, SECTION or original image",
             )
             check(not origin.exists(), "retry fabricated retroactive OCR provenance")
-            print("G3 R4.2 native Tk focused refusal + successful retry: OK", flush=True)
+
+            # Native Tk in-flight reversion race, with a real background
+            # worker and TWO actual PDIC publications. Bound only the
+            # source-owner writer entrypoint to hold the first background
+            # worker until the foreground editor is reverted. No source
+            # images or user-project paths are involved.
+            before_inflight = pdic_path(page1).read_bytes()
+            first_started = threading.Event()
+            allow_first = threading.Event()
+            worker_words = []
+            real_writer = module._apply_focused_review_page_updates
+
+            def gated_synthetic_writer(the_page, pages, index, changes):
+                worker_words.append(tuple(change["new_word"] for change in changes))
+                if len(worker_words) == 1:
+                    first_started.set()
+                    if not allow_first.wait(timeout=30):
+                        raise RuntimeError("synthetic Tk concurrency gate timed out")
+                return real_writer(the_page, pages, index, changes)
+
+            try:
+                with patch.object(
+                    module, "_apply_focused_review_page_updates",
+                    side_effect=gated_synthetic_writer,
+                ):
+                    review.filter_vars[0].set("synthetic-inflight-write")
+                    _pump_until(
+                        app,
+                        lambda: first_started.is_set()
+                        and review._filter_save_running,
+                        seconds=35,
+                        description="G3 native Tk first PDIC writer held in flight",
+                    )
+                    check(
+                        worker_words == [("synthetic-inflight-write",)]
+                        and pdic_path(page1).read_bytes() == before_inflight,
+                        "in-flight worker unexpectedly published before release",
+                    )
+                    # The original display-time text is restored in the
+                    # actual Tk StringVar while the first writer is blocked.
+                    # Its old pending edit legitimately vanishes; callback
+                    # must requeue it relative to the newly committed word.
+                    review.filter_vars[0].set("synthetic-native-retried")
+                    check(
+                        not review._filter_pending_changes
+                        and target["current_word"] == "synthetic-native-retried"
+                        and target["original_word"] == "synthetic-native-retried",
+                        "native in-flight reversion did not clear old pending edit",
+                    )
+                    allow_first.set()
+                    _pump_until(
+                        app,
+                        lambda: (
+                            len(worker_words) == 2
+                            and worker_words[-1] == ("synthetic-native-retried",)
+                            and not review._filter_save_running
+                            and not review._filter_pending_changes
+                            and target["original_word"] == "synthetic-native-retried"
+                            and pdic_path(page1).read_bytes() == before_inflight
+                        ),
+                        seconds=35,
+                        description="G3 native Tk reversion restored after two real PDIC saves",
+                    )
+            finally:
+                allow_first.set()
+
+            check(
+                worker_words
+                == [("synthetic-inflight-write",),
+                    ("synthetic-native-retried",)]
+                and [(e.word, e.x, e.y) for e in app.entries]
+                == [("synthetic-native-retried", 80, 76),
+                    ("synthetic-beta", 85, 182)]
+                and review.filter_vars[0].get() == "synthetic-native-retried"
+                and ppp_read_path_for_image(page1).read_bytes() == before_ppp
+                and settings_path(root).read_bytes() == before_settings
+                and (section_path.read_bytes() if section_original is not None else None)
+                == section_original
+                and [p.read_bytes() for p in (page1, page2)] == before_image
+                and not origin.exists(),
+                "native in-flight revert lost edit, modified sidecars, or changed source XY",
+            )
+            print("G3 R4.2 native Tk focused refusal + successful retry + in-flight reversion: OK", flush=True)
         finally:
             if review is not None:
                 review._filter_pending_changes.clear()
