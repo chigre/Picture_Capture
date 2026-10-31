@@ -1,3 +1,13 @@
+## 2026-10-31｜G3 R4.2 人工校对保存时的原图/SECTION 来源归属（test-first E2 待最终核验）
+
+- 唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged；`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 不变。前轮裁剪来源保护的最终 `5a0fca316497508442a19b71ac8cbe1dbd04a459` [CI #41168544144](https://github.com/chigre/Picture_Capture/actions/runs/41168544144) 六平台 **6/6 SUCCESS + Risk-tier**、[OCR #41168544148](https://github.com/chigre/Picture_Capture/actions/runs/41168544148) **3/3 SUCCESS**、[CodeQL #41168541671](https://github.com/chigre/Picture_Capture/actions/runs/41168541671) Actions/Python **2/2 SUCCESS**，仅自动化 E2。
+- 新 [Red-first CI #41170243020](https://github.com/chigre/Picture_Capture/actions/runs/41170243020)：测试-only `ee78e188667ee5967c99c4c479faa5f07e095898`；Ubuntu Python3.13 **9 expected failures/5005 pass/3 skip**、macOS Python3.10 **9 expected failures/5006 pass/2 skip**。确认已有裁剪可显示，但人工改字后原图/SECTION 改变时 PDIC 仍可能保存；原图同尺寸且原 mtime 恢复也能复现；缺来源不能 fail-closed；PDIC 读取后来源漂移无写前阻断。红灯是预期缺陷复现，不是通过门禁。
+- 生产 `1c6ec22930ab64fef94023b05cf57abddcddfacb`：在已校验的裁剪行绑定**原图+活动 SECTION**字节指纹（PDIC 不作为编辑时指纹，因正常写入会更新 PDIC）；改字排队携带该来源；后台保存所有页面先验来源，再由 PDIC 物理写入器在读取后、发布前和发布后复检。真实 filter 缺失/不一致来源拒绝写入，保留人工修改/较新同坐标修改；原有 R3/PDIC 原词/XY/8字段校验不削弱。
+- `5c0829f9d652f7f8072cc7bbc45e57ff8f43e8e6` 补充**第二页陈旧时第一页零写入**及**SECTION 原缺失→新增**两个合成负例。审计：[G3_R4_2_FOCUSED_SAVE_SOURCE_20261031.md](../architecture/G3_R4_2_FOCUSED_SAVE_SOURCE_20261031.md)。全部输入为合成 8×8 BMP + PDIC/SECTION，非真实词典。
+- **门禁截至本次文档编写**：更新后源 [CI #41170460022](https://github.com/chigre/Picture_Capture/actions/runs/41170460022) 仍进行中；[OCR #41170460039](https://github.com/chigre/Picture_Capture/actions/runs/41170460039) 三平台 3/3 SUCCESS；[PR/CodeQL #41170456823](https://github.com/chigre/Picture_Capture/actions/runs/41170456823) 仍进行中。**本 docs commit 产生新 HEAD，全部必需 exact-head 门禁需另行核验，绝不把 pending 说成 passed。**
+- 边界：按页面验证仅是文件字节快照乐观约束，不是跨页 OS 原子事务、无障碍全面安全保证；原图多次 SHA 读取增加 I/O，尚未真实大页性能测试。下一项是非破坏性的 Windows G3 操作验收准备/性能观察，不应再制造人工标签或扩大持久化格式。
+- 真人 Windows R3 E3、#483 W1–W11、#503 Undo/Redo、G3 真实词典 GUI/PDIC/PPP/SECTION/Profile 验收仍全部 **NOT PERFORMED**；R6 人工标签、R8 真实扫描 **DEFERRED**。不 Ready、不合并、不关闭 issues、不触及 main。
+
 ## 2026-10-31｜G3 R4.2 异步裁剪缓存的原图/PDIC/SECTION 内容漂移（test-first E2 待核）
 
 - 唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged；`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 不变。上个 checkpoint `659dcb90156c67701a71bc562f513b95b0c93d16` 的 [CI #41167212998](https://github.com/chigre/Picture_Capture/actions/runs/41167212998) 6/6 + Risk-tier、[OCR #41167213013](https://github.com/chigre/Picture_Capture/actions/runs/41167213013) 3/3、[CodeQL #41167207899](https://github.com/chigre/Picture_Capture/actions/runs/41167207899) Actions/Python 2/2 全部 SUCCESS，仅自动化 E2。
