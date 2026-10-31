@@ -1,3 +1,11 @@
+## 2026-10-31｜R3/G3 native Tk 完整异步等待条件硬化（旧 macOS 失败保留，待 exact HEAD 核验）
+
+- 生产关闭失败脱敏及未确认写入后取消旧 close intent：`fa2ec8377b9c118f7bb1a32d5aedc354dc8889b3` [CI #41183802964](https://github.com/chigre/Picture_Capture/actions/runs/41183802964) **6/6+Risk 已通过**；红灯 `7881848c` Ubuntu 4 targeted failed/5039 passed 是有效旧实现缺陷证明。
+- 原生 Tk 合成关闭集成的旧源 `40524a44` [CI #41183879358](https://github.com/chigre/Picture_Capture/actions/runs/41183879358)、初次等待修正 `60187066` [CI #41184236154](https://github.com/chigre/Picture_Capture/actions/runs/41184236154)、docs `3082cc56` [CI #41184611929](https://github.com/chigre/Picture_Capture/actions/runs/41184611929) **macOS 均曾失败**：分别是新 SECTION 拒绝结束、新未确认写入结束、旧 SECTION 恢复后保存重试；三个 await 均误用会被主应用自动保存覆盖的全局 `app.status_var` 文本。均如实留档，不能当成全绿。
+- `60187066`、`06b5e631` 已分别修正新关闭链路两个等待条件，`06b5e631` [CI #41184539224](https://github.com/chigre/Picture_Capture/actions/runs/41184539224) macOS **5044 passed/2 skipped** 且 native close OK。最新测试修正 `5b89b2ad` 将**此前遗留**的旧 SECTION 拒绝/正向保存两个等待改为 error callback+精确原始 XY 待保存内容、或 PDIC 物理字节变化+目标词条对齐；不降低写入保护。紧接 `1b632af3` 新增 AST 回归，禁止 G3 native Tk 的任何 `_pump_until` 依赖 `status_var`。
+- 新源码 [CI #41185041953](https://github.com/chigre/Picture_Capture/actions/runs/41185041953)、[OCR #41185041949](https://github.com/chigre/Picture_Capture/actions/runs/41185041949)、[CodeQL #41185039598](https://github.com/chigre/Picture_Capture/actions/runs/41185039598) 在文档编写时待完成；本 docs 更新 HEAD **仍需另核六平台CI+Risk、OCR3、CodeQL2**。完整审计：[G3_R4_2_REVIEW_CLOSE_FAIL_CLOSED_20261031.md](../architecture/G3_R4_2_REVIEW_CLOSE_FAIL_CLOSED_20261031.md)。
+- 唯一 Draft #663 Open/Unmerged，`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 不动，真人 Windows R3 E3、#483 W1–W11、#503 Undo/Redo、G3 真扫描与大图性能 NOT PERFORMED，R6/R8 真证据 DEFERRED。
+
 ## 2026-10-31｜R3/G3 关闭窗口 E2 跨平台 test oracle 修正（待最终 HEAD 核验）
 
 - 已通过有效红灯证明 `7881848c` 的普通关闭异常文本泄露（3 种模拟私有信息）和无确认提交后过期 close intent（1 项），Ubuntu [CI #41183577244](https://github.com/chigre/Picture_Capture/actions/runs/41183577244) 4 targeted failed、5039 pass；最小生产修复 `fa2ec837` [CI #41183802964](https://github.com/chigre/Picture_Capture/actions/runs/41183802964) **6/6 + Risk-tier gate SUCCESS**。
