@@ -1,3 +1,11 @@
+## 2026-10-31｜R3/#503 普通保存 Undo 历史的完整来源连续性（测试优先 5 个红灯已证，最终 E2 待核）
+
+- 承接最终已验收 `e12ce5908a2c40a60a5fc6a1914160e42e0d8c94`：[CI #41192253305](https://github.com/chigre/Picture_Capture/actions/runs/41192253305) Windows/macOS/Ubuntu × Python3.10/3.13 **6/6 + Risk-tier CI gate 通过**，[OCR #41192253252](https://github.com/chigre/Picture_Capture/actions/runs/41192253252) **3/3**，[CodeQL #41192249986](https://github.com/chigre/Picture_Capture/actions/runs/41192249986) **Python/Actions 2/2**；单 Draft PR #663，main 保持 `ec20989e`。
+- 普通 `ReviewSessionHistory.record` 在新保存之前仅比较前次保存与本次保存的部分字节和 owner_id，漏掉 `page` 与 `manual_path/ocr_path/section_path/profile_path`。不同来源的文件即便字节碰巧相同，也不应把旧 Undo frame 继续串到本次合法保存上；此前候选删除历史已使用完整 `_same_live_state`。
+- **真实红灯：** 测试先行 `95b91b183fe416c5cf287593c49d3853484dc179` [CI #41193829573](https://github.com/chigre/Picture_Capture/actions/runs/41193829573)：Ubuntu Python3.13 **5 failed / 5114 passed / 3 skipped**，macOS Python3.13 **5 failed / 5115 passed / 2 skipped**，五项失败均为旧 Undo frame 跨不同页面或来源路径未清除；同源连续多级历史正控通过。
+- 最小修复 `259f5f15a3b57948ed1c7d1c6659b90ed868cd41`：普通 record 与候选历史共用 `_same_live_state(previous.after, before)`，来源路径、对象 ID、快照数据不一致时只丢弃旧历史，但仍记录新的独立合法保存。测试 `318641056c69a5370bf03bdf68cd33ed560722e2` 追加真实 `write_pdic` / `snapshot_review` 下人工覆盖路径、OCR 路径、Profile 项目根路径更换 3 项集成场景。详情见 [R3_G1_PLAIN_RECORD_CHAIN_COMPLETE_OWNER_20261031.md](../architecture/R3_G1_PLAIN_RECORD_CHAIN_COMPLETE_OWNER_20261031.md)。
+- 只改内存 Undo 历史连续性，未修改磁盘事务/缓存写入、Entry XY、OCR/PDIC/SECTION/Profile 格式或门禁。**最终 docs HEAD 需独立证明 6/6 CI＋Risk、3/3 OCR、CodeQL Python/Actions 2/2**；真人 Windows E3、#483 W1–W11、#503 全复合事务、真实扫描及大图、R6/R8 均 NOT PERFORMED/DEFERRED；保留唯一 Draft #663，不 Ready、不 merge。
+
 ## 2026-10-31｜R3/#503 普通文字 Undo/Redo 全来源失效防护（测试优先红灯已证，E2 最终 HEAD 待核）
 
 - **承接已验收 HEAD `2f303379fae26906ac2674ff152139bc97dbb499`**：[CI #41191029305](https://github.com/chigre/Picture_Capture/actions/runs/41191029305) 六 OS/Python 组合 6/6＋Risk-tier gate、[OCR #41191029324](https://github.com/chigre/Picture_Capture/actions/runs/41191029324) 3/3、[CodeQL #41191026786](https://github.com/chigre/Picture_Capture/actions/runs/41191026786) Python/Actions 2/2；实际源码与 ReviewWindow native Tk G3 合成 E2 均成功。唯一 #663 Draft/Open/Unmerged，main `ec20989e` 未变。
