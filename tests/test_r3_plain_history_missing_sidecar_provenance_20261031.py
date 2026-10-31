@@ -51,8 +51,21 @@ def _frozen_session(tmp_path: Path, monkeypatch):
     history = tx.ReviewSessionHistory()
     history.undo_stack.append(tx.SavedEdit(snap, snap))
     review = SimpleNamespace(
-        parent=SimpleNamespace(current_page=page),
+        parent=SimpleNamespace(
+            current_page=page,
+            project=SimpleNamespace(root=tmp_path),
+            _manual_selection_path=lambda: paths["manual"],
+            _paddle_cache_path=lambda: paths["ocr"],
+        ),
     )
+    # Pin the synthetic source resolvers too: the new path-identity
+    # diagnostic must distinguish a real unchanged Tk retry from a
+    # reselected sidecar with byte-identical contents.
+    monkeypatch.setattr(
+        tx, "page_sections_read_path_for_image",
+        lambda _page: paths["section"],
+    )
+    monkeypatch.setattr(tx, "profile_path", lambda _root: paths["profile"])
     # A synthetic delayed native Tk rebind: no live snapshot can be taken.
     monkeypatch.setattr(tx, "snapshot_review", lambda *_args, **_kw: None)
     monkeypatch.setattr(tx, "sha256_file", lambda _path: snap.image_sha)
