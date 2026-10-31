@@ -1,3 +1,10 @@
+## 2026-10-31｜G3/R3 native Tk 稳定物理读回验证：旧 macOS 失败保留，五次事件循环所有者一致性（E2 最终 HEAD 待验）
+
+- 同步回调修复 `3ed584a5` 的源 CI [#41190137992](https://github.com/chigre/Picture_Capture/actions/runs/41190137992) 六组合 6/6 全通过。测试优先 `140d981d` 的 Ubuntu/macOS Python3.13 均有 **6 项真实目标失败**，证实未确认的 inline done/failed 能提前关闭／重复错误弹窗；后续产品回调确认屏障保留全部人工更正。
+- 原生 Tk 扩展提交 `9408c31d` [CI #41190240419](https://github.com/chigre/Picture_Capture/actions/runs/41190240419) **attempt 1 macOS Python3.13 G3 最后多文件一致性断言失败**（pytest 5086 passed，2 skipped；其他 Tk smoke 通过），明确不得把该失败当成功。相同 SHA 该失败作业独立重跑 **attempt 2 成功**，证明间歇性；不认为这等同于真实人工 E3。逐项诊断 `149ea7bc` [CI #41190551568](https://github.com/chigre/Picture_Capture/actions/runs/41190551568) 六 OS/Python CI 6/6＋Risk、OCR3/3、CodeQL2/2 成功，没有任何数据所有权放宽。
+- 纯测试等待修正 `1e89f4c15364eba071cf7bf9d5b76bc513714d50`：原 G3 native Tk 关闭后不再只等待窗口销毁，而是连续五次 Tk 事件循环确认实际 PDIC 全八字段/原始 XY、主 Entry、PPP、SECTION、settings、原图及 OCR 来源均满足原有等式，防止后台 UI 异步完成与测试采样竞态；永久不一致仍超时失败，不能以主窗口 `status_var` 文本替代权威状态。审计见 [G3_R4_2_SYNCHRONOUS_WORKER_CALLBACK_HANDOFF_20261031.md](../architecture/G3_R4_2_SYNCHRONOUS_WORKER_CALLBACK_HANDOFF_20261031.md)。
+- **本最终文档 HEAD 仍需核实 exact SHA 六组合 CI 6/6＋Risk、OCR3/3、CodeQL Python/Actions2/2；旧绿灯不可替代最新 HEAD。** main `ec20989e` 保持不变，唯一 Draft #663 Open/Unmerged、0 unresolved reviews（需再核）。真人 Windows R3 E3、#483 W1–W11、#503 复合 Undo/Redo、真实词典扫描性能、R6 人工标签与 R8 真实扫描仍未做／延后；不 Ready、不合并、不关闭 issue。
+
 ## 2026-10-31｜G3/R3 调度器同步回调先于确认返回：单次结果所有权（合成 E2 最终 HEAD 待核）
 
 - 基准 `1f6d85dd90ad3d9712033efdc7f3516a955bb2d1` 上已实际验证 [CI #41188843977](https://github.com/chigre/Picture_Capture/actions/runs/41188843977) 六组合 6/6 + Risk-tier CI gate、[OCR #41188843994](https://github.com/chigre/Picture_Capture/actions/runs/41188843994) 3/3、[CodeQL #41188841943](https://github.com/chigre/Picture_Capture/actions/runs/41188841943) Python/Actions 2/2，全绿；main `ec20989e` 不动，唯一 Draft PR #663。
