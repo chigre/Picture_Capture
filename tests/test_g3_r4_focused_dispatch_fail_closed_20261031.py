@@ -328,3 +328,111 @@ def test_rejected_launch_stale_callback_cannot_mutate_a_later_retry(
     assert status.get() == status_before
     assert len(alerts) == dialogs_before
     assert not closed
+
+
+@pytest.mark.parametrize("old_close_intent", [False, True])
+@pytest.mark.parametrize("early_callback", ["done", "failed"])
+def test_synchronous_completion_then_launch_exception_cannot_close_or_double_alert(
+    tmp_path, capsys, old_close_intent, early_callback,
+):
+    """No worker completion may be accepted until launch returns normally."""
+    review, deps, alerts, closed, status, pages = _review(
+        tmp_path, close_intent=old_close_intent
+    )
+    review.parent.current_index = 0
+    review.parent.entries = []
+    original_bytes = pages[0].read_bytes()
+    sentinel = "PRIVATE_EARLY_CALLBACK_C:/dictionary/private-entry.pdic"
+
+    def scheduler(_key, _worker, done, failed, **_options):
+        if early_callback == "done":
+            # This is an unacknowledged callback, not a disk proof.
+            done(([(0, 10, 20, "human-0")], []))
+        else:
+            failed(OSError(sentinel), sentinel)
+        raise OSError(sentinel)
+
+    review.parent._start_ui_worker = scheduler
+    workflow._flush_focused_changes(review, deps)
+
+    assert not closed
+    assert review._filter_save_launch_failed is True
+    assert review._filter_save_running is False
+    assert review._filter_close_after_save is False
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+    assert review.filtered_targets[0]["original_word"] == "old-0"
+    assert pages[0].read_bytes() == original_bytes
+    assert len(alerts) == 1, "ambiguous launch must display one generic refusal"
+    exposed = repr((alerts, status.messages, capsys.readouterr()))
+    assert sentinel not in exposed
+    assert "Traceback" not in exposed
+
+
+@pytest.mark.parametrize("first", ["done", "failed"])
+def test_accepted_dispatch_is_single_terminal_callback_even_if_scheduler_duplicates(
+    tmp_path, first,
+):
+    """Once the scheduler acknowledges a launch, first completion owns it."""
+    review, deps, alerts, closed, status, _pages = _review(
+        tmp_path, close_intent=True
+    )
+    review.parent.current_index = 0
+    review.parent.entries = []
+    callbacks = []
+
+    def scheduler(_key, _worker, done, failed, **_options):
+        callbacks.append((done, failed))
+        # Simulate a callback from a synchronous compatibility scheduler.
+        if first == "done":
+            done(([(0, 10, 20, "human-0")], []))
+        else:
+            failed(OSError("PRIVATE_SYNCHRONOUS_FAILURE"), "PRIVATE_DETAIL")
+
+    review.parent._start_ui_worker = scheduler
+    workflow._flush_focused_changes(review, deps)
+    assert len(callbacks) == 1
+    done, failed = callbacks[0]
+
+    if first == "done":
+        assert review.filtered_targets[0]["original_word"] == "human-0"
+        assert closed == [True]
+        assert alerts == []
+        # A duplicate/conflicting callback cannot reopen save state or alert
+        # after this exact accepted source was processed.
+        done(([(0, 10, 20, "human-0")], []))
+        failed(OSError("PRIVATE_LATE_DUPLICATE"), "PRIVATE_DETAIL")
+        assert closed == [True]
+        assert alerts == []
+    else:
+        assert closed == []
+        assert len(alerts) == 1
+        assert review.filtered_targets[0]["original_word"] == "old-0"
+        assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+        done(([(0, 10, 20, "human-0")], []))
+        failed(OSError("PRIVATE_SECOND_FAILURE"), "PRIVATE_DETAIL")
+        assert review.filtered_targets[0]["original_word"] == "old-0"
+        assert len(alerts) == 1
+        assert closed == []
+    assert review._filter_save_running is False
+
+
+def test_successfully_acknowledged_inline_empty_callback_does_not_leave_worker_hung(
+    tmp_path,
+):
+    review, deps, alerts, closed, status, _pages = _review(tmp_path)
+    review.parent.current_index = 0
+    review.parent.entries = []
+
+    def scheduler(_key, _worker, done, failed, **_options):
+        done(([], []))
+        # A synchronous producer returns normally, acknowledging the callback.
+
+    review.parent._start_ui_worker = scheduler
+    workflow._flush_focused_changes(review, deps)
+
+    assert review._filter_save_running is False
+    assert review._filter_save_launch_failed is False
+    assert review._filter_close_after_save is False
+    assert not closed and not alerts
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+    assert "尚有未确认修改" in status.get()
