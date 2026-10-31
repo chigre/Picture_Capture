@@ -110,6 +110,7 @@ def test_invalid_rounds_does_not_run_or_write(tmp_path):
     result = _cli("--image", page, "--rounds", "0")
     assert result.returncode == 2
     assert not result.stdout.strip()
+    assert "Invalid benchmark configuration." in result.stderr
     assert (page.read_bytes(), pdic.read_bytes(), section.read_bytes()) == before
     assert page.name not in result.stderr
 
@@ -123,6 +124,8 @@ def test_symlink_image_refused_without_disclosing_target(tmp_path):
         pytest.skip("symlinks unavailable")
     result = _cli("--image", link, "--rounds", "1", "--warmups", "0")
     assert result.returncode == 2
+    assert "Cannot verify stable source files" in result.stderr
+    assert not result.stdout.strip()
     assert str(tmp_path) not in result.stderr
     assert link.name not in result.stderr
 
