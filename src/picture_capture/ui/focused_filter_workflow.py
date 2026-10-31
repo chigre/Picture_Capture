@@ -1503,19 +1503,50 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             parent=self,
         )
 
-    # Mark a new explicit launch attempt. Only a successfully returned
-    # scheduler handoff can reset a prior ambiguous-start refusal.
+    # A scheduler may synchronously invoke a completion callback and then
+    # still raise on launch. Buffer those callbacks until it returns normally:
+    # an unacknowledged launch cannot reconcile, close, or emit duplicate
+    # failure dialogs. Accept only one terminal callback for this dispatch.
+    launch_state = "pending"
+    early_completion = [None]
+    terminal_seen = [False]
+
+    def complete_launch(kind, payload) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
+        if launch_state == "rejected":
+            return
+        if launch_state == "pending":
+            if early_completion[0] is None:
+                early_completion[0] = (kind, payload)
+            return
+        if terminal_seen[0]:
+            return
+        terminal_seen[0] = True
+        if kind == "done":
+            done(payload)
+        else:
+            failed(*payload)
+
+    def accepted_done(payload) -> None:
+        complete_launch("done", payload)
+
+    def accepted_failed(exc, detail) -> None:
+        complete_launch("failed", (exc, detail))
+
+    # Only an acknowledged scheduler handoff can reset a prior refusal.
     self._filter_save_launch_failed = False
     try:
         self.parent._start_ui_worker(
             f"focused-filter-save-{id(self)}",
-            worker, done, failed, wait_on_close=True,
+            worker, accepted_done, accepted_failed, wait_on_close=True,
         )
     except Exception:
-        # The worker may or may not have been accepted. Restore every
-        # unconfirmed source-coordinate edit conservatively without
-        # overwriting edits made during launch or a human reversion.
-        # Never queue an automatic retry of an uncertain handoff.
+        # A callback before a thrown launch is not an acknowledged commit.
+        # The worker could have written; retain edits as uncertain rather
+        # than rolling back files or publishing a false success in Tk.
+        launch_state = "rejected"
+        early_completion[0] = None
         self._filter_save_running = False
         self._filter_close_after_save = False
         self._filter_save_launch_failed = True
@@ -1528,4 +1559,10 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             "保存任务未能确认启动；窗口保持打开，校对修改可核对后重试。",
             parent=self,
         )
+    else:
+        launch_state = "accepted"
+        if early_completion[0] is not None:
+            kind, payload = early_completion[0]
+            early_completion[0] = None
+            complete_launch(kind, payload)
 
