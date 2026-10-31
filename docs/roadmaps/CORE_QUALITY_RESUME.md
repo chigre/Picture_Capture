@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 直接渲染重复/矛盾终结回调单次所有权（测试先红，最终 HEAD 待验）
+
+- 实时基准 `493877bead3e392d5e2b5bcdacffcc8ec2b97697` 已核：CI [#41213416632](https://github.com/chigre/Picture_Capture/actions/runs/41213416632) 六 OS/Python 组合＋Risk-tier gate SUCCESS；OCR [#41213416558](https://github.com/chigre/Picture_Capture/actions/runs/41213416558) 3/3、CodeQL [#41213413372](https://github.com/chigre/Picture_Capture/actions/runs/41213413372) Python/Actions 2/2 SUCCESS。main `ec20989e`、唯一 Draft #663，Issues #503/#562/#483 Open。
+- **实际红灯：** 仅新增 6 项合成参数化反例 `0c7473e821e117a92b32c62c47509a89ad72d493`，[CI #41216502798](https://github.com/chigre/Picture_Capture/actions/runs/41216502798) macOS Python3.13 **6 targeted FAILED / 5202 passed / 2 skipped**。证实同一次直接裁剪的 done→failed、failed→done、重复 done/failed 会第二次改动缓存/编辑视图；此前因人工修改而忽略的终结事件在修改消失后仍可被重复回调重新激活。红灯 SHA 不计绿色门禁。
+- **最小修复** `6c7088560334765f3fbc70d40d93edc32ea6a294` 仅在 `ui/focused_filter_workflow.py::_request_filter_batch_render` 回调闭包内增一次性 terminal claim：先核已有 serial、epoch、激活批次，再领用首个终结事件（包括因人工编辑/正在保存而不绘制的终结事件）；后续重复或矛盾回调严格无动作。保留此前来源哈希、安全写入以及未保存人工作业保护，不改变 PDIC/PPP/SECTION/Profile schema 和原图 XY。
+- 审计 [G3_R4_2_DIRECT_RENDER_TERMINAL_ONCE_20261031.md](../architecture/G3_R4_2_DIRECT_RENDER_TERMINAL_ONCE_20261031.md)。最终代码+文档 HEAD 必须**另查** CI 6/6＋Risk、OCR 3/3、CodeQL Python/Actions 2/2；本次提交前尚为 **PENDING**。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典扫描及性能均 **NOT PERFORMED**；R6 真标签学习、R8 真实扫描 **DEFERRED**。唯一 Draft #663 保持 Open/Unmerged；main 不动。
+
 ## 2026-10-31｜G3 R4.2 直接裁剪 success/failure 回调的来源、SECTION 与 save 队列隔离（测试先红，最终门禁待核）
 
 - 实时绿色基准 `6376d1a058bb634b8f09e18955cb80a9f4a67339` 已核：CI [#41212007134](https://github.com/chigre/Picture_Capture/actions/runs/41212007134) Windows/macOS/Ubuntu×Python3.10/3.13 六组合＋Risk gate 全成功；OCR [#41212007119](https://github.com/chigre/Picture_Capture/actions/runs/41212007119) 三平台成功；CodeQL [#41212004168](https://github.com/chigre/Picture_Capture/actions/runs/41212004168) Python/Actions 两项成功。唯一 Draft #663、main 不动、#503/#562/#483 Open。
