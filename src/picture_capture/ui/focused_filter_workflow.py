@@ -297,6 +297,53 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 sample["risk_pages"] += 1
         return targets, missing_ocr
 
+    def dispatch_scan_after_ack(worker_key, worker, on_done, on_failed) -> None:
+        """Only an acknowledged scan launch can publish a Tk terminal result.
+
+        The scheduler may synchronously deliver a callback and then raise.
+        Buffer the earliest terminal event until the handoff returns; on a
+        rejected handoff discard it, preserve the prior ready batches and
+        expose only the existing generic error message.
+        """
+        launch_state = ["pending"]
+        early_terminal = [None]
+
+        def terminal(kind, payload) -> None:
+            if launch_state[0] == "rejected":
+                return
+            if launch_state[0] == "pending":
+                if early_terminal[0] is None:
+                    early_terminal[0] = (kind, payload)
+                return
+            if kind == "done":
+                on_done(payload)
+            else:
+                on_failed(*payload)
+
+        def accepted_done(payload) -> None:
+            terminal("done", payload)
+
+        def accepted_failed(exc, detail) -> None:
+            terminal("failed", (exc, detail))
+
+        try:
+            self.parent._start_ui_worker(
+                worker_key, worker, accepted_done, accepted_failed,
+            )
+        except Exception:
+            launch_state[0] = "rejected"
+            early_terminal[0] = None
+            # Scans are read-only. A partly started, unacknowledged scan is
+            # incomplete and must not publish buffered result rows.
+            on_failed(None, None)
+            return
+
+        launch_state[0] = "accepted"
+        if early_terminal[0] is not None:
+            kind, payload = early_terminal[0]
+            early_terminal[0] = None
+            terminal(kind, payload)
+
     first_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
 
     def first_worker():
@@ -446,7 +493,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 "未扫描页面不计入结果，请检查后重新筛选。"
             )
 
-        self.parent._start_ui_worker(
+        dispatch_scan_after_ack(
             f"focused-filter-scan-rest-{id(self)}",
             remaining_worker, remaining_done, remaining_failed,
         )
@@ -533,7 +580,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             "重点筛选失败", "首批页面无法完成筛选；请检查后重新筛选。", parent=self
         )
 
-    self.parent._start_ui_worker(
+    dispatch_scan_after_ack(
         f"focused-filter-scan-{id(self)}", first_worker, first_done, failed
     )
 
