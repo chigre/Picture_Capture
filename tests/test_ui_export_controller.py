@@ -147,10 +147,13 @@ def test_export_controller_wiring_preserves_app_compatibility_methods() -> None:
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "ExportController" in imports
-    assert "self.export_controller = ExportController(self)" in app
-    assert app.index("self.export_controller = ExportController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.export_controller = ExportController(self)" in startup
+    assert startup.index("self.export_controller = ExportController(self)") < startup.index("self._build_ui()")
     assert "def _export_controller_for_call(" in app
-    assert 'self.__dict__.get("export_controller")' in app
+    assert '"export_controller", ExportController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert "def export_text(self)" in app
     assert "self._export_controller_for_call().export_text()" in app
     assert "def import_text(self)" in app

@@ -22,6 +22,29 @@ class CandidateDeletePlan:
     simplified_bytes: bytes | None
 
 
+def _unique_json_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous manual fields instead of dropping a human JSON value."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON object member in proofreading sidecar")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json(value: str) -> Any:
+    raise ValueError(f"Non-finite JSON constant in proofreading sidecar: {value}")
+
+
+def _load_unambiguous_json(raw: bytes) -> Any:
+    """Never reserialize a sidecar that would lose duplicate human fields."""
+    return json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_unique_json_members,
+        parse_constant=_reject_nonfinite_json,
+    )
+
+
 def prepare_candidate_delete(
     snapshot: SavedSnapshot, entry: Any, candidate: dict[str, Any],
 ) -> CandidateDeletePlan | None:
@@ -29,7 +52,13 @@ def prepare_candidate_delete(
     cid = str(candidate.get("candidate_id") or "")
     if not cid or str(getattr(entry, "candidate_id", "") or "") != cid:
         return None
-    if dict(snapshot.owner_ids).get(id(entry)) != cid:
+    # The on-disk manual override belongs to one candidate, never to a
+    # shared candidate_id attached to two live Entry objects. A plain dict
+    # lookup would silently accept the second owner and deselect both.
+    owners = dict(snapshot.owner_ids)
+    if (len(owners) != len(snapshot.owner_ids)
+            or owners.get(id(entry)) != cid
+            or sum(owner == cid for owner in owners.values()) != 1):
         return None
     # Legacy OCR caches need not store a "selected" flag. The owned live
     # Entry is stronger evidence of selection; an explicit false still vetoes.
@@ -62,16 +91,31 @@ def prepare_candidate_delete(
         if snapshot.manual_bytes is None:
             manual = {"version": 1, "overrides": {}}
         else:
-            manual = json.loads(snapshot.manual_bytes.decode("utf-8"))
+            manual = _load_unambiguous_json(snapshot.manual_bytes)
         if not isinstance(manual, dict) or not isinstance(manual.get("overrides"), dict):
             return None
         if str(manual.get("page") or snapshot.page.stem) != snapshot.page.stem:
             return None
-        prior = manual["overrides"].get(cid)
-        if prior is not None and (
-            not isinstance(prior, dict) or prior.get("selected") is False
+        # The legacy file may omit version, but an explicit incompatible
+        # version must never be silently rewritten as a v1 human decision.
+        if "version" in manual and (
+            type(manual["version"]) is not int or manual["version"] != 1
         ):
             return None
+        prior = manual["overrides"].get(cid)
+        if prior is not None:
+            # A preexisting explicit override must still describe this
+            # exact selected word. Do not silently turn a stale/foreign
+            # override for the same candidate_id into a deletion.
+            if (not isinstance(prior, dict)
+                    or prior.get("selected") is not True
+                    or ("word" in prior
+                        and prior["word"] != str(entry.word))
+                    or set(prior) - {"selected", "word", "engine"}):
+                # This candidate owns the selection state, NOT arbitrary
+                # extra human annotations in the existing override. A
+                # replacement would silently discard those extra bytes.
+                return None
         manual["page"] = snapshot.page.stem
         manual["overrides"][cid] = {
             "selected": False,
@@ -82,15 +126,30 @@ def prepare_candidate_delete(
 
         target_simplified = snapshot.simplified_bytes
         if target_simplified is not None:
-            simplified = json.loads(target_simplified.decode("utf-8"))
-            if not isinstance(simplified, dict) or not isinstance(simplified.get("entries"), list):
+            simplified = _load_unambiguous_json(target_simplified)
+            if (not isinstance(simplified, dict)
+                    or simplified.get("format") != "picture_capture_simplified_review"
+                    or simplified.get("format_version") != 1
+                    or simplified.get("page") != snapshot.page.stem
+                    or not isinstance(simplified.get("entries"), list)):
                 return None
+            # This is a human-edited sidecar, not a permissive display cache.
+            # Validate *every* row and its live PDIC source owner before a
+            # target-row deletion can normalize or discard any saved bytes.
+            from .simplified_review import validate_source_word_binding
+            validate_source_word_binding(
+                target_simplified, snapshot.page.stem,
+                [(word, x, y) for _, word, x, y in snapshot.entries],
+            )
             matches = []
             for i, record in enumerate(simplified["entries"]):
-                if not isinstance(record, dict):
-                    return None
-                x, y = int(record["x"]), int(record["y"])
+                x, y = record["x"], record["y"]
                 if x == int(entry.x) and y == int(entry.y):
+                    # Coordinates alone do not prove that the simplified
+                    # record belongs to the selected headword; a later
+                    # manual edit or stale sidecar can reuse the same key.
+                    if record.get("source_word") != str(entry.word):
+                        return None
                     matches.append(i)
             if len(matches) > 1:
                 return None
@@ -99,7 +158,7 @@ def prepare_candidate_delete(
                 target_simplified = json.dumps(
                     simplified, ensure_ascii=False, indent=2,
                 ).encode("utf-8")
-    except (UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+    except (UnicodeError, ValueError, TypeError, KeyError, AttributeError, RuntimeError):
         return None
     return CandidateDeletePlan(
         candidate_id=cid, pdic_bytes=target_pdic,

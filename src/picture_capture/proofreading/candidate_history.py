@@ -138,14 +138,25 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
         app = review.parent
         current = tx.snapshot_review(review)
         if current is None:
-            # A pending Tk repaint can be retried. Real source drift is final.
-            if (getattr(app, "current_page", None) != expected.page
+            # A pending Tk repaint may be retried only while *all* original
+            # source owners remain byte-identical. A denied file read is NOT
+            # proof of unchanged sources and must not crash a human Undo.
+            try:
+                stale_source = (
+                    not tx._live_source_bindings_match(review, expected)
                     or tx.sha256_file(expected.page) != expected.image_sha
                     or tx._bytes_or_absent(tx.pdic_path(expected.page)) != expected.pdic_bytes
                     or tx._bytes_or_absent(tx.simplified_review_path_for_image(expected.page))
                        != expected.simplified_bytes
                     or tx._bytes_or_absent(expected.manual_path) != expected.manual_bytes
-                    or tx._bytes_or_absent(expected.ocr_path) != expected.ocr_bytes):
+                    or tx._bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
+                    or tx._bytes_or_absent(expected.section_path) != expected.section_bytes
+                    or tx._bytes_or_absent(expected.profile_path) != expected.profile_bytes
+                )
+            except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
+                # No private exception path or text goes to Tk/status/stdout.
+                stale_source = True
+            if stale_source:
                 self.invalidate()
             return False
         if not tx._same_live_state(current, expected):
@@ -153,10 +164,17 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):
             return False
-        bound = review._bound_row_entries()
-        if (len(bound) != len(review.vars)
-                or any(var.get().strip() != entry.word
-                       for entry, var in zip(bound, review.vars))):
+        # The rendered Tk rows still refer to the PRE-replay membership.
+        # Capture their exact Entry/StringVar pairing before any disk write.
+        try:
+            bound = tuple(review._bound_row_entries())
+            bound_vars = tuple(review.vars)
+            if (len(bound) != len(bound_vars)
+                    or any(var.get().strip() != entry.word
+                           for entry, var in zip(bound, bound_vars))):
+                return False
+        except Exception:
+            # Destroyed Tk bindings must refuse before touching the journal.
             return False
         matches = [row for row in getattr(app, "ocr_review_candidates", ())
                    if isinstance(row, dict)
@@ -204,23 +222,41 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             except Exception:
                 pass
         words = {id(entry): word for entry, word, _, _ in target.entries}
-        for entry, var in zip(review._bound_row_entries(), review.vars):
+        for entry, var in zip(bound, bound_vars):
             if id(entry) in words:
-                var.set(words[id(entry)])
+                try:
+                    var.set(words[id(entry)])
+                except Exception:
+                    # PDIC/manual/simplified and the Entry/candidate models
+                    # already committed. Presentation-only destroyed Tk vars
+                    # cannot undo that or leak private exception paths.
+                    pass
         cache = getattr(review, "_simplified_page_cache", None)
         if isinstance(cache, dict):
             cache.pop(expected.page.stem, None)
+        pins = review.__dict__.get("_r3_simplified_source_bytes")
+        if isinstance(pins, dict):
+            pins.pop(expected.page.stem, None)
         getattr(review, "_simplified_dirty_pages", set()).discard(expected.page.stem)
         app._last_pdic_write_changed = True
+        # The owned PDIC/manual/simplified bundle and Entry/candidate models
+        # have already committed. Move the replay frame before any derived
+        # word-count/page-row refresh so an old frame cannot be replayed again
+        # if the Tk window was torn down after publication.
+        stack.pop()
+        (self.undo_stack if redo else self.redo_stack).append(frame)
         try:
             app._refresh_word_fill_check_from_line_count(
                 app.current_index, len(app.entries), persist=True,
             )
             app._update_page_row(app.current_index)
-        except (OSError, ValueError, AttributeError):
+        except Exception:
+            # This is only the post-commit derived status/UI refresh boundary.
+            # TclError/RuntimeError from destroyed Tk widgets (or a failed
+            # optional metadata refresh) must never turn a durable replay into
+            # an exposed private exception or an unadvanced history frame.
+            # The owned bundle writer and its precommit refusal are unchanged.
             pass
-        stack.pop()
-        (self.undo_stack if redo else self.redo_stack).append(frame)
         return True
 
 

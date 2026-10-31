@@ -38,17 +38,21 @@ def test_pdic_batch_mode_rejects_ppp_edits_and_save_paths():
     start = pointer_source.index("def toggle_polygon_drawing(")
     end = pointer_source.index("\ndef canvas_left_click(", start)
     assert "if self._batch_active:" in pointer_source[start:end]
-    start = source.index("    def _save_current_page_by_mode(")
-    end = source.index("\n    def ", start + 10)
-    assert 'and not getattr(self, "_batch_allow_pdic_edits", False)' in source[start:end]
-    assert "self.save_pdic(silent=True" in source[start:end]
+    assert "_main_pdic_persistence._save_current_page_by_mode(" in source
+    owner = (ROOT / "ui/main_pdic_persistence.py").read_text(encoding="utf-8")
+    start = owner.index("def _save_current_page_by_mode(")
+    end = owner.index("\ndef save_current_page(", start)
+    assert 'and not getattr(self, "_batch_allow_pdic_edits", False)' in owner[start:end]
+    assert "self.save_pdic(silent=True" in owner[start:end]
 
 
 def test_other_batch_tasks_allow_read_only_navigation_by_default():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
     assert "allow_page_navigation: bool = True" in source
     assert "allow_pdic_edits: bool = False" in source
-    assert "self._batch_allow_pdic_edits = False" in source
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in source
+    assert "self._batch_allow_pdic_edits = False" in startup
     assert "return bool(self._batch_allow_pdic_edits)" in (
         ROOT / "ui" / "batch_workflow.py"
     ).read_text(encoding="utf-8")

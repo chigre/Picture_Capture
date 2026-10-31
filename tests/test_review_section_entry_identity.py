@@ -83,10 +83,13 @@ def test_simplified_sidecar_uses_rendered_identity_after_section_reorder():
         simplified_vars=[FakeEditor("simplified-A"), FakeEditor("simplified-B")],
         simplified_manual_flags=[True, True],
         simplified_actual_values=[None, None],
+        vars=[FakeEditor("source-A"), FakeEditor("source-B")],
+        row_entries=[original_a, original_b], _rendered_page_stem="page",
         _simplified_page_records=lambda stem: records,
         _bound_row_entries=lambda: [original_a, original_b],
         parent=SimpleNamespace(
             current_page=SimpleNamespace(stem="page"),
+            entries=[original_a, original_b],
             _ordered_entries_reading_order=lambda: [original_b, original_a],
         ),
         _simplified_display_from_value=lambda source, value, manual: source,

@@ -83,6 +83,28 @@ def _finish_close_review(self, deps: ReviewPageDeps) -> None:
     self.parent.redraw()
 
 
+def _has_unreported_simplified_input(self) -> bool:
+    """Detect live text edits even when Tk emits no KeyRelease/Paste callback.
+
+    This is a read-only gate; the existing guarded commit performs the actual
+    source binding, PDIC/manual and simplified-sidecar verification.
+    A stale/destroyed row must never be rebound by a numeric index.
+    """
+    from .review_simplified_workflow import _owned_rendered_simplified_rows
+
+    rows = _owned_rendered_simplified_rows(self)
+    if rows is None:
+        return False
+    for index, _entry in enumerate(rows):
+        actual = self.simplified_actual_values[index]
+        manual = bool(self.simplified_manual_flags[index])
+        original = self.vars[index].get().strip()
+        expected = self._simplified_display_from_value(original, actual, manual)
+        if self.simplified_vars[index].get().strip() != expected:
+            return True
+    return False
+
+
 def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     """Commit review edits for the shared main-window autosave timer."""
     if getattr(self, "_filter_rows_active", False):
@@ -99,7 +121,10 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
         for i in range(min(len(self.vars), len(row_entries)))
     )
     current_stem = self.parent.current_page.stem
-    simplified_dirty = current_stem in self._simplified_dirty_pages
+    simplified_dirty = (
+        current_stem in self._simplified_dirty_pages
+        or _has_unreported_simplified_input(self)
+    )
     dirty = word_dirty or simplified_dirty
     if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
         return True
@@ -190,7 +215,12 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
             i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
             for i in range(len(self.vars))
         )
-        simplified_dirty = bool(self.parent.current_page and self.parent.current_page.stem in self._simplified_dirty_pages)
+        simplified_dirty = bool(
+            self.parent.current_page and (
+                self.parent.current_page.stem in self._simplified_dirty_pages
+                or _has_unreported_simplified_input(self)
+            )
+        )
         dirty = word_dirty or simplified_dirty
         if not dirty:
             # Browsing a pending page must not accidentally reserve it.
@@ -446,7 +476,8 @@ def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
     # The parent is told that the current PDIC has already been saved, which
     # also prevents stale main-canvas Entry widgets from overwriting the
     # newer proofreading text during navigation.
-    self.save(redraw_main=False)
+    if self.save(redraw_main=False) is False:
+        return
     preloaded = self._take_prefetched_page(target)
     self.parent.change_page(
         delta, preloaded=preloaded, current_already_saved=True, async_allowed=False

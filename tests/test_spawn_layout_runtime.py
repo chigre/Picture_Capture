@@ -65,7 +65,7 @@ def test_spawn_layout_wrapper_file_is_retired_and_processing_owns_preparation():
     root = Path(__file__).resolve().parents[1]
     runtime = root / "src/picture_capture/spawn_layout_runtime.py"
     processing_source = (
-        root / "src/picture_capture/processing.py"
+        root / "src/picture_capture/processing/__init__.py"
     ).read_text(encoding="utf-8")
     gui_source = (
         root / "src/picture_capture/bootstrap/gui.py"

@@ -54,9 +54,10 @@ def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
     )[0]
     only_ocr = src.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     detector = (ROOT / "ui/controllers/detection.py").read_text(encoding="utf-8")
-    batch_ocr = body_between(
-        detector, "    def batch_ocr(", "    def run_ocr_draw(",
-    )
+    batch_flow = (ROOT / "ui/batch_ocr_flow.py").read_text(encoding="utf-8")
+    batch_completion = (ROOT / "ui/batch_ocr_completion.py").read_text(encoding="utf-8")
+    batch_ocr = batch_flow.split("def run_existing_pdic_batch(", 1)[1]
+    assert "return run_existing_pdic_batch(" in detector
     assert "foreground_page_edit=True, allow_pdic_edits=True," in refiner
     assert "_start_parallel_batch_task(" in refiner
     assert "commit_refined_page_result" in refiner
@@ -67,7 +68,9 @@ def test_pdic_writing_refiner_and_ocr_both_use_page_ownership():
     # worker finishes, so only the page-completion event may reload the page.
     assert "save_result" in refiner
     assert "and not self._batch_foreground_pages" in only_ocr
-    assert 'not getattr(app, "_batch_foreground_pages", False)' in batch_ocr
+    assert "return complete_existing_pdic_batch(" in batch_ocr
+    assert 'not getattr(app, "_batch_foreground_pages", False)' in batch_completion
+    assert "app.project is not project" in batch_completion
 
 
 def test_manual_claim_skips_pending_worker_and_blocks_processing_page():

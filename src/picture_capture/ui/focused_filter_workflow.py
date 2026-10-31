@@ -6,7 +6,14 @@ Worker scheduling, cancel serials, cache contents and Tk-thread behavior unchang
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import TYPE_CHECKING
+
+from ..proofreading.review_timing import ReviewTimingSession
+from ..proofreading.focused_crop_source_fingerprint import (
+    focused_crop_source_witness, focused_save_source_from_crop_witness,
+    verify_focused_save_source,
+)
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -49,6 +56,24 @@ class FocusedFilterDeps:
     _apply_focused_review_page_updates: object
 
 
+def _record_focused_timing(
+    self, session: ReviewTimingSession | None,
+    stage: str, elapsed: float | None, count: int = 1,
+) -> None:
+    """Record in Tk callback only, and only for the still-active scan epoch."""
+    if (
+        session is None or elapsed is None
+        or getattr(self, "_focused_timing_session", None) is not session
+        or getattr(self, "_filter_scan_serial", None) != session.epoch
+        or not getattr(self, "_filter_rows_active", False)
+    ):
+        return
+    if session.add(stage, elapsed, count, epoch=session.epoch):
+        var = getattr(self, "focused_timing_summary_var", None)
+        if var is not None:
+            var.set(session.label)
+
+
 def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     """Render the first batch early, then stream and pre-render later batches."""
     messagebox = deps.messagebox
@@ -64,6 +89,13 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     project = self.parent.project
     if project is None:
         return
+    # Re-filter may destroy visible editor rows. Refuse *before* modifying
+    # persisted settings, even when the new checkbox differs from this epoch.
+    if getattr(self, "_filter_rows_active", False) and (
+        self._filter_save_running or self._filter_pending_changes
+    ):
+        self.parent.status_var.set("请先完成重点校对修改保存，再重新筛选。")
+        return
     try:
         # Reuse the main-window 【指定】 parser exactly. This preserves
         # filename-number matching, leading zeroes, mixed comma ranges and
@@ -71,7 +103,6 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         indices = self.parent._parse_page_spec(
             self.focused_page_range_var.get()
         )
-        self._persist_focused_filter_settings()
     except Exception as exc:
         messagebox.showerror("筛选条件无效", str(exc), parent=self)
         return
@@ -80,6 +111,11 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     include_chars = bool(self.focused_include_characters_var.get())
     exclude_single = bool(self.focused_exclude_single_var.get())
     exclude_reference = bool(self.focused_exclude_reference_var.get())
+    # The queue option is fixed for this scan epoch; toggling the checkbox
+    # never reorders visible editors or changes the in-flight worker.
+    risk_queue_enabled = bool(self.focused_risk_priority_var.get())
+    timing_var = getattr(self, "focused_timing_var", None)
+    timing_enabled = bool(timing_var.get()) if timing_var is not None else False
     tokens = _focused_review_character_tokens(self.focused_characters_var.get())
     if include_chars and not tokens:
         messagebox.showinfo(
@@ -89,24 +125,76 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         )
         return
 
+    # A rejected first scan must not persist options or erase single-page
+    # edits. ReviewWindow paints its first crop asynchronously; R3 forbids a
+    # save until the real page/Entry/sidecar source snapshot has rendered.
+    # Never bypass R3 merely to make an early filter click succeed.
     if not getattr(self, "_filter_rows_active", False):
-        self.save(redraw_main=False)
+        current_page = getattr(self.parent, "current_page", None)
+        if (
+            current_page is None
+            or getattr(self, "_rendered_page_stem", "") != current_page.stem
+        ):
+            self.parent.status_var.set(
+                "本页校对尚未加载完成，请待词条显示后重新筛选。"
+            )
+            return
+    try:
+        int(self.focused_batch_size_var.get().strip())
+    except (ValueError, TypeError, AttributeError):
+        messagebox.showerror(
+            "筛选条件无效", "单批显示数量必须是整数。", parent=self
+        )
+        return
+    if not getattr(self, "_filter_rows_active", False):
+        try:
+            saved = self.save(redraw_main=False)
+        except (RuntimeError, OSError, ValueError):
+            # Source mismatch, recovery marker and file-write failures belong
+            # to R3. Keep the current editing surface and its settings as-is.
+            self.parent.status_var.set(
+                "本页保存失败或来源未通过验证，筛选已取消；请核对后重试。"
+            )
+            return
+        if saved is False:
+            self.parent.status_var.set(
+                "本页校对尚未保存完成，筛选已取消。"
+            )
+            return
+    # Persist filter options only after a successful R3-protected save,
+    # valid options and no outstanding focused human edit.
+    try:
+        self._persist_focused_filter_settings()
+    except Exception as exc:
+        messagebox.showerror("筛选条件无效", str(exc), parent=self)
+        return
     self.review_mode_var.set("filter")
     self._filter_rows_active = True
     self._set_filter_navigation(True)
     self.parent._invalidate_ui_worker(self._review_render_worker_key)
+    # An old initial scan or prefetched crop must not publish in a new epoch.
+    self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-scan-rest-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-render-{id(self)}")
     self.parent._invalidate_ui_worker(f"focused-filter-prefetch-{id(self)}")
+    self._filter_render_serial += 1
     self._filter_batch_render_cache.clear()
     self._filter_prefetch_key = None
     self._filter_scan_complete = False
+    # An aborted remainder is not a completed scan. Keep already-rendered
+    # source batches editable; the unfinished tail is never offered as final.
+    self._filter_scan_failed = False
     self.filtered_targets = []
     self.filtered_batch_index = 0
     self._clear_review_workspace("正在快速筛选首批…")
     self.filter_batch_var.set("正在筛选首批…")
     self._filter_scan_serial += 1
     serial = self._filter_scan_serial
+    timing_session = ReviewTimingSession(epoch=serial) if timing_enabled else None
+    self._focused_timing_session = timing_session
+    summary_var = getattr(self, "focused_timing_summary_var", None)
+    if summary_var is not None:
+        summary_var.set(timing_session.label if timing_session is not None else "")
 
     pages = list(project.images)
     project_root = project.root
@@ -119,7 +207,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     )
     first_batch_size = self._focused_batch_size()
 
-    def scan_page(page_index: int) -> tuple[list[dict], bool]:
+    def scan_page(
+        page_index: int, sample: dict[str, float] | None = None,
+    ) -> tuple[list[dict], bool]:
         """Fast filter pass using only PDIC and OCR JSON, never page pixels."""
         page = pages[page_index]
         entries = read_pdic(pdic_path(page))
@@ -195,21 +285,40 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 "ocr_words": ocr_words,
                 "reasons": tuple(reasons),
             })
+        if risk_queue_enabled and targets:
+            risk_start = perf_counter() if sample is not None else None
+            from ..proofreading.review_risk_snapshot import prioritized_focused_page_targets
+            targets = prioritized_focused_page_targets(
+                targets, project_root=project_root, page=page,
+                cache_path=cache, pdic_path=pdic_path(page), enabled=True,
+            )
+            if risk_start is not None:
+                sample["risk"] += perf_counter() - risk_start
+                sample["risk_pages"] += 1
         return targets, missing_ocr
 
+    first_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
+
     def first_worker():
+        started = perf_counter() if timing_session is not None else None
         targets: list[dict] = []
         pages_without_ocr = 0
         next_position = len(indices)
         for position, page_index in enumerate(indices):
-            page_targets, missing_ocr = scan_page(page_index)
+            page_targets, missing_ocr = scan_page(
+                page_index, first_sample if timing_session is not None else None
+            )
             targets.extend(page_targets)
             pages_without_ocr += int(missing_ocr)
+            if started is not None:
+                first_sample["pages"] += 1
             # Stop at a page boundary as soon as one complete UI batch is
             # available. Later pages are streamed in batch-sized chunks.
             if len(targets) >= first_batch_size:
                 next_position = position + 1
                 break
+        if started is not None:
+            first_sample["scan"] = perf_counter() - started
         return targets, pages_without_ocr, next_position
 
     def start_remaining_scan(
@@ -235,18 +344,27 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         remainder = int(initial_count) % first_batch_size
         needed_for_next = first_batch_size - remainder if remainder else first_batch_size
 
+        remaining_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
+
         def remaining_worker():
+            started = perf_counter() if timing_session is not None else None
             additions: list[dict] = []
             missing_total = pages_without_ocr
             next_position = len(indices)
             for position in range(start_position, len(indices)):
                 page_index = indices[position]
-                page_targets, missing_ocr = scan_page(page_index)
+                page_targets, missing_ocr = scan_page(
+                    page_index, remaining_sample if timing_session is not None else None
+                )
                 additions.extend(page_targets)
                 missing_total += int(missing_ocr)
+                if started is not None:
+                    remaining_sample["pages"] += 1
                 if len(additions) >= needed_for_next:
                     next_position = position + 1
                     break
+            if started is not None:
+                remaining_sample["scan"] = perf_counter() - started
             return additions, missing_total, next_position
 
         def remaining_done(payload) -> None:
@@ -256,6 +374,16 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             ):
                 return
             additions, missing_total, next_position = payload
+            _record_focused_timing(
+                self, timing_session, "scan",
+                remaining_sample["scan"] if timing_session else None,
+                int(remaining_sample["pages"]),
+            )
+            _record_focused_timing(
+                self, timing_session, "risk",
+                remaining_sample["risk"] if timing_session else None,
+                int(remaining_sample["risk_pages"]),
+            )
             had_available = self._filter_available_target_count()
             self.filtered_targets.extend(additions)
             self._filter_scan_complete = next_position >= len(indices)
@@ -288,12 +416,24 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                     next_position, missing_total, len(self.filtered_targets)
                 )
 
-        def remaining_failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if serial != self._filter_scan_serial:
+        def remaining_failed(_exc, _detail) -> None:
+            if (
+                serial != self._filter_scan_serial
+                or not getattr(self, "_filter_rows_active", False)
+            ):
                 return
-            self.parent.status_var.set(f"后续页面筛选失败：{exc}")
+            # Only fully scanned batches may remain available; no failed
+            # chunk is published and no visible human edit is discarded.
+            # Do not surface exception strings containing project paths.
+            self._filter_scan_failed = True
+            self._update_filter_batch_indicator()
+            # Keep the explicit terminal label for older ReviewWindow
+            # integrations that override the indicator helper.
+            self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
+            self.parent.status_var.set(
+                "后续页面筛选失败，结果不完整；已就绪批次保留，"
+                "未扫描页面不计入结果，请检查后重新筛选。"
+            )
 
         self.parent._start_ui_worker(
             f"focused-filter-scan-rest-{id(self)}",
@@ -307,6 +447,15 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         ):
             return
         targets, pages_without_ocr, next_position = payload
+        _record_focused_timing(
+            self, timing_session, "scan",
+            first_sample["scan"] if timing_session else None, int(first_sample["pages"]),
+        )
+        _record_focused_timing(
+            self, timing_session, "risk",
+            first_sample["risk"] if timing_session else None,
+            int(first_sample["risk_pages"]),
+        )
         self.filtered_targets = list(targets)
         self.filtered_batch_index = 0
         self._filter_scan_complete = next_position >= len(indices)
@@ -337,15 +486,32 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 next_position, pages_without_ocr, len(self.filtered_targets)
             )
 
-    def failed(exc, detail) -> None:
-        if detail:
-            print(detail)
+    def failed(_exc, _detail) -> None:
+        # Keep the explicit serial comparison recognizable to existing
+        # source-level integration guards, then check active Tk mode.
         if serial != self._filter_scan_serial:
             return
-        self._filter_scan_complete = True
-        self.filter_batch_var.set("筛选失败")
-        self._clear_review_workspace(f"筛选失败：{exc}")
-        messagebox.showerror("重点筛选失败", str(exc), parent=self)
+        if not getattr(self, "_filter_rows_active", False):
+            return
+        # The first scan did not publish even one trustworthy batch. An
+        # exception is never a successful/complete scan, and raw worker
+        # errors can contain private local source paths.
+        self._filter_scan_failed = True
+        self._filter_scan_complete = False
+        self.filtered_targets = []
+        self._update_filter_batch_indicator()
+        # Older test/GUI adapters may override the indicator helper; the
+        # first-batch terminal label must still be visible in that case.
+        self.filter_batch_var.set("筛选中断（无完整批次）")
+        self._clear_review_workspace(
+            "首批筛选失败，结果未建立；请检查页面数据后重新筛选。"
+        )
+        self.parent.status_var.set(
+            "首批筛选失败，结果不完整；未显示任何筛选词条，请检查后重试。"
+        )
+        messagebox.showerror(
+            "重点筛选失败", "首批页面无法完成筛选；请检查后重新筛选。", parent=self
+        )
 
     self.parent._start_ui_worker(
         f"focused-filter-scan-{id(self)}", first_worker, first_done, failed
@@ -366,6 +532,13 @@ def _filter_available_target_count(self, deps: FocusedFilterDeps) -> int:
     return (total // batch_size) * batch_size
 
 def _update_filter_batch_indicator(self, deps: FocusedFilterDeps) -> None:
+    if getattr(self, "_filter_scan_failed", False):
+        self.filter_batch_var.set(
+            "筛选中断（无完整批次）"
+            if self._filter_available_target_count() <= 0
+            else "后续筛选中断（仅已就绪批次）"
+        )
+        return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
         self.filter_batch_var.set(
@@ -411,6 +584,14 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
         )
         for target in targets
     )
+    # A prefetched crop from a previous image/PDIC/SECTION revision must
+    # never be reused just because the source XY, text or Tk zoom is the same.
+    # Use actual source bytes, not mutable size/mtime metadata. This is a
+    # volatile readback, not an OS-level multi-file atomic snapshot.
+    try:
+        source_witness = focused_crop_source_witness(pages, targets)
+    except (OSError, ValueError, IndexError):
+        return None
     render_signature = (
         target_signature,
         repr(settings),
@@ -418,6 +599,7 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
         available_width,
         review_zoom_auto,
         None if review_zoom_auto else round(review_zoom, 6),
+        source_witness,
     )
     cache_key = (int(batch_index), render_signature)
     return (
@@ -531,6 +713,11 @@ def _apply_filter_batch_payload(
         return False
     snapshot = self._filter_batch_snapshot(batch_index)
     if snapshot is None or snapshot[0] != cache_key:
+        # Neither a late prefetch nor a cached payload owns a changed source.
+        # Do not clear the current editors or discard an unsaved human edit.
+        status = getattr(self.parent, "status_var", None)
+        if status is not None:
+            status.set("本批裁剪来源或显示条件已变化，旧预览已拒绝；请核对后重新筛选。")
         return False
     _key, _targets_copy, _pages, _settings, _viewer_width, _available_width, _zoom, _auto = snapshot
     batch_size = self._focused_batch_size()
@@ -541,9 +728,16 @@ def _apply_filter_batch_payload(
     crops, effective_zoom, display_meta = payload
     if len(crops) != len(targets) or len(display_meta) != len(targets):
         return False
+    # The accepted crop (not a later save-time disk read) is the source of
+    # truth for a subsequently edited row. Bind only image and SECTION: PDIC
+    # necessarily changes after a successful human correction.
+    source_witness = cache_key[1][-1]
     for target, (column_number, sequence_number) in zip(targets, display_meta):
         target["column_number"] = int(column_number)
         target["sequence_number"] = int(sequence_number)
+        target["_focused_save_source_witness"] = focused_save_source_from_crop_witness(
+            source_witness, int(target["page_index"])
+        )
     if self.review_zoom_auto:
         self.review_zoom = max(0.01, float(effective_zoom))
         self.review_zoom_var.set(f"自动 {_format_layout_percent(self.review_zoom * 100.0)}%")
@@ -571,6 +765,9 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         return
     self._filter_prefetch_key = cache_key
     worker_key = f"focused-filter-prefetch-{id(self)}"
+    scan_epoch = getattr(self, "_filter_scan_serial", None)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    crop_seconds = [None]
 
     ReviewWindow = deps.ReviewWindow
 
@@ -579,28 +776,96 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         local_viewer_width=viewer_width, local_available_width=available_width,
         local_review_zoom=review_zoom, local_review_zoom_auto=review_zoom_auto,
     ):
-        return ReviewWindow._prepare_filter_batch_payload(
+        started = perf_counter() if timing_session is not None else None
+        result = ReviewWindow._prepare_filter_batch_payload(
             local_targets, local_pages, local_settings,
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        # The key was attested before scheduling. A page, PDIC or SECTION
+        # changed during the worker must not be published under that old key.
+        # This is a volatile content check, not a filesystem CAS transaction.
+        if focused_crop_source_witness(local_pages, local_targets) != cache_key[1][-1]:
+            raise ValueError("focused crop source changed during prefetch")
+        if started is not None:
+            crop_seconds[0] = perf_counter() - started
+        return result
 
     def done(payload, local_key=cache_key, local_index=next_index) -> None:
-        if self._filter_prefetch_key == local_key:
-            self._filter_prefetch_key = None
+        # An old success callback must not steal a newer prefetch, even in
+        # the same scan epoch. It must not cache a result from changed bytes.
+        if (
+            scan_epoch != getattr(self, "_filter_scan_serial", None)
+            or self._filter_prefetch_key != local_key
+        ):
+            return
+        self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
             return
+        try:
+            current = self._filter_batch_snapshot(local_index)
+        except Exception:
+            current = None
+        if current is None or current[0] != local_key:
+            if (
+                int(self.filtered_batch_index) == int(local_index)
+                and not getattr(self, "_filter_save_running", False)
+                and not getattr(self, "_filter_pending_changes", None)
+            ):
+                self._clear_review_workspace(
+                    "本批裁剪来源已变化或不可核验；请重新筛选。"
+                )
+                self.parent.status_var.set(
+                    "当前批次原图、PDIC 或 SECTION 来源无法确认；请核对后重新筛选。"
+                )
+            return
+        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         self._cache_filter_batch_payload(local_key, payload)
-        # If the user clicked 【下一批】 while this worker was still running,
-        # complete that navigation immediately from the freshly built cache.
-        if int(self.filtered_batch_index) == int(local_index):
+        # Never repaint over a human edit or an unresolved save, even when
+        # the completed prefetch still belongs to this exact source.
+        if (
+            int(self.filtered_batch_index) == int(local_index)
+            and not getattr(self, "_filter_save_running", False)
+            and not getattr(self, "_filter_pending_changes", None)
+        ):
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(exc, detail, local_key=cache_key) -> None:
-        if detail:
-            print(detail)
-        if self._filter_prefetch_key == local_key:
-            self._filter_prefetch_key = None
+    def failed(_exc, _detail, local_key=cache_key, local_index=next_index) -> None:
+        if scan_epoch != getattr(self, "_filter_scan_serial", None):
+            return
+        # A newer prefetch owns its own key; a stale callback has no right to
+        # clear it, publish results or alter the current human-edit surface.
+        if self._filter_prefetch_key != local_key:
+            return
+        self._filter_prefetch_key = None
+        if (
+            not getattr(self, "_filter_rows_active", False)
+            or int(self.filtered_batch_index) != int(local_index)
+            or getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+        ):
+            return
+        # The user may be looking at "about to display" for N+1 when its
+        # prefetch fails. An owned direct-render retry is safe only if the
+        # exact image, PDIC and SECTION bytes still match the initial crop.
+        try:
+            current = self._filter_batch_snapshot(local_index)
+        except Exception:
+            # A read-only source/Tk inspection is not a license to expose
+            # private paths or to redraw from unknown source provenance.
+            current = None
+        if current is None or current[0] != local_key:
+            self._clear_review_workspace(
+                "本批裁剪来源已变化或不可核验；请重新筛选。"
+            )
+            self.parent.status_var.set(
+                "当前批次原图、PDIC 或 SECTION 来源无法确认；请核对后重新筛选。"
+            )
+            return
+        # One matching failure => at most one ordinary crop attempt. If the
+        # direct worker also fails, its existing terminal callback handles
+        # UI refusal; never loop, change saved rows or relax source checks.
+        self._request_filter_batch_render()
 
     self.parent._start_ui_worker(
         worker_key, worker, done, failed,
@@ -617,11 +882,24 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
     requested = self.filtered_batch_index + int(delta)
     target = max(0, min(batch_count - 1, requested))
     if target == self.filtered_batch_index:
-        if int(delta) > 0 and not self._filter_scan_complete:
+        if int(delta) > 0 and getattr(self, "_filter_scan_failed", False):
+            self.parent.status_var.set(
+                "后续筛选已中断，请重新筛选以处理尚未扫描的页面。"
+            )
+        elif int(delta) > 0 and not self._filter_scan_complete:
             self.parent.status_var.set("下一批仍在后台筛选与预生成，请继续校对当前批次。")
             self._schedule_filter_next_batch_preload()
         return
     self._flush_focused_changes_now()
+    if self._filter_save_running or self._filter_pending_changes:
+        # A background writer being scheduled does not mean the original
+        # batch's human corrections have reached PDIC. Preserve its visible
+        # editors on write failure/uncertainty instead of losing the source
+        # batch as soon as the worker starts.
+        self.parent.status_var.set(
+            "筛选校对修改尚未保存完成，暂不能切换下一批。"
+        )
+        return
     self.filtered_batch_index = target
     self._request_filter_batch_render()
 
@@ -630,7 +908,10 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
-        if self._filter_scan_complete:
+        if getattr(self, "_filter_scan_failed", False):
+            self.filter_batch_var.set("筛选中断（无完整批次）")
+            self._clear_review_workspace("筛选失败，结果不完整；请重新筛选。")
+        elif self._filter_scan_complete:
             self.filter_batch_var.set("0 / 0")
             self._clear_review_workspace("当前条件没有筛选出词条。")
         else:
@@ -647,6 +928,13 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     self._set_filter_navigation(True)
     snapshot = self._filter_batch_snapshot(self.filtered_batch_index)
     if snapshot is None:
+        # A disappeared/unreadable image, PDIC or SECTION is not a valid
+        # crop. Never silently retain another batch's thumbnail as this one.
+        self.parent.status_var.set(
+            "当前批次的原图、PDIC 或 SECTION 无法核验；请检查来源后重新筛选。"
+        )
+        if not self._filter_save_running and not self._filter_pending_changes:
+            self._clear_review_workspace("裁剪来源不可核验，未生成本批预览。")
         return
     (
         cache_key, targets, pages, settings, viewer_width, available_width,
@@ -655,6 +943,9 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
 
     self._filter_render_serial += 1
     serial = self._filter_render_serial
+    scan_epoch = getattr(self, "_filter_scan_serial", None)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    crop_seconds = [None]
     cached = self._filter_batch_render_cache.get(cache_key)
     if cached is not None:
         self._apply_filter_batch_payload(
@@ -675,27 +966,42 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         local_viewer_width=viewer_width, local_available_width=available_width,
         local_review_zoom=review_zoom, local_review_zoom_auto=review_zoom_auto,
     ):
-        return ReviewWindow._prepare_filter_batch_payload(
+        started = perf_counter() if timing_session is not None else None
+        result = ReviewWindow._prepare_filter_batch_payload(
             local_targets, local_pages, local_settings,
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        if started is not None:
+            crop_seconds[0] = perf_counter() - started
+        return result
 
     def done(payload, local_index=int(self.filtered_batch_index), local_key=cache_key) -> None:
         if (
             serial != self._filter_render_serial
+            or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
         ):
             return
+        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         self._cache_filter_batch_payload(local_key, payload)
         self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(exc, detail) -> None:
-        if detail:
-            print(detail)
-        if serial != self._filter_render_serial:
+    def failed(_exc, _detail) -> None:
+        if (
+            serial != self._filter_render_serial
+            or scan_epoch != getattr(self, "_filter_scan_serial", None)
+            or not getattr(self, "_filter_rows_active", False)
+        ):
             return
-        self._clear_review_workspace(f"本批切词行生成失败：{exc}")
+        # A crop failure cannot mutate the next scan's workspace or
+        # disclose a private page path through the ReviewWindow status.
+        self._clear_review_workspace(
+            "本批切词行生成失败；请检查页面数据后重试。"
+        )
+        self.parent.status_var.set(
+            "本批裁剪未能生成，请检查源文件后重试。"
+        )
 
     self.parent._start_ui_worker(
         f"focused-filter-render-{id(self)}", worker, done, failed
@@ -787,8 +1093,28 @@ def _render_filter_batch(
             style="PCR.Compact.TButton",
         ).pack(side="right", padx=(5, 0))
         self.filter_editors.append(editor)
+
+        def commit_bound_filter_var(
+            *_trace_args, i=index, expected_var=variable, expected_target=target,
+        ) -> None:
+            # A Tk StringVar write captures paste, cut, replacement and IME
+            # commits even when the platform emits no KeyRelease. An old
+            # variable may still outlive a batch redraw: never reuse its
+            # row index for a newly rendered page/XY owner.
+            if (
+                not getattr(self, "_filter_rows_active", False)
+                or i >= len(self.filter_vars)
+                or self.filter_vars[i] is not expected_var
+                or i >= len(self._filter_current_batch_targets)
+                or self._filter_current_batch_targets[i] is not expected_target
+            ):
+                return
+            self._commit_filter_editor_value(i)
+
+        variable.trace_add("write", commit_bound_filter_var)
         editor.bind("<FocusIn>", lambda _event, i=index: self._set_filter_active(i))
         editor.bind("<KeyRelease>", lambda event, i=index: self._on_filter_key(event, i))
+        editor.bind("<FocusOut>", lambda _event, callback=commit_bound_filter_var: callback())
         editor.bind("<Return>", lambda _event, i=index: self._focus_filter_index(i + 1))
         editor.bind("<Up>", lambda _event, i=index: self._focus_filter_index(i - 1))
         editor.bind("<Down>", lambda _event, i=index: self._focus_filter_index(i + 1))
@@ -802,26 +1128,44 @@ def _render_filter_batch(
 
 
 def _persist_focused_filter_settings(self, deps: FocusedFilterDeps) -> None:
+    """Validate first; never partially change settings on invalid input."""
     settings = self.parent.settings
-    settings.focused_review_include_ocr_mismatch = bool(
-        self.focused_include_mismatch_var.get()
+    include_mismatch = bool(self.focused_include_mismatch_var.get())
+    include_chars = bool(self.focused_include_characters_var.get())
+    exclude_single = bool(self.focused_exclude_single_var.get())
+    exclude_reference = bool(self.focused_exclude_reference_var.get())
+    characters = self.focused_characters_var.get().strip()
+    # Older adapter/test owners legitimately lack these optional Tk controls.
+    priority_var = getattr(self, "focused_risk_priority_var", None)
+    capture_var = getattr(self, "focused_risk_capture_var", None)
+    timing_var = getattr(self, "focused_timing_var", None)
+    risk_enabled = (
+        bool(priority_var.get()) if priority_var is not None
+        else bool(getattr(settings, "focused_review_risk_queue_enabled", False))
     )
-    settings.focused_review_include_characters = bool(
-        self.focused_include_characters_var.get()
+    capture_enabled = (
+        bool(capture_var.get()) if capture_var is not None
+        else bool(getattr(settings, "focused_review_risk_witness_capture", False))
     )
-    settings.focused_review_exclude_single_character = bool(
-        self.focused_exclude_single_var.get()
+    timing_enabled = (
+        bool(timing_var.get()) if timing_var is not None
+        else bool(getattr(settings, "focused_review_timing_enabled", False))
     )
-    settings.focused_review_exclude_reference_words = bool(
-        self.focused_exclude_reference_var.get()
-    )
-    settings.focused_review_characters = self.focused_characters_var.get().strip()
     try:
         batch_size = int(self.focused_batch_size_var.get().strip())
     except ValueError as exc:
         raise ValueError("单批显示数量必须是整数。") from exc
-    settings.focused_review_batch_size = max(1, min(500, batch_size))
-    self.focused_batch_size_var.set(str(settings.focused_review_batch_size))
+    validated_size = max(1, min(500, batch_size))
+    settings.focused_review_include_ocr_mismatch = include_mismatch
+    settings.focused_review_include_characters = include_chars
+    settings.focused_review_exclude_single_character = exclude_single
+    settings.focused_review_exclude_reference_words = exclude_reference
+    settings.focused_review_characters = characters
+    settings.focused_review_risk_queue_enabled = risk_enabled
+    settings.focused_review_risk_witness_capture = capture_enabled
+    settings.focused_review_timing_enabled = timing_enabled
+    settings.focused_review_batch_size = validated_size
+    self.focused_batch_size_var.set(str(validated_size))
     self.parent.save_settings()
 
 
@@ -881,6 +1225,13 @@ def _commit_filter_editor_value(self, deps: FocusedFilterDeps, index: int) -> No
     target = self._filter_current_batch_targets[index]
     editor = self.filter_editors[index]
     value = self.filter_vars[index].get().strip()
+    current = str(
+        target.get("current_word", target.get("original_word", ""))
+    ).strip()
+    if value == current:
+        # StringVar.trace_add already committed this exact editor value.
+        # A later KeyRelease / FocusOut must not reschedule an extra writer.
+        return
     target["current_word"] = value
     in_reference = value in set(self.parent._project_words)
     color = "#b3fddd" if in_reference else "#fce5e8"
@@ -930,12 +1281,18 @@ def _queue_focused_change(self, deps: FocusedFilterDeps, target: dict, value: st
             if not page_changes:
                 self._filter_pending_changes.pop(page_index, None)
     else:
-        self._filter_pending_changes.setdefault(page_index, {})[key] = {
+        change = {
             "page_index": page_index,
             "x": key[0], "y": key[1],
             "original_word": original,
             "new_word": clean,
         }
+        # Never fabricate source ownership from the disk at save time:
+        # a hidden external file change after crop display must be detected.
+        source_witness = target.get("_focused_save_source_witness")
+        if source_witness is not None:
+            change["_focused_save_source_witness"] = source_witness
+        self._filter_pending_changes.setdefault(page_index, {})[key] = change
     if self._filter_save_job is not None:
         try:
             self.after_cancel(self._filter_save_job)
@@ -971,24 +1328,100 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     }
     if not snapshot:
         return
+    # Construct the source-page snapshot before clearing the human queue.
+    # An unreadable/invalid project must never erase work on synchronous
+    # setup failure; the caller's close coordinator refuses the exception.
+    pages = list(project.images)
+    timing_session = getattr(self, "_focused_timing_session", None)
+    save_seconds = [None]
     self._filter_pending_changes.clear()
     self._filter_save_running = True
-    pages = list(project.images)
+    # A rejected launch may still produce a late callback after an explicit
+    # retry starts. Only callbacks for the current dispatch own Tk state.
+    dispatch_serial = int(getattr(self, "_filter_save_dispatch_serial", 0)) + 1
+    self._filter_save_dispatch_serial = dispatch_serial
+
+    def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
+        """Requeue only unsaved snapshot entries, without erasing newer edits.
+
+        A second edit at the same source page/XY can arrive while the writer
+        is running. That newer pending value owns the coordinate. A revert
+        to the original text also takes precedence over an old snapshot.
+        """
+        visible_targets = {
+            (int(target["page_index"]), int(target["x"]), int(target["y"])): target
+            for target in getattr(self, "filtered_targets", ())
+        }
+        recovered = False
+        for page_index, changes in snapshot.items():
+            for change in changes:
+                x, y = int(change["x"]), int(change["y"])
+                point = (int(page_index), x, y)
+                row_key = (x, y)
+                if point in committed:
+                    continue
+                if row_key in self._filter_pending_changes.get(page_index, {}):
+                    # An in-flight edit is newer than the failed write.
+                    continue
+                target = visible_targets.get(point)
+                if (
+                    target is not None and "current_word" in target
+                    and str(target["current_word"]).strip()
+                    == str(change.get("original_word") or "").strip()
+                ):
+                    # An explicit user reversion supersedes the old snapshot.
+                    continue
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = change
+                recovered = True
+        return recovered
 
     def worker():
+        started = perf_counter() if timing_session is not None else None
         saved: list[tuple[int, int, int, str]] = []
         conflicts: list[str] = []
+        # Preflight every page before any PDIC write: a stale page among
+        # several edited pages must not allow a partial first-page save.
+        # Actual ReviewWindow filter mode has _filter_rows_active=True.
+        # Keep legacy standalone helper/mock ABI intact outside filter mode.
+        if getattr(self, "_filter_rows_active", False):
+            for page_index, changes in sorted(snapshot.items()):
+                expected = changes[0].get("_focused_save_source_witness")
+                if expected is None or any(
+                    change.get("_focused_save_source_witness") != expected
+                    for change in changes
+                ):
+                    raise RuntimeError(
+                        "筛选校对缺少一致的原图与 SECTION 来源证明，拒绝保存"
+                    )
+                verify_focused_save_source(pages[page_index], expected)
         for page_index, changes in sorted(snapshot.items()):
             page_saved, page_conflicts = _apply_focused_review_page_updates(
                 pages[page_index], pages, page_index, changes
             )
             saved.extend(page_saved)
             conflicts.extend(page_conflicts)
+        if started is not None:
+            save_seconds[0] = perf_counter() - started
         return saved, conflicts
 
     def done(payload) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
         self._filter_save_running = False
+        if getattr(self, "_filter_save_launch_failed", False):
+            # A scheduler can raise after partially handing off work.
+            # A late callback is not an acknowledged launch; do not infer
+            # an all-page commit, reconcile UI words, or auto-retry.
+            self._filter_close_after_save = False
+            restore_unwritten(set())
+            self.parent.status_var.set(
+                "筛选校对启动状态未确认，修改已保留；请核对文件后重试。"
+            )
+            return
         saved, conflicts = payload
+        _record_focused_timing(
+            self, timing_session, "save", save_seconds[0], len(saved),
+        )
         saved_map = {
             (int(page_index), int(x), int(y)): str(word)
             for page_index, x, y, word in saved
@@ -1007,6 +1440,64 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 if saved_word is not None:
                     change["original_word"] = saved_word
 
+        # If a user returned a row to its pre-write original while this
+        # worker was running, the old queue legitimately became empty.
+        # Once the older snapshot *successfully* commits, that user's
+        # reversion is now a new change relative to the committed PDIC.
+        # Preserve any separately queued newer edit as the stronger owner.
+        for target in self.filtered_targets:
+            point = (
+                int(target["page_index"]), int(target["x"]), int(target["y"])
+            )
+            saved_word = saved_map.get(point)
+            if saved_word is None or "current_word" not in target:
+                continue
+            page_index, x, y = point
+            current_word = (
+                str(target["current_word"] or "")
+                .replace("\r", " ").replace("\n", " ")
+                .replace("#", "＃").strip()
+            )
+            row_key = (x, y)
+            queued = self._filter_pending_changes.get(page_index, {}).get(row_key)
+            if queued is not None:
+                # A newer, serialized edit already owns the page/XY.
+                # Drop only a redundant edit to precisely the saved text.
+                if (
+                    str(queued.get("new_word") or "") == saved_word
+                    and current_word == saved_word
+                ):
+                    changes = self._filter_pending_changes[page_index]
+                    changes.pop(row_key, None)
+                    if not changes:
+                        self._filter_pending_changes.pop(page_index, None)
+            elif current_word != saved_word:
+                # Reversion during an in-flight save becomes a fresh edit
+                # relative to the just-published PDIC. Reuse the accepted
+                # crop's image/SECTION provenance; do not mint new proof
+                # from disk in the save-completion callback.
+                replacement = {
+                    "page_index": page_index,
+                    "x": x, "y": y,
+                    "original_word": saved_word,
+                    "new_word": current_word,
+                }
+                source_witness = target.get("_focused_save_source_witness")
+                if source_witness is not None:
+                    replacement["_focused_save_source_witness"] = source_witness
+                # A missing witness still fails closed in the next worker.
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
+
+        # The writer returns no saved rows for a page with source-coordinate
+        # conflicts. Never drop that page's original human corrections or
+        # overwrite edits made after this snapshot was dispatched.
+        recovered = restore_unwritten(set(saved_map))
+        if conflicts or recovered:
+            # A close request belongs only to its fully confirmed save.
+            # Conflicts OR silently unwritten recovered rows must disarm it;
+            # otherwise a later unrelated autosave could close unexpectedly.
+            self._filter_close_after_save = False
+
         current_index = int(self.parent.current_index)
         current_saved = {
             (x, y): word
@@ -1014,6 +1505,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             if int(page_index) == current_index
         }
         if current_saved:
+            saved_entries = []
             for entry in self.parent.entries:
                 value = current_saved.get((int(entry.x), int(entry.y)))
                 if value is not None:
@@ -1022,6 +1514,13 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     entry.ocr_source = "manual"
                     entry.final_engine = "manual"
                     entry.manually_selected = True
+                    saved_entries.append(entry)
+            # Filtered writes finish off-thread. The main window retains its
+            # own Tk editor buffers; ordinary page navigation would otherwise
+            # copy the stale buffer over the newly committed PDIC Entry.word.
+            # Reconcile only saved, live Entry object identities.
+            from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
+            reconcile_main_editors_after_review(self.parent, saved_entries)
 
         if conflicts:
             messagebox.showwarning(
@@ -1034,27 +1533,95 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         self.parent.status_var.set(
             f"筛选校对已保存 {len(saved)} 条修改"
             + (f"；{len(conflicts)} 条冲突" if conflicts else "")
+            + ("；尚有未确认修改，请核对后重试" if recovered else "")
         )
-        if self._filter_pending_changes:
+        if self._filter_pending_changes and not conflicts and not recovered:
+            # Newer edits after a successful write can be serialized next.
             self._filter_save_job = self.after(1, self._flush_focused_changes)
-        elif self._filter_close_after_save:
+        elif self._filter_close_after_save and not self._filter_pending_changes:
             self._filter_close_after_save = False
             self._finish_close_review()
 
-    def failed(exc, detail) -> None:
+    def failed(_exc, _detail) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
         self._filter_save_running = False
-        # Put the snapshot back so a later explicit save can retry.
-        for page_index, changes in snapshot.items():
-            target = self._filter_pending_changes.setdefault(page_index, {})
-            for change in changes:
-                target[(int(change["x"]), int(change["y"]))] = change
-        if detail:
-            print(detail)
-        self.parent.status_var.set(f"筛选校对保存失败：{exc}")
-        messagebox.showerror("筛选校对保存失败", str(exc), parent=self)
+        self._filter_close_after_save = False
+        # Restore unsaved work for explicit retry, never overwrite a later
+        # edit or an explicit reversion made while the worker was running.
+        restore_unwritten(set())
+        # Worker exceptions/tracebacks can contain private project paths or
+        # headwords. Do not echo them to stdout, status, or Tk error dialogs.
+        # Keep the retry guidance generic and retain the human edit buffer.
+        self.parent.status_var.set(
+            "筛选校对保存失败：未确认写入的修改已保留，请检查后重试。"
+        )
+        messagebox.showerror(
+            "筛选校对保存失败",
+            "本次保存未完成；校对修改仍可核对或重试，请检查项目文件。",
+            parent=self,
+        )
 
-    self.parent._start_ui_worker(
-        f"focused-filter-save-{id(self)}",
-        worker, done, failed, wait_on_close=True,
-    )
+    # A scheduler may synchronously invoke a completion callback and then
+    # still raise on launch. Buffer those callbacks until it returns normally:
+    # an unacknowledged launch cannot reconcile, close, or emit duplicate
+    # failure dialogs. Accept only one terminal callback for this dispatch.
+    launch_state = "pending"
+    early_completion = [None]
+    terminal_seen = [False]
+
+    def complete_launch(kind, payload) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
+        if launch_state == "rejected":
+            return
+        if launch_state == "pending":
+            if early_completion[0] is None:
+                early_completion[0] = (kind, payload)
+            return
+        if terminal_seen[0]:
+            return
+        terminal_seen[0] = True
+        if kind == "done":
+            done(payload)
+        else:
+            failed(*payload)
+
+    def accepted_done(payload) -> None:
+        complete_launch("done", payload)
+
+    def accepted_failed(exc, detail) -> None:
+        complete_launch("failed", (exc, detail))
+
+    # Only an acknowledged scheduler handoff can reset a prior refusal.
+    self._filter_save_launch_failed = False
+    try:
+        self.parent._start_ui_worker(
+            f"focused-filter-save-{id(self)}",
+            worker, accepted_done, accepted_failed, wait_on_close=True,
+        )
+    except Exception:
+        # A callback before a thrown launch is not an acknowledged commit.
+        # The worker could have written; retain edits as uncertain rather
+        # than rolling back files or publishing a false success in Tk.
+        launch_state = "rejected"
+        early_completion[0] = None
+        self._filter_save_running = False
+        self._filter_close_after_save = False
+        self._filter_save_launch_failed = True
+        restore_unwritten(set())
+        self.parent.status_var.set(
+            "筛选校对保存启动失败或状态未确认，修改已保留；请核对后重试。"
+        )
+        messagebox.showerror(
+            "筛选校对未保存",
+            "保存任务未能确认启动；窗口保持打开，校对修改可核对后重试。",
+            parent=self,
+        )
+    else:
+        launch_state = "accepted"
+        if early_completion[0] is not None:
+            kind, payload = early_completion[0]
+            early_completion[0] = None
+            complete_launch(kind, payload)
 

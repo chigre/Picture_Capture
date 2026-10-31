@@ -401,3 +401,27 @@ class CanvasController:
             app.cursor_status_var.set(f"坐标：—｜预处理预览｜缩放 {zoom}%")
         else:
             app.cursor_status_var.set(f"坐标：—｜缩放 {zoom}%｜词条 {len(app.entries)}")
+
+
+    def fit_single_column_width(self) -> None:
+        app = self.app
+        """Scale a single dictionary column to the available viewer width."""
+        if app.image is None:
+            return
+        try:
+            column_width = float(app.settings.column_width)
+            gutter = float(app.settings.gutter)
+        except (AttributeError, TypeError, ValueError):
+            column_width, gutter = 0.0, -1.0
+        # Fit one column with a gutter-sized margin on each side.
+        fit_width = column_width + 2 * gutter
+        if not (0 < column_width <= app.image.width and gutter >= 0 and fit_width > 0):
+            app.status_var.set("请先设置有效的单栏宽度和栏间距。")
+            return
+        app.update_idletasks()
+        available = max(1, app.canvas.winfo_width())
+        app.view_scale = min(3.0, max(0.08, available / fit_width))
+        app._update_view_zoom_label()
+        app.redraw()
+        app._set_idle_cursor_status()
+        app.canvas.xview_moveto(0.0)

@@ -141,7 +141,9 @@ def test_app_owns_nonbmp_bridge_lifecycle_without_gui_installer():
         for node in app_class.body
         if isinstance(node, ast.FunctionDef)
     }
-    init_text = ast.get_source_segment(app_source, methods["__init__"]) or ""
+    init_facade = ast.get_source_segment(app_source, methods["__init__"]) or ""
+    init_text = (package / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in init_facade
     destroy_text = ast.get_source_segment(app_source, methods["destroy"]) or ""
     assert "attach_nonbmp_unicode_input(self)" in init_text
     assert init_text.rstrip().endswith("attach_nonbmp_unicode_input(self)")

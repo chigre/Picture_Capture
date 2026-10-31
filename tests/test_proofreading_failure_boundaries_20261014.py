@@ -62,6 +62,7 @@ def test_deferred_ocr_save_disk_failure_never_flushes_evidence_or_sidecar(tmp_pa
             ("one", "@", "@"), 0,
         ),
         _deferred_save_page=page,
+        _deferred_save_pdic_origin=(page, pdic.read_bytes()),
         project=SimpleNamespace(root=tmp_path, images=[page]),
         _flush_pending_manual_override=lambda: calls.append("override"),
         _flush_proofreading_candidate_evidence=lambda: calls.append("candidate"),
@@ -123,6 +124,7 @@ def test_deferred_override_failure_never_attributes_saved_pdic_as_verified_actio
             ("one", "@", "@"), 0,
         ),
         _deferred_save_page=page,
+        _deferred_save_pdic_origin=(page, pdic.read_bytes()),
         project=SimpleNamespace(root=tmp_path, images=[page]),
         _refresh_word_fill_check_from_line_count=lambda *args, **kwargs: None,
         _update_page_row=lambda *args, **kwargs: None,
@@ -133,6 +135,8 @@ def test_deferred_override_failure_never_attributes_saved_pdic_as_verified_actio
     with pytest.raises(OSError, match="sidecar permission denied"):
         PictureCaptureApp._flush_deferred_page_save(obj)
     assert calls == ["override"]
+    assert obj._deferred_save_uncertain is True
+    assert obj._deferred_save_snapshot[0] == page
     assert not (tmp_path / "ProofreadingEvidence").exists()
 
 def test_page_navigation_discards_queued_candidate_audit_without_writing(tmp_path):

@@ -10,7 +10,7 @@ physical Layout row metrics. OCR engine choice must never alter this crop box.
 from dataclasses import dataclass
 from typing import Any
 
-from ..entry_classification import get_entry_classification
+from ..proofreading.classification import get_entry_classification
 from ..models import AppSettings, Entry
 
 
@@ -51,7 +51,7 @@ def resolve_entry_ocr_row_metrics(
     fallback = _fallback_row_metrics(settings)
     analysis = None
     try:
-        from ..image_utils import build_analysis_image
+        from ..preprocess.analysis_image import build_analysis_image
         from ..layout.core_understanding import understand_layout_core
 
         analysis = build_analysis_image(image, settings)

@@ -105,7 +105,7 @@ def test_header_footer_use_same_palette_and_keep_their_callbacks():
     for command in ("app.run_normal_draw_action", "app.run_ocr_draw_action", "app.open_review"):
         assert command in source
     assert 'button._pc_skip_classic_appearance = True' in source
-    assert 'refresh_macaron_action_buttons(self)' in main
-    assert main.index('refresh_macaron_action_buttons(self)') > main.index(
-        'def _apply_resolved_appearance(self, mode: object)'
-    )
+    appearance = (Path(app_module.__file__).parent / "ui/appearance_resolution.py").read_text(encoding="utf-8")
+    assert "_appearance_resolution.apply_resolved_appearance(" in main
+    assert 'refresh_macaron_action_buttons(self)' in appearance
+    assert appearance.index("def apply_resolved_appearance(") < appearance.index("refresh_macaron_action_buttons(self)")

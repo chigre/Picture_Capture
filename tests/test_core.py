@@ -1888,7 +1888,11 @@ def test_v2810_save_current_page_is_mode_specific():
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _save_current_page_by_mode(")
     end = text.index("    def save_current_page(", start)
-    block = text[start:end]
+    assert "_main_pdic_persistence._save_current_page_by_mode(" in text[start:end]
+    owner = (source.parent / "ui/main_pdic_persistence.py").read_text(encoding="utf-8")
+    start = owner.index("def _save_current_page_by_mode(")
+    end = owner.index("\ndef save_current_page(", start)
+    block = owner[start:end]
     assert 'if self.polygon_draw_var.get() and not getattr(self, "_batch_allow_pdic_edits", False):' in block
     # PPP still has its own mode-specific save path, but now passes through
     # the disk-first canonical-label writer rather than serializing raw labels.
@@ -3320,7 +3324,8 @@ def test_v2818_position_variants_are_mutually_exclusive_after_overrides():
     assert rows[1]["selected"] is True
 
 
-def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action():
+def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action(tmp_path):
+    from types import SimpleNamespace
     from picture_capture.app import PictureCaptureApp
     from picture_capture.models import AppSettings, Entry
 
@@ -3344,6 +3349,10 @@ def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action():
     }
     app = PictureCaptureApp.__new__(PictureCaptureApp)
     app.settings = AppSettings()
+    # Source ownership now requires a real page-scoped manual-selection path.
+    # Keep the actual switch behavior and all original assertions unchanged.
+    app.project = SimpleNamespace(root=tmp_path)
+    app.current_page = tmp_path / "synthetic.png"
     app.entries = [Entry("信", 20, 92, candidate_id="base")]
     app.ocr_review_candidates = [refined, original]
     app.candidate_check_vars = {"base": FakeVar(True), "base-rawy": FakeVar(False)}
@@ -3356,7 +3365,7 @@ def test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action():
 
     PictureCaptureApp.set_candidate_selected(app, original, True)
 
-    assert refined["selected"] is False
+    assert refined["selected"] is False, app.status_var.messages
     assert original["selected"] is True
     assert len(app.entries) == 1
     assert app.entries[0].y == 104
@@ -3626,9 +3635,11 @@ def test_v292_display_zoom_remains_display_only_and_main_image_is_rgb():
     assert 'normalize_page_rgb(opened)' in load_block
     assert 'convert("RGBA")' not in load_block
 
-    cache_start = text.index("    def _get_cached_display_photo(")
-    cache_end = text.index("    def _apply_display_mode(", cache_start)
-    cache_block = text[cache_start:cache_end]
+    assert "_main_display_cache._get_cached_display_photo(" in text
+    cache_source = (source.parent / "ui/main_display_cache.py").read_text(encoding="utf-8")
+    cache_start = cache_source.index("def _get_cached_display_photo(")
+    cache_end = cache_source.index("\ndef _current_effective_profile_settings(", cache_start)
+    cache_block = cache_source[cache_start:cache_end]
     assert 'self.image.resize(size, Image.Resampling.LANCZOS)' in cache_block
     assert 'self.image.convert("RGB")' not in cache_block
 
@@ -3667,7 +3678,7 @@ def test_v292_paddle_engine_cache_is_bounded_without_invalidating_local_refs():
 
 def test_v293_rgba_transparency_is_composited_onto_white_before_ocr():
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     image = Image.new("RGBA", (3, 1), (255, 0, 0, 0))
     image.putpixel((1, 0), (0, 0, 0, 255))
@@ -3684,7 +3695,7 @@ def test_v293_rgba_transparency_is_composited_onto_white_before_ocr():
 
 def test_v293_palette_transparency_is_composited_onto_white():
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     image = Image.new("P", (2, 1))
     image.putpalette([255, 0, 0, 0, 0, 0] + [0, 0, 0] * 254)
@@ -3701,7 +3712,7 @@ def test_v293_palette_transparency_is_composited_onto_white():
 def test_v293_opaque_rgb_pixels_are_bit_exact_after_normalization():
     import numpy as np
     from PIL import Image
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.page_pixels import normalize_page_rgb
 
     rng = np.random.default_rng(293)
     pixels = rng.integers(0, 256, size=(19, 23, 3), dtype=np.uint8)
@@ -3719,13 +3730,15 @@ def test_v293_all_primary_page_loaders_use_alpha_safe_normalization():
     package = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app_text = (package / "app.py").read_text(encoding="utf-8")
     project_session = (package / "ui/project_session_workflow.py").read_text(encoding="utf-8")
-    training_text = (package / "training_export.py").read_text(encoding="utf-8")
+    training_text = (package / "training/export_runtime.py").read_text(encoding="utf-8")
+    training_owner_text = (package / "training/export_page_v2.py").read_text(encoding="utf-8")
     layout_text = (package / "layout/detection.py").read_text(encoding="utf-8")
-    paddle_text = (package / "paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_text = (package / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
 
     assert "self.image = normalize_page_rgb(opened)" in project_session
     assert "image = normalize_page_rgb(opened)" in (app_text + project_session)
-    assert "image = normalize_page_rgb(opened)" in training_text
+    assert "_page_v2.export_training_page(" in training_text
+    assert "image = normalize_page_rgb(opened)" in training_owner_text
     assert "source = normalize_page_rgb(image)" in layout_text
     assert "oriented = normalize_page_rgb(image)" in paddle_text
 
@@ -3747,9 +3760,11 @@ def test_v294_candidate_checkbox_uses_local_overlay_update_and_deferred_save():
 def test_v294_background_photo_cache_key_includes_page_size_binary_and_appearance():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    start = text.index("    def _get_cached_display_photo(")
-    end = text.index("    def _apply_display_mode(", start)
-    block = text[start:end]
+    assert "_main_display_cache._get_cached_display_photo(" in text
+    cache_source = (source.parent / "ui/main_display_cache.py").read_text(encoding="utf-8")
+    start = cache_source.index("def _get_cached_display_photo(")
+    end = cache_source.index("\ndef _current_effective_profile_settings(", start)
+    block = cache_source[start:end]
     assert "key = (id(self.image), int(size[0]), int(size[1]), binary, self.appearance_mode)" in block
     assert "self._display_photo_cache_key != key" in block
 
@@ -4154,7 +4169,9 @@ def test_v299_load_project_restores_word_fill_status_before_page_list_refresh():
 
 def test_v2910_page_list_has_persistent_fill_status_column():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'columns = ("bookmark", "page", "section", "lined", "fill_status", "illustrations")' in text
     for col,label in (("bookmark","●"),("page","页面"),("section","域"),("lined","线"),("fill_status","填充状态"),("illustrations","图")):
@@ -4631,6 +4648,8 @@ def test_v2103_review_wordslist_uses_virtual_window_and_cached_membership():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.word_window_radius = 250" in review
     assert 'text="前100"' in REVIEW_WORKSPACE_SOURCE and 'text="后100"' in REVIEW_WORKSPACE_SOURCE
     assert "step = 100" in REVIEW_REFERENCE_SOURCE
@@ -4735,7 +4754,9 @@ def test_v2140_page_list_visible_column_order_places_illustrations_before_fill_s
 
 def test_v2116_page_list_has_illustration_count_column_and_sort():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     assert 'self.page_list.heading("illustrations", text="图", anchor="center")' in text
     assert 'command=lambda: self._sort_page_list("illustrations")' in text
@@ -4792,7 +4813,9 @@ def test_main_crop_preview_is_selected_only_through_display_mode():
 
 def test_display_mode_and_color_mode_live_at_bottom_of_auxiliary_options():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     controller=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
     from picture_capture.ui.compact_display_menu import DISPLAY_MODES
@@ -4919,7 +4942,9 @@ def test_fixed_column_prior_constrains_sparse_box_layout():
 
 def test_bookmark_controls_and_project_switch_protect_project_settings():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     project_session = (root / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     compact=(root / "ui/simple_page_controls.py").read_text(encoding="utf-8")
@@ -4931,7 +4956,7 @@ def test_bookmark_controls_and_project_switch_protect_project_settings():
     block=project_session.split("def _load_project(",1)[1].split("def on_page_select",1)[0]
     for rule in ("self.after_cancel(pending_quick_job)","self._quick_trace_ready = False","self._display_geometry_cache = None"):
         assert rule in block
-    processing=(root / "processing.py").read_text(encoding="utf-8")
+    processing=(root / "processing/__init__.py").read_text(encoding="utf-8")
     assert "refine_separator_y" in processing
 
 def test_crop_preview_uses_export_filename_and_centered_entry_typography():
@@ -5273,6 +5298,7 @@ def test_v2119_crop_controls_live_only_in_crop_settings_dialog():
 def test_crop_settings_v7_declares_source_coordinate_space():
     root = Path(__file__).resolve().parents[1]
     schema = (root / "src" / "picture_capture" / "ui" / "settings" / "schema.py").read_text(encoding="utf-8")
+    catalog = (root / "src" / "picture_capture" / "ui" / "settings" / "help_catalog.py").read_text(encoding="utf-8")
     crop_class = (Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "ui" / "dialogs" / "crop_settings.py").read_text(encoding="utf-8")
     assert '"version": CROP_SETTINGS_VERSION' in crop_class
     assert '"coordinate_space": SOURCE_COORDINATE_SPACE' in crop_class
@@ -5281,8 +5307,8 @@ def test_crop_settings_v7_declares_source_coordinate_space():
     assert '"entry_left_padding_x"' in crop_class
     assert '"entry_right_padding_x"' in crop_class
     assert "原图像素" in crop_class
-    assert '"start_y": "正文起始 Y"' in schema
-    assert '"manual_x": "第一栏左缘 X"' in schema
+    assert '"start_y": "正文起始 Y"' in catalog
+    assert '"manual_x": "第一栏左缘 X"' in catalog
     assert '"paddle_left_tolerance": "% 单栏宽"' in schema
     assert '"paddle_separator_safety_px": "原图px"' in schema
 
@@ -5437,7 +5463,9 @@ def test_sidebar_defaults_fold_sections_two_through_five_and_keep_project_detail
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
     text = (root / "app.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    defaults=text.split('self.section_expanded = {',1)[1].split("stored_sections =",1)[0]
+    startup = (root / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in text
+    defaults=startup.split('self.section_expanded = {',1)[1].split("stored_sections =",1)[0]
     for key,value in (("preprocess","False"),("normal","True"),("aux","False"),("ocr","False"),("actions","False"),("postproduction","False"),("pages","True")):
         assert f'"{key}": {value}' in defaults
     assert "def _apply_new_project_sidebar_defaults(self) -> None:" in text
@@ -5567,7 +5595,8 @@ def test_all_configurable_content_font_paths_use_shared_auto_resolver():
     render_text = (Path(__file__).parents[1] / "src/picture_capture/ui/main_canvas_render_workflow.py").read_text(encoding="utf-8")
     assert "self.settings.illustration_label_font_family,\n                            self.settings.ocr_language" in render_text
     assert "self.parent.settings.review_entry_font_family,\n            self.parent.settings.ocr_language" in REVIEW_WORKSPACE_SOURCE
-    assert '"review_simplified_font_family"' in app_text
+    assert "_review_window_initialization.initialize_review_window(" in app_text
+    assert '"review_simplified_font_family"' in REVIEW_WORKSPACE_SOURCE
     display = (Path(__file__).parents[1] / "src/picture_capture/ui/compact_display_menu.py").read_text(encoding="utf-8")
     assert 'values=families' in display
     assert "review_families = (AUTO_FONT_FAMILY" in REVIEW_WORKSPACE_SOURCE
@@ -5623,11 +5652,15 @@ def test_review_zoom_defaults_to_auto_99_percent_left_pane_fit():
 
     app_text = (Path(__file__).parents[1] / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
     assert 'text="自动", width=5, command=self.reset_review_zoom' in REVIEW_WORKSPACE_SOURCE
-    assert "self.review_zoom_auto = stored_review_zoom <= 0" in app_text
+    initializer = (Path(__file__).parents[1] / "src/picture_capture/ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app_text
+    assert "self.review_zoom_auto = stored_review_zoom <= 0" in initializer
     assert "widest_crop = max(crop.width for crop in raw_crops)" in REVIEW_WORKSPACE_SOURCE
     assert "widest_crop, auto_image_area_width, 0.99" in REVIEW_WORKSPACE_SOURCE
-    assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in app_text
-    assert "not self.review_zoom_auto" in app_text
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._stored_review_zoom_percent(" in app_text
+    assert "return 0.0 if self.review_zoom_auto else round(self.review_zoom * 100.0, 2)" in events
+    assert "not self.review_zoom_auto" in events
 
 
 def test_google_lens_language_follows_headword_ocr_language():
@@ -5635,7 +5668,7 @@ def test_google_lens_language_follows_headword_ocr_language():
     assert settings["ocr_language"] == "jpn"
     assert settings["paddle_lens_language"] == "jpn"
 
-    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "picture_capture" / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
     assert 'getattr(settings, "ocr_language", "")' in source
     assert "band, language=lens_language" in source
     assert '"google_lens_language": lens_language' in source
@@ -5735,6 +5768,8 @@ def test_v21116_review_ui_exposes_editable_digit_map_and_grouped_vowels():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
@@ -5824,7 +5859,9 @@ def test_review_toolbar_controls_are_grouped_by_function():
     assert display.index("padding_row = ttk.Frame(") < display.index("font_row = ttk.Frame(")
     assert 'text="文本左边距：", style="PCR.Black.TLabel"' in display
     assert 'text="上下边距：", style="PCR.Black.TLabel"' in display
-    assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in review
+    styles_owner = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_style_policy.py").read_text(encoding="utf-8")
+    assert "_review_style_policy.configure_review_styles(" in review
+    assert 'foreground="#000000" if self.parent.appearance_mode != "dark" else colors["text"]' in styles_owner
 
     ocr_start = build.index('right, "ocr", "OCR结果"')
     ocr_end = build.index('right, "network", "词条联网核验结果"', ocr_start)
@@ -5846,9 +5883,12 @@ def test_review_right_sections_use_requested_default_expansion_states():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'for key in ("display", "digit", "accent", "ocr", "network", "reference")' in review
     assert 'key: tk.BooleanVar(value=(key == "reference"))' in review
-    assert 'expanded = True if state is None else bool(state.get())' in review
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert 'expanded = True if state is None else bool(state.get())' in events
     for key, title in (
         ("display", "显示设置"),
         ("digit", "数字替换映射"),
@@ -5859,8 +5899,9 @@ def test_review_right_sections_use_requested_default_expansion_states():
     ):
         assert f'right, "{key}", "{title}"' in REVIEW_WORKSPACE_SOURCE
     assert 'def _toggle_review_right_section(self, key: str) -> None:' in review
-    assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in review
-    assert "body.pack_forget()" in review
+    assert "_review_layout_events._toggle_review_right_section(" in review
+    assert 'title_var.set(("▾ " if expanded else "▸ ") + title)' in events
+    assert "body.pack_forget()" in events
 
 
 def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
@@ -5875,7 +5916,8 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
 
     styles_start = review.index("    def _configure_review_styles(")
     styles_end = review.index("    def _review_flat_button(", styles_start)
-    styles = review[styles_start:styles_end]
+    assert "_review_style_policy.configure_review_styles(" in review[styles_start:styles_end]
+    styles = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_style_policy.py").read_text(encoding="utf-8")
     assert "theme_use(" not in styles
     assert '"PCR.Surface.TFrame"' in styles
     assert '"PCR.Section.TLabelframe"' not in styles
@@ -5885,12 +5927,14 @@ def test_review_modern_styles_are_scoped_and_preserve_dense_workflow():
     assert 'panes.add(left, weight=0)' in build
     assert 'panes.add(right, weight=1)' in build
     assert 'self.review_panes = panes' in build
-    assert 'self._fit_review_left_pane_to_toolbar' in review
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "def _fit_review_left_pane_to_toolbar(" in events
+    assert "_review_layout_events._fit_review_left_pane_to_toolbar(" in review
     assert 'text="上\\n一\\n页"' in build and 'text="下\\n一\\n页"' in build
     assert 'self._review_collapsible_section(' in build
-    section_helper = review[
-        review.index("    def _review_collapsible_section("):
-        review.index("    def _build(self) -> None:")
+    section_helper = events[
+        events.index("def _review_collapsible_section("):
+        events.index("def _toggle_review_right_section(")
     ]
     assert 'style="PCR.Header.TLabel"' in section_helper
     assert 'relief="sunken"' not in build
@@ -5913,9 +5957,11 @@ def test_review_screenshot_polish_prevents_right_pane_clipping():
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
 
-    section_start = review.index("    def _review_collapsible_section(")
-    section_end = review.index("    def _build(self) -> None:", section_start)
-    section = review[section_start:section_end]
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._review_collapsible_section(" in review
+    section_start = events.index("def _review_collapsible_section(")
+    section_end = events.index("def _toggle_focused_panel(", section_start)
+    section = events[section_start:section_end]
     assert "ttk.LabelFrame(" not in section
     assert 'ttk.Separator(frame, orient="horizontal")' in section
     assert "body.pack_forget()" in section
@@ -6016,9 +6062,11 @@ def test_v21117_review_autosave_reuses_main_autosave_variable_and_tick():
     review = text[start:end]
     assert 'variable=self.parent.autosave_var' in REVIEW_WORKSPACE_SOURCE
     assert 'self.parent.toggle_autosave()' in REVIEW_WORKSPACE_SOURCE
-    tick_start = text.index("    def autosave_tick", text.index("class PictureCaptureApp"))
-    tick_end = text.index("    def open_settings", tick_start)
-    tick = text[tick_start:tick_end]
+    assert "_main_pdic_persistence.autosave_tick(" in text
+    owner = (Path(inspect.getsourcefile(app_module)).parent /
+             "ui" / "main_pdic_persistence.py").read_text(encoding="utf-8")
+    tick_start = owner.index("def autosave_tick(")
+    tick = owner[tick_start:]
     assert 'review.autosave_commit()' in tick
 
 
@@ -6157,7 +6205,9 @@ def test_review_regular_crop_uses_half_spacing_top_and_full_spacing_height():
 
 def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wired():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
-    text = source.read_text(encoding="utf-8")
+    app_owner = source.read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (source.parent / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     assert "self.sidebar_canvas = tk.Canvas(" in text
     assert 'orient="vertical", command=self.sidebar_canvas.yview' in text
     assert "def _sidebar_mousewheel(" in text
@@ -6165,12 +6215,13 @@ def test_sidebar_scroll_review_height_controls_and_normal_process_worker_are_wir
     review_start = text.index("class ReviewWindow")
     review_end = text.index("class PictureCaptureApp", review_start)
     review = text[review_start:review_end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (source.parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert '"行间空："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通词条行切图高："' in REVIEW_WORKSPACE_SOURCE
     assert "self.review_regular_crop_height_var" in review
-    detect_start = text.index("    def _detect_pages(")
-    detect_end = text.index("    def clear_entries", detect_start)
-    detect_block = text[detect_start:detect_end]
+    assert "_detection_batch_execution.detect_pages(" in text
+    detect_block = (source.parent / "ui/detection_batch_execution.py").read_text(encoding="utf-8")
     assert 'ProcessPoolExecutor(max_workers=1' in detect_block
     # A single ordinary page still uses the legacy one-process worker, while
     # multi-page ordinary drawing uses the bounded independent page pool.
@@ -6296,6 +6347,8 @@ def test_v21122_review_ui_exposes_vertical_safety_padding_and_applies_ipady():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'self.review_vertical_padding_var = tk.StringVar(' in review
     assert 'self._review_vertical_padding_apply_job: str | None = None' in review
     assert 'text="上下边距："' in REVIEW_WORKSPACE_SOURCE
@@ -6348,6 +6401,8 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert '"普通字/行高："' in REVIEW_WORKSPACE_SOURCE
     assert '"大字头切图高："' in REVIEW_WORKSPACE_SOURCE
     assert '"普通字/行高：", self.review_line_height_var, self.review_line_height_px_var' in REVIEW_WORKSPACE_SOURCE
@@ -6376,8 +6431,10 @@ def test_v21122_hotfix2_review_ui_exposes_shared_and_single_height_plus_main_ocr
     assert 'self._schedule_review_single_cjk_height_apply("pixel")' in review
     assert 'text="显示 OCR 内容选择"' not in review
     assert 'text="显示 OCR 底色"' not in review
-    assert 'self.settings.review_main_show_ocr_choices = False' in text
-    assert 'self.settings.review_main_show_ocr_background = False' in text
+    dialog_owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    assert "_main_dialog_lifecycle.open_review(" in text
+    assert 'self.settings.review_main_show_ocr_choices = False' in dialog_owner
+    assert 'self.settings.review_main_show_ocr_background = False' in dialog_owner
     assert 'self.parent.settings.character_height = line_height' in REVIEW_APPEARANCE_SOURCE
     assert 'self.parent.settings.review_single_cjk_line_height = line_height' in REVIEW_APPEARANCE_SOURCE
 
@@ -6483,7 +6540,9 @@ def test_v21122_hotfix5_review_rows_expose_x_delete_and_grave_shortcut():
     assert 'command=lambda i=index: self.delete_review_entry(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'editor.bind("<KeyPress-grave>", lambda _e, i=index: self.delete_review_entry(i))' in REVIEW_WORKSPACE_SOURCE
     assert "def delete_review_entry(self, index: int) -> str:" in review
-    assert "self.parent.save_pdic(silent=True, sync_editors=False)" in REVIEW_ENTRY_SOURCE
+    assert "commit_review_bundle(self, transaction_before)" in REVIEW_ENTRY_SOURCE
+    assert "protect_review_pdic_commit(self)" in REVIEW_ENTRY_SOURCE
+    assert "self.parent.save_pdic(silent=True, sync_editors=False)" not in REVIEW_ENTRY_SOURCE
     assert "self.parent.redraw()" in REVIEW_ENTRY_SOURCE
 
 
@@ -6837,7 +6896,8 @@ def test_v2124_review_simplified_is_editable_saved_and_has_network_button():
     assert 'text="网查"' in REVIEW_WORKSPACE_SOURCE
     assert 'command=lambda i=index: self.lookup_simplified_online(i)' in REVIEW_WORKSPACE_SOURCE
     assert 'def _persist_simplified_page' in review
-    assert 'write_simplified_records(' in REVIEW_SIMPLIFIED_SOURCE
+    assert 'guarded_write_records(' in REVIEW_SIMPLIFIED_SOURCE
+    assert 'writer=deps.write_simplified_records' in REVIEW_SIMPLIFIED_SOURCE
     assert 'def on_simplified_key' in review
 
 
@@ -6871,7 +6931,8 @@ def test_v2125_main_delete_path_removes_aligned_simplified_record():
     body = text[start:]
     assert "simplified_entry_key(entry.x, entry.y)" in body
     assert "read_simplified_records(path)" in body
-    assert "write_simplified_records(path, stem, records)" in body
+    assert "guarded_write_records(" in body
+    assert "writer=write_simplified_records" in body
     assert "self._delete_aligned_simplified_entry(entry)" in body
     assert "review.render_rows()" in body
 
@@ -6992,7 +7053,9 @@ def test_environment_center_reports_opencc_and_actionable_components():
     center_text = Path(inspect.getsourcefile(center_module)).read_text(encoding="utf-8")
     assert "EnvironmentCenterWindow" in app_text
     assert "show_environment_center" in app_text
-    assert '"环境中心"' in app_text
+    settings_init = (Path(__file__).parents[1] / "src/picture_capture/ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in app_text
+    assert '"环境中心"' in settings_init
     assert 'self.app._distribution_version("opencc")' in center_text
     assert 'self.app._distribution_version("opencc-python-reimplemented")' in center_text
     assert "简化配置：t2s.json（词组优先）" in center_text
@@ -7034,6 +7097,8 @@ def test_review_network_status_uses_single_line_result_block():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'value="网络词汇核验：等待选择词条"' in review
     assert '"✓ 有词典收录：" + "、".join(found_names)' in REVIEW_LOOKUP_SOURCE
     assert '"○ 各可用词典均未检出精确词条（不代表该词不存在）"' in REVIEW_LOOKUP_SOURCE
@@ -7063,6 +7128,8 @@ def test_v2140_reference_list_shows_smaller_line_numbers_before_words():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.word_list = tk.Text(" in REVIEW_WORKSPACE_SOURCE
     assert '"wordslist_number", font=(number_family, 10)' in REVIEW_WORKSPACE_SOURCE
     assert 'f"{global_index + 1:>{digits}}", ("wordslist_number",)' in REVIEW_WORKSPACE_SOURCE
@@ -7080,6 +7147,8 @@ def test_v2128_review_network_toolbar_has_compact_source_badges():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'text="自动检查"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="立即"' in REVIEW_WORKSPACE_SOURCE
     assert 'value="CC-CEDICT(?)"' in review
@@ -7104,10 +7173,12 @@ def test_v2129_review_window_has_independent_simplified_font_controls():
     body = text[start:text.index("class ", start + 20) if "class " in text[start + 20:] else len(text)]
     assert 'text="词条字体："' in REVIEW_WORKSPACE_SOURCE
     assert 'text="简体字体："' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.review_simplified_font_family_var' in body
-    assert 'self.review_simplified_font_size_var' in body
-    assert 'self.review_simplified_font_bold_var' in body
-    assert 'self.review_simplified_font_italic_var' in body
+    init_text = (Path(inspect.getsourcefile(app_module)).parent / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in body
+    assert 'self.review_simplified_font_family_var' in init_text
+    assert 'self.review_simplified_font_size_var' in init_text
+    assert 'self.review_simplified_font_bold_var' in init_text
+    assert 'self.review_simplified_font_italic_var' in init_text
     assert 'settings.review_simplified_font_family = family' in REVIEW_APPEARANCE_SOURCE
     assert 'settings.review_simplified_font_size = size' in REVIEW_APPEARANCE_SOURCE
 
@@ -7211,6 +7282,8 @@ def test_v21210_review_toolbar_has_cc_simplified_comparison():
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert 'value="CC简(?)"' in review
     assert 'textvariable=self.cc_simplified_compare_var' in REVIEW_WORKSPACE_SOURCE
     assert 'command=self.show_cc_simplified_comparison' in REVIEW_WORKSPACE_SOURCE
@@ -7319,7 +7392,7 @@ def test_v21211_new_unsaved_simplified_can_still_follow_original_during_session(
         def get(self): return self.value
         def set(self, value): self.value = value
 
-    entry = SimpleNamespace(x=10, y=20)
+    entry = SimpleNamespace(x=10, y=20, word="校對")
     review = object.__new__(app_module.ReviewWindow)
     review.vars = [Var("校對")]
     review.simplified_vars = [Var("旧")]
@@ -7333,6 +7406,13 @@ def test_v21211_new_unsaved_simplified_can_still_follow_original_during_session(
     review._auto_simplified_value = lambda original, fallback=None: "校对"
     records = {}
     review._simplified_page_records = lambda stem: records
+    # Model a fully rendered ReviewWindow page, including its stable
+    # Entry identity, rather than a pre-row-binding synthetic shell.
+    review.row_entries = [entry]
+    review.parent = SimpleNamespace(
+        current_page=SimpleNamespace(stem="0001"), entries=[entry],
+        _ordered_entries_reading_order=lambda: [entry],
+    )
 
     app_module.ReviewWindow._refresh_simplified_for_index(review, 0)
     assert review.simplified_vars[0].get() == "校对"
@@ -7350,7 +7430,10 @@ def test_v2140_regenerate_simplified_current_page_overwrites_saved_and_manual_re
         def get(self): return self.value
         def set(self, value): self.value = value
 
-    entries = [SimpleNamespace(x=10, y=20), SimpleNamespace(x=30, y=40)]
+    entries = [
+        SimpleNamespace(x=10, y=20, word="舊詞"),
+        SimpleNamespace(x=30, y=40, word="測試"),
+    ]
     records = {
         "10,20": {"x": 10, "y": 20, "source_word": "舊詞", "text": "人工旧值", "manual": True},
         "30,40": {"x": 30, "y": 40, "source_word": "測試", "text": "旧测试", "manual": False},
@@ -7367,11 +7450,13 @@ def test_v2140_regenerate_simplified_current_page_overwrites_saved_and_manual_re
     review._rendered_page_stem = "0001"
     review.active_index = 0
     review._bound_row_entries = lambda: entries
+    review.row_entries = list(entries)  # Exactly the rendered, live Tk rows.
     review._simplified_page_records = lambda stem: records
     review._persist_simplified_page = lambda stem: persisted.append(stem)
     review._refresh_cc_simplified_comparison = lambda index: None
     review.parent = SimpleNamespace(
         current_page=SimpleNamespace(stem="0001", name="0001.png"),
+        entries=entries,
         _claim_page_for_manual_edit=lambda: True,
         status_var=SimpleNamespace(set=lambda value: statuses.append(value)),
     )
@@ -7409,14 +7494,18 @@ def test_v2140_review_left_pane_fits_complete_toolbar_and_right_gets_remaining_w
     start = text.index("class ReviewWindow")
     end = text.index("class PictureCaptureApp", start)
     review = text[start:end]
+    assert "_review_window_initialization.initialize_review_window(" in text
+    review += "\n" + (Path(__file__).resolve().parents[1] / 'src' / 'picture_capture' / "ui/review_window_initialization.py").read_text(encoding="utf-8")
     assert "self.review_panes = panes" in REVIEW_WORKSPACE_SOURCE
     assert "self.review_control_row = row1" in REVIEW_WORKSPACE_SOURCE
     assert "self.after_idle(self._initialize_review_layout_and_rows)" in review
     assert "def _initialize_review_layout_and_rows" in review
-    assert "self._fit_review_left_pane_to_toolbar()" in review
-    fit_start = review.index("    def _fit_review_left_pane_to_toolbar")
-    fit_end = review.index("    def _build(self) -> None:", fit_start)
-    fit = review[fit_start:fit_end]
+    events = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/review_layout_events.py").read_text(encoding="utf-8")
+    assert "_review_layout_events._initialize_review_layout_and_rows(" in review
+    assert "self._fit_review_left_pane_to_toolbar()" in events
+    fit_start = events.index("def _fit_review_left_pane_to_toolbar(")
+    fit_end = events.index("def _initialize_review_layout_and_rows(", fit_start)
+    fit = events[fit_start:fit_end]
     assert "row.winfo_reqwidth()" in fit
     assert "panes.sashpos(0, min(required, available))" in fit
     assert "panes.add(left, weight=0)" in REVIEW_WORKSPACE_SOURCE
@@ -7540,7 +7629,7 @@ def test_windows_ocr_installer_uses_thin_batch_and_locked_uv_profiles():
     }
 
     runtime_source = Path("src/picture_capture/runtime/windows_gpu.py").read_text(encoding="utf-8")
-    paddle_source = Path("src/picture_capture/paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_source = Path("src/picture_capture/paddle_headwords/__init__.py").read_text(encoding="utf-8")
     layout_source = Path("src/picture_capture/layout/detection.py").read_text(encoding="utf-8")
     verify_source = Path("scripts/verify_ocr_environment.py").read_text(encoding="utf-8")
     assert "add_dll_directory" in runtime_source
@@ -8102,17 +8191,21 @@ def test_main_auxiliary_section_controls_section_overlay_and_ocr_display_order()
 def test_settings_display_labels_wrap_responsively_and_color_mode_name_is_current():
     source = Path(__file__).resolve().parents[1] / "src" / "picture_capture" / "app.py"
     text = source.read_text(encoding="utf-8")
-    assert 'text="颜色模式："' in text
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in text
+    init = (source.parent / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert 'text="颜色模式："' in init
     assert '"system": "跟随系统"' in text
     assert 'text="深色模式（夜间模式）"' not in text
     assert "single_line_labels: bool = False" in text
-    assert "wraplength=0 if single_line_labels else 180" in text
-    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in text
-    display_call = text.index('self._add_setting_group(\n            display,\n            "界面与校对"')
-    display_block = text[display_call:display_call + 240]
+    form = (source.parent / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.add_setting_group(" in text
+    assert "wraplength=0 if single_line_labels else 180" in form
+    assert "group.columnconfigure(0, minsize=longest_label_width + 4)" in form
+    display_call = init.index('self._add_setting_group(\n        display,\n        "界面与校对"')
+    display_block = init[display_call:display_call + 240]
     assert 'single_line_labels=True' not in display_block
-    assert "appearance_help = ttk.Label(" in text
-    assert "appearance_group, appearance_help, horizontal_padding=24, min_wrap=160" in text
+    assert "appearance_help = ttk.Label(" in init
+    assert "appearance_group, appearance_help, horizontal_padding=24, min_wrap=160" in init
 
 
 def test_page_list_context_menu_matches_visible_column_order():
@@ -8128,9 +8221,11 @@ def test_page_list_context_menu_matches_visible_column_order():
 
 def test_page_list_fills_width_adaptively_and_fill_status_is_opt_in_by_default():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = app_owner + "\n" + (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
-    models=(root / "models.py").read_text(encoding="utf-8")
+    models=(root / "profile/settings_model.py").read_text(encoding="utf-8")
     block=PAGE_INDEX_SOURCE.split("def _fit_page_list_columns(",1)[1].split("\ndef _hide_page_list_section_heading_hint(",1)[0]
     assert 'self.page_list.bind("<Configure>", self._page_list_configured)' in text
     assert 'self.page_list.winfo_width()' in block
@@ -8148,7 +8243,7 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
     block = schema[start:end]
     assert block.index('"PaddleOCR 主识别"') < block.index('"同时运行 Tesseract 对照"')
     assert block.index('"同时运行 Tesseract 对照"') < block.index('"多 OCR 自动融合"')
-    models = (root / "src" / "picture_capture" / "models.py").read_text(encoding="utf-8")
+    models = (root / "src" / "picture_capture" / "profile" / "settings_model.py").read_text(encoding="utf-8")
     assert "paddle_use_paddleocr: bool = True" in models
     assert "paddle_compare_tesseract: bool = False" in models
     assert "paddle_dual_ocr_arbitration: bool = False" in models
@@ -8156,7 +8251,12 @@ def test_ocr_strategy_order_and_defaults_are_single_engine_first():
 
 def test_page_section_editor_is_exposed_in_page_list_and_gap_clicks_are_guarded():
     root = Path(__file__).resolve().parents[1] / "src/picture_capture"
-    text = (root / "app.py").read_text(encoding="utf-8")
+    app_owner = (root / "app.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_owner
+    text = (app_owner + "\n" +
+            (root / "ui/main_workspace_build.py").read_text(encoding="utf-8") + "\n" +
+            (root / "ui/main_canvas_render_workflow.py").read_text(encoding="utf-8"))
+    assert "_main_canvas_render._current_page_crop_plan(" in app_owner
     pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
     workspace = (root / "ui/workspace_tools.py").read_text(encoding="utf-8")
     canvas=(root / "ui/controllers/canvas.py").read_text(encoding="utf-8")
@@ -8244,7 +8344,9 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
 
     assert 'text="校对模式："' in REVIEW_WORKSPACE_SOURCE
     assert 'self.focused_panel_title = tk.StringVar(value="▸ 重点筛选校对")' in REVIEW_WORKSPACE_SOURCE
-    assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in text
+    review_init = (root / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in text
+    assert 'self.focused_panel_expanded = tk.BooleanVar(value=False)' in review_init
     assert 'text="OCR不匹配"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="含特定字符"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="排除单字符"' in REVIEW_WORKSPACE_SOURCE
@@ -8257,11 +8359,11 @@ def test_review_filter_and_main_overlay_ui_contracts_are_exposed():
     assert 'right, "digit", "数字替换映射"' in REVIEW_WORKSPACE_SOURCE
     assert 'text="启用", variable=self.replace_digits' in REVIEW_WORKSPACE_SOURCE
     assert 'right, "accent", "变音字符"' in REVIEW_WORKSPACE_SOURCE
-    assert 'key: tk.BooleanVar(value=(key == "reference"))' in text
+    assert 'key: tk.BooleanVar(value=(key == "reference"))' in review_init
     assert 'accent_button.bind(' in REVIEW_WORKSPACE_SOURCE and '"<Button-3>"' in REVIEW_WORKSPACE_SOURCE
     assert "def copy_char(self, char: str)" in text
     assert "def _candidate_word_for_ocr_source(" in helper_text
-    assert 'self.focused_page_range_var = parent.page_range_spec_var' in text
+    assert 'self.focused_page_range_var = parent.page_range_spec_var' in review_init
     assert 'indices = self.parent._parse_page_spec(' in FOCUSED_FILTER_SOURCE
     assert 'ocr_compare_key = self.OCR_COMPARE_LABEL_TO_KEY.get(' in FOCUSED_FILTER_SOURCE
     assert '"ocr_words": ocr_words' in FOCUSED_FILTER_SOURCE
@@ -8291,8 +8393,10 @@ def test_generated_app_icon_is_packaged_and_applied_to_root():
     assert icon.exists()
     assert icon.stat().st_size > 1000
     assert '"data/*.png"' in pyproject
-    assert 'icon_path = Path(__file__).resolve().parent / "data" / "app_icon.png"' in app_text
-    assert "self.iconphoto(True, self._app_icon_photo)" in app_text
+    startup = (root / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert '"app_module_file": __file__' in app_text
+    assert 'icon_path = Path(app_module_file).resolve().parent / "data" / "app_icon.png"' in startup
+    assert "self.iconphoto(True, self._app_icon_photo)" in startup
 
 
 

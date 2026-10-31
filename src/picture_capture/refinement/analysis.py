@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..profile.semantics import effective_page_settings, page_template_analysis_image
 
 # Per-task evidence, not a shared page-layout cache or persisted setting.

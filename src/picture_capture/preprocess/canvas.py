@@ -113,5 +113,5 @@ def output_canvas_info(
 
 
 # Preserve historical callable module paths for external pickle/debug tooling.
-_normalize_canvas_alignment.__module__ = "picture_capture.image_preprocessing"
-output_canvas_info.__module__ = "picture_capture.image_preprocessing"
+_normalize_canvas_alignment.__module__ = "picture_capture.preprocess.pipeline"
+output_canvas_info.__module__ = "picture_capture.preprocess.pipeline"

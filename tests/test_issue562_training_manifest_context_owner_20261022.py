@@ -17,13 +17,13 @@ from picture_capture.training import manifest_v2
 
 
 def test_canonical_owner_and_historical_callable_format_identity() -> None:
-    root = Path(training_export.__file__).resolve().parent
+    root = Path(training_export.__file__).resolve().parent.parent
     assert Path(manifest_v2.__file__).resolve() == root / "training" / "manifest_v2.py"
     assert training_export.copy_project_context is manifest_v2.copy_project_context
     assert training_export.write_training_manifest is manifest_v2.write_training_manifest
     assert training_export.TRAINING_EXPORT_FORMAT == manifest_v2.TRAINING_EXPORT_FORMAT
     assert manifest_v2.TRAINING_EXPORT_FORMAT == "picture-capture-training-v2"
-    facade = (root / "training_export.py").read_text(encoding="utf-8")
+    facade = (root / "training/export_runtime.py").read_text(encoding="utf-8")
     assert "def copy_project_context(" not in facade
     assert "def write_training_manifest(" not in facade
     # v3 composition still composes the unchanged v2 function object.

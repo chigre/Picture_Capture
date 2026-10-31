@@ -85,7 +85,7 @@ def test_leaf_import_does_not_import_public_facade_gui_or_paddle():
     subprocess.run([sys.executable, "-c", """
 import sys
 from picture_capture.preprocess.perspective_stages import PerspectiveState
-assert 'picture_capture.image_preprocessing' not in sys.modules
+assert 'picture_capture.preprocess.pipeline' not in sys.modules
 assert 'picture_capture.app' not in sys.modules
 assert 'paddle' not in sys.modules
 """], check=True)

@@ -115,7 +115,7 @@ def test_phase9a_facades_use_one_explicit_compatibility_owner() -> None:
     assert "def publish_core_namespace(" in helper
     assert "def install_core_assignment_mirror(" in helper
 
-    for name in ("processing.py", "paddle_headwords.py"):
+    for name in ("processing/__init__.py", "paddle_headwords/__init__.py"):
         source = (ROOT / "src/picture_capture" / name).read_text(encoding="utf-8")
         assert "publish_core_namespace(globals(), _core)" in source
         assert "install_core_assignment_mirror(__name__, _core)" in source
@@ -131,9 +131,9 @@ def test_facade_mirror_is_package_owned_without_a_root_shim() -> None:
     assert importlib.util.find_spec("picture_capture.facade_compat") is None
     owner = ROOT / "src/picture_capture/compat/facade_mirror.py"
     assert owner.is_file()
-    for module in ("processing.py", "paddle_headwords.py"):
+    for module in ("processing/__init__.py", "paddle_headwords/__init__.py"):
         source = (ROOT / "src/picture_capture" / module).read_text(encoding="utf-8")
-        assert "from .compat.facade_mirror import " in source
+        assert "from ..compat.facade_mirror import " in source
         assert "from .facade_compat import " not in source
 
 

@@ -123,10 +123,27 @@ def write_pdic_atomic(
     image_width: int,
     pages: tuple[str, str, str],
 ) -> None:
-    """Atomically replace one page PDIC so stop/crash never leaves a half file."""
+    """Atomically replace one page PDIC without bypassing R3 ownership."""
+    from .transactions import _marker_present
+
+    target = Path(target)
+    marker = target.with_name(f".{target.name}.r3-inflight.json")
+
+    def assert_unclaimed() -> None:
+        # write_pdic(temp) checks the TEMP filename's marker, not this
+        # real destination. An unfinished R3 bundle owns the destination
+        # and must never be replaced through the staging path.
+        if _marker_present(marker):
+            raise RuntimeError("Unresolved R3 recovery marker; refusing PDIC write")
+
+    assert_unclaimed()
     temp = target.with_name(f".{target.name}.restore.tmp")
     try:
         write_pdic(temp, entries, image_width, pages)
+        # The journal can be created during the staging write. Check
+        # immediately before replace; this remains an optimistic guard,
+        # not an OS-level multi-process compare-and-swap.
+        assert_unclaimed()
         os.replace(temp, target)
         note_page_artifact_edit(target)
     finally:

@@ -11,7 +11,10 @@ REVIEW_ENTRY_SOURCE = (ROOT / "ui/review_entry_actions.py").read_text(encoding="
 
 
 def sources():
-    return ((ROOT / "app.py").read_text(encoding="utf-8"),
+    app = (ROOT / "app.py").read_text(encoding="utf-8")
+    owner = (ROOT / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app
+    return (app + "\n" + owner,
             Path(workspace_tools.__file__).read_text(encoding="utf-8"))
 
 
@@ -111,8 +114,10 @@ def test_page_name_column_does_not_absorb_all_spare_sidebar_width():
 
 def test_borderless_index_and_vector_rail_icon_art():
     app, tools = sources()
-    assert 'page_panel = ttk.Frame(sidebar, padding=' in app
-    assert '"六、页面列表"' not in app[app.index('def _build_ui'):app.index('def _build_ui') + 26000]
+    workspace = (Path(__file__).resolve().parents[1] / 'src/picture_capture/ui/main_workspace_build.py').read_text(encoding='utf-8')
+    assert '_main_workspace_build.build_ui(' in app
+    assert 'page_panel = ttk.Frame(sidebar, padding=' in workspace
+    assert '"六、页面列表"' not in workspace
     assert '_draw_rail_icon(icon, symbol)' in tools
     assert 'canvas.create_line(' in tools
     assert 'canvas.create_rectangle(' in tools
@@ -125,15 +130,21 @@ def test_borderless_index_and_vector_rail_icon_art():
 
 def test_main_window_has_no_minimum_width_constraint():
     app, _ = sources()
-    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in app
-    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in app
+    startup = (ROOT / 'ui/main_app_initialization.py').read_text(encoding='utf-8')
+    assert '_main_app_initialization.initialize_main_app(' in app
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1, min_height=680)' in startup
+    assert 'fit_window_to_work_area(self, 1440, 900, min_width=1080' not in startup
 
 
 def test_canvas_background_is_theme_specific_and_reapplied_on_switch():
     app, _ = sources()
-    assert '"canvas": "#e9edf2"' in app
-    assert '"canvas": base["canvas"]' in app
-    assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert '"canvas": "#e9edf2"' in appearance
+    assert '"canvas": base["canvas"]' in appearance
+    dynamic = (ROOT / "ui/appearance_resolution.py").read_text(encoding="utf-8")
+    assert "_appearance_resolution.apply_resolved_appearance(" in app
+    assert 'self._main_ui_colors["canvas"] if name == "canvas" else palette[color_key]' in dynamic
 
 
 def test_batch_progress_is_inline_with_status_bar_and_hidden_when_idle():
@@ -189,7 +200,8 @@ def test_page_columns_order_and_mandatory_visibility():
     assert 'menu.add_checkbutton(label="画线", state="disabled")' in PAGE_INDEX_SOURCE
     assert 'label="区块", variable=section_var, state="disabled"' in PAGE_INDEX_SOURCE
     assert '"bookmark": 25' in PAGE_INDEX_SOURCE
-    assert 'borderwidth=1' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert 'borderwidth=1' in appearance
 
 
 def test_mini_page_list_below_task_icons():
@@ -210,10 +222,12 @@ def test_mini_page_list_below_task_icons():
 
 def test_rail_styles_are_compact_in_both_themes():
     app, tools = sources()
-    assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in app
-    assert 'style.configure("PC.CompactPage.Treeview", rowheight=22' in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert "_main_appearance_policy.configure_main_workspace_styles(" in app
+    assert 'style.configure("PC.Rail.TButton", font="TkDefaultFont"' in appearance
+    assert 'style.configure("PC.CompactPage.Treeview", rowheight=22' in appearance
     assert 'padding=(0, 0), relief="flat"' in tools
-    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in app
+    assert 'style.configure("PC.QuickRail.TButton", font="TkDefaultFont"' in appearance
 
 
 def test_compact_index_has_optional_headers_and_horizontal_scroll():
@@ -222,9 +236,12 @@ def test_compact_index_has_optional_headers_and_horizontal_scroll():
     assert 'mini_hscroll = ttk.Scrollbar(mini_host, orient="horizontal"' in tools
     assert 'mini.configure(yscrollcommand=mini_scroll.set, xscrollcommand=mini_hscroll.set)' in tools
     assert 'menu.add_checkbutton(label=app.page_index_labels[key]' in tools
-    assert 'font=self.compact_page_font' in app
-    assert 'self.compact_page_font = default_page_font.copy()' in app
-    assert "round(base_size * 0.9)" in app
+    appearance = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_appearance_policy.py").read_text(encoding="utf-8")
+    assert 'font=self.compact_page_font' in appearance
+    startup = (ROOT / 'ui/main_app_initialization.py').read_text(encoding='utf-8')
+    assert '_main_app_initialization.initialize_main_app(' in app
+    assert 'self.compact_page_font = default_page_font.copy()' in startup
+    assert "round(base_size * 0.9)" in startup
 
 
 def test_canvas_right_click_navigation_and_sidebar_presets():
@@ -267,22 +284,26 @@ def test_compact_mode_does_not_reuse_full_sidebar_sash_width():
 
 def test_single_column_fit_includes_two_gutters():
     app, _ = sources()
-    assert 'gutter = float(self.settings.gutter)' in app
-    assert 'fit_width = column_width + 2 * gutter' in app
-    assert 'available / fit_width' in app
+    canvas = (ROOT / "ui" / "controllers" / "canvas.py").read_text(encoding="utf-8")
+    assert "self._canvas_controller_for_call().fit_single_column_width()" in app
+    assert 'gutter = float(app.settings.gutter)' in canvas
+    assert 'fit_width = column_width + 2 * gutter' in canvas
+    assert 'available / fit_width' in canvas
 
 
 def test_compact_review_uses_remaining_screen_and_scrolls_main_canvas():
     app, _ = sources()
     review = (ROOT / "ui" / "controllers" / "review.py").read_text(encoding="utf-8")
     selection = (ROOT / "ui" / "review_selection_workflow.py").read_text(encoding="utf-8")
-    assert 'mini.winfo_manager() == "grid"' in app
-    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in app
-    assert 'if compact_workspace:' in app
-    assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in app
-    assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in app
-    assert 'width = max(1, work_right - x)' in app
-    assert 'height = max(1, safe_client_height)' in app
+    initializer = (ROOT / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app
+    assert 'mini.winfo_manager() == "grid"' in initializer
+    assert 'getattr(parent, "workspace_mode", "") in {"极简", "紧凑"}' in initializer
+    assert 'if compact_workspace:' in initializer
+    assert 'x = max(0, parent.winfo_rootx() + parent.winfo_width())' in initializer
+    assert 'work_x, work_y, work_w, safe_client_height = _preset_work_geometry(parent)' in initializer
+    assert 'width = max(1, work_right - x)' in initializer
+    assert 'height = max(1, safe_client_height)' in initializer
     assert 'def _scroll_review_entry_into_view(self, entry: WordEntry)' in app
     assert '_review_line_box(' in selection
     assert 'canvas.xview_moveto(' in selection
@@ -335,14 +356,18 @@ def test_next_page_button_is_packed_before_expandable_editor_area():
 
 def test_compact_review_anchors_to_work_area_top():
     app, _ = sources()
-    assert 'y = work_y  # Align compact proofreading to the usable desktop top.' in app
-    assert 'height = max(1, safe_client_height)' in app
+    initializer = (ROOT / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in app
+    assert 'y = work_y  # Align compact proofreading to the usable desktop top.' in initializer
+    assert 'height = max(1, safe_client_height)' in initializer
 
 
 def test_inline_review_slice_uses_text_based_height_without_classification():
     app, _ = sources()
-    assert '_focused_review_is_single_character(displayed_text)' in app
-    assert 'classified_entry_crop_height(' not in app
+    review_geometry = (ROOT / "ui/review_crop_geometry.py").read_text(encoding="utf-8")
+    assert "_review_crop_geometry._review_line_box(" in app
+    assert '_focused_review_is_single_character(displayed_text)' in review_geometry
+    assert 'classified_entry_crop_height(' not in review_geometry
     assert 'entry, geometry, image, review_settings, next_entry,' in REVIEW_WORKSPACE_SOURCE
     assert 'editor_text=editor_texts[index]' in REVIEW_WORKSPACE_SOURCE
     assert 'ordinary_height_only=True' not in app
@@ -355,8 +380,10 @@ def test_workspace_mode_is_restored_from_last_session():
     project_session = (ROOT / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     session = (ROOT / "ui" / "controllers" / "session.py").read_text(encoding="utf-8")
     assert '"workspace_mode": getattr(app, "workspace_mode", "最大")' in session
-    assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in app
-    assert 'self._restore_workspace_mode_pending = True' in app
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert 'stored_mode = self._last_session.get("workspace_mode", "最大")' in startup
+    assert 'self._restore_workspace_mode_pending = True' in startup
     assert 'self._restore_workspace_layout()' in project_session
     assert 'set_sidebar_mode(self, self.workspace_mode)' in app
     assert 'app.workspace_mode = mode' in tools
@@ -567,5 +594,7 @@ def test_review_pinned_crop_2_5x_and_compact_font_captions():
 
 def test_saved_legacy_simple_mode_migrates_to_new_name():
     app, _ = sources()
-    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in app
-    assert 'stored_mode in {"极简", "紧凑", "正常", "最大"}' in app
+    startup = (ROOT / "ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert '"紧凑" if stored_mode in {"最简", "简单"} else stored_mode' in startup
+    assert 'stored_mode in {"极简", "紧凑", "正常", "最大"}' in startup

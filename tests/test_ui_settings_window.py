@@ -46,4 +46,6 @@ def test_settings_window_extraction_keeps_dialog_wrappers_and_controller_boundar
     open_start = app.index("    def open_settings(")
     open_end = app.index("\n    def ", open_start + 10)
     open_settings = app[open_start:open_end]
-    assert "existing.select_tab(initial_tab)" in open_settings
+    assert "_main_dialog_lifecycle.open_settings(" in open_settings
+    owner = (ROOT / "src/picture_capture/ui/main_dialog_lifecycle.py").read_text(encoding="utf-8")
+    assert "existing.select_tab(initial_tab)" in owner

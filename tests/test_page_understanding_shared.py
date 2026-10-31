@@ -242,7 +242,10 @@ def test_accepted_ocr_semantic_positive_survives_body_lane_conflict_for_review()
 
 
 def test_processing_builds_shared_understanding_before_all_detector_modes():
-    source = inspect.getsource(processing.detect_entries)
+    from picture_capture.detection import page_pipeline
+    facade = inspect.getsource(processing.detect_entries)
+    assert "return _page_pipeline.detect_entries_impl(" in facade
+    source = inspect.getsource(page_pipeline.detect_entries_impl)
     # The canonical helper owns runtime preparation and dispatches either the
     # Layout-only understanding (ordinary) or enriched understand_page (OCR).
     assert "_understand_page_current(" in source
@@ -255,15 +258,28 @@ def test_processing_builds_shared_understanding_before_all_detector_modes():
 
 
 def test_reliable_page_uses_one_geometry_for_ocr_and_combined_generation():
-    source = inspect.getsource(processing._shared_detector_observations)
-    assert "_geometry_from_page_understanding(understanding)" in source
+    from picture_capture.detection import shared_observations
+
+    facade = inspect.getsource(processing._shared_detector_observations)
+    source = inspect.getsource(shared_observations.shared_detector_observations)
+    # Keep both the live historical hook and the actual shared geometry owner.
+    assert "_geometry_from_page_understanding" in facade
+    assert "_core._fuse_detection_entries" in facade
+    assert "geometry_from_page_understanding(understanding)" in source
     assert "detect_paddle_headwords(" in source
-    assert "_fuse_detection_entries(" in source
+    assert "fuse_detection_entries(" in source
     assert "derive_geometry(" not in source
 
 
 def test_combined_vb_observation_does_not_duplicate_cjk_layout_reasoning():
-    source = inspect.getsource(processing._detect_entries_left_edge)
+    from picture_capture.ordinary import visual_fallback
+
+    facade = inspect.getsource(processing._detect_entries_left_edge)
+    source = inspect.getsource(visual_fallback.detect_entries_left_edge_with_recovery)
+    # Check the actual owner and the still-patchable historical public entry.
+    assert "_ordinary_visual_fallback.detect_entries_left_edge_with_recovery(" in facade
+    assert "finalize_indented_topology=finalize_indented_topology" in facade
+    assert "recover_cjk_oversized_heads=recover_cjk_oversized_heads" in facade
     assert 'if method not in {"combined", "paddleocr"}' in source
     assert "finalize_indented_topology(" in source
     assert "recover_cjk_oversized_heads(" in source

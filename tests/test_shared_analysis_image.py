@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageDraw
 
-from picture_capture.image_utils import build_analysis_image
+from picture_capture.preprocess.analysis_image import build_analysis_image
 
 
 def _pixel(image: Image.Image, x: int, y: int) -> tuple[int, int, int]:

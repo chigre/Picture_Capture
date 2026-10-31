@@ -62,8 +62,10 @@ def test_no_retired_python_imports_in_source_tests_or_scripts() -> None:
 
 
 def test_preserve_high_risk_root_entrypoints() -> None:
-    for name in ("app", "processing_core"):
-        assert (ROOT / (name + ".py")).is_file()
+    assert (ROOT / "app.py").is_file()
+    assert not (ROOT / "processing_core.py").exists()
+    assert (ROOT / "processing_core" / "__init__.py").is_file()
+    assert importlib.util.find_spec("picture_capture.processing_core") is not None
 
 
 def test_layout_rows_cache_is_physically_owned_by_layout_package() -> None:

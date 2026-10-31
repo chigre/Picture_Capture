@@ -131,7 +131,7 @@ def test_gpu_preflight_matches_page_policy_and_refuses_changed_image(tmp_path, m
     from picture_capture.models import AppSettings
     from picture_capture.layout import detection as layout_detection
     from picture_capture.profile.semantics import effective_page_settings
-    from picture_capture.image_utils import build_analysis_image
+    from picture_capture.preprocess.analysis_image import build_analysis_image
 
     page = tmp_path / "001.png"
     Image.new("RGB", (160, 220), "white").save(page)

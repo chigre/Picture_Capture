@@ -8,7 +8,7 @@ from PIL import Image
 from picture_capture.layout import physical_indent as layout_physical_indent
 from picture_capture import processing
 from picture_capture.layout import visualization_shared as layout_visualization_shared
-from picture_capture.entry_classification import register_layout_line_classification
+from picture_capture.proofreading.classification import register_layout_line_classification
 from picture_capture.models import AppSettings, Entry
 
 
@@ -167,8 +167,10 @@ def test_vb_is_only_used_when_layout_has_no_columns(monkeypatch) -> None:
 
 
 def test_spawn_job_uses_canonical_processing_detect_entries() -> None:
-    source = inspect.getsource(processing.detect_entries_job)
-
+    from picture_capture.detection import ordinary_page_job
+    facade = inspect.getsource(processing.detect_entries_job)
+    source = inspect.getsource(ordinary_page_job.detect_entries_job_impl)
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in facade
     assert "entries, _geometry = processing_module.detect_entries(" in source
     assert "ordinary_layout_worker" not in source
     assert "build_ordinary_layout_primary" not in source
@@ -199,10 +201,17 @@ def test_layout_runtime_does_not_replace_canonical_entry_materializer() -> None:
 
 
 def test_phase6d_processing_import_keeps_core_left_edge_native() -> None:
-    assert (
-        processing._core._detect_entries_left_edge
-        is processing._original_detect_entries_left_edge
+    # Other tests exercise live core/facade monkeypatch mirrors. A fresh
+    # interpreter checks the true cold-import contract without leakage.
+    import subprocess
+    import sys
+
+    program = (
+        "from picture_capture import processing; "
+        "assert processing._core._detect_entries_left_edge "
+        "is processing._original_detect_entries_left_edge"
     )
+    subprocess.run([sys.executable, "-c", program], check=True)
 
 
 def test_phase6d_processing_fallback_injects_enhanced_left_edge(monkeypatch) -> None:

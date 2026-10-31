@@ -350,27 +350,35 @@ def _delete_aligned_simplified_entry(self, deps: MainEntryActionsDeps, entry: Wo
     stem = self.current_page.stem
     key = simplified_entry_key(entry.x, entry.y)
     review = getattr(self, "review_window", None)
-    removed_from_review_cache = False
     if review is not None and getattr(review, "_rendered_page_stem", "") == stem:
-        try:
-            records = review._simplified_page_records(stem)
-            if key in records:
-                records.pop(key, None)
-                review._simplified_dirty_pages.add(stem)
-                removed_from_review_cache = True
-        except Exception:
-            removed_from_review_cache = False
-    path = simplified_review_path_for_image(self.current_page)
-    if removed_from_review_cache and review is not None:
-        try:
-            review._persist_simplified_page(stem)
+        records = review._simplified_page_records(stem)
+        if key in records:
+            original = records.pop(key)
+            was_dirty = stem in review._simplified_dirty_pages
+            review._simplified_dirty_pages.add(stem)
+            try:
+                review._persist_simplified_page(stem)
+            except Exception:
+                # Never downgrade a refused protected save into a raw rewrite.
+                # Restore unsaved human editor cache if the disk was untouched.
+                records[key] = original
+                if not was_dirty:
+                    review._simplified_dirty_pages.discard(stem)
+                raise
             return
-        except Exception:
-            pass
+    from ..proofreading.transactions import _bytes_or_absent
+    from ..proofreading.simplified_review import guarded_write_records
+    path = simplified_review_path_for_image(self.current_page)
+    expected = _bytes_or_absent(path)
     records = read_simplified_records(path)
+    if _bytes_or_absent(path) != expected:
+        raise RuntimeError("R3 主窗口删除时简体人工副本发生外部修改")
     if key in records:
         records.pop(key, None)
-        write_simplified_records(path, stem, records)
+        guarded_write_records(
+            self.current_page, path, stem, records, expected,
+            writer=write_simplified_records,
+        )
 
 def delete_entry(self, deps: MainEntryActionsDeps, entry: WordEntry) -> str:
     tk = deps.tk

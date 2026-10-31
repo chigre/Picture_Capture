@@ -4,7 +4,7 @@ from io import BytesIO
 import subprocess
 from typing import Any
 from PIL import Image
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..models import AppSettings, resolved_tesseract_language
 from .headword_models import OCRRecord
 

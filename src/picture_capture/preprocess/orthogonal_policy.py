@@ -268,8 +268,8 @@ def _orthogonal_estimate_from_step(
 
 
 # Preserve the historical callable pickle paths, as with preprocess.canvas.
-_absolute_horizontal_quality.__module__ = "picture_capture.image_preprocessing"
-_separator_vertical_span.__module__ = "picture_capture.image_preprocessing"
-_orthogonal_safe_gain_cap.__module__ = "picture_capture.image_preprocessing"
-_orthogonal_step_payload.__module__ = "picture_capture.image_preprocessing"
-_orthogonal_estimate_from_step.__module__ = "picture_capture.image_preprocessing"
+_absolute_horizontal_quality.__module__ = "picture_capture.preprocess.pipeline"
+_separator_vertical_span.__module__ = "picture_capture.preprocess.pipeline"
+_orthogonal_safe_gain_cap.__module__ = "picture_capture.preprocess.pipeline"
+_orthogonal_step_payload.__module__ = "picture_capture.preprocess.pipeline"
+_orthogonal_estimate_from_step.__module__ = "picture_capture.preprocess.pipeline"

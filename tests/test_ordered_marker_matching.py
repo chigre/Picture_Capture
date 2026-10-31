@@ -58,8 +58,10 @@ def test_real_benchmark_uses_identical_production_matching_primitive():
     import picture_capture.processing_core as core
 
     processing = Path(core.__file__).read_text(encoding="utf-8")
+    from picture_capture.quality import detection_entry_fusion
+    fusion = Path(detection_entry_fusion.__file__).read_text(encoding="utf-8")
     benchmark = (
-        Path(core.__file__).resolve().parents[2] / "scripts" /
+        Path(__file__).resolve().parents[1] / "scripts" /
         "detection_benchmark.py"
     ).read_text(encoding="utf-8")
     # The benchmark now delegates to a pure metric helper, which must use
@@ -70,7 +72,8 @@ def test_real_benchmark_uses_identical_production_matching_primitive():
     metric_source = Path(quality.__file__).read_text(encoding="utf-8")
     assert "marker_metrics(" in benchmark
     assert "match_ordered_markers(" in metric_source
-    assert "match_ordered_markers(" in processing
+    assert "_detection_entry_fusion.fuse_detection_entries(" in processing
+    assert "match_ordered_markers(" in fusion
     assert quality.marker_metrics(
         [(0, 0), (0, 5)], [(0, 4), (0, 9)], 5,
     )["matched"] == 2

@@ -34,15 +34,19 @@ def test_illustration_tab_placement_and_settings_persistence_wiring():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     settings_ui = (root / "ui" / "settings" / "illustration.py").read_text(encoding="utf-8")
-    assert app.index('(normal_tab, "普通画线")') < app.index('(illustration_tab, "插图")') < app.index('(display_tab, "显示/校对")')
-    assert '"illustration": illustration_tab' in app
-    assert "_settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)" in app
+    dialog_init = (root / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in app
+    assert dialog_init.index('(normal_tab, "普通画线")') < dialog_init.index('(illustration_tab, "插图")') < dialog_init.index('(display_tab, "显示/校对")')
+    assert '"illustration": illustration_tab' in dialog_init
+    assert "_settings_illustration_ui.build_illustration_settings_tab(self, illustration_tab)" in dialog_init
     assert "dialog._add_setting_group(" in settings_ui
     assert "dialog._add_check_group(" in settings_ui
     # Color selection is now shared by all Settings Center *_color fields,
     # including Illustration and REF, instead of feature-local plain buttons.
     shared = (root / "ui" / "settings" / "color_picker.py").read_text(encoding="utf-8")
-    assert "_settings_color_ui.make_color_widget(parent, var)" in app
+    form = (root / "ui/settings/field_form_runtime.py").read_text(encoding="utf-8")
+    assert "_settings_field_form.setting_widget(" in app
+    assert "_settings_color_ui.make_color_widget(parent, var)" in form
     assert "colorchooser.askcolor(" in shared
     assert "value.trace_add(" in shared
     assert "for name in COLOR_FIELDS" not in settings_ui

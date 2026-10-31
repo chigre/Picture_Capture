@@ -22,6 +22,21 @@ def _bytes_or_absent(path):
         return None
 
 
+def _verified_same_disk_snapshot(app: Any, page, path, before) -> bool:
+    """Only a successful byte readback may authorize an in-memory rollback.
+
+    After an original PDIC writer error, a second readback can fail too.
+    Never let that diagnostic I/O error mask the original exception or
+    pretend that failed verification proves a pre-publication state.
+    """
+    if app.current_page != page:
+        return False
+    try:
+        return _bytes_or_absent(path) == before
+    except OSError:
+        return False
+
+
 def _editor_state(app: Any):
     result = []
     for editor, entry in tuple(app.__dict__.get("entry_editor_bindings", ())):
@@ -30,6 +45,50 @@ def _editor_state(app: Any):
         except (tk.TclError, RuntimeError):
             pass
     return result
+
+
+def _live_editors_unchanged(app: Any, saved) -> bool:
+    """Only restore Tk state when no newer text or widget binding appeared."""
+    bindings = tuple(app.__dict__.get("entry_editor_bindings", ()))
+    if len(bindings) != len(saved):
+        return False
+    for (editor, entry), (old_editor, old_entry, text) in zip(bindings, saved):
+        if editor is not old_editor or entry is not old_entry:
+            return False
+        try:
+            if str(editor.get()) != text:
+                return False
+        except (tk.TclError, RuntimeError):
+            return False
+    return True
+
+
+def _review_vars_state(review: Any):
+    """Freeze the word-input values without altering live ReviewWindow vars."""
+    result = []
+    try:
+        for var in tuple(getattr(review, "vars", ())):
+            result.append((var, str(var.get())))
+    except (tk.TclError, RuntimeError):
+        return None
+    return tuple(result)
+
+
+def _review_vars_unchanged(review: Any, saved) -> bool:
+    if saved is None:
+        return False
+    live = tuple(getattr(review, "vars", ()))
+    if len(live) != len(saved):
+        return False
+    for var, (old_var, text) in zip(live, saved):
+        if var is not old_var:
+            return False
+        try:
+            if str(var.get()) != text:
+                return False
+        except (tk.TclError, RuntimeError):
+            return False
+    return True
 
 
 def _restore_editor_state(items):
@@ -54,7 +113,10 @@ def protect_app_pdic_commit(app: Any):
     try:
         yield
     except Exception:
-        if app.current_page == page and _bytes_or_absent(path) == before:
+        if (
+            _verified_same_disk_snapshot(app, page, path, before)
+            and _live_editors_unchanged(app, editors)
+        ):
             app.entries[:] = entries
             for entry, word in words:
                 entry.word = word
@@ -81,10 +143,15 @@ def protect_review_pdic_commit(review: Any):
     dirty = set(getattr(review, "_simplified_dirty_pages", set()))
     flags = list(getattr(review, "simplified_manual_flags", []))
     values = list(getattr(review, "simplified_actual_values", []))
+    review_vars = _review_vars_state(review)
     try:
         yield
     except Exception:
-        if app.current_page == page and _bytes_or_absent(path) == before:
+        if (
+            _verified_same_disk_snapshot(app, page, path, before)
+            and _live_editors_unchanged(app, editors)
+            and _review_vars_unchanged(review, review_vars)
+        ):
             app.entries[:] = entries
             for entry, word in words:
                 entry.word = word

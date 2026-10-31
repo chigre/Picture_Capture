@@ -7,7 +7,8 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
+from . import homography_ops as _homography_ops
 from ..layout.detection import analysis_ink_mask
 from ..models import AppSettings
 from .geometry import horizontal_column_rows
@@ -1360,32 +1361,10 @@ def transform_polygons_orthogonal(
 
 
 def _paper_fill(image: Image.Image) -> tuple[int, int, int]:
-    source = normalize_page_rgb(image)
-    width, height = source.size
-    pw = max(1, round(width * 0.04))
-    ph = max(1, round(height * 0.04))
-    samples = [
-        np.asarray(source.crop((0, 0, pw, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(
-            source.crop((max(0, width - pw), 0, width, ph)),
-            dtype=np.uint8,
-        ).reshape(-1, 3),
-        np.asarray(
-            source.crop((0, max(0, height - ph), pw, height)),
-            dtype=np.uint8,
-        ).reshape(-1, 3),
-        np.asarray(
-            source.crop((
-                max(0, width - pw),
-                max(0, height - ph),
-                width,
-                height,
-            )),
-            dtype=np.uint8,
-        ).reshape(-1, 3),
-    ]
-    median = np.median(np.concatenate(samples, axis=0), axis=0)
-    return tuple(int(round(v)) for v in median[:3])
+    """Historical paper-corner sample; physically shared with homography warps."""
+    return _homography_ops.corner_paper_fill(
+        image, normalize_page_rgb=normalize_page_rgb,
+    )
 
 
 def _inverse_corner(

@@ -532,10 +532,13 @@ def test_crop_controller_wiring_preserves_app_compatibility_methods() -> None:
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "CropController" in imports
-    assert "self.crop_controller = CropController(self)" in app
-    assert app.index("self.crop_controller = CropController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.crop_controller = CropController(self)" in startup
+    assert startup.index("self.crop_controller = CropController(self)") < startup.index("self._build_ui()")
     assert "def _crop_controller_for_call(" in app
-    assert 'self.__dict__.get("crop_controller")' in app
+    assert '"crop_controller", CropController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
     assert "def split_lines_current(self)" in app
     assert "self._crop_controller_for_call().split_lines_current()" in app
     assert "def split_whole_current(self)" in app

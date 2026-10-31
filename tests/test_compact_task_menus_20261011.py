@@ -184,6 +184,8 @@ def test_ocr_preprocessing_uses_existing_quick_autosave_pipeline():
     assert 'app.quick_field_casts["paddle_preprocessing"] = str' in ocr
     assert 'preprocessing_var.trace_add(' in ocr
     assert 'app._quick_parameter_changed()' in ocr
-    assert "for name, var in self.quick_vars.items():" in app
-    assert 'self.quick_field_casts[name](var.get())' in app
-    assert 'self.settings.paddle_lens_mode = LENS_MODE_VALUES.get(' in app
+    quick_owner = (ROOT / "ui/quick_settings_apply.py").read_text(encoding="utf-8")
+    assert "_quick_settings_apply.apply_quick_settings(" in app
+    assert "for name, var in self.quick_vars.items():" in quick_owner
+    assert 'self.quick_field_casts[name](var.get())' in quick_owner
+    assert 'self.settings.paddle_lens_mode = LENS_MODE_VALUES.get(' in quick_owner

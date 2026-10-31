@@ -175,8 +175,11 @@ def test_shared_channel_owns_active_ocr_execution_not_legacy_parser():
 
 def test_marker_only_ocr_is_a_channel_consumer_not_single_engine_dispatch():
     import picture_capture.processing_core as processing_core
+    from picture_capture.ocr import ordinary_marker_text_enrichment
 
-    source = Path(processing_core.__file__).read_text(encoding="utf-8")
+    facade = Path(processing_core.__file__).read_text(encoding="utf-8")
+    source = Path(ordinary_marker_text_enrichment.__file__).read_text(encoding="utf-8")
+    assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in facade
     assert "OcrChannelSession" in source
     assert "channel.recognize_crop(" in source
     assert "choose_ocr_text(" in source

@@ -7,7 +7,8 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
+from . import homography_ops as _homography_ops
 
 
 def _normalize_half_turn(angle: float) -> float:
@@ -85,19 +86,10 @@ def estimate_skew_from_polygons(
 
 
 def _paper_fill(image: Image.Image) -> tuple[int, int, int]:
-    source = normalize_page_rgb(image)
-    w, h = source.size
-    pw = max(1, round(w * 0.04))
-    ph = max(1, round(h * 0.04))
-    samples = [
-        np.asarray(source.crop((0, 0, pw, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), 0, w, ph)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((0, max(0, h - ph), pw, h)), dtype=np.uint8).reshape(-1, 3),
-        np.asarray(source.crop((max(0, w - pw), max(0, h - ph), w, h)), dtype=np.uint8).reshape(-1, 3),
-    ]
-    pixels = np.concatenate(samples, axis=0)
-    median = np.median(pixels, axis=0)
-    return tuple(int(round(value)) for value in median[:3])
+    """Historical paper-corner sample; physically shared with homography warps."""
+    return _homography_ops.corner_paper_fill(
+        image, normalize_page_rgb=normalize_page_rgb,
+    )
 
 
 
@@ -244,14 +236,14 @@ def _rotate_box_same_canvas(
 
 
 # Preserve historical callable pickle paths, as with preprocess.canvas.
-_normalize_half_turn.__module__ = "picture_capture.image_preprocessing"
-_weighted_median.__module__ = "picture_capture.image_preprocessing"
-estimate_skew_from_polygons.__module__ = "picture_capture.image_preprocessing"
-_paper_fill.__module__ = "picture_capture.image_preprocessing"
-deskew_image.__module__ = "picture_capture.image_preprocessing"
-_rotate_point_same_canvas.__module__ = "picture_capture.image_preprocessing"
-_rotate_polygons_same_canvas.__module__ = "picture_capture.image_preprocessing"
-_rotated_text_box.__module__ = "picture_capture.image_preprocessing"
-_polygon_boxes.__module__ = "picture_capture.image_preprocessing"
-_expand_box_px.__module__ = "picture_capture.image_preprocessing"
-_rotate_box_same_canvas.__module__ = "picture_capture.image_preprocessing"
+_normalize_half_turn.__module__ = "picture_capture.preprocess.pipeline"
+_weighted_median.__module__ = "picture_capture.preprocess.pipeline"
+estimate_skew_from_polygons.__module__ = "picture_capture.preprocess.pipeline"
+_paper_fill.__module__ = "picture_capture.preprocess.pipeline"
+deskew_image.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_point_same_canvas.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_polygons_same_canvas.__module__ = "picture_capture.preprocess.pipeline"
+_rotated_text_box.__module__ = "picture_capture.preprocess.pipeline"
+_polygon_boxes.__module__ = "picture_capture.preprocess.pipeline"
+_expand_box_px.__module__ = "picture_capture.preprocess.pipeline"
+_rotate_box_same_canvas.__module__ = "picture_capture.preprocess.pipeline"

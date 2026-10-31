@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image, ImageDraw
 
-from picture_capture.entry_classification import (
+from picture_capture.proofreading.classification import (
     get_entry_classification, register_entry_classification,
 )
 from picture_capture.ocr.entry_crop import (
@@ -142,12 +142,14 @@ def test_plain_small_text_rows_and_latin_profile_do_not_expand():
 def test_marker_ocr_and_preview_use_identical_role_independent_visual_extent():
     from pathlib import Path
     base = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
-    source = (base / "processing_core.py").read_text("utf-8")
+    source = (base / "runtime/processing_core_runtime.py").read_text("utf-8")
+    crop_owner = (base / "ocr" / "ordinary_marker_crop.py").read_text("utf-8")
     preview = (base / "ui" / "ocr_crop_preview.py").read_text("utf-8")
-    for content in (source, preview):
+    assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in source
+    for content in (crop_owner, preview):
         assert "visual_oversized_head_height(" in content
         assert "visual_head_height=visual_height," in content
-    assert "large_for_ocr = meta.entry_scale == \"oversized\" or visual_height > 0" in source
+    assert "large_for_ocr = meta.entry_scale == \"oversized\" or visual_height > 0" in crop_owner
 
 
 
@@ -229,9 +231,12 @@ def test_latin_or_profile_disabled_marker_ocr_does_not_cut_bracket_words(monkeyp
     # Direct pure-helper check is the stable policy contract; real OCR writer
     # enables this only for explicitly configured CJK-bracket dictionary mode.
     assert bracketed_ocr_lemma("prefix【apple】suffix", enabled=False) is None
+    from picture_capture.ocr import ordinary_marker_text_enrichment
     source = __import__("inspect").getsource(processing_core.ocr_existing_entry_words_from_markers)
-    assert 'profile.uses_parser("cjk_bracketed")' in source
-    assert 'profile_cjk_allow_bracketed_headword' in source
+    owner = __import__("inspect").getsource(ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl)
+    assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in source
+    assert 'profile.uses_parser("cjk_bracketed")' in owner
+    assert 'profile_cjk_allow_bracketed_headword' in owner
 
 
 
@@ -329,5 +334,9 @@ def test_explicit_only_ocr_button_uses_overwrite_not_combined_blank_fill():
     assert "OCR文字意外覆盖了人工选定文本" in body
     assert "重新 OCR 并覆盖已有的自动 OCR 文本" in body
     # Automatic combined rescue remains blank-only, as before.
-    combined = source.split("    def _detect_pages(", 1)[1]
-    assert "only_blank=True," in combined
+    assert "_detection_batch_execution.detect_pages(" in source
+    owner = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "picture_capture" / "ui" / "detection_batch_execution.py"
+    ).read_text("utf-8")
+    assert "only_blank=True," in owner

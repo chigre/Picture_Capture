@@ -16,10 +16,22 @@ from typing import Any
 from PIL import Image
 
 from ...io.formats import pdic_path, read_pdic, write_pdic
-from ...image_utils import normalize_page_rgb
+from ...preprocess.analysis_image import normalize_page_rgb
 from ...layout.mask_source_guard import missing_saved_illustrations, detection_mask_source_path
 from ...ordinary.quick_settings import _apply_quick_settings_for_ordinary
 from ...ocr.action_guard import guard_ocr_action_selection
+from ...ocr.batch_existing_entries import process_existing_pdic_page
+from ...detection.current_page_worker import detect_current_page
+from ..detection_current_page_result import apply_current_page_detection_result
+from ..batch_ocr_flow import run_existing_pdic_batch
+from ..detection_selected_scope_actions import run_selected_draw_action
+from ..detection_current_page_setup import prepare_current_page_detection
+from ..detection_current_page_flow import run_current_page_detection
+from ..detection_direct_actions import (
+    run_current_paddle_action,
+    run_all_pages_auto_detect,
+    run_legacy_scoped_ocr,
+)
 from ...persistence.page_sections import read_page_sections
 from ...paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
 from ...processing import (
@@ -52,295 +64,97 @@ class DetectionController:
     def auto_detect_current(
         self, clicked_x: int | None = None, force_paddle_refresh: bool = False,
     ) -> None:
-        """Run backward-compatible single-page detection through the batch worker."""
-        app = self.app
-        if app._batch_active:
-            app.status_var.set("后台画线任务运行中，暂不启动前台自动识别；可进行人工校对。")
-            return
-        if not app.guard():
-            return
-        if not app._guard_transformed_geometry("自动画线"):
-            return
-
-        project = app.project
-        page = app.current_page
-        if missing_saved_illustrations((page,), app.settings):
-            app.status_var.set("当前页缺少 PPP 插图数据：请先识别插图，或在设置中心→插图关闭‘使用已有的插图数据’。")
-            return
-        page_index = int(app.current_index)
-        settings = replace(app.settings)
-        page_sections = list(app.page_sections)
-        existing_entries = [replace(entry) for entry in app.entries]
-        cache_path = (
-            ocr_cache_root(project.root) / f"{page.stem}.json"
-            if settings.detection_method in {"paddleocr", "combined"} else None
-        )
-        filter_path = (
-            headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME)
-            if settings.detection_method in {"paddleocr", "combined"} else None
-        )
-
-        def worker(_item, _position: int, _total: int):
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            detected, geometry = detect_entries(
-                image,
-                settings,
-                paddle_cache_path=cache_path,
-                force_paddle_refresh=force_paddle_refresh,
-                paddle_filter_rules_path=filter_path,
-                profile_page_index=page_index,
-                page_sections=page_sections,
-                source_image_path=detection_mask_source_path(
-                    page, settings,
-                    ordinary=settings.detection_method not in {"paddleocr", "combined"},
-                ),
-            )
-            text_stats = None
-            if settings.detection_method == "combined":
-                original_coords = [
-                    (int(entry.x), int(entry.y)) for entry in detected
-                ]
-                detected, text_stats = ocr_existing_entry_words_from_markers(
-                    image,
-                    detected,
-                    settings,
-                    load_replace_rules(replace_rules_path(project.root)),
-                    profile_page_index=page_index,
-                    page_sections=page_sections,
-                    profile_path=project_profile_path(project.root),
-                    only_blank=True,
-                )
-                if [
-                    (int(entry.x), int(entry.y)) for entry in detected
-                ] != original_coords:
-                    raise RuntimeError(
-                        "融合画线自动补字不得修改任何画线坐标"
-                    )
-            return detected, geometry, text_stats
-
-        def done(_completed, _total, stopped, results, error):
-            if error is not None or stopped or not results:
-                return
-            if app.project is not project or app.current_page != page:
-                return
-            detected, geometry, text_stats = results[-1]
-            if clicked_x is None:
-                app.entries = list(detected)
-            else:
-                col = column_index_for_click(clicked_x, geometry)
-                merged = [
-                    entry for entry in existing_entries
-                    if column_index(entry.x, geometry, entry.y) != col
-                ]
-                merged.extend(
-                    entry for entry in detected
-                    if column_index(entry.x, geometry, entry.y) == col
-                )
-                app.entries = merged
-            app._sort_entries_reading_order()
-            if settings.detection_method in {"paddleocr", "combined"}:
-                app._load_ocr_review_candidates()
-                app._refresh_page_quality_colors()
-            app.redraw()
-            if settings.detection_method in {"paddleocr", "combined"}:
-                cache = ocr_cache_root(project.root) / f"{page.stem}.json"
-                quality = app._current_page_quality_text()
-                fill_text = ""
-                if settings.detection_method == "combined" and text_stats:
-                    fill_text = (
-                        f"；普通救漏自动补字 {int(text_stats.get('filled', 0))} 条"
-                        f"（普通框 {int(text_stats.get('regular', 0))}，"
-                        f"大字框 {int(text_stats.get('large', 0))}）"
-                    )
-                app.status_var.set(
-                    f"智能画线完成：{len(app.entries)} 个词条；{quality}"
-                    f"{fill_text}；紧凑OCR缓存 {cache.name}"
-                )
-            else:
-                app.status_var.set(
-                    f"智能画线完成：检测到 {len(app.entries)} 个词条；可手动增删后保存"
-                )
-
-        label = {
-            "combined": "融合画线 当前页识别",
-            "paddleocr": "OCR画线 当前页识别",
-        }.get(settings.detection_method, "当前页自动画线")
-        app._start_batch_task(
-            label, [page_index], worker, done,
-            item_label=lambda _item: page.name,
-            refresh_page_quality=settings.detection_method in {"paddleocr", "combined"},
+        """Keep the historical Tk entrypoint and live monkeypatch contracts."""
+        return run_current_page_detection(
+            self.app,
+            clicked_x=clicked_x,
+            force_paddle_refresh=force_paddle_refresh,
+            dependencies=lambda: {
+                "prepare_current_page_detection": prepare_current_page_detection,
+                "replace": replace,
+                "missing_saved_illustrations": missing_saved_illustrations,
+                "ocr_cache_root": ocr_cache_root,
+                "headword_filter_rules_path": headword_filter_rules_path,
+                "HEADWORD_FILTER_RULES_FILENAME": HEADWORD_FILTER_RULES_FILENAME,
+                "detect_current_page": detect_current_page,
+                "Image": Image,
+                "normalize_page_rgb": normalize_page_rgb,
+                "detect_entries": detect_entries,
+                "detection_mask_source_path": detection_mask_source_path,
+                "ocr_existing_entry_words_from_markers": ocr_existing_entry_words_from_markers,
+                "load_replace_rules": load_replace_rules,
+                "replace_rules_path": replace_rules_path,
+                "project_profile_path": project_profile_path,
+                "apply_current_page_detection_result": apply_current_page_detection_result,
+                "column_index_for_click": column_index_for_click,
+                "column_index": column_index,
+            },
         )
 
     def run_normal_draw_action(self) -> None:
-        """Run ordinary OCR-independent drawing for the selected page scope."""
-        app = self.app
-        if not app.guard() or not _apply_quick_settings_for_ordinary(app):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "left_edge"
-        app.save_settings()
-        app._detect_pages(indices, method="left_edge", force_refresh=False)
+        """Ordinary selected-page drawing; retain the legacy public entrypoint."""
+        return run_selected_draw_action(
+            self.app,
+            method="left_edge",
+            ordinary_settings_guard=_apply_quick_settings_for_ordinary,
+        )
 
     def paddle_detect_current(self, force_refresh: bool = False) -> None:
-        app = self.app
-        app.settings.detection_method = "paddleocr"
-        app.sync_quick_settings()
-        app.save_settings()
-        app.auto_detect_current(force_paddle_refresh=force_refresh)
+        return run_current_paddle_action(
+            self.app, force_refresh=force_refresh,
+            ocr_engine_guard=guard_ocr_action_selection,
+        )
 
     def run_combined_draw_action(self) -> None:
-        app = self.app
-        if not guard_ocr_action_selection(app):
-            return
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "combined"
-        app.save_settings()
-        app._detect_pages(
-            indices,
-            method="combined",
-            force_refresh=app.ocr_refresh_var.get() == "force",
+        """Combined selected-page drawing with the live OCR preflight."""
+        return run_selected_draw_action(
+            self.app, method="combined",
+            ocr_engine_guard=guard_ocr_action_selection,
         )
 
     def run_ocr_draw_action(self) -> None:
-        app = self.app
-        if not guard_ocr_action_selection(app):
-            return
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        try:
-            indices = app.selected_page_indices()
-        except Exception as exc:
-            app.show_error("页面范围无效", exc)
-            return
-        app.settings.detection_method = "paddleocr"
-        app.save_settings()
-        app._detect_pages(
-            indices,
-            method="paddleocr",
-            force_refresh=app.ocr_refresh_var.get() == "force",
+        """OCR selected-page drawing with the live OCR preflight."""
+        return run_selected_draw_action(
+            self.app, method="paddleocr",
+            ocr_engine_guard=guard_ocr_action_selection,
         )
 
     def batch_auto_detect(self, force_paddle_refresh: bool = False) -> None:
-        app = self.app
-        if not app.project:
-            return
-        app._detect_pages(
-            list(range(len(app.project.images))),
-            method=app.settings.detection_method,
-            force_refresh=force_paddle_refresh,
+        return run_all_pages_auto_detect(
+            self.app, force_refresh=force_paddle_refresh,
         )
 
     def batch_ocr(self) -> None:
-        app = self.app
-        if not app.project or app._batch_active:
-            return
-        if not app._guard_transformed_geometry("批量 OCR"):
-            return
-        indices = [
-            i
-            for i, page in enumerate(app.project.images)
-            if read_pdic(pdic_path(page))
-        ]
-        if not indices:
-            app.status_var.set("没有含 PDIC 词条的页面可执行批量 OCR")
-            return
-        if not messagebox.askyesno(
-            "批量 OCR",
-            f"将对 {len(indices)} 个已有 PDIC 的页面执行 OCR。\n\n"
-            "处理期间可暂停或停止；当前页会先完整处理并保存。继续？",
-            parent=app,
-        ):
-            return
+        """Delegate the existing-PDIC OCR action to the dedicated UI owner.
 
-        # Preserve the newest visible text before a worker claims this page.
-        if callable(getattr(app, "save_pdic", None)):
-            app._sync_entry_editor_texts()
-            app.save_pdic(silent=True, sync_editors=False)
-        project = app.project
-        settings = replace(app.settings)
-        rules = load_replace_rules(replace_rules_path(project.root))
-        pages_info = {i: app.pages_tuple(i) for i in indices}
-
-        def worker(index: int, _position: int, _total: int):
-            page = project.images[index]
-            entries = read_pdic(pdic_path(page))
-            with Image.open(page) as opened:
-                image = normalize_page_rgb(opened)
-            effective_settings = effective_page_settings(settings, image.size, index)
-            analysis_image = page_template_analysis_image(image, effective_settings, index)
-            sections = read_page_sections(page)
-            entries = sort_entries_reading_order(
-                entries,
-                derive_geometry(analysis_image, effective_settings),
-                sections,
-            )
-            texts = ocr_entries(
-                image,
-                entries,
-                settings,
-                rules,
-                profile_page_index=index,
-                page_sections=sections,
-            )
-            for entry, text in zip(entries, texts):
-                entry.word = text
-            export_ocred(
-                qt_root(project.root) / f"{page.stem}.OCRed",
-                texts,
-            )
-            write_pdic(
-                pdic_path(page),
-                entries,
-                image.width,
-                pages_info[index],
-            )
-            return len(texts)
-
-        def done(completed, total_pages, stopped, results, error):
-            if error is not None:
-                return
-            count = sum(int(value or 0) for value in results)
-            if not getattr(app, "_batch_foreground_pages", False):
-                app.load_page(app.current_index, skip_current_save=True)
-            if stopped:
-                app.status_var.set(
-                    f"批量 OCR 已停止：完成 {completed}/{total_pages} 页，共 {count} 个词条"
-                )
-            else:
-                app.status_var.set(f"批量 OCR 完成：{count} 个词条")
-
-        app._start_batch_task(
-            "批量 OCR",
-            indices,
-            worker,
-            done,
-            item_label=lambda i: project.images[i].name,
-            foreground_page_edit=True, allow_pdic_edits=True,
+        Resolve original controller globals for every dispatch and worker
+        execution, retaining tests and runtime module monkeypatch behavior.
+        """
+        return run_existing_pdic_batch(
+            self.app,
+            dependencies=lambda: {
+                "read_pdic": read_pdic,
+                "pdic_path": pdic_path,
+                "messagebox": messagebox,
+                "load_replace_rules": load_replace_rules,
+                "replace_rules_path": replace_rules_path,
+                "process_existing_pdic_page": process_existing_pdic_page,
+                "Image": Image,
+                "normalize_page_rgb": normalize_page_rgb,
+                "effective_page_settings": effective_page_settings,
+                "page_template_analysis_image": page_template_analysis_image,
+                "read_page_sections": read_page_sections,
+                "sort_entries_reading_order": sort_entries_reading_order,
+                "derive_geometry": derive_geometry,
+                "ocr_entries": ocr_entries,
+                "qt_root": qt_root,
+                "export_ocred": export_ocred,
+                "write_pdic": write_pdic,
+            },
         )
 
     def run_ocr_draw(self, scope: str, force_refresh: bool) -> None:
-        app = self.app
-        if not app.guard() or not app.apply_quick_settings(show_status=False):
-            return
-        app.settings.detection_method = "paddleocr"
-        indices = (
-            [app.current_index]
-            if scope == "current"
-            else list(range(len(app.project.images)))
-        )
-        app._detect_pages(
-            indices,
-            method="paddleocr",
-            force_refresh=force_refresh,
+        return run_legacy_scoped_ocr(
+            self.app, scope=scope, force_refresh=force_refresh,
+            ocr_engine_guard=guard_ocr_action_selection,
         )

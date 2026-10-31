@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from picture_capture import app as shell
 from picture_capture.models import Entry as WordEntry
 from picture_capture.ui import review_selection_workflow as selection
@@ -87,7 +89,10 @@ def test_pending_manual_override_flush_is_page_scoped_and_disk_reads_are_safe(tm
     view._flush_pending_manual_override()
     assert json.loads(path_b.read_text(encoding="utf-8"))["page"] == "b"
     path_b.write_text("not json", encoding="utf-8")
-    assert view._read_manual_overrides() == {"version": 1, "overrides": {}}
+    # A malformed human sidecar cannot authorize an empty rewrite.
+    with pytest.raises(RuntimeError, match="损坏"):
+        view._read_manual_overrides()
+    assert path_b.read_bytes() == b"not json"
 
 
 def test_selection_changes_local_model_before_deferred_persistence():
@@ -117,12 +122,16 @@ def test_selection_changes_local_model_before_deferred_persistence():
     assert [row[0] for row in event[:4]] == ["queue", "sync", "override", "overlay"]
 
 
-def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch):
+def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch, tmp_path):
     from dataclasses import replace
     cancelled, jobs = [], []
+    page = tmp_path / "page.png"
+    page.write_bytes(b"synthetic page; not a real dictionary scan")
+    pdic = tmp_path / "page.PDIC"
+    pdic.write_bytes(b"original human PDIC bytes")
     view = SimpleNamespace(
-        project=SimpleNamespace(root=Path(".")),
-        current_page=Path("page.png"), image=SimpleNamespace(width=200),
+        project=SimpleNamespace(root=tmp_path),
+        current_page=page, image=SimpleNamespace(width=200),
         entries=[WordEntry(word="a", x=2, y=3)],
         current_index=0, _deferred_save_job="old",
         _deferred_save_delay_ms=120,
@@ -132,11 +141,14 @@ def test_deferred_save_replaces_pending_timer_without_writing(monkeypatch):
         _flush_deferred_page_save=lambda: None,
     )
     selection._schedule_deferred_page_save(
-        view, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError), replace=replace),
+        view, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError), replace=replace,
+                        pdic_path=lambda _page: pdic),
         sync_editors=False,
     )
     assert cancelled == ["old"] and jobs == [(120, view._flush_deferred_page_save)]
     assert view._deferred_save_job == "new"
-    assert view._deferred_save_page == Path("page.png")
-    assert view._deferred_save_snapshot[0] == Path("page.png")
+    assert view._deferred_save_page == page
+    assert view._deferred_save_snapshot[0] == page
+    assert view._deferred_save_pdic_origin == (page, b"original human PDIC bytes")
+    assert pdic.read_bytes() == b"original human PDIC bytes"
     assert view._deferred_save_snapshot[1][0] is not view.entries[0]

@@ -18,6 +18,7 @@ from PIL import Image, ImageOps
 
 from ..models import AppSettings, Entry
 from ..profile.dictionary import DictionaryProfile
+from .candidate_scoring import CandidateScoreFeatures, score_candidate
 from .headword_models import HeadwordFilterRule, HeadwordParse, OCRRecord
 
 
@@ -472,20 +473,23 @@ def filter_headword_records(
         )
         tail_structure_cue = bool(tail_evidence)
 
-        score = (
-            (2.0 if parsed else 0.0)
-            + (2.0 if (cjk_at_left if cjk_single_visual else at_left) else 0.0)
-            + (3.0 if selected_pos else 0.0)
-            + (2.0 if selected_inflection else 0.0)
-            + (1.5 if selected_variant else 0.0)
-            + (1.5 if selected_pronunciation else 0.0)
-            + (3.0 if selected_descriptor else 0.0)
-            + (1.0 if front_structure_cue else 0.0)
-            + (0.75 if large else 0.0)
-            + (1.0 if bold else 0.0)
-            + (0.5 if separated else 0.0)
-            + (0.75 if cjk_candidate_right_sparse else 0.0)
-        )
+        # Snapshot only the twelve pre-existing score terms. Parser/visual
+        # collectors, original diagnostic fields and all acceptance gates stay
+        # in this owner; no OCR object or image enters the pure scorer.
+        score = score_candidate(CandidateScoreFeatures(
+            parsed=bool(parsed),
+            left_evidence=bool(cjk_at_left if cjk_single_visual else at_left),
+            selected_pos=bool(selected_pos),
+            selected_inflection=bool(selected_inflection),
+            selected_variant=bool(selected_variant),
+            selected_pronunciation=bool(selected_pronunciation),
+            selected_descriptor=bool(selected_descriptor),
+            front_structure_cue=bool(front_structure_cue),
+            large=bool(large),
+            bold=bool(bold),
+            separated=bool(separated),
+            cjk_candidate_right_sparse=bool(cjk_candidate_right_sparse),
+        ))
         if tail_controls_active:
             structural_cue = tail_structure_cue or front_structure_cue
         else:

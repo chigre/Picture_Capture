@@ -80,3 +80,150 @@ def write_records(path: Path, page: str, records: dict[str, dict]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
+
+
+def validate_source_for_rewrite(raw: bytes | None, stem: str) -> None:
+    """Reject sidecars that display-only normalization would irreversibly lose."""
+    if raw is None:
+        return
+    from .candidate_delete import _load_unambiguous_json
+
+    try:
+        doc = _load_unambiguous_json(raw)
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise RuntimeError("R3 简体人工副本无法无损解析，拒绝规范化覆盖") from exc
+    if (
+        not isinstance(doc, dict)
+        or set(doc) != {"format", "format_version", "page", "entries"}
+        or doc.get("format") != "picture_capture_simplified_review"
+        or type(doc.get("format_version")) is not int
+        or doc["format_version"] != FORMAT_VERSION
+        or doc.get("page") != stem
+        or not isinstance(doc.get("entries"), list)
+    ):
+        raise RuntimeError("R3 简体人工副本格式或人工扩展字段不明确，拒绝覆盖")
+    seen: set[tuple[int, int]] = set()
+    for row in doc["entries"]:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"x", "y", "source_word", "text", "manual"}
+            or type(row["x"]) is not int or type(row["y"]) is not int
+            or not isinstance(row["source_word"], str)
+            or not isinstance(row["text"], str)
+            or type(row["manual"]) is not bool
+        ):
+            raise RuntimeError("R3 简体人工行存在无法保留的字段或坐标，拒绝覆盖")
+        key = (row["x"], row["y"])
+        if key in seen:
+            raise RuntimeError("R3 简体人工行有重复原图坐标，拒绝覆盖")
+        seen.add(key)
+
+
+def source_word_conflicts(record: dict | None, current_word: str) -> bool:
+    """An X/Y match alone never grants ownership of a saved human correction."""
+    return record is not None and (
+        not isinstance(record, dict)
+        or record.get("source_word") != str(current_word)
+    )
+
+
+def validate_source_word_binding(
+    raw: bytes | None, stem: str, rows: list[tuple[str, int, int]],
+) -> None:
+    """Verify saved human text still belongs to the PDIC word at that pixel.
+
+    Historical/orphan coordinates are preserved without reassignment: only an
+    existing PDIC coordinate with a different source_word is a conflict.
+    """
+    validate_source_for_rewrite(raw, stem)
+    if raw is None:
+        return
+    live: dict[tuple[int, int], str] = {}
+    for word, x, y in rows:
+        coordinate = (int(x), int(y))
+        if coordinate in live:
+            raise RuntimeError("R3 PDIC 同一原图坐标有多个词条，拒绝简体归属推断")
+        live[coordinate] = str(word)
+    document = json.loads(raw.decode("utf-8"))
+    for record in document["entries"]:
+        coordinate = (record["x"], record["y"])
+        if coordinate in live and source_word_conflicts(record, live[coordinate]):
+            raise RuntimeError("R3 简体记录来源词条与 PDIC 原图坐标不一致，拒绝覆盖")
+
+
+def guarded_write_records(
+    page: Path, path: Path, stem: str, records: dict[str, dict],
+    expected: bytes | None, *, writer=None,
+) -> bytes:
+    """Preserve exact human bytes via a source-pinned R3 recovery journal.
+
+    Optimistic check + O_EXCL intent is not atomic cross-process file CAS.
+    """
+    from tempfile import TemporaryDirectory
+    from . import transactions as tx
+
+    page, path = Path(page), Path(path)
+    if writer is None:
+        writer = write_records
+    if stem != page.stem or tx._marker_present(tx._recovery_path(page)):
+        raise RuntimeError("R3 存在其他事务恢复标记或页面已改变")
+    if tx._bytes_or_absent(path) != expected:
+        raise RuntimeError("R3 简体人工副本由其他人修改，拒绝覆盖")
+    # A simplified-only save must not attach an old human correction to a
+    # newly replaced PDIC word at the same source pixel coordinate.
+    from ..io.formats import pdic_path, read_pdic
+    pdic_file = pdic_path(page)
+    pdic_source = tx._bytes_or_absent(pdic_file)
+    if pdic_source is None:
+        pdic_rows = None
+        validate_source_for_rewrite(expected, stem)
+    else:
+        try:
+            pdic_rows = [
+                (entry.word, entry.x, entry.y) for entry in read_pdic(pdic_file)
+            ]
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError("R3 PDIC 来源不可读，拒绝简体写盘") from exc
+        validate_source_word_binding(expected, stem, pdic_rows)
+    if tx._bytes_or_absent(pdic_file) != pdic_source:
+        raise RuntimeError("R3 读取 PDIC 原词期间来源发生变化，拒绝覆盖")
+
+    with TemporaryDirectory(prefix="pc-r3-simplified-") as directory:
+        proposal = Path(directory) / "proposal.json"
+        writer(proposal, stem, records)
+        target = proposal.read_bytes()
+    if tx._bytes_or_absent(path) != expected:
+        raise RuntimeError("R3 简体预览期间外部修改了人工副本")
+    if pdic_rows is not None:
+        validate_source_word_binding(target, stem, pdic_rows)
+    if tx._bytes_or_absent(pdic_file) != pdic_source:
+        raise RuntimeError("R3 简体预览期间 PDIC 原词被其他人修改")
+    if target == expected:
+        return target
+
+    marker = tx._stage_recovery(
+        page, [("simplified", expected, target)], rollback_required=True,
+    )
+    try:
+        marker_bytes = marker.read_bytes()
+        if (not tx._recovery_marker_unchanged(marker, marker_bytes)
+                or tx._bytes_or_absent(path) != expected
+                or tx._bytes_or_absent(pdic_file) != pdic_source):
+            raise RuntimeError("R3 简体/PDIC 来源或恢复意图已变化")
+        tx._publish(path, target)
+        if (tx._bytes_or_absent(path) != target
+                or tx._bytes_or_absent(pdic_file) != pdic_source
+                or not tx._recovery_marker_unchanged(marker, marker_bytes)):
+            raise RuntimeError("R3 简体保存回读、PDIC 来源或恢复意图不一致")
+        marker.unlink()
+        if tx._marker_present(marker):
+            raise RuntimeError("R3 简体恢复标记未能清除")
+    except Exception:
+        if tx._marker_present(marker):
+            try:
+                tx._rollback_failed_publish(page)
+            except (OSError, RuntimeError, ValueError):
+                # An unresolved journal must quarantine subsequent writers.
+                pass
+        raise
+    return target

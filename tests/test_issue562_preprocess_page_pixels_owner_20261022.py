@@ -8,17 +8,18 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from picture_capture import image_utils
+from picture_capture.preprocess import analysis_image as image_utils
 from picture_capture.preprocess import page_pixels as pixels
 
 
 def test_one_physical_owner_and_historical_function_identity() -> None:
-    root = Path(image_utils.__file__).resolve().parent
+    root = Path(image_utils.__file__).resolve().parents[1]
     assert Path(pixels.__file__).resolve() == root / "preprocess" / "page_pixels.py"
     for name in ("normalize_page_rgb", "_box_sum", "_generic_analysis_ink"):
         assert getattr(image_utils, name) is getattr(pixels, name)
         assert getattr(pixels, name).__module__ == "picture_capture.preprocess.page_pixels"
-    source = (root / "image_utils.py").read_text(encoding="utf-8")
+    source = (root / "preprocess/analysis_image.py").read_text(encoding="utf-8")
+    assert not (root / "image_utils.py").exists()
     assert "def normalize_page_rgb(" not in source
     assert "def _box_sum(" not in source
     assert "def _generic_analysis_ink(" not in source
@@ -128,12 +129,12 @@ def test_box_sum_preserves_zero_border_counts() -> None:
     np.testing.assert_array_equal(image_utils._box_sum(source, 1, 1), expected)
 
 
-def test_leaf_import_before_historical_image_utils_has_no_runtime_dependency_cycle() -> None:
+def test_leaf_import_before_preprocess_analysis_image_has_no_runtime_dependency_cycle() -> None:
     code = """
 import importlib, sys
 leaf = importlib.import_module('picture_capture.preprocess.page_pixels')
-assert 'picture_capture.image_utils' not in sys.modules
-root = importlib.import_module('picture_capture.image_utils')
+assert 'picture_capture.preprocess.analysis_image' not in sys.modules
+root = importlib.import_module('picture_capture.preprocess.analysis_image')
 assert root.normalize_page_rgb is leaf.normalize_page_rgb
 assert root._generic_analysis_ink is leaf._generic_analysis_ink
 """
