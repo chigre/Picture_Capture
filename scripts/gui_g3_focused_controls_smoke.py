@@ -687,6 +687,46 @@ def run():
                 else:
                     section_path.write_bytes(section_original)
 
+            # A native ReviewWindow synchronous dispatch failure occurs
+            # *before* any worker can certify disk state. The user must not
+            # lose the StringVar correction, leak the injected private path,
+            # or inherit an automatic-close request from the old attempt.
+            dispatch_denied_alerts = []
+            review.filter_vars[0].set("synthetic-close-dispatch-refused")
+            attempted = review._filter_pending_changes.get(0, {}).get((80, 76))
+            check(
+                attempted is not None
+                and attempted["new_word"] == "synthetic-close-dispatch-refused"
+                and attempted.get("_focused_save_source_witness")
+                == target.get("_focused_save_source_witness"),
+                "native dispatch test lacks a source-attested pending editor",
+            )
+            dispatch_baseline = pdic_path(page1).read_bytes()
+            with patch.object(
+                app, "_start_ui_worker",
+                side_effect=OSError("PRIVATE_NATIVE_DISPATCH_PATH/word"),
+            ), patch.object(
+                module.messagebox, "showerror",
+                side_effect=lambda title, msg, **_kw:
+                dispatch_denied_alerts.append((title, msg)),
+            ):
+                review._close_review()
+            check(
+                review.winfo_exists()
+                and review.filter_vars[0].get() == "synthetic-close-dispatch-refused"
+                and review._filter_pending_changes.get(0, {}).get(
+                    (80, 76), {}
+                ).get("new_word") == "synthetic-close-dispatch-refused"
+                and review._filter_save_launch_failed
+                and not review._filter_save_running
+                and not review._filter_close_after_save
+                and pdic_path(page1).read_bytes() == dispatch_baseline
+                and len(dispatch_denied_alerts) == 1
+                and "PRIVATE_" not in str(dispatch_denied_alerts)
+                + app.status_var.get(),
+                "native synchronous dispatch failure lost input, leaked source, or closed UI",
+            )
+
             # A new explicit close attempt after restoring the original
             # source really saves one word then destroys the ReviewWindow.
             review.filter_vars[0].set("synthetic-close-committed")
