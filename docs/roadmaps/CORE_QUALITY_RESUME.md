@@ -1,3 +1,10 @@
+## 2026-10-31｜R3/#503 普通文字 Undo/Redo 全来源失效防护（测试优先红灯已证，E2 最终 HEAD 待核）
+
+- **承接已验收 HEAD `2f303379fae26906ac2674ff152139bc97dbb499`**：[CI #41191029305](https://github.com/chigre/Picture_Capture/actions/runs/41191029305) 六 OS/Python 组合 6/6＋Risk-tier gate、[OCR #41191029324](https://github.com/chigre/Picture_Capture/actions/runs/41191029324) 3/3、[CodeQL #41191026786](https://github.com/chigre/Picture_Capture/actions/runs/41191026786) Python/Actions 2/2；实际源码与 ReviewWindow native Tk G3 合成 E2 均成功。唯一 #663 Draft/Open/Unmerged，main `ec20989e` 未变。
+- **真实红灯：** 仅新增合成测试 `dc306c3613b342eccadf02c1adcc342ac6dc1b03`，[CI #41192052020](https://github.com/chigre/Picture_Capture/actions/runs/41192052020) Ubuntu Python3.13 **24 failed / 5087 passed / 3 skipped**，全部是普通 `ReviewSessionHistory` 在 Tk 快照暂失效时没有核对人工覆盖、OCR、SECTION、Profile 的修改/删除/拒读，导致旧 Undo/Redo 历史未作废；2 个来源完全不变的重试正控通过。绝不把测试先红 SHA 算作通过门禁。
+- **最小代码修复 `20fb3dffd2b63cdd9de39f5633617f37146766ac`：** 只在 `snapshot_review=None` 的保守诊断补四类 sidecar 的精确字节复核，OSError/ValueError/TypeError 统一拒绝＋失效历史，绝不回滚或覆盖第三方改动，保留来源未变时显式重试。无实际 PDIC writer、XY、人工覆盖和 OCR 格式变更。
+- 合成测试新增 26 个参数化场景；完整审计见 [R3_G1_PLAIN_HISTORY_FULL_PROVENANCE_20261031.md](../architecture/R3_G1_PLAIN_HISTORY_FULL_PROVENANCE_20261031.md)。本轮最终文档 HEAD 必须另查 CI Windows/macOS/Ubuntu × Python3.10/3.13 **6/6＋Risk gate**、OCR **3/3**、CodeQL **2/2**。真人 Windows E3、#483 W1–W11、#503 完整复合撤销、G3 真词典及大图、R6 人工标签、R8 真扫描依旧 NOT PERFORMED/DEFERRED；不 Ready、不合并、不关闭 issue。
+
 ## 2026-10-31｜G3/R3 native Tk 稳定物理读回验证：旧 macOS 失败保留，五次事件循环所有者一致性（E2 最终 HEAD 待验）
 
 - 同步回调修复 `3ed584a5` 的源 CI [#41190137992](https://github.com/chigre/Picture_Capture/actions/runs/41190137992) 六组合 6/6 全通过。测试优先 `140d981d` 的 Ubuntu/macOS Python3.13 均有 **6 项真实目标失败**，证实未确认的 inline done/failed 能提前关闭／重复错误弹窗；后续产品回调确认屏障保留全部人工更正。
