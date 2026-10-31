@@ -1,3 +1,7 @@
+## 2026-10-31｜G3 success prefetch 中间测试夹具诊断补记（最终 docs HEAD 待验）
+
+- 源修复 `7637eedb` [CI #41211513690](https://github.com/chigre/Picture_Capture/actions/runs/41211513690) Ubuntu Python3.13 **5 failed / 5185 passed / 3 skipped**：3 项是新测试应先取得 worker 成功载荷再模拟磁盘漂移，已由 `cd01446d` 校正；另 2 项是旧 epoch-smoke 假 key 没有真实 witness，已由 `a5a25dc5` 换成原有 source-witness API。未改产品检查，未跳过断言。最新代码+文档 HEAD 6/6 CI＋Risk、OCR3/3、CodeQL Python/Actions2/2 均须重新核实。真人 E3/W1–W11/人工 Undo/真实词典 **NOT PERFORMED**，R6/R8 **DEFERRED**。
+
 ## 2026-10-31｜G3 R4.2 成功 prefetch 的来源复核、跨 epoch/key 所有权与人工修改保护（red-first，最终 E2 待核）
 
 - 绿色基准为 `8ce6d807914cef24456862a3492806a5bb3e38a1`：CI [#41205116868](https://github.com/chigre/Picture_Capture/actions/runs/41205116868) 6/6 + Risk-tier、OCR [#41205116875](https://github.com/chigre/Picture_Capture/actions/runs/41205116875) 3/3、CodeQL [#41205112460](https://github.com/chigre/Picture_Capture/actions/runs/41205112460) Python/Actions 2/2 成功，唯一 Draft #663。

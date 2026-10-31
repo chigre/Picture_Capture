@@ -30,3 +30,7 @@ Synthetic fixture correction `cd01446db23801a2f04e9e9397134089562dc65a`: a compl
 ## Next check
 
 Review the direct-render success callback for matching provenance and stale-cache ownership. Any further change requires new red-first tests and the same exact-head safety gates. Never convert automated E2 into E3 evidence.
+
+## Intermediate source CI and legacy fixture correction
+
+At source-fix SHA `7637eedb7bc2eb5db8048a1ea690dc5d67bfa190`, [CI #41211513690](https://github.com/chigre/Picture_Capture/actions/runs/41211513690) Ubuntu Python3.13 reported **5 failed / 5,185 passed / 3 skipped**. Three new tests originally called the worker *after* mutating the source, so the stricter post-worker guard correctly raised before a success callback could be simulated; `cd01446d` corrected their timing to precompute a payload, mutate source, then deliver `done`. Two historical source-less epoch-smoke tests injected a bare `("sig",)` key, inconsistent with the already-required real content-witness cache contract; `a5a25dc53ae9be4b2e8729ecf4b8e71ad51b3458` now constructs an empty-target witness with the actual `focused_crop_source_witness([], [])` function and still asserts cross-epoch isolation and exactly one valid current-epoch cache publication. No production source guard was removed, tests were not skipped, and red intermediate CI remains red. These are synthetic fixture fidelity corrections, **not** evidence of real-device acceptance.
