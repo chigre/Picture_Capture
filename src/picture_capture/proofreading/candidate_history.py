@@ -143,7 +143,7 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             # proof of unchanged sources and must not crash a human Undo.
             try:
                 stale_source = (
-                    getattr(app, "current_page", None) != expected.page
+                    not tx._live_source_bindings_match(review, expected)
                     or tx.sha256_file(expected.page) != expected.image_sha
                     or tx._bytes_or_absent(tx.pdic_path(expected.page)) != expected.pdic_bytes
                     or tx._bytes_or_absent(tx.simplified_review_path_for_image(expected.page))
@@ -153,7 +153,7 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
                     or tx._bytes_or_absent(expected.section_path) != expected.section_bytes
                     or tx._bytes_or_absent(expected.profile_path) != expected.profile_bytes
                 )
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
                 # No private exception path or text goes to Tk/status/stdout.
                 stale_source = True
             if stale_source:
@@ -164,10 +164,17 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):
             return False
-        bound = review._bound_row_entries()
-        if (len(bound) != len(review.vars)
-                or any(var.get().strip() != entry.word
-                       for entry, var in zip(bound, review.vars))):
+        # The rendered Tk rows still refer to the PRE-replay membership.
+        # Capture their exact Entry/StringVar pairing before any disk write.
+        try:
+            bound = tuple(review._bound_row_entries())
+            bound_vars = tuple(review.vars)
+            if (len(bound) != len(bound_vars)
+                    or any(var.get().strip() != entry.word
+                           for entry, var in zip(bound, bound_vars))):
+                return False
+        except Exception:
+            # Destroyed Tk bindings must refuse before touching the journal.
             return False
         matches = [row for row in getattr(app, "ocr_review_candidates", ())
                    if isinstance(row, dict)
@@ -215,9 +222,15 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
             except Exception:
                 pass
         words = {id(entry): word for entry, word, _, _ in target.entries}
-        for entry, var in zip(review._bound_row_entries(), review.vars):
+        for entry, var in zip(bound, bound_vars):
             if id(entry) in words:
-                var.set(words[id(entry)])
+                try:
+                    var.set(words[id(entry)])
+                except Exception:
+                    # PDIC/manual/simplified and the Entry/candidate models
+                    # already committed. Presentation-only destroyed Tk vars
+                    # cannot undo that or leak private exception paths.
+                    pass
         cache = getattr(review, "_simplified_page_cache", None)
         if isinstance(cache, dict):
             cache.pop(expected.page.stem, None)
