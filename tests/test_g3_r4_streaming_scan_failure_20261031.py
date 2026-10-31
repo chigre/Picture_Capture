@@ -223,3 +223,28 @@ def test_current_crop_render_error_does_not_publish_private_path(capsys):
     assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in workspace[-1]
     assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in status.get()
     assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_crop_prefetch_failure_is_silent_and_retriable(capsys):
+    calls = []
+    review = SimpleNamespace(
+        parent=SimpleNamespace(_start_ui_worker=lambda *args: calls.append(args)),
+        _filter_rows_active=True,
+        filtered_batch_index=0,
+        _filter_scan_serial=22,
+        _focused_timing_session=None,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _filter_batch_snapshot=lambda index: (
+            (index, ("synthetic-source",)), [], [], None, 300, 250, 1.0, False,
+        ),
+    )
+    workflow._schedule_filter_next_batch_preload(
+        review, SimpleNamespace(ReviewWindow=object())
+    )
+    assert len(calls) == 1
+    assert review._filter_prefetch_key is not None
+    failed = calls[0][3]
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert review._filter_prefetch_key is None
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out

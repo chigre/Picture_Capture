@@ -412,7 +412,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                     next_position, missing_total, len(self.filtered_targets)
                 )
 
-        def remaining_failed(exc, detail) -> None:
+        def remaining_failed(_exc, _detail) -> None:
             if (
                 serial != self._filter_scan_serial
                 or not getattr(self, "_filter_rows_active", False)
@@ -423,7 +423,6 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             # Do not surface exception strings containing project paths.
             self._filter_scan_failed = True
             self._update_filter_batch_indicator()
-            self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
             self.parent.status_var.set(
                 "后续页面筛选失败，结果不完整；已就绪批次保留，"
                 "未扫描页面不计入结果，请检查后重新筛选。"
@@ -480,15 +479,28 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 next_position, pages_without_ocr, len(self.filtered_targets)
             )
 
-    def failed(exc, detail) -> None:
-        if detail:
-            print(detail)
-        if serial != self._filter_scan_serial:
+    def failed(_exc, _detail) -> None:
+        if (
+            serial != self._filter_scan_serial
+            or not getattr(self, "_filter_rows_active", False)
+        ):
             return
-        self._filter_scan_complete = True
-        self.filter_batch_var.set("筛选失败")
-        self._clear_review_workspace(f"筛选失败：{exc}")
-        messagebox.showerror("重点筛选失败", str(exc), parent=self)
+        # The first scan did not publish even one trustworthy batch. An
+        # exception is never a successful/complete scan, and raw worker
+        # errors can contain private local source paths.
+        self._filter_scan_failed = True
+        self._filter_scan_complete = False
+        self.filtered_targets = []
+        self._update_filter_batch_indicator()
+        self._clear_review_workspace(
+            "首批筛选失败，结果未建立；请检查页面数据后重新筛选。"
+        )
+        self.parent.status_var.set(
+            "首批筛选失败，结果不完整；未显示任何筛选词条，请检查后重试。"
+        )
+        messagebox.showerror(
+            "重点筛选失败", "首批页面无法完成筛选；请检查后重新筛选。", parent=self
+        )
 
     self.parent._start_ui_worker(
         f"focused-filter-scan-{id(self)}", first_worker, first_done, failed
@@ -510,7 +522,11 @@ def _filter_available_target_count(self, deps: FocusedFilterDeps) -> int:
 
 def _update_filter_batch_indicator(self, deps: FocusedFilterDeps) -> None:
     if getattr(self, "_filter_scan_failed", False):
-        self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
+        self.filter_batch_var.set(
+            "筛选中断（无完整批次）"
+            if self._filter_available_target_count() <= 0
+            else "后续筛选中断（仅已就绪批次）"
+        )
         return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
@@ -752,11 +768,11 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         if int(self.filtered_batch_index) == int(local_index):
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(exc, detail, local_key=cache_key) -> None:
+    def failed(_exc, _detail, local_key=cache_key) -> None:
         if scan_epoch != getattr(self, "_filter_scan_serial", None):
             return
-        if detail:
-            print(detail)
+        # Prefetch is optional. Let a later navigation retry the batch,
+        # without publishing raw paths from a stale/failed crop worker.
         if self._filter_prefetch_key == local_key:
             self._filter_prefetch_key = None
 
@@ -802,8 +818,8 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     available_total = self._filter_available_target_count()
     if available_total <= 0:
         if getattr(self, "_filter_scan_failed", False):
-            self.filter_batch_var.set("后续筛选中断（无完整批次）")
-            self._clear_review_workspace("后续扫描失败，结果不完整；请重新筛选。")
+            self.filter_batch_var.set("筛选中断（无完整批次）")
+            self._clear_review_workspace("筛选失败，结果不完整；请重新筛选。")
         elif self._filter_scan_complete:
             self.filter_batch_var.set("0 / 0")
             self._clear_review_workspace("当前条件没有筛选出词条。")
@@ -873,12 +889,21 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         self._cache_filter_batch_payload(local_key, payload)
         self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(exc, detail) -> None:
-        if detail:
-            print(detail)
-        if serial != self._filter_render_serial:
+    def failed(_exc, _detail) -> None:
+        if (
+            serial != self._filter_render_serial
+            or scan_epoch != getattr(self, "_filter_scan_serial", None)
+            or not getattr(self, "_filter_rows_active", False)
+        ):
             return
-        self._clear_review_workspace(f"本批切词行生成失败：{exc}")
+        # A crop failure cannot mutate the next scan's workspace or
+        # disclose a private page path through the ReviewWindow status.
+        self._clear_review_workspace(
+            "本批切词行生成失败；请检查页面数据后重试。"
+        )
+        self.parent.status_var.set(
+            "本批裁剪未能生成，请检查源文件后重试。"
+        )
 
     self.parent._start_ui_worker(
         f"focused-filter-render-{id(self)}", worker, done, failed
