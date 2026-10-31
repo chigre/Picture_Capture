@@ -52,3 +52,51 @@ def focused_crop_source_witness(
             _file_witness(page_sections_read_path_for_image(page), optional=True),
         ))
     return ("focused-crop-source-v1", tuple(rows))
+
+
+def focused_save_source_from_crop_witness(
+    crop_witness: tuple, page_index: int,
+) -> tuple | None:
+    """Bind an accepted crop's image/SECTION to each human edit.
+
+    PDIC bytes are deliberately omitted: a valid human edit changes PDIC.
+    Source provenance is captured during verified crop display, not at save.
+    """
+    try:
+        if crop_witness[0] != "focused-crop-source-v1":
+            return None
+        matches = [
+            row for row in crop_witness[1]
+            if row[0] == int(page_index)
+        ]
+        if len(matches) != 1:
+            return None
+        row = matches[0]
+        return ("focused-save-source-v1", row[1], row[3])
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def focused_save_source_witness(page: Path) -> tuple:
+    """Current image/SECTION byte identity; no new source witness is stored."""
+    page = Path(page)
+    return (
+        "focused-save-source-v1",
+        _file_witness(page, optional=False),
+        _file_witness(page_sections_read_path_for_image(page), optional=True),
+    )
+
+
+def verify_focused_save_source(page: Path, expected: tuple | None) -> None:
+    """Fail closed if the displayed image/SECTION source cannot be proven."""
+    if (
+        not isinstance(expected, tuple) or len(expected) != 3
+        or expected[0] != "focused-save-source-v1"
+    ):
+        raise RuntimeError("筛选校对缺少有效的原图与 SECTION 来源证明，拒绝保存")
+    try:
+        current = focused_save_source_witness(page)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("筛选校对原图或 SECTION 来源无法核验，拒绝保存") from exc
+    if current != expected:
+        raise RuntimeError("筛选校对原图或 SECTION 来源已变化，拒绝保存")

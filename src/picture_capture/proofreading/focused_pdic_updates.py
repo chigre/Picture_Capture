@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .focused_crop_source_fingerprint import verify_focused_save_source
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -27,6 +29,18 @@ def apply_focused_review_page_updates(
     Image = deps.Image
     _write_pdic_atomic = deps._write_pdic_atomic
     target_path = pdic_path(page)
+
+    # Optional at this low-level helper boundary for existing direct callers;
+    # live focused-mode saves require this attestation before dispatch. If a
+    # caller supplies it, all changes on the page must share the same source.
+    witnessed = [
+        change.get("_focused_save_source_witness") for change in changes
+    ]
+    expected_source = next((value for value in witnessed if value is not None), None)
+    if expected_source is not None:
+        if any(value != expected_source for value in witnessed):
+            raise RuntimeError("筛选校对页面的原图或 SECTION 来源不一致，拒绝保存")
+        verify_focused_save_source(page, expected_source)
 
     def disk_bytes() -> bytes | None:
         try:
@@ -83,7 +97,16 @@ def apply_focused_review_page_updates(
     )
     if disk_bytes() != original_bytes:
         raise RuntimeError("筛选校对 PDIC 保存前已变化，拒绝覆盖")
+    # External source changes may arrive while PDIC is read or the image
+    # width is inspected. Revalidate immediately before publication.
+    if expected_source is not None:
+        verify_focused_save_source(page, expected_source)
     _write_pdic_atomic(target_path, working, image_width, page_links)
+    # This cannot turn publication into a cross-file OS CAS. Detect source
+    # drift after publication and never report verified success or roll back
+    # over a foreign file.
+    if expected_source is not None:
+        verify_focused_save_source(page, expected_source)
     verified = read_pdic(target_path)
     if len(verified) != len(working):
         raise RuntimeError("保存后 PDIC 行数发生变化")

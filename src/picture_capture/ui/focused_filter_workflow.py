@@ -10,7 +10,10 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from ..proofreading.review_timing import ReviewTimingSession
-from ..proofreading.focused_crop_source_fingerprint import focused_crop_source_witness
+from ..proofreading.focused_crop_source_fingerprint import (
+    focused_crop_source_witness, focused_save_source_from_crop_witness,
+    verify_focused_save_source,
+)
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -725,9 +728,16 @@ def _apply_filter_batch_payload(
     crops, effective_zoom, display_meta = payload
     if len(crops) != len(targets) or len(display_meta) != len(targets):
         return False
+    # The accepted crop (not a later save-time disk read) is the source of
+    # truth for a subsequently edited row. Bind only image and SECTION: PDIC
+    # necessarily changes after a successful human correction.
+    source_witness = cache_key[1][-1]
     for target, (column_number, sequence_number) in zip(targets, display_meta):
         target["column_number"] = int(column_number)
         target["sequence_number"] = int(sequence_number)
+        target["_focused_save_source_witness"] = focused_save_source_from_crop_witness(
+            source_witness, int(target["page_index"])
+        )
     if self.review_zoom_auto:
         self.review_zoom = max(0.01, float(effective_zoom))
         self.review_zoom_var.set(f"自动 {_format_layout_percent(self.review_zoom * 100.0)}%")
@@ -1212,12 +1222,18 @@ def _queue_focused_change(self, deps: FocusedFilterDeps, target: dict, value: st
             if not page_changes:
                 self._filter_pending_changes.pop(page_index, None)
     else:
-        self._filter_pending_changes.setdefault(page_index, {})[key] = {
+        change = {
             "page_index": page_index,
             "x": key[0], "y": key[1],
             "original_word": original,
             "new_word": clean,
         }
+        # Never fabricate source ownership from the disk at save time:
+        # a hidden external file change after crop display must be detected.
+        source_witness = target.get("_focused_save_source_witness")
+        if source_witness is not None:
+            change["_focused_save_source_witness"] = source_witness
+        self._filter_pending_changes.setdefault(page_index, {})[key] = change
     if self._filter_save_job is not None:
         try:
             self.after_cancel(self._filter_save_job)
@@ -1297,6 +1313,21 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         started = perf_counter() if timing_session is not None else None
         saved: list[tuple[int, int, int, str]] = []
         conflicts: list[str] = []
+        # Preflight every page before any PDIC write: a stale page among
+        # several edited pages must not allow a partial first-page save.
+        # Actual ReviewWindow filter mode has _filter_rows_active=True.
+        # Keep legacy standalone helper/mock ABI intact outside filter mode.
+        if getattr(self, "_filter_rows_active", False):
+            for page_index, changes in sorted(snapshot.items()):
+                expected = changes[0].get("_focused_save_source_witness")
+                if expected is None or any(
+                    change.get("_focused_save_source_witness") != expected
+                    for change in changes
+                ):
+                    raise RuntimeError(
+                        "筛选校对缺少一致的原图与 SECTION 来源证明，拒绝保存"
+                    )
+                verify_focused_save_source(pages[page_index], expected)
         for page_index, changes in sorted(snapshot.items()):
             page_saved, page_conflicts = _apply_focused_review_page_updates(
                 pages[page_index], pages, page_index, changes
