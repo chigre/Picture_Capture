@@ -596,8 +596,10 @@ def run():
                     lambda: (
                         not review._filter_save_running
                         and not review._filter_close_after_save
-                        and bool(review._filter_pending_changes)
-                        and "尚有未确认修改" in app.status_var.get()
+                        and review._filter_pending_changes.get(0, {}).get(
+                            (80, 76), {}
+                        ).get("new_word") == "synthetic-close-unconfirmed"
+                        and review.winfo_exists()
                     ),
                     seconds=35,
                     description="G3 native close disarmed after unconfirmed save",
