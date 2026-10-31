@@ -436,3 +436,64 @@ def test_successfully_acknowledged_inline_empty_callback_does_not_leave_worker_h
     assert not closed and not alerts
     assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
     assert "尚有未确认修改" in status.get()
+
+
+@pytest.mark.parametrize("close_intent", [False, True])
+@pytest.mark.parametrize("early_callback", ["none", "done", "failed"])
+def test_shutdown_refusal_minus_one_requeues_without_claiming_save(
+    tmp_path, capsys, close_intent, early_callback,
+):
+    """The actual Tk worker runtime returns -1 without registering a worker.
+
+    Even a contradictory inline compatibility callback must not certify a
+    rejected save, close the editor, or lose a human correction. Synthetic E2.
+    """
+    review, deps, dialogs, closed, status, pages = _review(
+        tmp_path, close_intent=close_intent,
+    )
+    review.parent.current_index = 0
+    review.parent.entries = []
+    original_bytes = pages[0].read_bytes()
+    pending = review._filter_pending_changes[0][(10, 20)]
+    sentinel = "PRIVATE_SHUTDOWN_REFUSAL_C:/dictionary/page001.pdic"
+    callbacks = []
+
+    def shutdown_worker(_key, _worker, done, failed, **options):
+        assert options == {"wait_on_close": True}
+        callbacks.append((done, failed))
+        if early_callback == "done":
+            done(([(0, 10, 20, "human-0")], []))
+        elif early_callback == "failed":
+            failed(RuntimeError(sentinel), sentinel)
+        return -1
+
+    review.parent._start_ui_worker = shutdown_worker
+    workflow._flush_focused_changes(review, deps)
+
+    assert len(callbacks) == 1
+    assert review._filter_save_launch_failed is True
+    assert review._filter_save_running is False
+    assert review._filter_close_after_save is False
+    assert review._filter_pending_changes[0][(10, 20)] is pending
+    assert review.filtered_targets[0]["original_word"] == "old-0"
+    assert pages[0].read_bytes() == original_bytes
+    assert not closed
+    assert len(dialogs) == 1
+    assert "未确认" in status.get() or "重试" in status.get()
+    exposed = repr((dialogs, status.messages, capsys.readouterr()))
+    assert sentinel not in exposed
+    assert "Traceback" not in exposed
+
+    # A callback after the refused handoff must not publish, clear newer
+    # state, or manufacture an acknowledged disk save.
+    done, failed = callbacks[0]
+    dialog_count = len(dialogs)
+    status_before = status.get()
+    done(([(0, 10, 20, "human-0")], []))
+    failed(OSError(sentinel), sentinel)
+    assert review._filter_pending_changes[0][(10, 20)] is pending
+    assert review.filtered_targets[0]["original_word"] == "old-0"
+    assert review._filter_save_launch_failed is True
+    assert len(dialogs) == dialog_count
+    assert status.get() == status_before
+    assert not closed
