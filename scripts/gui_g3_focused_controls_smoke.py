@@ -16,7 +16,9 @@ from tkinter import ttk
 from unittest.mock import patch
 
 from picture_capture.models import AppSettings
-from picture_capture.persistence.project_storage import settings_path
+from picture_capture.persistence.project_storage import (
+    page_sections_read_path_for_image, settings_path,
+)
 from picture_capture.io.formats import pdic_path, read_pdic
 
 from gui_project_roundtrip_smoke import _sample_project, _pump_until
@@ -265,6 +267,119 @@ def run():
                 "second native filter changed original source XY or ordering",
             )
             check(not origin.exists(), "opt-out rescan unexpectedly created OCR provenance")
+
+            # Real native Tk integration for the focused-save source owner.
+            # The prior unit tests faked pending edits and worker dispatch;
+            # this exercise uses the actual accepted crop, StringVar trace,
+            # 160-ms autosave and background failure callback. Only a
+            # disposable synthetic project is touched (NOT operator E3).
+            _pump_until(
+                app,
+                lambda: (
+                    bool(review.filter_vars)
+                    and bool(review._filter_current_batch_targets)
+                    and review._filter_current_batch_targets[0].get(
+                        "_focused_save_source_witness"
+                    ) is not None
+                ),
+                seconds=35,
+                description="G3 native focused source-attested crop display",
+            )
+            target = review._filter_current_batch_targets[0]
+            check(
+                (int(target["page_index"]), int(target["x"]), int(target["y"]))
+                == (0, 80, 76),
+                "native filtered editor attached to an unexpected source coordinate",
+            )
+            before_drift_pdic = pdic_path(page1).read_bytes()
+            before_main_words = [(e.word, e.x, e.y) for e in app.entries]
+            section_path = page_sections_read_path_for_image(page1)
+            section_original = (
+                section_path.read_bytes() if section_path.is_file() else None
+            )
+            native_save_alerts = []
+            try:
+                with patch.object(
+                    module.messagebox, "showerror",
+                    side_effect=lambda title, message, **_kw:
+                    native_save_alerts.append((title, message)),
+                ):
+                    # This is an actual Tk StringVar mutation, not a direct
+                    # mock of _queue_focused_change or a manufactured witness.
+                    review.filter_vars[0].set("synthetic-native-edit")
+                    queued = review._filter_pending_changes.get(0, {}).get(
+                        (80, 76)
+                    )
+                    check(
+                        queued is not None
+                        and queued.get("_focused_save_source_witness")
+                        == target["_focused_save_source_witness"],
+                        "Tk human change did not retain the displayed crop witness",
+                    )
+                    # Introduce an external SECTION after the editor's
+                    # source snapshot but before the autosave worker fires.
+                    # Existing JSON stays parseable if it already exists.
+                    section_path.parent.mkdir(parents=True, exist_ok=True)
+                    section_path.write_bytes(
+                        b'{"synthetic_section_added":true}'
+                        if section_original is None
+                        else section_original + b" "
+                    )
+                    check(
+                        page_sections_read_path_for_image(page1).read_bytes()
+                        != (section_original if section_original is not None else b""),
+                        "synthetic SECTION mutation did not take effect",
+                    )
+                    _pump_until(
+                        app,
+                        lambda: (
+                            not review._filter_save_running
+                            and bool(review._filter_pending_changes)
+                            and bool(native_save_alerts)
+                            and "保存失败" in app.status_var.get()
+                        ),
+                        seconds=35,
+                        description="G3 native Tk stale-SECTION save refusal",
+                    )
+                    check(
+                        pdic_path(page1).read_bytes() == before_drift_pdic,
+                        "native stale-SECTION save overwrote synthetic PDIC",
+                    )
+                    check(
+                        [(e.word, e.x, e.y) for e in app.entries]
+                        == before_main_words,
+                        "native failed save mutated main canvas Entry words/XY",
+                    )
+                    check(
+                        review.filter_vars[0].get() == "synthetic-native-edit"
+                        and review._filter_pending_changes[0][(80, 76)][
+                            "new_word"
+                        ] == "synthetic-native-edit"
+                        and target["original_word"] == "synthetic-alpha"
+                        and not review._filter_close_after_save,
+                        "native save failure lost the human edit or closed the review",
+                    )
+                    check(
+                        all("保存失败" in title for title, _ in native_save_alerts)
+                        and "synthetic-native-edit" not in str(native_save_alerts),
+                        "native save failure UI showed a headword or wrong outcome",
+                    )
+            finally:
+                # Restore the disposable source, never a private/real page.
+                if section_original is None:
+                    section_path.unlink(missing_ok=True)
+                else:
+                    section_path.write_bytes(section_original)
+                # Explicitly abandon this intentionally unsaved test edit;
+                # do not allow ReviewWindow cleanup to publish it later.
+                review._filter_pending_changes.clear()
+                job = review._filter_save_job
+                if job is not None:
+                    try:
+                        review.after_cancel(job)
+                    except module.tk.TclError:
+                        pass
+                    review._filter_save_job = None
 
             check([p.read_bytes() for p in (page1, page2)] == before_image,
                   "native UI smoke unexpectedly modified synthetic source image")
