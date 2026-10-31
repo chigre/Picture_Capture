@@ -345,9 +345,11 @@ def run():
                         app,
                         lambda: (
                             not review._filter_save_running
-                            and bool(review._filter_pending_changes)
-                            and bool(native_save_alerts)
-                            and "保存失败" in app.status_var.get()
+                            and len(native_save_alerts) == 1
+                            and review._filter_pending_changes.get(0, {}).get(
+                                (80, 76), {}
+                            ).get("new_word") == "synthetic-native-edit"
+                            and review.winfo_exists()
                         ),
                         seconds=35,
                         description="G3 native Tk stale-SECTION save refusal",
@@ -419,7 +421,8 @@ def run():
                     not review._filter_save_running
                     and not review._filter_pending_changes
                     and target["original_word"] == "synthetic-native-retried"
-                    and "筛选校对已保存 1 条修改" in app.status_var.get()
+                    and target["current_word"] == "synthetic-native-retried"
+                    and pdic_path(page1).read_bytes() != before_drift_pdic
                 ),
                 seconds=35,
                 description="G3 native Tk successful retry after SECTION restore",
