@@ -713,11 +713,17 @@ class ReviewSessionHistory:
                     or _bytes_or_absent(pdic_path(expected.page)) != expected.pdic_bytes
                     or _bytes_or_absent(simplified_review_path_for_image(expected.page))
                        != expected.simplified_bytes
+                    or _bytes_or_absent(expected.manual_path) != expected.manual_bytes
+                    or _bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
+                    or _bytes_or_absent(expected.section_path) != expected.section_bytes
+                    or _bytes_or_absent(expected.profile_path) != expected.profile_bytes
                 )
-            except OSError:
-                # Snapshot failure may itself have been caused by a denied
-                # PDIC or simplified read. That is NOT a verified unchanged
-                # source; quarantine old history, do not crash the Tk action.
+            except (OSError, ValueError, TypeError):
+                # A transient Tk rebind is retryable only if *all* source
+                # owners remain byte-identical. A denied or invalid read is
+                # not proof of unchanged human/OCR/SECTION/Profile evidence.
+                # Refuse and quarantine the old history without leaking the
+                # private exception path through a Tk Undo/Redo callback.
                 stale_source = True
             if stale_source:
                 self.invalidate()
