@@ -1,3 +1,10 @@
+## 2026-10-31｜R3/G1 OCR 候选删除 Undo/Redo 来源不可读与 SECTION/Profile 漂移安全拒绝（最终 E2 待核）
+
+- 承接上一轮最终 `19ffa6a955f74016aba2fef2502567974ec42a1c`： [CI #41187745842](https://github.com/chigre/Picture_Capture/actions/runs/41187745842) 六组合 6/6 + Risk-tier gate、[OCR #41187745851](https://github.com/chigre/Picture_Capture/actions/runs/41187745851) 3/3、[CodeQL #41187743372](https://github.com/chigre/Picture_Capture/actions/runs/41187743372) Python/Actions 2/2 **完整验收成功**。唯一 Draft PR #663 未合并、main 保持 `ec20989ea`。
+- 本轮仅聚焦 OCR candidate-owned deletion 的 R3 Undo/Redo：与普通 Undo 不同，原 `CandidateReviewHistory._apply` 在 Tk 临时快照为 None 时来源诊断直接 `sha256_file/_bytes_or_absent`，缺少权限/磁盘异常处理，且漏检 SECTION 和 Profile 漂移。先测 `b7a0b669` 添加 20 个合成参数化案例（7 类来源不可读×Undo/Redo、SECTION/Profile 漂移×Undo/Redo、2 个未变来源的重试正控）；最小源修复 `cc0f101a` 异常安全拒绝＋校验 SECTION/Profile，不改变 PDIC/人工覆盖/撤销事务与历史格式。
+- 详细审计 [R3_G1_CANDIDATE_REPLAY_SOURCE_DIAGNOSTIC_20261031.md](../architecture/R3_G1_CANDIDATE_REPLAY_SOURCE_DIAGNOSTIC_20261031.md)。测试优先 [CI #41188708454](https://github.com/chigre/Picture_Capture/actions/runs/41188708454) 及源修复 [CI #41188770945](https://github.com/chigre/Picture_Capture/actions/runs/41188770945) 在记录时执行中；**须按最终文档 HEAD 重新核对 6/6 CI＋Risk、3/3 OCR、CodeQL2/2，不把 pending 当 pass**。
+- 人工 Windows E3、#483 W1–W11、#503 全套复合 Undo/Redo、真实词典 G3、R6 人工标签与 R8 真扫描均 NOT PERFORMED/DEFERRED；继续 Draft/Open/Unmerged，不 Ready、不 merge、不关闭 issue。
+
 ## 2026-10-31｜G3/R3 大批量：筛选保存调度失败、多页人工修改恢复与旧回调隔离（最终 E2 待核）
 
 - 本批次直接承接已验证 `37bc755e2d9d04515b89a49c4f4abbee2aad265e`：[CI #41186645728](https://github.com/chigre/Picture_Capture/actions/runs/41186645728) 六组合 6/6＋Risk-tier gate、[OCR #41186645762](https://github.com/chigre/Picture_Capture/actions/runs/41186645762) 3/3、[CodeQL #41186643481](https://github.com/chigre/Picture_Capture/actions/runs/41186643481) Python/Actions 2/2 全成功；主分支 `ec20989e` 未变化、唯一 Draft #663。
