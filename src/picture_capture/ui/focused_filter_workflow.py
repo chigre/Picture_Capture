@@ -944,9 +944,18 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         # UI refusal; never loop, change saved rows or relax source checks.
         self._request_filter_batch_render()
 
-    self.parent._start_ui_worker(
-        worker_key, worker, done, failed,
-    )
+    # The actual UI scheduler returns -1 during shutdown without creating
+    # a worker or a Tk callback. Treat rejection as this attempt's failure:
+    # otherwise the key remains occupied forever by a nonexistent prefetch.
+    try:
+        generation = self.parent._start_ui_worker(
+            worker_key, worker, done, failed,
+        )
+    except Exception:
+        failed(None, None)
+        return
+    if generation == -1:
+        failed(None, None)
 
 def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
     if not self._filter_rows_active or not self.filtered_targets:
@@ -1134,9 +1143,17 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             "本批裁剪未能生成，请检查源文件后重试。"
         )
 
-    self.parent._start_ui_worker(
-        f"focused-filter-render-{id(self)}", worker, done, failed
-    )
+    # A -1 scheduler return means no worker exists (e.g. close requested).
+    # Never leave the visible batch in a permanent loading placeholder.
+    try:
+        generation = self.parent._start_ui_worker(
+            f"focused-filter-render-{id(self)}", worker, done, failed
+        )
+    except Exception:
+        failed(None, None)
+        return
+    if generation == -1:
+        failed(None, None)
 
 def _render_filter_batch(
     self, deps: FocusedFilterDeps, targets: list[dict], crops: list[Image.Image],
