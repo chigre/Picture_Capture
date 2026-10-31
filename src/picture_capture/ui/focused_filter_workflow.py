@@ -1751,10 +1751,15 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     # Only an acknowledged scheduler handoff can reset a prior refusal.
     self._filter_save_launch_failed = False
     try:
-        self.parent._start_ui_worker(
+        generation = self.parent._start_ui_worker(
             f"focused-filter-save-{id(self)}",
             worker, accepted_done, accepted_failed, wait_on_close=True,
         )
+        if generation == -1:
+            # The real Tk scheduler declines shutdown-time launches with
+            # no registered callback. Never strand cleared human edits in an
+            # imaginary save or accept an early unacknowledged completion.
+            raise RuntimeError("focused filter save worker launch refused")
     except Exception:
         # A callback before a thrown launch is not an acknowledged commit.
         # The worker could have written; retain edits as uncertain rather
