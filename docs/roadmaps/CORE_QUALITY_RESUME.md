@@ -1,3 +1,13 @@
+## 2026-11-01｜G3 R4.2 大批次：预取/直接裁剪 worker 启动确认 + Tk 线程启动失败所有权回滚（失败先行）
+
+- GitHub 复核 main `ec20989ea8c`、仅 Draft/Open/Unmerged PR #663、#503/#562/#483 Open、0 review threads；起点 `f9d2f807` [CI #41238054379](https://github.com/chigre/Picture_Capture/actions/runs/41238054379) 六平台+Risk SUCCESS、[OCR #41238054368](https://github.com/chigre/Picture_Capture/actions/runs/41238054368) 3OS SUCCESS、[CodeQL #41238051230](https://github.com/chigre/Picture_Capture/actions/runs/41238051230) Python/Actions 2/2 SUCCESS。
+- **第一组真实 RED：** 测试提交 `d83e05d833cc281be778c84fb5d6f00f1e3cde36` [CI #41240906808](https://github.com/chigre/Picture_Capture/actions/runs/41240906808) macOS Python3.13 **8 targeted FAILED / 5242 passed / 2 skipped**。预取/直接裁剪各 2×2 个拒绝启动场景（同步 done/failed，然后 -1/raise）暴露未确认启动即发布缓存、编辑界面和重入新渲染；另 2 个正常返回正控。
+- **第二组真实 RED：** 叠加测试提交 `465943db85e84aab1c3e0ea406511645949133b6` [CI #41241036808](https://github.com/chigre/Picture_Capture/actions/runs/41241036808) macOS Python3.10 **16 targeted FAILED（8 crop + 8 scheduler）/5246 passed/2 skipped**。Tk 后台线程 constructor/start 抛错时未清理新 handler/active/close-wait；尝试替换同名旧任务时还抹去了旧 handler。另有成功启动及 shutdown -1 正控。
+- **修复 ①/②：** `abc0f34316b23199c705663ec4c786c58c0d6fcf` 新建责任明确的 `ui/readonly_worker_launch.py`，并仅调整 `focused_filter_workflow.py` 两处裁剪调度入口。先缓冲最早完成/失败 callback，实际正常返回才允许发布；-1/异常则拒绝已缓存回调并走原有 generic failed。保留同步正常返回 `None` 的测试兼容 ABI、不放松来源/epoch/人工保存保护。
+- **修复 ③：** `116cc02dcbbbc336624926f97d99e1921fcef9f3` 最小修改 `ui/background_job_runtime.py`：Thread 构造或 start 抛错时撤销本代 handler/active/close-wait、恢复仍运行的同名旧任务 handler 和 generation，避免错误的窗口关闭阻塞或丢失旧完成确认。
+- 审计：[G3_R4_2_UI_WORKER_LAUNCH_OWNERSHIP_20261101.md](../architecture/G3_R4_2_UI_WORKER_LAUNCH_OWNERSHIP_20261101.md)。**最终代码+文档 exact HEAD 六平台 CI/Risk、OCR 3OS、CodeQL Python/Actions 必须独立核实，暂记 PENDING。** Tk `after()` 在 Thread 成功启动后失败的情况不在本批证据内；无持久化 schema 或实际 PDIC 写入流程修改。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真词典/PDIC/PPP/SECTION/Profile/OCR/裁剪/性能 **NOT PERFORMED**；R6/R8 DEFERRED。保持 PR Draft，main 不动。
+
+
 ## 2026-11-01｜G3 R4.2 重点筛选人工保存 worker 关闭拒绝 -1：6 个真实失败先行用例，最小修复已提交
 
 - 实时来源：main `ec20989ea8c`，唯一 Draft PR #663，#503/#562/#483 Open；先前 `8af813ad` [CI #41228910802](https://github.com/chigre/Picture_Capture/actions/runs/41228910802) 六 OS/Python＋Risk gate SUCCESS、[OCR #41228910853](https://github.com/chigre/Picture_Capture/actions/runs/41228910853) 3/3 SUCCESS，CodeQL 在此 SHA 未独立核实。
