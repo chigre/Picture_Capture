@@ -38,6 +38,8 @@ def _stream_fixture(
     def dispatch(*args):
         calls.append(args)
         fault = first_launch_fault if len(calls) == 1 else remainder_launch_fault
+        if fault == "refuse":
+            return -1  # Real scheduler closed-worker refusal, no callbacks.
         if fault is not None:
             _name, worker, done, failed = args
             action = fault.removesuffix("_ack")
@@ -449,3 +451,32 @@ def test_acknowledged_inline_scan_completion_is_delivered_after_handoff(
     assert review._filter_scan_complete is True
     assert review._filter_scan_failed is False
     assert "筛选完成" in status.get()
+
+
+@pytest.mark.parametrize("phase", ("initial", "remainder"))
+def test_closed_ui_worker_refusal_is_terminal_not_acknowledged(tmp_path, phase):
+    """-1 never registers callbacks; scanning must fail, not wait forever."""
+    kwargs = {"first_launch_fault": "refuse"} if phase == "initial" else {
+        "remainder_launch_fault": "refuse",
+    }
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False, **kwargs,
+    )
+    if phase == "remainder":
+        _key, worker, done, _failed = calls[0]
+        done(worker())
+    assert len(calls) == (1 if phase == "initial" else 2)
+    assert len(review.filtered_targets) == (0 if phase == "initial" else 1)
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (list(review.filtered_targets), list(workspace),
+              list(status.writes), list(indicator.writes))
+    _name, _worker, done, failed = calls[-1]
+    done(([], 0, 2))
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE")
+    assert list(review.filtered_targets) == before[0]
+    assert list(workspace) == before[1]
+    assert list(status.writes) == before[2]
+    assert list(indicator.writes) == before[3]
