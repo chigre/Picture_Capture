@@ -768,20 +768,28 @@ def run():
                 ).splitlines()
                 if line.strip()
             ]
-            check(
-                final_fields[0][0] == "synthetic-close-committed"
-                and final_fields[0][1:] == before_drift_rows[0][1:]
-                and final_fields[1] == before_drift_rows[1]
-                and [(e.word, e.x, e.y) for e in app.entries]
+            # Report only fixed synthetic outcome labels, never source paths
+            # or headwords, so cross-platform failures reveal *which* owner
+            # diverged without weakening any assertion.
+            final_checks = {
+                "pdic_word": final_fields[0][0] == "synthetic-close-committed",
+                "pdic_other_fields": final_fields[0][1:] == before_drift_rows[0][1:],
+                "pdic_other_row": final_fields[1] == before_drift_rows[1],
+                "main_entries": [(e.word, e.x, e.y) for e in app.entries]
                 == [("synthetic-close-committed", 80, 76),
-                    ("synthetic-beta", 85, 182)]
-                and ppp_read_path_for_image(page1).read_bytes() == before_ppp
-                and settings_path(root).read_bytes() == before_settings
-                and (section_path.read_bytes() if section_original is not None else None)
-                == section_original
-                and [p.read_bytes() for p in (page1, page2)] == before_image
-                and not origin.exists(),
-                "native successful focused close mutated source fields or sidecars",
+                    ("synthetic-beta", 85, 182)],
+                "ppp": ppp_read_path_for_image(page1).read_bytes() == before_ppp,
+                "settings": settings_path(root).read_bytes() == before_settings,
+                "section": (section_path.read_bytes()
+                            if section_original is not None else None)
+                == section_original,
+                "images": [p.read_bytes() for p in (page1, page2)] == before_image,
+                "no_ocr_origin": not origin.exists(),
+            }
+            check(
+                all(final_checks.values()),
+                "native successful focused close source ownership mismatch: "
+                + ", ".join(k for k, ok in final_checks.items() if not ok),
             )
             print(
                 "G3 R4.2 native Tk close redaction + pending refusal"
