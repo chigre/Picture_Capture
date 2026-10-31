@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 多页 PDIC 冲突部分提交与写入中断后的不确定状态（E2 待最终 HEAD 核验）
+
+- 唯一 [Draft #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged，`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。上一批原生 Tk 并发撤回最终 HEAD `4ca7401012e4cbf747a2bf277c2f738517f31a88` [CI #41177650887](https://github.com/chigre/Picture_Capture/actions/runs/41177650887) 6/6 + Risk gate、[OCR #41177650896](https://github.com/chigre/Picture_Capture/actions/runs/41177650896) 3/3、[CodeQL #41177648830](https://github.com/chigre/Picture_Capture/actions/runs/41177648830) 2/2 全部成功；仍是合成 E2，非真人 E3。
+- 纯测试提交 `f643404029a5428c2928781d56d430a8afd42a46` 新增两页 synthetic BMP/PDIC/SECTION 的两项真实 worker/done/failed 回调覆盖：① 两页原图/SECTION 指纹均有效，但第二页 PDIC 原词被外部改变：第一页恰好只发布一次、第二页保留 pending 且不覆盖外部原词；再次明确重试也不重新写第一页；② 第一页已发布、第二页发生受控 `OSError`：必须报告失败并保留**两页**待检查人工修改，不回滚可能已成功的第一页或泄露私有路径。只加强测试，不更改生产写入器/规则。
+- 源 [CI #41178622263](https://github.com/chigre/Picture_Capture/actions/runs/41178622263)、[OCR #41178622249](https://github.com/chigre/Picture_Capture/actions/runs/41178622249)、[CodeQL #41178619392](https://github.com/chigre/Picture_Capture/actions/runs/41178619392) 在文档编写时运行中；本 docs 提交将更新 HEAD，**需重新核验最终 exact-head 六平台 CI + Risk/OCR/CodeQL**。专项审计：[G3_R4_2_MULTI_PAGE_CONFLICT_E2_20261031.md](../architecture/G3_R4_2_MULTI_PAGE_CONFLICT_E2_20261031.md)。
+- 真人 Windows R3 E3、#483 W1–W11、#503 Undo/Redo、G3 真实扫描与原图性能均 NOT PERFORMED；R6 人工标签、R8 真实扫描 DEFERRED；保持 Draft、不 merge、不关 issues。
+
 ## 2026-10-31｜G3 R4.2 真实 Tk 输入框＋受控后台保存中的撤回测试（合成 E2 待最终 HEAD 核验）
 
 - 继续唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)，`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 未动。上一组异步撤回来源指纹修复最终 `ea66f9009815d322d7d29dced90dafc9596e4ce8` [CI #41177039367](https://github.com/chigre/Picture_Capture/actions/runs/41177039367) **6/6+Risk SUCCESS**、[OCR #41177039325](https://github.com/chigre/Picture_Capture/actions/runs/41177039325) **3/3 SUCCESS**、[CodeQL #41177036541](https://github.com/chigre/Picture_Capture/actions/runs/41177036541) **2/2 SUCCESS**（纯合成 E2）。
