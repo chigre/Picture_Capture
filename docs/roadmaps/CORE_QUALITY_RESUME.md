@@ -1,3 +1,14 @@
+## 2026-10-31｜G3 R4.2 后续页面异步扫描失败：明确中断、保留已就绪批次
+
+- 实时起点：PR #663 Draft/Open/Unmerged `f2422e271d1d33dd3913942b4504633f47990477`；六平台 CI #41120989838 SUCCESS 6/6，OCR #41120989687 SUCCESS 3/3，Risk-tier 成功，独立 CodeQL #41120978327 Actions/Python 2/2 SUCCESS；架构文档 job SKIPPED（不计通过）。main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。
+- 真实失败先行提交 `6182785af8bcaf0bf27c4cf700819c9d3e2556ee`，CI https://github.com/chigre/Picture_Capture/actions/runs/41161338739：Ubuntu 3.13 1 failed / 4988 passed / 3 skipped；macOS 3.10 1 failed / 4989 passed / 2 skipped。问题是后续 worker error 只设 status 字符串，没有终止态标志或批次指示，界面可能仍误显示后台扫描中；另一个旧 epoch 回调隔离测试通过。
+- 最小修复：`ui/focused_filter_workflow.py` 仅增加**内存态** `_filter_scan_failed`，每次新扫描重置；在当前 epoch + 活跃模式的后续 worker 失败时标记**中断/未完成**，保留已显示词条与编辑；禁止将未扫描页视为完成，明确提示用户重筛，旧回调不能污染新 epoch。失败文案不回显包含私有路径的异常字符串。完整批次可继续处理，partial 尾部仍隐藏。
+- 测试：`tests/test_g3_r4_streaming_scan_failure_20261031.py` 两个纯合成用例：部分扫描失败的显式终态/原批保留，以及跨 epoch 旧失败拒绝。本提交 CI/OCR/Risk-tier/CodeQL 的 exact-head 结论**待实时核实**；失败先行的 CI 红灯不当成生产通过。
+- 审计：不改变源图 XY、PDIC/PPP/SECTION/manual_selection/OCR 缓存、Profile、原子写入和持久化 schema；不增加自动数据采集或 R6/R8 实验。Windows R3 E3、#483 W1–W11、#503 真人 Undo、R4.2 真人操作、真实词典扫描均 **NOT PERFORMED / DEFERRED**；自动 E2 不能代替。
+- 恢复：确认本次修复最终 PR HEAD 的六平台 CI、三平台 OCR、Risk-tier、CodeQL Python/Actions，架构审计与 PR review；有红灯先检查日志并修复，勿合并/Ready/关闭 Issues。
+
+---
+
 ## 2026-10-30｜G3 R4.2 真正 Tk 合成集成测出来的首屏 R3 来源竞态（最新恢复入口）
 
 之前文档最终 HEAD `58a8108c461efae36cda3fc9c677bc85e249bb5b` 全部 CI 6/6、OCR 3/3、CodeQL 2/2、Risk-tier SUCCESS，仅自动化 E2。新 `c65f3fbbe7f3263b798d49846eb1e7a9a343816e` 把真实 Tk 校对窗口+三个默认 OFF 开关+「筛选」按钮的合成临时项目集成测试加进 `.github/workflows/ci.yml` Python 3.13 的 Windows/macOS/Linux 三平台。首次脚本将标签中带「筛选」的复选框误当按钮，`e952f5737346f576e38b2ec163a2d65e2f6174e7` 只修测试 selector。随后 Mac/Windows GUI smoke 通过，Ubuntu **真正暴露产品时序缺口**：异步首屏校对来源/词条尚未建立时单页保存被原有 R3 `commit_review_bundle` 正确拒绝，原筛选回调未捕捉，导致挂起/超时。

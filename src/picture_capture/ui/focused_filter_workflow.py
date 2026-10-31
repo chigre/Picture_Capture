@@ -177,6 +177,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     self._filter_batch_render_cache.clear()
     self._filter_prefetch_key = None
     self._filter_scan_complete = False
+    # An aborted remainder is not a completed scan. Keep already-rendered
+    # source batches editable; the unfinished tail is never offered as final.
+    self._filter_scan_failed = False
     self.filtered_targets = []
     self.filtered_batch_index = 0
     self._clear_review_workspace("正在快速筛选首批…")
@@ -410,11 +413,21 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 )
 
         def remaining_failed(exc, detail) -> None:
-            if detail:
-                print(detail)
-            if serial != self._filter_scan_serial:
+            if (
+                serial != self._filter_scan_serial
+                or not getattr(self, "_filter_rows_active", False)
+            ):
                 return
-            self.parent.status_var.set(f"后续页面筛选失败：{exc}")
+            # Only fully scanned batches may remain available; no failed
+            # chunk is published and no visible human edit is discarded.
+            # Do not surface exception strings containing project paths.
+            self._filter_scan_failed = True
+            self._update_filter_batch_indicator()
+            self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
+            self.parent.status_var.set(
+                "后续页面筛选失败，结果不完整；已就绪批次保留，"
+                "未扫描页面不计入结果，请检查后重新筛选。"
+            )
 
         self.parent._start_ui_worker(
             f"focused-filter-scan-rest-{id(self)}",
@@ -496,6 +509,9 @@ def _filter_available_target_count(self, deps: FocusedFilterDeps) -> int:
     return (total // batch_size) * batch_size
 
 def _update_filter_batch_indicator(self, deps: FocusedFilterDeps) -> None:
+    if getattr(self, "_filter_scan_failed", False):
+        self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
+        return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
         self.filter_batch_var.set(
@@ -759,7 +775,11 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
     requested = self.filtered_batch_index + int(delta)
     target = max(0, min(batch_count - 1, requested))
     if target == self.filtered_batch_index:
-        if int(delta) > 0 and not self._filter_scan_complete:
+        if int(delta) > 0 and getattr(self, "_filter_scan_failed", False):
+            self.parent.status_var.set(
+                "后续筛选已中断，请重新筛选以处理尚未扫描的页面。"
+            )
+        elif int(delta) > 0 and not self._filter_scan_complete:
             self.parent.status_var.set("下一批仍在后台筛选与预生成，请继续校对当前批次。")
             self._schedule_filter_next_batch_preload()
         return
@@ -781,7 +801,10 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
-        if self._filter_scan_complete:
+        if getattr(self, "_filter_scan_failed", False):
+            self.filter_batch_var.set("后续筛选中断（无完整批次）")
+            self._clear_review_workspace("后续扫描失败，结果不完整；请重新筛选。")
+        elif self._filter_scan_complete:
             self.filter_batch_var.set("0 / 0")
             self._clear_review_workspace("当前条件没有筛选出词条。")
         else:

@@ -1892,5 +1892,20 @@
     "limitations": "Readback optimism is not cross-process OS CAS or multi-file crash atomicity; no user-owned PDIC/PPP/SECTION/OCR serialization or source image coordinates changed.",
     "human": "2026-10-30 explicit user request: pause/skip manual acceptance, continue later independent tasks. Real Windows E3 NOT PERFORMED; #483 W1-W11 NOT PERFORMED. No verified human labels; R6, R8 blocked.",
     "governance": "Only Draft PR #663 Open/Unmerged, main unchanged, #503/#562/#483 OPEN."
+  },
+  "g3_r4_2_remainder_failure_20261031": {
+    "status": "source_fix_submitted_exact_head_CI_pending_human_NOT_PERFORMED",
+    "baseline_head": "f2422e271d1d33dd3913942b4504633f47990477",
+    "baseline_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41120989838",
+    "baseline_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41120989687",
+    "baseline_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41120978327",
+    "test_first_commit": "6182785af8bcaf0bf27c4cf700819c9d3e2556ee",
+    "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41161338739",
+    "red_observed": "Ubuntu Python 3.13: 1 failed, 4988 passed, 3 skipped; macOS Python 3.10: 1 failed, 4989 passed, 2 skipped. Missing explicit failure state after remainder callback; stale-epoch test passed.",
+    "source": "src/picture_capture/ui/focused_filter_workflow.py",
+    "tests": "tests/test_g3_r4_streaming_scan_failure_20261031.py",
+    "change": "Current-epoch remainder failure explicitly stops in partial/incomplete state without discarding rendered rows or disclosing exception path; stale callbacks ignored. Full batches only; retry requires explicit re-filter.",
+    "limits": "In-memory scan lifecycle only; no persistent data or image-coordinate changes, no real scan benchmark, human Windows E3/R4.2, #483 W1-W11 and #503 Undo are NOT PERFORMED/DEFERRED.",
+    "next": "Recheck exact final HEAD CI 6OS/Python jobs, OCR 3OS, Risk-tier, CodeQL Python/Actions; fix red before any acceptance, do not merge/Ready."
   }
 }
