@@ -223,3 +223,59 @@ def test_focused_close_does_not_claim_saving_if_no_worker_was_launched(
     assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
     assert "正在保存" not in status.get()
     assert "未" in status.get() or "重试" in status.get()
+
+
+def test_late_callback_from_rejected_launch_cannot_autoretry_or_certify_write(
+    tmp_path,
+):
+    review, deps, dialogs, closed, status, _pages = _review(tmp_path)
+    callbacks, delayed_autosaves = [], []
+    review.parent.current_index = 0
+    review.parent.entries = []
+    review.after = lambda *args: delayed_autosaves.append(args) or "unexpected-job"
+
+    def launch_then_raise(_key, worker, done, failed, **_options):
+        callbacks.append((worker, done, failed))
+        raise RuntimeError("PRIVATE_LATE_WORKER_START_FAILURE")
+
+    review.parent._start_ui_worker = launch_then_raise
+    workflow._flush_focused_changes(review, deps)
+    assert review._filter_save_launch_failed is True
+    assert len(callbacks) == 1
+    assert not closed
+
+    # Some worker implementations can report a late result after an
+    # ambiguous start failure; neither that result nor a status label
+    # gives the close coordinator an acknowledged dispatch contract.
+    _worker, done, _failed = callbacks[0]
+    done(([(0, 10, 20, "human-0")], []))
+
+    assert review._filter_save_launch_failed is True
+    assert not review._filter_save_running
+    assert not review._filter_close_after_save
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+    assert review.filtered_targets[0]["original_word"] == "old-0"
+    assert delayed_autosaves == []
+    assert not closed
+    assert len(dialogs) == 1
+    assert "未确认" in status.get() or "重试" in status.get()
+
+
+def test_explicit_retry_after_failed_dispatch_can_launch_verified_worker(tmp_path):
+    review, deps, dialogs, closed, _status, _pages = _review(tmp_path)
+    review.parent._start_ui_worker = lambda *_a, **_kw: (
+        (_ for _ in ()).throw(RuntimeError("PRIVATE_TRANSIENT_START"))
+    )
+    workflow._flush_focused_changes(review, deps)
+    assert review._filter_save_launch_failed is True
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+
+    accepted = []
+    review.parent._start_ui_worker = lambda *a, **kw: accepted.append((a, kw))
+    workflow._flush_focused_changes(review, deps)
+    assert len(accepted) == 1
+    assert review._filter_save_launch_failed is False
+    assert review._filter_save_running is True
+    assert review._filter_pending_changes == {}
+    assert not closed
+    assert len(dialogs) == 1
