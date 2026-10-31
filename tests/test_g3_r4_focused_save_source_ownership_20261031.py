@@ -389,6 +389,7 @@ def test_inflight_reversion_cannot_bypass_changed_section_with_retained_witness(
     review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
     writes = []
     deps, alerts = _save_deps(page, writes)
+    review._flush_focused_changes = lambda: flow._flush_focused_changes(review, deps)
 
     flow._flush_focused_changes(review, deps)
     _name, worker, done, failed = calls[0][0]
