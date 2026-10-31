@@ -227,6 +227,8 @@ def test_successful_prefetch_cannot_publish_drifted_source(
     case = _case(tmp_path)
     case.review.filtered_batch_index = 1
     stale_key = case.review._filter_prefetch_key
+    # Worker finished under the original source. Drift occurs before Tk done.
+    payload = case.workers[0][1]()
     page = case.images[1]
     if source == "image":
         replacement = tmp_path / "replacement.bmp"
@@ -242,7 +244,7 @@ def test_successful_prefetch_cannot_publish_drifted_source(
         )
     assert case.review._filter_batch_snapshot(1)[0] != stale_key
     _worker_name, worker, done, _failed = case.workers[0]
-    done(worker())
+    done(payload)
     assert case.review._filter_prefetch_key is None
     assert case.review._filter_batch_render_cache == {}
     assert case.applied == []
