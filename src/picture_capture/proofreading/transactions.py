@@ -643,6 +643,41 @@ def _publish_restored_snapshot(
     return True
 
 
+def _live_source_bindings_match(review: Any, expected: SavedSnapshot) -> bool:
+    """A Tk redraw is retryable only under the same *source paths*.
+
+    The disk-byte fallback also checks the previously frozen files. That is
+    insufficient when the app's manual/OCR/SECTION/Profile resolver changes
+    to another path with identical bytes. Every real source resolver must
+    still name the original owner; never infer a match from contents alone.
+    """
+    app = review.parent
+    if getattr(app, "current_page", None) != expected.page:
+        return False
+    for attribute, frozen in (
+        ("_manual_selection_path", expected.manual_path),
+        ("_paddle_cache_path", expected.ocr_path),
+    ):
+        resolver = getattr(app, attribute, None)
+        if not callable(resolver):
+            if frozen is not None:
+                return False
+        elif resolver() != frozen:
+            return False
+    project = getattr(app, "project", None)
+    if expected.section_path is not None or expected.profile_path is not None:
+        if project is None:
+            return False
+        if (expected.section_path is not None
+                and page_sections_read_path_for_image(expected.page)
+                    != expected.section_path):
+            return False
+        if (expected.profile_path is not None
+                and profile_path(project.root) != expected.profile_path):
+            return False
+    return True
+
+
 def _same_live_state(current: SavedSnapshot, expected: SavedSnapshot) -> bool:
     return (
         current.page == expected.page
@@ -705,7 +740,7 @@ class ReviewSessionHistory:
             page = getattr(review.parent, "current_page", None)
             try:
                 stale_source = (
-                    page != expected.page
+                    not _live_source_bindings_match(review, expected)
                     or sha256_file(expected.page) != expected.image_sha
                     or _bytes_or_absent(pdic_path(expected.page)) != expected.pdic_bytes
                     or _bytes_or_absent(simplified_review_path_for_image(expected.page))
@@ -715,7 +750,7 @@ class ReviewSessionHistory:
                     or _bytes_or_absent(expected.section_path) != expected.section_bytes
                     or _bytes_or_absent(expected.profile_path) != expected.profile_bytes
                 )
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError, TypeError, AttributeError, RuntimeError):
                 # A transient Tk rebind is retryable only if *all* source
                 # owners remain byte-identical. A denied or invalid read is
                 # not proof of unchanged human/OCR/SECTION/Profile evidence.
@@ -730,12 +765,20 @@ class ReviewSessionHistory:
             return False
         if expected.page.stem in getattr(review, "_simplified_dirty_pages", set()):
             return False
-        bound = review._bound_row_entries()
-        if len(bound) != len(review.vars):
-            return False
-        for entry, var in zip(bound, review.vars):
-            if var.get().strip() != entry.word:
+        # Freeze the OLD widget-to-Entry pairing before disk publication:
+        # restoring/deleting a row changes app.entries, but until the next Tk
+        # repaint the existing StringVars still belong to the prior rows.
+        try:
+            bound = tuple(review._bound_row_entries())
+            bound_vars = tuple(review.vars)
+            if len(bound) != len(bound_vars) or any(
+                var.get().strip() != entry.word
+                for entry, var in zip(bound, bound_vars)
+            ):
                 return False
+        except Exception:
+            # A destroyed Tk getter/row binding is not safe Undo authority.
+            return False
         try:
             if not _publish_restored_snapshot(expected, target):
                 return False
@@ -749,9 +792,15 @@ class ReviewSessionHistory:
         for entry, word, _, _ in target.entries:
             entry.word = word
         current_words = {id(entry): word for entry, word, _, _ in target.entries}
-        for entry, var in zip(review._bound_row_entries(), review.vars):
+        for entry, var in zip(bound, bound_vars):
             if id(entry) in current_words:
-                var.set(current_words[id(entry)])
+                try:
+                    var.set(current_words[id(entry)])
+                except Exception:
+                    # The durable PDIC/Entry model already committed; a dead
+                    # Tk widget is presentation-only. The caller schedules
+                    # a full row rebind instead of rolling back human bytes.
+                    pass
         cache = getattr(review, "_simplified_page_cache", None)
         if isinstance(cache, dict):
             cache.pop(expected.page.stem, None)
