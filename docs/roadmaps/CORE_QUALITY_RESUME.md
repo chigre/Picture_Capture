@@ -1,3 +1,12 @@
+## 2026-10-31｜G3 R4.2 首批扫描/裁剪错误回调 epoch 与路径脱敏（源修复，最终门禁待核）
+
+- 实时核对：仅有 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) Open/Unmerged，main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。上一轮 `e75747ecda54b0ee896b0a2e79d480908f56c4da` 的 [CI #41161659038](https://github.com/chigre/Picture_Capture/actions/runs/41161659038) 六平台 6/6 SUCCESS、[OCR #41161659989](https://github.com/chigre/Picture_Capture/actions/runs/41161659989) 三 OS 3/3 SUCCESS、[CodeQL #41161655346](https://github.com/chigre/Picture_Capture/actions/runs/41161655346) Python/Actions 2/2 SUCCESS、Risk-tier SUCCESS。Documentation architecture check SKIPPED，未记作通过。
+- 反例先行 `85188655c43c7239471e9cc933934447c35732d8` 的 [CI #41165165064](https://github.com/chigre/Picture_Capture/actions/runs/41165165064) 在 Ubuntu 3.13 和 macOS 3.13 **各有 4 个真实失败**：首批 worker 失败误标已完成、模式退出后回调改写界面、旧 crop render 失败污染新 epoch、裁剪报错回显异常来源路径。其余该两平台用例分别 4,989/4,990 通过；这份红灯不是门禁成功。
+- 生产修复 `901ad2ec2f96d6397eb39db73ffe0ce02b5a5b2d` 仅收紧 `ui/focused_filter_workflow.py` 当前 scan/render epoch + 活跃模式失败回调，首批失败保持 incomplete/failed、泛化显示信息；预取失败不输出异常路径并允许后续重试。后续扫描失败的显式批次提示继续保留，避免旧测试适配器 override 指示器时失去状态。新旧回调均不写入 PDIC/PPP/SECTION。
+- 源修复固定 SHA 的 CI [#41165270089](https://github.com/chigre/Picture_Capture/actions/runs/41165270089) 在本次文档编辑时仍处于运行过程；最终本提交也必须单独检查 exact-head 六平台、OCR 三 OS、Risk-tier、CodeQL Python/Actions，不能复用上一 HEAD 成功结论。
+- 审计：[G3_R4_2_INITIAL_CROP_FAILURE_20261031.md](../architecture/G3_R4_2_INITIAL_CROP_FAILURE_20261031.md)。**NOT PERFORMED / DEFERRED**：Windows R3 E3、#483 W1–W11、#503 人工 Undo、R4.2 真人操作、真实词典扫描、R6 人工标签和 R8 真实扫描；自动 E2 不是人工 E3。继续保持 #663 Draft/Open/Unmerged、main 不动、不关闭 Issues。
+- 下一恢复：先核最终 HEAD exact CI 与 CodeQL，如失败检查测试/工作区回调路径并最小修正；若绿，继续 SECTION/裁剪预取在源文件改写和保存后的一致性合成负例，不引入新的持久化 schema 或真实数据。
+
 ## 2026-10-31｜G3 R4.2 后续页面异步扫描失败：明确中断、保留已就绪批次
 
 - 实时起点：PR #663 Draft/Open/Unmerged `f2422e271d1d33dd3913942b4504633f47990477`；六平台 CI #41120989838 SUCCESS 6/6，OCR #41120989687 SUCCESS 3/3，Risk-tier 成功，独立 CodeQL #41120978327 Actions/Python 2/2 SUCCESS；架构文档 job SKIPPED（不计通过）。main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。

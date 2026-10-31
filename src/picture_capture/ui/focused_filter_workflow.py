@@ -423,6 +423,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             # Do not surface exception strings containing project paths.
             self._filter_scan_failed = True
             self._update_filter_batch_indicator()
+            # Keep the explicit terminal label for older ReviewWindow
+            # integrations that override the indicator helper.
+            self.filter_batch_var.set("后续筛选中断（仅已就绪批次）")
             self.parent.status_var.set(
                 "后续页面筛选失败，结果不完整；已就绪批次保留，"
                 "未扫描页面不计入结果，请检查后重新筛选。"
