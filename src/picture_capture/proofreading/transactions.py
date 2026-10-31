@@ -128,7 +128,11 @@ def snapshot_review(review: Any, *, allow_unbound: bool = False, allow_evidence:
             section_path=section_path, section_bytes=_bytes_or_absent(section_path),
             profile_path=profile_file, profile_bytes=_bytes_or_absent(profile_file),
         )
-    except (OSError, ValueError, TypeError):
+    except Exception:
+        # This is a read-only authority probe, not the disk writer. A native
+        # Tk row resolver can raise TclError/RuntimeError after window teardown;
+        # all such failures mean the source cannot be proved and MUST refuse
+        # replay rather than exposing a private exception in an Undo callback.
         return None
 
 
