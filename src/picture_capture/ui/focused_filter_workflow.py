@@ -1277,6 +1277,10 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     save_seconds = [None]
     self._filter_pending_changes.clear()
     self._filter_save_running = True
+    # A rejected launch may still produce a late callback after an explicit
+    # retry starts. Only callbacks for the current dispatch own Tk state.
+    dispatch_serial = int(getattr(self, "_filter_save_dispatch_serial", 0)) + 1
+    self._filter_save_dispatch_serial = dispatch_serial
 
     def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
         """Requeue only unsaved snapshot entries, without erasing newer edits.
@@ -1342,6 +1346,8 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         return saved, conflicts
 
     def done(payload) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
         self._filter_save_running = False
         if getattr(self, "_filter_save_launch_failed", False):
             # A scheduler can raise after partially handing off work.
@@ -1478,6 +1484,8 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             self._finish_close_review()
 
     def failed(_exc, _detail) -> None:
+        if dispatch_serial != getattr(self, "_filter_save_dispatch_serial", None):
+            return
         self._filter_save_running = False
         self._filter_close_after_save = False
         # Restore unsaved work for explicit retry, never overwrite a later
