@@ -327,9 +327,16 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             terminal("failed", (exc, detail))
 
         try:
-            self.parent._start_ui_worker(
+            generation = self.parent._start_ui_worker(
                 worker_key, worker, accepted_done, accepted_failed,
             )
+            if generation == -1:
+                # Closed UI runtime registers no callback. A normal return
+                # with this sentinel is not acknowledgement of handoff.
+                launch_state[0] = "rejected"
+                early_terminal[0] = None
+                on_failed(None, None)
+                return
         except Exception:
             launch_state[0] = "rejected"
             early_terminal[0] = None
