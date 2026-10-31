@@ -24,7 +24,7 @@ class Var:
         self.value = value
 
 
-def _stream_fixture(tmp_path):
+def _stream_fixture(tmp_path, *, before_first_done=False, first_page_error=False):
     pages = [tmp_path / "001.png", tmp_path / "002.png"]
     calls, workspace = [], []
     status, indicator = Var(""), Var("")
@@ -71,6 +71,8 @@ def _stream_fixture(tmp_path):
         _schedule_filter_next_batch_preload=lambda: None,
     )
     def read_pdic(path):
+        if path.stem == "001" and first_page_error:
+            raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
         if path.stem == "002":
             raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
         return [SimpleNamespace(word="fixture", x=13, y=27)]
@@ -91,6 +93,8 @@ def _stream_fixture(tmp_path):
     assert len(calls) == 1
     first_key, first_worker, first_done, _ = calls[0]
     assert first_key.startswith("focused-filter-scan-")
+    if before_first_done:
+        return review, status, indicator, calls, workspace
     first_done(first_worker())
     assert len(calls) == 2
     assert len(review.filtered_targets) == 1
@@ -127,3 +131,95 @@ def test_stale_remainder_failure_cannot_poison_new_epoch(tmp_path):
     assert review._filter_scan_failed is False
     assert status.get() == "new scan running"
     assert indicator.get() == "new batch"
+
+
+def test_initial_worker_failure_is_incomplete_and_redacts_private_paths(tmp_path, capsys):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, first_page_error=True
+    )
+    _, first_worker, _first_done, first_failed = calls[0]
+    with pytest.raises(OSError, match="PRIVATE_PATH_DO_NOT_EXPOSE"):
+        first_worker()
+    first_failed(
+        OSError("PRIVATE_PATH_DO_NOT_EXPOSE"),
+        "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE",
+    )
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert review.filtered_targets == []
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    assert all(
+        "PRIVATE_PATH_DO_NOT_EXPOSE" not in str(item)
+        for item in (status.get(), indicator.get(), *workspace)
+    )
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_initial_failure_after_filter_mode_exit_does_not_erase_new_view(tmp_path, capsys):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True
+    )
+    initial_failed = calls[0][3]
+    review._filter_rows_active = False
+    status.set("new review mode")
+    indicator.set("new view")
+    previous_workspace = list(workspace)
+    initial_failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "PRIVATE_TRACE")
+    assert status.get() == "new review mode"
+    assert indicator.get() == "new view"
+    assert workspace == previous_workspace
+    assert review._filter_scan_failed is False
+    assert review._filter_scan_complete is False
+    assert "PRIVATE_TRACE" not in capsys.readouterr().out
+
+
+def _render_failure_fixture():
+    calls, workspace = [], []
+    status = Var("unchanged")
+    parent = SimpleNamespace(
+        status_var=status,
+        _start_ui_worker=lambda *args: calls.append(args),
+    )
+    review = SimpleNamespace(
+        parent=parent,
+        _filter_rows_active=True,
+        filtered_targets=[{"page_index": 0, "x": 10, "y": 20}],
+        filtered_batch_index=0,
+        _filter_scan_serial=70,
+        _filter_render_serial=4,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _filter_available_target_count=lambda: 1,
+        _focused_batch_size=lambda: 1,
+        _set_filter_navigation=lambda enabled: None,
+        _update_filter_batch_indicator=lambda: None,
+        _filter_batch_snapshot=lambda index: (
+            (index, ("geometry",)), [], [], None, 300, 250, 1.0, False,
+        ),
+        _clear_review_workspace=lambda message: workspace.append(message),
+    )
+    workflow._request_filter_batch_render(
+        review, SimpleNamespace(ReviewWindow=object())
+    )
+    assert len(calls) == 1
+    return review, status, workspace, calls[0][3]
+
+
+def test_stale_crop_render_failure_cannot_mutate_new_scan_epoch(capsys):
+    review, status, workspace, failed = _render_failure_fixture()
+    current_workspace = list(workspace)
+    review._filter_scan_serial += 1
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert workspace == current_workspace
+    assert status.get() == "unchanged"
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_current_crop_render_error_does_not_publish_private_path(capsys):
+    review, status, workspace, failed = _render_failure_fixture()
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert "失败" in workspace[-1] or "重试" in workspace[-1]
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in workspace[-1]
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in status.get()
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
