@@ -1394,12 +1394,21 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     if not changes:
                         self._filter_pending_changes.pop(page_index, None)
             elif current_word != saved_word:
-                self._filter_pending_changes.setdefault(page_index, {})[row_key] = {
+                # Reversion during an in-flight save becomes a fresh edit
+                # relative to the just-published PDIC. Reuse the accepted
+                # crop's image/SECTION provenance; do not mint new proof
+                # from disk in the save-completion callback.
+                replacement = {
                     "page_index": page_index,
                     "x": x, "y": y,
                     "original_word": saved_word,
                     "new_word": current_word,
                 }
+                source_witness = target.get("_focused_save_source_witness")
+                if source_witness is not None:
+                    replacement["_focused_save_source_witness"] = source_witness
+                # A missing witness still fails closed in the next worker.
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
 
         # The writer returns no saved rows for a page with source-coordinate
         # conflicts. Never drop that page's original human corrections or
