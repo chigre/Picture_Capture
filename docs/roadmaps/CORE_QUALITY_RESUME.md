@@ -1,3 +1,11 @@
+## 2026-10-31｜G3/R3 大批量：筛选保存调度失败、多页人工修改恢复与旧回调隔离（最终 E2 待核）
+
+- 本批次直接承接已验证 `37bc755e2d9d04515b89a49c4f4abbee2aad265e`：[CI #41186645728](https://github.com/chigre/Picture_Capture/actions/runs/41186645728) 六组合 6/6＋Risk-tier gate、[OCR #41186645762](https://github.com/chigre/Picture_Capture/actions/runs/41186645762) 3/3、[CodeQL #41186643481](https://github.com/chigre/Picture_Capture/actions/runs/41186643481) Python/Actions 2/2 全成功；主分支 `ec20989e` 未变化、唯一 Draft #663。
+- **实测红灯**：仅加测试的 `d928e65c` 在 [CI #41187323339](https://github.com/chigre/Picture_Capture/actions/runs/41187323339) Ubuntu Python3.13 **8 failed / 5046 passed / 3 skipped**，macOS Python3.13 **8 failed / 5047 passed / 2 skipped**。包含调度器异常外逸/隐私泄露、单页与多页人工作业丢失、较新编辑与主动撤回、页面读取失败已清队列、缺乏真实 worker 却遗留关闭意图。**这条旧测试 SHA 的失败不可归为绿色**。
+- 同一主题源修复：`8e965bec` 在清空待保存修改前构造来源页面快照，异常调度时恢复未确认的人工修改、脱敏并停止自动关闭/重试；`50551093` 明确区分运行中、未开始和调度失败，不把未开始说成正在保存；`9f746b98` 加内存 dispatch serial，拒绝更早的不确定任务在新任务成功接管后通过迟到 done/failed 更改 Tk/队列/close 状态。
+- 扩展测试：`81803283` 覆盖迟到回调与人工重试，`cc4177e4` 覆盖旧 done/failed 在新任务启动后的跨代污染；`44607281` 真实 Tk 控件＋临时合成项目，覆盖同步拒绝 → 保留编辑/PDIC 原字节 → 人工明确重试并验真后关闭。审计 [G3_R4_2_DISPATCH_FAILURE_RECOVERY_20261031.md](../architecture/G3_R4_2_DISPATCH_FAILURE_RECOVERY_20261031.md)。
+- **最终文档 HEAD 的 6/6 CI＋Risk、OCR 3/3、CodeQL Python/Actions 2/2 尚须按最终 SHA 分别检查**。不把非最终 SHA 的结果冒充验收。仍是合成 E2，不等于真人 Windows E3、#483 W1–W11、#503 Undo/Redo、真实扫描/G3 大图性能、R6 人工标签或 R8 真实扫描；全部保持 NOT PERFORMED/DEFERRED。唯一 #663 继续 Draft/Open/Unmerged；不 Ready、不自动合并、不关闭 issue。
+
 ## 2026-10-31｜R3/G3 筛选校对关闭时同步触发保存异常，安全拒绝（E2 exact-head 待核）
 
 - 此前最终 `f1d436be` 已**实际核实**：CI [#41185135896](https://github.com/chigre/Picture_Capture/actions/runs/41185135896) Windows/macOS/Ubuntu × Python3.10/3.13 **6/6**、Risk-tier gate SUCCESS，OCR [#41185135720](https://github.com/chigre/Picture_Capture/actions/runs/41185135720) **3/3**，CodeQL [#41185132099](https://github.com/chigre/Picture_Capture/actions/runs/41185132099) Python/Actions **2/2**。独立 Documentation architecture 作业 SKIPPED，不计成功。
