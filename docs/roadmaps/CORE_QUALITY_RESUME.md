@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 N+1 裁剪 prefetch 失败后的可见批次保守恢复（red-first，最终 E2 待核）
+
+- 上一严格绿色基线 `c9837923b0bcf5184ac16098688a4688600c68b6`：[CI #41197464856](https://github.com/chigre/Picture_Capture/actions/runs/41197464856) 六组合 6/6＋Risk-tier；[OCR #41197464869](https://github.com/chigre/Picture_Capture/actions/runs/41197464869) 3/3；[CodeQL #41197460973](https://github.com/chigre/Picture_Capture/actions/runs/41197460973) Python/Actions 2/2 通过。唯一 Draft #663；main 不变。
+- 测试先行 `1166cd5e18c3bc13e67417b23ea8e3ca15db9491` 在 [CI #41204531136](https://github.com/chigre/Picture_Capture/actions/runs/41204531136) macOS Python3.13 **5 targeted FAILED / 5180 passed / 2 skipped**：切换到等待中的 N+1 后 prefetch 失败，旧代码清空 key 却不进行直接裁剪恢复；原图/PDIC/SECTION 同大小同 mtime 字节变更后未作明确重筛提示。红灯不算通过门禁。
+- 最小产品修复限定 `ui/focused_filter_workflow.py` prefetch failed 回调：严格比对 scan epoch 与本次 prefetch key；无人工未保存编辑/后台写入、当前仍选中该批次时再核验原图+PDIC+SECTION 精确字节，未变才单次调度已有 direct render；变化/拒读则脱敏提示重新筛选并清除等待占位，不擅自读取新来源当成旧批次；重复或晚到回调不污染状态。修复 synthetic PDIC 的换行夹具，提高保真度。
+- 审计 [G3_R4_2_VISIBLE_PREFETCH_FAILURE_RECOVERY_20261031.md](../architecture/G3_R4_2_VISIBLE_PREFETCH_FAILURE_RECOVERY_20261031.md)。**本次最终代码与文档 HEAD CI 6/6+Risk、OCR3/3、CodeQL Python/Actions2/2 尚需独立核实。** Windows R3 E3、#483 W1–W11、#503 人工 Undo、真词典与性能 NOT PERFORMED；R6 真标签/R8 真扫描 DEFERRED。#663 Draft/Open/Unmerged，不合并、不 Ready、不关闭 issues。
+
 ## 2026-10-31｜R3/#503 候选删除 Undo/Redo 已提交后的 Tk 状态刷新异常（红灯已实测，最终 HEAD 仍待验）
 
 - 上一基线 `683b06bed6fe0750ec94f6b4f65f2b89adda075a` 的 Windows/macOS/Ubuntu × Python3.10/3.13 CI **6/6 + Risk-tier gate 成功**，OCR **3/3**、CodeQL Python/Actions **2/2** 成功；仅合成 E2。

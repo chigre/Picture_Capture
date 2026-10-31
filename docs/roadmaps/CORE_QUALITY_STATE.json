@@ -2525,5 +2525,27 @@
     "R8_real_scans": "DEFERRED",
     "pr_663": "DRAFT_OPEN_UNMERGED",
     "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
+  },
+  "g3_r4_2_visible_prefetch_failure_recovery_20261031": {
+    "status": "RED_FIRST_5_TARGET_FAILURES_OBSERVED_MINIMAL_FIX_COMMITTED_EXACT_HEAD_GATES_PENDING",
+    "baseline_green_sha": "c9837923b0bcf5184ac16098688a4688600c68b6",
+    "red_test_sha": "1166cd5e18c3bc13e67417b23ea8e3ca15db9491",
+    "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41204531136",
+    "observed_macos_py313": "5 targeted failed, 5180 passed, 2 skipped",
+    "production": "src/picture_capture/ui/focused_filter_workflow.py",
+    "tests": "tests/test_g3_r4_prefetch_visible_failure_recovery_20261031.py",
+    "audit": "docs/architecture/G3_R4_2_VISIBLE_PREFETCH_FAILURE_RECOVERY_20261031.md",
+    "guarantee": "matching current epoch and prefetch key; selected N+1 only; no outstanding edits/save; exact image/PDIC/SECTION witness recheck; one direct render retry or explicit source-refilter refusal.",
+    "exact_head_ci": "PENDING",
+    "exact_head_ocr": "PENDING",
+    "exact_head_codeql": "PENDING",
+    "human_windows_E3": "NOT_PERFORMED",
+    "issue_483_W1_W11": "NOT_PERFORMED",
+    "issue_503_complex_undo": "NOT_PERFORMED",
+    "real_scan_and_latency": "NOT_PERFORMED",
+    "R6_human_labels": "DEFERRED",
+    "R8_real_scans": "DEFERRED",
+    "pr_663": "DRAFT_OPEN_UNMERGED",
+    "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
   }
 }

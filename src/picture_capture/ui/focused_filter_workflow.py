@@ -800,13 +800,42 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         if int(self.filtered_batch_index) == int(local_index):
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(_exc, _detail, local_key=cache_key) -> None:
+    def failed(_exc, _detail, local_key=cache_key, local_index=next_index) -> None:
         if scan_epoch != getattr(self, "_filter_scan_serial", None):
             return
-        # Prefetch is optional. Let a later navigation retry the batch,
-        # without publishing raw paths from a stale/failed crop worker.
-        if self._filter_prefetch_key == local_key:
-            self._filter_prefetch_key = None
+        # A newer prefetch owns its own key; a stale callback has no right to
+        # clear it, publish results or alter the current human-edit surface.
+        if self._filter_prefetch_key != local_key:
+            return
+        self._filter_prefetch_key = None
+        if (
+            not getattr(self, "_filter_rows_active", False)
+            or int(self.filtered_batch_index) != int(local_index)
+            or getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+        ):
+            return
+        # The user may be looking at "about to display" for N+1 when its
+        # prefetch fails. An owned direct-render retry is safe only if the
+        # exact image, PDIC and SECTION bytes still match the initial crop.
+        try:
+            current = self._filter_batch_snapshot(local_index)
+        except Exception:
+            # A read-only source/Tk inspection is not a license to expose
+            # private paths or to redraw from unknown source provenance.
+            current = None
+        if current is None or current[0] != local_key:
+            self._clear_review_workspace(
+                "本批裁剪来源已变化或不可核验；请重新筛选。"
+            )
+            self.parent.status_var.set(
+                "当前批次原图、PDIC 或 SECTION 来源无法确认；请核对后重新筛选。"
+            )
+            return
+        # One matching failure => at most one ordinary crop attempt. If the
+        # direct worker also fails, its existing terminal callback handles
+        # UI refusal; never loop, change saved rows or relax source checks.
+        self._request_filter_batch_render()
 
     self.parent._start_ui_worker(
         worker_key, worker, done, failed,

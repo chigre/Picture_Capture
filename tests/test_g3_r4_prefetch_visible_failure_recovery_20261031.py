@@ -43,7 +43,7 @@ def _case(tmp_path):
         Image.new("RGB", (8, 8), "black").save(page)
         pdic = pdic_path_for_image(page)
         pdic.parent.mkdir(parents=True, exist_ok=True)
-        pdic.write_bytes(f"old#3#4#1#1#{i:03d}#@#@\\n".encode("utf-8"))
+        pdic.write_bytes(f"old#3#4#1#1#{i:03d}#@#@\n".encode("utf-8"))
         section = page_sections_read_path_for_image(page)
         section.parent.mkdir(parents=True, exist_ok=True)
         section.write_bytes(b'{"revision":"A"}')
@@ -162,7 +162,7 @@ def test_prefetch_failure_after_source_byte_drift_refuses_automatic_rebuild(
     elif source == "pdic":
         _same_size_replace(
             pdic_path_for_image(page),
-            b"new#3#4#1#1#002#@#@\\n",
+            b"new#3#4#1#1#002#@#@\n",
         )
     else:
         _same_size_replace(
