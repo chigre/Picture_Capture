@@ -495,3 +495,49 @@ def test_direct_terminal_ignored_for_human_edit_cannot_reactivate_later(
     assert case.workspace == before[1]
     assert case.status.get() == before[2]
     assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_old_prefetch_terminal_cannot_steal_rescheduled_identical_key(
+    tmp_path, first, late, capsys,
+):
+    """Same epoch and source key does not confer ownership of a new worker."""
+    case = _case(tmp_path)
+    review = case.review
+    old_key = review._filter_prefetch_key
+    _name, old_worker, old_done, old_failed = case.workers[0]
+    payload = old_worker()
+    if first == "done":
+        old_done(payload)
+        # Eviction makes a new prefetch for exactly the same source legitimate.
+        assert old_key in review._filter_batch_render_cache
+        review._filter_batch_render_cache.clear()
+    else:
+        # Not the visible batch; a normal failure just releases the key.
+        old_failed(OSError("PRIVATE_OLD"), "PRIVATE_TRACE")
+    assert review._filter_prefetch_key is None
+
+    # A new worker can own the same key without a new scan epoch.
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert len(case.workers) == 2
+    assert review._filter_prefetch_key == old_key
+    if late == "done":
+        old_done(payload)
+    else:
+        old_failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE_TRACE")
+    assert review._filter_prefetch_key == old_key
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert case.status.get() == "existing"
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+    # Only the actual new owner's completion is allowed to publish the crop.
+    _new_name, new_worker, new_done, _new_failed = case.workers[1]
+    new_done(new_worker())
+    assert review._filter_prefetch_key is None
+    assert list(review._filter_batch_render_cache) == [old_key]
