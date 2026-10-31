@@ -540,8 +540,192 @@ def run():
                 "native in-flight revert lost edit, modified sidecars, or changed source XY",
             )
             print("G3 R4.2 native Tk focused refusal + successful retry + in-flight reversion: OK", flush=True)
+
+            # Review-close safety must also exercise the actual ReviewWindow
+            # callback, not only the synthetic SimpleNamespace unit owner.
+            # First verify ordinary R3 close refuses a sensitive exception
+            # without leaking its path/headword into Tk status or dialogs.
+            ordinary_close_alerts = []
+            review._filter_rows_active = False
+            try:
+                with patch.object(
+                    review, "save",
+                    side_effect=OSError(
+                        "PRIVATE_NATIVE_PATIENT_PATH/headword_MUST_NOT_DISPLAY"
+                    ),
+                ), patch.object(
+                    module.messagebox, "showerror",
+                    side_effect=lambda title, message, **_kw:
+                    ordinary_close_alerts.append((title, message)),
+                ):
+                    review._close_review()
+                check(
+                    review.winfo_exists()
+                    and len(ordinary_close_alerts) == 1
+                    and "保存失败" in app.status_var.get()
+                    and "PRIVATE_" not in app.status_var.get()
+                    + str(ordinary_close_alerts),
+                    "native ordinary review close leaked source exception or destroyed UI",
+                )
+            finally:
+                review._filter_rows_active = True
+
+            # When a source-attested focused worker returns no commit and no
+            # conflict, its returned edits are unconfirmed: the close request
+            # must be disarmed, with all unsaved words retained on screen.
+            before_close = pdic_path(page1).read_bytes()
+            close_unconfirmed = []
+            with patch.object(
+                module, "_apply_focused_review_page_updates",
+                return_value=([], []),
+            ), patch.object(
+                module.messagebox, "showerror",
+                side_effect=lambda title, message, **_kw:
+                close_unconfirmed.append((title, message)),
+            ):
+                review.filter_vars[0].set("synthetic-close-unconfirmed")
+                review._close_review()
+                check(
+                    review._filter_save_running
+                    and review._filter_close_after_save
+                    and review.winfo_exists(),
+                    "native focused close did not wait on in-flight writer",
+                )
+                _pump_until(
+                    app,
+                    lambda: (
+                        not review._filter_save_running
+                        and not review._filter_close_after_save
+                        and bool(review._filter_pending_changes)
+                        and "尚有未确认修改" in app.status_var.get()
+                    ),
+                    seconds=35,
+                    description="G3 native close disarmed after unconfirmed save",
+                )
+            check(
+                review.winfo_exists()
+                and pdic_path(page1).read_bytes() == before_close
+                and not close_unconfirmed
+                and review._filter_pending_changes[0][(80, 76)]["new_word"]
+                == "synthetic-close-unconfirmed",
+                "native close lost unconfirmed human edit or wrote PDIC",
+            )
+
+            # A real background save held before publication may be followed
+            # by a close click and an external SECTION drift. The close must
+            # NOT destroy the visible editor after failed source verification.
+            close_start = threading.Event()
+            close_release = threading.Event()
+            def gated_close_writer(the_page, pages, index, changes):
+                close_start.set()
+                if not close_release.wait(timeout=30):
+                    raise RuntimeError("synthetic close gate timed out")
+                return real_writer(the_page, pages, index, changes)
+            close_failed_alerts = []
+            try:
+                with patch.object(
+                    module, "_apply_focused_review_page_updates",
+                    side_effect=gated_close_writer,
+                ), patch.object(
+                    module.messagebox, "showerror",
+                    side_effect=lambda title, message, **_kw:
+                    close_failed_alerts.append((title, message)),
+                ):
+                    review.filter_vars[0].set("synthetic-close-source-denied")
+                    _pump_until(
+                        app,
+                        lambda: close_start.is_set()
+                        and review._filter_save_running,
+                        seconds=35,
+                        description="G3 real Tk close writer held before publication",
+                    )
+                    review._close_review()
+                    check(
+                        review._filter_close_after_save
+                        and review.winfo_exists(),
+                        "native close failed to wait for active focused save",
+                    )
+                    section_path.parent.mkdir(parents=True, exist_ok=True)
+                    section_path.write_bytes(
+                        b'{"synthetic_close_drift":true}'
+                        if section_original is None
+                        else section_original + b" "
+                    )
+                    close_release.set()
+                    _pump_until(
+                        app,
+                        lambda: (
+                            not review._filter_save_running
+                            and not review._filter_close_after_save
+                            and bool(close_failed_alerts)
+                            and "保存失败" in app.status_var.get()
+                        ),
+                        seconds=35,
+                        description="G3 native source-drift close refusal",
+                    )
+                    check(
+                        review.winfo_exists()
+                        and pdic_path(page1).read_bytes() == before_close
+                        and review._filter_pending_changes[0][(80, 76)][
+                            "new_word"
+                        ] == "synthetic-close-source-denied"
+                        and "synthetic-close-source-denied" not in str(
+                            close_failed_alerts
+                        ),
+                        "native failed-close dropped work, leaked word, or published PDIC",
+                    )
+            finally:
+                close_release.set()
+                if section_original is None:
+                    section_path.unlink(missing_ok=True)
+                else:
+                    section_path.write_bytes(section_original)
+
+            # A new explicit close attempt after restoring the original
+            # source really saves one word then destroys the ReviewWindow.
+            review.filter_vars[0].set("synthetic-close-committed")
+            review._close_review()
+            check(
+                review._filter_close_after_save
+                and review._filter_save_running,
+                "native positive close was not tied to the actual save worker",
+            )
+            _pump_until(
+                app,
+                lambda: not review.winfo_exists()
+                and app.review_window is None,
+                seconds=35,
+                description="G3 native focused close after verified PDIC commit",
+            )
+            final_fields = [
+                line.split("#")
+                for line in pdic_path(page1).read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            ]
+            check(
+                final_fields[0][0] == "synthetic-close-committed"
+                and final_fields[0][1:] == before_drift_rows[0][1:]
+                and final_fields[1] == before_drift_rows[1]
+                and [(e.word, e.x, e.y) for e in app.entries]
+                == [("synthetic-close-committed", 80, 76),
+                    ("synthetic-beta", 85, 182)]
+                and ppp_read_path_for_image(page1).read_bytes() == before_ppp
+                and settings_path(root).read_bytes() == before_settings
+                and (section_path.read_bytes() if section_original is not None else None)
+                == section_original
+                and [p.read_bytes() for p in (page1, page2)] == before_image
+                and not origin.exists(),
+                "native successful focused close mutated source fields or sidecars",
+            )
+            print(
+                "G3 R4.2 native Tk close redaction + pending refusal"
+                " + source-drift refusal + verified close: OK",
+                flush=True,
+            )
         finally:
-            if review is not None:
+            if review is not None and review.winfo_exists():
                 review._filter_pending_changes.clear()
                 review.destroy()
             app.destroy()
