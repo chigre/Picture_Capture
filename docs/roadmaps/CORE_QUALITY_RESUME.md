@@ -1,3 +1,11 @@
+## 2026-11-01｜G3 R4.2 初始/分段扫描 worker 启动确认屏障（测试先红，最终 exact-head 门禁待核）
+
+- GitHub 基线：`2599eddb1360b0ae72c0a51c11961020008fbc49` 的 [CI #41223273971](https://github.com/chigre/Picture_Capture/actions/runs/41223273971) 六平台＋Risk gate、[OCR #41223274149](https://github.com/chigre/Picture_Capture/actions/runs/41223274149) 3/3、[CodeQL #41223270845](https://github.com/chigre/Picture_Capture/actions/runs/41223270845) Python/Actions 2/2 全部成功。main `ec20989e` 不变，唯一 Draft PR #663、#503/#562/#483 Open、无 Review Threads。
+- **测试先红：** 仅测试提交 `bcaee25f61b4b998ee251a9b4b106d013cd5b5a7`，[CI #41225930839](https://github.com/chigre/Picture_Capture/actions/runs/41225930839) macOS Python 3.13 **4 targeted FAILED / 5220 passed / 2 skipped**。首次或后续扫描的 `_start_ui_worker` 同步执行 done/failed 后再抛启动异常，会暴露私有异常并把未确认的扫描结果或失败发布到 UI；四项反例均红灯。
+- 产品最小修复 `1790fe84c5196dcdbe40fdcb5c709b4886344203` 仅更新 `ui/focused_filter_workflow.py`：局部 `dispatch_scan_after_ack` 为首批和每次分段扫描缓冲启动期间最早 terminal，正常返回才派发；若启动抛异常则废弃早期结果、阻断迟到回调、以既有通用 failed 文案 fail-closed（不回显异常）。既有 scan epoch 和单次终结 guard 不变。
+- 测试补充 `a83fc88fa848af394ef67f83f67d4e2e14fbb998`：扩展无 callback 直接启动异常的失败安全检查，并新增首批/分段同步成功且已确认启动的正控。上述测试结果需以最终 code+docs HEAD 完成 CI 为准。
+- 架构审计：[G3_R4_2_SCAN_LAUNCH_ACK_20261101.md](../architecture/G3_R4_2_SCAN_LAUNCH_ACK_20261101.md)。最终 exact-head 六平台 CI＋Risk、OCR3/3、CodeQL Python/Actions 2/2 均暂记 **PENDING**，不借用前一 SHA。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典与性能 **NOT PERFORMED**，R6 标签学习及 R8 真实扫描 **DEFERRED**。保持唯一 Draft/Open/Unmerged PR #663，main 不动。
+
 ## 2026-11-01｜G3 R4.2 首批与分段 scan 的重复/矛盾终结回调（7 项红灯，新增计数断言，最终门禁待核）
 
 - 上一基准 `97cabc347c28085b0e970947e347a7fc376f8782` GitHub exact-head CI [#41219251436](https://github.com/chigre/Picture_Capture/actions/runs/41219251436) 六组合及 Risk-tier gate、OCR [#41219251550](https://github.com/chigre/Picture_Capture/actions/runs/41219251550) 3/3、CodeQL [#41219246937](https://github.com/chigre/Picture_Capture/actions/runs/41219246937) Python/Actions 2/2 均成功；main `ec20989ea` 未动，唯一 Draft PR #663，Issues #503/#562/#483 全 Open。
