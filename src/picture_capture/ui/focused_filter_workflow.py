@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from ..proofreading.review_timing import ReviewTimingSession
+from ..proofreading.focused_crop_source_fingerprint import focused_crop_source_witness
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -580,6 +581,14 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
         )
         for target in targets
     )
+    # A prefetched crop from a previous image/PDIC/SECTION revision must
+    # never be reused just because the source XY, text or Tk zoom is the same.
+    # Use actual source bytes, not mutable size/mtime metadata. This is a
+    # volatile readback, not an OS-level multi-file atomic snapshot.
+    try:
+        source_witness = focused_crop_source_witness(pages, targets)
+    except (OSError, ValueError, IndexError):
+        return None
     render_signature = (
         target_signature,
         repr(settings),
@@ -587,6 +596,7 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
         available_width,
         review_zoom_auto,
         None if review_zoom_auto else round(review_zoom, 6),
+        source_witness,
     )
     cache_key = (int(batch_index), render_signature)
     return (
@@ -700,6 +710,11 @@ def _apply_filter_batch_payload(
         return False
     snapshot = self._filter_batch_snapshot(batch_index)
     if snapshot is None or snapshot[0] != cache_key:
+        # Neither a late prefetch nor a cached payload owns a changed source.
+        # Do not clear the current editors or discard an unsaved human edit.
+        status = getattr(self.parent, "status_var", None)
+        if status is not None:
+            status.set("本批裁剪来源或显示条件已变化，旧预览已拒绝；请核对后重新筛选。")
         return False
     _key, _targets_copy, _pages, _settings, _viewer_width, _available_width, _zoom, _auto = snapshot
     batch_size = self._focused_batch_size()
@@ -844,6 +859,13 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     self._set_filter_navigation(True)
     snapshot = self._filter_batch_snapshot(self.filtered_batch_index)
     if snapshot is None:
+        # A disappeared/unreadable image, PDIC or SECTION is not a valid
+        # crop. Never silently retain another batch's thumbnail as this one.
+        self.parent.status_var.set(
+            "当前批次的原图、PDIC 或 SECTION 无法核验；请检查来源后重新筛选。"
+        )
+        if not self._filter_save_running and not self._filter_pending_changes:
+            self._clear_review_workspace("裁剪来源不可核验，未生成本批预览。")
         return
     (
         cache_key, targets, pages, settings, viewer_width, available_width,
