@@ -327,3 +327,113 @@ def test_new_section_after_originally_sectionless_crop_fails_closed(tmp_path):
     with pytest.raises(RuntimeError, match="(来源|变化|拒绝|SECTION)"):
         worker()
     assert writes == [] and pdic.read_bytes() == before
+
+
+def test_inflight_reversion_reuses_display_witness_and_saves_after_first_commit(tmp_path):
+    """User changes back to pre-write text while an older worker runs.
+
+    The older snapshot writes edit-1; done() must queue 'old' relative to
+    the newly saved word *with the accepted crop witness*, not mint one
+    from the current disk at save time. The second worker must succeed.
+    """
+    page, pdic, _section, target, crop = _files(tmp_path)
+    witness = _save_witness(crop)
+    target.update(current_word="edit-1", _focused_save_source_witness=witness)
+    review, calls = _review(page, target)
+    review._filter_close_after_save = False
+    timers = []
+    review.after = lambda ms, fn: timers.append((ms, fn)) or "scheduled"
+    review._finish_close_review = lambda: None
+    review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
+    writes = []
+    deps, alerts = _save_deps(page, writes)
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    assert review._filter_save_running and not review._filter_pending_changes
+
+    # Real Tk's StringVar trace cancels the old queued edit on reversion,
+    # leaving no newer pending row while the first worker still owns disk.
+    target["current_word"] = "old"
+    done(worker())
+    assert not alerts and writes == [1]
+    assert read_pdic(pdic)[0].word == "edit-1"
+    change = review._filter_pending_changes[0][(3, 4)]
+    assert change["original_word"] == "edit-1"
+    assert change["new_word"] == "old"
+    assert change["_focused_save_source_witness"] == witness
+    assert any(ms == 1 for ms, _fn in timers)
+
+    flow._flush_focused_changes(review, deps)
+    assert len(calls) == 2
+    _name, worker2, done2, failed2 = calls[1][0]
+    done2(worker2())
+    assert not alerts and writes == [1, 1]
+    assert not review._filter_pending_changes
+    assert read_pdic(pdic)[0].word == "old"
+    assert target["original_word"] == target["current_word"] == "old"
+
+
+def test_inflight_reversion_cannot_bypass_changed_section_with_retained_witness(tmp_path):
+    """A restored queue retains the OLD proof and still rejects later drift."""
+    page, pdic, section, target, crop = _files(tmp_path)
+    witness = _save_witness(crop)
+    target.update(current_word="edit-1", _focused_save_source_witness=witness)
+    review, calls = _review(page, target)
+    review._filter_close_after_save = False
+    review.after = lambda ms, fn: "scheduled"
+    review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
+    writes = []
+    deps, alerts = _save_deps(page, writes)
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    target["current_word"] = "old"
+    done(worker())
+    assert read_pdic(pdic)[0].word == "edit-1"
+    assert review._filter_pending_changes[0][(3, 4)][
+        "_focused_save_source_witness"
+    ] == witness
+
+    _replace_without_metadata_change(section, b'{"revision":"B"}')
+    unchanged_pdic = pdic.read_bytes()
+    flow._flush_focused_changes(review, deps)
+    _name, worker2, done2, failed2 = calls[1][0]
+    with pytest.raises(RuntimeError, match="(来源|变化|拒绝|SECTION)"):
+        worker2()
+    failed2(RuntimeError("PRIVATE_PAGE_PATH"), "PRIVATE_TRACE")
+    assert writes == [1] and pdic.read_bytes() == unchanged_pdic
+    assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "old"
+    assert not review._filter_close_after_save
+    assert alerts and "PRIVATE_" not in str(alerts)
+
+
+def test_newer_inflight_edit_maintains_original_crop_witness_after_save(tmp_path):
+    """A new edit queued during the worker retains its stronger ownership."""
+    page, pdic, _section, target, crop = _files(tmp_path)
+    witness = _save_witness(crop)
+    target.update(current_word="edit-1", _focused_save_source_witness=witness)
+    review, calls = _review(page, target)
+    review._filter_close_after_save = False
+    review.after = lambda ms, fn: "scheduled"
+    review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
+    writes = []
+    deps, alerts = _save_deps(page, writes)
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, _failed = calls[0][0]
+    target["current_word"] = "edit-2"
+    review._filter_pending_changes[0] = {
+        (3, 4): _edited_change(witness, word="edit-2"),
+    }
+    done(worker())
+    queued = review._filter_pending_changes[0][(3, 4)]
+    assert queued["original_word"] == "edit-1"
+    assert queued["new_word"] == "edit-2"
+    assert queued["_focused_save_source_witness"] == witness
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker2, done2, _failed2 = calls[1][0]
+    done2(worker2())
+    assert not review._filter_pending_changes and not alerts
+    assert read_pdic(pdic)[0].word == "edit-2"
+    assert writes == [1, 1]
