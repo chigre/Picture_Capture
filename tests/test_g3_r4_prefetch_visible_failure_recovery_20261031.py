@@ -594,3 +594,99 @@ def test_crop_scheduler_exception_before_worker_handoff_is_generic(
     assert case.applied == []
     assert "synthetic_private_scheduler_path" not in repr(case.status.get())
     assert "synthetic_private_scheduler_path" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("mode", ("prefetch", "direct"))
+@pytest.mark.parametrize("early", ("done", "failed"))
+@pytest.mark.parametrize("refusal", ("minus_one", "raises"))
+def test_crop_launch_inline_terminal_requires_acknowledgement(
+    tmp_path, capsys, mode, early, refusal,
+):
+    """G3 R4.2: an unacknowledged launch cannot publish a crop or UI terminal.
+
+    Synthetic image/PDIC/SECTION bytes and a deliberately adversarial
+    synchronous launcher, not a claim about real Tk callback ordering.
+    """
+    case = _case(tmp_path)
+    review = case.review
+    review._filter_prefetch_key = None
+    case.workers.clear()
+    if mode == "direct":
+        review.filtered_batch_index = 1
+    attempts, before_ack = [], []
+    private_error = "PRIVATE_CROP_LAUNCH_C:/dictionary/headword.pdic"
+
+    def schedule(key, worker, done, failed):
+        attempts.append(key)
+        # Refused visible retry after a refused N+1 prefetch is legitimate
+        # but must not produce a crop or turn into an endless retry.
+        if mode == "prefetch" and key.startswith("focused-filter-render-"):
+            return -1
+        assert key.startswith(f"focused-filter-{mode if mode == 'prefetch' else 'render'}-")
+        if mode == "prefetch":
+            review.filtered_batch_index = 1
+        if early == "done":
+            done(worker())
+        else:
+            failed(OSError(private_error), private_error)
+        before_ack.append((
+            len(case.applied),
+            len(review._filter_batch_render_cache),
+            len(attempts),
+            tuple(case.workspace),
+        ))
+        if refusal == "raises":
+            raise RuntimeError(private_error)
+        return -1
+
+    review.parent._start_ui_worker = schedule
+    if mode == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+    else:
+        workflow._request_filter_batch_render(review, case.deps)
+
+    assert len(before_ack) == 1
+    applied, cached, calls_before_ack, workspace_before_ack = before_ack[0]
+    assert applied == 0 and cached == 0
+    if mode == "prefetch":
+        assert calls_before_ack == 1, "no reentrant direct render before launch acknowledgement"
+        assert review._filter_prefetch_key is None
+    else:
+        assert workspace_before_ack[-1] == "正在异步生成本批切词行…"
+    assert case.applied == []
+    assert review._filter_batch_render_cache == {}
+    assert "PRIVATE_CROP_LAUNCH" not in repr(
+        (case.workspace, case.status.get(), capsys.readouterr())
+    )
+
+
+@pytest.mark.parametrize("mode", ("prefetch", "direct"))
+def test_crop_inline_success_normal_launch_still_publishes_once(tmp_path, mode):
+    """Successful synchronous compatibility shims remain supported."""
+    case = _case(tmp_path)
+    review = case.review
+    review._filter_prefetch_key = None
+    case.workers.clear()
+    if mode == "direct":
+        review.filtered_batch_index = 1
+
+    def schedule(key, worker, done, failed):
+        assert key.startswith(
+            "focused-filter-prefetch-" if mode == "prefetch"
+            else "focused-filter-render-"
+        )
+        if mode == "prefetch":
+            review.filtered_batch_index = 1
+        payload = worker()
+        done(payload)
+        # Only a normally returned launch can certify this early terminal.
+        return None
+
+    review.parent._start_ui_worker = schedule
+    if mode == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+    else:
+        workflow._request_filter_batch_render(review, case.deps)
+
+    assert len(case.applied) == 1
+    assert len(review._filter_batch_render_cache) == 1
