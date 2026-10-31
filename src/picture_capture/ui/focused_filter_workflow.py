@@ -946,6 +946,14 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
     crop_seconds = [None]
+    # A user correction or incomplete save owns the displayed editor.  A
+    # refresh request must invalidate older direct callbacks, but not repaint
+    # or clear the unsaved source while it is still pending.
+    if (
+        getattr(self, "_filter_save_running", False)
+        or getattr(self, "_filter_pending_changes", None)
+    ):
+        return
     cached = self._filter_batch_render_cache.get(cache_key)
     if cached is not None:
         self._apply_filter_batch_payload(
@@ -972,6 +980,11 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        # The direct render is just as source-sensitive as N+1 prefetch:
+        # do not associate a completed crop with pre-worker PDIC/SECTION/image
+        # bytes if they changed during off-thread processing.
+        if focused_crop_source_witness(local_pages, local_targets) != cache_key[1][-1]:
+            raise ValueError("focused crop source changed during direct rendering")
         if started is not None:
             crop_seconds[0] = perf_counter() - started
         return result
@@ -981,21 +994,47 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             serial != self._filter_render_serial
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
+            or int(self.filtered_batch_index) != int(local_index)
         ):
+            return
+        # No asynchronous crop is authorized to replace an outstanding
+        # correction or a save whose durable outcome is still unknown.
+        if (
+            getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+        ):
+            return
+        try:
+            current = self._filter_batch_snapshot(local_index)
+        except Exception:
+            current = None
+        if current is None or current[0] != local_key:
+            # Reject the pre-change payload *before* publishing it into cache.
+            # A missing/changed sidecar needs an explicit new filter run;
+            # do not infer the new source owns this crop.
+            self._clear_review_workspace(
+                "本批裁剪来源已变化或不可核验；请重新筛选。"
+            )
+            self.parent.status_var.set(
+                "当前批次原图、PDIC 或 SECTION 来源无法确认；请核对后重新筛选。"
+            )
             return
         _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         self._cache_filter_batch_payload(local_key, payload)
         self._apply_filter_batch_payload(local_index, local_key, payload)
 
-    def failed(_exc, _detail) -> None:
+    def failed(_exc, _detail, local_index=int(self.filtered_batch_index)) -> None:
         if (
             serial != self._filter_render_serial
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
+            or int(self.filtered_batch_index) != int(local_index)
+            or getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
         ):
             return
-        # A crop failure cannot mutate the next scan's workspace or
-        # disclose a private page path through the ReviewWindow status.
+        # A crop failure cannot mutate a newer scan or an in-flight human
+        # correction, or disclose a private page path through Tk status.
         self._clear_review_workspace(
             "本批切词行生成失败；请检查页面数据后重试。"
         )
