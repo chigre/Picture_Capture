@@ -36,11 +36,11 @@ class _Var:
         self.value = value
 
 
-def _files(tmp_path: Path):
-    page = tmp_path / "001.bmp"
+def _files(tmp_path: Path, *, stem: str = "001"):
+    page = tmp_path / f"{stem}.bmp"
     Image.new("RGB", (8, 8), "black").save(page)
     pdic = pdic_path_for_image(page)
-    pdic.write_bytes(b"old#3#4#37.5#50#001#@#@\n")
+    pdic.write_bytes(f"old#3#4#37.5#50#{stem}#@#@\n".encode("utf-8"))
     section = page_sections_read_path_for_image(page)
     section.parent.mkdir(parents=True, exist_ok=True)
     section.write_bytes(b'{"revision":"A"}')
@@ -453,7 +453,7 @@ def _two_attested_pages(tmp_path):
     first.mkdir()
     second.mkdir()
     p1, d1, _s1, t1, c1 = _files(first)
-    p2, d2, _s2, t2, c2 = _files(second)
+    p2, d2, _s2, t2, c2 = _files(second, stem="002")
     t1.update(
         current_word="edit-one",
         _focused_save_source_witness=_save_witness(c1),
@@ -485,7 +485,7 @@ def test_two_page_pdic_conflict_commits_first_once_preserves_second(tmp_path):
     (p1, d1, t1), (p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
     # External PDIC edit is intentionally after display attestation; page 2
     # must remain the foreign owner's data, not our stale human correction.
-    foreign = b"external#3#4#37.5#50#001#@#@\n"
+    foreign = b"external#3#4#37.5#50#002#@#@\n"
     d2.write_bytes(foreign)
     before_second = d2.read_bytes()
     writes, alerts = [], []
@@ -721,8 +721,8 @@ def test_two_page_clean_commit_preserves_links_coordinates_and_main_entry(tmp_pa
     assert (review.parent.entries[0].x, review.parent.entries[0].y) == (3, 4)
     assert first_words_before == (("old", 3, 4), ("old", 3, 4))
     for path, word, expected_links in (
-        (d1, "edit-one", ["001", "@", "001"]),
-        (d2, "edit-two", ["001", "001", "@"]),
+        (d1, "edit-one", ["001", "@", "002"]),
+        (d2, "edit-two", ["002", "001", "@"]),
     ):
         rows = [line.split("#") for line in path.read_text(encoding="utf-8").splitlines()]
         assert rows == [[word, "3", "4", "37.5", "50", *expected_links]]
