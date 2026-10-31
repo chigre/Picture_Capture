@@ -1,3 +1,11 @@
+## 2026-10-31｜G3/R3 调度器同步回调先于确认返回：单次结果所有权（合成 E2 最终 HEAD 待核）
+
+- 基准 `1f6d85dd90ad3d9712033efdc7f3516a955bb2d1` 上已实际验证 [CI #41188843977](https://github.com/chigre/Picture_Capture/actions/runs/41188843977) 六组合 6/6 + Risk-tier CI gate、[OCR #41188843994](https://github.com/chigre/Picture_Capture/actions/runs/41188843994) 3/3、[CodeQL #41188841943](https://github.com/chigre/Picture_Capture/actions/runs/41188841943) Python/Actions 2/2，全绿；main `ec20989e` 不动，唯一 Draft PR #663。
+- **新红灯已实际复现：** `140d981d48e227ca2a5ccd3a6c7d9bc31bf951ac` 的 [CI #41190094623](https://github.com/chigre/Picture_Capture/actions/runs/41190094623) Ubuntu Python3.13 **6 failed / 5079 passed / 3 skipped**，macOS Python3.13 **6 failed / 5080 passed / 2 skipped**。调度器在返回前先调用 done/failed，随后抛错时，旧逻辑可能提前消费成功结果并关闭窗口，或重复弹窗；同一已确认调度的矛盾终结回调也会重复处理。成功接受 inline 空结果的正控通过。红灯测试 SHA 不是通过的门禁。
+- 修复 `3ed584a5d3c8dea7f938008f005ce4dc2e94248a` 在 `focused_filter_workflow._flush_focused_changes` 设置本地 pending/accepted/rejected 回调确认屏障：调度器未正常返回之前不消费任何终结回调；异常时保留人工修改/清除关闭意图/单一通用错误；正常返回后仅消费第一条终结回调。原有跨代递增 dispatch serial 保持不变。
+- 合成原生 Tk 集成 `9408c31d620b97f561274b31be85db0397ae761e` 对真实 ReviewWindow StringVar 测试“inline done→raise”和“inline failed→raise”两种拒绝、精确待保存 XY、PDIC 字节不动与后续人工明确重试真正保存。审计 [G3_R4_2_SYNCHRONOUS_WORKER_CALLBACK_HANDOFF_20261031.md](../architecture/G3_R4_2_SYNCHRONOUS_WORKER_CALLBACK_HANDOFF_20261031.md)。
+- **最后文档 HEAD 全部六 OS/Python CI＋Risk、OCR3、CodeQL2 必须再核验**，不得用中间源码 SHA 取代。真人 Windows R3 E3、#483 W1–W11、#503 复杂事务、G3 真实词典扫描/大图、R6 人工标签、R8 真实扫描均 NOT PERFORMED/DEFERRED；继续 #663 Draft、未合并，不 Ready，不降低失败门禁。
+
 ## 2026-10-31｜R3/G1 OCR 候选删除 Undo/Redo 来源不可读与 SECTION/Profile 漂移安全拒绝（最终 E2 待核）
 
 - 承接上一轮最终 `19ffa6a955f74016aba2fef2502567974ec42a1c`： [CI #41187745842](https://github.com/chigre/Picture_Capture/actions/runs/41187745842) 六组合 6/6 + Risk-tier gate、[OCR #41187745851](https://github.com/chigre/Picture_Capture/actions/runs/41187745851) 3/3、[CodeQL #41187743372](https://github.com/chigre/Picture_Capture/actions/runs/41187743372) Python/Actions 2/2 **完整验收成功**。唯一 Draft PR #663 未合并、main 保持 `ec20989ea`。
