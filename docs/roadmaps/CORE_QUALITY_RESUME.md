@@ -1,3 +1,10 @@
+## 2026-10-31｜R3/G3 关闭窗口 E2 跨平台 test oracle 修正（待最终 HEAD 核验）
+
+- 已通过有效红灯证明 `7881848c` 的普通关闭异常文本泄露（3 种模拟私有信息）和无确认提交后过期 close intent（1 项），Ubuntu [CI #41183577244](https://github.com/chigre/Picture_Capture/actions/runs/41183577244) 4 targeted failed、5039 pass；最小生产修复 `fa2ec837` [CI #41183802964](https://github.com/chigre/Picture_Capture/actions/runs/41183802964) **6/6 + Risk-tier gate SUCCESS**。
+- 后续原生 Tk 合成 close smoke 源 `40524a44` 的 [CI #41183879358](https://github.com/chigre/Picture_Capture/actions/runs/41183879358) **macOS 失败**，因测试把全局 `app.status_var` 瞬时“保存失败”用作 await 条件；主应用自动保存可将状态覆写为“已自动保存”。`60187066` 修正后 [CI #41184236154](https://github.com/chigre/Picture_Capture/actions/runs/41184236154) 又暴露**此前一段**等待“尚有未确认修改”文本的同类测试时序问题。两次失败须明确记录为 test oracle 不稳，不能算生产代码已通过／也不能证明它存在新故障。
+- 最新纯测试修正 `06b5e631c124cd8afbcdaf26a5d62f438bb779fb`：两处完成等待条件均只检查真实后台 worker、`_filter_close_after_save`、精确待保存词条、错误回调和 live Tk 窗口；不撤销来源指纹、PDIC、关闭窗口门禁。源 [CI #41184539224](https://github.com/chigre/Picture_Capture/actions/runs/41184539224)、[OCR #41184539255](https://github.com/chigre/Picture_Capture/actions/runs/41184539255)、[CodeQL #41184536750](https://github.com/chigre/Picture_Capture/actions/runs/41184536750) 当时进行中。审计见 [G3_R4_2_REVIEW_CLOSE_FAIL_CLOSED_20261031.md](../architecture/G3_R4_2_REVIEW_CLOSE_FAIL_CLOSED_20261031.md)。
+- 本 docs 会更新 HEAD，**必须重新核验 exact-head 六平台+Risk/OCR3/CodeQL2**。唯一 Draft #663 Open/Unmerged，`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 不动；真人 R3 E3/#483/#503 和真实词典性能 NOT PERFORMED，R6/R8 真证据延期。
+
 ## 2026-10-31｜R3/G3 校对关闭失败脱敏＋恢复未确认修改时取消自动关闭意图（E2 待 docs 最终 HEAD 核验）
 
 - 唯一 [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) 仍 Open/Unmerged；`main@ec20989ea8c026cca5337293e67850b6b6df30f2` 未动。上一批多页成功保存／预检后 SECTION 漂移最终 `e1399dc1dd19ee540cdf5bbd208dfc2641f869af` [CI #41182460290](https://github.com/chigre/Picture_Capture/actions/runs/41182460290) **6/6 + Risk SUCCESS**、[OCR #41182460325](https://github.com/chigre/Picture_Capture/actions/runs/41182460325) **3/3**、[CodeQL #41182457382](https://github.com/chigre/Picture_Capture/actions/runs/41182457382) **2/2** 全部通过。
