@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 直接裁剪 success/failure 回调的来源、SECTION 与 save 队列隔离（测试先红，最终门禁待核）
+
+- 实时绿色基准 `6376d1a058bb634b8f09e18955cb80a9f4a67339` 已核：CI [#41212007134](https://github.com/chigre/Picture_Capture/actions/runs/41212007134) Windows/macOS/Ubuntu×Python3.10/3.13 六组合＋Risk gate 全成功；OCR [#41212007119](https://github.com/chigre/Picture_Capture/actions/runs/41212007119) 三平台成功；CodeQL [#41212004168](https://github.com/chigre/Picture_Capture/actions/runs/41212004168) Python/Actions 两项成功。唯一 Draft #663、main 不动、#503/#562/#483 Open。
+- **真实测试先红**：仅加 synthetic test `13f4abbbb54f787ca0357ebde161f443ae105dda`，[CI #41213043690](https://github.com/chigre/Picture_Capture/actions/runs/41213043690) Ubuntu Python3.13 **9 targeted FAILED / 5192 passed / 3 skipped**。三类原图/PDIC/SECTION 同大小同 mtime 漂移可入旧 cache；直接裁剪 worker 过程来源漂移未拒绝；后到 done/failed 和缓存命中会覆盖未完成的编辑/保存。稳定来源和过期 serial 正控通过；本旧 SHA 是 RED，不计通过。
+- 生产最小修复 `cc1d2d44289eb6b81f9f80adfaa2081567c5d40a` 仅 `ui/focused_filter_workflow.py`：direct worker 返回前复核 source witness；成功回调先验证 scan epoch、render serial、选中批次、当前图像/PDIC/SECTION 字节及无正在保存/未保存编辑，再允许缓存与重绘；失败回调不可清除被人工或保存占用的工作区；缓存命中路径同样尊重这些保护。无持久化变更、原图 XY 或实验默认值修改。
+- 审计 [G3_R4_2_DIRECT_RENDER_SOURCE_SAVE_GUARDS_20261031.md](../architecture/G3_R4_2_DIRECT_RENDER_SOURCE_SAVE_GUARDS_20261031.md)。**本次代码及文档最终 HEAD** 必须另核 exact-head CI 六组合＋Risk、OCR 3/3、CodeQL Python/Actions 2/2，不能凭本说明或旧 SHA 推定成功。真实 Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典/性能均 **NOT PERFORMED**；R6 真标签/R8 真实扫描 **DEFERRED**。
+
 ## 2026-10-31｜G3 success prefetch 中间测试夹具诊断补记（最终 docs HEAD 待验）
 
 - 源修复 `7637eedb` [CI #41211513690](https://github.com/chigre/Picture_Capture/actions/runs/41211513690) Ubuntu Python3.13 **5 failed / 5185 passed / 3 skipped**：3 项是新测试应先取得 worker 成功载荷再模拟磁盘漂移，已由 `cd01446d` 校正；另 2 项是旧 epoch-smoke 假 key 没有真实 witness，已由 `a5a25dc5` 换成原有 source-witness API。未改产品检查，未跳过断言。最新代码+文档 HEAD 6/6 CI＋Risk、OCR3/3、CodeQL Python/Actions2/2 均须重新核实。真人 E3/W1–W11/人工 Undo/真实词典 **NOT PERFORMED**，R6/R8 **DEFERRED**。
