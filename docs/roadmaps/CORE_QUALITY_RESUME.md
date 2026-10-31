@@ -1,3 +1,10 @@
+## 2026-11-01｜G3 R4.2 真实 worker 关闭拒绝（返回 -1）后的 prefetch 和直接裁剪状态释放（失败先行，最终门禁待核）
+
+- GitHub 实时基线：`main@ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 Draft/Open/Unmerged PR #663，#503/#562/#483 Open，Review Threads 0；之前绿色 HEAD `18be51852eeb39179219fd4ac72738a451b18846` 已重新核对 [CI #41226272640](https://github.com/chigre/Picture_Capture/actions/runs/41226272640) 六平台＋Risk gate、[OCR #41226272559](https://github.com/chigre/Picture_Capture/actions/runs/41226272559) 3/3、[CodeQL #41226269712](https://github.com/chigre/Picture_Capture/actions/runs/41226269712) Python/Actions 2/2，全部 SUCCESS。
+- 从 `ui/background_job_runtime.py::start_ui_worker` 查明实际关闭/停止调度返回 **-1**，不建立线程回调。旧 `focused_filter_workflow.py` 的 prefetch / direct render 调度忽略返回值，可能永久占有预取 key 或停留加载提示。**真实测试先红：** `f12778e0478bf68208ba54be1dd08c76e503506e`，[CI #41227343838](https://github.com/chigre/Picture_Capture/actions/runs/41227343838) Ubuntu Python3.13 观察 **2 targeted FAILED / 5227 passed / 3 skipped**，均为这两条新反例。
+- **最小修复** `d54dc5c895e00c5ff678ed0cea0219e2c12e3860` 仅修改 prefetch 和直接裁剪的启动点：`_start_ui_worker` 抛异常或返回 `-1`，交由现有 epoch/key/serial/人工保存 guard 的 generic failed 回调处理；prefetch 释放 key，直接裁剪清除无穷加载提示；不披露任何内部异常/原图路径。补充 `03ebd57b41c6a1ca189df6cbe3122a38e8fcf970` 两项启动直接抛异常的 E2 测试。
+- 审计：[G3_R4_2_CROP_WORKER_CLOSE_REFUSAL_20261101.md](../architecture/G3_R4_2_CROP_WORKER_CLOSE_REFUSAL_20261101.md)。**最终代码+文档 HEAD** 的 CI 六平台＋Risk、OCR 3/3 和 CodeQL Python/Actions 2/2 均需独立核实，此快照记 **PENDING**。Windows R3 E3、#483 W1–W11、#503 人工 Undo/真实词典/性能 **NOT PERFORMED**；R6 真标签学习、R8 实扫 **DEFERRED**。保留唯一 Draft PR #663，main 不动。
+
 ## 2026-11-01｜G3 R4.2 初始/分段扫描 worker 启动确认屏障（测试先红，最终 exact-head 门禁待核）
 
 - GitHub 基线：`2599eddb1360b0ae72c0a51c11961020008fbc49` 的 [CI #41223273971](https://github.com/chigre/Picture_Capture/actions/runs/41223273971) 六平台＋Risk gate、[OCR #41223274149](https://github.com/chigre/Picture_Capture/actions/runs/41223274149) 3/3、[CodeQL #41223270845](https://github.com/chigre/Picture_Capture/actions/runs/41223270845) Python/Actions 2/2 全部成功。main `ec20989e` 不变，唯一 Draft PR #663、#503/#562/#483 Open、无 Review Threads。
