@@ -1400,16 +1400,23 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             self._filter_close_after_save = False
             self._finish_close_review()
 
-    def failed(exc, detail) -> None:
+    def failed(_exc, _detail) -> None:
         self._filter_save_running = False
         self._filter_close_after_save = False
         # Restore unsaved work for explicit retry, never overwrite a later
         # edit or an explicit reversion made while the worker was running.
         restore_unwritten(set())
-        if detail:
-            print(detail)
-        self.parent.status_var.set(f"筛选校对保存失败：{exc}")
-        messagebox.showerror("筛选校对保存失败", str(exc), parent=self)
+        # Worker exceptions/tracebacks can contain private project paths or
+        # headwords. Do not echo them to stdout, status, or Tk error dialogs.
+        # Keep the retry guidance generic and retain the human edit buffer.
+        self.parent.status_var.set(
+            "筛选校对保存失败：未确认写入的修改已保留，请检查后重试。"
+        )
+        messagebox.showerror(
+            "筛选校对保存失败",
+            "本次保存未完成；校对修改仍可核对或重试，请检查项目文件。",
+            parent=self,
+        )
 
     self.parent._start_ui_worker(
         f"focused-filter-save-{id(self)}",
