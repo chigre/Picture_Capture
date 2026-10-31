@@ -541,3 +541,29 @@ def test_old_prefetch_terminal_cannot_steal_rescheduled_identical_key(
     new_done(new_worker())
     assert review._filter_prefetch_key is None
     assert list(review._filter_batch_render_cache) == [old_key]
+
+def test_prefetch_refused_by_closed_worker_queue_releases_key(tmp_path):
+    """The real scheduler returns -1 when closing; this is not a started job."""
+    case = _case(tmp_path)
+    review = case.review
+    case.workers[0][3](OSError("synthetic failure"), "synthetic")
+    assert review._filter_prefetch_key is None
+    review.parent._start_ui_worker = lambda *args: -1
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert review._filter_prefetch_key is None
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+
+
+def test_direct_crop_refused_by_closed_worker_queue_reports_failure(tmp_path):
+    """A rejected direct crop must not leave an indefinite loading view."""
+    case = _case(tmp_path)
+    review = case.review
+    review.filtered_batch_index = 1
+    review._filter_prefetch_key = None
+    review.parent._start_ui_worker = lambda *args: -1
+    review._request_filter_batch_render()
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "失败" in case.workspace[-1] or "重试" in case.workspace[-1]
+    assert "失败" in case.status.get() or "重试" in case.status.get()
