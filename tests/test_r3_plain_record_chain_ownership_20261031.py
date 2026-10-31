@@ -96,3 +96,69 @@ def test_identity_equivalent_snapshot_objects_can_continue_same_chain(tmp_path):
     assert history.record(first_before, first_after)
     assert history.record(chain_before, chain_after)
     assert len(history.undo_stack) == 2
+
+
+@pytest.mark.parametrize("binding", ("manual", "ocr", "profile"))
+def test_actual_saved_pdic_snapshot_chain_invalidates_rebound_source_path(
+    tmp_path, binding,
+):
+    """Real read_pdic/write_pdic snapshots, not a manually invented history."""
+    from types import SimpleNamespace
+
+    from picture_capture.io.formats import pdic_path, write_pdic
+    from picture_capture.proofreading.transactions import snapshot_review
+
+    class Var:
+        def __init__(self, text):
+            self.text = text
+
+        def get(self):
+            return self.text
+
+        def set(self, text):
+            self.text = text
+
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"SYNTHETIC-IMAGE-NO-PATIENT")
+    row = Entry("alpha", 10, 20)
+    write_pdic(pdic_path(page), [row], 120, ("synthetic", "@", "@"))
+    app = SimpleNamespace(
+        current_page=page, project=SimpleNamespace(root=tmp_path),
+        settings=SimpleNamespace(proofreading_event_capture=False),
+        _batch_active=False, _pending_manual_override_payload=None,
+        entries=[row], ocr_review_candidates=[],
+        _manual_selection_path=lambda: tmp_path / "old_manual.json",
+        _paddle_cache_path=lambda: tmp_path / "old_ocr.json",
+    )
+    review = SimpleNamespace(
+        parent=app, _rendered_page_stem=page.stem,
+        _filter_rows_active=False, vars=[Var("alpha")],
+    )
+    review._bound_row_entries = lambda: app.entries
+
+    def save_word(word):
+        before = snapshot_review(review)
+        assert before is not None
+        row.word = word
+        review.vars[0].set(word)
+        write_pdic(pdic_path(page), app.entries, 120, ("synthetic", "@", "@"))
+        after = snapshot_review(review)
+        assert after is not None
+        return before, after
+
+    history = ReviewSessionHistory()
+    assert history.record(*save_word("beta"))
+    assert len(history.undo_stack) == 1
+    if binding == "manual":
+        app._manual_selection_path = lambda: tmp_path / "new_manual.json"
+    elif binding == "ocr":
+        app._paddle_cache_path = lambda: tmp_path / "new_ocr.json"
+    else:
+        app.project.root = tmp_path / "different_project"
+
+    # The new save is valid itself; the old file-owner path is not.
+    second_before, second_after = save_word("gamma")
+    assert history.record(second_before, second_after)
+    assert len(history.undo_stack) == 1
+    assert history.undo_stack[0].before is second_before
+    assert history.undo_stack[0].after is second_after
