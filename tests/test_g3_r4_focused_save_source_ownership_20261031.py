@@ -695,3 +695,87 @@ def test_two_page_section_drift_after_preflight_keeps_uncertain_work(
     # No rollback of a possibly independently published PDIC file.
     assert d1.read_bytes() != before1
     assert section2.read_bytes() != original_page2_section
+
+
+def test_two_page_clean_commit_preserves_links_coordinates_and_main_entry(tmp_path):
+    """Two attested pages can commit normally without cross-page losses."""
+    (p1, d1, t1), (p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
+    review._filter_close_after_save = False
+    writes = []
+    deps, alerts = _save_deps(p1, writes)
+    first_words_before = (
+        (read_pdic(d1)[0].word, read_pdic(d1)[0].x, read_pdic(d1)[0].y),
+        (read_pdic(d2)[0].word, read_pdic(d2)[0].x, read_pdic(d2)[0].y),
+    )
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    saved, conflicts = worker()
+    assert saved == [(0, 3, 4, "edit-one"), (1, 3, 4, "edit-two")]
+    assert not conflicts
+    done((saved, conflicts))
+    assert writes == [1, 1] and not alerts
+    assert not review._filter_pending_changes and not review._filter_save_running
+    assert t1["original_word"] == t1["current_word"] == "edit-one"
+    assert t2["original_word"] == t2["current_word"] == "edit-two"
+    assert review.parent.entries[0].word == "edit-one"
+    assert (review.parent.entries[0].x, review.parent.entries[0].y) == (3, 4)
+    assert first_words_before == (("old", 3, 4), ("old", 3, 4))
+    for path, word, expected_links in (
+        (d1, "edit-one", ["001", "@", "001"]),
+        (d2, "edit-two", ["001", "001", "@"]),
+    ):
+        rows = [line.split("#") for line in path.read_text(encoding="utf-8").splitlines()]
+        assert rows == [[word, "3", "4", "37.5", "50", *expected_links]]
+        assert len(rows[0]) == 8
+    assert "已保存 2 条修改" in review.parent.status_var.get()
+
+
+def test_two_page_success_then_newer_second_page_edit_only_republishes_second(tmp_path):
+    """The first worker owns both pages, but a newer edit owns page 2 only."""
+    (p1, d1, t1), (p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
+    review._filter_close_after_save = False
+    scheduled = []
+    review.after = lambda ms, fn: scheduled.append((ms, fn)) or "scheduled"
+    writes, dialogs = [], []
+    deps, alerts = _save_deps(p1, writes)
+    review._flush_focused_changes = lambda: flow._flush_focused_changes(review, deps)
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    # The newer text is entered after the first worker dispatches its
+    # snapshot. The displayed crop source witness must not be re-minted.
+    t2["current_word"] = "edit-two-newer"
+    review._filter_pending_changes[1] = {
+        (3, 4): {
+            "page_index": 1, "x": 3, "y": 4,
+            "original_word": "old", "new_word": "edit-two-newer",
+            "_focused_save_source_witness": t2["_focused_save_source_witness"],
+        },
+    }
+    done(worker())
+    assert writes == [1, 1] and not alerts
+    committed_first = d1.read_bytes()
+    assert t1["original_word"] == "edit-one"
+    assert t2["original_word"] == "edit-two"
+    queued = review._filter_pending_changes[1][(3, 4)]
+    assert queued["original_word"] == "edit-two"
+    assert queued["new_word"] == "edit-two-newer"
+    assert queued["_focused_save_source_witness"] == t2[
+        "_focused_save_source_witness"
+    ]
+    assert 0 not in review._filter_pending_changes
+    assert any(ms == 1 for ms, _ in scheduled)
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker2, done2, failed2 = calls[1][0]
+    saved, conflicts = worker2()
+    assert saved == [(1, 3, 4, "edit-two-newer")] and not conflicts
+    done2((saved, conflicts))
+    assert writes == [1, 1, 1] and not alerts
+    assert d1.read_bytes() == committed_first
+    assert read_pdic(d2)[0].word == "edit-two-newer"
+    assert (read_pdic(d2)[0].x, read_pdic(d2)[0].y) == (3, 4)
+    assert t2["original_word"] == t2["current_word"] == "edit-two-newer"
+    assert t1["original_word"] == t1["current_word"] == "edit-one"
+    assert review.parent.entries[0].word == "edit-one"
+    assert not review._filter_pending_changes and not review._filter_save_running
