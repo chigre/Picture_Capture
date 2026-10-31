@@ -301,3 +301,113 @@ def test_candidate_undo_redo_clears_stale_manual_sidecar_origin_pin(tmp_path):
     assert history.redo(review)
     assert page.stem not in review._simplified_page_cache
     assert page.stem not in review._r3_simplified_source_bytes
+
+
+@pytest.mark.parametrize("direction", ["undo", "redo"])
+@pytest.mark.parametrize("source", [
+    "image", "pdic", "simplified", "manual", "ocr", "section", "profile",
+])
+def test_candidate_replay_snapshot_failure_unreadable_source_fail_closed(
+    tmp_path, monkeypatch, capsys, direction, source,
+):
+    """Unreadable owned source on Tk snapshot failure cannot crash replay.
+
+    Disk changes are never inferred from the saved history on a denied read.
+    This is a synthetic diagnostic, not actual Windows operator E3.
+    """
+    from picture_capture.proofreading import transactions as files
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, before, after = committed_delete(page, owned, review, candidate)
+    if direction == "redo":
+        assert history.undo(review)
+        review.vars = [Var(e.word) for e in review.parent.entries]
+    expected = after if direction == "undo" else before
+    original_pdic = pdic_path(page).read_bytes()
+    original_manual = manual.read_bytes() if manual.exists() else None
+    original_membership = tuple(review.parent.entries)
+    original_candidate = dict(candidate)
+    sentinel = "PRIVATE_CANDIDATE_SOURCE_DO_NOT_LOG"
+
+    # This simulates an otherwise transient row rebind. The explicit second
+    # source check must distinguish unreadable backing data from a safe retry.
+    monkeypatch.setattr(files, "snapshot_review", lambda *_a, **_kw: None)
+    paths = {
+        "pdic": pdic_path(page),
+        "simplified": simplified_review_path_for_image(page),
+        "manual": expected.manual_path,
+        "ocr": expected.ocr_path,
+        "section": expected.section_path,
+        "profile": expected.profile_path,
+    }
+    if source == "image":
+        original_hash = files.sha256_file
+        def unreadable_hash(path):
+            if path == page:
+                raise PermissionError(sentinel)
+            return original_hash(path)
+        monkeypatch.setattr(files, "sha256_file", unreadable_hash)
+    else:
+        original_reader = files._bytes_or_absent
+        assert paths[source] is not None
+        def unreadable_reader(path):
+            if path == paths[source]:
+                raise PermissionError(sentinel)
+            return original_reader(path)
+        monkeypatch.setattr(files, "_bytes_or_absent", unreadable_reader)
+
+    assert (history.undo(review) if direction == "undo" else history.redo(review)) is False
+    assert not history.undo_stack and not history.redo_stack
+    assert history._candidate_frames == {}
+    assert tuple(review.parent.entries) == original_membership
+    assert dict(candidate) == original_candidate
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert (manual.read_bytes() if manual.exists() else None) == original_manual
+    assert sentinel not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("direction", ["undo", "redo"])
+@pytest.mark.parametrize("source", ["section", "profile"])
+def test_candidate_replay_transient_tk_rebind_with_sidecar_drift_invalidates(
+    tmp_path, monkeypatch, direction, source,
+):
+    """A real SECTION/Profile drift cannot retain an obsolete candidate redo."""
+    from picture_capture.proofreading import transactions as files
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, before, after = committed_delete(page, owned, review, candidate)
+    if direction == "redo":
+        assert history.undo(review)
+        review.vars = [Var(e.word) for e in review.parent.entries]
+    expected = after if direction == "undo" else before
+    target = expected.section_path if source == "section" else expected.profile_path
+    assert target is not None
+    target.parent.mkdir(parents=True, exist_ok=True)
+    original = target.read_bytes() if target.exists() else None
+    changed = (original or b"") + b"foreign-owner-write"
+    target.write_bytes(changed)
+    pdic_before = pdic_path(page).read_bytes()
+    selection_before = dict(candidate)
+    monkeypatch.setattr(files, "snapshot_review", lambda *_a, **_kw: None)
+
+    assert (history.undo(review) if direction == "undo" else history.redo(review)) is False
+    assert history.undo_stack == [] and history.redo_stack == []
+    assert history._candidate_frames == {}
+    assert target.read_bytes() == changed
+    assert pdic_path(page).read_bytes() == pdic_before
+    assert candidate == selection_before
+
+
+@pytest.mark.parametrize("direction", ["undo", "redo"])
+def test_candidate_replay_transient_tk_rebind_with_unchanged_sources_retryable(
+    tmp_path, monkeypatch, direction,
+):
+    from picture_capture.proofreading import transactions as files
+    page, owned, review, candidate, manual = setup_case(tmp_path)
+    history, before, after = committed_delete(page, owned, review, candidate)
+    if direction == "redo":
+        assert history.undo(review)
+        review.vars = [Var(e.word) for e in review.parent.entries]
+    original_stack = len(history.redo_stack if direction == "redo" else history.undo_stack)
+    monkeypatch.setattr(files, "snapshot_review", lambda *_a, **_kw: None)
+    assert (history.undo(review) if direction == "undo" else history.redo(review)) is False
+    assert len(history.redo_stack if direction == "redo" else history.undo_stack) == original_stack
+    assert len(history._candidate_frames) == 1
