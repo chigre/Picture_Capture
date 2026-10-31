@@ -24,11 +24,11 @@ The probe creates a temporary synthetic BMP, 8-field synthetic PDIC and syntheti
 
 ```powershell
 $REV = (git rev-parse HEAD).Trim()
-$PAGE = "D:\\AuthorizedDisposableProject\\001.png" # replace locally; do not paste publicly
+$PAGE = "D:\AuthorizedDisposableProject\001.png" # replace locally; do not paste publicly
 uv run --locked python scripts/benchmark_g3_focused_source_guard.py --image "$PAGE" --rounds 7 --warmups 2
 ```
 
-The CLI has no output-file argument and does not create/write a real-project file. If a private record is required, use shell redirection **only** to a restricted local folder **outside** both the project and repository, for example `> "$EVID\\g3-source-latency.json"`; never upload it to GitHub, ChatGPT, CI, crash reporting or telemetry. The command line and PowerShell history can still contain the private `$PAGE` path: keep that shell private. The probe refuses a missing PDIC, image/PDIC/SECTION symlinks, unreadable source, and changed source bytes; on failure it emits only a generic error without a report or raw exception. Nonzero exit is **NOT a benchmark result**, not a permission to repair or overwrite files.
+The CLI has no output-file argument and does not create/write a real-project file. If a private record is required, use shell redirection **only** to a restricted local folder **outside** both the project and repository, for example `> "$EVID\g3-source-latency.json"`; never upload it to GitHub, ChatGPT, CI, crash reporting or telemetry. The command line and PowerShell history can still contain the private `$PAGE` path: keep that shell private. The probe refuses a missing PDIC, image/PDIC/SECTION symlinks, unreadable source, and changed source bytes; on failure it emits only a generic error without a report or raw exception. Nonzero exit is **NOT a benchmark result**, not a permission to repair or overwrite files.
 
 A successful JSON report has only:
 - `schema`, `dataset` (`synthetic` or `local-readonly`), `human_acceptance=NOT_PERFORMED`;
