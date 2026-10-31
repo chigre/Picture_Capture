@@ -1,3 +1,11 @@
+## 2026-11-01｜G3 R4.2 重点筛选人工保存 worker 关闭拒绝 -1：6 个真实失败先行用例，最小修复已提交
+
+- 实时来源：main `ec20989ea8c`，唯一 Draft PR #663，#503/#562/#483 Open；先前 `8af813ad` [CI #41228910802](https://github.com/chigre/Picture_Capture/actions/runs/41228910802) 六 OS/Python＋Risk gate SUCCESS、[OCR #41228910853](https://github.com/chigre/Picture_Capture/actions/runs/41228910853) 3/3 SUCCESS，CodeQL 在此 SHA 未独立核实。
+- `ui/background_job_runtime.py::start_ui_worker` 在关闭时直接返回 `-1` 且不会登记 worker/callback；`focused_filter_workflow.py` 人工编辑保存入口仍忽略此返回码，可能清空等待保存的队列却将保存状态永久视为运行。
+- **真实测试先红** `36ad0b2e866a4d9ab7a7385ed89ca2ca363fc7d0`，[CI #41237742113](https://github.com/chigre/Picture_Capture/actions/runs/41237742113) Ubuntu 3.13 实际 **6 targeted FAILED / 5233 passed / 3 skipped**；用例组合为关闭意图 false/true × 无回调/同步 done/同步 failed（拒绝启动返回 -1），并检测晚到回调、敏感路径和人工修改保存。
+- **最小产品修复** `5c7727413997aa9e010c703844e915ef1f345c01`：保存调度遇 `-1` 进入已有 launch-rejected fail-closed 处理，恢复排队编辑、取消自动关闭、拒绝未确认的提前/晚到回调；不修改落盘格式/worker runtime。独立审计：[G3_R4_2_FOCUSED_SAVE_WORKER_REFUSAL_20261101.md](../architecture/G3_R4_2_FOCUSED_SAVE_WORKER_REFUSAL_20261101.md)。
+- 本轮**最终 code+tests+docs HEAD** 的六 OS/Python CI＋Risk、OCR 3 OS、CodeQL Python/Actions 仍须独立检查，暂记 **PENDING**，不能借用其它 SHA 通过证明。Windows R3 E3、#483 W1–W11、#503 实际人工、真实词典/PDIC/PPP/SECTION/Profile/OCR/裁剪验收 **NOT PERFORMED**，R6/R8 DEFERRED；继续保持 Draft、不合并、不关 Issue。
+
 ## 2026-11-01｜G3 R4.2 真实 worker 关闭拒绝（返回 -1）后的 prefetch 和直接裁剪状态释放（失败先行，最终门禁待核）
 
 - GitHub 实时基线：`main@ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 Draft/Open/Unmerged PR #663，#503/#562/#483 Open，Review Threads 0；之前绿色 HEAD `18be51852eeb39179219fd4ac72738a451b18846` 已重新核对 [CI #41226272640](https://github.com/chigre/Picture_Capture/actions/runs/41226272640) 六平台＋Risk gate、[OCR #41226272559](https://github.com/chigre/Picture_Capture/actions/runs/41226272559) 3/3、[CodeQL #41226269712](https://github.com/chigre/Picture_Capture/actions/runs/41226269712) Python/Actions 2/2，全部 SUCCESS。
