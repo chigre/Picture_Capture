@@ -217,3 +217,79 @@ def test_prefetch_failure_for_no_longer_selected_batch_remains_silent(tmp_path):
     assert len(case.workers) == 1
     assert case.review._filter_prefetch_key is None
     assert case.status.get() == "existing"
+
+
+@pytest.mark.parametrize("source", ("image", "pdic", "section"))
+def test_successful_prefetch_cannot_publish_drifted_source(
+    tmp_path, source, capsys,
+):
+    """A successful worker result is not evidence that its source is current."""
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    stale_key = case.review._filter_prefetch_key
+    page = case.images[1]
+    if source == "image":
+        replacement = tmp_path / "replacement.bmp"
+        Image.new("RGB", (8, 8), "red").save(replacement)
+        _same_size_replace(page, replacement.read_bytes())
+    elif source == "pdic":
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+    else:
+        _same_size_replace(
+            page_sections_read_path_for_image(page), b'{"revision":"B"}',
+        )
+    assert case.review._filter_batch_snapshot(1)[0] != stale_key
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(worker())
+    assert case.review._filter_prefetch_key is None
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "重新筛选" in case.status.get()
+    assert "PRIVATE" not in repr(case.status.get())
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_successful_old_key_callback_cannot_steal_new_prefetch(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_prefetch_key = ("new-owner",)
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(worker())
+    assert case.review._filter_prefetch_key == ("new-owner",)
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert case.status.get() == "existing"
+
+
+def test_successful_prefetch_does_not_overwrite_outstanding_human_edit(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    human = {1: {(3, 4): {"new_word": "human"}}}
+    case.review._filter_pending_changes = human
+    case.workspace.append("HUMAN_VISIBLE_EDITOR")
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(worker())
+    assert case.applied == []
+    assert case.workspace == ["HUMAN_VISIBLE_EDITOR"]
+    assert case.review._filter_pending_changes is human
+    assert human[1][(3, 4)]["new_word"] == "human"
+
+
+def test_prefetch_worker_detects_source_change_during_crop(tmp_path):
+    """Worker must not label a different PDIC as the initial cache key."""
+    case = _case(tmp_path)
+    page = case.images[1]
+    old_prepare = case.deps.ReviewWindow._prepare_filter_batch_payload
+
+    def prepare_with_drift(*args):
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+        return old_prepare(*args)
+
+    case.deps.ReviewWindow._prepare_filter_batch_payload = prepare_with_drift
+    _worker_name, worker, _done, _failed = case.workers[0]
+    with pytest.raises((OSError, ValueError)):
+        worker()
