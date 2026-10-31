@@ -279,3 +279,52 @@ def test_explicit_retry_after_failed_dispatch_can_launch_verified_worker(tmp_pat
     assert review._filter_pending_changes == {}
     assert not closed
     assert len(dialogs) == 1
+
+
+@pytest.mark.parametrize("late_callback", ["done", "failed"])
+def test_rejected_launch_stale_callback_cannot_mutate_a_later_retry(
+    tmp_path, late_callback,
+):
+    review, deps, alerts, closed, status, _pages = _review(tmp_path)
+    old_callbacks, new_callbacks = [], []
+    review.parent.current_index = 0
+    review.parent.entries = []
+    review.after = lambda *_a: pytest.fail(
+        "stale dispatch callback must not schedule unrelated writer"
+    )
+
+    def first_schedule(_key, worker, done, failed, **_kw):
+        old_callbacks.append((worker, done, failed))
+        raise RuntimeError("PRIVATE_FIRST_LAUNCH_ERROR")
+
+    review.parent._start_ui_worker = first_schedule
+    workflow._flush_focused_changes(review, deps)
+    assert review._filter_save_launch_failed is True
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
+
+    def second_schedule(_key, worker, done, failed, **_kw):
+        new_callbacks.append((worker, done, failed))
+
+    review.parent._start_ui_worker = second_schedule
+    workflow._flush_focused_changes(review, deps)
+    assert len(new_callbacks) == 1
+    assert review._filter_save_running is True
+    assert review._filter_save_launch_failed is False
+    assert review._filter_pending_changes == {}
+    status_before = status.get()
+    dialogs_before = len(alerts)
+
+    _worker, old_done, old_failed = old_callbacks[0]
+    if late_callback == "done":
+        old_done(([], []))
+    else:
+        old_failed(
+            OSError("PRIVATE_STALE_OLD_PAGE"),
+            "PRIVATE_STALE_TRACEBACK",
+        )
+    assert review._filter_save_running is True
+    assert review._filter_pending_changes == {}
+    assert review._filter_close_after_save is False
+    assert status.get() == status_before
+    assert len(alerts) == dialogs_before
+    assert not closed
