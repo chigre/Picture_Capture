@@ -23,9 +23,26 @@ def close_review(review: Any, *, showerror: Callable) -> None:
                 parent=review,
             )
             return
-        if review._filter_save_running or review._filter_pending_changes:
+        if getattr(review, "_filter_save_launch_failed", False):
+            # A rejected/ambiguous dispatch must not inherit a prior close
+            # request even if the visible editor was later reverted.
+            review._filter_close_after_save = False
+            review.parent.status_var.set(
+                "筛选校对保存启动状态未确认，窗口保持打开；请核对后重试。"
+            )
+            return
+        if review._filter_save_running:
             review._filter_close_after_save = True
             review.parent.status_var.set("正在保存筛选校对修改，完成后关闭校对窗口。")
+            return
+        if review._filter_pending_changes:
+            # A missing project, refused worker launch, or other early
+            # no-op can leave edits pending without an active worker.
+            # Never mislabel this state as an in-flight confirmed save.
+            review._filter_close_after_save = False
+            review.parent.status_var.set(
+                "筛选校对仍有未确认修改，保存尚未开始；请检查后重试。"
+            )
             return
         review._finish_close_review()
         return
