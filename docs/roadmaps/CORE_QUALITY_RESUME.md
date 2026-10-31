@@ -1,3 +1,10 @@
+## 2026-11-01｜G3 R4.2 首批与分段 scan 的重复/矛盾终结回调（7 项红灯，新增计数断言，最终门禁待核）
+
+- 上一基准 `97cabc347c28085b0e970947e347a7fc376f8782` GitHub exact-head CI [#41219251436](https://github.com/chigre/Picture_Capture/actions/runs/41219251436) 六组合及 Risk-tier gate、OCR [#41219251550](https://github.com/chigre/Picture_Capture/actions/runs/41219251550) 3/3、CodeQL [#41219246937](https://github.com/chigre/Picture_Capture/actions/runs/41219246937) Python/Actions 2/2 均成功；main `ec20989ea` 未动，唯一 Draft PR #663，Issues #503/#562/#483 全 Open。
+- **真实测试先红：** `cd77a0aac4250adca5a2e2008e04e294ea1ffddc` 测试单独提交，[CI #41222862870](https://github.com/chigre/Picture_Capture/actions/runs/41222862870) Ubuntu Python 3.13 观察 **7 targeted FAILED / 5212 passed / 3 skipped**。首批重复 success/failed 会重置就绪结果或触发第二个 rest worker；分段重复 success 重复追加 targets，迟到 failed 可污染已完成扫描。测试 `41c92b63e80b786ff5b32147e355c5fb09e2e7e8` 增加 Var 状态写入次数断言，捕获“同文字的失败回调重复设置 UI”而不修改原有安全断言。[增强测试 CI #41223121982](https://github.com/chigre/Picture_Capture/actions/runs/41223121982) 独立记录，不将运行中作业视为通过。
+- **最小修复** `405df1384e78a9658d3f1759e2a38ea0fd7abd8b` 仅 `ui/focused_filter_workflow.py`：首批一次性 `first_terminal_claimed`，每个分段派发独立 `remaining_terminal_claimed`；只有当前 scan epoch 且处于活跃筛选模式时认领首个 `done` 或 `failed`，认领先于 Tk 修改与启动下一批，旧回调绝不重复追加、清除或重派。既有隐私状态屏蔽、来源校验、安全写入逻辑保持不变。
+- 架构审计 [G3_R4_2_STREAMING_SCAN_TERMINAL_20261101.md](../architecture/G3_R4_2_STREAMING_SCAN_TERMINAL_20261101.md)。**最终代码＋文档 HEAD** CI 六组合＋Risk gate、OCR3/3、CodeQL2/2 仍待核，提交文件内暂记 **PENDING**。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典/性能 **NOT PERFORMED**；R6 真标签学习及 R8 真实扫描 **DEFERRED**。仅 Draft/Open/Unmerged #663，main 不动。
+
 ## 2026-10-31｜G3 R4.2 prefetch 同 epoch 相同 key 重派后的旧终结回调隔离（测试先红，最终门禁待核）
 
 - 上轮绿色基线 `8894d4cc4b781d811b429a051006d41d90ec46f9` 已重新核实：[CI #41216783408](https://github.com/chigre/Picture_Capture/actions/runs/41216783408) 六组合＋Risk-tier gate、[OCR #41216783393](https://github.com/chigre/Picture_Capture/actions/runs/41216783393) 三平台、[CodeQL #41216780401](https://github.com/chigre/Picture_Capture/actions/runs/41216780401) Python/Actions 全部 SUCCESS；main 不变，唯一 Draft PR #663 与 #503/#562/#483 Open。
