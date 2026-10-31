@@ -946,6 +946,10 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
     crop_seconds = [None]
+    # Only the first owned terminal callback may affect this render. Worker
+    # adapters can report a delayed duplicate or contradictory completion;
+    # a later callback must never replace an already committed Tk outcome.
+    terminal_claimed = [False]
     # A user correction or incomplete save owns the displayed editor.  A
     # refresh request must invalidate older direct callbacks, but not repaint
     # or clear the unsaved source while it is still pending.
@@ -990,6 +994,8 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         return result
 
     def done(payload, local_index=int(self.filtered_batch_index), local_key=cache_key) -> None:
+        if terminal_claimed[0]:
+            return
         if (
             serial != self._filter_render_serial
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
@@ -997,6 +1003,9 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             or int(self.filtered_batch_index) != int(local_index)
         ):
             return
+        # Consume this delivery even when a human edit currently blocks
+        # display; a repeat after that edit is saved cannot resurrect it.
+        terminal_claimed[0] = True
         # No asynchronous crop is authorized to replace an outstanding
         # correction or a save whose durable outcome is still unknown.
         if (
@@ -1024,12 +1033,18 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         self._apply_filter_batch_payload(local_index, local_key, payload)
 
     def failed(_exc, _detail, local_index=int(self.filtered_batch_index)) -> None:
+        if terminal_claimed[0]:
+            return
         if (
             serial != self._filter_render_serial
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
             or int(self.filtered_batch_index) != int(local_index)
-            or getattr(self, "_filter_save_running", False)
+        ):
+            return
+        terminal_claimed[0] = True
+        if (
+            getattr(self, "_filter_save_running", False)
             or getattr(self, "_filter_pending_changes", None)
         ):
             return
