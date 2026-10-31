@@ -24,7 +24,10 @@ class Var:
         self.value = value
 
 
-def _stream_fixture(tmp_path, *, before_first_done=False, first_page_error=False):
+def _stream_fixture(
+    tmp_path, *, before_first_done=False, first_page_error=False,
+    second_page_error=True,
+):
     pages = [tmp_path / "001.png", tmp_path / "002.png"]
     calls, workspace = [], []
     status, indicator = Var(""), Var("")
@@ -64,6 +67,7 @@ def _stream_fixture(tmp_path, *, before_first_done=False, first_page_error=False
         _persist_focused_filter_settings=lambda: None,
         _set_filter_navigation=lambda enabled: None,
         _focused_batch_size=lambda: 1,
+        _filter_available_target_count=lambda: len(review.filtered_targets),
         _clear_review_workspace=lambda message: workspace.append(message),
         _update_title=lambda: None,
         _update_filter_batch_indicator=lambda: None,
@@ -73,7 +77,7 @@ def _stream_fixture(tmp_path, *, before_first_done=False, first_page_error=False
     def read_pdic(path):
         if path.stem == "001" and first_page_error:
             raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
-        if path.stem == "002":
+        if path.stem == "002" and second_page_error:
             raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
         return [SimpleNamespace(word="fixture", x=13, y=27)]
 
@@ -248,3 +252,84 @@ def test_crop_prefetch_failure_is_silent_and_retriable(capsys):
     failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
     assert review._filter_prefetch_key is None
     assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_first_scan_terminal_single_owner_preserves_current_epoch_ui(
+    tmp_path, first, late, capsys,
+):
+    """Duplicate first-chunk callback must not republish/erase ready scan."""
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+    )
+    _key, worker, done, failed = calls[0]
+    payload = worker()
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_FIRST_FAIL"), "PRIVATE_FIRST_TRACE")
+    initial_targets = list(review.filtered_targets)
+    initial_calls = len(calls)
+    initial_workspace = list(workspace)
+    initial_status = status.get()
+    initial_indicator = indicator.get()
+    initial_failed = review._filter_scan_failed
+    if late == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_FIRST_LATE"), "PRIVATE_FIRST_TRACE_LATE")
+    assert review.filtered_targets == initial_targets
+    assert len(calls) == initial_calls
+    assert workspace == initial_workspace
+    assert status.get() == initial_status
+    assert indicator.get() == initial_indicator
+    assert review._filter_scan_failed == initial_failed
+    assert "PRIVATE_FIRST_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
+    tmp_path, first, late, capsys,
+):
+    """Remainder completion/failure is one-shot, never a replay."""
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+    )
+    _first_key, first_worker, first_done, _first_failed = calls[0]
+    first_done(first_worker())
+    assert len(calls) == 2
+    _key, worker, done, failed = calls[1]
+    payload = worker()
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_REMAIN_FAIL"), "PRIVATE_REMAIN_TRACE")
+    initial_targets = list(review.filtered_targets)
+    initial_calls = len(calls)
+    initial_status = status.get()
+    initial_indicator = indicator.get()
+    initial_failed = review._filter_scan_failed
+    initial_complete = review._filter_scan_complete
+    initial_workspace = list(workspace)
+    if late == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_REMAIN_LATE"), "PRIVATE_REMAIN_TRACE_LATE")
+    assert review.filtered_targets == initial_targets
+    assert len(calls) == initial_calls
+    assert status.get() == initial_status
+    assert indicator.get() == initial_indicator
+    assert review._filter_scan_failed == initial_failed
+    assert review._filter_scan_complete == initial_complete
+    assert workspace == initial_workspace
+    assert "PRIVATE_REMAIN_" not in repr(capsys.readouterr())
