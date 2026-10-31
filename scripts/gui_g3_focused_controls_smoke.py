@@ -276,7 +276,7 @@ def run():
             _pump_until(
                 app,
                 lambda: (
-                    bool(review.filter_vars)
+                    bool(getattr(review, "filter_vars", ()))
                     and bool(review._filter_current_batch_targets)
                     and review._filter_current_batch_targets[0].get(
                         "_focused_save_source_witness"
