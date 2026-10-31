@@ -480,10 +480,17 @@ def run():
                         raise RuntimeError("synthetic Tk concurrency gate timed out")
                 return real_writer(the_page, pages, index, changes)
 
+            # An unexpected save conflict must be a diagnostic failure, not
+            # an undismissable native Tk modal that hangs the entire matrix.
+            native_inflight_warnings = []
             try:
                 with patch.object(
                     module, "_apply_focused_review_page_updates",
                     side_effect=gated_synthetic_writer,
+                ), patch.object(
+                    module.messagebox, "showwarning",
+                    side_effect=lambda title, message, **_kw:
+                    native_inflight_warnings.append((title, message)),
                 ):
                     review.filter_vars[0].set("synthetic-inflight-write")
                     _pump_until(
@@ -512,7 +519,7 @@ def run():
                     allow_first.set()
                     _pump_until(
                         app,
-                        lambda: (
+                        lambda: bool(native_inflight_warnings) or (
                             len(worker_words) == 2
                             and worker_words[-1] == ("synthetic-native-retried",)
                             and not review._filter_save_running
@@ -522,6 +529,11 @@ def run():
                         ),
                         seconds=35,
                         description="G3 native Tk reversion restored after two real PDIC saves",
+                    )
+                    check(
+                        not native_inflight_warnings,
+                        "native in-flight reversion caused unexpected PDIC conflict: "
+                        + repr(native_inflight_warnings[:1]),
                     )
             finally:
                 allow_first.set()
