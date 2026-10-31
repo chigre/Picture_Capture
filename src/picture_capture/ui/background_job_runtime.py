@@ -24,7 +24,14 @@ def start_ui_worker(
     """
     if self._ui_worker_shutdown or self._ui_close_requested:
         return -1
-    stale = [token for token in self._ui_worker_handlers if token[0] == key]
+    # Keep the previous callback ownership until a replacement thread has
+    # *actually* started. A failed constructor/start cannot invalidate an
+    # older durable writer or strand its wait-on-close generation.
+    previous_generation = self._ui_worker_generations.get(key)
+    stale = {
+        token: handler for token, handler in self._ui_worker_handlers.items()
+        if token[0] == key
+    }
     for token in stale:
         self._ui_worker_handlers.pop(token, None)
     generation = int(self._ui_worker_generations.get(key, 0)) + 1
@@ -43,9 +50,23 @@ def start_ui_worker(
             event = ("error", key, generation, None, exc, traceback.format_exc())
         self._ui_worker_queue.put(event)
 
-    threading.Thread(
-        target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
-    ).start()
+    try:
+        threading.Thread(
+            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
+        ).start()
+    except Exception:
+        # A thread that did not start cannot deliver a completion event.
+        # Undo only this generation's registrations; older workers remain
+        # live and keep their original callbacks and close-wait ownership.
+        self._ui_worker_handlers.pop(token, None)
+        self._ui_worker_active.discard(token)
+        self._ui_worker_close_wait.discard(token)
+        self._ui_worker_handlers.update(stale)
+        if previous_generation is None:
+            self._ui_worker_generations.pop(key, None)
+        else:
+            self._ui_worker_generations[key] = previous_generation
+        raise
     if self._ui_worker_poll_job is None:
         self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
     return generation
