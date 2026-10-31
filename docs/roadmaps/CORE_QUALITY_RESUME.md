@@ -1,3 +1,10 @@
+## 2026-10-31｜G3 R4.2 prefetch 同 epoch 相同 key 重派后的旧终结回调隔离（测试先红，最终门禁待核）
+
+- 上轮绿色基线 `8894d4cc4b781d811b429a051006d41d90ec46f9` 已重新核实：[CI #41216783408](https://github.com/chigre/Picture_Capture/actions/runs/41216783408) 六组合＋Risk-tier gate、[OCR #41216783393](https://github.com/chigre/Picture_Capture/actions/runs/41216783393) 三平台、[CodeQL #41216780401](https://github.com/chigre/Picture_Capture/actions/runs/41216780401) Python/Actions 全部 SUCCESS；main 不变，唯一 Draft PR #663 与 #503/#562/#483 Open。
+- **真实失败先行**：测试单独提交 `e2c6b5c1c01c134557909c0f8ad2033c2d457bc0`，[CI #41218910472](https://github.com/chigre/Picture_Capture/actions/runs/41218910472) macOS Python 3.13 实际 **4 targeted FAILED / 5208 passed / 2 skipped**：旧 prefetch 第一次 done 或 failed 后，新一轮同 epoch 同源 key 被重派时，旧任务迟到的 done / failed 仍能覆盖新任务 key 或旧缓存。四种先后组合均红灯。
+- **最小产品修复** `24d682ff4ffdd58f54b4e68762dee3017a819466` 仅改 `ui/focused_filter_workflow.py::_schedule_filter_next_batch_preload`：每次派发独立内存 `terminal_claimed`；核实原 scan epoch 及当前 key 后，首个有效 done/failed 认领终结，重复终结不能作用于同 key 重新派发的新任务。保留原图/PDIC/SECTION 字节 witness、人工编辑与保存防护和失败后仅一次直接渲染恢复。
+- 架构审计：[G3_R4_2_PREFETCH_IDENTICAL_KEY_TERMINAL_20261031.md](../architecture/G3_R4_2_PREFETCH_IDENTICAL_KEY_TERMINAL_20261031.md)。产品＋文档最终 SHA 的 CI 六平台、Risk-tier、OCR 3/3、CodeQL 2/2 仍 **PENDING**；不得沿用旧 SHA。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典及性能 **NOT PERFORMED**；R6 真标签与 R8 真实扫描 **DEFERRED**。
+
 ## 2026-10-31｜G3 R4.2 直接渲染重复/矛盾终结回调单次所有权（测试先红，最终 HEAD 待验）
 
 - 实时基准 `493877bead3e392d5e2b5bcdacffcc8ec2b97697` 已核：CI [#41213416632](https://github.com/chigre/Picture_Capture/actions/runs/41213416632) 六 OS/Python 组合＋Risk-tier gate SUCCESS；OCR [#41213416558](https://github.com/chigre/Picture_Capture/actions/runs/41213416558) 3/3、CodeQL [#41213413372](https://github.com/chigre/Picture_Capture/actions/runs/41213413372) Python/Actions 2/2 SUCCESS。main `ec20989e`、唯一 Draft #663，Issues #503/#562/#483 Open。
