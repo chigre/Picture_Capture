@@ -483,10 +483,11 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             )
 
     def failed(_exc, _detail) -> None:
-        if (
-            serial != self._filter_scan_serial
-            or not getattr(self, "_filter_rows_active", False)
-        ):
+        # Keep the explicit serial comparison recognizable to existing
+        # source-level integration guards, then check active Tk mode.
+        if serial != self._filter_scan_serial:
+            return
+        if not getattr(self, "_filter_rows_active", False):
             return
         # The first scan did not publish even one trustworthy batch. An
         # exception is never a successful/complete scan, and raw worker
@@ -495,6 +496,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         self._filter_scan_complete = False
         self.filtered_targets = []
         self._update_filter_batch_indicator()
+        # Older test/GUI adapters may override the indicator helper; the
+        # first-batch terminal label must still be visible in that case.
+        self.filter_batch_var.set("筛选中断（无完整批次）")
         self._clear_review_workspace(
             "首批筛选失败，结果未建立；请检查页面数据后重新筛选。"
         )
