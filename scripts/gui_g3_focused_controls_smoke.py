@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 from picture_capture.models import AppSettings
 from picture_capture.persistence.project_storage import (
-    page_sections_read_path_for_image, settings_path,
+    page_sections_read_path_for_image, ppp_read_path_for_image, settings_path,
 )
 from picture_capture.io.formats import pdic_path, read_pdic
 
@@ -292,6 +292,17 @@ def run():
                 "native filtered editor attached to an unexpected source coordinate",
             )
             before_drift_pdic = pdic_path(page1).read_bytes()
+            before_drift_rows = [
+                line.split("#") for line in before_drift_pdic.decode("utf-8").splitlines()
+                if line.strip()
+            ]
+            check(
+                len(before_drift_rows) == 2
+                and all(len(fields) == 8 for fields in before_drift_rows),
+                "native synthetic PDIC fixture is not two eight-field rows",
+            )
+            before_ppp = ppp_read_path_for_image(page1).read_bytes()
+            before_settings = settings_path(root).read_bytes()
             before_main_words = [(e.word, e.x, e.y) for e in app.entries]
             section_path = page_sections_read_path_for_image(page1)
             section_original = (
@@ -381,14 +392,72 @@ def run():
                         pass
                     review._filter_save_job = None
 
-            check([p.read_bytes() for p in (page1, page2)] == before_image,
-                  "native UI smoke unexpectedly modified synthetic source image")
+            # Retry through the SAME real Tk editor after the stale
+            # SECTION has been restored to its displayed source state.
+            # This positive path must really publish the word, update the
+            # main canvas Entry, and preserve all other eight PDIC fields.
+            # A denied save is NOT grounds to silently discard/rebind the
+            # user's source XY, fabricate a new witness, or edit sidecars.
+            check(
+                pdic_path(page1).read_bytes() == before_drift_pdic
+                and ppp_read_path_for_image(page1).read_bytes() == before_ppp,
+                "failed Tk save changed original PDIC/PPP before retry",
+            )
+            review.filter_vars[0].set("synthetic-native-retried")
+            retry_queued = review._filter_pending_changes.get(0, {}).get((80, 76))
+            check(
+                retry_queued is not None
+                and retry_queued["original_word"] == "synthetic-alpha"
+                and retry_queued["new_word"] == "synthetic-native-retried"
+                and retry_queued["_focused_save_source_witness"]
+                == target["_focused_save_source_witness"],
+                "native Tk retry discarded displayed provenance or source XY",
+            )
+            _pump_until(
+                app,
+                lambda: (
+                    not review._filter_save_running
+                    and not review._filter_pending_changes
+                    and target["original_word"] == "synthetic-native-retried"
+                    and "筛选校对已保存 1 条修改" in app.status_var.get()
+                ),
+                seconds=35,
+                description="G3 native Tk successful retry after SECTION restore",
+            )
+            saved_rows = [
+                line.split("#")
+                for line in pdic_path(page1).read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            check(
+                len(saved_rows) == len(before_drift_rows)
+                and all(len(fields) == 8 for fields in saved_rows)
+                and saved_rows[0][0] == "synthetic-native-retried"
+                and saved_rows[0][1:] == before_drift_rows[0][1:]
+                and saved_rows[1] == before_drift_rows[1],
+                "native Tk retry changed source XY, 8-field metadata or another PDIC row",
+            )
             check(
                 [(e.word, e.x, e.y) for e in read_pdic(pdic_path(page1))]
-                == [("synthetic-alpha", 80, 76), ("synthetic-beta", 85, 182)],
-                "synthetic Tk filter changed saved PDIC words/source XY",
+                == [("synthetic-native-retried", 80, 76),
+                    ("synthetic-beta", 85, 182)]
+                and [(e.word, e.x, e.y) for e in app.entries]
+                == [("synthetic-native-retried", 80, 76),
+                    ("synthetic-beta", 85, 182)]
+                and review.filter_vars[0].get() == "synthetic-native-retried"
+                and target["current_word"] == "synthetic-native-retried",
+                "native positive retry did not reconcile Tk, PDIC and main source XY",
             )
-            print("G3 R4.2 native Tk focused options + refusal smoke: OK", flush=True)
+            check(
+                ppp_read_path_for_image(page1).read_bytes() == before_ppp
+                and settings_path(root).read_bytes() == before_settings
+                and (section_path.read_bytes() if section_original is not None else None)
+                == section_original
+                and [p.read_bytes() for p in (page1, page2)] == before_image,
+                "native positive retry mutated PPP, settings, SECTION or original image",
+            )
+            check(not origin.exists(), "retry fabricated retroactive OCR provenance")
+            print("G3 R4.2 native Tk focused refusal + successful retry: OK", flush=True)
         finally:
             if review is not None:
                 review._filter_pending_changes.clear()
