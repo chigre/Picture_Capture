@@ -28,11 +28,28 @@ class Var:
 
 def _stream_fixture(
     tmp_path, *, before_first_done=False, first_page_error=False,
-    second_page_error=True,
+    second_page_error=True, first_launch_fault=None,
+    remainder_launch_fault=None,
 ):
     pages = [tmp_path / "001.png", tmp_path / "002.png"]
     calls, workspace = [], []
     status, indicator = Var(""), Var("")
+
+    def dispatch(*args):
+        calls.append(args)
+        fault = first_launch_fault if len(calls) == 1 else remainder_launch_fault
+        if fault is not None:
+            _name, worker, done, failed = args
+            if fault == "done":
+                done(worker())
+            elif fault == "failed":
+                failed(OSError("PRIVATE_LAUNCH_CALLBACK"), "PRIVATE_TRACE")
+            else:
+                raise AssertionError("invalid fixture fault")
+            # Completion delivered before the scheduler rejects its handoff
+            # is not a completed, acknowledged scan.
+            raise OSError("PRIVATE_LAUNCH_UNACKNOWLEDGED")
+
     parent = SimpleNamespace(
         project=SimpleNamespace(root=tmp_path, images=pages),
         current_page=pages[0],
@@ -41,7 +58,7 @@ def _stream_fixture(
         _project_words=[],
         _parse_page_spec=lambda _: [0, 1],
         _invalidate_ui_worker=lambda _: None,
-        _start_ui_worker=lambda *args: calls.append(args),
+        _start_ui_worker=dispatch,
     )
     review = SimpleNamespace(
         parent=parent,
@@ -343,3 +360,59 @@ def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
     assert review._filter_scan_complete == initial_complete
     assert workspace == initial_workspace
     assert "PRIVATE_REMAIN_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("early", ("done", "failed"))
+def test_first_scan_inline_callback_then_launch_exception_is_not_accepted(
+    tmp_path, early, capsys,
+):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+        first_launch_fault=early,
+    )
+    assert len(calls) == 1
+    assert review.filtered_targets == []
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (list(workspace), list(status.writes), list(indicator.writes))
+    _name, worker, done, failed = calls[0]
+    done(worker())
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE_LATE")
+    assert review.filtered_targets == []
+    assert review._filter_scan_complete is False
+    assert list(workspace) == before[0]
+    assert list(status.writes) == before[1]
+    assert list(indicator.writes) == before[2]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("early", ("done", "failed"))
+def test_remaining_scan_inline_callback_then_launch_exception_keeps_first_batch(
+    tmp_path, early, capsys,
+):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+        remainder_launch_fault=early,
+    )
+    _key, worker, done, _failed = calls[0]
+    done(worker())
+    assert len(calls) == 2
+    assert len(review.filtered_targets) == 1
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (
+        list(review.filtered_targets), list(workspace),
+        list(status.writes), list(indicator.writes),
+    )
+    _name, rest_worker, rest_done, rest_failed = calls[1]
+    rest_done(rest_worker())
+    rest_failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE_LATE")
+    assert review.filtered_targets == before[0]
+    assert list(workspace) == before[1]
+    assert list(status.writes) == before[2]
+    assert list(indicator.writes) == before[3]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
