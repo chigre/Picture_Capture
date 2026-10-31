@@ -13,6 +13,9 @@ import pytest
 
 from picture_capture.models import AppSettings
 from picture_capture.proofreading.review_timing import ReviewTimingSession
+from picture_capture.proofreading.focused_crop_source_fingerprint import (
+    focused_crop_source_witness,
+)
 from picture_capture.ui import focused_filter_workflow as workflow
 
 
@@ -84,6 +87,9 @@ def test_legacy_missing_new_tk_timing_variable_keeps_default_off():
 
 def _fake_prefetch():
     callbacks, cache_calls, apply_calls = [], [], []
+    # Use the actual content witness contract even for the empty synthetic
+    # page/target list. A bare "sig" is not a valid source-bound cache key.
+    source_witness = focused_crop_source_witness([], [])
     worker = SimpleNamespace(
         _filter_rows_active=True,
         filtered_batch_index=0,
@@ -91,7 +97,7 @@ def _fake_prefetch():
         _filter_batch_render_cache={},
         _filter_prefetch_key=None,
         _focused_timing_session=None,
-        _filter_batch_snapshot=lambda index: ((index, ("sig",)), [], [],
+        _filter_batch_snapshot=lambda index: ((index, ("sig", source_witness)), [], [],
                                               None, 10, 240, 1.0, False),
         _cache_filter_batch_payload=lambda *args: cache_calls.append(args),
         _apply_filter_batch_payload=lambda *args: apply_calls.append(args),
@@ -114,21 +120,23 @@ def test_stale_prefetch_after_restart_cannot_populate_cache_or_new_epoch():
     key, job, done, failed = workers[0]
     assert key.startswith("focused-filter-prefetch-")
     # New scan starts with same future batch cache signature but distinct epoch.
+    captured_key = review._filter_prefetch_key
     review._filter_scan_serial += 1
-    review._filter_prefetch_key = (1, ("sig",))
+    review._filter_prefetch_key = captured_key
     done(job())
     assert cached == [] and applied == []
     # Late failure must not reset the *new* scan's prefetch key.
     failed(OSError("old failure"), "old traceback")
-    assert review._filter_prefetch_key == (1, ("sig",))
+    assert review._filter_prefetch_key == captured_key
 
 
 def test_prefetch_for_current_epoch_still_delivers_once():
     review, deps, workers, cached, applied = _fake_prefetch()
     workflow._schedule_filter_next_batch_preload(review, deps)
     key, job, done, failed = workers[0]
+    captured_key = review._filter_prefetch_key
     done(job())
-    assert len(cached) == 1 and cached[0][0] == (1, ("sig",))
+    assert len(cached) == 1 and cached[0][0] == captured_key
     assert applied == []
     assert review._filter_prefetch_key is None
 
