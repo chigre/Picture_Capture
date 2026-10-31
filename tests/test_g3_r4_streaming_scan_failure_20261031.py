@@ -16,12 +16,14 @@ from picture_capture.ui import focused_filter_workflow as workflow
 class Var:
     def __init__(self, value):
         self.value = value
+        self.writes = []
 
     def get(self):
         return self.value
 
     def set(self, value):
         self.value = value
+        self.writes.append(value)
 
 
 def _stream_fixture(
@@ -278,6 +280,8 @@ def test_first_scan_terminal_single_owner_preserves_current_epoch_ui(
     initial_workspace = list(workspace)
     initial_status = status.get()
     initial_indicator = indicator.get()
+    initial_status_writes = len(status.writes)
+    initial_indicator_writes = len(indicator.writes)
     initial_failed = review._filter_scan_failed
     if late == "done":
         done(payload)
@@ -288,6 +292,8 @@ def test_first_scan_terminal_single_owner_preserves_current_epoch_ui(
     assert workspace == initial_workspace
     assert status.get() == initial_status
     assert indicator.get() == initial_indicator
+    assert len(status.writes) == initial_status_writes
+    assert len(indicator.writes) == initial_indicator_writes
     assert review._filter_scan_failed == initial_failed
     assert "PRIVATE_FIRST_" not in repr(capsys.readouterr())
 
@@ -318,6 +324,8 @@ def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
     initial_calls = len(calls)
     initial_status = status.get()
     initial_indicator = indicator.get()
+    initial_status_writes = len(status.writes)
+    initial_indicator_writes = len(indicator.writes)
     initial_failed = review._filter_scan_failed
     initial_complete = review._filter_scan_complete
     initial_workspace = list(workspace)
@@ -329,6 +337,8 @@ def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
     assert len(calls) == initial_calls
     assert status.get() == initial_status
     assert indicator.get() == initial_indicator
+    assert len(status.writes) == initial_status_writes
+    assert len(indicator.writes) == initial_indicator_writes
     assert review._filter_scan_failed == initial_failed
     assert review._filter_scan_complete == initial_complete
     assert workspace == initial_workspace
