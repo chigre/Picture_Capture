@@ -702,30 +702,48 @@ def run():
                 "native dispatch test lacks a source-attested pending editor",
             )
             dispatch_baseline = pdic_path(page1).read_bytes()
-            with patch.object(
-                app, "_start_ui_worker",
-                side_effect=OSError("PRIVATE_NATIVE_DISPATCH_PATH/word"),
-            ), patch.object(
-                module.messagebox, "showerror",
-                side_effect=lambda title, msg, **_kw:
-                dispatch_denied_alerts.append((title, msg)),
-            ):
-                review._close_review()
-            check(
-                review.winfo_exists()
-                and review.filter_vars[0].get() == "synthetic-close-dispatch-refused"
-                and review._filter_pending_changes.get(0, {}).get(
-                    (80, 76), {}
-                ).get("new_word") == "synthetic-close-dispatch-refused"
-                and review._filter_save_launch_failed
-                and not review._filter_save_running
-                and not review._filter_close_after_save
-                and pdic_path(page1).read_bytes() == dispatch_baseline
-                and len(dispatch_denied_alerts) == 1
-                and "PRIVATE_" not in str(dispatch_denied_alerts)
-                + app.status_var.get(),
-                "native synchronous dispatch failure lost input, leaked source, or closed UI",
-            )
+            # A scheduler may call done/failed re-entrantly, then reject
+            # the launch. The ReviewWindow must not consume that result as
+            # confirmed, close early, or produce two Tk error dialogs.
+            for early_kind in ("done", "failed"):
+                dispatch_denied_alerts.clear()
+
+                def rejected_after_inline_callback(_name, _work, done, failed, **_kw):
+                    if early_kind == "done":
+                        done(([(0, 80, 76, "synthetic-close-dispatch-refused")], []))
+                    else:
+                        failed(
+                            OSError("PRIVATE_NATIVE_INLINE_CALLBACK_PATH/word"),
+                            "PRIVATE_NATIVE_INLINE_CALLBACK_TRACE",
+                        )
+                    raise OSError("PRIVATE_NATIVE_DISPATCH_PATH/word")
+
+                with patch.object(
+                    app, "_start_ui_worker",
+                    side_effect=rejected_after_inline_callback,
+                ), patch.object(
+                    module.messagebox, "showerror",
+                    side_effect=lambda title, msg, **_kw:
+                    dispatch_denied_alerts.append((title, msg)),
+                ):
+                    review._close_review()
+                check(
+                    review.winfo_exists()
+                    and review.filter_vars[0].get() == "synthetic-close-dispatch-refused"
+                    and target["original_word"] == "synthetic-native-retried"
+                    and review._filter_pending_changes.get(0, {}).get(
+                        (80, 76), {}
+                    ).get("new_word") == "synthetic-close-dispatch-refused"
+                    and review._filter_save_launch_failed
+                    and not review._filter_save_running
+                    and not review._filter_close_after_save
+                    and pdic_path(page1).read_bytes() == dispatch_baseline
+                    and len(dispatch_denied_alerts) == 1
+                    and "PRIVATE_" not in str(dispatch_denied_alerts)
+                    + app.status_var.get(),
+                    "native inline callback after rejected launch lost the human edit, "
+                    "claimed success, leaked source or closed the ReviewWindow",
+                )
 
             # A new explicit close attempt after restoring the original
             # source really saves one word then destroys the ReviewWindow.
