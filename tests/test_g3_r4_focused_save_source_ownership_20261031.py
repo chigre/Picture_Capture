@@ -187,6 +187,9 @@ def test_source_changed_after_display_before_worker_preserves_human_edits(
     }
     writes = []
     deps, alerts = _save_deps(page, writes)
+    # Bind the production ReviewWindow owner method on this lightweight
+    # synthetic object: done() schedules it when a newer edit exists.
+    review._flush_focused_changes = lambda: flow._flush_focused_changes(review, deps)
     flow._flush_focused_changes(review, deps)
     assert len(calls) == 1 and review._filter_pending_changes == {}
     _name, worker, _done, failed = calls[0][0]
@@ -347,6 +350,7 @@ def test_inflight_reversion_reuses_display_witness_and_saves_after_first_commit(
     review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
     writes = []
     deps, alerts = _save_deps(page, writes)
+    review._flush_focused_changes = lambda: flow._flush_focused_changes(review, deps)
 
     flow._flush_focused_changes(review, deps)
     _name, worker, done, failed = calls[0][0]
@@ -419,6 +423,9 @@ def test_newer_inflight_edit_maintains_original_crop_witness_after_save(tmp_path
     review._filter_pending_changes = {0: {(3, 4): _edited_change(witness)}}
     writes = []
     deps, alerts = _save_deps(page, writes)
+    # Bind the production ReviewWindow owner method on this lightweight
+    # synthetic object: done() schedules it when a newer edit exists.
+    review._flush_focused_changes = lambda: flow._flush_focused_changes(review, deps)
     flow._flush_focused_changes(review, deps)
     _name, worker, done, _failed = calls[0][0]
     target["current_word"] = "edit-2"
