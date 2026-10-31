@@ -223,3 +223,118 @@ def test_snapshot_unavailable_with_all_original_bindings_retains_retry(
     assert len(case.history.redo_stack if direction == "redo"
                else case.history.undo_stack) == 1
     assert pdic_path(case.page).read_bytes() == original_pdic
+
+
+class BrokenGetVar(Var):
+    def get(self):
+        raise RuntimeError("PRIVATE_PATIENT_PATH destroyed Tk getter")
+
+
+@pytest.mark.parametrize("candidate", (False, True))
+@pytest.mark.parametrize("direction", ("undo", "redo"))
+@pytest.mark.parametrize("broken", ("var_get", "row_bind"))
+def test_destroyed_tk_reader_refuses_replay_before_persisting(
+    tmp_path, monkeypatch, capsys, candidate, direction, broken,
+):
+    case = fixture(tmp_path, candidate=candidate)
+    if direction == "redo":
+        assert case.history.undo(case.review)
+        case.review.vars = [Var("head"), Var("tail")]
+    expected = case.after if direction == "undo" else case.before
+    # Isolate the after-snapshot presentation preflight: source was already
+    # captured and has no change. Tk destruction must still veto the replay.
+    monkeypatch.setattr(tx, "snapshot_review", lambda *_a, **_kw: expected)
+    if broken == "var_get":
+        case.review.vars[-1] = BrokenGetVar("tail")
+    else:
+        def broken_bound():
+            raise RuntimeError("PRIVATE_PATIENT_PATH destroyed row bindings")
+        case.review._bound_row_entries = broken_bound
+    before_pdic = pdic_path(case.page).read_bytes()
+    before_rows = tuple(case.app.entries)
+    before_candidate = dict(case.candidate) if candidate else None
+
+    assert (case.history.undo(case.review) if direction == "undo"
+            else case.history.redo(case.review)) is False
+    assert pdic_path(case.page).read_bytes() == before_pdic
+    assert tuple(case.app.entries) == before_rows
+    assert (dict(case.candidate) if candidate else None) == before_candidate
+    assert len(case.history.undo_stack if direction == "undo"
+               else case.history.redo_stack) == 1
+    assert "PRIVATE_PATIENT_PATH" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("order", ("candidate_then_plain", "plain_then_candidate"))
+def test_mixed_saved_text_and_candidate_delete_history_replays_in_exact_sequence(
+    tmp_path, order,
+):
+    """Two genuinely committed different owners, four exact ordered replays."""
+    case = fixture(tmp_path, candidate=True)
+    hist = case.history
+    original_pdic = case.before.pdic_bytes
+    selected_manual = case.after.manual_bytes
+    if order == "plain_then_candidate":
+        # Re-establish original authoritative source and abandon old redo
+        # through an actual new saved text commit.
+        assert hist.undo(case.review)
+        case.review.vars = [Var("head"), Var("tail")]
+        plain_before = tx.snapshot_review(case.review)
+        assert plain_before is not None
+        case.tail.word = "TAIL"
+        case.review.vars[1].set("TAIL")
+        write_pdic(pdic_path(case.page), case.app.entries, 200, ("synthetic", "@", "@"))
+        plain_after = tx.snapshot_review(case.review)
+        assert plain_after is not None and hist.record(plain_before, plain_after)
+        original_pdic = plain_before.pdic_bytes
+        # The exact candidate still owns its own unchanged original head.
+        plan = commit_candidate_delete(plain_after, case.head, case.candidate)
+        assert plan is not None
+        case.candidate["selected"] = False
+        case.app.candidate_check_vars["owned-ocr"].set(False)
+        case.app.entries[:] = [case.tail]
+        case.review.vars = [Var("TAIL")]
+        candidate_after = tx.snapshot_review(case.review)
+        assert candidate_after is not None
+        assert hist.record_candidate_delete(
+            plain_after, candidate_after, case.candidate, True, plan,
+        )
+        final_pdic = candidate_after.pdic_bytes
+        final_manual = candidate_after.manual_bytes
+        assert hist.undo(case.review)  # candidate deletion
+        case.review.vars = [Var("head"), Var("TAIL")]
+        assert hist.undo(case.review)  # ordinary text save
+        assert pdic_path(case.page).read_bytes() == original_pdic
+        assert [e.word for e in case.app.entries] == ["head", "tail"]
+        case.review.vars = [Var("head"), Var("tail")]
+        assert hist.redo(case.review)  # ordinary text save
+        case.review.vars = [Var("head"), Var("TAIL")]
+        assert hist.redo(case.review)  # candidate deletion
+    else:
+        # The candidate has already been durably deleted; now edit only the
+        # surviving unlinked ordinary row, then Undo/Redo both frames.
+        ordinary_before = tx.snapshot_review(case.review)
+        assert ordinary_before is not None
+        case.tail.word = "TAIL"
+        case.review.vars[0].set("TAIL")
+        write_pdic(pdic_path(case.page), case.app.entries, 200, ("synthetic", "@", "@"))
+        ordinary_after = tx.snapshot_review(case.review)
+        assert ordinary_after is not None
+        assert hist.record(ordinary_before, ordinary_after)
+        final_pdic = ordinary_after.pdic_bytes
+        final_manual = case.after.manual_bytes
+        assert hist.undo(case.review)  # ordinary edit
+        case.review.vars = [Var("tail")]
+        assert hist.undo(case.review)  # candidate deletion
+        assert pdic_path(case.page).read_bytes() == original_pdic
+        assert [e.word for e in case.app.entries] == ["head", "tail"]
+        case.review.vars = [Var("head"), Var("tail")]
+        assert hist.redo(case.review)  # candidate deletion
+        case.review.vars = [Var("tail")]
+        assert hist.redo(case.review)  # ordinary edit
+
+    assert pdic_path(case.page).read_bytes() == final_pdic
+    assert [e.word for e in case.app.entries] == ["TAIL"]
+    assert case.candidate["selected"] is False
+    assert case.bindings["manual"].read_bytes() == final_manual
+    assert len(hist.undo_stack) == 2 and not hist.redo_stack
+    assert len(hist._candidate_frames) == 1
