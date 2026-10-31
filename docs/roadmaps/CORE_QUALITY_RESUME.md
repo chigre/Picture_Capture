@@ -1,3 +1,11 @@
+## 2026-10-31｜G3 R4.2 成功 prefetch 的来源复核、跨 epoch/key 所有权与人工修改保护（red-first，最终 E2 待核）
+
+- 绿色基准为 `8ce6d807914cef24456862a3492806a5bb3e38a1`：CI [#41205116868](https://github.com/chigre/Picture_Capture/actions/runs/41205116868) 6/6 + Risk-tier、OCR [#41205116875](https://github.com/chigre/Picture_Capture/actions/runs/41205116875) 3/3、CodeQL [#41205112460](https://github.com/chigre/Picture_Capture/actions/runs/41205112460) Python/Actions 2/2 成功，唯一 Draft #663。
+- **红灯确实复现：** 仅新增合成测试提交 `e45c92e44b3ab2ad4e3714455096b59a807c10ae`，[CI #41211306832](https://github.com/chigre/Picture_Capture/actions/runs/41211306832) macOS Python3.13 **6 targeted FAILED / 5185 passed / 2 skipped**。涵盖同大小恢复 mtime 原图/PDIC/SECTION 修改后旧成功结果缓存、旧 key 回调覆盖新所有权、未保存人工编辑被重画、worker 读取过程变源没有被检测。该测试 SHA 不算绿色。
+- 最小产品修复 `7637eedb7bc2eb5db8048a1ea690dc5d67bfa190` 只修改 `ui/focused_filter_workflow.py`：worker 裁剪后复核原图/PDIC/SECTION 的确切字节 witness，Tk success 在相同 scan epoch、活动 prefetch key 和当前批次完整 snapshot 匹配时才发布 cache；可见漂移清除等待占位并提示重新筛选；人工未保存编辑或保存任务存在时不覆盖展示。异常不泄露私有信息，非 OS CAS。
+- 测试时序更正 `cd01446db23801a2f04e9e9397134089562dc65a` 明确 worker 先完成、随后发生磁盘漂移、最后才递送 Tk done；修正夹具模拟路径，没有跳过断言。详见 [G3_R4_2_SUCCESSFUL_PREFETCH_SOURCE_ATTESTATION_20261031.md](../architecture/G3_R4_2_SUCCESSFUL_PREFETCH_SOURCE_ATTESTATION_20261031.md)。
+- **最终代码与文档 HEAD** 必须单独核验 CI 6/6＋Risk、OCR 3/3、CodeQL Python/Actions 2/2。Windows R3 E3、#483 W1–W11、#503 人工 Undo、真实词典与性能均 **NOT PERFORMED**，R6 真标签与 R8 真扫描 **DEFERRED**。保持 main 不变、#663 Draft/Open/Unmerged、不 Ready/merge/关闭 Issues。
+
 ## 2026-10-31｜G3 可见 prefetch 失败修复后的合成夹具补充（最终门禁待验）
 
 - 产品修复初始 HEAD `5532774c42b5a0b23603b5da88ae9aca842f2adc` [CI #41204886134](https://github.com/chigre/Picture_Capture/actions/runs/41204886134) Ubuntu3.13 **1 failed / 5183 passed / 3 skipped**；唯一失败是新测试合成 ReviewWindow 缺少原有 `_cache_filter_batch_payload`，真实 direct-render done 回调因此 AttributeError，属于测试夹具遗漏，不是已经证明的生产源码故障。
