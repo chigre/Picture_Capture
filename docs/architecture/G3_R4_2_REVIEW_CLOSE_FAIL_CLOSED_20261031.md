@@ -1,0 +1,35 @@
+# G3 R4.2 / R3 — fail-closed review-window close, error redaction and async ownership (2026-10-31)
+
+## Why this tranche is an actual production repair
+
+While source-owned focused saves already redacted exceptions, the **ordinary R3 review-close path** in `src/picture_capture/ui/review_close_actions.py` interpolated `{exc}` directly into both the Tk status bar and `messagebox.showerror`. An OSError can contain a private source path, user headword or other sensitive detail. Independently, the G3 focused-save success callback reconstructed pending corrections when a writer reported no committed edits, yet left `_filter_close_after_save=True` if the writer returned no explicit conflicts. This could allow a *later unrelated autosave* to close a window after the original close request had failed to achieve confirmed persistence.
+
+The test-only `7881848c093bb1512b26bdc75c35d7490f1f541d` added nine **synthetic unit test cases** covering three distinct confidential-looking exception strings, normal save false/success, focused busy/pending/idle close behavior, and the recovered-but-uncommitted close flag. [Red CI #41183577244](https://github.com/chigre/Picture_Capture/actions/runs/41183577244) on Ubuntu Python3.13 returned **4 failed / 5039 passed / 3 skipped**: all three error-redaction assertions exposed exactly the raw synthetic path/headword in Tk-bound text, and the fourth proved the stale close flag remained true. These were the expected production assertions, **not fixture AttributeErrors**. This is a genuine fail-first → repair test sequence.
+
+## Minimal production patch
+
+`fa2ec8377b9c118f7bb1a32d5aedc354dc8889b3` changes only two physical production modules:
+
+1. `ui/review_close_actions.py`: keep the window open on ordinary R3 review save exception, but **never format, print or surface the arbitrary exception message**. Show a generic status and dialog: save failed **or is uncertain**, inspect project files before retry. Do not falsely claim a durable rollback or preserved on-disk state.
+2. `ui/focused_filter_workflow.py`: on a worker's completed callback, disarm `_filter_close_after_save` when **conflicts OR recovered unwritten edits** exist. Show a generic `尚有未确认修改，请核对后重试` suffix for recovered work. New edits remain pending for inspection and will not be implicitly retried when the prior save was uncertain. Valid fully committed saves still honor an explicit close request; a failed callback already disarmed it.
+
+The patch does **not** change source witness semantics, PDIC publication, PPP/SECTION/Profile serialization, R3 history/Undo/Redo, OCR models, or cross-process transaction guarantees. Absent source proof, changed SECTION, and failed writes remain fail-closed.
+
+## Real Tk synthetic close lifecycle smoke (E2, not operator E3)
+
+Test-only `40524a44d40fc217c5bfaa3dbddff642e7978521` extends the existing `scripts/gui_g3_focused_controls_smoke.py` with a single disposable managed project and the **actual Tk `ReviewWindow` close callback**:
+
+1. Route a simulated **ordinary R3 close** through the actual Tk window with `save()` injected to raise `OSError('PRIVATE_NATIVE_PATIENT_PATH/...')`; the window stays live and both status and native-dialog text are path/headword-free. The route is selected using a test-only temporary `_filter_rows_active=False` flag on the synthetic window.
+2. Real focused Tk `StringVar` generates a queued edit; a test-only writer returns `([], [])` after valid source preflight. Calling `_close_review()` while the worker starts must wait, then **retain the visible unsaved edit**, disarm the stale close intent, display `尚有未确认修改`, and keep actual PDIC bytes untouched.
+3. A gated **real background worker** starts from the same accepted crop. After `_close_review()` requests close but before the gated writer publishes, mutate synthetic SECTION bytes. On release, the existing source SHA verification rejects the write. The native error callback leaves the Tk window and human edit intact, cancels close intent, does not publish PDIC, and does not echo the synthetic word. The gate is bounded by 30 seconds and released in `finally`; temporary SECTION bytes are restored.
+4. A **new explicit close request** after SECTION restoration uses the real attested worker, physically publishes the PDIC correction with the original integer XY and eight fields, reconciles the main Entry, and destroys the ReviewWindow **only after successful save**. The test verifies unchanged original image bytes, PPP/SECTION/settings, neighbor PDIC row, and absent fabricated OCR evidence.
+
+All data are synthetic and ephemeral; Tk close smoke does not include real patient files, labels or scanned image quality. It does not establish real Windows human acceptance or on-disk multi-file atomic CAS.
+
+## Evidence and remaining gates
+
+At document authoring, production-fix [CI #41183802964](https://github.com/chigre/Picture_Capture/actions/runs/41183802964) had Ubuntu/macOS Python3.13 success but other OS jobs were pending. Native-source [CI #41183879358](https://github.com/chigre/Picture_Capture/actions/runs/41183879358) had **Ubuntu 5043 passed, 3 skipped**, plus `G3 R4.2 native Tk close redaction + pending refusal + source-drift refusal + verified close: OK`; Windows/macOS completion pending. Native-source [OCR #41183879407](https://github.com/chigre/Picture_Capture/actions/runs/41183879407) **3/3 SUCCESS**, [CodeQL #41183876658](https://github.com/chigre/Picture_Capture/actions/runs/41183876658) **2/2 SUCCESS**.
+
+**This documentation commit itself creates a new branch HEAD.** Do not call this tranche complete until the exact-final-HEAD [CI] Windows/macOS/Ubuntu × Python 3.10/3.13 **6/6 + Risk tier AND Risk-tier CI gate**, [OCR] **3/3**, [CodeQL Python+Actions] **2/2**, main frozen, sole PR Draft/Open/Unmerged and zero unresolved review threads are separately verified. The conditional Documentation architecture check can be SKIPPED; that is neither a failed nor a passed test.
+
+Still **NOT PERFORMED**: real Windows R3 E3 operator save/close, [#483](https://github.com/chigre/Picture_Capture/issues/483) W1–W11, [#503](https://github.com/chigre/Picture_Capture/issues/503) complex Undo/Redo, real G3 dictionary image source XY/save-reopen, large-image latency, actual cross-process CAS. R6 real human labels and R8 real scans **DEFERRED**. No merge, Ready, issue closure or private evidence uploaded.
