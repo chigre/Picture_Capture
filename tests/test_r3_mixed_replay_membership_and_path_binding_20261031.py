@@ -372,3 +372,49 @@ def test_real_snapshot_destroyed_tk_row_reader_fails_closed_without_traceback(
     assert len(case.history.undo_stack if direction == "undo"
                else case.history.redo_stack) == 1
     assert "PRIVATE_DESTROYED_REVIEW" not in repr(capsys.readouterr())
+
+@pytest.mark.parametrize("direction", ("undo", "redo"))
+@pytest.mark.parametrize("callback", ("word_count", "page_row"))
+@pytest.mark.parametrize("error_kind", ("runtime", "tcl"))
+def test_candidate_replay_postcommit_derived_refresh_failure(
+    tmp_path, capsys, direction, callback, error_kind,
+):
+    """A Tk teardown after the owned bundle publishes cannot strand its frame.
+
+    This is synthetic saved-PDIC/manual-source E2, not real Windows E3.
+    It must fail red before the post-commit Tk exception boundary is fixed.
+    """
+    from tkinter import TclError
+
+    case = fixture(tmp_path, candidate=True)
+    if direction == "redo":
+        assert case.history.undo(case.review)
+        # An explicit ReviewWindow repaint rebinds the restored original rows.
+        case.review.vars = [Var("head"), Var("tail")]
+    target = case.before if direction == "undo" else case.after
+    exception = RuntimeError if error_kind == "runtime" else TclError
+
+    def destroyed_tk(*_args, **_kwargs):
+        raise exception("PRIVATE_SOURCE_PATH destroyed Tk after commit")
+
+    if callback == "word_count":
+        case.app._refresh_word_fill_check_from_line_count = destroyed_tk
+    else:
+        case.app._update_page_row = destroyed_tk
+
+    replay = (case.history.undo(case.review) if direction == "undo"
+              else case.history.redo(case.review))
+    assert replay is True
+    assert pdic_path(case.page).read_bytes() == target.pdic_bytes
+    assert tx._bytes_or_absent(case.bindings["manual"]) == target.manual_bytes
+    assert [entry.word for entry in case.app.entries] == [
+        word for _, word, _, _ in target.entries
+    ]
+    assert case.candidate["selected"] is (direction == "undo")
+    destination = (case.history.redo_stack if direction == "undo"
+                   else case.history.undo_stack)
+    source = (case.history.undo_stack if direction == "undo"
+              else case.history.redo_stack)
+    assert len(destination) == 1 and not source
+    stdout = capsys.readouterr()
+    assert "PRIVATE_SOURCE_PATH" not in stdout.out + stdout.err
