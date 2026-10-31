@@ -40,15 +40,17 @@ def _stream_fixture(
         fault = first_launch_fault if len(calls) == 1 else remainder_launch_fault
         if fault is not None:
             _name, worker, done, failed = args
-            if fault == "done":
+            action = fault.removesuffix("_ack")
+            if action == "done":
                 done(worker())
-            elif fault == "failed":
+            elif action == "failed":
                 failed(OSError("PRIVATE_LAUNCH_CALLBACK"), "PRIVATE_TRACE")
-            else:
+            elif action != "raise":
                 raise AssertionError("invalid fixture fault")
-            # Completion delivered before the scheduler rejects its handoff
-            # is not a completed, acknowledged scan.
-            raise OSError("PRIVATE_LAUNCH_UNACKNOWLEDGED")
+            # An accepted synchronous callback must be delivered only after
+            # _start_ui_worker returns. A rejected one is never published.
+            if not fault.endswith("_ack"):
+                raise OSError("PRIVATE_LAUNCH_UNACKNOWLEDGED")
 
     parent = SimpleNamespace(
         project=SimpleNamespace(root=tmp_path, images=pages),
@@ -113,6 +115,9 @@ def _stream_fixture(
         _review_similarity_key=lambda text: text,
     )
     workflow.run_focused_filter(review, deps)
+    if first_launch_fault == "done_ack":
+        assert len(calls) == 2
+        return review, status, indicator, calls, workspace
     assert len(calls) == 1
     first_key, first_worker, first_done, _ = calls[0]
     assert first_key.startswith("focused-filter-scan-")
@@ -362,7 +367,7 @@ def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
     assert "PRIVATE_REMAIN_" not in repr(capsys.readouterr())
 
 
-@pytest.mark.parametrize("early", ("done", "failed"))
+@pytest.mark.parametrize("early", ("done", "failed", "raise"))
 def test_first_scan_inline_callback_then_launch_exception_is_not_accepted(
     tmp_path, early, capsys,
 ):
@@ -388,7 +393,7 @@ def test_first_scan_inline_callback_then_launch_exception_is_not_accepted(
     assert "PRIVATE_" not in repr(capsys.readouterr())
 
 
-@pytest.mark.parametrize("early", ("done", "failed"))
+@pytest.mark.parametrize("early", ("done", "failed", "raise"))
 def test_remaining_scan_inline_callback_then_launch_exception_keeps_first_batch(
     tmp_path, early, capsys,
 ):
@@ -416,3 +421,31 @@ def test_remaining_scan_inline_callback_then_launch_exception_keeps_first_batch(
     assert list(status.writes) == before[2]
     assert list(indicator.writes) == before[3]
     assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("phase", ("initial", "remainder"))
+def test_acknowledged_inline_scan_completion_is_delivered_after_handoff(
+    tmp_path, phase,
+):
+    """The launch guard must not drop a genuinely acknowledged inline result."""
+    kwargs = {"first_launch_fault": "done_ack"} if phase == "initial" else {
+        "remainder_launch_fault": "done_ack",
+    }
+    review, status, _indicator, calls, _workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False, **kwargs,
+    )
+    if phase == "initial":
+        # The first result is accepted and dispatches the second page once.
+        assert len(calls) == 2
+        assert len(review.filtered_targets) == 1
+        assert not review._filter_scan_complete
+        _name, worker, done, _failed = calls[1]
+        done(worker())
+    else:
+        _name, worker, done, _failed = calls[0]
+        done(worker())
+        assert len(calls) == 2
+    assert len(review.filtered_targets) == 2
+    assert review._filter_scan_complete is True
+    assert review._filter_scan_failed is False
+    assert "筛选完成" in status.get()
