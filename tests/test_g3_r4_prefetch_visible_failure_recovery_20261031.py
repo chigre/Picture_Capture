@@ -430,3 +430,68 @@ def test_direct_render_old_serial_success_cannot_publish(tmp_path):
     old_done(old_worker())
     assert case.review._filter_batch_render_cache == {}
     assert case.applied == []
+
+
+@pytest.mark.parametrize(
+    "sequence", ("done_then_failed", "failed_then_done", "done_twice", "failed_twice"),
+)
+def test_direct_render_terminal_callback_is_consumed_exactly_once(
+    tmp_path, sequence, capsys,
+):
+    """One accepted job cannot deliver contradictory/duplicate Tk outcomes."""
+    case = _direct_case(tmp_path)
+    review = case.review
+    _name, worker, done, failed = case.workers[1]
+    payload = worker()
+    if sequence.startswith("done"):
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_RENDER"), "PRIVATE_TRACE")
+    after_first_cache = dict(review._filter_batch_render_cache)
+    after_first_applied = list(case.applied)
+    after_first_workspace = list(case.workspace)
+    after_first_status = case.status.get()
+
+    if sequence.endswith("failed") or sequence == "failed_twice":
+        failed(OSError("PRIVATE_RENDER_LATE"), "PRIVATE_TRACE_LATE")
+    else:
+        done(payload)
+
+    assert review._filter_batch_render_cache == after_first_cache
+    assert case.applied == after_first_applied
+    assert case.workspace == after_first_workspace
+    assert case.status.get() == after_first_status
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("first", ("done", "failed"))
+def test_direct_terminal_ignored_for_human_edit_cannot_reactivate_later(
+    tmp_path, first, capsys,
+):
+    """A duplicate delivered after a user edit is later saved stays invalid."""
+    case = _direct_case(tmp_path)
+    review = case.review
+    _name, worker, done, failed = case.workers[1]
+    payload = worker()
+    edits = {1: {(3, 4): {"new_word": "human"}}}
+    review._filter_pending_changes = edits
+    case.workspace.append("HUMAN_EDITOR")
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_RENDER"), "PRIVATE_TRACE")
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+
+    # A later UI lifecycle resolves the correction, but *this* old job has
+    # already delivered a terminal event and cannot become active again.
+    review._filter_pending_changes = {}
+    before = (dict(review._filter_batch_render_cache),
+              list(case.workspace), case.status.get())
+    done(payload)
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE")
+    assert case.applied == []
+    assert review._filter_batch_render_cache == before[0]
+    assert case.workspace == before[1]
+    assert case.status.get() == before[2]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
