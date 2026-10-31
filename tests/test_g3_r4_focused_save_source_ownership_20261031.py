@@ -273,3 +273,57 @@ def test_missing_render_provenance_cannot_publish_live_filter_edits(tmp_path):
     with pytest.raises(RuntimeError, match="(来源|校验|拒绝)"):
         worker()
     assert writes == [] and pdic.read_bytes() == before
+
+
+def test_stale_second_page_blocks_first_page_before_any_pdic_publication(tmp_path):
+    # All-page preflight matters: otherwise saving page 1 before discovering
+    # a stale SECTION on page 2 is an avoidable partial publication.
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    p1, d1, _s1, t1, c1 = _files(first)
+    p2, d2, s2, t2, c2 = _files(second)
+    t1["current_word"] = "edit-1"
+    t2.update(page_index=1, current_word="edit-2")
+    review, calls = _review(p1, t1)
+    review.parent.project.images = [p1, p2]
+    review.filtered_targets = [t1, t2]
+    review._filter_pending_changes = {
+        0: {(3, 4): _edited_change(_save_witness(c1))},
+        1: {(3, 4): {**_edited_change(_save_witness(c2), word="edit-2"),
+                     "page_index": 1}},
+    }
+    baseline = (d1.read_bytes(), d2.read_bytes())
+    writes = []
+    deps, _alerts = _save_deps(p1, writes)
+    flow._flush_focused_changes(review, deps)
+    _alter(second, "section", p2, s2)
+    _name, worker, _done, failed = calls[0][0]
+    with pytest.raises(RuntimeError, match="(来源|变化|拒绝|SECTION)"):
+        worker()
+    failed(RuntimeError("private pathname"), "private traceback")
+    assert writes == []
+    assert (d1.read_bytes(), d2.read_bytes()) == baseline
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "edit-1"
+    assert review._filter_pending_changes[1][(3, 4)]["new_word"] == "edit-2"
+    assert not review._filter_close_after_save
+
+
+def test_new_section_after_originally_sectionless_crop_fails_closed(tmp_path):
+    page, pdic, section, target, _ignored = _files(tmp_path)
+    section.unlink()
+    source = _save_witness(focused_crop_source_witness([page], [target]))
+    before = pdic.read_bytes()
+    target["current_word"] = "edit-1"
+    review, calls = _review(page, target)
+    review._filter_pending_changes = {(0): {(3, 4): _edited_change(source)}}
+    writes = []
+    deps, _alerts = _save_deps(page, writes)
+    flow._flush_focused_changes(review, deps)
+    section.write_bytes(b'{"revision":"A"}')
+    worker = calls[0][0][1]
+    with pytest.raises(RuntimeError, match="(来源|变化|拒绝|SECTION)"):
+        worker()
+    assert writes == [] and pdic.read_bytes() == before
