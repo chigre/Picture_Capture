@@ -345,6 +345,9 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         needed_for_next = first_batch_size - remainder if remainder else first_batch_size
 
         remaining_sample = {"scan": 0.0, "risk": 0.0, "pages": 0, "risk_pages": 0}
+        # A remainder is an owned worker dispatch. Duplicate/contradictory
+        # terminal callbacks must never append the same scanned rows twice.
+        remaining_terminal_claimed = [False]
 
         def remaining_worker():
             started = perf_counter() if timing_session is not None else None
@@ -368,11 +371,16 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             return additions, missing_total, next_position
 
         def remaining_done(payload) -> None:
+            if remaining_terminal_claimed[0]:
+                return
             if (
                 serial != self._filter_scan_serial
                 or not getattr(self, "_filter_rows_active", False)
             ):
                 return
+            # Consume before publishing and scheduling the following chunk;
+            # Tk callbacks can be re-entered by UI refresh and worker shims.
+            remaining_terminal_claimed[0] = True
             additions, missing_total, next_position = payload
             _record_focused_timing(
                 self, timing_session, "scan",
@@ -417,11 +425,14 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 )
 
         def remaining_failed(_exc, _detail) -> None:
+            if remaining_terminal_claimed[0]:
+                return
             if (
                 serial != self._filter_scan_serial
                 or not getattr(self, "_filter_rows_active", False)
             ):
                 return
+            remaining_terminal_claimed[0] = True
             # Only fully scanned batches may remain available; no failed
             # chunk is published and no visible human edit is discarded.
             # Do not surface exception strings containing project paths.
@@ -440,12 +451,18 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             remaining_worker, remaining_done, remaining_failed,
         )
 
+    # The initial scan may complete/fail only once in its own epoch.
+    first_terminal_claimed = [False]
+
     def first_done(payload) -> None:
+        if first_terminal_claimed[0]:
+            return
         if (
             serial != self._filter_scan_serial
             or not getattr(self, "_filter_rows_active", False)
         ):
             return
+        first_terminal_claimed[0] = True
         targets, pages_without_ocr, next_position = payload
         _record_focused_timing(
             self, timing_session, "scan",
@@ -487,12 +504,15 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             )
 
     def failed(_exc, _detail) -> None:
+        if first_terminal_claimed[0]:
+            return
         # Keep the explicit serial comparison recognizable to existing
         # source-level integration guards, then check active Tk mode.
         if serial != self._filter_scan_serial:
             return
         if not getattr(self, "_filter_rows_active", False):
             return
+        first_terminal_claimed[0] = True
         # The first scan did not publish even one trustworthy batch. An
         # exception is never a successful/complete scan, and raw worker
         # errors can contain private local source paths.
