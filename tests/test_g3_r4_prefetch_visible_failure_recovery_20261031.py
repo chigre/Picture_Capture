@@ -567,3 +567,30 @@ def test_direct_crop_refused_by_closed_worker_queue_reports_failure(tmp_path):
     assert case.applied == []
     assert "失败" in case.workspace[-1] or "重试" in case.workspace[-1]
     assert "失败" in case.status.get() or "重试" in case.status.get()
+
+@pytest.mark.parametrize("phase", ("prefetch", "direct"))
+def test_crop_scheduler_exception_before_worker_handoff_is_generic(
+    tmp_path, phase, capsys,
+):
+    case = _case(tmp_path)
+    review = case.review
+    if phase == "prefetch":
+        case.workers[0][3](OSError("prior"), "prior")
+    else:
+        review._filter_prefetch_key = None
+        review.filtered_batch_index = 1
+
+    def refused(*_args):
+        raise OSError("synthetic_private_scheduler_path")
+
+    review.parent._start_ui_worker = refused
+    if phase == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+        assert review._filter_prefetch_key is None
+    else:
+        review._request_filter_batch_render()
+        assert "失败" in case.workspace[-1] or "重试" in case.workspace[-1]
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "synthetic_private_scheduler_path" not in repr(case.status.get())
+    assert "synthetic_private_scheduler_path" not in repr(capsys.readouterr())
