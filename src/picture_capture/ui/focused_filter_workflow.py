@@ -782,22 +782,52 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             local_viewer_width, local_available_width,
             local_review_zoom, local_review_zoom_auto,
         )
+        # The key was attested before scheduling. A page, PDIC or SECTION
+        # changed during the worker must not be published under that old key.
+        # This is a volatile content check, not a filesystem CAS transaction.
+        if focused_crop_source_witness(local_pages, local_targets) != cache_key[1][-1]:
+            raise ValueError("focused crop source changed during prefetch")
         if started is not None:
             crop_seconds[0] = perf_counter() - started
         return result
 
     def done(payload, local_key=cache_key, local_index=next_index) -> None:
-        if scan_epoch != getattr(self, "_filter_scan_serial", None):
+        # An old success callback must not steal a newer prefetch, even in
+        # the same scan epoch. It must not cache a result from changed bytes.
+        if (
+            scan_epoch != getattr(self, "_filter_scan_serial", None)
+            or self._filter_prefetch_key != local_key
+        ):
             return
-        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
-        if self._filter_prefetch_key == local_key:
-            self._filter_prefetch_key = None
+        self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
             return
+        try:
+            current = self._filter_batch_snapshot(local_index)
+        except Exception:
+            current = None
+        if current is None or current[0] != local_key:
+            if (
+                int(self.filtered_batch_index) == int(local_index)
+                and not getattr(self, "_filter_save_running", False)
+                and not getattr(self, "_filter_pending_changes", None)
+            ):
+                self._clear_review_workspace(
+                    "本批裁剪来源已变化或不可核验；请重新筛选。"
+                )
+                self.parent.status_var.set(
+                    "当前批次原图、PDIC 或 SECTION 来源无法确认；请核对后重新筛选。"
+                )
+            return
+        _record_focused_timing(self, timing_session, "crop", crop_seconds[0])
         self._cache_filter_batch_payload(local_key, payload)
-        # If the user clicked 【下一批】 while this worker was still running,
-        # complete that navigation immediately from the freshly built cache.
-        if int(self.filtered_batch_index) == int(local_index):
+        # Never repaint over a human edit or an unresolved save, even when
+        # the completed prefetch still belongs to this exact source.
+        if (
+            int(self.filtered_batch_index) == int(local_index)
+            and not getattr(self, "_filter_save_running", False)
+            and not getattr(self, "_filter_pending_changes", None)
+        ):
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
     def failed(_exc, _detail, local_key=cache_key, local_index=next_index) -> None:
