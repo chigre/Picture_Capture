@@ -93,6 +93,9 @@ def _case(tmp_path):
     review._filter_batch_snapshot = lambda index: workflow._filter_batch_snapshot(
         review, deps, index
     )
+    review._cache_filter_batch_payload = lambda key, payload: workflow._cache_filter_batch_payload(
+        review, deps, key, payload
+    )
     review._request_filter_batch_render = lambda: workflow._request_filter_batch_render(
         review, deps
     )

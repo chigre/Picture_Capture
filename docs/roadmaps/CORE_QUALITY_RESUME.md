@@ -1,3 +1,9 @@
+## 2026-10-31｜G3 可见 prefetch 失败修复后的合成夹具补充（最终门禁待验）
+
+- 产品修复初始 HEAD `5532774c42b5a0b23603b5da88ae9aca842f2adc` [CI #41204886134](https://github.com/chigre/Picture_Capture/actions/runs/41204886134) Ubuntu3.13 **1 failed / 5183 passed / 3 skipped**；唯一失败是新测试合成 ReviewWindow 缺少原有 `_cache_filter_batch_payload`，真实 direct-render done 回调因此 AttributeError，属于测试夹具遗漏，不是已经证明的生产源码故障。
+- 本次仅在新测试文件增加指向真实 `workflow._cache_filter_batch_payload` 的 fixture 方法，仍核验失败 prefetch → 单次回退直接裁剪 → 成功确认/来源锁定。无产品代码改动，无跳过失败测试。最终 HEAD CI 6/6＋Risk、OCR 3/3、CodeQL 2/2 仍 **PENDING**。
+- 详见 [G3_R4_2_VISIBLE_PREFETCH_FAILURE_RECOVERY_20261031.md](../architecture/G3_R4_2_VISIBLE_PREFETCH_FAILURE_RECOVERY_20261031.md)。真人 Windows R3 E3、#483 W1–W11、#503 人工 Undo、真扫描均 NOT PERFORMED；R6/R8 DEFERRED。唯一 #663 保持 Draft/Open/Unmerged、main 未变化。
+
 ## 2026-10-31｜G3 R4.2 N+1 裁剪 prefetch 失败后的可见批次保守恢复（red-first，最终 E2 待核）
 
 - 上一严格绿色基线 `c9837923b0bcf5184ac16098688a4688600c68b6`：[CI #41197464856](https://github.com/chigre/Picture_Capture/actions/runs/41197464856) 六组合 6/6＋Risk-tier；[OCR #41197464869](https://github.com/chigre/Picture_Capture/actions/runs/41197464869) 3/3；[CodeQL #41197460973](https://github.com/chigre/Picture_Capture/actions/runs/41197460973) Python/Actions 2/2 通过。唯一 Draft #663；main 不变。

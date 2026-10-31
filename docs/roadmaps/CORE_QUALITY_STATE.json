@@ -2527,7 +2527,7 @@
     "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
   },
   "g3_r4_2_visible_prefetch_failure_recovery_20261031": {
-    "status": "RED_FIRST_5_TARGET_FAILURES_OBSERVED_MINIMAL_FIX_COMMITTED_EXACT_HEAD_GATES_PENDING",
+    "status": "RED_FIRST_PRODUCT_FIXED_TEST_FIXTURE_COMPLETED_FINAL_EXACT_HEAD_GATES_PENDING",
     "baseline_green_sha": "c9837923b0bcf5184ac16098688a4688600c68b6",
     "red_test_sha": "1166cd5e18c3bc13e67417b23ea8e3ca15db9491",
     "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41204531136",
@@ -2546,6 +2546,10 @@
     "R6_human_labels": "DEFERRED",
     "R8_real_scans": "DEFERRED",
     "pr_663": "DRAFT_OPEN_UNMERGED",
-    "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2"
+    "main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
+    "intermediate_fix_head": "5532774c42b5a0b23603b5da88ae9aca842f2adc",
+    "intermediate_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41204886134",
+    "intermediate_ubuntu_py313": "1 failed, 5183 passed, 3 skipped",
+    "intermediate_failure_cause": "new synthetic ReviewWindow fixture omitted _cache_filter_batch_payload used by the real direct-render completion callback; test-only fixture corrected; no production guard weakened"
   }
 }

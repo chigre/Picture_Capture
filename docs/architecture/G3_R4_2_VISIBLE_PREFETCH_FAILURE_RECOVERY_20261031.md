@@ -17,3 +17,8 @@ Test fixture PDIC now uses a real newline delimiter, rather than escaped backsla
 The **final code+docs commit** must independently pass Windows/macOS/Ubuntu × Python3.10/3.13 **6/6**, Risk-tier CI gate, OCR three-OS Smoke **3/3** and CodeQL Python/Actions **2/2** before its E2 scope can be marked verified; conditional Documentation architecture SKIPPED is not a pass. At commit time these final checks were PENDING; report actual completed results in an immutable post-gate PR comment.
 
 **NOT PERFORMED:** real Windows operator R3 E3, #483 W1–W11, #503 full compound Undo/Redo, scanned dictionary GUI/OCR/PDIC/PPP/SECTION/Profile/crop save-reopen and large-image latency. **DEFERRED:** R6 human truth, R8 scanned baseline. Retain #663 Draft/Open/Unmerged, main unchanged, blocker issues open.
+
+## G3 R4.2 interim CI failure — synthetic direct-render completion fixture (2026-10-31)
+
+After product fix `5532774c42b5a0b23603b5da88ae9aca842f2adc`, [CI #41204886134](https://github.com/chigre/Picture_Capture/actions/runs/41204886134) Ubuntu Python3.13 actually yielded **one failing new test / 5,183 passed / 3 skipped**. The visible-prefetch recovery ran the real direct-render `done`, but the new test's `SimpleNamespace` lacked the pre-existing `_cache_filter_batch_payload` UI method, producing `AttributeError`. This is a **test fixture omission**, not evidence that the production cache method is absent. The fixture now binds the actual `workflow._cache_filter_batch_payload` implementation and tests the same recovered completion. No production source or original failed-source safety guards were relaxed. This intermediate failed CI must remain recorded; the amended test+docs exact-head CI/OCR/CodeQL remain PENDING.
+
