@@ -657,8 +657,9 @@ def run():
                         lambda: (
                             not review._filter_save_running
                             and not review._filter_close_after_save
-                            and bool(close_failed_alerts)
-                            and "保存失败" in app.status_var.get()
+                            and len(close_failed_alerts) == 1
+                            and bool(review._filter_pending_changes.get(0))
+                            and review.winfo_exists()
                         ),
                         seconds=35,
                         description="G3 native source-drift close refusal",
