@@ -768,6 +768,10 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
     crop_seconds = [None]
+    # A source key may be reissued within one scan epoch after cache eviction
+    # or a completed attempt. Key equality is not worker identity: once this
+    # dispatch receives an owned terminal callback it can never act again.
+    terminal_claimed = [False]
 
     ReviewWindow = deps.ReviewWindow
 
@@ -793,12 +797,15 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
 
     def done(payload, local_key=cache_key, local_index=next_index) -> None:
         # An old success callback must not steal a newer prefetch, even in
-        # the same scan epoch. It must not cache a result from changed bytes.
+        # the same scan epoch or under an identical cache key.
+        if terminal_claimed[0]:
+            return
         if (
             scan_epoch != getattr(self, "_filter_scan_serial", None)
             or self._filter_prefetch_key != local_key
         ):
             return
+        terminal_claimed[0] = True
         self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
             return
@@ -831,12 +838,15 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             self._apply_filter_batch_payload(local_index, local_key, payload)
 
     def failed(_exc, _detail, local_key=cache_key, local_index=next_index) -> None:
+        if terminal_claimed[0]:
+            return
         if scan_epoch != getattr(self, "_filter_scan_serial", None):
             return
         # A newer prefetch owns its own key; a stale callback has no right to
         # clear it, publish results or alter the current human-edit surface.
         if self._filter_prefetch_key != local_key:
             return
+        terminal_claimed[0] = True
         self._filter_prefetch_key = None
         if (
             not getattr(self, "_filter_rows_active", False)
