@@ -138,14 +138,25 @@ class CandidateReviewHistory(tx.ReviewSessionHistory):
         app = review.parent
         current = tx.snapshot_review(review)
         if current is None:
-            # A pending Tk repaint can be retried. Real source drift is final.
-            if (getattr(app, "current_page", None) != expected.page
+            # A pending Tk repaint may be retried only while *all* original
+            # source owners remain byte-identical. A denied file read is NOT
+            # proof of unchanged sources and must not crash a human Undo.
+            try:
+                stale_source = (
+                    getattr(app, "current_page", None) != expected.page
                     or tx.sha256_file(expected.page) != expected.image_sha
                     or tx._bytes_or_absent(tx.pdic_path(expected.page)) != expected.pdic_bytes
                     or tx._bytes_or_absent(tx.simplified_review_path_for_image(expected.page))
                        != expected.simplified_bytes
                     or tx._bytes_or_absent(expected.manual_path) != expected.manual_bytes
-                    or tx._bytes_or_absent(expected.ocr_path) != expected.ocr_bytes):
+                    or tx._bytes_or_absent(expected.ocr_path) != expected.ocr_bytes
+                    or tx._bytes_or_absent(expected.section_path) != expected.section_bytes
+                    or tx._bytes_or_absent(expected.profile_path) != expected.profile_bytes
+                )
+            except (OSError, ValueError, TypeError):
+                # No private exception path or text goes to Tk/status/stdout.
+                stale_source = True
+            if stale_source:
                 self.invalidate()
             return False
         if not tx._same_live_state(current, expected):
