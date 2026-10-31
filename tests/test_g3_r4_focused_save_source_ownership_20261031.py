@@ -445,3 +445,140 @@ def test_newer_inflight_edit_maintains_original_crop_witness_after_save(tmp_path
     assert not review._filter_pending_changes and not alerts
     assert read_pdic(pdic)[0].word == "edit-2"
     assert writes == [1, 1]
+
+
+def _two_attested_pages(tmp_path):
+    """Two separate synthetic directories, avoiding any real scan/word data."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    p1, d1, _s1, t1, c1 = _files(first)
+    p2, d2, _s2, t2, c2 = _files(second)
+    t1.update(
+        current_word="edit-one",
+        _focused_save_source_witness=_save_witness(c1),
+    )
+    t2.update(
+        page_index=1, current_word="edit-two",
+        _focused_save_source_witness=_save_witness(c2),
+    )
+    review, calls = _review(p1, t1)
+    review.parent.project.images = [p1, p2]
+    review.filtered_targets = [t1, t2]
+    review._filter_pending_changes = {
+        0: {(3, 4): _edited_change(_save_witness(c1), word="edit-one")},
+        1: {(3, 4): {
+            **_edited_change(_save_witness(c2), word="edit-two"),
+            "page_index": 1,
+        }},
+    }
+    return (p1, d1, t1), (p2, d2, t2), review, calls
+
+
+def test_two_page_pdic_conflict_commits_first_once_preserves_second(tmp_path):
+    """A page-2 word conflict must not requeue a committed page-1 row.
+
+    Image/SECTION preflight passes for both pages. A foreign PDIC word
+    change (which is deliberately excluded from the crop witness) instead
+    causes a *per-page* writer conflict, not an all-page provenance error.
+    """
+    (p1, d1, t1), (p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
+    # External PDIC edit is intentionally after display attestation; page 2
+    # must remain the foreign owner's data, not our stale human correction.
+    foreign = b"external#3#4#37.5#50#001#@#@\n"
+    d2.write_bytes(foreign)
+    before_second = d2.read_bytes()
+    writes, alerts = [], []
+    deps, failures = _save_deps(p1, writes)
+    deps.messagebox.showwarning = lambda title, message, **kw: alerts.append(
+        (title, message)
+    )
+
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    saved, conflicts = worker()
+    assert saved == [(0, 3, 4, "edit-one")]
+    assert len(conflicts) == 1 and "原词已变化" in conflicts[0]
+    done((saved, conflicts))
+
+    assert writes == [1]
+    assert read_pdic(d1)[0].word == "edit-one"
+    assert d2.read_bytes() == before_second
+    assert t1["original_word"] == t1["current_word"] == "edit-one"
+    assert t2["original_word"] == "old" and t2["current_word"] == "edit-two"
+    assert 0 not in review._filter_pending_changes
+    assert review._filter_pending_changes[1][(3, 4)]["new_word"] == "edit-two"
+    assert review._filter_pending_changes[1][(3, 4)][
+        "_focused_save_source_witness"
+    ] == t2["_focused_save_source_witness"]
+    assert not review._filter_save_running and not review._filter_close_after_save
+    assert len(alerts) == 1 and not failures
+    assert "已保存 1 条修改" in review.parent.status_var.get()
+    assert "1 条冲突" in review.parent.status_var.get()
+    assert review.parent.entries[0].word == "edit-one"
+    assert (review.parent.entries[0].x, review.parent.entries[0].y) == (3, 4)
+
+    # Even an explicit retry of the remaining unsaved page must NEVER
+    # republish page 1 or overwrite the foreign text at page 2.
+    committed_first = d1.read_bytes()
+    flow._flush_focused_changes(review, deps)
+    _name, worker2, done2, failed2 = calls[1][0]
+    saved2, conflicts2 = worker2()
+    assert saved2 == [] and len(conflicts2) == 1
+    done2((saved2, conflicts2))
+    assert writes == [1] and d1.read_bytes() == committed_first
+    assert d2.read_bytes() == before_second
+    assert 0 not in review._filter_pending_changes
+    assert review._filter_pending_changes[1][(3, 4)]["new_word"] == "edit-two"
+    assert len(alerts) == 2 and not failures
+
+
+def test_two_page_late_writer_error_keeps_uncertain_edits_no_rollback(tmp_path):
+    """Page 2 can fail *after* page 1 commits, even after all-page preflight.
+
+    The callback has no durable, authoritative all-page commit journal; it
+    must report failure, retain both human edits and NEVER roll back page 1
+    over a potentially newer writer or falsely mark page 1 as confirmed.
+    """
+    (p1, d1, t1), (_p2, d2, t2), review, calls = _two_attested_pages(tmp_path)
+    before_second = d2.read_bytes()
+    writes = []
+    deps, alerts = _save_deps(p1, writes)
+    real_writer = deps._apply_focused_review_page_updates
+
+    def late_failure(page, pages, index, changes):
+        if index == 1:
+            raise OSError("PRIVATE_SECOND_PAGE_PATH_NEVER_DISPLAY")
+        return real_writer(page, pages, index, changes)
+
+    deps._apply_focused_review_page_updates = late_failure
+    flow._flush_focused_changes(review, deps)
+    _name, worker, done, failed = calls[0][0]
+    with pytest.raises(OSError, match="PRIVATE_SECOND_PAGE_PATH"):
+        worker()
+    assert writes == [1] and read_pdic(d1)[0].word == "edit-one"
+    assert d2.read_bytes() == before_second
+
+    failed(
+        OSError("PRIVATE_SECOND_PAGE_PATH_NEVER_DISPLAY"),
+        "PRIVATE_SECOND_PAGE_TRACEBACK",
+    )
+    assert not review._filter_save_running and not review._filter_close_after_save
+    # Conservative uncertainty: never silently discard the second page or
+    # classify the first page as durably reported by a failed all-page job.
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "edit-one"
+    assert review._filter_pending_changes[1][(3, 4)]["new_word"] == "edit-two"
+    assert review._filter_pending_changes[0][(3, 4)][
+        "_focused_save_source_witness"
+    ] == t1["_focused_save_source_witness"]
+    assert review._filter_pending_changes[1][(3, 4)][
+        "_focused_save_source_witness"
+    ] == t2["_focused_save_source_witness"]
+    assert t1["original_word"] == t2["original_word"] == "old"
+    assert review.parent.entries[0].word == "old"
+    assert d2.read_bytes() == before_second
+    assert len(alerts) == 1
+    status = review.parent.status_var.get()
+    assert "保存失败" in status and "已保留" in status
+    assert "PRIVATE_" not in status + str(alerts)
