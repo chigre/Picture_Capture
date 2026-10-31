@@ -677,16 +677,13 @@ class ReviewSessionHistory:
         if before is None or after is None or not _undoable_committed_change(before, after):
             self.invalidate()
             return False
-        if self.undo_stack and (
-            self.undo_stack[-1].after.pdic_bytes != before.pdic_bytes
-            or self.undo_stack[-1].after.simplified_bytes != before.simplified_bytes
-            or self.undo_stack[-1].after.manual_bytes != before.manual_bytes
-            or self.undo_stack[-1].after.ocr_bytes != before.ocr_bytes
-            or self.undo_stack[-1].after.candidates != before.candidates
-            or self.undo_stack[-1].after.owner_ids != before.owner_ids
-            or self.undo_stack[-1].after.image_sha != before.image_sha
-            or self.undo_stack[-1].after.section_bytes != before.section_bytes
-            or self.undo_stack[-1].after.profile_bytes != before.profile_bytes
+        # Chaining committed saves requires the complete frozen ownership
+        # of the previous post-state, not just equal PDIC/sidecar contents.
+        # A page or manual/OCR/SECTION/Profile *path* may change while bytes
+        # happen to match. A separately valid new save must drop the old
+        # cross-source Undo frame rather than inherit its unrelated history.
+        if self.undo_stack and not _same_live_state(
+            self.undo_stack[-1].after, before,
         ):
             self.invalidate()
         self.undo_stack.append(SavedEdit(before, after))
