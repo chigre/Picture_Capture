@@ -87,12 +87,13 @@ def test_batch_source_signature_changes_even_without_mtime_or_size_change(
     review, _deps, page, pdic, section, _rendered, _preloaded = _fixture(tmp_path)
     original_key = review._filter_batch_snapshot(0)[0]
     if changed == "image":
-        # 24-bit BMP: equally sized, valid alternate source pixels.
+        # 24-bit BMP: equally sized valid replacement pixels; preserve the
+        # original source mtime, not the mtime from writing an intermediate.
         before = page.read_bytes()
-        Image.new("RGB", (8, 8), "red").save(page)
-        after = page.read_bytes()
-        assert len(after) == len(before)
-        _replace_bytes_preserving_mtime(page, before)
+        alt = tmp_path / "alt.bmp"
+        Image.new("RGB", (8, 8), "red").save(alt)
+        after = alt.read_bytes()
+        assert len(after) == len(before) and after != before
         _replace_bytes_preserving_mtime(page, after)
     elif changed == "pdic":
         _replace_bytes_preserving_mtime(pdic, b"new#3#4#1#1#001#@#@\n")
