@@ -338,3 +338,37 @@ def test_mixed_saved_text_and_candidate_delete_history_replays_in_exact_sequence
     assert case.bindings["manual"].read_bytes() == final_manual
     assert len(hist.undo_stack) == 2 and not hist.redo_stack
     assert len(hist._candidate_frames) == 1
+
+
+@pytest.mark.parametrize("candidate", (False, True))
+@pytest.mark.parametrize("direction", ("undo", "redo"))
+@pytest.mark.parametrize("exception", ("runtime", "tcl"))
+def test_real_snapshot_destroyed_tk_row_reader_fails_closed_without_traceback(
+    tmp_path, capsys, candidate, direction, exception,
+):
+    """Use the actual snapshot_review rather than mocking its return."""
+    from tkinter import TclError
+
+    case = fixture(tmp_path, candidate=candidate)
+    if direction == "redo":
+        assert case.history.undo(case.review)
+        case.review.vars = [Var("head"), Var("tail")]
+    before_pdic = pdic_path(case.page).read_bytes()
+    original_rows = tuple(case.app.entries)
+    before_candidate = dict(case.candidate) if candidate else None
+
+    def dead_tk_row_reader():
+        message = "PRIVATE_DESTROYED_REVIEW_C:/source/patient.dic"
+        if exception == "runtime":
+            raise RuntimeError(message)
+        raise TclError(message)
+
+    case.review._bound_row_entries = dead_tk_row_reader
+    assert (case.history.undo(case.review) if direction == "undo"
+            else case.history.redo(case.review)) is False
+    assert pdic_path(case.page).read_bytes() == before_pdic
+    assert tuple(case.app.entries) == original_rows
+    assert (dict(case.candidate) if candidate else None) == before_candidate
+    assert len(case.history.undo_stack if direction == "undo"
+               else case.history.redo_stack) == 1
+    assert "PRIVATE_DESTROYED_REVIEW" not in repr(capsys.readouterr())
