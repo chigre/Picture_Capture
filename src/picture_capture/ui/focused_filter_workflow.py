@@ -1269,11 +1269,14 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     }
     if not snapshot:
         return
-    self._filter_pending_changes.clear()
-    self._filter_save_running = True
+    # Construct the source-page snapshot before clearing the human queue.
+    # An unreadable/invalid project must never erase work on synchronous
+    # setup failure; the caller's close coordinator refuses the exception.
     pages = list(project.images)
     timing_session = getattr(self, "_focused_timing_session", None)
     save_seconds = [None]
+    self._filter_pending_changes.clear()
+    self._filter_save_running = True
 
     def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
         """Requeue only unsaved snapshot entries, without erasing newer edits.
@@ -1340,6 +1343,16 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
 
     def done(payload) -> None:
         self._filter_save_running = False
+        if getattr(self, "_filter_save_launch_failed", False):
+            # A scheduler can raise after partially handing off work.
+            # A late callback is not an acknowledged launch; do not infer
+            # an all-page commit, reconcile UI words, or auto-retry.
+            self._filter_close_after_save = False
+            restore_unwritten(set())
+            self.parent.status_var.set(
+                "筛选校对启动状态未确认，修改已保留；请核对文件后重试。"
+            )
+            return
         saved, conflicts = payload
         _record_focused_timing(
             self, timing_session, "save", save_seconds[0], len(saved),
@@ -1482,8 +1495,29 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             parent=self,
         )
 
-    self.parent._start_ui_worker(
-        f"focused-filter-save-{id(self)}",
-        worker, done, failed, wait_on_close=True,
-    )
+    # Mark a new explicit launch attempt. Only a successfully returned
+    # scheduler handoff can reset a prior ambiguous-start refusal.
+    self._filter_save_launch_failed = False
+    try:
+        self.parent._start_ui_worker(
+            f"focused-filter-save-{id(self)}",
+            worker, done, failed, wait_on_close=True,
+        )
+    except Exception:
+        # The worker may or may not have been accepted. Restore every
+        # unconfirmed source-coordinate edit conservatively without
+        # overwriting edits made during launch or a human reversion.
+        # Never queue an automatic retry of an uncertain handoff.
+        self._filter_save_running = False
+        self._filter_close_after_save = False
+        self._filter_save_launch_failed = True
+        restore_unwritten(set())
+        self.parent.status_var.set(
+            "筛选校对保存启动失败或状态未确认，修改已保留；请核对后重试。"
+        )
+        messagebox.showerror(
+            "筛选校对未保存",
+            "保存任务未能确认启动；窗口保持打开，校对修改可核对后重试。",
+            parent=self,
+        )
 
