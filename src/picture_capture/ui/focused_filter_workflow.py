@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from ..proofreading.review_timing import ReviewTimingSession
+from .readonly_worker_launch import dispatch_readonly_ui_worker
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
     verify_focused_save_source,
@@ -951,18 +952,12 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         # UI refusal; never loop, change saved rows or relax source checks.
         self._request_filter_batch_render()
 
-    # The actual UI scheduler returns -1 during shutdown without creating
-    # a worker or a Tk callback. Treat rejection as this attempt's failure:
-    # otherwise the key remains occupied forever by a nonexistent prefetch.
-    try:
-        generation = self.parent._start_ui_worker(
-            worker_key, worker, done, failed,
-        )
-    except Exception:
-        failed(None, None)
-        return
-    if generation == -1:
-        failed(None, None)
+    # A synchronous compatibility callback must not publish crop pixels or
+    # trigger a visible retry before the scheduler acknowledges handoff.
+    # This also handles shutdown refusal (-1) without leaving the key held.
+    dispatch_readonly_ui_worker(
+        self.parent._start_ui_worker, worker_key, worker, done, failed,
+    )
 
 def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
     if not self._filter_rows_active or not self.filtered_targets:
@@ -1150,17 +1145,12 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             "本批裁剪未能生成，请检查源文件后重试。"
         )
 
-    # A -1 scheduler return means no worker exists (e.g. close requested).
-    # Never leave the visible batch in a permanent loading placeholder.
-    try:
-        generation = self.parent._start_ui_worker(
-            f"focused-filter-render-{id(self)}", worker, done, failed
-        )
-    except Exception:
-        failed(None, None)
-        return
-    if generation == -1:
-        failed(None, None)
+    # Only an acknowledged launch may publish a crop or terminal UI state;
+    # an early done/failed followed by -1/raise is a rejected attempt.
+    dispatch_readonly_ui_worker(
+        self.parent._start_ui_worker,
+        f"focused-filter-render-{id(self)}", worker, done, failed,
+    )
 
 def _render_filter_batch(
     self, deps: FocusedFilterDeps, targets: list[dict], crops: list[Image.Image],
