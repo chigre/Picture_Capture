@@ -85,9 +85,23 @@ def test_two_saved_edits_replay_without_row_index_matching(tmp_path):
     review.vars.reverse()
     assert history.undo(review)
     assert {r.word for r in rows} == {"ONE", "two"}
+    # Until actual ReviewWindow redraw, the old widgets still own the
+    # previous reversed row bindings. Do not make one widget silently
+    # take another Entry's value merely to let a second Undo proceed.
+    assert [var.get() for var in review.vars] == ["two", "ONE"]
+    assert history.undo(review) is False
+    assert len(history.undo_stack) == 1
+    assert len(history.redo_stack) == 1
+    # The ordinary UI coordinator requests a full row repaint after every
+    # committed replay. Model that explicit rebind, not an implicit index
+    # reassignment of the old StringVars.
+    review.vars = [Var(row.word) for row in rows]
     assert history.undo(review)
     assert {r.word for r in rows} == {"one", "two"}
-    assert history.redo(review) and history.redo(review)
+    review.vars = [Var(row.word) for row in rows]
+    assert history.redo(review)
+    review.vars = [Var(row.word) for row in rows]
+    assert history.redo(review)
     assert {r.word for r in rows} == {"ONE", "TWO"}
 
 
