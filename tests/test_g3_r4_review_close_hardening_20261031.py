@@ -174,3 +174,33 @@ def test_recovered_but_uncommitted_save_disarms_stale_close_intent():
     assert not review._filter_close_after_save
     assert "尚有未确认修改" in review.parent.status_var.get()
     assert not scheduled
+
+
+def test_g3_native_tk_smoke_waits_do_not_depend_on_transient_app_status():
+    """Main autosave may rewrite status during an otherwise valid async save.
+
+    Stable completion must use the real UI worker/queue/PDIC ownership state,
+    not human-readable main-window status text with independent writers.
+    """
+    import ast
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "scripts" / "gui_g3_focused_controls_smoke.py"
+    ).read_text(encoding="utf-8")
+    parsed = ast.parse(source)
+    waits = [
+        item.args[1]
+        for item in ast.walk(parsed)
+        if isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Name)
+        and item.func.id == "_pump_until"
+        and len(item.args) >= 2
+        and isinstance(item.args[1], ast.Lambda)
+    ]
+    assert len(waits) >= 8, "G3 native smoke unexpectedly lost await coverage"
+    for predicate in waits:
+        assert "status_var" not in ast.unparse(predicate.body), (
+            f"unstable main status in G3 Tk await at line {predicate.lineno}"
+        )
