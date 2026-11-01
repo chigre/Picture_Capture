@@ -492,3 +492,82 @@ def test_coordinate_map_rejects_inverse_point_on_projective_horizon(scale):
     # homography horizon. Absolute clamping currently fabricates source (0,.1).
     with pytest.raises(CoordinateMappingUnavailable, match="horizon|denominator"):
         mapping.output_to_source_point((0.0, 1.0))
+
+
+@pytest.mark.parametrize("scale", (1e-14, 1.0, 1e14))
+def test_coordinate_map_handles_zero_forward_bottom_right_scale_invariant(scale):
+    """A zero H[2,2] may still be raster-replayable via the inverse normalizer."""
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    matrix = tuple(
+        value * scale
+        for value in (
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 1.0,
+            0.0, 1.0, 0.0,
+        )
+    )
+    mapping = PreprocessCoordinateMap(
+        _analysis(
+            crop_box=(0, 0, 100, 100),
+            applied_angle_deg=0.0,
+            perspective_matrix=matrix,
+            orthogonal_steps=(),
+        )
+    )
+    mapped = mapping.source_to_output_point((50.0, 50.0))
+    assert mapped.status == "mapped"
+    assert mapped.point == pytest.approx((1.0, 1.02), abs=1e-9)
+    restored = mapping.output_to_source_point(mapped.point)
+    assert restored.status == "mapped"
+    assert restored.point == pytest.approx((50.0, 50.0), abs=1e-7)
+
+
+@pytest.mark.parametrize(
+    "kind", ("identity", "mirror_x", "rotate_ccw90", "rotate_cw90"),
+)
+def test_coordinate_map_roundtrips_points_and_roi_polygons_for_each_layout_transform(kind):
+    """Canonical orientation composes with the map without changing source XY."""
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    source_size = (101, 81)
+    transform = LayoutTransform(kind)
+    canonical_size = transform.canonical_size(source_size)
+    analysis = _analysis(
+        source_size=canonical_size,
+        crop_box=(0, 0, canonical_size[0], canonical_size[1]),
+        applied_angle_deg=0.0,
+        perspective_matrix=None,
+        orthogonal_steps=(),
+    )
+    mapping = PreprocessCoordinateMap(
+        analysis=analysis,
+        source_size=source_size,
+        layout_transform=transform,
+        analysis_is_canonicalized=(kind != "identity"),
+    )
+
+    source_point = (10.25, 20.5)
+    expected_point = transform.source_to_canonical_point(
+        *source_point, source_size,
+    )
+    mapped_point = mapping.source_to_output_point(source_point)
+    assert mapped_point.status == "mapped"
+    assert mapped_point.point == pytest.approx(expected_point, abs=1e-9)
+    restored_point = mapping.output_to_source_point(mapped_point.point)
+    assert restored_point.status == "mapped"
+    assert restored_point.point == pytest.approx(source_point, abs=1e-9)
+
+    source_polygon = (
+        (10.0, 10.0), (40.0, 10.0), (40.0, 30.0), (10.0, 30.0),
+    )
+    expected_polygon = tuple(
+        transform.source_to_canonical_point(*point, source_size)
+        for point in source_polygon
+    )
+    mapped_polygon = mapping.source_to_output_polygon(source_polygon)
+    assert mapped_polygon is not None
+    assert np.allclose(mapped_polygon, expected_polygon, atol=1e-9)
+    restored_polygon = mapping.output_to_source_polygon(mapped_polygon)
+    assert restored_polygon is not None
+    assert np.allclose(restored_polygon, source_polygon, atol=1e-9)
