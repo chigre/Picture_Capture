@@ -375,3 +375,6 @@ def test_coordinate_map_raster_normalization_guard_is_scale_invariant():
         result = mapping.source_to_output_point((40.0, 40.0))
         assert result.status == "mapped"
         assert result.point == pytest.approx((35.0, 35.0))
+        restored = mapping.output_to_source_point(result.point)
+        assert restored.status == "mapped"
+        assert restored.point == pytest.approx((40.0, 40.0))

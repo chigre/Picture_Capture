@@ -18,3 +18,11 @@ The image renderer normalizes `inverse(H)` by its `[2,2]` entry before passing i
 Exact-head Windows/macOS/Ubuntu Python 3.10/3.13 full CI, Risk-tier gate, OCR three-platform smoke, and CodeQL Python/Actions are required **after this code/docs change**. They are PENDING until GitHub returns terminal results; historical green gates do not certify this commit.
 
 These are synthetic coordinate/raster contracts only (E2 when verified). No real source-image/PDIC/PPP/SECTION/Profile/OCR save-reopen, human R3 E3, #483 W1–W11, #503 manual Undo/Redo or dictionary accuracy/throughput measurements were performed. R6 human-label learning and R8 real scanning stay DEFERRED. PR #663 must remain Draft/Open/Unmerged; main unchanged.
+
+
+## Intermediate exact-head regression and follow-up correction
+
+At source/test/doc HEAD `72d795922cd561bf7e7554c1e9a4a5161b95fde9`, [CI #41304339978](https://github.com/chigre/Picture_Capture/actions/runs/41304339978) reported **one genuine positive-test failure** on Ubuntu Python 3.13 (1 failed / 5,299 passed / 3 skipped) and macOS Python 3.13 (1 failed / 5,300 passed / 2 skipped): the projectively identical `H=1e-14 I` was returned as `outside_crop`. This exposed an existing absolute `1e-9` denominator clamp in the general point-homography helper. The inverse direction for `H=1e14 I` has the same risk. These are real RED results and **do not count as passing gates**.
+
+The map now strips arbitrary homogeneous scale before forwarding H or inverse(H) to that shared helper, choosing the `[2,2]` normalizer when safe and a maximum-coefficient fallback for forward matrices whose `[2,2]` is effectively zero. The test also round-trips output points to source across three H scales. This fix is restricted to the new read-only mapping contract; no global homography/image raster behavior, crop/PDIC/PPP/SECTION bytes or original XY storage is changed. **Final exact-head CI/OCR/CodeQL verification remains required after this follow-up.**
+

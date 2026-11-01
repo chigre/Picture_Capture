@@ -224,6 +224,25 @@ class PreprocessCoordinateMap:
             return ((estimate, float(analysis.orthogonal_row_gain)),)
         return ()
 
+    @staticmethod
+    def _normalized_projective_matrix(
+        matrix: Sequence[float],
+    ) -> tuple[float, ...]:
+        """Remove arbitrary homogeneous scale before the shared point mapper.
+
+        The general pixel-point utility clamps denominators below 1e-9 in
+        absolute units, whereas H and its inverse can be multiplied by any
+        nonzero scalar. Prefer a [2,2] normalizer (as raster replay does for
+        the inverse), falling back to the largest coefficient for a forward
+        H whose lower-right entry is effectively zero.
+        """
+        coefficients = np.asarray(matrix, dtype=float).reshape(3, 3)
+        magnitude = float(np.max(np.abs(coefficients)))
+        scale = float(coefficients[2, 2])
+        if abs(scale) <= 1e-12 * magnitude:
+            scale = magnitude
+        return tuple((coefficients / scale).reshape(-1))
+
     def _forward_geometry(self, point: tuple[float, float]) -> tuple[float, float]:
         analysis = self._analysis
         width, height = int(analysis.source_width), int(analysis.source_height)
@@ -234,7 +253,9 @@ class PreprocessCoordinateMap:
         mapped = np.asarray(((x, y),), dtype=float)
         if analysis.perspective_matrix is not None:
             mapped = transform_points_homography(
-                mapped, analysis.perspective_matrix,
+                mapped, self._normalized_projective_matrix(
+                    analysis.perspective_matrix,
+                ),
             )
         for estimate, row_gain in self._orthogonal_step_cache:
             mapped = transform_points_orthogonal(
@@ -264,7 +285,9 @@ class PreprocessCoordinateMap:
                 raise CoordinateMappingUnavailable(
                     "perspective matrix became singular"
                 ) from exc
-            mapped = transform_points_homography(mapped, inverse.reshape(-1))
+            mapped = transform_points_homography(
+                mapped, self._normalized_projective_matrix(inverse.reshape(-1)),
+            )
         width, height = int(analysis.source_width), int(analysis.source_height)
         x, y = _rotate_point_same_canvas(
             float(mapped[0, 0]), float(mapped[0, 1]),
