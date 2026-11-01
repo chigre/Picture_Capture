@@ -118,7 +118,7 @@ def test_recurring_schedule_failure_during_close_restores_visible_retryable_stat
     app.deiconify = lambda: visibility.append("visible")
     runtime.poll_ui_worker_queue(app, deps=_deps())
 
-    assert app._ui_close_requested is False
+    assert app._ui_close_requested is True
     assert visibility == ["visible"]
     assert app._ui_worker_close_wait == {("durable-save", 4)}
     assert app._ui_worker_active == {("durable-save", 4)}
@@ -243,7 +243,7 @@ def test_repeated_close_retries_missing_poll_without_reinvalidating_generation()
     assert app._ui_worker_poll_job == "retry-after-poll"
     assert app._ui_close_requested is True
     assert invalidated == []
-    assert withdrawn == []
+    assert withdrawn == [True]
 
 
 def test_failed_rearm_during_close_keeps_close_intent_and_reopens_for_retry():
@@ -267,17 +267,39 @@ def test_failed_rearm_during_close_keeps_close_intent_and_reopens_for_retry():
 
 def test_explicit_close_retry_resets_idle_fallback_latch_before_rescheduling():
     def after(_ms, _callback):
-        return "retry-after-poll"
+        raise RuntimeError("PRIVATE_RETRY_AFTER:/synthetic/durable.pdic")
+
+    def after_idle(_callback):
+        return "retry-idle-poll"
 
     app, invalidated, withdrawn, _status = _close_app(
-        after=after, after_idle=lambda *_args: pytest.fail("not needed"),
-        close_requested=True,
+        after=after, after_idle=after_idle, close_requested=True,
     )
     app._ui_worker_poll_idle_fallback_used = True
     lifecycle.on_close(app, deps=_close_deps())
 
-    assert app._ui_worker_poll_job == "retry-after-poll"
-    assert app._ui_worker_poll_idle_fallback_used is False
+    assert app._ui_worker_poll_job == "retry-idle-poll"
+    assert app._ui_worker_poll_idle_fallback_used is True
     assert app._ui_close_requested is True
     assert invalidated == []
+    assert withdrawn == [True]
+
+
+def test_failed_explicit_close_retry_keeps_window_visible_and_close_intent():
+    sentinel = "PRIVATE_RETRY_CLOSE:/synthetic/durable.pdic"
+
+    def fail(_ms, _callback):
+        raise RuntimeError(sentinel)
+
+    app, invalidated, withdrawn, status = _close_app(
+        after=fail, after_idle=fail, close_requested=True,
+    )
+    visible = []
+    app.deiconify = lambda: visible.append(True)
+    lifecycle.on_close(app, deps=_close_deps())
+
+    assert app._ui_close_requested is True
+    assert visible == [True]
+    assert invalidated == []
     assert withdrawn == []
+    assert sentinel not in repr(status.messages)
