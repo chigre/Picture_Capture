@@ -157,7 +157,7 @@ def test_scan_targets_carry_source_witness_and_reject_later_ocr_cache_drift(tmp_
 
 @pytest.mark.parametrize("mutation", ("pdic", "ocr", "section"))
 def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path, mutation):
-    review, deps, call, status, _indicator, pdic, cache, section = _fixture(tmp_path)
+    review, deps, _initial_call, status, _indicator, pdic, cache, section = _fixture(tmp_path)
     no_hit = tmp_path / "000-no-hit.png"
     Image.new("RGB", (8, 8), "white").save(no_hit)
     no_hit_pdic = no_hit.with_suffix(".pdic")
@@ -180,8 +180,15 @@ def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path, mutatio
     original_read = deps.read_pdic
     deps.read_pdic = lambda path: [] if path == no_hit_pdic else original_read(path)
 
+    # Re-run only after installing the two-page project; _fixture() already
+    # starts its own one-page scan before returning.
+    calls = []
+    review.parent._start_ui_worker = lambda *args: calls.append(args) or len(calls)
+    workflow.run_focused_filter(review, deps)
+    assert len(calls) == 1
+
     # First (no-hit) page and second (hit) page complete in the initial scan.
-    _key, worker, done, failed = call
+    _key, worker, done, failed = calls[0]
     done(worker())
     assert review._filter_scan_complete is True
     assert len(review.filtered_targets) == 1
