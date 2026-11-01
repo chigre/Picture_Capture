@@ -1943,16 +1943,28 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             except Exception:
                 pass
             self._filter_save_job = None
+        prior_uncertain = set(
+            getattr(self, "_filter_save_uncertain_pages", set())
+        )
         outcomes = dict(page_outcomes)
         if not outcomes:
-            # The all-page source preflight failed before any page writer ran.
-            outcomes = {int(index): "not_committed" for index in snapshot}
+            # Preflight did not launch this retry's page writers. That does
+            # NOT resolve an earlier dispatch that might have published the
+            # same page before its launch returned an error.
+            outcomes = {
+                int(index): (
+                    "uncertain" if int(index) in prior_uncertain
+                    else "not_committed"
+                )
+                for index in snapshot
+            }
         self._filter_save_page_outcomes = outcomes
-        # A multi-page writer is not a cross-file transaction. If any page
-        # writer raises, preserve the entire snapshot and treat every page in
-        # that batch as UNCERTAIN until an explicit retry rechecks each PDIC.
+        # A multi-page writer is not a cross-file transaction. Retain all
+        # prior uncertainty unless a *verified successful* retry settles it;
+        # a preflight rejection can never clear older unknown disk outcomes.
         self._filter_save_uncertain_pages = (
-            {int(index) for index in snapshot} if page_outcomes else set()
+            prior_uncertain
+            | ({int(index) for index in snapshot} if page_outcomes else set())
         )
         recovered = restore_unwritten(set())
         self._filter_close_after_save = False
