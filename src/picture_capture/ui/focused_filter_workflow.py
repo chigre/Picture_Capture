@@ -91,6 +91,48 @@ def _focused_scan_target_source_signature(
     return tuple(sorted(expected_by_page.items()))
 
 
+def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> bool:
+    """Revalidate every page consumed by the active filter epoch.
+
+    This includes no-hit pages, which have no target-level crop witness.
+    The check is performed at later UI publication boundaries; it is not a
+    filesystem watcher or an OS-level compare-and-swap.
+    """
+    witnesses = getattr(self, "_filter_scan_epoch_source_witnesses", None)
+    if witnesses is None:
+        # Preserve the legacy helper ABI for non-live synthetic integrations.
+        return True
+    if getattr(self, "_filter_scan_epoch_source_serial", None) != getattr(
+        self, "_filter_scan_serial", None
+    ):
+        return True
+    project = getattr(getattr(self, "parent", None), "project", None)
+    pages = getattr(self, "_filter_scan_epoch_pages", None)
+    project_root = getattr(self, "_filter_scan_epoch_project_root", None)
+    if project is None or pages is None or project_root is None:
+        return False
+    try:
+        if str(getattr(project, "root", None)) != str(project_root):
+            return False
+        current_pages = tuple(getattr(project, "images", ()))
+        if tuple(str(page) for page in current_pages) != tuple(
+            str(page) for page in pages
+        ):
+            return False
+        for page_index, expected in sorted(witnesses.items()):
+            page_index = int(page_index)
+            if not 0 <= page_index < len(pages):
+                return False
+            page = pages[page_index]
+            cache = deps.ocr_cache_root(project_root) / f"{page.stem}.json"
+            verify_focused_scan_source(
+                page, deps.pdic_path(page), cache, expected,
+            )
+    except (OSError, ValueError, RuntimeError, IndexError, TypeError, AttributeError):
+        return False
+    return True
+
+
 def _record_focused_timing(
     self, session: ReviewTimingSession | None,
     stage: str, elapsed: float | None, count: int = 1,
@@ -246,6 +288,12 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     # that produce zero target rows. A no-hit page still participates in the
     # completeness claim made when the streamed scan reaches its terminal.
     epoch_source_witnesses: dict[int, tuple] = {}
+    # Retain the complete epoch source set after scan completion so later
+    # batch publication also rejects drift on pages that produced no targets.
+    self._filter_scan_epoch_source_witnesses = epoch_source_witnesses
+    self._filter_scan_epoch_pages = tuple(pages)
+    self._filter_scan_epoch_project_root = project_root
+    self._filter_scan_epoch_source_serial = serial
 
     def record_epoch_source_witness(page_index: int, witness: tuple) -> None:
         page_index = int(page_index)
@@ -1095,6 +1143,31 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
 
 def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     if not getattr(self, "_filter_rows_active", False):
+        return
+    if not _verify_active_filter_scan_epoch_sources(self, deps):
+        self._filter_scan_failed = True
+        self._filter_scan_complete = False
+        self._filter_render_serial += 1
+        self._filter_batch_render_cache.clear()
+        self._filter_prefetch_key = None
+        for key in (
+            f"focused-filter-render-{id(self)}",
+            f"focused-filter-prefetch-{id(self)}",
+        ):
+            self.parent._invalidate_ui_worker(key)
+        if (
+            not getattr(self, "_filter_save_running", False)
+            and not getattr(self, "_filter_pending_changes", None)
+        ):
+            self._clear_review_workspace(
+                "筛选来源在扫描完成后发生变化；请重新筛选。"
+            )
+        self.parent.status_var.set(
+            "已完成筛选的页面来源发生变化（包括此前无命中页面），"
+            "旧结果不再视为完整；请重新筛选。"
+        )
+        self.filter_batch_var.set("筛选来源已变化（结果不完整）")
+        self._update_filter_batch_indicator()
         return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
