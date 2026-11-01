@@ -8,6 +8,7 @@ solver as the image mesh and is therefore marked approximate.
 """
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from copy import deepcopy
 from dataclasses import dataclass, field
 import math
@@ -637,68 +638,286 @@ class PreprocessCoordinateMap:
                 return True
         return False
 
-    def _polygon_edge_samples(
-        self, points: Sequence[Sequence[float]],
-    ) -> tuple[tuple[float, float], ...]:
-        """Sample nonlinear orthogonal edges before certifying domain bounds.
+    def _orthogonal_stage_input_point(
+        self,
+        point: Sequence[float],
+        stage_index: int,
+        *,
+        reverse: bool,
+    ) -> tuple[float, float]:
+        """Return a point in one saved orthogonal stage's input coordinate frame.
 
-        Homography/deskew alone maps straight segments to straight segments
-        (provided no projective horizon is crossed). Orthogonal replay is
-        nonlinear, so valid vertices do not prove that the intervening edge
-        remains inside the crop/source rectangle. Sample at a bounded interval
-        and fail closed rather than returning an unchecked polygon.
+        Forward polygon edges start in source coordinates and must pass through
+        layout canonicalization, deskew and perspective before reaching the
+        first orthogonal stage. Reverse edges start in output-canvas coordinates
+        and must undo canvas/crop offsets and later orthogonal stages first.
+        """
+        x, y = self._point(point)
+        analysis = self._analysis
+        if reverse:
+            offset_x, offset_y = self._canvas_offset()
+            x0, y0, _x1, _y1 = (
+                int(value) for value in analysis.crop_box
+            )
+            mapped = np.asarray(
+                ((x - offset_x + x0, y - offset_y + y0),),
+                dtype=float,
+            )
+            for index in range(
+                len(self._orthogonal_step_cache) - 1,
+                stage_index - 1,
+                -1,
+            ):
+                estimate, row_gain = self._orthogonal_step_cache[index]
+                mapped = inverse_transform_points_orthogonal(
+                    mapped,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+        else:
+            canonical = self.layout_transform.source_to_canonical_point(
+                x, y, self.source_size,
+            )
+            width = int(analysis.source_width)
+            height = int(analysis.source_height)
+            deskewed = _rotate_point_same_canvas(
+                float(canonical[0]),
+                float(canonical[1]),
+                width,
+                height,
+                float(analysis.applied_angle_deg),
+            )
+            if analysis.perspective_matrix is not None:
+                deskewed = self._map_projective_point(
+                    deskewed,
+                    analysis.perspective_matrix,
+                )
+            mapped = np.asarray((deskewed,), dtype=float)
+            for index in range(stage_index):
+                estimate, row_gain = self._orthogonal_step_cache[index]
+                mapped = transform_points_orthogonal(
+                    mapped,
+                    estimate,
+                    row_gain=row_gain,
+                    separator_gain=1.0,
+                )
+
+        result = (float(mapped[0, 0]), float(mapped[0, 1]))
+        if not all(math.isfinite(value) for value in result):
+            raise CoordinateMappingUnavailable(
+                "orthogonal stage input mapping is non-finite"
+            )
+        return result
+
+    def _bisect_orthogonal_knot_crossing(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        fraction_start: float,
+        fraction_end: float,
+        value_start: float,
+        value_end: float,
+        knot: float,
+        stage_index: int,
+        axis: int,
+        *,
+        reverse: bool,
+    ) -> float | None:
+        """Find a saved interpolation-knot crossing in the actual stage frame."""
+        if value_start == knot:
+            return fraction_start
+        if value_end == knot:
+            return fraction_end
+        if not (
+            (value_start < knot < value_end)
+            or (value_end < knot < value_start)
+        ):
+            return None
+
+        def value_at(fraction: float) -> float:
+            point = (
+                start[0] + (end[0] - start[0]) * fraction,
+                start[1] + (end[1] - start[1]) * fraction,
+            )
+            value = self._orthogonal_stage_input_point(
+                point,
+                stage_index,
+                reverse=reverse,
+            )[axis]
+            if not math.isfinite(value):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal knot crossing became non-finite"
+                )
+            return value
+
+        left = float(fraction_start)
+        right = float(fraction_end)
+        left_value = float(value_start)
+        for _ in range(52):
+            middle = (left + right) / 2.0
+            middle_value = value_at(middle)
+            if middle_value == knot:
+                return middle
+            if (left_value < knot) == (middle_value < knot):
+                left = middle
+                left_value = middle_value
+            else:
+                right = middle
+            if right - left <= 1e-12:
+                break
+        return (left + right) / 2.0
+
+    def _polygon_edge_samples(
+        self,
+        points: Sequence[Sequence[float]],
+        *,
+        reverse: bool = False,
+    ) -> tuple[tuple[float, float], ...]:
+        """Sample nonlinear edges and include exact saved-knot preimages.
+
+        Knot coordinates are not generally expressed in the polygon's input
+        frame: forward edges must be transformed up to each orthogonal stage,
+        while reverse edges must first undo canvas/crop offsets and later warp
+        stages. Root-find every bracketed knot crossing in that actual frame;
+        bounded spatial samples remain as coverage between the knots.
         """
         vertices = tuple(self._point(point) for point in points)
         if len(vertices) < 2 or not self._orthogonal_step_cache:
             return vertices
+
         samples: list[tuple[float, float]] = []
-        for index, start in enumerate(vertices):
-            end = vertices[(index + 1) % len(vertices)]
-            distance = math.hypot(end[0] - start[0], end[1] - start[1])
+        for edge_index, start in enumerate(vertices):
+            end = vertices[(edge_index + 1) % len(vertices)]
+            distance = math.hypot(
+                end[0] - start[0],
+                end[1] - start[1],
+            )
             steps = max(
                 2,
-                int(math.ceil(distance / _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX)),
+                int(math.ceil(
+                    distance / _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX
+                )),
             )
+
+            # Bound spacing in every stage frame, not just in the caller's
+            # source/output frame. Mid-edge path length also detects ordinary
+            # curvature introduced by preceding nonlinear stages.
+            for stage_index in range(len(self._orthogonal_step_cache)):
+                first = self._orthogonal_stage_input_point(
+                    start, stage_index, reverse=reverse,
+                )
+                middle = self._orthogonal_stage_input_point(
+                    (
+                        (start[0] + end[0]) / 2.0,
+                        (start[1] + end[1]) / 2.0,
+                    ),
+                    stage_index,
+                    reverse=reverse,
+                )
+                last = self._orthogonal_stage_input_point(
+                    end, stage_index, reverse=reverse,
+                )
+                stage_length = (
+                    math.hypot(
+                        middle[0] - first[0],
+                        middle[1] - first[1],
+                    )
+                    + math.hypot(
+                        last[0] - middle[0],
+                        last[1] - middle[1],
+                    )
+                )
+                steps = max(
+                    steps,
+                    int(math.ceil(
+                        stage_length / _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX
+                    )),
+                )
+
             if steps % 2:
                 steps += 1
+            if steps > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS:
+                raise CoordinateMappingUnavailable(
+                    "orthogonal polygon edge exceeds the bounded sampling budget"
+                )
+
+            base_fractions = tuple(
+                step / steps for step in range(steps + 1)
+            )
+            fractions = set(base_fractions)
+
+            for stage_index, (estimate, _row_gain) in enumerate(
+                self._orthogonal_step_cache
+            ):
+                stage_points = tuple(
+                    self._orthogonal_stage_input_point(
+                        (
+                            start[0] + (end[0] - start[0]) * fraction,
+                            start[1] + (end[1] - start[1]) * fraction,
+                        ),
+                        stage_index,
+                        reverse=reverse,
+                    )
+                    for fraction in base_fractions
+                )
+                knot_sets = (
+                    (0, tuple(sorted(set(float(v) for v in estimate.x_knots)))),
+                    (
+                        1,
+                        tuple(sorted(set(
+                            float(v)
+                            for v in (
+                                *estimate.y_knots,
+                                *estimate.separator_y_knots,
+                            )
+                        ))),
+                    ),
+                )
+                for axis, knots in knot_sets:
+                    if not knots:
+                        continue
+                    for index, (value_start, value_end) in enumerate(
+                        zip(
+                            (point[axis] for point in stage_points),
+                            (point[axis] for point in stage_points[1:]),
+                        )
+                    ):
+                        low = min(value_start, value_end)
+                        high = max(value_start, value_end)
+                        first_knot = bisect_right(knots, low)
+                        after_last_knot = bisect_left(knots, high)
+                        for knot in knots[first_knot:after_last_knot]:
+                            crossing = self._bisect_orthogonal_knot_crossing(
+                                start,
+                                end,
+                                base_fractions[index],
+                                base_fractions[index + 1],
+                                value_start,
+                                value_end,
+                                knot,
+                                stage_index,
+                                axis,
+                                reverse=reverse,
+                            )
+                            if crossing is not None:
+                                fractions.add(crossing)
+
             if (
-                steps > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS
-                or len(samples) + steps > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
+                len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS + 1
+                or len(samples) + len(fractions)
+                > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
             ):
                 raise CoordinateMappingUnavailable(
                     "orthogonal polygon edge exceeds the bounded sampling budget"
                 )
-            fractions = {step / steps for step in range(steps)}
-            delta_x = end[0] - start[0]
-            delta_y = end[1] - start[1]
-            # The warp is piecewise interpolated at these saved coordinates.
-            # Include their crossings explicitly so a narrow local excursion
-            # cannot hide between the uniform spatial samples. Earlier stages
-            # may rotate/warp the edge, so the bounded uniform samples remain
-            # necessary as a second, independent coverage layer.
-            for estimate, _row_gain in self._orthogonal_step_cache:
-                if delta_y != 0.0:
-                    for knot in (*estimate.y_knots, *estimate.separator_y_knots):
-                        fraction = (float(knot) - start[1]) / delta_y
-                        if 0.0 < fraction < 1.0:
-                            fractions.add(fraction)
-                if delta_x != 0.0:
-                    for knot in estimate.x_knots:
-                        fraction = (float(knot) - start[0]) / delta_x
-                        if 0.0 < fraction < 1.0:
-                            fractions.add(fraction)
-            if (
-                len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS
-                or len(samples) + len(fractions) > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
-            ):
-                raise CoordinateMappingUnavailable(
-                    "orthogonal polygon edge exceeds the bounded sampling budget"
+            samples.extend(
+                (
+                    start[0] + (end[0] - start[0]) * fraction,
+                    start[1] + (end[1] - start[1]) * fraction,
                 )
-            for fraction in sorted(fractions):
-                samples.append((
-                    start[0] + delta_x * fraction,
-                    start[1] + delta_y * fraction,
-                ))
+                for fraction in sorted(fractions)
+            )
         return tuple(samples)
 
     def source_to_output_polygon(
@@ -721,7 +940,7 @@ class PreprocessCoordinateMap:
     ) -> tuple[tuple[float, float], ...] | None:
         if len(points) == 0:
             return None
-        samples = self._polygon_edge_samples(points)
+        samples = self._polygon_edge_samples(points, reverse=True)
         mapped_samples = tuple(self.output_to_source_point(point) for point in samples)
         if any(
             item.status != "mapped" or item.point is None
