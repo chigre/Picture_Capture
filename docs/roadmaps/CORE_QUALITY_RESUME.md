@@ -1,3 +1,13 @@
+## 2026-11-01｜docs checkpoint 10a23f40 and B5 R5 parity recheck
+
+- **Docs checkpoint exact HEAD:** `10a23f40f7751d51f66b34790fa12ec5efe25690`; [CI #41290109140](https://github.com/chigre/Picture_Capture/actions/runs/41290109140) 6/6 Windows/macOS/Ubuntu × Python3.10/3.13 + Risk-tier + Risk-tier CI gate SUCCESS; [OCR #41290109157](https://github.com/chigre/Picture_Capture/actions/runs/41290109157) 3/3 SUCCESS; [CodeQL #41290105787](https://github.com/chigre/Picture_Capture/actions/runs/41290105787) Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED and not counted as PASS.
+- **B5 R5.1/R5.2 current source recheck:** exact source HEAD `3b06e89034cc8c5b93db3613fd0d10fe811bdc70`; [CI #41289630397](https://github.com/chigre/Picture_Capture/actions/runs/41289630397) 6/6 SUCCESS, [OCR #41289630408](https://github.com/chigre/Picture_Capture/actions/runs/41289630408) 3/3 SUCCESS, [CodeQL #41289628415](https://github.com/chigre/Picture_Capture/actions/runs/41289628415) 2/2 SUCCESS. Dedicated candidate-score and engine-q parity tests both passed in all six full-suite jobs. R5.1 covers 4,096 boolean vectors; R5.2 covers 512 direct q comparisons plus full-arbitration differential cases. No weights/thresholds/decision rules changed; synthetic E2 only.
+- **Batch state:** B4 remains active for the residual post-terminal no-hit source drift and focused-save partial publication/reconciliation audit. B5 R5.1/R5.2 is now marked synthetic E2 complete. B6 is blocked pending reliable human-verified, source-consistent labels and independent dictionary/project partition; no model training or shadow deployment.
+- **Boundaries:** R3 E3, #483 W1-W11, #503 manual Undo/Redo and real PDIC/PPP/SECTION/Profile/OCR save/reopen remain NOT PERFORMED. R6 training/shadow, R7 real performance claims and R8 real scan remain gated/deferred.
+- **Next:** fail-first test post-terminal no-hit page drift with a bounded/performance-aware design, then continue focused-save partial publication/reconciliation. Preserve one Draft PR #663; do not merge or mark Ready.
+
+---
+
 ## 2026-11-01｜G3 R4.2 no-hit page source retention across async scan epochs：source HEAD synthetic E2 verified
 
 - **Live baseline:** source/test HEAD `3b06e89034cc8c5b93db3613fd0d10fe811bdc70`; main `ec20989ea8c026cca5337293e67850b6b6df30f2`; sole PR #663 remains Draft/Open/Unmerged; #503/#562/#483 remain Open.
