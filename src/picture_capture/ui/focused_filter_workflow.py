@@ -106,6 +106,10 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
         self, "_filter_scan_serial", None
     ):
         return True
+    # Chunk terminals already revalidate the scanned prefix while streaming.
+    # Avoid rehashing that growing prefix for every early-batch repaint.
+    if not getattr(self, "_filter_scan_complete", False):
+        return True
     project = getattr(getattr(self, "parent", None), "project", None)
     pages = getattr(self, "_filter_scan_epoch_pages", None)
     project_root = getattr(self, "_filter_scan_epoch_project_root", None)
