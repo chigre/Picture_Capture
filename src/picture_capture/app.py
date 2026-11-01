@@ -1983,7 +1983,10 @@ class PictureCaptureApp(tk.Tk):
 
     def on_close(self) -> None:
         """Public compatibility entrypoint with call-time patched collaborators."""
-        return _main_app_lifecycle.on_close(self, deps={"messagebox": messagebox, "tk": tk, "settings_path": settings_path})
+        return _main_app_lifecycle.on_close(self, deps={
+            "messagebox": messagebox, "tk": tk, "settings_path": settings_path,
+            "schedule_ui_worker_poll": _background_job_runtime.schedule_ui_worker_poll,
+        })
 
     def _build_ui(self) -> None:
         """Historical main workspace construction with current Tk bindings."""
