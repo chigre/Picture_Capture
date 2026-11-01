@@ -1,11 +1,13 @@
-## 2026-11-01｜G3 R4.2 Tk 重复轮询和关闭调度失败：RED-first + 最小修复，E2 待门禁
+## 2026-11-01｜G3 R4.2 recurring Tk poll / durable close retry：源码修复完成，source HEAD E2 门禁通过
 
-- 实时 main `ec20989ea8c026cca5337293e67850b6b6df30f2`，唯一 Draft PR #663；#503/#562/#483 仍 Open。
-- 测试先行 `923aa0754844959365732332fd83ccdf231168c2`，[CI #41283123003](https://github.com/chigre/Picture_Capture/actions/runs/41283123003) macOS Python3.13 **7 failed / 5267 passed / 2 skipped**，Ubuntu Python3.13 也失败；这是 RED 证据，不是绿灯。
-- 源码修复 `adf8ee22`（定时轮询失败后一次 idle fallback、避免无界 idle spin、关闭回调降级），`b50d1301`（关闭前先注册观察者，不让未确认调度的 durable worker 隐藏窗口），`58eee5f4`（app 注入调度依赖），`a03a7a67`（初始化 fallback 状态）。[架构审计](../architecture/G3_R4_2_TK_POLL_REARM_CLOSE_20261101.md)。
-- 最终文档 HEAD 六平台 CI、OCR 3 OS、Risk-tier/gate、CodeQL Python/Actions 均须独立验证；当前 **PENDING**，不继承旧 SHA 的绿灯。
-- **NOT PERFORMED**：Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典/PDIC/PPP/SECTION/Profile 验收。**DEFERRED**：R6 真实标签学习与 R8 真实扫描。PR 保持 Draft/Open/Unmerged，main 不变。
-- 下轮优先核实 exact-head 门禁并修复任何失败，然后继续异步 epoch/SECTION/crop prefetch/save 一致性。
+- 实时 main `ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 PR #663 保持 Draft/Open/Unmerged；#503/#562/#483 均 Open。
+- **RED-first 链**：`923aa075` 首轮新增 7 个调度失败测试；发现 close-path fake 缺少 `_poll_ui_worker_queue` 后，在 `11db385d` 补齐 mock 并同步更新严格 leaf-owner inventory。随后 `57be8123` 的 corrected fixture RED 在 Ubuntu/macOS Python3.13 各复现 5 个失败，涉及关闭意图丢失、retry 后重新隐藏、idle fallback latch 与显式重试。
+- **源码修复**：最终 source commit `1f338a368726c0cfd3c188f4bef1a0dec95b09ec`。轮询周期性 `after()` 失败时最多尝试一次 `after_idle()` fallback，避免 idle-spin；两种调度器均失败时保留 active/close-wait 和关闭意图，重新显示窗口以供显式重试；关闭重试重新开放一次 fallback，成功注册观察者后再隐藏，不重复 invalidation；若 worker 已完成但 `after_idle(on_close)` 注册失败，则在同一 Tk 线程直接完成关闭。
+- **Source exact-head gates**：CI [#41284201872](https://github.com/chigre/Picture_Capture/actions/runs/41284201872) 六平台/Python 组合 6/6 SUCCESS，Risk tier 与 Risk-tier CI gate SUCCESS；OCR [#41284201873](https://github.com/chigre/Picture_Capture/actions/runs/41284201873) 3/3 SUCCESS；CodeQL [#41284199187](https://github.com/chigre/Picture_Capture/actions/runs/41284199187) Python/Actions 2/2 SUCCESS。macOS Python3.13 原生 GUI smoke 首次出现一次 synthetic in-flight PDIC conflict；同一 HEAD 的同一 job 重跑 `124783274918` 后 SUCCESS，5,277 passed/2 skipped，All checks passed。保留此瞬时异常记录，不宣称它未发生。Documentation architecture check 为 **SKIPPED**，不计为通过。
+- 以上为 source HEAD 证据；本次路线图/架构 checkpoint commit 后仍须对新的 docs HEAD 重新验证全部 exact-head gates。此轮为 synthetic E2；不等于人工 E3 或真实项目文件耐久性验收。
+- **NOT PERFORMED**：Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描、真实 PDIC/PPP/SECTION/Profile/OCR 保存重开、性能 benchmark。**DEFERRED**：R6 真实标签学习、R8 真实扫描。PR 保持 Draft/Open/Unmerged，main 不变。
+- 下一工作包：异步 SECTION/source epoch、crop prefetch 与 save 一致性 fail-first audit。
+
 
 ---
 
