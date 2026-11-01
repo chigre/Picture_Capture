@@ -50,14 +50,9 @@ def start_ui_worker(
             event = ("error", key, generation, None, exc, traceback.format_exc())
         self._ui_worker_queue.put(event)
 
-    try:
-        threading.Thread(
-            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
-        ).start()
-    except Exception:
-        # A thread that did not start cannot deliver a completion event.
-        # Undo only this generation's registrations; older workers remain
-        # live and keep their original callbacks and close-wait ownership.
+    def rollback_reservation() -> None:
+        # Restore only the prior generation displaced by this attempted
+        # replacement; never discard another worker's close-wait ownership.
         self._ui_worker_handlers.pop(token, None)
         self._ui_worker_active.discard(token)
         self._ui_worker_close_wait.discard(token)
@@ -66,9 +61,22 @@ def start_ui_worker(
             self._ui_worker_generations.pop(key, None)
         else:
             self._ui_worker_generations[key] = previous_generation
+
+    try:
+        # Register the first Tk poll before constructing or starting a worker.
+        # If Tcl rejects after(), no background operation has begun, so this
+        # generation can be rolled back without stranding a running worker.
+        # Keep an accepted poll if Thread construction/start later fails: it
+        # can still service a restored same-key worker, or harmlessly drain
+        # once when this was the only attempted worker.
+        if self._ui_worker_poll_job is None:
+            self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
+        threading.Thread(
+            target=runner, name=f"PictureCapture-{key}-{generation}", daemon=True,
+        ).start()
+    except Exception:
+        rollback_reservation()
         raise
-    if self._ui_worker_poll_job is None:
-        self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
     return generation
 
 

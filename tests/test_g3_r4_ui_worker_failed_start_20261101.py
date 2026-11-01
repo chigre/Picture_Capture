@@ -73,7 +73,9 @@ def test_worker_start_failure_rolls_back_only_new_reservation(
     assert app._ui_worker_generations == generations
     assert app._ui_worker_active == active
     assert app._ui_worker_close_wait == close_wait
-    assert app._ui_worker_poll_job is None
+    # The first poll is registered before Thread construction/start and
+    # remains scheduled to service a restored prior worker if one exists.
+    assert app._ui_worker_poll_job == "scheduled-poll"
     assert app._ui_worker_queue.empty()
 
 
