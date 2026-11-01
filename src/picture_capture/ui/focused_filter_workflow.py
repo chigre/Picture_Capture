@@ -1192,6 +1192,16 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
 def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     if not getattr(self, "_filter_rows_active", False):
         return
+    # A completed scan's no-hit pages remain part of its source epoch.
+    # Revalidate once at the actual batch-publication boundary (not on every
+    # repaint or background prefetch) so a post-terminal PDIC/OCR/SECTION
+    # mutation cannot leave stale rows presented as a valid completed scan.
+    if (
+        getattr(self, "_filter_scan_complete", False)
+        and not _verify_active_filter_scan_epoch_sources(self, deps)
+    ):
+        _reject_active_filter_scan_epoch(self)
+        return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
         if not _verify_active_filter_scan_epoch_sources(self, deps):
