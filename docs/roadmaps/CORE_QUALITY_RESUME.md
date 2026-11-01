@@ -1,3 +1,14 @@
+## 2026-11-01｜B7b R7.3 polygon-horizon & G3 R4.2 uncertain focused-save, synthetic E2 verified
+
+- **实时代码基线：** PR #663 的最后源码 HEAD `023432f6f8f0a742743eb5b33c68379c38cf1d4c`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。#663 Draft/Open/Unmerged；#503/#562/#483 保持 Open。任何新的文档/测试 commit 需重新确认当前 HEAD。
+- **R7.3 反例与修复：** 多边形四角都在图内不代表边可投影。source polygon 跨单应性分母极点时必须拒绝，安全同侧多边形仍正常。RED [CI #41307611949](https://github.com/chigre/Picture_Capture/actions/runs/41307611949)；修复 `afbc42a1` 的 [CI #41307851367](https://github.com/chigre/Picture_Capture/actions/runs/41307851367) 6/6，OCR #41307851371 3/3，CodeQL #41307849472 2/2 SUCCESS。
+- **G3 反例与修复：** scheduler 可能先运行 writer 后报告启动失败；本批全部标 UNCERTAIN，保留人工改动，关闭窗口与防抖不能隐式重试，只有核对 PDIC 后的显式 retry 可启动。RED #41308310346/#41308530086。原生 Tk GUI smoke 中间 RED #41308743285 已修正测试交互并在 [CI #41309027670](https://github.com/chigre/Picture_Capture/actions/runs/41309027670) 六平台通过。显式 retry 若 source preflight 失败必须保留历史 UNCERTAIN，RED #41309554723 → 修复 `023432f6`，其 [CI #41309765324](https://github.com/chigre/Picture_Capture/actions/runs/41309765324) 6/6 + Risk-tier/gate、OCR #41309765320 3/3、CodeQL #41309762501 2/2 SUCCESS。
+- **架构审计：** `docs/architecture/R7_3_HOMOGRAPHY_RASTER_REPLAY_GUARD_20261101.md` 和 `docs/architecture/G3_R4_2_FOCUSED_SAVE_LAUNCH_AND_PREFLIGHT_20261101.md`。仅 transient UI / read-only geometry + synthetic tests，未更改 PDIC/PPP/SECTION/Profile/OCR 持久化 schema、原图坐标、实际 writer 或实验默认值。Documentation architecture check 的 SKIPPED 不计成功。最终文档/测试 HEAD 须独立复检门禁。
+- **后续：** 保持 B7b 几何合同与 G3 async epoch/SECTION/crop prefetch/save 一致性回归的自动审计；风险恢复时先查实时 main/PR HEAD 和最新 PR 评论、CI/OCR/CodeQL。B6/R6 缺真实核验标签，B7a 缺真实 profiler，R8 缺授权数据时不得执行或声称性能提升。
+- **NOT PERFORMED：** Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描与真实 PDIC/PPP/SECTION/Profile/OCR 保存重开。**DEFERRED：** R6 学习、R8 扫描；synthetic E2 不等于人工验收。
+
+---
+
 ## 2026-11-01｜G3 R4.2 B4 收口，进入 R7.3 独立坐标合同审计
 
 - **实时 HEAD：** `fd4f46b717de23c96014661ae28cedef51434788`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 不变；唯一 PR #663 仍 Draft/Open/Unmerged；当前 open PR 列表仅 #663。

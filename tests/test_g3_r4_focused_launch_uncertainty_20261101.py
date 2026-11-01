@@ -144,6 +144,9 @@ def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
 
     assert attempted == [0, 1], "preflight must reject before new writes"
     assert review._filter_save_uncertain_pages == {0, 1}
+    assert review._filter_save_page_outcomes == {
+        0: "uncertain", 1: "uncertain",
+    }, "a rejected preflight cannot prove an old write was never committed"
     assert set(review._filter_pending_changes) == {0, 1}
     assert not review._filter_save_running
     assert not review._filter_close_after_save

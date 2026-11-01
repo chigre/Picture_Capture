@@ -26,3 +26,16 @@ At source/test/doc HEAD `72d795922cd561bf7e7554c1e9a4a5161b95fde9`, [CI #4130433
 
 The map now strips arbitrary homogeneous scale before forwarding H or inverse(H) to that shared helper, choosing the `[2,2]` normalizer when safe and a maximum-coefficient fallback for forward matrices whose `[2,2]` is effectively zero. The test also round-trips output points to source across three H scales. This fix is restricted to the new read-only mapping contract; no global homography/image raster behavior, crop/PDIC/PPP/SECTION bytes or original XY storage is changed. **Final exact-head CI/OCR/CodeQL verification remains required after this follow-up.**
 
+
+## Additional synthetic polygon-horizon regression (2026-11-01)
+
+The original vertex-only ROI/polygon mapping could return a complete finite
+polygon even if an edge crossed the denominator-zero line of an invertible
+homography. In a synthetic fixture, all four corners mapped into the 100×100
+crop while the source edge crossed x=50, where H has a projective pole. Such a
+polygon is not a bounded continuous replay of the original ROI.
+
+- **RED first:** `641bb7187a54e25a0ea7ab97e06caad91f1929c5`, [CI #41307611949](https://github.com/chigre/Picture_Capture/actions/runs/41307611949), Ubuntu Python 3.13: targeted failure, 5,300 passed, 3 skipped.
+- **Minimal correction:** `afbc42a18d48a3944685ec182dac4b88816c6253` checks the homogeneous denominator signs and pole proximity for polygon vertices after canonical layout and deskew; crossings are rejected in forward and reverse polygon mapping. Same-side polygons continue to map; point mapping, raster writer, source XY, and persisted PDIC/PPP/SECTION/ROI schema remain unchanged.
+- **Exact source-head evidence:** [CI #41307851367](https://github.com/chigre/Picture_Capture/actions/runs/41307851367) 6/6 Windows/macOS/Ubuntu × Python 3.10/3.13, Risk-tier/gate SUCCESS; [OCR #41307851371](https://github.com/chigre/Picture_Capture/actions/runs/41307851371) 3/3 SUCCESS; [PR CodeQL #41307849472](https://github.com/chigre/Picture_Capture/actions/runs/41307849472) Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS.
+- **Limits:** synthetic coordinate/raster checks only, NOT PERFORMED human Windows R3 E3/#483 W1–W11/#503 manual Undo/Redo, real scans and real PDIC/PPP/SECTION/Profile/OCR save-reopen; R6 learning and R8 scanning remain DEFERRED. No accuracy/speed claim.
