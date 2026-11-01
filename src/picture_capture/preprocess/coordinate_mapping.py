@@ -17,7 +17,6 @@ import numpy as np
 
 from ..geometry.layout_transform import LayoutTransform
 from .deskew import _rotate_point_same_canvas
-from .geometry import transform_points_homography
 from .models import OutputCanvasInfo, PreprocessAnalysis
 from .orthogonal_dewarp import (
     OrthogonalWarpEstimate,
@@ -243,6 +242,53 @@ class PreprocessCoordinateMap:
             scale = magnitude
         return tuple((coefficients / scale).reshape(-1))
 
+    @staticmethod
+    def _projective_denominator_is_unsafe(
+        g: float, h: float, i: float, x: float, y: float,
+    ) -> bool:
+        """Detect a pole relative to its cancelling terms, not absolute scale."""
+        terms = (float(g) * float(x), float(h) * float(y), float(i))
+        denominator = math.fsum(terms)
+        magnitude = math.fsum(abs(term) for term in terms)
+        return (
+            not math.isfinite(denominator)
+            or not math.isfinite(magnitude)
+            or magnitude == 0.0
+            or abs(denominator) <= 1e-12 * magnitude
+        )
+
+    @classmethod
+    def _map_projective_point(
+        cls, point: tuple[float, float], matrix: Sequence[float],
+    ) -> tuple[float, float]:
+        """Map one point without the shared helper's absolute 1e-9 clamp.
+
+        Homographies are scale-invariant. A denominator close to zero relative
+        to the terms that form it is numerically indistinguishable from a
+        projective pole and must not be turned into a plausible in-crop point.
+        """
+        x, y = float(point[0]), float(point[1])
+        coefficients = np.asarray(
+            cls._normalized_projective_matrix(matrix), dtype=float,
+        ).reshape(3, 3)
+        g, h, i = (float(value) for value in coefficients[2])
+        if cls._projective_denominator_is_unsafe(g, h, i, x, y):
+            raise CoordinateMappingUnavailable(
+                "point lies on or too near the projective horizon"
+            )
+        denominator = math.fsum((g * x, h * y, i))
+        a, b, c = (float(value) for value in coefficients[0])
+        d, e, f = (float(value) for value in coefficients[1])
+        mapped = (
+            math.fsum((a * x, b * y, c)) / denominator,
+            math.fsum((d * x, e * y, f)) / denominator,
+        )
+        if not all(math.isfinite(value) for value in mapped):
+            raise CoordinateMappingUnavailable(
+                "projective point mapping produced a non-finite coordinate"
+            )
+        return mapped
+
     def _forward_geometry(self, point: tuple[float, float]) -> tuple[float, float]:
         analysis = self._analysis
         width, height = int(analysis.source_width), int(analysis.source_height)
@@ -252,10 +298,12 @@ class PreprocessCoordinateMap:
         )
         mapped = np.asarray(((x, y),), dtype=float)
         if analysis.perspective_matrix is not None:
-            mapped = transform_points_homography(
-                mapped, self._normalized_projective_matrix(
+            mapped = np.asarray(
+                (self._map_projective_point(
+                    (float(mapped[0, 0]), float(mapped[0, 1])),
                     analysis.perspective_matrix,
-                ),
+                ),),
+                dtype=float,
             )
         for estimate, row_gain in self._orthogonal_step_cache:
             mapped = transform_points_orthogonal(
@@ -285,8 +333,12 @@ class PreprocessCoordinateMap:
                 raise CoordinateMappingUnavailable(
                     "perspective matrix became singular"
                 ) from exc
-            mapped = transform_points_homography(
-                mapped, self._normalized_projective_matrix(inverse.reshape(-1)),
+            mapped = np.asarray(
+                (self._map_projective_point(
+                    (float(mapped[0, 0]), float(mapped[0, 1])),
+                    inverse.reshape(-1),
+                ),),
+                dtype=float,
             )
         width, height = int(analysis.source_width), int(analysis.source_height)
         x, y = _rotate_point_same_canvas(
@@ -400,11 +452,9 @@ class PreprocessCoordinateMap:
                 float(canonical[0]), float(canonical[1]), width, height,
                 float(self._analysis.applied_angle_deg),
             )
-            denominator = g * tx + h * ty + i
-            # Match the shared homography utility's absolute 1e-9 clamp:
-            # near-pole points are not trustworthy ROI boundary vertices.
-            if not math.isfinite(denominator) or abs(denominator) < 1e-9:
+            if self._projective_denominator_is_unsafe(g, h, i, tx, ty):
                 return True
+            denominator = math.fsum((g * tx, h * ty, i))
             signs.add(denominator > 0.0)
             if len(signs) > 1:
                 return True

@@ -420,7 +420,8 @@ def test_coordinate_map_refuses_polygon_edge_crossing_projective_horizon():
     assert mapping.output_to_source_polygon(output_corners) is None
 
 
-def test_coordinate_map_rejects_forward_point_near_projective_horizon():
+@pytest.mark.parametrize("scale", (1e-14, 1.0, 1e14))
+def test_coordinate_map_rejects_forward_point_near_projective_horizon(scale):
     """The shared absolute denominator clamp must not invent a valid XY."""
     from picture_capture.preprocess.coordinate_mapping import (
         CoordinateMappingUnavailable,
@@ -428,10 +429,13 @@ def test_coordinate_map_rejects_forward_point_near_projective_horizon():
     )
 
     delta = -1e-10
-    matrix = (
-        1.0, 0.0, -50.0 + delta,
-        0.0, 1.0, -50.0 + delta,
-        1.0, 1.0, -100.0 + delta,
+    matrix = tuple(
+        value * scale
+        for value in (
+            1.0, 0.0, -50.0 + delta,
+            0.0, 1.0, -50.0 + delta,
+            1.0, 1.0, -100.0 + delta,
+        )
     )
     mapping = PreprocessCoordinateMap(
         _analysis(
@@ -454,7 +458,8 @@ def test_coordinate_map_rejects_forward_point_near_projective_horizon():
         mapping.source_to_output_point((50.0, 50.0))
 
 
-def test_coordinate_map_rejects_inverse_point_on_projective_horizon():
+@pytest.mark.parametrize("scale", (1e-14, 1.0, 1e14))
+def test_coordinate_map_rejects_inverse_point_on_projective_horizon(scale):
     """Reverse mapping must use the same scale-relative pole guard."""
     from picture_capture.preprocess.coordinate_mapping import (
         CoordinateMappingUnavailable,
@@ -462,10 +467,13 @@ def test_coordinate_map_rejects_inverse_point_on_projective_horizon():
     )
 
     delta = -1e-10
-    matrix = (
-        1.0, 0.0, -50.0 + delta,
-        0.0, 1.0, -50.0 + delta,
-        1.0, 1.0, -100.0 + delta,
+    matrix = tuple(
+        value * scale
+        for value in (
+            1.0, 0.0, -50.0 + delta,
+            0.0, 1.0, -50.0 + delta,
+            1.0, 1.0, -100.0 + delta,
+        )
     )
     mapping = PreprocessCoordinateMap(
         _analysis(
