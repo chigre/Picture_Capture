@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -21,7 +22,8 @@ def _analysis(
     *,
     source_size: tuple[int, int] = (100, 101),
     crop_box: tuple[int, int, int, int] | None = None,
-    separator_shift: tuple[float, float, float] | None = None,
+    separator_shift: tuple[float, ...] | None = None,
+    separator_y_knots: tuple[float, ...] = (0.0, 50.0, 100.0),
 ) -> PreprocessAnalysis:
     width, height = source_size
     crop = crop_box or (0, 0, width, height)
@@ -37,7 +39,7 @@ def _analysis(
             "row_grid_cols": 0,
             "row_angle_grid_deg": [],
             "row_displacement_grid_px": [],
-            "separator_y_knots": [0.0, 50.0, 100.0],
+            "separator_y_knots": list(separator_y_knots),
             "separator_shift_knots_px": list(separator_shift),
         },)
     return PreprocessAnalysis(
@@ -205,3 +207,58 @@ def test_malformed_orthogonal_row_grid_decoder_fails_closed():
 
     with pytest.raises(CoordinateMappingUnavailable, match="orthogonal"):
         PreprocessCoordinateMap(analysis)
+
+
+
+def test_source_polygon_checks_narrow_excursion_at_exact_orthogonal_knot():
+    """A sub-8px separator excursion must not hide between uniform samples."""
+    analysis = _analysis(
+        source_size=(50, 101),
+        crop_box=(0, 0, 50, 101),
+        separator_shift=(0.0, 0.0, -10.0, 0.0, 0.0),
+        separator_y_knots=(0.0, 52.0, 53.0, 54.0, 100.0),
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+    polygon = ((40.0, 10.0), (45.0, 10.0),
+               (45.0, 90.0), (40.0, 90.0))
+
+    assert all(mapping.source_to_output_point(point).status == "mapped"
+               for point in polygon)
+    assert mapping.source_to_output_polygon(polygon) is None
+
+
+def test_inverse_polygon_checks_narrow_excursion_at_exact_orthogonal_knot():
+    """Inverse ROI edges must sample the saved field's exact knot locations."""
+    analysis = _analysis(
+        source_size=(50, 101),
+        crop_box=(0, 0, 50, 101),
+        separator_shift=(0.0, 0.0, 10.0, 0.0, 0.0),
+        separator_y_knots=(0.0, 52.0, 53.0, 54.0, 100.0),
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+    polygon = ((40.0, 10.0), (45.0, 10.0),
+               (45.0, 90.0), (40.0, 90.0))
+
+    assert all(mapping.output_to_source_point(point).status == "mapped"
+               for point in polygon)
+    assert mapping.output_to_source_polygon(polygon) is None
+
+
+def test_polygon_mapping_accepts_numpy_point_arrays():
+    """The Sequence API also accepts NumPy arrays without truth-value ambiguity."""
+    analysis = _analysis(
+        source_size=(100, 101),
+        crop_box=(0, 0, 100, 101),
+        separator_shift=None,
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+    polygon = np.asarray(
+        ((20.0, 20.0), (60.0, 20.0), (60.0, 60.0), (20.0, 60.0)),
+        dtype=float,
+    )
+
+    output = mapping.source_to_output_polygon(polygon)
+    assert output is not None and len(output) == 4
+    restored = mapping.output_to_source_polygon(np.asarray(output, dtype=float))
+    assert restored is not None
+    assert np.allclose(restored, polygon, atol=0.02)
