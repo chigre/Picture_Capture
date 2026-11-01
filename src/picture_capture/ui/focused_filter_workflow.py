@@ -1074,9 +1074,6 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
             return
-        if not _verify_active_filter_scan_epoch_sources(self, deps):
-            _reject_active_filter_scan_epoch(self)
-            return
         try:
             current = self._filter_batch_snapshot(local_index)
         except Exception:
@@ -1163,6 +1160,14 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
     requested = self.filtered_batch_index + int(delta)
     target = max(0, min(batch_count - 1, requested))
     if target == self.filtered_batch_index:
+        # Even a no-op navigation can be the first user action after a
+        # completed scan; validate no-hit pages before preserving "complete".
+        if (
+            self._filter_scan_complete
+            and not _verify_active_filter_scan_epoch_sources(self, deps)
+        ):
+            _reject_active_filter_scan_epoch(self)
+            return
         if int(delta) > 0 and getattr(self, "_filter_scan_failed", False):
             self.parent.status_var.set(
                 "后续筛选已中断，请重新筛选以处理尚未扫描的页面。"
@@ -1187,11 +1192,11 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
 def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     if not getattr(self, "_filter_rows_active", False):
         return
-    if not _verify_active_filter_scan_epoch_sources(self, deps):
-        _reject_active_filter_scan_epoch(self)
-        return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
+        if not _verify_active_filter_scan_epoch_sources(self, deps):
+            _reject_active_filter_scan_epoch(self)
+            return
         if getattr(self, "_filter_scan_failed", False):
             self.filter_batch_var.set("筛选中断（无完整批次）")
             self._clear_review_workspace("筛选失败，结果不完整；请重新筛选。")
