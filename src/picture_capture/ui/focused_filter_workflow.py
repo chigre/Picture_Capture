@@ -242,6 +242,37 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     )
     first_batch_size = self._focused_batch_size()
 
+    # Retain provenance for every page in this scan epoch, including pages
+    # that produce zero target rows. A no-hit page still participates in the
+    # completeness claim made when the streamed scan reaches its terminal.
+    epoch_source_witnesses: dict[int, tuple] = {}
+
+    def record_epoch_source_witness(page_index: int, witness: tuple) -> None:
+        page_index = int(page_index)
+        previous = epoch_source_witnesses.get(page_index)
+        if previous is not None and previous != witness:
+            raise RuntimeError("同一扫描周期内页面来源版本发生变化")
+        epoch_source_witnesses[page_index] = witness
+
+    def verify_scan_epoch_sources(next_position: int) -> bool:
+        """Recheck every scanned page, not just pages with visible targets."""
+        try:
+            scanned_page_indices = tuple(
+                dict.fromkeys(int(index) for index in indices[:int(next_position)])
+            )
+            for page_index in scanned_page_indices:
+                expected = epoch_source_witnesses.get(page_index)
+                if expected is None or not 0 <= page_index < len(pages):
+                    return False
+                page = pages[page_index]
+                cache = ocr_cache_root(project_root) / f"{page.stem}.json"
+                verify_focused_scan_source(
+                    page, pdic_path(page), cache, expected,
+                )
+        except (OSError, ValueError, RuntimeError, IndexError, TypeError):
+            return False
+        return True
+
     def scan_page(
         page_index: int, sample: dict[str, float] | None = None,
     ) -> tuple[list[dict], bool]:
@@ -260,6 +291,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             verify_focused_scan_source(
                 page, page_pdic_path, cache, scan_source_witness,
             )
+            record_epoch_source_witness(page_index, scan_source_witness)
             return [], False
 
         candidates: list[dict] = []
@@ -343,6 +375,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         verify_focused_scan_source(
             page, page_pdic_path, cache, scan_source_witness,
         )
+        record_epoch_source_witness(page_index, scan_source_witness)
         for target in targets:
             target["_focused_scan_source_witness"] = scan_source_witness
         return targets, missing_ocr
@@ -482,6 +515,12 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 or not getattr(self, "_filter_rows_active", False)
             ):
                 return
+            additions, missing_total, next_position = payload
+            # Previously scanned no-hit pages remain part of the epoch's
+            # source set even when later chunks add visible target rows.
+            if not verify_scan_epoch_sources(next_position):
+                remaining_failed(None, None)
+                return
             # Consume before publishing and scheduling the following chunk;
             # Tk callbacks can be re-entered by UI refresh and worker shims.
             remaining_terminal_claimed[0] = True
@@ -565,6 +604,11 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             serial != self._filter_scan_serial
             or not getattr(self, "_filter_rows_active", False)
         ):
+            return
+        # No-hit pages are part of the scan's source set too. Do not publish
+        # even the first visible batch if an earlier page has drifted.
+        if not verify_scan_epoch_sources(payload[2]):
+            failed(None, None)
             return
         first_terminal_claimed[0] = True
         targets, pages_without_ocr, next_position = payload
