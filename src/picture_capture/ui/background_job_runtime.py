@@ -105,16 +105,18 @@ def schedule_ui_worker_poll(self, milliseconds: int = 40) -> bool:
 
 
 def _handle_poll_registration_failure(self) -> None:
-    """Do not strand a hidden window if no Tk completion poll is available."""
+    """Keep deferred close intent authoritative while exposing a retry surface."""
     if self._ui_close_requested:
-        self._ui_close_requested = False
+        # Do not cancel close intent: worker callbacks must remain suppressed
+        # after their handlers were invalidated. Reopening only permits an
+        # explicit close retry to re-establish the Tk completion observer.
         try:
             self.deiconify()
         except Exception:
             pass
     try:
         self.status_var.set(
-            "后台操作尚未结束，界面轮询暂不可用；请保持程序运行并重试。"
+            "后台操作尚未结束，界面轮询暂不可用；请保持程序运行并重试关闭。"
         )
     except Exception:
         pass

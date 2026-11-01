@@ -25,6 +25,9 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
     # observer before its poll has been successfully registered.
     if self._ui_worker_close_wait:
         if self._ui_worker_poll_job is None:
+            # An explicit close retry is a fresh opportunity for one bounded
+            # idle fallback; never let an earlier failed attempt latch it out.
+            self._ui_worker_poll_idle_fallback_used = False
             schedule_poll = deps.get("schedule_ui_worker_poll")
             if schedule_poll is None:
                 # Legacy direct helper invocation; keep its historical
@@ -32,24 +35,36 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
                 try:
                     self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
                 except Exception:
+                    if self._ui_close_requested:
+                        try:
+                            self.deiconify()
+                        except Exception:
+                            pass
                     self.status_var.set(
-                        "后台操作仍在运行，轮询无法启动；请保持窗口并重试关闭。"
+                        "后台操作仍在运行，轮询无法启动；请保持程序并重试关闭。"
                     )
                     return
             elif not schedule_poll(self, 40):
+                if self._ui_close_requested:
+                    try:
+                        self.deiconify()
+                    except Exception:
+                        pass
                 self.status_var.set(
-                    "后台操作仍在运行，轮询无法启动；请保持窗口并重试关闭。"
+                    "后台操作仍在运行，轮询无法启动；请保持程序并重试关闭。"
                 )
                 return
         if not self._ui_close_requested:
             self._ui_close_requested = True
             for key in tuple(self._ui_worker_generations):
                 self._invalidate_ui_worker(key)
-            self.status_var.set("正在完成后台文件操作，完成后自动退出…")
-            try:
-                self.withdraw()
-            except tk.TclError:
-                pass
+        # A retry that successfully registers the observer should hide the
+        # window again, but must not invalidate the same generations twice.
+        self.status_var.set("正在完成后台文件操作，完成后自动退出…")
+        try:
+            self.withdraw()
+        except tk.TclError:
+            pass
         return
 
     try:
