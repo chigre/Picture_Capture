@@ -102,6 +102,8 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
     if witnesses is None:
         # Preserve the legacy helper ABI for non-live synthetic integrations.
         return True
+    if getattr(self, "_filter_scan_epoch_invalidated", False):
+        return False
     if getattr(self, "_filter_scan_epoch_source_serial", None) != getattr(
         self, "_filter_scan_serial", None
     ):
@@ -135,6 +137,36 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
     except (OSError, ValueError, RuntimeError, IndexError, TypeError, AttributeError):
         return False
     return True
+
+
+def _reject_active_filter_scan_epoch(self) -> None:
+    """Invalidate stale scan-derived rows without discarding human edits."""
+    if getattr(self, "_filter_scan_epoch_invalidated", False):
+        return
+    self._filter_scan_epoch_invalidated = True
+    self._filter_scan_failed = True
+    self._filter_scan_complete = False
+    self._filter_render_serial += 1
+    self._filter_batch_render_cache.clear()
+    self._filter_prefetch_key = None
+    for key in (
+        f"focused-filter-render-{id(self)}",
+        f"focused-filter-prefetch-{id(self)}",
+    ):
+        self.parent._invalidate_ui_worker(key)
+    if (
+        not getattr(self, "_filter_save_running", False)
+        and not getattr(self, "_filter_pending_changes", None)
+    ):
+        self._clear_review_workspace(
+            "筛选来源在扫描完成后发生变化；请重新筛选。"
+        )
+    self.parent.status_var.set(
+        "已完成筛选的页面来源发生变化（包括此前无命中页面），"
+        "旧结果不再视为完整；请重新筛选。"
+    )
+    self.filter_batch_var.set("筛选来源已变化（结果不完整）")
+    self._update_filter_batch_indicator()
 
 
 def _record_focused_timing(
@@ -262,6 +294,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     self._filter_batch_render_cache.clear()
     self._filter_prefetch_key = None
     self._filter_scan_complete = False
+    self._filter_scan_epoch_invalidated = False
     # An aborted remainder is not a completed scan. Keep already-rendered
     # source batches editable; the unfinished tail is never offered as final.
     self._filter_scan_failed = False
@@ -935,6 +968,9 @@ def _apply_filter_batch_payload(
         or int(self.filtered_batch_index) != int(batch_index)
     ):
         return False
+    if not _verify_active_filter_scan_epoch_sources(self, deps):
+        _reject_active_filter_scan_epoch(self)
+        return False
     snapshot = self._filter_batch_snapshot(batch_index)
     if snapshot is None or snapshot[0] != cache_key:
         # Neither a late prefetch nor a cached payload owns a changed source.
@@ -1037,6 +1073,9 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         terminal_claimed[0] = True
         self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
+            return
+        if not _verify_active_filter_scan_epoch_sources(self, deps):
+            _reject_active_filter_scan_epoch(self)
             return
         try:
             current = self._filter_batch_snapshot(local_index)
@@ -1149,29 +1188,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     if not getattr(self, "_filter_rows_active", False):
         return
     if not _verify_active_filter_scan_epoch_sources(self, deps):
-        self._filter_scan_failed = True
-        self._filter_scan_complete = False
-        self._filter_render_serial += 1
-        self._filter_batch_render_cache.clear()
-        self._filter_prefetch_key = None
-        for key in (
-            f"focused-filter-render-{id(self)}",
-            f"focused-filter-prefetch-{id(self)}",
-        ):
-            self.parent._invalidate_ui_worker(key)
-        if (
-            not getattr(self, "_filter_save_running", False)
-            and not getattr(self, "_filter_pending_changes", None)
-        ):
-            self._clear_review_workspace(
-                "筛选来源在扫描完成后发生变化；请重新筛选。"
-            )
-        self.parent.status_var.set(
-            "已完成筛选的页面来源发生变化（包括此前无命中页面），"
-            "旧结果不再视为完整；请重新筛选。"
-        )
-        self.filter_batch_var.set("筛选来源已变化（结果不完整）")
-        self._update_filter_batch_indicator()
+        _reject_active_filter_scan_epoch(self)
         return
     available_total = self._filter_available_target_count()
     if available_total <= 0:
