@@ -355,3 +355,23 @@ def test_coordinate_map_fails_closed_if_homography_cannot_replay_into_pixels():
                 orthogonal_steps=(),
             )
         )
+
+
+def test_coordinate_map_raster_normalization_guard_is_scale_invariant():
+    """Homogeneous matrix scale cannot change whether a raster map is valid."""
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    for scale in (1e-14, 1.0, 1e14):
+        analysis = _analysis(
+            applied_angle_deg=0.0,
+            perspective_matrix=(
+                scale, 0.0, 0.0,
+                0.0, scale, 0.0,
+                0.0, 0.0, scale,
+            ),
+            orthogonal_steps=(),
+        )
+        mapping = PreprocessCoordinateMap(analysis)
+        result = mapping.source_to_output_point((40.0, 40.0))
+        assert result.status == "mapped"
+        assert result.point == pytest.approx((35.0, 35.0))

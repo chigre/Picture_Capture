@@ -168,6 +168,16 @@ class PreprocessCoordinateMap:
                 raise CoordinateMappingUnavailable(
                     "perspective inverse is not finite"
                 )
+            # Pillow's raster perspective replay normalizes inv(H) by
+            # inv(H)[2, 2]. A nonsingular homography may still have a zero
+            # bottom-right inverse coefficient and therefore cannot be
+            # materialized by our image renderer. Compare relative to the
+            # inverse's norm, since a homography has arbitrary scalar scale.
+            inverse_scale = float(np.max(np.abs(inverse)))
+            if abs(float(inverse[2, 2])) <= 1e-12 * inverse_scale:
+                raise CoordinateMappingUnavailable(
+                    "perspective inverse cannot be normalized for raster replay"
+                )
 
     def _build_orthogonal_steps(
         self,
