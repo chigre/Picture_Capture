@@ -1,9 +1,9 @@
 # Picture_Capture 核心质量与校对效率升级：总计划（PC-CQ-20261014）
 
-> **2026-10-28 · v1.3.0 复审版（权威当前入口）**：以 [全库静态架构复审](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md) 为新基线。#503 R3 与 #562 模块化统一由 **[Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)** 推进；旧 #664 已 Closed/Unmerged、代码历史并入 #663。旧 B0/B1 与 B3 工程合并历史保留，但不再视为当前下一步。**人工 R3/#503 与 R2/#483 尚未执行，R8/PR-B 仍用户延后；任何自动化通过不得代替真人验收。**
+> **2026-11-01 · v1.3.1 执行状态同步版（权威当前入口）**：以 [全库静态架构复审](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md) 为新基线。#503 R3 与 #562 模块化统一由 **[Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)** 推进；旧 #664 已 Closed/Unmerged、代码历史并入 #663。旧 B0/B1 与 B3 工程合并历史保留，但不再视为当前下一步。**人工 R3/#503 与 R2/#483 尚未执行，R8/PR-B 仍用户延后；任何自动化通过不得代替真人验收。** B4/R4.2 已进入实现与 synthetic E2 回归，具体当前 HEAD 和证据以 STATE/RESUME 为准。
 
 
-> 状态：**规划已固化；尚未开始生产代码升级**。版本：1.1.0。起草：2026-10-14。  
+> 状态：**计划目标已固化；生产实施已推进至 B4/R4.2，具体完成范围与门禁证据以 STATE/RESUME 为准**。版本：1.3.1。起草：2026-10-14；执行状态更新：2026-11-01。  
 > 此文档定义目标、依赖和验收合同；同目录的 CORE_QUALITY_STATE.json 是机器可读执行检查点；CORE_QUALITY_RESUME.md 是跨会话恢复入口。  
 > 原始评估依据：用户提供的《Picture_Capture 核心功能改进思考.md》；经过对 GitHub main 的源码再核查，以下内容**不是逐字采纳原评估**，明确标注了补充/纠正后的设计判断。
 

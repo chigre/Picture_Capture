@@ -1,3 +1,16 @@
+## 2026-11-01｜G3 R4.2 异步筛选 PDIC/OCR/SECTION 来源绑定：source HEAD synthetic E2 已验证
+
+- **实时基线与边界：** source/test HEAD `4458faa953fccc1bb247e3209dba400139c10a68`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变；唯一 PR #663 仍 Draft/Open/Unmerged；#503/#562/#483 仍 Open。无 inline review comments / submitted reviews。
+- **RED-first：** 测试提交 `36e917d27e98615413ad770c138cdba2f294ede4`，[CI #41286614069](https://github.com/chigre/Picture_Capture/actions/runs/41286614069) 六平台/Python regression jobs 均因四个新来源断言失败而 FAILURE：PDIC、OCR JSON、SECTION 在 scan 读取期间变化未拒绝，以及 target 缺少 scan witness；Ubuntu Python3.13 为 4 failed / 5,276 passed / 3 skipped，macOS Python3.13 为 4 failed / 5,277 passed / 2 skipped。
+- **源码修复：** `035b50631b46a1ec1b6474736cc354c9a2214d77` 新增 `focused_scan_source_witness` / `verify_focused_scan_source`，对 required PDIC、optional OCR cache、active SECTION sidecar 记录 path/presence/SHA-256；scan_page 前后校验并将 witness 绑定到每个 target；batch snapshot 将其纳入 cache key；prefetch/direct crop worker 完成后再校验，Tk completion/apply 前再次 snapshot。
+- **中间回归修复：** 首个 source CI 发现旧 streaming fixture 没有磁盘 PDIC，且部分旧 crop mock 没有 `parent.project`。新四个目标测试已通过，但 Ubuntu Python3.13 full suite 报 25 个旧夹具失败。提交 `4458faa953fccc1bb247e3209dba400139c10a68` 仅补 synthetic PDIC fixture，并使 legacy mock 的 project-root capture 安全；未削弱生产来源校验。
+- **source exact-head gates：** [CI #41287049195](https://github.com/chigre/Picture_Capture/actions/runs/41287049195) **6/6 SUCCESS**，Risk-tier 与 Risk-tier CI gate SUCCESS；[OCR #41287049231](https://github.com/chigre/Picture_Capture/actions/runs/41287049231) **3/3 SUCCESS**；[CodeQL #41287046391](https://github.com/chigre/Picture_Capture/actions/runs/41287046391) Analyze Python/Actions **2/2 SUCCESS**。Ubuntu3.13 5280/3；macOS/Windows3.13 各5281/2；Ubuntu3.10 5280/3；macOS/Windows3.10 各5281/2。Documentation architecture check **SKIPPED**，不计 PASS。
+- **限制与未完成：** 当前 target witness 绑定可见命中页，但 scan_page 返回后未命中的页面 witness 尚未保存在 epoch-wide map；此前扫描过的 no-hit page 在 scan terminal 前变化，仍需专门失败先行测试。SHA-256 readback 不是 OS-level CAS/文件锁。save writer 未改，未声称跨页原子事务。
+- **NOT PERFORMED：** Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描及真实 PDIC/PPP/SECTION/Profile/OCR 保存重开、真人验收。**DEFERRED：** R6 真实标签学习、R8 真实扫描。无真实 benchmark，不声称加速或准确性。
+- **本次文档 checkpoint：** 以下架构审计、STATE、RESUME 与计划状态将提交到现有 Draft 分支；提交后必须对新的 docs HEAD 重新核验六平台 CI/Risk gate、OCR 3OS、CodeQL Python/Actions。下一恢复点为 no-hit page epoch-wide source witness，再继续 save publication consistency。
+
+---
+
 ## 2026-11-01｜G3 R4.2 recurring Tk poll / durable close retry：源码修复完成，source HEAD E2 门禁通过
 
 - 实时 main `ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 PR #663 保持 Draft/Open/Unmerged；#503/#562/#483 均 Open。
