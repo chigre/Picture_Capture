@@ -129,3 +129,26 @@ def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
     assert review._filter_save_running is True
     assert review._filter_save_launch_failed is False
     assert review._filter_pending_changes == {}
+
+    # An explicit retry can fail during the all-page source preflight,
+    # before any new writer invocation. That failure does not resolve the
+    # earlier ambiguous publication; uncertainty must remain sticky.
+    _key, worker, _done, failed = dispatched[0][0]
+    pages[0].write_bytes(b"synthetic-source-drift-after-uncertain-launch")
+    try:
+        worker()
+    except Exception as exc:
+        failed(exc, "PRIVATE_SYNTHETIC_PREFLIGHT_TRACE")
+    else:
+        raise AssertionError("source-drift retry must refuse to write")
+
+    assert attempted == [0, 1], "preflight must reject before new writes"
+    assert review._filter_save_uncertain_pages == {0, 1}
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert not review._filter_save_running
+    assert not review._filter_close_after_save
+    assert "PRIVATE_" not in " ".join(status.messages)
+
+    # The failed retry must not silently arm another timer-driven save.
+    workflow._flush_focused_changes(review, deps)
+    assert len(dispatched) == 1
