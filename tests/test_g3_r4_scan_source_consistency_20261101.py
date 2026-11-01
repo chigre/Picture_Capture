@@ -260,3 +260,49 @@ def test_inflight_crop_payload_cannot_publish_after_no_hit_epoch_source_drift(tm
     assert review._filter_scan_failed is True
     assert review._filter_scan_complete is False
 
+@pytest.mark.parametrize(
+    ("uncertain_pages", "launch_failed"),
+    [({0}, False), (set(), True)],
+)
+def test_refilter_refuses_unresolved_save_even_with_empty_edit_queue(
+    tmp_path, uncertain_pages, launch_failed,
+):
+    """An empty debounce queue does not prove an ambiguous PDIC write settled."""
+    review, deps, call, status, _indicator, _pdic, _cache, _section = _fixture(
+        tmp_path,
+    )
+    _key, worker, done, _failed = call
+    done(worker())
+    assert review._filter_scan_complete is True
+    assert len(review.filtered_targets) == 1
+
+    previous_serial = review._filter_scan_serial
+    previous_targets = list(review.filtered_targets)
+    previous_witness = review.filtered_targets[0]["_focused_scan_source_witness"]
+    review._filter_save_uncertain_pages = set(uncertain_pages)
+    review._filter_save_launch_failed = launch_failed
+    review._filter_pending_changes = {}
+    launches = []
+    review.parent._start_ui_worker = (
+        lambda *args: launches.append(args) or len(launches)
+    )
+
+    workflow.run_focused_filter(review, deps)
+
+    assert launches == [], "unsettled write must not start a replacement scan"
+    assert review._filter_scan_serial == previous_serial
+    assert review._filter_scan_complete is True
+    assert review.filtered_targets == previous_targets
+    assert (
+        review.filtered_targets[0]["_focused_scan_source_witness"]
+        == previous_witness
+    )
+    assert "核对" in status.get()
+
+    # A separately settled writer may clear the flags; rescan must remain
+    # available rather than being permanently disabled by the guard.
+    review._filter_save_uncertain_pages = set()
+    review._filter_save_launch_failed = False
+    workflow.run_focused_filter(review, deps)
+    assert len(launches) == 1
+    assert review._filter_scan_serial == previous_serial + 1
