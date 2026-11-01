@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "plan_id": "PC-CQ-20261014",
-  "plan_version": "1.3.0",
+  "plan_version": "1.3.1",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-11-01T09:57:00Z",
+  "updated_at_utc": "2026-11-01T10:48:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -23,8 +23,8 @@
   },
   "current_state": {
     "status": "in_progress",
-    "active_phase": "R4",
-    "active_work_item": "G3_R4_2_post_terminal_no_hit_source_drift_and_focused_save_partial_publication_reconciliation",
+    "active_phase": "R7",
+    "active_work_item": "R7_3_source_canonical_transformed_coordinate_contract_read_only_roundtrip",
     "work_in_progress": true,
     "implementation_pr": {
       "number": 663,
@@ -43,9 +43,9 @@
       ],
       "note": "Scope index for R3.1/R3.2/R4.1/R4.2/R5.1/R5.2/R7.1/R7.3 only. Per-unit implementation and verification status is recorded under batches and dedicated evidence objects: R4.1/R4.2 and R5.1/R5.2 have synthetic E2 evidence; R7.1/R7.3 are not yet verified; human R3 acceptance remains deferred/not performed."
     },
-    "implementation_head_sha": "3b06e89034cc8c5b93db3613fd0d10fe811bdc70",
+    "implementation_head_sha": "fd4f46b717de23c96014661ae28cedef51434788",
     "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
-    "last_completed_work_item": "G3_R4_2_no_hit_scan_epoch_source_binding_source_synthetic_E2_VERIFIED_20261101",
+    "last_completed_work_item": "G3_R4_2_post_terminal_no_hit_and_partial_multi_page_save_uncertainty_synthetic_E2_VERIFIED_20261101",
     "blockers": [
       {
         "type": "r2_human_acceptance_pending",
@@ -58,7 +58,7 @@
         "url": "https://github.com/chigre/Picture_Capture/issues/503"
       }
     ],
-    "required_next_action": "Continue B4 with failure-first tests for no-hit page source drift after scan terminal (design a bounded/performance-aware revalidation strategy before implementation) and focused-save partial publication/reconciliation. Preserve the no-rollback-over-foreign-files policy and explicit uncertain-write state. Do not start R6 training/shadow output without verified human labels; do not claim R7 performance without real profiling; keep R8 real scan deferred. Maintain one Draft PR #663 and re-run exact-head gates for each source/doc checkpoint.",
+    "required_next_action": "Proceed with B7b/R7.3 only: audit existing source→canonical→transformed coordinate owners, define a versioned forward/inverse mapping contract, and add synthetic read-only round-trip tests for SECTION, PDIC, PPP, ROI polygons and crops. Preserve current coordinates and formats; do not migrate persisted schema or alter save/write flows. B6 remains blocked on human-verified labels; B7a remains blocked until representative authorized profiling; R8 remains user-deferred.",
     "last_test_evidence": "G1 source baseline fc5de64451ec7b60ebfc2d9a8d7e5bd4157e8753: CI #40956098786 6/6 + Risk-tier success, OCR #40956099126 3/3 success, CodeQL #40956092623 2/2 success. G2 fail-first 5bed7d6890fd923c3239ca7ff7a744ff7dcb5da0 CI #40962371921 Ubuntu py3.13 3 expected failures/4828 passed/3 skipped; middle fix 732cb511b5296d1f34f6057fafb926f7824a27cb CI #40962500142 Ubuntu py3.13 1 preexisting strict initializer-owner architecture assertion failed/4830 passed/3 skipped; preserved strict guard via 089c7334f97fed34869c17b252ef749c55086d62. Final G2 SOURCE exact HEAD 089c7334: CI #40962965881 Windows/macOS/Ubuntu Python3.10/3.13 6/6 plus Risk-tier gate SUCCESS; OCR #40962965552 3/3 SUCCESS; CodeQL Analyze Python+Actions 2/2 SUCCESS. Ubuntu py3.13 4831 passed/3 skipped. No real Windows E3 or #483 W1-W11 human acceptance; no R5/R4 live code or label training claimed. G3 R5.1 red 9426de03 expected ModuleNotFoundError; source 33fbef91 six-platform CI found 1 test-only wrong assertion counting meta diagnostic; corrected source/tests f63d8805d54100adafb802ed2bedd1ff91dd226f. Exact source CI #40965305404 and OCR #40965305118 PENDING at docs authoring; no R5.1 E2 green claim, no R5.2 q implementation. R5.1 final docs/head 234870694bca285117deb6a863c11bd705f3891c: CI #40965627205 Windows/macOS/Ubuntu Python3.10/3.13 6/6, Risk-tier success, OCR #40965627204 3/3, CodeQL python+actions success. R5.2 red 5cd39dddc278553b10ded5d0efb57ff54f9375f3 absent module expected error; production source e57346968a48372a0cb633cc63c6fce8fe0f0db9 q extraction; #40967756737 full CI still pending, #40967756750 OCR 3/3 success, Risk-tier success at checkpoint; no R5.2 E2 verified claim. R4.1 exact final head c6426614e112e0d8bc7a4d80aae941575e301b47: six OS/Python CI 6/6, 3OS OCR 3/3, Risk-tier and CodeQL Python/Actions 2/2 successful. R4.2 red c155a8dda3cf032b43e93ba396fcc2ba7b2d8dff expected ModuleNotFoundError; source 898d90261727b3c5515cba43e5255b294e7135df CI #41059425448 pending at checkpoint, OCR #41059425445 3/3 success, Risk-tier success, source module read-only/default-OFF not Tk wired; E2 pending. R4.2 read-only source foundation final head f8d2d48acb68df3f11b83445d7ef2f0155ff8e99 CI #41059839013 6/6 and Risk-tier, OCR #41059838822 3/3, CodeQL 2/2 success. Red-first source-time witness a81075569ed32e2c4d4618cc1c4bfcf9d8e1ce66 expected missing-module failure in Ubuntu job 124092044094; source 2985eb6610aa54f070bf07eb919bf792678b6f67 CI #41064630984 pending as of authoring. Optional default OFF, no Tk queue. G3 R4.2 prior exact docs head b49d1ef181828f1699e2fc9e5304bac4cfb23d0c CI #41064932750 6/6 + Risk, OCR three OS and CodeQL Python+Actions successes (automated only). SECTION red cd7aa3f055515e0e3785c05ef8cedb36329dee66, source ffbe5ded4c8b4de6f8b47bc01a8045a259cd1332 Ubuntu py3.13 4961 passed 3 skipped, OCR 3/3, Risk succeeded, remaining CI and CodeQL pending. no Tk queue. R4.2 section source final doc head e60c59f9bb5a4a1656457f4e056c63986f5f39f6 six CI 6/6 + Risk, 3OS OCR 3/3, CodeQL 2/2 SUCCESS. R4.2 Tk queue red test 155727da9783178f8e9257e8e72a17682edb73df expected ModuleNotFoundError; source 9ac248699e05b1524ca56cbe24a8b06f2729a18c OCR 3/3 + Risk success; full CI E2 pending exact source/document HEAD. UI queue source 9ac248699e05b1524ca56cbe24a8b06f2729a18c had actual old regression AttributeError in test_issue562_focused_filter_save_owner_20261023.py; hotfix f7cba75de0dadb755b8eaa7505e39e31ce9f0f44 Ubuntu py3.13 4971 passed 3 skipped, OCR 3/3, Risk and CodeQL Python+Actions 2/2 successful; exact six-platform CI E2 still pending at checkpoint. R4.2 large batch red test a5414d69071a8c9fdb4e0d12fbb7f3939790f473 expected missing review_timing. Source af797e858a2795e41eb51b7f9a435b9c0d096f7e Ubuntu 3.13 pytest 4978 passed 3 skipped, Risk-tier+CodeQL 2/2 success, Windows OCR setup-uv 'Server Error' before tests, remaining jobs pending. Final doc head exact checks pending. R4.2 follow-up test-first 12fa0cd4bc800ab740e0cb148d6874698924ad31 red Ubuntu 6 failures (2 genuine missing invariants, 4 incomplete mock deps); production 691bcee0da9adc3b8a108ac737a2216ac03a5a9c source tests Ubuntu 4980 passed, 4 incomplete mock deps errors; corrected test-only 3252a949d615af1a819441778db2bd6c3f4f84c7 CI pending. G3 R4.2 actual Tk synthetic test c65f3fbbe7f3263b798d49846eb1e7a9a343816e CI test selector false positive, fixed e952f5737346f576e38b2ec163a2d65e2f6174e7; Mac/Windows native smoke passed but Ubuntu detected early R3 no source snapshot and 35s timeout. Source bd796fd73a2906d4e083fbd43ff83caacc57472d Ubuntu py3.13 4987 passed 3 skipped and actual Xvfb Tk synthetic smoke OK, OCR all3 success, others pending. No human E3. G3 R4.2 first Tk poll registration red test-only commit 30a52c095a85a3d3d21f8e5bae9eba9b2969c6da, CI #41281091863 completed FAILURE with 4 targeted Tk-after cases failing across Windows/macOS/Ubuntu and Python 3.10/3.13; Windows Python3.10 log: 4 failed, 5263 passed, 2 skipped. Minimal source fix c3e5c0e3aa937784715f5ece16ce82adb8173da7 pre-registers first Tk poll before Thread construction/start and rolls back the new reservation if after() raises. Source exact-head CI #41281480946 all six platform/Python jobs SUCCESS, Risk tier and Risk-tier CI gate SUCCESS; OCR #41281480909 3/3 SUCCESS; CodeQL #41281477946 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Final documentation/checkpoint HEAD gates pending. NEW G3 Tk recurring rearm RED-first test-only 923aa0754844959365732332fd83ccdf231168c2 CI #41283123003: macOS Python3.13 7 targeted failed / 5267 passed / 2 skipped, Ubuntu Python3.13 also failure; other jobs still running at documentation authoring. Source corrections adf8ee22, b50d130, 58eee5f, a03a7a6; exact source/final docs gates PENDING. No E2 green claim. G3 R4.2 recurring Tk poll/close scheduling RED-first test commit 923aa0754844959365732332fd83ccdf231168c2: CI #41283123003 macOS Python3.13 7 targeted tests failed/5267 passed/2 skipped; the first test harness had incomplete _poll_ui_worker_queue mocks in close-path fakes, corrected in 11db385d6e73bfff63141b537af8611436cf5f33. That corrected fixture/owner inventory run #41283880606 Ubuntu Python3.13 exposed 1 genuine close-intent failure/5274 passed/3 skipped. Follow-up test commit 57be8123006bd444ceda207681ea3f5fc7029625 produced 5 expected failures/5271 passed/3 skipped on Ubuntu and macOS Python3.13: preserving close intent after poll loss, visible retry, re-hiding after successful retry, resetting one-shot idle fallback for explicit retry, and avoiding repeated invalidation. Source fix 1f338a368726c0cfd3c188f4bef1a0dec95b09ec keeps close intent authoritative, exposes a retry surface without restoring invalidated callbacks, resets the bounded idle fallback on explicit retry, re-hides only after a poll is accepted, and never invalidates the same generation twice. Source exact-head CI #41284201872: all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs SUCCESS, Risk tier SUCCESS, Risk-tier CI gate SUCCESS. MacOS Python3.13 GUI smoke first attempt reported a native in-flight PDIC conflict; the exact same job/head was rerun as job 124783274918 and completed SUCCESS, 5277 passed/2 skipped, All checks passed. Ubuntu Python3.13 5276/3; macOS Python3.13 5277/2; Windows Python3.13 5277/2; Python3.10 Ubuntu 5276/3, macOS 5277/2, Windows 5277/2. OCR #41284201873 3/3 SUCCESS. CodeQL #41284199187 Analyze Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED; not counted as a pass. Final docs checkpoint HEAD gates pending.\n\nG3 R4.2 no-hit scan epoch source test-first 1a3e19e2595fb6355b87e185305228994c54e00a: all six platform/Python jobs failed the three PDIC/OCR/SECTION no-hit drift assertions; source 3b06e89034cc8c5b93db3613fd0d10fe811bdc70 retained per-page source witnesses including no-hit pages and revalidated the scanned epoch prefix at each chunk terminal. Exact source CI #41289630397 6/6 + Risk-tier CI gate SUCCESS; OCR #41289630408 3/3 SUCCESS; PR CodeQL #41289628415 Analyze Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not counted PASS. Next: docs checkpoint gates, then focused-save partial publication/reconciliation and post-terminal no-hit source drift.\n\nDocs checkpoint 10a23f40f7751d51f66b34790fa12ec5efe25690 exact-head gates: CI #41290109140 six-platform/Python 6/6 + Risk-tier and Risk-tier CI gate SUCCESS; OCR #41290109157 3/3 SUCCESS; PR #663 CodeQL #41290105787 Analyze Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS. Current source HEAD 3b06e89034cc8c5b93db3613fd0d10fe811bdc70 also re-ran R5.1/R5.2 dedicated parity suites in all six regression jobs; B5 synthetic E2 verified. B4 remains active for post-terminal no-hit source drift and focused-save partial publication/reconciliation.\n\nFinal docs checkpoint at acab2b832148d6594c52a876e68c94dfe7ced916: CI #41290656126 6/6 + Risk-tier + Risk-tier CI gate SUCCESS; OCR #41290656141 3/3 SUCCESS; CodeQL #41290653408 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS. State note clarified: unit list is a scope index; per-unit status is recorded in B4/B5/B6 evidence.",
     "active_batch": "B3",
     "next_batch": "B4",
@@ -179,7 +179,8 @@
       "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/40971805624",
       "status": "source_committed_E2_pending_UI_not_wired",
       "human": "R3 E3 and #483 W1-W11 NOT_PERFORMED"
-    }
+    },
+    "note": "B4 and B5 are synthetic E2 complete on exact source HEAD fd4f46b717de23c96014661ae28cedef51434788. B7b/R7.3 is independent of R6 labels and may proceed; B7a requires real profiling and remains blocked. R3 human acceptance remains NOT PERFORMED."
   },
   "units": {
     "R0.1": "verified",
@@ -1036,11 +1037,11 @@
         "R4.1",
         "R4.2"
       ],
-      "status": "in_progress",
+      "status": "verified",
       "implementation_pr": 663,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "R4.1/R4.2 focused-review risk queue and timing UI are synthetic E2 verified on source HEAD 3b06e89034cc8c5b93db3613fd0d10fe811bdc70. R4.2 includes PDIC/OCR/SECTION source binding for hit pages and epoch-prefix retention for no-hit pages. Remaining B4 audit targets: no-hit drift after terminal and focused-save partial publication/reconciliation; no human E3 or real-data claims."
+      "current_planning": "COMPLETE on source HEAD fd4f46b717de23c96014661ae28cedef51434788: G3 R4.2 scan-epoch PDIC/OCR/SECTION binding, no-hit page retention, post-terminal revalidation at actual batch publication, crop/prefetch stale-payload rejection, and conservative multi-page save uncertainty are covered by synthetic E2 and exact-head CI/OCR/CodeQL. No real scan, operator E3, or performance claim."
     },
     "B5": {
       "units": [
@@ -1051,7 +1052,7 @@
       "implementation_pr": 663,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "R5.1 candidate-score extraction and R5.2 engine-q extraction are independently parity verified on current source HEAD 3b06e89034cc8c5b93db3613fd0d10fe811bdc70. Both dedicated parity test files execute successfully in all six Windows/macOS/Ubuntu × Python3.10/3.13 regression jobs; 4096 candidate score boolean vectors and 512 engine-q boolean/score/boundary/repair comparisons plus full arbitration differential cases. No weights, thresholds, decisions, diagnostics or source coordinates changed. Synthetic E2 only; no real-label accuracy claim."
+      "current_planning": "R5.1/R5.2 remain synthetic E2 verified; their dedicated parity suites are included in the full six-platform regression suite at current source HEAD fd4f46b717de23c96014661ae28cedef51434788. No weights, thresholds, decisions, or diagnostics changed."
     },
     "B6": {
       "units": [
@@ -1069,21 +1070,21 @@
         "R7.1",
         "R7.2"
       ],
-      "status": "todo",
+      "status": "blocked",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
-      "blocker": null,
-      "current_planning": "todo: profiling required, bytes/filesize are not speed benchmarks"
+      "blocker": "R7.1/R7.2 require representative authorized profiling before selecting or claiming a performance optimization. No real dictionary/project benchmark is authorized or evidenced; do not infer speed from source structure or synthetic tests.",
+      "current_planning": "Blocked pending an authorized representative profiling run; no speed claim or optimization without measured bottleneck."
     },
     "B7b": {
       "units": [
         "R7.3"
       ],
-      "status": "todo",
+      "status": "in_progress",
       "implementation_pr": null,
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "todo: source/canonical/transformed exact coordinate contract and PDIC/PPP/SECTION crop roundtrip"
+      "current_planning": "Next independent non-human work item: R7.3 source→canonical→transformed coordinate contract, read-only validation and synthetic round-trip for SECTION/PDIC/PPP/ROI/crop. Do not change persisted schema, source image coordinates, or write flows; first audit existing owners and tests."
     },
     "B8": {
       "units": [
@@ -2161,7 +2162,7 @@
     "final_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41177648830"
   },
   "g3_r4_2_multipage_partial_commit_20261031": {
-    "status": "synthetic_test_E2_verified_exact_head_cb640e2ed4ea09c5cfa5ca7c3d0254cd3f4a2d7a",
+    "status": "synthetic_E2_verified_conservative_batch_uncertain_exact_head_fd4f46b717de23c96014661ae28cedef51434788",
     "test_sha": "f643404029a5428c2928781d56d430a8afd42a46",
     "tests": [
       "test_two_page_pdic_conflict_commits_first_once_preserves_second",
@@ -2182,9 +2183,15 @@
     "main": "ec20989ea8c026cca5337293e67850b6b6df30f2",
     "pr": "663_DRAFT_OPEN_UNMERGED",
     "final_head_sha": "cb640e2ed4ea09c5cfa5ca7c3d0254cd3f4a2d7a",
-    "final_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41178796433",
-    "final_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41178796384",
-    "final_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41178793955"
+    "final_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41298152181",
+    "final_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41298152176",
+    "final_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41298149721",
+    "followup_test_commit": "684693053aa2b958226ab44b674d2c1acdf5e861",
+    "followup_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41296691853",
+    "conservative_test_commit": "e1d376df89e622ffe081ea27c2960dd600dcd9cc",
+    "conservative_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41297732941",
+    "final_source_commit": "fd4f46b717de23c96014661ae28cedef51434788",
+    "policy": "Any dispatched multi-page writer exception conservatively retains the entire human-edit snapshot, marks every page in that batch UNCERTAIN, disarms close, blocks timer/debounce auto-retry, and requires explicit user retry after PDIC inspection. No file rollback is attempted. A clean all-page worker completion reconciles verified rows."
   },
   "g3_r4_2_multipage_late_source_and_clean_save_20261031": {
     "status": "synthetic_test_only_E2_verified_final_head_e1399dc1dd19ee540cdf5bbd208dfc2641f869af",
@@ -2909,8 +2916,8 @@
     "pr663": "DRAFT_OPEN_UNMERGED",
     "main": "ec20989ea8c026cca5337293e67850b6b6df30f2"
   },
-  "active_batch": "B4",
-  "next_batch": "B6",
+  "active_batch": "B7b",
+  "next_batch": "B7a",
   "g3_r4_2_async_scan_source_binding_20261101": {
     "status": "source_and_no_hit_epoch_synthetic_E2_verified_docs_checkpoint_pending",
     "test_first_commit": "36e917d27e98615413ad770c138cdba2f294ede4",
@@ -2968,7 +2975,7 @@
     "next_recovery_point": "Commit the no-hit epoch audit/STATE/RESUME; re-run exact docs-head gates; then fail-first focused-save partial publication/reconciliation and post-terminal no-hit source drift."
   },
   "g3_r4_2_no_hit_scan_epoch_20261101": {
-    "status": "source_synthetic_E2_verified_docs_checkpoint_pending",
+    "status": "synthetic_E2_verified_with_post_terminal_revalidation_exact_head_fd4f46b717de23c96014661ae28cedef51434788",
     "test_first_commit": "1a3e19e2595fb6355b87e185305228994c54e00a",
     "test_first_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41289415491",
     "red_evidence": "All six Windows/macOS/Ubuntu × Python3.10/3.13 regression jobs failed on the three parameterized no-hit page drift cases (PDIC, OCR JSON, SECTION), each reproducing completion despite mutation of a previously scanned zero-target page. Ubuntu3.13 and Ubuntu3.10 logs: 3 failed / 5280 passed / 3 skipped.",
@@ -2981,7 +2988,7 @@
       "The initial batch completion and every subsequent chunk completion revalidate all pages scanned through that position before publishing rows or marking the scan complete.",
       "If a prior no-hit page changes, the current chunk is rejected, the scan remains incomplete/failed, and previously ready user-editable batches are retained."
     ],
-    "exact_head_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41289630397",
+    "exact_head_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41298152181",
     "exact_head_ci_result": "SUCCESS_6_OF_6",
     "platform_results": {
       "Ubuntu Python 3.13": "5283 passed, 3 skipped",
@@ -3000,9 +3007,10 @@
     "codeql_result": "Analyze_Python_and_Actions_2_OF_2_SUCCESS",
     "documentation_architecture_check": "SKIPPED_NOT_COUNTED_AS_PASS",
     "limitations": [
-      "The epoch map is volatile and is rechecked at chunk terminals, not continuously after scan completion.",
-      "SHA-256 readback is not an OS-level multi-file CAS or lock.",
-      "No save-writer or persistence-schema changes; no cross-page transaction is claimed."
+      "Source witnesses are in-memory and scoped to the active scan epoch; they are rechecked at scan chunk terminals and at actual batch-publication boundaries, not on every repaint.",
+      "A full epoch revalidation can still scale with the number and size of pages; no representative real-project latency benchmark has been performed.",
+      "SHA-256 readback is not an OS-level multi-file compare-and-swap, lock, or atomic filesystem snapshot.",
+      "No persistent schema, PDIC/SECTION format, crop geometry, or save writer format was changed."
     ],
     "human_acceptance": "NOT_PERFORMED",
     "deferred": [
@@ -3013,7 +3021,15 @@
       "R6 real-label learning",
       "R8 real scan"
     ],
-    "next_recovery_point": "Docs-head gates, then fail-first focused-save partial publication/reconciliation and post-terminal no-hit source drift."
+    "next_recovery_point": "Docs-head gates, then fail-first focused-save partial publication/reconciliation and post-terminal no-hit source drift.",
+    "post_terminal_test_commit": "35bbeed90f943c50854e0b8a12ea4b8db5fa3f25",
+    "post_terminal_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41295513470",
+    "post_terminal_source_commit": "194df65fd8f9e6e3a77bb8071380d8897609341d",
+    "post_terminal_intermediate_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41295775912",
+    "post_terminal_behavior": "Revalidates the retained epoch witness at actual batch publication, including no-hit pages; stale in-flight crop payloads cannot render or publish. Avoids hashing the whole epoch on every repaint or background prefetch.",
+    "exact_head": "fd4f46b717de23c96014661ae28cedef51434788",
+    "exact_head_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41298152176",
+    "exact_head_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41298149721"
   },
   "verified_documentation_checkpoint_20261101": {
     "head": "acab2b832148d6594c52a876e68c94dfe7ced916",
@@ -3047,5 +3063,42 @@
       "This is pure-function and synthetic integrated parity, not human-labeled OCR accuracy or dictionary-level F1.",
       "No score weights, acceptance thresholds, arbitration policies, tie rules or diagnostics were changed."
     ]
-  }
+  },
+  "implementation_head_sha": "fd4f46b717de23c96014661ae28cedef51434788",
+  "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
+  "g3_r4_2_post_terminal_no_hit_and_partial_save_20261101": {
+    "status": "synthetic_E2_verified_exact_head",
+    "head": "fd4f46b717de23c96014661ae28cedef51434788",
+    "no_hit_test": "tests/test_g3_r4_scan_source_consistency_20261101.py",
+    "no_hit_red_commit": "35bbeed90f943c50854e0b8a12ea4b8db5fa3f25",
+    "no_hit_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41295513470",
+    "no_hit_source_commit": "194df65fd8f9e6e3a77bb8071380d8897609341d",
+    "no_hit_intermediate_failed_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41295775912",
+    "no_hit_intermediate_failure": "Three post-terminal PDIC/OCR/SECTION drift cases regressed after moving validation away from repaint/prefetch; corrected by restoring one check at the actual batch-publication boundary.",
+    "save_test": "tests/test_g3_r4_focused_save_partial_publication_20261101.py",
+    "save_red_commit": "684693053aa2b958226ab44b674d2c1acdf5e861",
+    "save_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41296691853",
+    "conservative_test_commit": "e1d376df89e622ffe081ea27c2960dd600dcd9cc",
+    "conservative_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41297732941",
+    "save_final_fix": "fd4f46b717de23c96014661ae28cedef51434788",
+    "save_final_fix_note": "Final fix closes recovered NameError, keeps legacy test doubles without filtered_targets compatible, and reports a generic save-failure/uncertain status; all-batch uncertainty is preserved after partial publication.",
+    "ci": "https://github.com/chigre/Picture_Capture/actions/runs/41298152181",
+    "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41298152176",
+    "codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41298149721",
+    "risk_tier": "SUCCESS",
+    "risk_tier_ci_gate": "SUCCESS",
+    "documentation_architecture_check": "SKIPPED_NOT_COUNTED_AS_PASS",
+    "human_acceptance": "NOT_PERFORMED",
+    "deferred": [
+      "Windows R3 E3",
+      "#483 W1-W11",
+      "#503 manual Undo/Redo",
+      "real dictionary scan",
+      "real PDIC/PPP/SECTION/Profile/OCR save/reopen",
+      "R6 human-label learning",
+      "R8 real scan"
+    ],
+    "no_benchmark_claim": true
+  },
+  "last_test_evidence": "\n\nG3 R4.2 post-terminal no-hit and multi-page partial-save follow-up at exact source HEAD fd4f46b717de23c96014661ae28cedef51434788: test-first no-hit CI #41295513470; intermediate publication-boundary regression #41295775912; test-first partial-save CI #41296691853; conservative-state test CI #41297732941 exposed 28 cross-platform failures (including unbound `recovered`, legacy fake missing `filtered_targets`, and outdated save-failure text assertion). Final minimal source correction fd4f46b7. Exact-head CI #41298152181 six platform/Python jobs + Risk-tier + gate SUCCESS; OCR #41298152176 3/3 SUCCESS; CodeQL #41298149721 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Human E3/#483/#503 and real scan/save remain NOT PERFORMED; R6/R8 DEFERRED."
 }

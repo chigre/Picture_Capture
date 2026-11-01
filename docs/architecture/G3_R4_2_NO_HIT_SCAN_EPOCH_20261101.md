@@ -1,5 +1,7 @@
 # G3 R4.2 — no-hit page source retention across asynchronous scan epochs
 
+> **Superseded for current branch HEAD:** the post-terminal no-hit drift gap described below was subsequently closed by `G3_R4_2_POST_TERMINAL_NO_HIT_AND_PARTIAL_SAVE_20261101.md` at source HEAD `fd4f46b717de23c96014661ae28cedef51434788`. This file remains the historical audit for the earlier source checkpoint `3b06e89034cc8c5b93db3613fd0d10fe811bdc70`.
+
 **Date:** 2026-11-01  
 **Repository:** `chigre/Picture_Capture`  
 **Branch:** `refactor/562-retire-root-image-utils-20261024`  

@@ -174,13 +174,13 @@
 - **继续口令**：详见 CORE_QUALITY_RESUME.md；新的会话应直接读取 GitHub 文件，无需引用本聊天或依赖内存。
 - **保守资源使用**：不连续轮询 CI；CI 运行未完成时报告 URL 与状态，不假装在后台继续。若执行环境缺 OCR 或真实扫描数据，只做受支持的测试并注明限制。
 
-## 6. 当前执行目标（v1.3.0，2026-10-28；取代 2026-10-14 的 B0 入口）
+## 6. 当前执行目标（v1.3.1，2026-11-01；取代 2026-10-28 的执行入口）
 
 **唯一活跃工程 PR = [#663](https://github.com/chigre/Picture_Capture/pull/663)，Draft / Open / Unmerged**；同时承载 #503 R3 事务安全与 #562 模块架构。2026-10-28 双父合并 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac` 保留了已关闭未合并的 #664 全部历史，**不得再次开启独立 #503 实施 PR**。每小时自动推进也只允许写入 #663；禁止并发覆写同一 owner。
 
 **历史证据，不需重做：** B0/R0、B1/R1 已经过往 main 合并和 CI 验证；B2/R2 工程增量已合并、真人 #483 W1–W11 尚未验收；B3/R3 通过 #542 合并基础工程且 synthetic CI 已过，但当前 #503 安全收口和真人交互未完成。旧节所列「再启动 #479 / 从 B0 开始 / 建一个新 PR」从本版起**作废，仅保留于 Git 历史**。
 
-**唯一可执行下一工作包：G1 R3 事务收口**，逐项审查 candidate_id/selected/Tk checkbox、manual_selection/PDIC/simplified、20步 Undo/Redo、FocusOut/关闭重开/人工覆盖，首先给出不会覆盖第三方校对数据的失败安全故障矩阵；发现已由 #663 实现的不得重复迁移。随后 G2 `app.py` / 大 owner 收敛与 G3 R5 parity + R4 opt-in 风险队列，单批次保留 Windows spawn/Tk + OCR/PDIC 原图坐标与侧写格式的跨平台门禁。
+**2026-11-01 执行入口（v1.3.1）：** B4/R4.1+R4.2 已在 #663 source HEAD `fd4f46b717de23c96014661ae28cedef51434788` 完成 synthetic E2；B5/R5.1+R5.2 继续保持 synthetic E2 verified。B6/R6 因缺少授权、可靠且来源一致的人工标签仍 blocked，不训练、不 shadow。B7a/R7.1–R7.2 因没有代表性授权 profiling 仍 blocked，不做性能优化或加速声明。**下一独立可执行工作包为 B7b/R7.3 坐标合同**：只读审计 source → canonical → transformed 映射与 SECTION/PDIC/PPP/ROI/crop round-trip；不改持久化 schema、原图坐标或保存写入流程。R3 的 Windows E3、#483 W1–W11、#503 人工 Undo/Redo 继续 NOT PERFORMED；R8 继续由用户延期。
 
 **基线证据**（不自动沿用到后续 HEAD）：`66ad88c276b6965c075eeb72583b42dd0aa7f3ac`，[六平台 CI #40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) **completed/success 6/6**；[OCR Smoke #40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) **completed/success 3/3**。合成 CI 不能替代真人扫描与 R3 人工验收；后续提交均需核查**其自身最新 HEAD**。
 
@@ -188,6 +188,7 @@
 
 ## 7. 文档变更记录
 
+- **2026-11-01 v1.3.1**：根据 #663 实时 HEAD 完成 G3 R4.2 post-terminal no-hit epoch 与 multi-page partial-save uncertainty；B4/B5 synthetic E2 已验证。B6 与 B7a 按人工标签/真实 profiling 依赖保持 blocked；允许独立推进 B7b/R7.3 只读坐标合同。保留全部原 R0–R8 DoD 与人工/真实扫描门禁。
 - **2026-10-28 v1.3.0**：以 #663 合并后的 Git tree、真实代码边界及 fixed-head CI 重审 R0–R8；取代旧 B0 入口为 #503/#562 唯一 Draft PR，定义 G0–G6 内部交付、优先级、人工验收与条件阻塞。旧 R0–R8 DoD 保留，不凭目录迁移宣称 R5/R6/R7 完成。详细见 `docs/audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md`。
 
 - 2026-10-15 v1.2.0：用户明确授权 R2/B2 人工验收暂缓、继续 B3/R3；仅修改阶段门槛，不宣称 B2 verified，不更动原有数据与真实扫描延后原则。

@@ -1,3 +1,15 @@
+## 2026-11-01｜G3 R4.2 B4 收口，进入 R7.3 独立坐标合同审计
+
+- **实时 HEAD：** `fd4f46b717de23c96014661ae28cedef51434788`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 不变；唯一 PR #663 仍 Draft/Open/Unmerged；当前 open PR 列表仅 #663。
+- **Exact-head 门禁：** [CI #41298152181](https://github.com/chigre/Picture_Capture/actions/runs/41298152181) 六平台/Python 6/6 + Risk-tier + gate SUCCESS；[OCR #41298152176](https://github.com/chigre/Picture_Capture/actions/runs/41298152176) 3/3 SUCCESS；[CodeQL #41298149721](https://github.com/chigre/Picture_Capture/actions/runs/41298149721) Python/Actions 2/2 SUCCESS。Documentation architecture check SKIPPED，不计 PASS。
+- **B4/R4.2 完成：** no-hit page 的 PDIC/OCR/SECTION witness 在 scan terminal 后仍保留，并在实际 batch publication 前复核；在途 crop stale payload 被拒绝。多页保存若任一已派发 writer 抛错，则整批人工修改保留、页面标为 UNCERTAIN、关闭与自动重试停止，必须人工核对后显式重试；不回滚已可能发布的文件。
+- **RED 与修复记录：** no-hit 在途 crop RED #41295513470，优化后 post-terminal 三来源回归 #41295775912；partial-save RED #41296691853；保守状态更新 RED #41297732941（28 failures，包括 recovered 未定义、旧 helper mock 缺字段和错误提示断言）。最终修复提交 `fd4f46b717de23c96014661ae28cedef51434788`，当前 exact-head gates 全绿。
+- **批次状态：** B4 verified（synthetic E2）；B5 R5.1/R5.2 synthetic E2 verified；B6 blocked（缺少人工核验来源一致标签）；B7a R7.1/R7.2 blocked（无授权真实 profiling，不声称加速）；B7b R7.3 作为不依赖人工标签的独立工作包开始。
+- **下一步：** 只读审计 source→canonical→transformed 坐标 owner，制定版本化正/逆映射合同，并以 synthetic tests 覆盖 SECTION、PDIC、PPP、ROI polygon、crop round-trip。禁止改持久化 schema、原图坐标或写入流程。
+- **始终 NOT PERFORMED：** Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描及真实 PDIC/PPP/SECTION/Profile/OCR 保存重开。**DEFERRED：** R6 真实标签学习、R8 真实扫描。自动 E2 不等于人工验收。
+
+---
+
 ## 2026-11-01｜final docs checkpoint acab2b8321 exact-head gates green
 
 - [CI #41290656126](https://github.com/chigre/Picture_Capture/actions/runs/41290656126): **6/6 SUCCESS**, Risk-tier and Risk-tier CI gate SUCCESS. [OCR #41290656141](https://github.com/chigre/Picture_Capture/actions/runs/41290656141): **3/3 SUCCESS**. [CodeQL #41290653408](https://github.com/chigre/Picture_Capture/actions/runs/41290653408): Analyze Python/Actions **2/2 SUCCESS**. Documentation architecture check was SKIPPED and is not counted as PASS.
