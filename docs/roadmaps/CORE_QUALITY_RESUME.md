@@ -1,3 +1,14 @@
+## 2026-11-01｜G3 R4.2 Tk 重复轮询和关闭调度失败：RED-first + 最小修复，E2 待门禁
+
+- 实时 main `ec20989ea8c026cca5337293e67850b6b6df30f2`，唯一 Draft PR #663；#503/#562/#483 仍 Open。
+- 测试先行 `923aa0754844959365732332fd83ccdf231168c2`，[CI #41283123003](https://github.com/chigre/Picture_Capture/actions/runs/41283123003) macOS Python3.13 **7 failed / 5267 passed / 2 skipped**，Ubuntu Python3.13 也失败；这是 RED 证据，不是绿灯。
+- 源码修复 `adf8ee22`（定时轮询失败后一次 idle fallback、避免无界 idle spin、关闭回调降级），`b50d1301`（关闭前先注册观察者，不让未确认调度的 durable worker 隐藏窗口），`58eee5f4`（app 注入调度依赖），`a03a7a67`（初始化 fallback 状态）。[架构审计](../architecture/G3_R4_2_TK_POLL_REARM_CLOSE_20261101.md)。
+- 最终文档 HEAD 六平台 CI、OCR 3 OS、Risk-tier/gate、CodeQL Python/Actions 均须独立验证；当前 **PENDING**，不继承旧 SHA 的绿灯。
+- **NOT PERFORMED**：Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典/PDIC/PPP/SECTION/Profile 验收。**DEFERRED**：R6 真实标签学习与 R8 真实扫描。PR 保持 Draft/Open/Unmerged，main 不变。
+- 下轮优先核实 exact-head 门禁并修复任何失败，然后继续异步 epoch/SECTION/crop prefetch/save 一致性。
+
+---
+
 ## 2026-11-01｜G3 R4.2 首次 Tk poll 注册失败：先注册轮询，再启动 worker
 
 - 实时基线：main `ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 PR #663 保持 Draft/Open/Unmerged；#503/#562/#483 Open；无 inline review threads。
