@@ -202,6 +202,17 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     project = self.parent.project
     if project is None:
         return
+    # An ambiguous asynchronous save is not settled merely because its
+    # debounce queue is empty. Re-filtering would replace the scan epoch and
+    # could discard the operator's only visible reconciliation context.
+    if (
+        getattr(self, "_filter_save_uncertain_pages", None)
+        or getattr(self, "_filter_save_launch_failed", False)
+    ):
+        self.parent.status_var.set(
+            "筛选校对保存状态未确认；请核对 PDIC 后显式重试，暂不能重新筛选。"
+        )
+        return
     # Re-filter may destroy visible editor rows. Refuse *before* modifying
     # persisted settings, even when the new checkbox differs from this epoch.
     if getattr(self, "_filter_rows_active", False) and (
@@ -1175,6 +1186,16 @@ def change_filter_batch(self, deps: FocusedFilterDeps, delta: int) -> None:
         elif int(delta) > 0 and not self._filter_scan_complete:
             self.parent.status_var.set("下一批仍在后台筛选与预生成，请继续校对当前批次。")
             self._schedule_filter_next_batch_preload()
+        return
+    # Batch navigation must not turn an ambiguous save into an implicit
+    # "explicit" retry. A separate operator save action owns that decision.
+    if (
+        getattr(self, "_filter_save_uncertain_pages", None)
+        or getattr(self, "_filter_save_launch_failed", False)
+    ):
+        self.parent.status_var.set(
+            "筛选校对保存状态未确认；请核对 PDIC 后显式重试，暂不能切换批次。"
+        )
         return
     self._flush_focused_changes_now()
     if self._filter_save_running or self._filter_pending_changes:
