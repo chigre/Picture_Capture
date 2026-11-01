@@ -418,3 +418,69 @@ def test_coordinate_map_refuses_polygon_edge_crossing_projective_horizon():
     assert mapping.source_to_output_polygon(crossing) is None
     output_corners = tuple(item.point for item in corners)
     assert mapping.output_to_source_polygon(output_corners) is None
+
+
+def test_coordinate_map_rejects_forward_point_near_projective_horizon():
+    """The shared absolute denominator clamp must not invent a valid XY."""
+    from picture_capture.preprocess.coordinate_mapping import (
+        CoordinateMappingUnavailable,
+        PreprocessCoordinateMap,
+    )
+
+    delta = -1e-10
+    matrix = (
+        1.0, 0.0, -50.0 + delta,
+        0.0, 1.0, -50.0 + delta,
+        1.0, 1.0, -100.0 + delta,
+    )
+    mapping = PreprocessCoordinateMap(
+        _analysis(
+            crop_box=(0, 0, 100, 100),
+            applied_angle_deg=0.0,
+            perspective_matrix=matrix,
+            orthogonal_steps=(),
+        )
+    )
+
+    # Away from the horizon, the same transform remains usable.
+    safe = mapping.source_to_output_point((40.0, 40.0))
+    assert safe.status == "mapped"
+    assert safe.point == pytest.approx((0.5, 0.5), abs=1e-8)
+
+    # H maps (50, 50) to (1, 1) algebraically, but the homogeneous
+    # denominator is ~1e-12 after normalization. The generic point helper
+    # clamps it to +1e-9 and currently returns a false in-crop point.
+    with pytest.raises(CoordinateMappingUnavailable, match="horizon|denominator"):
+        mapping.source_to_output_point((50.0, 50.0))
+
+
+def test_coordinate_map_rejects_inverse_point_on_projective_horizon():
+    """Reverse mapping must use the same scale-relative pole guard."""
+    from picture_capture.preprocess.coordinate_mapping import (
+        CoordinateMappingUnavailable,
+        PreprocessCoordinateMap,
+    )
+
+    delta = -1e-10
+    matrix = (
+        1.0, 0.0, -50.0 + delta,
+        0.0, 1.0, -50.0 + delta,
+        1.0, 1.0, -100.0 + delta,
+    )
+    mapping = PreprocessCoordinateMap(
+        _analysis(
+            crop_box=(0, 0, 100, 100),
+            applied_angle_deg=0.0,
+            perspective_matrix=matrix,
+            orthogonal_steps=(),
+        )
+    )
+
+    safe = mapping.output_to_source_point((0.0, 0.0))
+    assert safe.status == "mapped"
+    assert safe.point == pytest.approx((50.0, 50.0), abs=1e-5)
+
+    # This output point is inside the crop, but lies exactly on the inverse
+    # homography horizon. Absolute clamping currently fabricates source (0,.1).
+    with pytest.raises(CoordinateMappingUnavailable, match="horizon|denominator"):
+        mapping.output_to_source_point((0.0, 1.0))
