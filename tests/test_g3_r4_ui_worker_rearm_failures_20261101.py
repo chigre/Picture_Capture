@@ -170,6 +170,7 @@ def _close_app(*, after, after_idle, close_requested=False):
         status_var=status,
         after=after,
         after_idle=after_idle,
+        _poll_ui_worker_queue=lambda: None,
         _invalidate_ui_worker=lambda key: invalidated.append(key),
         withdraw=lambda: withdrawn.append(True),
         _flush_deferred_page_save=lambda: None,
