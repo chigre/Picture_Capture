@@ -21,8 +21,26 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
         return
 
     # Durable one-shot workers must finish their success/error cleanup
-    # boundary before the process can disappear.
+    # boundary before the process can disappear. Never hide the only Tk
+    # observer before its poll has been successfully registered.
     if self._ui_worker_close_wait:
+        if self._ui_worker_poll_job is None:
+            schedule_poll = deps.get("schedule_ui_worker_poll")
+            if schedule_poll is None:
+                # Legacy direct helper invocation; keep its historical
+                # scheduler behavior while using the guarded owner in app.py.
+                try:
+                    self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
+                except Exception:
+                    self.status_var.set(
+                        "后台操作仍在运行，轮询无法启动；请保持窗口并重试关闭。"
+                    )
+                    return
+            elif not schedule_poll(self, 40):
+                self.status_var.set(
+                    "后台操作仍在运行，轮询无法启动；请保持窗口并重试关闭。"
+                )
+                return
         if not self._ui_close_requested:
             self._ui_close_requested = True
             for key in tuple(self._ui_worker_generations):
@@ -32,8 +50,6 @@ def on_close(self, *, deps: dict[str, Any]) -> None:
                 self.withdraw()
             except tk.TclError:
                 pass
-            if self._ui_worker_poll_job is None:
-                self._ui_worker_poll_job = self.after(40, self._poll_ui_worker_queue)
         return
 
     try:
