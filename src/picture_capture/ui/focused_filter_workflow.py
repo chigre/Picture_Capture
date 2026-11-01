@@ -1780,7 +1780,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             page_index, x, y = point
             current_word = (
                 str(target["current_word"] or "")
-                .replace("\\r", " ").replace("\\n", " ")
+                .replace("\r", " ").replace("\n", " ")
                 .replace("#", "＃").strip()
             )
             row_key = (x, y)
