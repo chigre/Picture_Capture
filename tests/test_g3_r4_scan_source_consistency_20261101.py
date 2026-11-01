@@ -204,3 +204,59 @@ def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path, mutatio
     assert review._filter_scan_complete is False
     assert "来源" in status.get() or "重新筛选" in status.get()
 
+def test_inflight_crop_payload_cannot_publish_after_no_hit_epoch_source_drift(tmp_path):
+    review, deps, _initial_call, _status, _indicator, pdic, cache, _section = _fixture(tmp_path)
+    no_hit = tmp_path / "000-no-hit.png"
+    Image.new("RGB", (8, 8), "white").save(no_hit)
+    no_hit_pdic = no_hit.with_suffix(".pdic")
+    no_hit_pdic.write_bytes(b"synthetic-no-hit-pdic")
+    no_hit_cache = cache.parent / "000-no-hit.json"
+    no_hit_cache.write_text('{"review_candidates": []}', encoding="utf-8")
+    no_hit_section = page_sections_read_path_for_image(no_hit)
+    no_hit_section.parent.mkdir(parents=True, exist_ok=True)
+    no_hit_section.write_bytes(b"synthetic-no-hit-section")
+
+    original_page = review.parent.project.images[0]
+    review.parent.project.images = [no_hit, original_page]
+    review.parent.current_page = no_hit
+    review.parent._parse_page_spec = lambda _value: [0, 1]
+    review.focused_page_range_var.set("1-2")
+    review._focused_batch_size = lambda: 1
+    pdic_by_page = {no_hit: no_hit_pdic, original_page: pdic}
+    deps.pdic_path = lambda page: pdic_by_page[page]
+    original_read = deps.read_pdic
+    deps.read_pdic = lambda path: [] if path == no_hit_pdic else original_read(path)
+    calls = []
+    review.parent._start_ui_worker = lambda *args: calls.append(args) or len(calls)
+    workflow.run_focused_filter(review, deps)
+    _key, scan_worker, scan_done, _scan_failed = calls[0]
+    scan_done(scan_worker())
+    assert review._filter_scan_complete is True
+    target = review.filtered_targets[0]
+    assert target["page_index"] == 1
+
+    pages = [no_hit, original_page]
+    crop_witness = workflow.focused_crop_source_witness(pages, [target])
+    cache_key = (0, ("synthetic-render-settings", crop_witness))
+    review._filter_batch_snapshot = lambda _index: (
+        cache_key, [dict(target)], pages, None, 300, 300, 1.0, False,
+    )
+    review.review_zoom_auto = False
+    review._render_filter_batch = lambda *_args: rendered.append(True)
+    review._reset_rows_scroll_top = lambda: None
+    review._schedule_filter_next_batch_preload = lambda: None
+    review._update_filter_batch_indicator = lambda: None
+    rendered = []
+    deps._format_layout_percent = lambda value: str(value)
+
+    # The batch snapshot is valid when the crop payload is accepted, but a
+    # no-hit page changes while that payload is in flight.
+    no_hit_section.write_bytes(b"synthetic-no-hit-section-after-terminal")
+    applied = workflow._apply_filter_batch_payload(
+        review, deps, 0, cache_key, ([object()], 1.0, [(1, 1)]),
+    )
+    assert applied is False
+    assert rendered == []
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+
