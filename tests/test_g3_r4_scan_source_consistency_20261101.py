@@ -149,7 +149,7 @@ def test_scan_targets_carry_source_witness_and_reject_later_ocr_cache_drift(tmp_
     # A same-length cache replacement with a restored timestamp must not
     # authorize rendering a result derived from the old OCR candidates.
     original_stat = cache.stat()
-    cache.write_text('{"review_candidates": [{"new": true}]}', encoding="utf-8")
+    cache.write_text('{"review_candidates":[] }', encoding="utf-8")
     import os
     os.utime(cache, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
     snapshot = workflow._filter_batch_snapshot(review, deps, 0)

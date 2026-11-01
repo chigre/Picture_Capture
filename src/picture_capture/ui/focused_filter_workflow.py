@@ -13,7 +13,8 @@ from ..proofreading.review_timing import ReviewTimingSession
 from .readonly_worker_launch import dispatch_readonly_ui_worker
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
-    verify_focused_save_source,
+    focused_scan_source_witness, verify_focused_save_source,
+    verify_focused_scan_source,
 )
 
 if TYPE_CHECKING:
@@ -55,6 +56,39 @@ class FocusedFilterDeps:
     _entry_font_spec: object
     themed_display_image: object
     _apply_focused_review_page_updates: object
+
+
+def _focused_scan_target_source_signature(
+    targets: list[dict], pages: list, project_root, deps: FocusedFilterDeps,
+) -> tuple:
+    """Verify that visible scan targets still belong to their PDIC/OCR/SECTION inputs.
+
+    Legacy synthetic callers with no scan witness retain their old helper ABI;
+    real filter targets all carry a witness captured by scan_page().
+    """
+    expected_by_page = {}
+    missing_pages = set()
+    for target in targets:
+        page_index = int(target["page_index"])
+        expected = target.get("_focused_scan_source_witness")
+        if expected is None:
+            missing_pages.add(page_index)
+            continue
+        if not 0 <= page_index < len(pages):
+            raise ValueError("focused scan page index out of range")
+        previous = expected_by_page.get(page_index)
+        if previous is not None and previous != expected:
+            raise RuntimeError("同一页面的重点筛选来源证明不一致")
+        expected_by_page[page_index] = expected
+    if missing_pages.intersection(expected_by_page):
+        raise RuntimeError("重点筛选行缺少一致的数据来源证明")
+    for page_index, expected in sorted(expected_by_page.items()):
+        page = pages[page_index]
+        cache_path = deps.ocr_cache_root(project_root) / f"{page.stem}.json"
+        verify_focused_scan_source(
+            page, deps.pdic_path(page), cache_path, expected,
+        )
+    return tuple(sorted(expected_by_page.items()))
 
 
 def _record_focused_timing(
@@ -213,13 +247,23 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     ) -> tuple[list[dict], bool]:
         """Fast filter pass using only PDIC and OCR JSON, never page pixels."""
         page = pages[page_index]
-        entries = read_pdic(pdic_path(page))
+        page_pdic_path = pdic_path(page)
+        cache = ocr_cache_root(project_root) / f"{page.stem}.json"
+        # A page scan consumes PDIC, OCR cache and (when risk ordering is
+        # enabled) SECTION. Pin all three before any read and recheck after
+        # candidate matching so a mixed revision cannot enter this epoch.
+        scan_source_witness = focused_scan_source_witness(
+            page, page_pdic_path, cache,
+        )
+        entries = read_pdic(page_pdic_path)
         if not entries:
+            verify_focused_scan_source(
+                page, page_pdic_path, cache, scan_source_witness,
+            )
             return [], False
 
         candidates: list[dict] = []
         missing_ocr = False
-        cache = ocr_cache_root(project_root) / f"{page.stem}.json"
         if cache.exists():
             try:
                 payload = json.loads(cache.read_text(encoding="utf-8"))
@@ -291,11 +335,16 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             from ..proofreading.review_risk_snapshot import prioritized_focused_page_targets
             targets = prioritized_focused_page_targets(
                 targets, project_root=project_root, page=page,
-                cache_path=cache, pdic_path=pdic_path(page), enabled=True,
+                cache_path=cache, pdic_path=page_pdic_path, enabled=True,
             )
             if risk_start is not None:
                 sample["risk"] += perf_counter() - risk_start
                 sample["risk_pages"] += 1
+        verify_focused_scan_source(
+            page, page_pdic_path, cache, scan_source_witness,
+        )
+        for target in targets:
+            target["_focused_scan_source_witness"] = scan_source_witness
         return targets, missing_ocr
 
     def dispatch_scan_after_ack(worker_key, worker, on_done, on_failed) -> None:
@@ -664,11 +713,15 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
     # Use actual source bytes, not mutable size/mtime metadata. This is a
     # volatile readback, not an OS-level multi-file atomic snapshot.
     try:
+        scan_source_signature = _focused_scan_target_source_signature(
+            targets, pages, project.root, deps,
+        )
         source_witness = focused_crop_source_witness(pages, targets)
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError, RuntimeError):
         return None
     render_signature = (
         target_signature,
+        scan_source_signature,
         repr(settings),
         viewer_width,
         available_width,
@@ -842,6 +895,7 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
     worker_key = f"focused-filter-prefetch-{id(self)}"
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
+    project_root = self.parent.project.root
     crop_seconds = [None]
     # A source key may be reissued within one scan epoch after cache eviction
     # or a completed attempt. Key equality is not worker identity: once this
@@ -866,6 +920,9 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         # This is a volatile content check, not a filesystem CAS transaction.
         if focused_crop_source_witness(local_pages, local_targets) != cache_key[1][-1]:
             raise ValueError("focused crop source changed during prefetch")
+        _focused_scan_target_source_signature(
+            local_targets, local_pages, project_root, deps,
+        )
         if started is not None:
             crop_seconds[0] = perf_counter() - started
         return result
@@ -1033,6 +1090,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     serial = self._filter_render_serial
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
+    project_root = self.parent.project.root
     crop_seconds = [None]
     # Only the first owned terminal callback may affect this render. Worker
     # adapters can report a delayed duplicate or contradictory completion;
@@ -1077,6 +1135,9 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
         # bytes if they changed during off-thread processing.
         if focused_crop_source_witness(local_pages, local_targets) != cache_key[1][-1]:
             raise ValueError("focused crop source changed during direct rendering")
+        _focused_scan_target_source_signature(
+            local_targets, local_pages, project_root, deps,
+        )
         if started is not None:
             crop_seconds[0] = perf_counter() - started
         return result

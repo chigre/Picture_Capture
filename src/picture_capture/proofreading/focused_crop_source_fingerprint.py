@@ -100,3 +100,37 @@ def verify_focused_save_source(page: Path, expected: tuple | None) -> None:
         raise RuntimeError("筛选校对原图或 SECTION 来源无法核验，拒绝保存") from exc
     if current != expected:
         raise RuntimeError("筛选校对原图或 SECTION 来源已变化，拒绝保存")
+
+
+def focused_scan_source_witness(
+    page: Path, pdic_path: Path, ocr_cache_path: Path,
+) -> tuple:
+    """Pin the exact inputs consumed by one focused-filter page scan.
+
+    PDIC is required; OCR cache and SECTION are optional but their absence,
+    resolved path and bytes are part of the witness. The page pixels are not
+    read by the scan and therefore are intentionally not included.
+    """
+    return (
+        "focused-scan-source-v1",
+        _file_witness(Path(pdic_path), optional=False),
+        _file_witness(Path(ocr_cache_path), optional=True),
+        _file_witness(page_sections_read_path_for_image(Path(page)), optional=True),
+    )
+
+
+def verify_focused_scan_source(
+    page: Path, pdic_path: Path, ocr_cache_path: Path, expected: tuple | None,
+) -> None:
+    """Reject a scan whose PDIC/OCR/SECTION inputs no longer match its read."""
+    if (
+        not isinstance(expected, tuple) or len(expected) != 4
+        or expected[0] != "focused-scan-source-v1"
+    ):
+        raise RuntimeError("重点筛选缺少有效的数据来源证明，拒绝发布结果")
+    try:
+        current = focused_scan_source_witness(page, pdic_path, ocr_cache_path)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("重点筛选的数据来源无法核验，拒绝发布结果") from exc
+    if current != expected:
+        raise RuntimeError("重点筛选期间 PDIC、OCR 缓存或 SECTION 来源已变化，拒绝发布结果")
