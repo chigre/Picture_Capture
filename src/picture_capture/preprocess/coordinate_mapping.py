@@ -11,6 +11,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 import math
+from operator import index as integer_index
 from typing import Literal, Sequence
 
 import numpy as np
@@ -26,6 +27,33 @@ from .orthogonal_dewarp import (
 from .orthogonal_policy import _orthogonal_estimate_from_step
 
 COORDINATE_MAPPING_CONTRACT_VERSION = 1
+
+# Orthogonal replay is nonlinear. Check each polygon edge at a bounded spatial
+# interval no larger than one quarter of the default 32 px raster mesh cell.
+# This is a conservative boundary check, not a claim of sub-pixel exactness.
+_ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX = 8.0
+_ORTHOGONAL_POLYGON_MAX_EDGE_STEPS = 8192
+_ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES = 32768
+
+
+def _validated_size_pair(value: Sequence[int], name: str) -> tuple[int, int]:
+    """Return a strict positive integer (width, height) snapshot."""
+    try:
+        if isinstance(value, (str, bytes)) or len(value) != 2:
+            raise ValueError
+        items = tuple(value)
+        if any(isinstance(item, bool) for item in items):
+            raise ValueError
+        dimensions = tuple(integer_index(item) for item in items)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            f"{name} must contain exactly two positive integer dimensions"
+        ) from exc
+    if any(dimension <= 0 for dimension in dimensions):
+        raise ValueError(
+            f"{name} must contain exactly two positive integer dimensions"
+        )
+    return int(dimensions[0]), int(dimensions[1])
 
 
 class CoordinateMappingUnavailable(ValueError):
@@ -59,6 +87,8 @@ class PreprocessCoordinateMap:
 
     _analysis: PreprocessAnalysis = field(repr=False, compare=False)
     source_size: tuple[int, int]
+    raw_source_size: tuple[int, int] | None
+    exif_orientation: int
     layout_transform: LayoutTransform
     canvas: OutputCanvasInfo | None
     analysis_is_canonicalized: bool
@@ -73,19 +103,44 @@ class PreprocessCoordinateMap:
         layout_transform: LayoutTransform | None = None,
         canvas: OutputCanvasInfo | None = None,
         analysis_is_canonicalized: bool = False,
+        *,
+        raw_source_size: Sequence[int] | None = None,
+        exif_orientation: int = 1,
     ) -> None:
         snapshot = deepcopy(analysis)
-        raw_size = source_size or (
-            int(snapshot.source_width),
-            int(snapshot.source_height),
+        raw_dimensions = (
+            (snapshot.source_width, snapshot.source_height)
+            if source_size is None else source_size
         )
-        if len(raw_size) != 2:
-            raise ValueError("source_size must contain width and height")
-        size = (int(raw_size[0]), int(raw_size[1]))
-        transform = layout_transform or LayoutTransform()
+        size = _validated_size_pair(raw_dimensions, "source_size")
+        try:
+            if isinstance(exif_orientation, bool):
+                raise TypeError
+            orientation = integer_index(exif_orientation)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("exif_orientation must be an integer from 1 through 8") from exc
+        if orientation < 1 or orientation > 8:
+            raise ValueError("exif_orientation must be an integer from 1 through 8")
+        raw_size = (
+            None if raw_source_size is None
+            else _validated_size_pair(raw_source_size, "raw_source_size")
+        )
+        if raw_size is None and orientation != 1:
+            raise ValueError(
+                "raw_source_size is required to validate a non-default EXIF orientation"
+            )
+        if raw_size is not None:
+            expected_size = (raw_size[1], raw_size[0]) if orientation >= 5 else raw_size
+            if size != expected_size:
+                raise ValueError(
+                    "source_size does not match the EXIF-oriented raw_source_size"
+                )
+        transform = LayoutTransform() if layout_transform is None else layout_transform
 
         object.__setattr__(self, "_analysis", snapshot)
         object.__setattr__(self, "source_size", size)
+        object.__setattr__(self, "raw_source_size", raw_size)
+        object.__setattr__(self, "exif_orientation", int(orientation))
         object.__setattr__(self, "layout_transform", transform)
         object.__setattr__(self, "canvas", canvas)
         object.__setattr__(
@@ -108,10 +163,12 @@ class PreprocessCoordinateMap:
         analysis = self._analysis
         if self.source_size[0] <= 0 or self.source_size[1] <= 0:
             raise ValueError("source_size must be positive")
+        if not isinstance(self.layout_transform, LayoutTransform):
+            raise CoordinateMappingUnavailable("layout transform snapshot is malformed")
         canonical_size = self.layout_transform.canonical_size(self.source_size)
-        analysis_size = (
-            int(analysis.source_width),
-            int(analysis.source_height),
+        analysis_size = _validated_size_pair(
+            (analysis.source_width, analysis.source_height),
+            "analysis source dimensions",
         )
         if canonical_size != analysis_size:
             raise ValueError(
@@ -265,6 +322,19 @@ class PreprocessCoordinateMap:
                 "orthogonal replay geometry is missing"
             )
 
+    @classmethod
+    def _validate_orthogonal_snapshot(
+        cls, estimate: OrthogonalWarpEstimate,
+    ) -> None:
+        try:
+            cls._validate_orthogonal_replay_estimate(estimate)
+        except CoordinateMappingUnavailable:
+            raise
+        except (TypeError, ValueError, OverflowError, IndexError) as exc:
+            raise CoordinateMappingUnavailable(
+                "orthogonal replay geometry is malformed"
+            ) from exc
+
     def _build_orthogonal_steps(
         self,
     ) -> tuple[tuple[OrthogonalWarpEstimate, float], ...]:
@@ -288,37 +358,42 @@ class PreprocessCoordinateMap:
                     raise CoordinateMappingUnavailable(
                         "orthogonal row gain is not finite"
                     )
-                self._validate_orthogonal_replay_estimate(estimate)
+                self._validate_orthogonal_snapshot(estimate)
                 steps.append((estimate, float(row_gain)))
             return tuple(steps)
         if analysis.orthogonal_y_knots and analysis.orthogonal_angle_knots_deg:
-            estimate = OrthogonalWarpEstimate(
-                y_knots=tuple(analysis.orthogonal_y_knots),
-                angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
-                x_knots=tuple(analysis.orthogonal_x_knots),
-                row_grid_rows=int(analysis.orthogonal_row_grid_rows),
-                row_grid_cols=int(analysis.orthogonal_row_grid_cols),
-                row_angle_grid_deg=tuple(
-                    analysis.orthogonal_row_angle_grid_deg
-                ),
-                row_displacement_grid_px=tuple(
-                    analysis.orthogonal_row_displacement_grid_px
-                ),
-                separator_y_knots=tuple(
-                    analysis.orthogonal_separator_y_knots
-                ),
-                separator_shift_knots_px=tuple(
-                    analysis.orthogonal_separator_shift_knots_px
-                ),
-                reference_x=float(analysis.orthogonal_reference_x),
-                active=True,
-            )
-            row_gain = float(analysis.orthogonal_row_gain)
+            try:
+                estimate = OrthogonalWarpEstimate(
+                    y_knots=tuple(analysis.orthogonal_y_knots),
+                    angle_knots_deg=tuple(analysis.orthogonal_angle_knots_deg),
+                    x_knots=tuple(analysis.orthogonal_x_knots),
+                    row_grid_rows=int(analysis.orthogonal_row_grid_rows),
+                    row_grid_cols=int(analysis.orthogonal_row_grid_cols),
+                    row_angle_grid_deg=tuple(
+                        analysis.orthogonal_row_angle_grid_deg
+                    ),
+                    row_displacement_grid_px=tuple(
+                        analysis.orthogonal_row_displacement_grid_px
+                    ),
+                    separator_y_knots=tuple(
+                        analysis.orthogonal_separator_y_knots
+                    ),
+                    separator_shift_knots_px=tuple(
+                        analysis.orthogonal_separator_shift_knots_px
+                    ),
+                    reference_x=float(analysis.orthogonal_reference_x),
+                    active=True,
+                )
+                row_gain = float(analysis.orthogonal_row_gain)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise CoordinateMappingUnavailable(
+                    "orthogonal replay legacy geometry is malformed"
+                ) from exc
             if not math.isfinite(row_gain):
                 raise CoordinateMappingUnavailable(
                     "orthogonal row gain is not finite"
                 )
-            self._validate_orthogonal_replay_estimate(estimate)
+            self._validate_orthogonal_snapshot(estimate)
             return ((estimate, row_gain),)
         raise CoordinateMappingUnavailable(
             "orthogonal replay geometry is missing"
@@ -561,25 +636,78 @@ class PreprocessCoordinateMap:
                 return True
         return False
 
+    def _polygon_edge_samples(
+        self, points: Sequence[Sequence[float]],
+    ) -> tuple[tuple[float, float], ...]:
+        """Sample nonlinear orthogonal edges before certifying domain bounds.
+
+        Homography/deskew alone maps straight segments to straight segments
+        (provided no projective horizon is crossed). Orthogonal replay is
+        nonlinear, so valid vertices do not prove that the intervening edge
+        remains inside the crop/source rectangle. Sample at a bounded interval
+        and fail closed rather than returning an unchecked polygon.
+        """
+        vertices = tuple(self._point(point) for point in points)
+        if len(vertices) < 2 or not self._orthogonal_step_cache:
+            return vertices
+        samples: list[tuple[float, float]] = []
+        for index, start in enumerate(vertices):
+            end = vertices[(index + 1) % len(vertices)]
+            distance = math.hypot(end[0] - start[0], end[1] - start[1])
+            steps = max(
+                2,
+                int(math.ceil(distance / _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX)),
+            )
+            if steps % 2:
+                steps += 1
+            if (
+                steps > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS
+                or len(samples) + steps > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
+            ):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal polygon edge exceeds the bounded sampling budget"
+                )
+            for step in range(steps):
+                fraction = step / steps
+                samples.append((
+                    start[0] + (end[0] - start[0]) * fraction,
+                    start[1] + (end[1] - start[1]) * fraction,
+                ))
+        return tuple(samples)
+
     def source_to_output_polygon(
         self, points: Sequence[Sequence[float]],
     ) -> tuple[tuple[float, float], ...] | None:
+        if not points or self._polygon_crosses_perspective_horizon(points):
+            return None
+        samples = self._polygon_edge_samples(points)
+        for sample in samples:
+            item = self.source_to_output_point(sample)
+            if item.status != "mapped" or item.point is None:
+                return None
         mapped = tuple(self.source_to_output_point(point) for point in points)
         if not mapped or any(item.status != "mapped" or item.point is None for item in mapped):
-            return None
-        if self._polygon_crosses_perspective_horizon(points):
             return None
         return tuple(item.point for item in mapped if item.point is not None)
 
     def output_to_source_polygon(
         self, points: Sequence[Sequence[float]],
     ) -> tuple[tuple[float, float], ...] | None:
+        if not points:
+            return None
+        samples = self._polygon_edge_samples(points)
+        mapped_samples = tuple(self.output_to_source_point(point) for point in samples)
+        if any(
+            item.status != "mapped" or item.point is None
+            for item in mapped_samples
+        ):
+            return None
+        source_samples = tuple(
+            item.point for item in mapped_samples if item.point is not None
+        )
+        if self._polygon_crosses_perspective_horizon(source_samples):
+            return None
         mapped = tuple(self.output_to_source_point(point) for point in points)
         if not mapped or any(item.status != "mapped" or item.point is None for item in mapped):
             return None
-        source_vertices = tuple(
-            item.point for item in mapped if item.point is not None
-        )
-        if self._polygon_crosses_perspective_horizon(source_vertices):
-            return None
-        return source_vertices
+        return tuple(item.point for item in mapped if item.point is not None)
