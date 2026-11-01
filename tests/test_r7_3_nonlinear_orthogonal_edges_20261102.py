@@ -282,8 +282,8 @@ def test_source_polygon_samples_separator_knots_after_projective_transform():
         ),
     )
     mapping = PreprocessCoordinateMap(analysis)
-    polygon = ((40.0, 10.0), (45.0, 10.0),
-               (45.0, 70.0), (40.0, 70.0))
+    polygon = ((38.0, 10.0), (40.0, 10.0),
+               (40.0, 70.0), (38.0, 70.0))
 
     assert all(mapping.source_to_output_point(point).status == "mapped"
                for point in polygon)
