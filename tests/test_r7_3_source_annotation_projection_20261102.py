@@ -44,6 +44,22 @@ def test_pdic_ppp_section_source_xy_survives_canonical_crop_canvas_projection(
     canonical = transform.canonical_image_for_analysis(source)
     width, height = canonical.size
 
+    orthogonal_steps = tuple(
+        {
+            "row_gain": 1.0,
+            "reference_x": 0.0,
+            "y_knots": [0.0, float(height - 1)],
+            "angle_knots_deg": [0.0, 0.0],
+            "x_knots": [],
+            "row_grid_rows": 0,
+            "row_grid_cols": 0,
+            "row_angle_grid_deg": [],
+            "row_displacement_grid_px": [],
+            "separator_y_knots": [0.0, float(height - 1)],
+            "separator_shift_knots_px": [shift, shift],
+        }
+        for shift in (2.0, 1.0)
+    )
     analysis = PreprocessAnalysis(
         source_width=width,
         source_height=height,
@@ -65,8 +81,8 @@ def test_pdic_ppp_section_source_xy_survives_canonical_crop_canvas_projection(
             0.0, 1.0, 4.0,
             0.0, 0.0, 1.0,
         ),
-        orthogonal_applied=False,
-        orthogonal_steps=(),
+        orthogonal_applied=True,
+        orthogonal_steps=orthogonal_steps,
     )
     crop_width = analysis.crop_box[2] - analysis.crop_box[0]
     crop_height = analysis.crop_box[3] - analysis.crop_box[1]
@@ -123,6 +139,7 @@ def test_pdic_ppp_section_source_xy_survives_canonical_crop_canvas_projection(
     mapped = mapping.source_to_output_point(source_point)
     assert mapped.status == "mapped"
     assert mapped.point is not None
+    assert mapped.approximate is True
     restored = mapping.output_to_source_point(mapped.point)
     assert restored.status == "mapped"
     assert restored.point == pytest.approx(source_point, abs=1e-9)
