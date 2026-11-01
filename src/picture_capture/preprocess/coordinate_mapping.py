@@ -372,11 +372,51 @@ class PreprocessCoordinateMap:
             "mapped", source_point, self.approximate,
         )
 
+    def _polygon_crosses_perspective_horizon(
+        self, source_points: Sequence[Sequence[float]],
+    ) -> bool:
+        """Refuse ROI edges whose homogeneous denominator crosses zero.
+
+        A vertex-only map cannot certify an entire polygon: both endpoints
+        of an edge can lie inside the crop while the segment passes through
+        a projective pole. Layout and deskew are affine, so evaluating H's
+        last row at their transformed vertices proves whether any straight
+        source edge crosses that pole. No persisted coordinates are touched.
+        """
+        matrix = self._analysis.perspective_matrix
+        if matrix is None or len(source_points) < 2:
+            return False
+        normalized = self._normalized_projective_matrix(matrix)
+        g, h, i = normalized[6:]
+        width = int(self._analysis.source_width)
+        height = int(self._analysis.source_height)
+        signs: set[bool] = set()
+        for raw_point in source_points:
+            x, y = self._point(raw_point)
+            canonical = self.layout_transform.source_to_canonical_point(
+                x, y, self.source_size,
+            )
+            tx, ty = _rotate_point_same_canvas(
+                float(canonical[0]), float(canonical[1]), width, height,
+                float(self._analysis.applied_angle_deg),
+            )
+            denominator = g * tx + h * ty + i
+            # Match the shared homography utility's absolute 1e-9 clamp:
+            # near-pole points are not trustworthy ROI boundary vertices.
+            if not math.isfinite(denominator) or abs(denominator) < 1e-9:
+                return True
+            signs.add(denominator > 0.0)
+            if len(signs) > 1:
+                return True
+        return False
+
     def source_to_output_polygon(
         self, points: Sequence[Sequence[float]],
     ) -> tuple[tuple[float, float], ...] | None:
         mapped = tuple(self.source_to_output_point(point) for point in points)
         if not mapped or any(item.status != "mapped" or item.point is None for item in mapped):
+            return None
+        if self._polygon_crosses_perspective_horizon(points):
             return None
         return tuple(item.point for item in mapped if item.point is not None)
 
@@ -386,4 +426,9 @@ class PreprocessCoordinateMap:
         mapped = tuple(self.output_to_source_point(point) for point in points)
         if not mapped or any(item.status != "mapped" or item.point is None for item in mapped):
             return None
-        return tuple(item.point for item in mapped if item.point is not None)
+        source_vertices = tuple(
+            item.point for item in mapped if item.point is not None
+        )
+        if self._polygon_crosses_perspective_horizon(source_vertices):
+            return None
+        return source_vertices
