@@ -97,10 +97,21 @@ def test_partial_multi_page_save_does_not_requeue_confirmed_commit(tmp_path: Pat
     else:
         raise AssertionError("the second page must fail in this fixture")
 
-    # Page 001 was acknowledged by the writer and must not be retried.
-    assert 0 not in review._filter_pending_changes
-    assert targets[0]["original_word"] == "human-0"
-    # Page 002 never reached publication and must remain available for retry.
+    # The worker is not a multi-file transaction. Even though page 001's
+    # writer returned, a later page failure leaves the whole batch pending;
+    # the UI must not claim a globally reconciled save or roll back disk data.
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert review._filter_pending_changes[0][(10, 20)]["new_word"] == "human-0"
     assert review._filter_pending_changes[1][(11, 21)]["new_word"] == "human-1"
+    assert targets[0]["original_word"] == "old-0"
+    assert targets[1]["original_word"] == "old-1"
     assert review._filter_save_running is False
     assert review._filter_close_after_save is False
+    assert review._filter_save_uncertain_pages == {0, 1}
+    assert "保存失败" in status.value and "已保留" in status.value
+
+    # Timer/debounce-driven retry is blocked while the batch outcome is
+    # uncertain. A user action through _flush_focused_changes_now is the
+    # explicit retry path after checking the PDIC files.
+    workflow._flush_focused_changes(review, deps)
+    assert len(callbacks) == 1
