@@ -1,3 +1,12 @@
+## 2026-11-01｜final docs checkpoint acab2b8321 exact-head gates green
+
+- [CI #41290656126](https://github.com/chigre/Picture_Capture/actions/runs/41290656126): **6/6 SUCCESS**, Risk-tier and Risk-tier CI gate SUCCESS. [OCR #41290656141](https://github.com/chigre/Picture_Capture/actions/runs/41290656141): **3/3 SUCCESS**. [CodeQL #41290653408](https://github.com/chigre/Picture_Capture/actions/runs/41290653408): Analyze Python/Actions **2/2 SUCCESS**. Documentation architecture check was SKIPPED and is not counted as PASS.
+- B4 remains active for post-terminal no-hit source drift and focused-save partial publication/reconciliation. B5/R5.1+R5.2 is synthetic E2 complete on source HEAD `3b06e89034cc8c5b93db3613fd0d10fe811bdc70`. B6 is blocked pending reliable human-verified source-consistent labels and independent dictionary/project partitions.
+- The `implementation_pr.units` field is a scope index only; per-unit status is recorded in the B4/B5/B6 batch records and dedicated evidence objects. R7.1/R7.3 are not yet verified; human R3 acceptance remains deferred/not performed.
+- Next: fail-first test to bound the cost of no-hit epoch revalidation (avoid repeated full-prefix hashing on every intermediate chunk), then continue focused-save partial publication/reconciliation. Preserve one Draft PR #663 and all human/real-data deferrals.
+
+---
+
 ## 2026-11-01｜docs checkpoint 10a23f40 and B5 R5 parity recheck
 
 - **Docs checkpoint exact HEAD:** `10a23f40f7751d51f66b34790fa12ec5efe25690`; [CI #41290109140](https://github.com/chigre/Picture_Capture/actions/runs/41290109140) 6/6 Windows/macOS/Ubuntu × Python3.10/3.13 + Risk-tier + Risk-tier CI gate SUCCESS; [OCR #41290109157](https://github.com/chigre/Picture_Capture/actions/runs/41290109157) 3/3 SUCCESS; [CodeQL #41290105787](https://github.com/chigre/Picture_Capture/actions/runs/41290105787) Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED and not counted as PASS.
