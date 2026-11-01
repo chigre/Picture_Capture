@@ -243,3 +243,40 @@ def test_repeated_close_retries_missing_poll_without_reinvalidating_generation()
     assert app._ui_close_requested is True
     assert invalidated == []
     assert withdrawn == []
+
+
+def test_failed_rearm_during_close_keeps_close_intent_and_reopens_for_retry():
+    visibility = []
+
+    def fail(_ms, _callback):
+        raise RuntimeError("PRIVATE_REARM:/synthetic/durable.pdic")
+
+    app = _poll_app(after=fail, after_idle=fail, close_requested=True)
+    app.deiconify = lambda: visibility.append("visible")
+    runtime.poll_ui_worker_queue(app, deps=_deps())
+
+    # The close request remains authoritative and callbacks stay suppressed;
+    # the visible window exists only so the operator can retry scheduling.
+    assert app._ui_close_requested is True
+    assert visibility == ["visible"]
+    assert app._ui_worker_close_wait == {("durable-save", 4)}
+    assert app._ui_worker_active == {("durable-save", 4)}
+    assert app._ui_worker_poll_job is None
+
+
+def test_explicit_close_retry_resets_idle_fallback_latch_before_rescheduling():
+    def after(_ms, _callback):
+        return "retry-after-poll"
+
+    app, invalidated, withdrawn, _status = _close_app(
+        after=after, after_idle=lambda *_args: pytest.fail("not needed"),
+        close_requested=True,
+    )
+    app._ui_worker_poll_idle_fallback_used = True
+    lifecycle.on_close(app, deps=_close_deps())
+
+    assert app._ui_worker_poll_job == "retry-after-poll"
+    assert app._ui_worker_poll_idle_fallback_used is False
+    assert app._ui_close_requested is True
+    assert invalidated == []
+    assert withdrawn == []
