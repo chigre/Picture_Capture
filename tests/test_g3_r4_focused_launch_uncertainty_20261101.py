@@ -65,6 +65,7 @@ def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
         _filter_save_dispatch_serial=0,
     )
     deps = SimpleNamespace(
+        tk=SimpleNamespace(TclError=RuntimeError),
         _apply_focused_review_page_updates=lambda _page, _pages, index, changes: (
             attempted.append(index) or [
                 (index, int(change["x"]), int(change["y"]), change["new_word"])

@@ -6,6 +6,19 @@ from typing import Any, Callable
 
 def close_review(review: Any, *, showerror: Callable) -> None:
     if getattr(review, "_filter_rows_active", False):
+        # Closing a window is not consent to repeat writes whose launch or
+        # page-level outcome is uncertain. The user must inspect PDIC and
+        # use the explicit save retry action while this window stays open.
+        if (
+            getattr(review, "_filter_save_launch_failed", False)
+            or getattr(review, "_filter_save_uncertain_pages", None)
+        ):
+            review._filter_close_after_save = False
+            review.parent.status_var.set(
+                "筛选校对存在写入结果未确认的页面，窗口保持打开；"
+                "请核对 PDIC 后显式重试。"
+            )
+            return
         try:
             review._flush_focused_changes_now()
         except Exception:

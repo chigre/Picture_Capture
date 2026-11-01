@@ -1682,7 +1682,10 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     _apply_focused_review_page_updates = deps._apply_focused_review_page_updates
     self._filter_save_job = None
     if (
-        getattr(self, "_filter_save_uncertain_pages", None)
+        (
+            getattr(self, "_filter_save_uncertain_pages", None)
+            or getattr(self, "_filter_save_launch_failed", False)
+        )
         and not getattr(self, "_filter_save_explicit_retry", False)
     ):
         self.parent.status_var.set(
@@ -2018,6 +2021,14 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         self._filter_save_running = False
         self._filter_close_after_save = False
         self._filter_save_launch_failed = True
+        # A worker may publish some pages and then the scheduler can raise
+        # before acknowledging launch. Treat *every* page in the dispatch
+        # as uncertain; no timer, navigation or close path may replay it
+        # until a user explicitly inspects PDIC and requests retry.
+        self._filter_save_uncertain_pages = (
+            set(getattr(self, "_filter_save_uncertain_pages", set()))
+            | {int(index) for index in snapshot}
+        )
         restore_unwritten(set())
         self.parent.status_var.set(
             "筛选校对保存启动失败或状态未确认，修改已保留；请核对后重试。"

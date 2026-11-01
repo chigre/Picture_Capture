@@ -272,7 +272,11 @@ def test_explicit_retry_after_failed_dispatch_can_launch_verified_worker(tmp_pat
 
     accepted = []
     review.parent._start_ui_worker = lambda *a, **kw: accepted.append((a, kw))
-    workflow._flush_focused_changes(review, deps)
+    # A retry after an ambiguous launch must be a user-triggered action,
+    # not a timer calling _flush_focused_changes directly.
+    deps.tk = SimpleNamespace(TclError=RuntimeError)
+    review._flush_focused_changes = lambda: workflow._flush_focused_changes(review, deps)
+    workflow._flush_focused_changes_now(review, deps)
     assert len(accepted) == 1
     assert review._filter_save_launch_failed is False
     assert review._filter_save_running is True
@@ -306,7 +310,9 @@ def test_rejected_launch_stale_callback_cannot_mutate_a_later_retry(
         new_callbacks.append((worker, done, failed))
 
     review.parent._start_ui_worker = second_schedule
-    workflow._flush_focused_changes(review, deps)
+    deps.tk = SimpleNamespace(TclError=RuntimeError)
+    review._flush_focused_changes = lambda: workflow._flush_focused_changes(review, deps)
+    workflow._flush_focused_changes_now(review, deps)
     assert len(new_callbacks) == 1
     assert review._filter_save_running is True
     assert review._filter_save_launch_failed is False
