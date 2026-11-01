@@ -216,3 +216,19 @@ def test_coordinate_map_refuses_analysis_whose_dimensions_do_not_match_canonical
             source_size=(100, 80),
             layout_transform=LayoutTransform("rotate_ccw90"),
         )
+
+
+def test_coordinate_map_roundtrips_roi_polygon_vertices_and_refuses_partial_crop():
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    analysis = _analysis()
+    mapping = PreprocessCoordinateMap(analysis=analysis)
+    polygon = ((30.0, 30.0), (60.0, 30.0), (60.0, 60.0), (30.0, 60.0))
+    output = mapping.source_to_output_polygon(polygon)
+    assert output is not None and len(output) == 4
+    restored = mapping.output_to_source_polygon(output)
+    assert restored is not None and len(restored) == 4
+    assert np.allclose(restored, polygon, atol=0.02)
+
+    crossing = ((0.0, 30.0), (60.0, 30.0), (60.0, 60.0), (0.0, 60.0))
+    assert mapping.source_to_output_polygon(crossing) is None

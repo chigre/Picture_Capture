@@ -1397,6 +1397,32 @@ def _inverse_corner(
     return x_source, y_source
 
 
+
+def inverse_transform_points_orthogonal(
+    points: np.ndarray,
+    estimate: OrthogonalWarpEstimate,
+    *,
+    row_gain: float = 1.0,
+    separator_gain: float = 1.0,
+) -> np.ndarray:
+    """Map transformed points back through the same inverse used by the image mesh.
+
+    The inverse is a bounded fixed-point solve, so callers must treat round-trip
+    results as approximate rather than as exact integer source coordinates.
+    """
+    raw = np.asarray(points, dtype=float)
+    shape = raw.shape
+    flat = raw.reshape(-1, 2).copy()
+    for index, (x_out, y_out) in enumerate(flat):
+        flat[index] = _inverse_corner(
+            float(x_out),
+            float(y_out),
+            estimate,
+            float(row_gain),
+            float(separator_gain),
+        )
+    return flat.reshape(shape)
+
 def apply_orthogonal_warp_image(
     image: Image.Image,
     estimate: OrthogonalWarpEstimate,
