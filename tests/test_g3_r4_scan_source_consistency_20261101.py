@@ -191,7 +191,6 @@ def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path):
     # presenting the old scan as a complete result.
     no_hit_pdic.write_bytes(b"synthetic-no-hit-pdic-now-has-entry")
     review._filter_batch_snapshot = lambda _index: None
-    calls_before = len(review.parent._start_ui_worker.__self__) if False else None
     workflow._request_filter_batch_render(review, deps)
     assert review._filter_scan_failed is True
     assert review._filter_scan_complete is False
