@@ -262,3 +262,5 @@ def test_polygon_mapping_accepts_numpy_point_arrays():
     restored = mapping.output_to_source_polygon(np.asarray(output, dtype=float))
     assert restored is not None
     assert np.allclose(restored, polygon, atol=0.02)
+    assert mapping.source_to_output_polygon(np.empty((0, 2))) is None
+    assert mapping.output_to_source_polygon(np.empty((0, 2))) is None

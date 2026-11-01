@@ -29,8 +29,9 @@ from .orthogonal_policy import _orthogonal_estimate_from_step
 COORDINATE_MAPPING_CONTRACT_VERSION = 1
 
 # Orthogonal replay is nonlinear. Check each polygon edge at a bounded spatial
-# interval no larger than one quarter of the default 32 px raster mesh cell.
-# This is a conservative boundary check, not a claim of sub-pixel exactness.
+# interval no larger than one fifth of the default 40 px raster mesh cell,
+# adding saved grid/separator knot crossings explicitly. This is a conservative
+# boundary check, not a claim of sub-pixel exactness.
 _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX = 8.0
 _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS = 8192
 _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES = 32768
@@ -667,18 +668,43 @@ class PreprocessCoordinateMap:
                 raise CoordinateMappingUnavailable(
                     "orthogonal polygon edge exceeds the bounded sampling budget"
                 )
-            for step in range(steps):
-                fraction = step / steps
+            fractions = {step / steps for step in range(steps)}
+            delta_x = end[0] - start[0]
+            delta_y = end[1] - start[1]
+            # The warp is piecewise interpolated at these saved coordinates.
+            # Include their crossings explicitly so a narrow local excursion
+            # cannot hide between the uniform spatial samples. Earlier stages
+            # may rotate/warp the edge, so the bounded uniform samples remain
+            # necessary as a second, independent coverage layer.
+            for estimate, _row_gain in self._orthogonal_step_cache:
+                if delta_y != 0.0:
+                    for knot in (*estimate.y_knots, *estimate.separator_y_knots):
+                        fraction = (float(knot) - start[1]) / delta_y
+                        if 0.0 < fraction < 1.0:
+                            fractions.add(fraction)
+                if delta_x != 0.0:
+                    for knot in estimate.x_knots:
+                        fraction = (float(knot) - start[0]) / delta_x
+                        if 0.0 < fraction < 1.0:
+                            fractions.add(fraction)
+            if (
+                len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS
+                or len(samples) + len(fractions) > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
+            ):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal polygon edge exceeds the bounded sampling budget"
+                )
+            for fraction in sorted(fractions):
                 samples.append((
-                    start[0] + (end[0] - start[0]) * fraction,
-                    start[1] + (end[1] - start[1]) * fraction,
+                    start[0] + delta_x * fraction,
+                    start[1] + delta_y * fraction,
                 ))
         return tuple(samples)
 
     def source_to_output_polygon(
         self, points: Sequence[Sequence[float]],
     ) -> tuple[tuple[float, float], ...] | None:
-        if not points or self._polygon_crosses_perspective_horizon(points):
+        if len(points) == 0 or self._polygon_crosses_perspective_horizon(points):
             return None
         samples = self._polygon_edge_samples(points)
         for sample in samples:
@@ -693,7 +719,7 @@ class PreprocessCoordinateMap:
     def output_to_source_polygon(
         self, points: Sequence[Sequence[float]],
     ) -> tuple[tuple[float, float], ...] | None:
-        if not points:
+        if len(points) == 0:
             return None
         samples = self._polygon_edge_samples(points)
         mapped_samples = tuple(self.output_to_source_point(point) for point in samples)
