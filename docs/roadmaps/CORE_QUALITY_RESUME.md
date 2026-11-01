@@ -685,3 +685,13 @@ On branch `feat/pc-cq-b3-candidate-undo-redo-20261015` (parent `8b52b344d755`, m
 - 计划批次和子任务映射见 CORE_QUALITY_UPGRADE_PLAN.md 的“1.1 主题批次计划”；当前首次批次 B1，推荐 2–4 关联点/PR，**可分拆不可强捆**。一个 PR 可一轮完成多个子任务、一次 CI；不必在两个子任务之间等待一小时。
 - STATE 必须保存 active_batch、batches[batch].units、batches[batch].status、各个 units 的完成证据以及同一 active PR。先检查旧 PR 和实时 CI，不能重做、不能并发另开第二个生产 PR。
 - 文档修订 PR 不等于生产代码 PR。合并后先确认 main CI 通过才开始下一批次。用户特别要求：**简短状态报告、主要进度留在 GitHub，不增加聊天长度**。
+
+
+## 2026-11-02｜B7b/R7.3 非线性 ROI knot preimage、Canvas/crop 与半开边界
+
+- **唯一活跃生产 PR** 仍为 [#663](https://github.com/chigre/Picture_Capture/pull/663)，Draft/Open/Unmerged；main 仍为 `ec20989ea8c026cca5337293e67850b6b6df30f2`，#503/#562/#483 仍 Open，inline review threads 0。没有 main 写入、合并、force push、第二个生产 PR、issue 关闭或 Ready 转换。
+- 新 RED 测试提交 `a59a904bdbc2c4d2895a77bbc74a7c8490ca326b`，[CI #41344061364](https://github.com/chigre/Picture_Capture/actions/runs/41344061364)：六平台/Python3.10/3.13 全部因三项 fractional/boolean crop_box 断言失败；Canvas+crop reverse knot 回归已通过，证明 stage-frame preimage 修复有效。
+- 源码修复链：`4b2a1cb1` 将 knot root finding 移到每个 orthogonal stage 的真实输入坐标系；`d589e318` 加入 half-open crop 上边界的 (10^{-7}) px 数值 fail-closed guard；最终 `d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b` 严格拒绝 fractional/boolean crop_box 坐标，避免 `int()` 有损截断。
+- 最终 exact-head [CI #41344312511](https://github.com/chigre/Picture_Capture/actions/runs/41344312511) **6/6 SUCCESS** + Risk-tier/Risk-tier CI gate SUCCESS。Ubuntu 3.13/3.10 各 5352 passed、3 skipped；macOS 3.13 5353/2、3.10 5353/2；Windows 3.13 5353/2、3.10 5352/3。[OCR #41344312514](https://github.com/chigre/Picture_Capture/actions/runs/41344312514) 3/3 SUCCESS；[CodeQL #41344308665](https://github.com/chigre/Picture_Capture/actions/runs/41344308665) Python/Actions 2/2 SUCCESS。Documentation architecture check **SKIPPED，不计为通过**。
+- 详见 `docs/architecture/R7_3_NONLINEAR_ROI_KNOT_PREIMAGE_20261102.md`。R7.3 仍为 **in_progress / synthetic E2 only**；bounded root finding 仍未声称可证明任意病态多重/切触 crossing，orthogonal inverse 仍是近似逆。未改 PDIC/PPP/SECTION schema/writer、原图 XY、renderer 或实验默认值；未执行真实扫描、真人 E3 或人工验收。
+- **唯一下一步**：对 tangential/non-monotonic knot contacts 做 fail-first 对抗测试，并校验 `OutputCanvasInfo` 尺寸/content_box 为严格整数 raster snapshot；同时审计实际 map construction callsite 的 raw-size/EXIF metadata 传递。继续保持 B7b/R7.3，不推进 B7a profiling、B6 labels 或用户暂缓的 B8。
