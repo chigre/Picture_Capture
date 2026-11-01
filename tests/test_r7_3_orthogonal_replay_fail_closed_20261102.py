@@ -33,7 +33,7 @@ def _analysis(*, steps=()) -> PreprocessAnalysis:
     )
 
 
-@pytest.mark.parametrize("case", ("missing", "empty_step", "incomplete_legacy"))
+@pytest.mark.parametrize("case", ("missing", "empty_step", "incomplete_legacy", "partial_separator", "invalid_row_grid"))
 def test_coordinate_map_rejects_applied_orthogonal_stage_without_replay_geometry(case):
     analysis = _analysis()
     if case == "empty_step":
@@ -43,6 +43,20 @@ def test_coordinate_map_rejects_applied_orthogonal_stage_without_replay_geometry
     elif case == "incomplete_legacy":
         analysis.orthogonal_y_knots = (0.0, 50.0, 100.0)
         analysis.orthogonal_angle_knots_deg = ()
+    elif case == "partial_separator":
+        analysis.orthogonal_steps = (
+            {"separator_y_knots": [0.0, 100.0]},
+        )
+    elif case == "invalid_row_grid":
+        analysis.orthogonal_steps = (
+            {
+                "y_knots": [0.0, 100.0],
+                "x_knots": [0.0, 100.0],
+                "row_grid_rows": 3,
+                "row_grid_cols": 2,
+                "row_angle_grid_deg": [0.0] * 6,
+            },
+        )
 
     with pytest.raises(
         CoordinateMappingUnavailable,

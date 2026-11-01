@@ -178,6 +178,93 @@ class PreprocessCoordinateMap:
                     "perspective inverse cannot be normalized for raster replay"
                 )
 
+    @staticmethod
+    def _validate_orthogonal_replay_estimate(
+        estimate: OrthogonalWarpEstimate,
+    ) -> None:
+        """Reject applied orthogonal stages whose saved geometry cannot replay."""
+        def finite(values: Sequence[float]) -> bool:
+            return all(math.isfinite(float(value)) for value in values)
+
+        def increasing(values: Sequence[float]) -> bool:
+            return all(
+                float(right) > float(left)
+                for left, right in zip(values, values[1:])
+            )
+
+        y_knots = estimate.y_knots
+        angle_knots = estimate.angle_knots_deg
+        x_knots = estimate.x_knots
+        separator_y = estimate.separator_y_knots
+        separator_shift = estimate.separator_shift_knots_px
+        row_angles = estimate.row_angle_grid_deg
+        row_displacements = estimate.row_displacement_grid_px
+
+        if bool(separator_y) != bool(separator_shift) or (
+            separator_y and len(separator_y) != len(separator_shift)
+        ):
+            raise CoordinateMappingUnavailable(
+                "orthogonal replay separator geometry is incomplete"
+            )
+        if separator_y and (
+            not finite(separator_y)
+            or not finite(separator_shift)
+            or not increasing(separator_y)
+        ):
+            raise CoordinateMappingUnavailable(
+                "orthogonal replay separator geometry is invalid"
+            )
+
+        has_row_grid = bool(row_angles or row_displacements)
+        if has_row_grid:
+            rows = int(estimate.row_grid_rows)
+            cols = int(estimate.row_grid_cols)
+            if (
+                rows < 2 or cols < 2
+                or len(y_knots) != rows
+                or len(x_knots) != cols
+                or not finite(y_knots)
+                or not finite(x_knots)
+                or not increasing(y_knots)
+                or not increasing(x_knots)
+                or (row_angles and len(row_angles) != rows * cols)
+                or (
+                    row_displacements
+                    and len(row_displacements) != rows * cols
+                )
+                or not finite(row_angles)
+                or not finite(row_displacements)
+            ):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal replay row-grid geometry is invalid"
+                )
+            has_row_geometry = True
+        else:
+            if bool(y_knots) != bool(angle_knots) or (
+                y_knots and len(y_knots) != len(angle_knots)
+            ):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal replay legacy row geometry is incomplete"
+                )
+            if y_knots and (
+                not finite(y_knots)
+                or not finite(angle_knots)
+                or not increasing(y_knots)
+            ):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal replay legacy row geometry is invalid"
+                )
+            has_row_geometry = bool(y_knots and angle_knots)
+
+        if not math.isfinite(float(estimate.reference_x)):
+            raise CoordinateMappingUnavailable(
+                "orthogonal replay reference coordinate is not finite"
+            )
+        if not has_row_geometry and not separator_y:
+            raise CoordinateMappingUnavailable(
+                "orthogonal replay geometry is missing"
+            )
+
     def _build_orthogonal_steps(
         self,
     ) -> tuple[tuple[OrthogonalWarpEstimate, float], ...]:
@@ -191,11 +278,17 @@ class PreprocessCoordinateMap:
                     raise CoordinateMappingUnavailable(
                         "orthogonal replay step is malformed"
                     )
-                estimate, row_gain = _orthogonal_estimate_from_step(dict(payload))
+                try:
+                    estimate, row_gain = _orthogonal_estimate_from_step(dict(payload))
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise CoordinateMappingUnavailable(
+                        "orthogonal replay step is malformed"
+                    ) from exc
                 if not math.isfinite(float(row_gain)):
                     raise CoordinateMappingUnavailable(
                         "orthogonal row gain is not finite"
                     )
+                self._validate_orthogonal_replay_estimate(estimate)
                 steps.append((estimate, float(row_gain)))
             return tuple(steps)
         if analysis.orthogonal_y_knots and analysis.orthogonal_angle_knots_deg:
@@ -220,8 +313,16 @@ class PreprocessCoordinateMap:
                 reference_x=float(analysis.orthogonal_reference_x),
                 active=True,
             )
-            return ((estimate, float(analysis.orthogonal_row_gain)),)
-        return ()
+            row_gain = float(analysis.orthogonal_row_gain)
+            if not math.isfinite(row_gain):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal row gain is not finite"
+                )
+            self._validate_orthogonal_replay_estimate(estimate)
+            return ((estimate, row_gain),)
+        raise CoordinateMappingUnavailable(
+            "orthogonal replay geometry is missing"
+        )
 
     @staticmethod
     def _normalized_projective_matrix(
