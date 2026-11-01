@@ -232,3 +232,26 @@ def test_coordinate_map_roundtrips_roi_polygon_vertices_and_refuses_partial_crop
 
     crossing = ((0.0, 30.0), (60.0, 30.0), (60.0, 60.0), (0.0, 60.0))
     assert mapping.source_to_output_polygon(crossing) is None
+
+
+def test_coordinate_map_is_an_immutable_snapshot_of_preprocess_analysis():
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    analysis = _analysis(
+        applied_angle_deg=0.0,
+        orthogonal_steps=(),
+    )
+    mapping = PreprocessCoordinateMap(analysis=analysis)
+    before = mapping.source_to_output_point((40.0, 40.0))
+    assert before.status == "mapped"
+
+    # The source analysis object is mutable in the legacy model. A read-only
+    # coordinate map must not silently change when a caller later edits it.
+    analysis.perspective_matrix = (
+        1.0, 0.0, 20.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+    )
+    after = mapping.source_to_output_point((40.0, 40.0))
+    assert after.status == "mapped"
+    assert after.point == before.point
