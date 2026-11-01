@@ -135,11 +135,6 @@ def test_no_hit_page_source_drift_before_epoch_terminal_is_rejected(tmp_path, mu
     assert len(review.filtered_targets) == 1
     assert all(target["page_index"] != 0 for target in review.filtered_targets)
 
-    # Scan-time attestations plus one bounded recheck per intermediate chunk
-    # and one complete-prefix recheck at the terminal. Rehashing the whole
-    # prefix at every chunk grows quadratically with the page count.
-    assert len(verify_calls) <= 11
-
     # Second chunk scans page 003 and schedules a final chunk for page 004.
     _key2, worker2, done2, _failed2 = calls[1]
     done2(worker2())
@@ -162,3 +157,9 @@ def test_no_hit_page_source_drift_before_epoch_terminal_is_rejected(tmp_path, mu
     assert review._filter_scan_failed is True
     assert review._filter_scan_complete is False
     assert all(target["page_index"] != 0 for target in review.filtered_targets)
+
+    # Scan-time attestations plus one bounded recheck per intermediate chunk
+    # and one complete-prefix recheck at the terminal. Rehashing the whole
+    # prefix at every chunk grows quadratically with the page count.
+    assert len(verify_calls) <= 11
+
