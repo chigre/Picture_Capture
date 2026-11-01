@@ -271,3 +271,59 @@ def test_coordinate_map_requires_explicit_canonicalized_input_for_mirror():
             _analysis(applied_angle_deg=0.0, orthogonal_steps=()),
             layout_transform=LayoutTransform("mirror_x"),
         )
+
+
+def test_coordinate_map_matches_materialized_homography_crop_and_canvas_pixels():
+    from PIL import Image, ImageDraw
+
+    from picture_capture.preprocess.canvas import output_canvas_info
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+    from picture_capture.preprocess.pipeline import geometry_corrected_image
+    from picture_capture.preprocess.rendering import (
+        processed_image,
+        processed_image_with_canvas,
+    )
+
+    analysis = _analysis(
+        crop_box=(10, 10, 90, 90),
+        applied_angle_deg=0.0,
+        perspective_matrix=(
+            1.0, 0.0, 5.0,
+            0.0, 1.0, 3.0,
+            0.0, 0.0, 1.0,
+        ),
+        orthogonal_steps=(),
+    )
+    source = Image.new("RGB", (100, 100), "white")
+    ImageDraw.Draw(source).rectangle((30, 40, 39, 49), fill="black")
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=120,
+        requested_height=110,
+        canvas_width=120,
+        canvas_height=110,
+        margin_top=15,
+        margin_bottom=15,
+        margin_left=20,
+        margin_right=20,
+        align_x="center",
+        align_y="center",
+    )
+
+    mapping = PreprocessCoordinateMap(analysis=analysis, canvas=canvas)
+    mapped = mapping.source_to_output_point((34.0, 44.0))
+    assert mapped.status == "mapped"
+    assert mapped.point == (49.0, 52.0)
+
+    rendered = processed_image_with_canvas(
+        source,
+        analysis,
+        canvas,
+        content_renderer=lambda image, item: processed_image(
+            image, item, geometry_renderer=geometry_corrected_image,
+        ),
+        canvas_info_factory=output_canvas_info,
+    )
+    assert rendered.getpixel((49, 52)) == (0, 0, 0)
