@@ -104,10 +104,25 @@ def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
     assert dispatched == []
     assert set(review._filter_pending_changes) == {0, 1}
 
-    # The existing explicit retry action is the only allowed new dispatch.
+    # Closing the ReviewWindow is not informed consent to replay a batch
+    # whose worker may already have published one or more page files.
+    from picture_capture.ui.review_close_actions import close_review
+
     review._flush_focused_changes = lambda: workflow._flush_focused_changes(
         review, deps,
     )
+    review._flush_focused_changes_now = (
+        lambda: workflow._flush_focused_changes_now(review, deps)
+    )
+    finished = []
+    review._finish_close_review = lambda: finished.append(True)
+    close_review(review, showerror=lambda *a, **kw: None)
+    assert dispatched == []
+    assert not finished
+    assert not review._filter_close_after_save
+    assert set(review._filter_pending_changes) == {0, 1}
+
+    # Only the real explicit retry action may launch again after PDIC review.
     workflow._flush_focused_changes_now(review, deps)
     assert len(dispatched) == 1
     assert review._filter_save_running is True
