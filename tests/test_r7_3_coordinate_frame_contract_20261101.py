@@ -378,3 +378,43 @@ def test_coordinate_map_raster_normalization_guard_is_scale_invariant():
         restored = mapping.output_to_source_point(result.point)
         assert restored.status == "mapped"
         assert restored.point == pytest.approx((40.0, 40.0))
+
+
+def test_coordinate_map_refuses_polygon_edge_crossing_projective_horizon():
+    """Vertices inside the crop cannot prove that every ROI edge is mappable.
+
+    H has a projective pole at source x=50, while all four mapped corners
+    remain inside the image: x'=50+100/(x-50), y'=50+y/(x-50).
+    A straight polygon edge crossing that pole cannot be represented by a
+    bounded output polygon and must not be silently accepted.
+    """
+    from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+
+    matrix = (
+        50.0, 0.0, -2400.0,
+        50.0, 1.0, -2500.0,
+        1.0, 0.0, -50.0,
+    )
+    mapping = PreprocessCoordinateMap(
+        _analysis(
+            crop_box=(0, 0, 100, 100),
+            applied_angle_deg=0.0,
+            perspective_matrix=matrix,
+            orthogonal_steps=(),
+        )
+    )
+    crossing = ((40.0, 40.0), (60.0, 40.0),
+                (60.0, 60.0), (40.0, 60.0))
+    corners = tuple(mapping.source_to_output_point(point) for point in crossing)
+    assert all(item.status == "mapped" for item in corners)
+    assert all(item.point is not None for item in corners)
+
+    # A safe same-side ROI is still allowed; this is not a blanket refusal
+    # of perspective transforms or of vertices close to the crop boundary.
+    same_side = ((40.0, 40.0), (45.0, 40.0),
+                 (45.0, 60.0), (40.0, 60.0))
+    assert mapping.source_to_output_polygon(same_side) is not None
+
+    assert mapping.source_to_output_polygon(crossing) is None
+    output_corners = tuple(item.point for item in corners)
+    assert mapping.output_to_source_polygon(output_corners) is None
