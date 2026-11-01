@@ -1,3 +1,15 @@
+## 2026-11-01｜G3 R4.2 不确定保存的重新筛选 / 批次导航旁路：失败先行 + 源码修复
+
+- **实时代码基线：** 源码提交 `eff2b7c8e269bb4f6ecec414cffdff059e9dabdb`；唯一 #663 Draft/Open/Unmerged；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 不变，#503/#562/#483 仍 Open。
+- **失败先行：** `d8b65be7` [CI #41311186833](https://github.com/chigre/Picture_Capture/actions/runs/41311186833) Ubuntu Python3.13 2 targeted FAILED / 5302 passed / 3 skipped；`ae1f21ed` [CI #41311282890](https://github.com/chigre/Picture_Capture/actions/runs/41311282890) Ubuntu Python3.13 3 targeted FAILED / 5301 passed / 3 skipped。前者暴露 empty pending queue 仍允许重新筛选覆盖 source epoch；后者暴露 Next batch 经 `_flush_focused_changes_now` 自动赋予显式重试权限。
+- **最小修复：** `eff2b7c8` 拦截尚未确认的 save/launch 状态，禁止重新筛选和导航隐式保存；保留人工 edit、PDIC 检查后显式 retry 和无异常的正常扫描/切批行为。回归含可恢复正向控制。
+- **门禁：** 源码 HEAD [CI #41311452549](https://github.com/chigre/Picture_Capture/actions/runs/41311452549)、[OCR #41311452557](https://github.com/chigre/Picture_Capture/actions/runs/41311452557)、CodeQL Python/Actions 均须读取终态，不以当前排队 / 运行态当 SUCCESS；此文档提交后仍需检查文档 HEAD 的 exact-head 门禁。Documentation architecture check 的 SKIPPED 不计 PASS。
+- **架构审计：** [G3 R4.2 不确定保存导航保护](../architecture/G3_R4_2_UNCERTAIN_SAVE_REFILTER_NAVIGATION_20261101.md)。未改变持久化 schema、writer、原图 XY 或实验开关，未声称原子跨文件事务。
+- **NOT PERFORMED：** Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描与真实 PDIC/PPP/SECTION/Profile/OCR 保存重开。**DEFERRED：** R6 真实标签学习、R8 真实扫描；自动 E2 不等于人工通过。
+- **下一恢复点：** 先核最终 HEAD 六平台/Risk-tier/OCR/CodeQL，失败先修复；再推进异步 epoch / SECTION / crop prefetch / save 一致性反例。保持主干不变、唯一 PR #663 Draft，不合并。
+
+---
+
 ## 2026-11-01｜B7b R7.3 polygon-horizon & G3 R4.2 uncertain focused-save, synthetic E2 verified
 
 - **实时代码基线：** PR #663 的最后源码 HEAD `023432f6f8f0a742743eb5b33c68379c38cf1d4c`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变。#663 Draft/Open/Unmerged；#503/#562/#483 保持 Open。任何新的文档/测试 commit 需重新确认当前 HEAD。

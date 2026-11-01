@@ -3064,7 +3064,7 @@
       "No score weights, acceptance thresholds, arbitration policies, tie rules or diagnostics were changed."
     ]
   },
-  "implementation_head_sha": "023432f6f8f0a742743eb5b33c68379c38cf1d4c",
+  "implementation_head_sha": "eff2b7c8e269bb4f6ecec414cffdff059e9dabdb",
   "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
   "g3_r4_2_post_terminal_no_hit_and_partial_save_20261101": {
     "status": "synthetic_E2_verified_exact_head",
@@ -3100,7 +3100,7 @@
     ],
     "no_benchmark_claim": true
   },
-  "last_test_evidence": "\n\nG3 R4.2 post-terminal no-hit and multi-page partial-save follow-up at exact source HEAD fd4f46b717de23c96014661ae28cedef51434788: test-first no-hit CI #41295513470; intermediate publication-boundary regression #41295775912; test-first partial-save CI #41296691853; conservative-state test CI #41297732941 exposed 28 cross-platform failures (including unbound `recovered`, legacy fake missing `filtered_targets`, and outdated save-failure text assertion). Final minimal source correction fd4f46b7. Exact-head CI #41298152181 six platform/Python jobs + Risk-tier + gate SUCCESS; OCR #41298152176 3/3 SUCCESS; CodeQL #41298149721 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Human E3/#483/#503 and real scan/save remain NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-01: R7.3 polygon-horizon RED #41307611949 then verified source afbc42a1: CI #41307851367 6/6, OCR #41307851371 3/3, CodeQL #41307849472 2/2. G3 uncertain launch RED #41308310346/#41308530086, native Tk smoke correction after RED #41308743285, green CI #41309027670; failed retry preflight RED #41309554723, verified source 023432f6: CI #41309765324 6/6, OCR #41309765320 3/3, CodeQL #41309762501 2/2. Final docs/test HEAD requires fresh gate verification. Windows R3 E3/#483/#503 and real scan/save NOT PERFORMED; R6/R8 DEFERRED.",
+  "last_test_evidence": "\n\nG3 R4.2 post-terminal no-hit and multi-page partial-save follow-up at exact source HEAD fd4f46b717de23c96014661ae28cedef51434788: test-first no-hit CI #41295513470; intermediate publication-boundary regression #41295775912; test-first partial-save CI #41296691853; conservative-state test CI #41297732941 exposed 28 cross-platform failures (including unbound `recovered`, legacy fake missing `filtered_targets`, and outdated save-failure text assertion). Final minimal source correction fd4f46b7. Exact-head CI #41298152181 six platform/Python jobs + Risk-tier + gate SUCCESS; OCR #41298152176 3/3 SUCCESS; CodeQL #41298149721 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Human E3/#483/#503 and real scan/save remain NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-01: R7.3 polygon-horizon RED #41307611949 then verified source afbc42a1: CI #41307851367 6/6, OCR #41307851371 3/3, CodeQL #41307849472 2/2. G3 uncertain launch RED #41308310346/#41308530086, native Tk smoke correction after RED #41308743285, green CI #41309027670; failed retry preflight RED #41309554723, verified source 023432f6: CI #41309765324 6/6, OCR #41309765320 3/3, CodeQL #41309762501 2/2. Final docs/test HEAD requires fresh gate verification. Windows R3 E3/#483/#503 and real scan/save NOT PERFORMED; R6/R8 DEFERRED.\n2026-11-01: G3 unresolved focused-save refilter/navigation. RED CI #41311186833 Ubuntu3.13 2 targeted fails, #41311282890 Ubuntu3.13 3 targeted fails; minimal fix eff2b7c8. Exact source-head CI #41311452549, OCR #41311452557, CodeQL and post-docs HEAD gates must be terminally verified. Windows human E3, #483 W1-W11, #503 manual Undo, real scans/save NOT PERFORMED; R6/R8 DEFERRED.",
   "r7_3_projective_polygon_horizon_20261101": {
     "status": "synthetic_E2_verified_at_source_head",
     "source_head": "afbc42a18d48a3944685ec182dac4b88816c6253",
@@ -3136,5 +3136,45 @@
     "evidence": "synthetic E2, exact source-head CI 6/6 and Risk-tier/gate, OCR 3/3, CodeQL 2/2",
     "human": "NOT PERFORMED",
     "real_scan": "DEFERRED"
+  },
+  "g3_r4_2_uncertain_save_navigation_20261101": {
+    "status": "source_fix_submitted_exact_head_gates_pending",
+    "source_head": "eff2b7c8e269bb4f6ecec414cffdff059e9dabdb",
+    "red_test_commits": [
+      "d8b65be7ed8aeed0bfab022c69cf5860a1863fd0",
+      "ae1f21edbfff17e5a554b6e97dd7787e3be7c0a3"
+    ],
+    "red_ci": [
+      "https://github.com/chigre/Picture_Capture/actions/runs/41311186833",
+      "https://github.com/chigre/Picture_Capture/actions/runs/41311282890"
+    ],
+    "red_ubuntu_python313": [
+      "2 targeted failures / 5302 passed / 3 skipped",
+      "3 targeted failures / 5301 passed / 3 skipped"
+    ],
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41311452549",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41311452557",
+    "codeql": "EXACT_SOURCE_HEAD_TERMINAL_TO_VERIFY",
+    "source_gate_status": "PENDING_NOT_VERIFIED",
+    "changed_source": [
+      "src/picture_capture/ui/focused_filter_workflow.py"
+    ],
+    "test_paths": [
+      "tests/test_g3_r4_scan_source_consistency_20261101.py",
+      "tests/test_g3_r4_focused_launch_uncertainty_20261101.py"
+    ],
+    "audit": "docs/architecture/G3_R4_2_UNCERTAIN_SAVE_REFILTER_NAVIGATION_20261101.md",
+    "contract": "Uncertain page/launch outcome blocks both re-filter and Next batch implicit retry, even with empty pending queue; explicit human retry remains available only via separate save action.",
+    "limits": "Synthetic E2 only; no durable PDIC multi-file CAS, operator acceptance or benchmark",
+    "human_acceptance": "NOT_PERFORMED",
+    "deferred": [
+      "Windows R3 E3",
+      "#483 W1-W11",
+      "#503 manual Undo/Redo",
+      "real dictionary scans and real PDIC/PPP/SECTION/Profile/OCR save-reopen",
+      "R6 real-label learning",
+      "R8 real scan"
+    ],
+    "next_recovery_point": "Verify final docs head CI/OCR/CodeQL and risk-tier; repair failures; continue async epoch/source/crop/save bounded counterexamples."
   }
 }
