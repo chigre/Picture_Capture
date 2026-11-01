@@ -327,3 +327,31 @@ def test_coordinate_map_matches_materialized_homography_crop_and_canvas_pixels()
         canvas_info_factory=output_canvas_info,
     )
     assert rendered.getpixel((49, 52)) == (0, 0, 0)
+
+
+def test_coordinate_map_fails_closed_if_homography_cannot_replay_into_pixels():
+    """An invertible point transform is not enough for Pillow raster replay.
+
+    The raster warper normalizes the inverse by inverse[2, 2]; an otherwise
+    nonsingular H whose inverse bottom-right entry is zero cannot be replayed.
+    Do not advertise such a map as safe for PDIC/ROI/crop projection.
+    """
+    from picture_capture.preprocess.coordinate_mapping import (
+        CoordinateMappingUnavailable,
+        PreprocessCoordinateMap,
+    )
+
+    matrix = (
+        1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0,
+        0.0, 1.0, 1.0,
+    )
+    assert abs(float(np.linalg.det(np.asarray(matrix).reshape(3, 3)))) > 0.5
+    with pytest.raises(CoordinateMappingUnavailable, match="raster"):
+        PreprocessCoordinateMap(
+            _analysis(
+                applied_angle_deg=0.0,
+                perspective_matrix=matrix,
+                orthogonal_steps=(),
+            )
+        )
