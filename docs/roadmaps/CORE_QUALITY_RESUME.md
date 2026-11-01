@@ -1,3 +1,13 @@
+## 2026-11-01｜G3 R4.2 首次 Tk poll 注册失败：先注册轮询，再启动 worker
+
+- 实时基线：main `ec20989ea8c026cca5337293e67850b6b6df30f2`；唯一 PR #663 保持 Draft/Open/Unmerged；#503/#562/#483 Open；无 inline review threads。
+- **失败先行：** 测试提交 `30a52c095a85a3d3d21f8e5bae9eba9b2969c6da`，[CI #41281091863](https://github.com/chigre/Picture_Capture/actions/runs/41281091863) 最终 FAILURE。四个参数化反例覆盖有/无同 key 旧 worker × 普通/持久化 wait-on-close worker；在首次 `after()` 抛错时，旧实现已构造并启动新 worker，随后抛出调度异常，无法保证该 worker 有 Tk completion/close-wait observer。Windows Python3.10 日志为 **4 failed / 5263 passed / 2 skipped**；Ubuntu/macOS 的 Python3.10/3.13 jobs 也观察到四个目标失败。该 RED run 不作为通过门禁。
+- **最小修复：** `c3e5c0e3aa937784715f5ece16ce82adb8173da7`。在 `ui/background_job_runtime.py::start_ui_worker` 中，先成功注册首个 Tk poll，再构造/启动 Thread；若 `after()` 抛错，回滚本次 generation、handler、active、close-wait，并恢复旧同 key handler/generation，因此不会启动无轮询观察者的线程。若 poll 已注册后 Thread constructor/start 失败，保留该 poll，让它能处理恢复的旧 worker，或在无旧任务时空轮询一次。未改持久化 schema、真实文件写入、OCR、原图坐标或实验开关。
+- 回归：`tests/test_g3_r4_ui_worker_after_failure_20261101.py` 覆盖首次调度失败与已有 poll 复用；`tests/test_g3_r4_ui_worker_failed_start_20261101.py` 更新 constructor/start 失败后保留已接受 poll 的契约。
+- **Source exact-head 自动验收：** [CI #41281480946](https://github.com/chigre/Picture_Capture/actions/runs/41281480946) Windows/macOS/Ubuntu × Python3.10/3.13 **6/6 SUCCESS**，Risk tier 与 Risk-tier CI gate SUCCESS；Documentation architecture check SKIPPED。Ubuntu Python3.13 5266 passed/3 skipped；macOS/Windows Python3.13 各 5267 passed/2 skipped；Python3.10 三平台均 SUCCESS。 [OCR #41281480909](https://github.com/chigre/Picture_Capture/actions/runs/41281480909) **3/3 SUCCESS**；[CodeQL #41281477946](https://github.com/chigre/Picture_Capture/actions/runs/41281477946) Analyze Python/Actions **2/2 SUCCESS**。
+- 以上为 source HEAD `c3e5c0e3` 证据；本次审计/路线图文档 checkpoint 提交后，仍必须重新核对其自身 exact-head 六平台 CI/Risk、OCR 3OS、CodeQL Python/Actions。**残余边界：** `poll_ui_worker_queue` 后续周期性 `after()` re-arm 与 close 路径 `after_idle()` 在 worker 已活动后的调度异常尚未覆盖，需另立失败先行测试；不宣称该范围已修复。
+- **NOT PERFORMED：** Windows R3 E3、#483 W1–W11、#503 人工 Undo/Redo、真实词典扫描、真实 PDIC/PPP/SECTION/Profile/OCR、人工保存重开及性能 benchmark。**DEFERRED：** R6 真实标签学习、R8 真实扫描。自动 E2 不等于人工通过。保持 main 不动、PR #663 Draft/Open/Unmerged，不合并、不改 Ready、不关闭 Issues。
+
 ## 2026-11-01｜G3 R4.2 大批次：预取/直接裁剪 worker 启动确认 + Tk 线程启动失败所有权回滚（失败先行）
 
 - GitHub 复核 main `ec20989ea8c`、仅 Draft/Open/Unmerged PR #663、#503/#562/#483 Open、0 review threads；起点 `f9d2f807` [CI #41238054379](https://github.com/chigre/Picture_Capture/actions/runs/41238054379) 六平台+Risk SUCCESS、[OCR #41238054368](https://github.com/chigre/Picture_Capture/actions/runs/41238054368) 3OS SUCCESS、[CodeQL #41238051230](https://github.com/chigre/Picture_Capture/actions/runs/41238051230) Python/Actions 2/2 SUCCESS。
