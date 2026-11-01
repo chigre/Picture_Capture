@@ -1754,7 +1754,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             (int(page_index), int(x), int(y)): str(word)
             for page_index, x, y, word in saved_rows
         }
-        for target in self.filtered_targets:
+        for target in getattr(self, "filtered_targets", ()):
             point = (
                 int(target["page_index"]), int(target["x"]), int(target["y"])
             )
@@ -1770,7 +1770,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
 
         # A reversion made during the writer becomes a new edit relative to
         # the confirmed PDIC word. A newer queued value retains ownership.
-        for target in self.filtered_targets:
+        for target in getattr(self, "filtered_targets", ()):
             point = (
                 int(target["page_index"]), int(target["x"]), int(target["y"])
             )
@@ -1892,6 +1892,11 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             self, timing_session, "save", save_seconds[0], len(saved),
         )
         saved_map = reconcile_committed_rows(saved)
+        # Successful per-page writes are only reconciled after the entire
+        # worker returns. If a later page fails, the batch remains uncertain.
+        recovered = restore_unwritten(set(saved_map))
+        if conflicts or recovered:
+            self._filter_close_after_save = False
 
         if conflicts:
             messagebox.showwarning(
@@ -1940,29 +1945,24 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             # The all-page source preflight failed before any page writer ran.
             outcomes = {int(index): "not_committed" for index in snapshot}
         self._filter_save_page_outcomes = outcomes
-        self._filter_save_uncertain_pages = {
-            int(index) for index, outcome in outcomes.items()
-            if outcome == "uncertain"
-        }
-        saved_map = reconcile_committed_rows(saved)
-        # Confirmed earlier pages are not put back into the queue. The failed
-        # page remains visible/pending with UNCERTAIN status; later pages were
-        # never attempted and remain retryable.
-        recovered = restore_unwritten(set(saved_map))
-        if recovered or self._filter_save_uncertain_pages:
-            self._filter_close_after_save = False
+        # A multi-page writer is not a cross-file transaction. If any page
+        # writer raises, preserve the entire snapshot and treat every page in
+        # that batch as UNCERTAIN until an explicit retry rechecks each PDIC.
+        self._filter_save_uncertain_pages = (
+            {int(index) for index in snapshot} if page_outcomes else set()
+        )
+        recovered = restore_unwritten(set())
+        self._filter_close_after_save = False
         uncertain_count = len(self._filter_save_uncertain_pages)
-        confirmed_count = len(saved_map)
         self.parent.status_var.set(
-            f"筛选校对保存中断：已确认提交 {confirmed_count} 条；"
-            f"{uncertain_count} 页写入状态未确认，其余修改已保留。"
+            "筛选校对保存失败或状态未确认：本次批次的人工修改均已保留；"
+            f"{uncertain_count} 页写入状态未确认。"
             "请核对 PDIC 后再显式重试。"
         )
         messagebox.showerror(
-            "筛选校对保存中断",
-            "部分页面可能已写入，失败页面的最终状态无法确认；"
-            "已确认提交的修改不会重复排队，其余修改已保留。"
-            "请核对 PDIC 后再显式重试。",
+            "筛选校对保存失败",
+            "多页保存未能完整确认；所有人工修改均已保留，"
+            "失败批次的页面状态需要核对后显式重试。",
             parent=self,
         )
 
