@@ -155,7 +155,8 @@ def test_scan_targets_carry_source_witness_and_reject_later_ocr_cache_drift(tmp_
     snapshot = workflow._filter_batch_snapshot(review, deps, 0)
     assert snapshot is None
 
-def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path):
+@pytest.mark.parametrize("mutation", ("pdic", "ocr", "section"))
+def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path, mutation):
     review, deps, call, status, _indicator, pdic, cache, section = _fixture(tmp_path)
     no_hit = tmp_path / "000-no-hit.png"
     Image.new("RGB", (8, 8), "white").save(no_hit)
