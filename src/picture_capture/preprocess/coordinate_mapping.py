@@ -59,6 +59,24 @@ def _validated_size_pair(value: Sequence[int], name: str) -> tuple[int, int]:
     return int(dimensions[0]), int(dimensions[1])
 
 
+def _validated_box(
+    value: Sequence[int], name: str,
+) -> tuple[int, int, int, int]:
+    """Return a strict integer half-open box without lossy int() coercion."""
+    try:
+        if isinstance(value, (str, bytes)) or len(value) != 4:
+            raise ValueError
+        items = tuple(value)
+        if any(isinstance(item, bool) for item in items):
+            raise ValueError
+        coordinates = tuple(integer_index(item) for item in items)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            f"{name} must contain exactly four integer half-open coordinates"
+        ) from exc
+    return tuple(int(item) for item in coordinates)
+
+
 class CoordinateMappingUnavailable(ValueError):
     """Raised when a transform chain has no safe, supported point mapping."""
 
@@ -190,9 +208,10 @@ class PreprocessCoordinateMap:
                 "UVDoc uses a nonlinear unwarp without a supported point-map contract"
             )
 
-        if len(analysis.crop_box) != 4:
-            raise ValueError("crop_box must contain four half-open coordinates")
-        x0, y0, x1, y1 = (int(value) for value in analysis.crop_box)
+        x0, y0, x1, y1 = _validated_box(
+            analysis.crop_box,
+            "crop_box",
+        )
         if (
             x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0
             or x1 > analysis_size[0] or y1 > analysis_size[1]
