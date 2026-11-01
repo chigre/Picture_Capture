@@ -1,3 +1,15 @@
+## 2026-11-01｜G3 R4.2 no-hit page source retention across async scan epochs：source HEAD synthetic E2 verified
+
+- **Live baseline:** source/test HEAD `3b06e89034cc8c5b93db3613fd0d10fe811bdc70`; main `ec20989ea8c026cca5337293e67850b6b6df30f2`; sole PR #663 remains Draft/Open/Unmerged; #503/#562/#483 remain Open.
+- **RED-first:** test-only `1a3e19e2595fb6355b87e185305228994c54e00a`; [CI #41289415491](https://github.com/chigre/Picture_Capture/actions/runs/41289415491) all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs failed the three intended no-hit source drift cases (PDIC, OCR JSON, SECTION). Ubuntu3.13 and Ubuntu3.10 logs: 3 failed / 5280 passed / 3 skipped.
+- **Production fix:** `3b06e89034cc8c5b93db3613fd0d10fe811bdc70` retains a scan-epoch-local page-index→source-witness map for every scanned page, including no-hit pages; rejects repeated page index with a changed witness; revalidates the scanned prefix at the first batch and every subsequent chunk terminal before publishing or marking complete.
+- **Exact source-head E2:** [CI #41289630397](https://github.com/chigre/Picture_Capture/actions/runs/41289630397) **6/6 SUCCESS**, Risk-tier and Risk-tier CI gate SUCCESS; [OCR #41289630408](https://github.com/chigre/Picture_Capture/actions/runs/41289630408) **3/3 SUCCESS**; [CodeQL #41289628415](https://github.com/chigre/Picture_Capture/actions/runs/41289628415) Python/Actions **2/2 SUCCESS**. Ubuntu3.13 5283/3; macOS3.13 5284/2; Windows3.13 5284/2; Ubuntu3.10 5283/3; macOS3.10 5284/2; Windows3.10 5284/2. Documentation architecture check **SKIPPED**, not PASS.
+- **Limitations:** witness map is volatile and rechecked at chunk terminals; later no-hit-page drift after terminal is not continuously rechecked on every navigation. SHA-256 readback is not OS-level CAS/lock. No save writer or persistence schema changed; no cross-page transaction claimed.
+- **NOT PERFORMED:** Windows R3 E3, #483 W1–W11, #503 manual Undo/Redo, real dictionary scan, real PDIC/PPP/SECTION/Profile/OCR save/reopen, operator acceptance. **DEFERRED:** R6 real-label learning, R8 real scan.
+- **Next:** commit synchronized docs checkpoint and re-run exact docs-head gates; then fail-first focused-save partial publication/reconciliation and post-terminal no-hit source drift.
+
+---
+
 ## 2026-11-01｜G3 R4.2 异步筛选 PDIC/OCR/SECTION 来源绑定：source HEAD synthetic E2 已验证
 
 - **实时基线与边界：** source/test HEAD `4458faa953fccc1bb247e3209dba400139c10a68`；main `ec20989ea8c026cca5337293e67850b6b6df30f2` 未变；唯一 PR #663 仍 Draft/Open/Unmerged；#503/#562/#483 仍 Open。无 inline review comments / submitted reviews。
