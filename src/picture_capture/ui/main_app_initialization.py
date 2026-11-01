@@ -282,6 +282,7 @@ def initialize_main_app(self, *, deps) -> None:
     # work. Workers never call Tk; per-key generations discard stale results.
     self._ui_worker_queue: queue.Queue = queue.Queue()
     self._ui_worker_poll_job: str | None = None
+    self._ui_worker_poll_idle_fallback_used = False
     self._ui_worker_generations: dict[str, int] = {}
     self._ui_worker_handlers: dict[tuple[str, int], tuple] = {}
     self._ui_worker_active: set[tuple[str, int]] = set()
