@@ -36,6 +36,7 @@ COORDINATE_MAPPING_CONTRACT_VERSION = 1
 _ORTHOGONAL_POLYGON_SAMPLE_SPACING_PX = 8.0
 _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS = 8192
 _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES = 32768
+_ORTHOGONAL_EXCLUSIVE_BOUNDARY_EPSILON_PX = 1e-7
 
 
 def _validated_size_pair(value: Sequence[int], name: str) -> tuple[int, int]:
@@ -768,6 +769,27 @@ class PreprocessCoordinateMap:
                 break
         return (left + right) / 2.0
 
+    def _near_exclusive_crop_boundary(
+        self, point: Sequence[float],
+    ) -> bool:
+        """Conservatively reject points numerically indistinguishable from x1/y1.
+
+        Crop boxes are half-open. A root found by finite-precision bisection can
+        land a few ULPs inside an excluded upper edge even when the exact knot
+        crossing lies on that edge. Treat this tiny uncertainty band as outside.
+        """
+        x, y = self._point(point)
+        offset_x, offset_y = self._canvas_offset()
+        x0, y0, x1, y1 = (
+            int(value) for value in self._analysis.crop_box
+        )
+        crop_x = x - offset_x
+        crop_y = y - offset_y
+        return (
+            x1 - x0 - crop_x <= _ORTHOGONAL_EXCLUSIVE_BOUNDARY_EPSILON_PX
+            or y1 - y0 - crop_y <= _ORTHOGONAL_EXCLUSIVE_BOUNDARY_EPSILON_PX
+        )
+
     def _polygon_edge_samples(
         self,
         points: Sequence[Sequence[float]],
@@ -930,6 +952,8 @@ class PreprocessCoordinateMap:
             item = self.source_to_output_point(sample)
             if item.status != "mapped" or item.point is None:
                 return None
+            if self._near_exclusive_crop_boundary(item.point):
+                return None
         mapped = tuple(self.source_to_output_point(point) for point in points)
         if not mapped or any(item.status != "mapped" or item.point is None for item in mapped):
             return None
@@ -941,6 +965,8 @@ class PreprocessCoordinateMap:
         if len(points) == 0:
             return None
         samples = self._polygon_edge_samples(points, reverse=True)
+        if any(self._near_exclusive_crop_boundary(point) for point in samples):
+            return None
         mapped_samples = tuple(self.output_to_source_point(point) for point in samples)
         if any(
             item.status != "mapped" or item.point is None
