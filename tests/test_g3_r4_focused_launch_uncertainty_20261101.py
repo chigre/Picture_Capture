@@ -123,6 +123,17 @@ def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
     assert not review._filter_close_after_save
     assert set(review._filter_pending_changes) == {0, 1}
 
+    # Navigating to another batch is NOT informed consent to replay an
+    # ambiguous save. It must preserve the current batch and pending edits.
+    review._filter_available_target_count = lambda: len(review.filtered_targets)
+    review._focused_batch_size = lambda: 1
+    review.filtered_batch_index = 0
+    workflow.change_filter_batch(review, deps, 1)
+    assert dispatched == [], "batch navigation must never trigger uncertain retry"
+    assert review.filtered_batch_index == 0
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert "核对" in status.messages[-1]
+
     # Only the real explicit retry action may launch again after PDIC review.
     workflow._flush_focused_changes_now(review, deps)
     assert len(dispatched) == 1
