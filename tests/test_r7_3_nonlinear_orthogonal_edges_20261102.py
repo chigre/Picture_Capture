@@ -292,21 +292,59 @@ def test_source_polygon_samples_separator_knots_after_projective_transform():
     assert mapping.source_to_output_polygon(polygon) is None
 
 
-def test_inverse_polygon_samples_separator_knots_after_crop_offset():
-    """Reverse knot crossings belong to pre-crop coordinates, not output XY."""
+def test_inverse_polygon_samples_separator_knots_after_crop_and_canvas_offsets():
+    """Reverse knot crossings must undo both canvas and crop offsets first."""
+    from picture_capture.preprocess.canvas import output_canvas_info
+
     analysis = _analysis(
         source_size=(50, 101),
         crop_box=(0, 20, 50, 101),
         separator_shift=(0.0, 0.0, 10.0, 0.0, 0.0),
         separator_y_knots=(0.0, 52.0, 53.0, 54.0, 100.0),
     )
-    mapping = PreprocessCoordinateMap(analysis)
-    polygon = ((35.0, 10.0), (40.0, 10.0),
-               (40.0, 70.0), (35.0, 70.0))
+    canvas = output_canvas_info(
+        analysis,
+        enabled=True,
+        mode="custom",
+        requested_width=70,
+        requested_height=111,
+        canvas_width=70,
+        canvas_height=111,
+        margin_top=15,
+        margin_bottom=15,
+        margin_left=10,
+        margin_right=10,
+        align_x="center",
+        align_y="center",
+    )
+    mapping = PreprocessCoordinateMap(analysis, canvas=canvas)
+    polygon = ((45.0, 25.0), (50.0, 25.0),
+               (50.0, 85.0), (45.0, 85.0))
 
     assert all(mapping.output_to_source_point(point).status == "mapped"
                for point in polygon)
-    # Output y=33 is pre-crop y=53; inverse separator shift sends x=40
-    # exactly to the excluded source boundary x=50.
-    assert mapping.output_to_source_point((40.0, 33.0)).status == "outside_source"
+    # Output (50, 48) -> canvas-relative (40, 33) -> pre-crop (40, 53).
+    # Inverse separator shift sends source X exactly to the excluded boundary 50.
+    assert mapping.output_to_source_point((50.0, 48.0)).status == "outside_source"
     assert mapping.output_to_source_polygon(polygon) is None
+
+
+@pytest.mark.parametrize(
+    "crop_box",
+    (
+        (0.5, 0, 50, 101),
+        (0, 0, 50.5, 101),
+        (False, 0, 50, 101),
+    ),
+)
+def test_crop_box_rejects_fractional_or_boolean_half_open_coordinates(crop_box):
+    """Half-open raster boxes must not be silently truncated by int()."""
+    analysis = _analysis(
+        source_size=(50, 101),
+        crop_box=(0, 0, 50, 101),
+        separator_shift=None,
+    )
+    analysis.crop_box = crop_box
+
+    with pytest.raises(ValueError, match="crop_box"):
+        PreprocessCoordinateMap(analysis)
