@@ -1670,13 +1670,25 @@ def _flush_focused_changes_now(self, deps: FocusedFilterDeps) -> None:
         except tk.TclError:
             pass
         self._filter_save_job = None
-    self._flush_focused_changes()
+    self._filter_save_explicit_retry = True
+    try:
+        self._flush_focused_changes()
+    finally:
+        self._filter_save_explicit_retry = False
 
 
 def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     messagebox = deps.messagebox
     _apply_focused_review_page_updates = deps._apply_focused_review_page_updates
     self._filter_save_job = None
+    if (
+        getattr(self, "_filter_save_uncertain_pages", None)
+        and not getattr(self, "_filter_save_explicit_retry", False)
+    ):
+        self.parent.status_var.set(
+            "存在写入结果未确认的页面；自动重试已暂停，请核对文件后显式重试。"
+        )
+        return
     if self._filter_save_running or not self._filter_pending_changes:
         return
     project = self.parent.project
@@ -1736,9 +1748,92 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 recovered = True
         return recovered
 
+    def reconcile_committed_rows(saved_rows):
+        """Advance UI originals only for pages whose writer returned verified rows."""
+        saved_map = {
+            (int(page_index), int(x), int(y)): str(word)
+            for page_index, x, y, word in saved_rows
+        }
+        for target in self.filtered_targets:
+            point = (
+                int(target["page_index"]), int(target["x"]), int(target["y"])
+            )
+            if point in saved_map:
+                target["original_word"] = saved_map[point]
+        for page_index, changes in self._filter_pending_changes.items():
+            for key, change in changes.items():
+                saved_word = saved_map.get(
+                    (int(page_index), int(key[0]), int(key[1]))
+                )
+                if saved_word is not None:
+                    change["original_word"] = saved_word
+
+        # A reversion made during the writer becomes a new edit relative to
+        # the confirmed PDIC word. A newer queued value retains ownership.
+        for target in self.filtered_targets:
+            point = (
+                int(target["page_index"]), int(target["x"]), int(target["y"])
+            )
+            saved_word = saved_map.get(point)
+            if saved_word is None or "current_word" not in target:
+                continue
+            page_index, x, y = point
+            current_word = (
+                str(target["current_word"] or "")
+                .replace("\\r", " ").replace("\\n", " ")
+                .replace("#", "＃").strip()
+            )
+            row_key = (x, y)
+            queued = self._filter_pending_changes.get(page_index, {}).get(row_key)
+            if queued is not None:
+                if (
+                    str(queued.get("new_word") or "") == saved_word
+                    and current_word == saved_word
+                ):
+                    changes = self._filter_pending_changes[page_index]
+                    changes.pop(row_key, None)
+                    if not changes:
+                        self._filter_pending_changes.pop(page_index, None)
+            elif current_word != saved_word:
+                replacement = {
+                    "page_index": page_index,
+                    "x": x, "y": y,
+                    "original_word": saved_word,
+                    "new_word": current_word,
+                }
+                source_witness = target.get("_focused_save_source_witness")
+                if source_witness is not None:
+                    replacement["_focused_save_source_witness"] = source_witness
+                self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
+
+        current_index = getattr(self.parent, "current_index", None)
+        if current_index is not None:
+            current_saved = {
+                (x, y): word
+                for page_index, x, y, word in saved_rows
+                if int(page_index) == int(current_index)
+            }
+            if current_saved:
+                saved_entries = []
+                for entry in getattr(self.parent, "entries", ()):
+                    value = current_saved.get((int(entry.x), int(entry.y)))
+                    if value is not None:
+                        entry.word = value
+                        entry.confidence = None
+                        entry.ocr_source = "manual"
+                        entry.final_engine = "manual"
+                        entry.manually_selected = True
+                        saved_entries.append(entry)
+                if saved_entries:
+                    from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
+                    reconcile_main_editors_after_review(self.parent, saved_entries)
+        return saved_map
+
+    saved: list[tuple[int, int, int, str]] = []
+    page_outcomes: dict[int, str] = {}
+
     def worker():
         started = perf_counter() if timing_session is not None else None
-        saved: list[tuple[int, int, int, str]] = []
         conflicts: list[str] = []
         # Preflight every page before any PDIC write: a stale page among
         # several edited pages must not allow a partial first-page save.
@@ -1756,11 +1851,24 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     )
                 verify_focused_save_source(pages[page_index], expected)
         for page_index, changes in sorted(snapshot.items()):
-            page_saved, page_conflicts = _apply_focused_review_page_updates(
-                pages[page_index], pages, page_index, changes
-            )
+            page_outcomes[page_index] = "uncertain"
+            try:
+                page_saved, page_conflicts = _apply_focused_review_page_updates(
+                    pages[page_index], pages, page_index, changes
+                )
+            except Exception:
+                # The page writer may have raised before or after atomic
+                # publication. Preserve it as UNCERTAIN, never infer
+                # NOT_COMMITTED from an exception after writer dispatch.
+                for later_index in snapshot:
+                    if int(later_index) > int(page_index):
+                        page_outcomes[int(later_index)] = "not_attempted"
+                raise
             saved.extend(page_saved)
             conflicts.extend(page_conflicts)
+            page_outcomes[page_index] = (
+                "not_committed" if page_conflicts else "committed"
+            )
         if started is not None:
             save_seconds[0] = perf_counter() - started
         return saved, conflicts
@@ -1783,105 +1891,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         _record_focused_timing(
             self, timing_session, "save", save_seconds[0], len(saved),
         )
-        saved_map = {
-            (int(page_index), int(x), int(y)): str(word)
-            for page_index, x, y, word in saved
-        }
-        for target in self.filtered_targets:
-            key = (
-                int(target["page_index"]), int(target["x"]), int(target["y"])
-            )
-            if key in saved_map:
-                target["original_word"] = saved_map[key]
-        # Pending edits made while this worker was running must use the new
-        # on-disk word as their ambiguity guard on the next serialized write.
-        for page_index, changes in self._filter_pending_changes.items():
-            for key, change in changes.items():
-                saved_word = saved_map.get((int(page_index), int(key[0]), int(key[1])))
-                if saved_word is not None:
-                    change["original_word"] = saved_word
-
-        # If a user returned a row to its pre-write original while this
-        # worker was running, the old queue legitimately became empty.
-        # Once the older snapshot *successfully* commits, that user's
-        # reversion is now a new change relative to the committed PDIC.
-        # Preserve any separately queued newer edit as the stronger owner.
-        for target in self.filtered_targets:
-            point = (
-                int(target["page_index"]), int(target["x"]), int(target["y"])
-            )
-            saved_word = saved_map.get(point)
-            if saved_word is None or "current_word" not in target:
-                continue
-            page_index, x, y = point
-            current_word = (
-                str(target["current_word"] or "")
-                .replace("\r", " ").replace("\n", " ")
-                .replace("#", "＃").strip()
-            )
-            row_key = (x, y)
-            queued = self._filter_pending_changes.get(page_index, {}).get(row_key)
-            if queued is not None:
-                # A newer, serialized edit already owns the page/XY.
-                # Drop only a redundant edit to precisely the saved text.
-                if (
-                    str(queued.get("new_word") or "") == saved_word
-                    and current_word == saved_word
-                ):
-                    changes = self._filter_pending_changes[page_index]
-                    changes.pop(row_key, None)
-                    if not changes:
-                        self._filter_pending_changes.pop(page_index, None)
-            elif current_word != saved_word:
-                # Reversion during an in-flight save becomes a fresh edit
-                # relative to the just-published PDIC. Reuse the accepted
-                # crop's image/SECTION provenance; do not mint new proof
-                # from disk in the save-completion callback.
-                replacement = {
-                    "page_index": page_index,
-                    "x": x, "y": y,
-                    "original_word": saved_word,
-                    "new_word": current_word,
-                }
-                source_witness = target.get("_focused_save_source_witness")
-                if source_witness is not None:
-                    replacement["_focused_save_source_witness"] = source_witness
-                # A missing witness still fails closed in the next worker.
-                self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
-
-        # The writer returns no saved rows for a page with source-coordinate
-        # conflicts. Never drop that page's original human corrections or
-        # overwrite edits made after this snapshot was dispatched.
-        recovered = restore_unwritten(set(saved_map))
-        if conflicts or recovered:
-            # A close request belongs only to its fully confirmed save.
-            # Conflicts OR silently unwritten recovered rows must disarm it;
-            # otherwise a later unrelated autosave could close unexpectedly.
-            self._filter_close_after_save = False
-
-        current_index = int(self.parent.current_index)
-        current_saved = {
-            (x, y): word
-            for page_index, x, y, word in saved
-            if int(page_index) == current_index
-        }
-        if current_saved:
-            saved_entries = []
-            for entry in self.parent.entries:
-                value = current_saved.get((int(entry.x), int(entry.y)))
-                if value is not None:
-                    entry.word = value
-                    entry.confidence = None
-                    entry.ocr_source = "manual"
-                    entry.final_engine = "manual"
-                    entry.manually_selected = True
-                    saved_entries.append(entry)
-            # Filtered writes finish off-thread. The main window retains its
-            # own Tk editor buffers; ordinary page navigation would otherwise
-            # copy the stale buffer over the newly committed PDIC Entry.word.
-            # Reconcile only saved, live Entry object identities.
-            from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
-            reconcile_main_editors_after_review(self.parent, saved_entries)
+        saved_map = reconcile_committed_rows(saved)
 
         if conflicts:
             messagebox.showwarning(
@@ -1891,6 +1901,14 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 + ("\n…" if len(conflicts) > 20 else ""),
                 parent=self,
             )
+        settled_pages = {
+            int(page_index) for page_index, outcome in page_outcomes.items()
+            if outcome in {"committed", "not_committed"}
+        }
+        self._filter_save_uncertain_pages = (
+            set(getattr(self, "_filter_save_uncertain_pages", set()))
+            - settled_pages
+        )
         self.parent.status_var.set(
             f"筛选校对已保存 {len(saved)} 条修改"
             + (f"；{len(conflicts)} 条冲突" if conflicts else "")
@@ -1908,18 +1926,43 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             return
         self._filter_save_running = False
         self._filter_close_after_save = False
-        # Restore unsaved work for explicit retry, never overwrite a later
-        # edit or an explicit reversion made while the worker was running.
-        restore_unwritten(set())
-        # Worker exceptions/tracebacks can contain private project paths or
-        # headwords. Do not echo them to stdout, status, or Tk error dialogs.
-        # Keep the retry guidance generic and retain the human edit buffer.
+        # A later debounce created while the writer was active must not
+        # silently retry an UNCERTAIN page. Explicit close/navigation may retry.
+        pending_job = getattr(self, "_filter_save_job", None)
+        if pending_job is not None:
+            try:
+                self.after_cancel(pending_job)
+            except Exception:
+                pass
+            self._filter_save_job = None
+        outcomes = dict(page_outcomes)
+        if not outcomes:
+            # The all-page source preflight failed before any page writer ran.
+            outcomes = {int(index): "not_committed" for index in snapshot}
+        self._filter_save_page_outcomes = outcomes
+        self._filter_save_uncertain_pages = {
+            int(index) for index, outcome in outcomes.items()
+            if outcome == "uncertain"
+        }
+        saved_map = reconcile_committed_rows(saved)
+        # Confirmed earlier pages are not put back into the queue. The failed
+        # page remains visible/pending with UNCERTAIN status; later pages were
+        # never attempted and remain retryable.
+        recovered = restore_unwritten(set(saved_map))
+        if recovered or self._filter_save_uncertain_pages:
+            self._filter_close_after_save = False
+        uncertain_count = len(self._filter_save_uncertain_pages)
+        confirmed_count = len(saved_map)
         self.parent.status_var.set(
-            "筛选校对保存失败：未确认写入的修改已保留，请检查后重试。"
+            f"筛选校对保存中断：已确认提交 {confirmed_count} 条；"
+            f"{uncertain_count} 页写入状态未确认，其余修改已保留。"
+            "请核对 PDIC 后再显式重试。"
         )
         messagebox.showerror(
-            "筛选校对保存失败",
-            "本次保存未完成；校对修改仍可核对或重试，请检查项目文件。",
+            "筛选校对保存中断",
+            "部分页面可能已写入，失败页面的最终状态无法确认；"
+            "已确认提交的修改不会重复排队，其余修改已保留。"
+            "请核对 PDIC 后再显式重试。",
             parent=self,
         )
 
