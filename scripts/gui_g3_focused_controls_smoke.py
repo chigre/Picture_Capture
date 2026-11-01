@@ -738,7 +738,18 @@ def run():
                     side_effect=lambda title, msg, **_kw:
                     dispatch_denied_alerts.append((title, msg)),
                 ):
+                    # Closing must not implicitly replay an uncertain batch.
                     review._close_review()
+                    check(
+                        review.winfo_exists()
+                        and not dispatch_denied_alerts
+                        and not review._filter_close_after_save
+                        and review._filter_save_uncertain_pages,
+                        "native close retried an unverified earlier page write",
+                    )
+                    # Only this explicit save action may ask the mocked
+                    # scheduler to retry after the operator inspects PDIC.
+                    review._flush_focused_changes_now()
                 check(
                     review.winfo_exists()
                     and review.filter_vars[0].get() == "synthetic-close-dispatch-refused"
@@ -757,15 +768,37 @@ def run():
                     "claimed success, leaked source or closed the ReviewWindow",
                 )
 
-            # A new explicit close attempt after restoring the original
-            # source really saves one word then destroys the ReviewWindow.
+            # After restoring original source, use the explicit retry
+            # control. A close click while an earlier batch is uncertain is
+            # never a substitute for reviewing disk state and retrying.
             review.filter_vars[0].set("synthetic-close-committed")
+            review._flush_focused_changes_now()
+            check(
+                review.winfo_exists()
+                and review._filter_save_running,
+                "native explicit retry did not start the actual save worker",
+            )
             review._close_review()
             check(
-                review._filter_close_after_save
-                and review._filter_save_running,
-                "native positive close was not tied to the actual save worker",
+                review.winfo_exists()
+                and not review._filter_close_after_save,
+                "native close incorrectly bypassed the uncertain-save gate",
             )
+            _pump_until(
+                app,
+                lambda: (
+                    not review._filter_save_running
+                    and not review._filter_pending_changes
+                    and not review._filter_save_uncertain_pages
+                    and pdic_path(page1).exists()
+                    and "synthetic-close-committed" in pdic_path(page1).read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                seconds=35,
+                description="G3 native explicit retry confirms disk before close",
+            )
+            review._close_review()
             # Window destruction alone is not a physical-save oracle:
             # unrelated main-app autosave/editor reconciliation may still
             # be draining on the Tk event loop. Require five consecutive
