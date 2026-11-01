@@ -24,6 +24,7 @@ def _analysis(
     crop_box: tuple[int, int, int, int] | None = None,
     separator_shift: tuple[float, ...] | None = None,
     separator_y_knots: tuple[float, ...] = (0.0, 50.0, 100.0),
+    perspective_matrix: tuple[float, ...] | None = None,
 ) -> PreprocessAnalysis:
     width, height = source_size
     crop = crop_box or (0, 0, width, height)
@@ -58,7 +59,7 @@ def _analysis(
         status="synthetic",
         method="r7_3_nonlinear_orthogonal_edge_regression",
         geometry_mode="perspective",
-        perspective_matrix=None,
+        perspective_matrix=perspective_matrix,
         orthogonal_applied=bool(steps),
         orthogonal_steps=steps,
     )
@@ -264,3 +265,48 @@ def test_polygon_mapping_accepts_numpy_point_arrays():
     assert np.allclose(restored, polygon, atol=0.02)
     assert mapping.source_to_output_polygon(np.empty((0, 2))) is None
     assert mapping.output_to_source_polygon(np.empty((0, 2))) is None
+
+
+
+def test_source_polygon_samples_separator_knots_after_projective_transform():
+    """Knot crossings belong to the orthogonal input frame, not raw source XY."""
+    analysis = _analysis(
+        source_size=(50, 101),
+        crop_box=(0, 0, 50, 101),
+        separator_shift=(0.0, 0.0, -10.0, 0.0, 0.0),
+        separator_y_knots=(0.0, 52.0, 53.0, 54.0, 100.0),
+        perspective_matrix=(
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 20.0,
+            0.0, 0.0, 1.0,
+        ),
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+    polygon = ((40.0, 10.0), (45.0, 10.0),
+               (45.0, 70.0), (40.0, 70.0))
+
+    assert all(mapping.source_to_output_point(point).status == "mapped"
+               for point in polygon)
+    # The source edge at y=33 becomes orthogonal-input y=53 after H.
+    assert mapping.source_to_output_point((40.0, 33.0)).status == "outside_crop"
+    assert mapping.source_to_output_polygon(polygon) is None
+
+
+def test_inverse_polygon_samples_separator_knots_after_crop_offset():
+    """Reverse knot crossings belong to pre-crop coordinates, not output XY."""
+    analysis = _analysis(
+        source_size=(50, 101),
+        crop_box=(0, 20, 50, 101),
+        separator_shift=(0.0, 0.0, 10.0, 0.0, 0.0),
+        separator_y_knots=(0.0, 52.0, 53.0, 54.0, 100.0),
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+    polygon = ((35.0, 10.0), (40.0, 10.0),
+               (40.0, 70.0), (35.0, 70.0))
+
+    assert all(mapping.output_to_source_point(point).status == "mapped"
+               for point in polygon)
+    # Output y=33 is pre-crop y=53; inverse separator shift sends x=40
+    # exactly to the excluded source boundary x=50.
+    assert mapping.output_to_source_point((40.0, 33.0)).status == "outside_source"
+    assert mapping.output_to_source_polygon(polygon) is None
