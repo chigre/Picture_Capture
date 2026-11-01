@@ -170,6 +170,7 @@ def test_coordinate_map_uses_layout_transform_as_the_canonical_stage():
         analysis=analysis,
         source_size=source_size,
         layout_transform=transform,
+        analysis_is_canonicalized=True,
     )
     source_point = (10.0, 20.0)
     output = mapping.source_to_output_point(source_point)
@@ -241,7 +242,9 @@ def test_coordinate_map_is_an_immutable_snapshot_of_preprocess_analysis():
         applied_angle_deg=0.0,
         orthogonal_steps=(),
     )
+    original_payload = analysis.to_dict()
     mapping = PreprocessCoordinateMap(analysis=analysis)
+    assert analysis.to_dict() == original_payload
     before = mapping.source_to_output_point((40.0, 40.0))
     assert before.status == "mapped"
 
@@ -255,3 +258,16 @@ def test_coordinate_map_is_an_immutable_snapshot_of_preprocess_analysis():
     after = mapping.source_to_output_point((40.0, 40.0))
     assert after.status == "mapped"
     assert after.point == before.point
+
+
+def test_coordinate_map_requires_explicit_canonicalized_input_for_mirror():
+    from picture_capture.preprocess.coordinate_mapping import (
+        CoordinateMappingUnavailable,
+        PreprocessCoordinateMap,
+    )
+
+    with pytest.raises(CoordinateMappingUnavailable, match="analysis_is_canonicalized"):
+        PreprocessCoordinateMap(
+            _analysis(applied_angle_deg=0.0, orthogonal_steps=()),
+            layout_transform=LayoutTransform("mirror_x"),
+        )

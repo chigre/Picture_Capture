@@ -8,6 +8,7 @@ solver as the image mesh and is therefore marked approximate.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 import math
 from typing import Literal, Sequence
@@ -40,52 +41,99 @@ class CoordinateMappingResult:
     contract_version: int = COORDINATE_MAPPING_CONTRACT_VERSION
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PreprocessCoordinateMap:
     """Compose source → canonical → transformed → crop → output-canvas mapping.
 
     `source_size` is the EXIF-oriented source pixel size. When a non-identity
-    `layout_transform` is supplied, `analysis` must have been computed from
-    that canonicalized image and its source_width/source_height must therefore
-    equal `layout_transform.canonical_size(source_size)`.
+    `layout_transform` is supplied, `analysis_is_canonicalized=True` is
+    mandatory and `analysis` must have been computed from that canonicalized
+    image. Its source_width/source_height must equal
+    `layout_transform.canonical_size(source_size)`.
 
-    The map is read-only and ephemeral. It does not add fields to
-    PreprocessAnalysis or modify PDIC, PPP, SECTION, crop-plan or image files.
+    The constructor takes a deep snapshot of the mutable legacy
+    PreprocessAnalysis model. The map and its replay steps are immutable from
+    the caller's perspective. It is ephemeral: no fields are added to
+    PreprocessAnalysis and no PDIC, PPP, SECTION, crop-plan or image file is
+    changed.
     """
 
-    analysis: PreprocessAnalysis
-    source_size: tuple[int, int] | None = None
-    layout_transform: LayoutTransform = field(default_factory=LayoutTransform)
-    canvas: OutputCanvasInfo | None = None
+    _analysis: PreprocessAnalysis = field(repr=False, compare=False)
+    source_size: tuple[int, int]
+    layout_transform: LayoutTransform
+    canvas: OutputCanvasInfo | None
+    analysis_is_canonicalized: bool
+    _orthogonal_step_cache: tuple[
+        tuple[OrthogonalWarpEstimate, float], ...
+    ] = field(repr=False, compare=False)
 
-    def __post_init__(self) -> None:
-        raw_size = self.source_size or (
-            int(self.analysis.source_width),
-            int(self.analysis.source_height),
+    def __init__(
+        self,
+        analysis: PreprocessAnalysis,
+        source_size: tuple[int, int] | None = None,
+        layout_transform: LayoutTransform | None = None,
+        canvas: OutputCanvasInfo | None = None,
+        analysis_is_canonicalized: bool = False,
+    ) -> None:
+        snapshot = deepcopy(analysis)
+        raw_size = source_size or (
+            int(snapshot.source_width),
+            int(snapshot.source_height),
         )
         if len(raw_size) != 2:
             raise ValueError("source_size must contain width and height")
         size = (int(raw_size[0]), int(raw_size[1]))
-        if size[0] <= 0 or size[1] <= 0:
+        transform = layout_transform or LayoutTransform()
+
+        object.__setattr__(self, "_analysis", snapshot)
+        object.__setattr__(self, "source_size", size)
+        object.__setattr__(self, "layout_transform", transform)
+        object.__setattr__(self, "canvas", canvas)
+        object.__setattr__(
+            self, "analysis_is_canonicalized", bool(analysis_is_canonicalized),
+        )
+        self._validate()
+        object.__setattr__(
+            self, "_orthogonal_step_cache", self._build_orthogonal_steps(),
+        )
+
+    @property
+    def contract_version(self) -> int:
+        return COORDINATE_MAPPING_CONTRACT_VERSION
+
+    @property
+    def approximate(self) -> bool:
+        return bool(self._orthogonal_step_cache)
+
+    def _validate(self) -> None:
+        analysis = self._analysis
+        if self.source_size[0] <= 0 or self.source_size[1] <= 0:
             raise ValueError("source_size must be positive")
-        canonical_size = self.layout_transform.canonical_size(size)
+        canonical_size = self.layout_transform.canonical_size(self.source_size)
         analysis_size = (
-            int(self.analysis.source_width),
-            int(self.analysis.source_height),
+            int(analysis.source_width),
+            int(analysis.source_height),
         )
         if canonical_size != analysis_size:
             raise ValueError(
                 "analysis dimensions do not match the canonical coordinate frame"
             )
+        if (
+            self.layout_transform.kind != "identity"
+            and not self.analysis_is_canonicalized
+        ):
+            raise CoordinateMappingUnavailable(
+                "non-identity LayoutTransform requires analysis_is_canonicalized=True"
+            )
 
-        if str(self.analysis.geometry_mode or "").strip().casefold() == "uvdoc":
+        if str(analysis.geometry_mode or "").strip().casefold() == "uvdoc":
             raise CoordinateMappingUnavailable(
                 "UVDoc uses a nonlinear unwarp without a supported point-map contract"
             )
 
-        x0, y0, x1, y1 = (
-            int(value) for value in self.analysis.crop_box
-        )
+        if len(analysis.crop_box) != 4:
+            raise ValueError("crop_box must contain four half-open coordinates")
+        x0, y0, x1, y1 = (int(value) for value in analysis.crop_box)
         if (
             x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0
             or x1 > analysis_size[0] or y1 > analysis_size[1]
@@ -104,11 +152,10 @@ class PreprocessCoordinateMap:
                     "canvas content_box must place the complete crop without rescaling"
                 )
 
-        angle = float(self.analysis.applied_angle_deg)
-        if not math.isfinite(angle):
+        if not math.isfinite(float(analysis.applied_angle_deg)):
             raise CoordinateMappingUnavailable("deskew angle is not finite")
-        if self.analysis.perspective_matrix is not None:
-            matrix = np.asarray(self.analysis.perspective_matrix, dtype=float)
+        if analysis.perspective_matrix is not None:
+            matrix = np.asarray(analysis.perspective_matrix, dtype=float)
             if matrix.size != 9 or not np.isfinite(matrix).all():
                 raise CoordinateMappingUnavailable("perspective matrix is malformed")
             try:
@@ -122,16 +169,10 @@ class PreprocessCoordinateMap:
                     "perspective inverse is not finite"
                 )
 
-        object.__setattr__(self, "source_size", size)
-
-    @property
-    def approximate(self) -> bool:
-        return bool(self._orthogonal_steps())
-
-    def _orthogonal_steps(
+    def _build_orthogonal_steps(
         self,
     ) -> tuple[tuple[OrthogonalWarpEstimate, float], ...]:
-        analysis = self.analysis
+        analysis = self._analysis
         if not analysis.orthogonal_applied:
             return ()
         if analysis.orthogonal_steps:
@@ -174,20 +215,18 @@ class PreprocessCoordinateMap:
         return ()
 
     def _forward_geometry(self, point: tuple[float, float]) -> tuple[float, float]:
-        width, height = (
-            int(self.analysis.source_width),
-            int(self.analysis.source_height),
-        )
+        analysis = self._analysis
+        width, height = int(analysis.source_width), int(analysis.source_height)
         x, y = _rotate_point_same_canvas(
             point[0], point[1], width, height,
-            float(self.analysis.applied_angle_deg),
+            float(analysis.applied_angle_deg),
         )
         mapped = np.asarray(((x, y),), dtype=float)
-        if self.analysis.perspective_matrix is not None:
+        if analysis.perspective_matrix is not None:
             mapped = transform_points_homography(
-                mapped, self.analysis.perspective_matrix,
+                mapped, analysis.perspective_matrix,
             )
-        for estimate, row_gain in self._orthogonal_steps():
+        for estimate, row_gain in self._orthogonal_step_cache:
             mapped = transform_points_orthogonal(
                 mapped, estimate, row_gain=row_gain, separator_gain=1.0,
             )
@@ -199,14 +238,15 @@ class PreprocessCoordinateMap:
         return result
 
     def _inverse_geometry(self, point: tuple[float, float]) -> tuple[float, float]:
+        analysis = self._analysis
         mapped = np.asarray((point,), dtype=float)
-        for estimate, row_gain in reversed(self._orthogonal_steps()):
+        for estimate, row_gain in reversed(self._orthogonal_step_cache):
             mapped = inverse_transform_points_orthogonal(
                 mapped, estimate, row_gain=row_gain, separator_gain=1.0,
             )
-        if self.analysis.perspective_matrix is not None:
+        if analysis.perspective_matrix is not None:
             matrix = np.asarray(
-                self.analysis.perspective_matrix, dtype=float,
+                analysis.perspective_matrix, dtype=float,
             ).reshape(3, 3)
             try:
                 inverse = np.linalg.inv(matrix)
@@ -215,13 +255,10 @@ class PreprocessCoordinateMap:
                     "perspective matrix became singular"
                 ) from exc
             mapped = transform_points_homography(mapped, inverse.reshape(-1))
-        width, height = (
-            int(self.analysis.source_width),
-            int(self.analysis.source_height),
-        )
+        width, height = int(analysis.source_width), int(analysis.source_height)
         x, y = _rotate_point_same_canvas(
             float(mapped[0, 0]), float(mapped[0, 1]),
-            width, height, -float(self.analysis.applied_angle_deg),
+            width, height, -float(analysis.applied_angle_deg),
         )
         if not (math.isfinite(x) and math.isfinite(y)):
             raise CoordinateMappingUnavailable(
@@ -260,9 +297,7 @@ class PreprocessCoordinateMap:
         tx, ty = self._forward_geometry(
             (float(canonical[0]), float(canonical[1])),
         )
-        x0, y0, x1, y1 = (
-            int(value) for value in self.analysis.crop_box
-        )
+        x0, y0, x1, y1 = (int(value) for value in self._analysis.crop_box)
         if not (x0 <= tx < x1 and y0 <= ty < y1):
             return CoordinateMappingResult("outside_crop", None, self.approximate)
         offset_x, offset_y = self._canvas_offset()
@@ -277,9 +312,7 @@ class PreprocessCoordinateMap:
     ) -> CoordinateMappingResult:
         x, y = self._point(point)
         offset_x, offset_y = self._canvas_offset()
-        x0, y0, x1, y1 = (
-            int(value) for value in self.analysis.crop_box
-        )
+        x0, y0, x1, y1 = (int(value) for value in self._analysis.crop_box)
         crop_x = x - offset_x
         crop_y = y - offset_y
         if not (
