@@ -80,6 +80,46 @@ def start_ui_worker(
     return generation
 
 
+def schedule_ui_worker_poll(self, milliseconds: int = 40) -> bool:
+    """Best-effort Tk-thread registration; never lose durable-worker ownership.
+
+    An idle fallback is attempted at most once until a normal timed poll is
+    accepted. Both schedulers can fail during Tcl teardown; leave the window
+    visible and retryable rather than silently abandoning a durable worker.
+    """
+    if self._ui_worker_poll_job is not None:
+        return True
+    try:
+        self._ui_worker_poll_job = self.after(milliseconds, self._poll_ui_worker_queue)
+    except Exception:
+        if getattr(self, "_ui_worker_poll_idle_fallback_used", False):
+            return False
+        try:
+            self._ui_worker_poll_job = self.after_idle(self._poll_ui_worker_queue)
+        except Exception:
+            return False
+        self._ui_worker_poll_idle_fallback_used = True
+        return True
+    self._ui_worker_poll_idle_fallback_used = False
+    return True
+
+
+def _handle_poll_registration_failure(self) -> None:
+    """Do not strand a hidden window if no Tk completion poll is available."""
+    if self._ui_close_requested:
+        self._ui_close_requested = False
+        try:
+            self.deiconify()
+        except Exception:
+            pass
+    try:
+        self.status_var.set(
+            "后台操作尚未结束，界面轮询暂不可用；请保持程序运行并重试。"
+        )
+    except Exception:
+        pass
+
+
 def poll_ui_worker_queue(self, *, deps: dict[str, Any]) -> None:
     tk = deps["tk"]
     queue = deps["queue"]
@@ -123,15 +163,18 @@ def poll_ui_worker_queue(self, *, deps: dict[str, Any]) -> None:
                     pass
 
     if self._ui_close_requested and not self._ui_worker_close_wait:
-        self.after_idle(self.on_close)
+        try:
+            self.after_idle(self.on_close)
+        except Exception:
+            # Already on the Tk thread: finish the deferred close directly.
+            self.on_close()
         return
     if (
         (self._ui_worker_handlers or self._ui_worker_close_wait or self._ui_worker_active)
         and not self._ui_worker_shutdown
     ):
-        self._ui_worker_poll_job = self.after(
-            8 if processed >= 48 else 60, self._poll_ui_worker_queue
-        )
+        if not schedule_ui_worker_poll(self, 8 if processed >= 48 else 60):
+            _handle_poll_registration_failure(self)
 
 
 def _ui_worker_key_active(self, key: str, *, deps: dict[str, Any]) -> bool:
