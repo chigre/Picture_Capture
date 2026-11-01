@@ -895,7 +895,8 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
     worker_key = f"focused-filter-prefetch-{id(self)}"
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
-    project_root = self.parent.project.root
+    project = getattr(self.parent, "project", None)
+    project_root = getattr(project, "root", None)
     crop_seconds = [None]
     # A source key may be reissued within one scan epoch after cache eviction
     # or a completed attempt. Key equality is not worker identity: once this
@@ -1090,7 +1091,8 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
     serial = self._filter_render_serial
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
-    project_root = self.parent.project.root
+    project = getattr(self.parent, "project", None)
+    project_root = getattr(project, "root", None)
     crop_seconds = [None]
     # Only the first owned terminal callback may affect this render. Worker
     # adapters can report a delayed duplicate or contradictory completion;

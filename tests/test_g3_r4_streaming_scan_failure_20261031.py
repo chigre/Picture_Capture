@@ -32,6 +32,8 @@ def _stream_fixture(
     remainder_launch_fault=None,
 ):
     pages = [tmp_path / "001.png", tmp_path / "002.png"]
+    for page in pages:
+        page.with_suffix(".pdic").write_bytes(b"synthetic-pdic-source")
     calls, workspace = [], []
     status, indicator = Var(""), Var("")
 
