@@ -417,6 +417,16 @@ def test_inflight_render_rejects_replaced_project_object_before_scan_terminal(tm
         )
 
     review._filter_batch_snapshot = batch_snapshot
+    review._cache_filter_batch_payload = (
+        lambda key, payload: workflow._cache_filter_batch_payload(
+            review, deps, key, payload,
+        )
+    )
+    review._apply_filter_batch_payload = (
+        lambda index, key, payload: workflow._apply_filter_batch_payload(
+            review, deps, index, key, payload,
+        )
+    )
     review._request_filter_batch_render = (
         lambda: workflow._request_filter_batch_render(review, deps)
     )
