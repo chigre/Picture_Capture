@@ -129,6 +129,11 @@ class PreprocessCoordinateMap:
         exif_orientation: int = 1,
     ) -> None:
         snapshot = deepcopy(analysis)
+        if not isinstance(snapshot.orthogonal_applied, (bool, np.bool_)):
+            raise CoordinateMappingUnavailable(
+                "orthogonal_applied flag must be boolean"
+            )
+        snapshot.orthogonal_applied = bool(snapshot.orthogonal_applied)
         raw_dimensions = (
             (snapshot.source_width, snapshot.source_height)
             if source_size is None else source_size
