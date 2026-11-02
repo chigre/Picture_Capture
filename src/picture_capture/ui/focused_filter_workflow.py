@@ -108,15 +108,10 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
         self, "_filter_scan_serial", None
     ):
         return True
-    # Chunk terminals already revalidate the scanned prefix while streaming.
-    # Avoid rehashing that growing prefix for every early-batch repaint.
-    if not getattr(self, "_filter_scan_complete", False):
-        return True
     project = getattr(getattr(self, "parent", None), "project", None)
     epoch_project = getattr(self, "_filter_scan_epoch_project", None)
-    # Root and image paths can be identical across a reopened/replaced
-    # ProjectState. A completed scan belongs to the exact session object that
-    # created its epoch, not merely to equivalent-looking project metadata.
+    # A scan epoch belongs to the exact ProjectState object that created it;
+    # equal root/page metadata does not transfer ownership to a replacement.
     if epoch_project is None or project is not epoch_project:
         return False
     pages = getattr(self, "_filter_scan_epoch_pages", None)
@@ -131,6 +126,11 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
             str(page) for page in pages
         ):
             return False
+        # While the scan is streaming, chunk terminals own the expensive
+        # byte-level prefix verification. Every UI publication boundary still
+        # enforces the cheap session/root/page identity checks above.
+        if not getattr(self, "_filter_scan_complete", False):
+            return True
         for page_index, expected in sorted(witnesses.items()):
             page_index = int(page_index)
             if not 0 <= page_index < len(pages):
