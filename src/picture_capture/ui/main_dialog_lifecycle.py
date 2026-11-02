@@ -114,6 +114,12 @@ def open_project_profile(self, new_project: bool = False, *, deps: dict[str, Any
 def open_review(self, *, deps: dict[str, Any]) -> None:
     tk = deps["tk"]
     ReviewWindow = deps["ReviewWindow"]
+    worker_active = getattr(self, "_ui_worker_key_active", None)
+    if callable(worker_active) and worker_active("project-load"):
+        self.status_var.set(
+            "项目正在后台加载，加载完成后再打开词条校对窗口。"
+        )
+        return
     if not (self.guard() and self.entries):
         return
     if self.review_window is not None:
