@@ -111,4 +111,4 @@ def test_open_review_is_refused_while_project_load_worker_is_active():
     )
     assert settings.review_main_show_ocr_choices is True
     assert settings.review_main_show_ocr_background is True
-    assert "项目正在加载" in app.status_var.value
+    assert "项目正在后台加载" in app.status_var.value
