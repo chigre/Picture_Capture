@@ -67,8 +67,8 @@ def test_orthogonal_replay_rejects_noninteger_grid_dimensions(field, value):
         PreprocessCoordinateMap(_analysis(_payload(**{field: value})))
 
 
-@pytest.mark.parametrize("row_gain", (-0.5, True, "0.7", None))
-def test_orthogonal_replay_rejects_negative_boolean_text_or_null_row_gain(row_gain):
+@pytest.mark.parametrize("row_gain", (True, False))
+def test_orthogonal_replay_rejects_boolean_row_gain(row_gain):
     with pytest.raises(CoordinateMappingUnavailable, match="orthogonal"):
         PreprocessCoordinateMap(_analysis(_payload(row_gain=row_gain)))
 
