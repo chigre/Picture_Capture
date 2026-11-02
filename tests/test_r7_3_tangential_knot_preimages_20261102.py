@@ -97,3 +97,74 @@ def test_polygon_fails_closed_when_composed_stage_path_touches_knot_without_cros
     # The polygon contract must nevertheless refuse this partially unmappable
     # ROI boundary.
     assert mapping.source_to_output_polygon(polygon) is None
+
+
+def test_inverse_polygon_fails_closed_when_composed_stage_path_touches_knot_without_crossing():
+    # Forward order is separator-only followed by an X-varying row-angle
+    # stage. In reverse, the latter creates a smooth local maximum in the
+    # separator-stage input Y at x=948.5, between the 8 px samples x=948/956.
+    separator_stage = {
+        "row_gain": 1.0,
+        "reference_x": 0.0,
+        "y_knots": [],
+        "angle_knots_deg": [],
+        "x_knots": [],
+        "row_grid_rows": 0,
+        "row_grid_cols": 0,
+        "row_angle_grid_deg": [],
+        "row_displacement_grid_px": [],
+        "separator_y_knots": [0.0, 52.999, 53.0, 53.001, 101.0],
+        "separator_shift_knots_px": [0.0, 0.0, 48.5001, 0.0, 0.0],
+    }
+    row_stage = {
+        "row_gain": 1.0,
+        "reference_x": 900.0,
+        "y_knots": [0.0, 101.0],
+        "angle_knots_deg": [],
+        "x_knots": [900.0, 997.0],
+        "row_grid_rows": 2,
+        "row_grid_cols": 2,
+        "row_angle_grid_deg": [2.0, -2.0, 2.0, -2.0],
+        "row_displacement_grid_px": [],
+        "separator_y_knots": [],
+        "separator_shift_knots_px": [],
+    }
+    inverse_tangent_y = 53.0 - 24.25 * math.tan(math.radians(2.0))
+    analysis = PreprocessAnalysis(
+        source_width=997,
+        source_height=101,
+        correction_angle_deg=0.0,
+        applied_angle_deg=0.0,
+        crop_box=(0, 0, 997, 101),
+        raw_content_box=(0, 0, 997, 101),
+        text_box=(0, 0, 997, 101),
+        source_boxes=0,
+        angle_samples=0,
+        angle_mad_deg=0.0,
+        retained_ratio=1.0,
+        confidence=1.0,
+        status="synthetic",
+        method="r7_3_inverse_tangential_knot_preimage",
+        geometry_mode="perspective",
+        perspective_matrix=None,
+        orthogonal_applied=True,
+        orthogonal_steps=(separator_stage, row_stage),
+    )
+    mapping = PreprocessCoordinateMap(analysis)
+
+    tangent = mapping.output_to_source_point((948.5, inverse_tangent_y))
+    left_sample = mapping.output_to_source_point((948.0, inverse_tangent_y))
+    right_sample = mapping.output_to_source_point((956.0, inverse_tangent_y))
+    assert tangent.status == "outside_source"
+    assert left_sample.status == "mapped"
+    assert right_sample.status == "mapped"
+
+    polygon = (
+        (900.0, inverse_tangent_y),
+        (996.0, inverse_tangent_y),
+        (996.0, inverse_tangent_y + 1.0),
+        (900.0, inverse_tangent_y + 1.0),
+    )
+    vertices = tuple(mapping.output_to_source_point(point) for point in polygon)
+    assert all(item.status == "mapped" for item in vertices)
+    assert mapping.output_to_source_polygon(polygon) is None
