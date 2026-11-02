@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from operator import index as integer_index
 from typing import Callable, Iterable
 
 import numpy as np
@@ -238,14 +239,47 @@ def _orthogonal_step_payload(
 def _orthogonal_estimate_from_step(
     payload: dict[str, object],
 ) -> tuple[OrthogonalWarpEstimate, float]:
+    def grid_dimension(name: str) -> int:
+        if name not in payload:
+            return 0
+        value = payload[name]
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(f"{name} must be a non-negative integer")
+        try:
+            result = int(integer_index(value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                f"{name} must be a non-negative integer"
+            ) from exc
+        if result < 0:
+            raise ValueError(f"{name} must be a non-negative integer")
+        return result
+
+    if "row_gain" in payload:
+        raw_gain = payload["row_gain"]
+        if isinstance(
+            raw_gain, (bool, np.bool_, str, bytes, bytearray)
+        ) or raw_gain is None:
+            raise ValueError("row_gain must be a finite non-negative number")
+    else:
+        raw_gain = 1.0
+    try:
+        row_gain = float(raw_gain)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "row_gain must be a finite non-negative number"
+        ) from exc
+    if not math.isfinite(row_gain) or row_gain < 0.0:
+        raise ValueError("row_gain must be a finite non-negative number")
+
     estimate = OrthogonalWarpEstimate(
         y_knots=tuple(float(v) for v in payload.get("y_knots", ())),
         angle_knots_deg=tuple(
             float(v) for v in payload.get("angle_knots_deg", ())
         ),
         x_knots=tuple(float(v) for v in payload.get("x_knots", ())),
-        row_grid_rows=max(0, int(payload.get("row_grid_rows", 0) or 0)),
-        row_grid_cols=max(0, int(payload.get("row_grid_cols", 0) or 0)),
+        row_grid_rows=grid_dimension("row_grid_rows"),
+        row_grid_cols=grid_dimension("row_grid_cols"),
         row_angle_grid_deg=tuple(
             float(v) for v in payload.get("row_angle_grid_deg", ())
         ),
@@ -257,13 +291,12 @@ def _orthogonal_estimate_from_step(
             float(v) for v in payload.get("separator_y_knots", ())
         ),
         separator_shift_knots_px=tuple(
-            float(v)
-            for v in payload.get("separator_shift_knots_px", ())
+            float(v) for v in payload.get("separator_shift_knots_px", ())
         ),
         reference_x=float(payload.get("reference_x", 0.0) or 0.0),
         active=True,
     )
-    return estimate, max(0.0, float(payload.get("row_gain", 1.0) or 1.0))
+    return estimate, row_gain
 
 
 
