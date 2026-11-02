@@ -113,6 +113,12 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
     if not getattr(self, "_filter_scan_complete", False):
         return True
     project = getattr(getattr(self, "parent", None), "project", None)
+    epoch_project = getattr(self, "_filter_scan_epoch_project", None)
+    # Root and image paths can be identical across a reopened/replaced
+    # ProjectState. A completed scan belongs to the exact session object that
+    # created its epoch, not merely to equivalent-looking project metadata.
+    if epoch_project is None or project is not epoch_project:
+        return False
     pages = getattr(self, "_filter_scan_epoch_pages", None)
     project_root = getattr(self, "_filter_scan_epoch_project_root", None)
     if project is None or pages is None or project_root is None:
@@ -341,6 +347,10 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
     # Retain the complete epoch source set after scan completion so later
     # batch publication also rejects drift on pages that produced no targets.
     self._filter_scan_epoch_source_witnesses = epoch_source_witnesses
+    # Keep the owning ProjectState identity for post-terminal publication
+    # checks. Equal root/page metadata does not make a replacement session the
+    # owner of callbacks and scan results created by the prior instance.
+    self._filter_scan_epoch_project = project
     self._filter_scan_epoch_pages = tuple(pages)
     self._filter_scan_epoch_project_root = project_root
     self._filter_scan_epoch_source_serial = serial
