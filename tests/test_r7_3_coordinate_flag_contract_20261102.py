@@ -93,3 +93,37 @@ def test_output_canvas_enabled_accepts_and_snapshots_numpy_boolean_scalar():
     assert mapping.canvas is not None
     assert mapping.canvas.enabled is True
     assert type(mapping.canvas.enabled) is bool
+
+
+def _separator_step():
+    return {
+        "row_gain": 1.0,
+        "reference_x": 0.0,
+        "y_knots": [],
+        "angle_knots_deg": [],
+        "x_knots": [],
+        "row_grid_rows": 0,
+        "row_grid_cols": 0,
+        "row_angle_grid_deg": [],
+        "row_displacement_grid_px": [],
+        "separator_y_knots": [0.0, 99.0],
+        "separator_shift_knots_px": [0.0, 1.0],
+    }
+
+
+@pytest.mark.parametrize("flag", ("false", 1, 0))
+def test_orthogonal_applied_requires_a_boolean(flag):
+    analysis = _analysis()
+    analysis.orthogonal_applied = flag
+    analysis.orthogonal_steps = (_separator_step(),)
+    with pytest.raises(ValueError, match="orthogonal_applied"):
+        PreprocessCoordinateMap(analysis)
+
+
+def test_orthogonal_applied_accepts_numpy_boolean_and_snapshots_python_bool():
+    analysis = _analysis()
+    analysis.orthogonal_applied = np.bool_(True)
+    analysis.orthogonal_steps = (_separator_step(),)
+    mapping = PreprocessCoordinateMap(analysis)
+    assert mapping.approximate is True
+    assert type(mapping._analysis.orthogonal_applied) is bool
