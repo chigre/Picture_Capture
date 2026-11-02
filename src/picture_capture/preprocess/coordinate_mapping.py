@@ -997,6 +997,10 @@ class PreprocessCoordinateMap:
                 end[0] - start[0],
                 end[1] - start[1],
             )
+            if not math.isfinite(distance):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal polygon edge length is non-finite"
+                )
             steps = max(
                 2,
                 int(math.ceil(
@@ -1032,6 +1036,10 @@ class PreprocessCoordinateMap:
                         last[1] - middle[1],
                     )
                 )
+                if not math.isfinite(stage_length):
+                    raise CoordinateMappingUnavailable(
+                        "orthogonal polygon stage edge length is non-finite"
+                    )
                 steps = max(
                     steps,
                     int(math.ceil(
