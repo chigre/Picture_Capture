@@ -580,9 +580,20 @@ class PreprocessCoordinateMap:
 
     @staticmethod
     def _point(value: Sequence[float]) -> tuple[float, float]:
-        if len(value) != 2:
-            raise ValueError("a coordinate point must contain X and Y")
-        point = (float(value[0]), float(value[1]))
+        try:
+            if isinstance(value, (str, bytes, bytearray)) or len(value) != 2:
+                raise ValueError
+            coordinates = tuple(value)
+            if any(
+                isinstance(item, (bool, np.bool_, str, bytes, bytearray))
+                for item in coordinates
+            ):
+                raise ValueError
+            point = (float(coordinates[0]), float(coordinates[1]))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "coordinate point must contain two real numeric X/Y values"
+            ) from exc
         if not all(math.isfinite(v) for v in point):
             raise ValueError("coordinate point must be finite")
         return point
