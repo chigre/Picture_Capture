@@ -150,6 +150,8 @@ def _reject_active_filter_scan_epoch(self) -> None:
     self._filter_batch_render_cache.clear()
     self._filter_prefetch_key = None
     for key in (
+        f"focused-filter-scan-{id(self)}",
+        f"focused-filter-scan-rest-{id(self)}",
         f"focused-filter-render-{id(self)}",
         f"focused-filter-prefetch-{id(self)}",
     ):
@@ -162,7 +164,7 @@ def _reject_active_filter_scan_epoch(self) -> None:
             "筛选来源在扫描完成后发生变化；请重新筛选。"
         )
     self.parent.status_var.set(
-        "已完成筛选的页面来源发生变化（包括此前无命中页面），"
+        "筛选项目会话或页面来源发生变化（包括此前无命中页面），"
         "旧结果不再视为完整；请重新筛选。"
     )
     self.filter_batch_var.set("筛选来源已变化（结果不完整）")
@@ -351,8 +353,24 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
         epoch_source_witnesses[page_index] = witness
 
     def verify_scan_epoch_sources(next_position: int) -> bool:
-        """Recheck every scanned page, not just pages with visible targets."""
+        """Recheck project-session ownership and every scanned source page."""
+        if getattr(self, "_filter_scan_epoch_invalidated", False):
+            return False
+        # ProjectSessionWorkflow can replace parent.project while this
+        # non-modal ReviewWindow and its read-only scan worker are still alive.
+        # Old source files remaining byte-identical is not authority to publish
+        # their rows into a different ProjectState session.
+        active_project = getattr(getattr(self, "parent", None), "project", None)
         try:
+            if (
+                active_project is not project
+                or active_project is None
+                or str(getattr(active_project, "root", None)) != str(project_root)
+                or tuple(str(page) for page in getattr(active_project, "images", ()))
+                != tuple(str(page) for page in pages)
+            ):
+                _reject_active_filter_scan_epoch(self)
+                return False
             scanned_page_indices = tuple(
                 dict.fromkeys(int(index) for index in indices[:int(next_position)])
             )
@@ -365,7 +383,7 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
                 verify_focused_scan_source(
                     page, pdic_path(page), cache, expected,
                 )
-        except (OSError, ValueError, RuntimeError, IndexError, TypeError):
+        except (OSError, ValueError, RuntimeError, IndexError, TypeError, AttributeError):
             return False
         return True
 
