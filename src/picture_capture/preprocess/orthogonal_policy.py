@@ -255,22 +255,21 @@ def _orthogonal_estimate_from_step(
             raise ValueError(f"{name} must be a non-negative integer")
         return result
 
-    if "row_gain" in payload:
-        raw_gain = payload["row_gain"]
-        if isinstance(
-            raw_gain, (bool, np.bool_, str, bytes, bytearray)
-        ) or raw_gain is None:
-            raise ValueError("row_gain must be a finite non-negative number")
-    else:
-        raw_gain = 1.0
+    if (
+        "row_gain" in payload
+        and isinstance(payload["row_gain"], (bool, np.bool_))
+    ):
+        raise ValueError("row_gain must not be boolean")
     try:
-        row_gain = float(raw_gain)
+        # Preserve established replay compatibility: absent, null and zero
+        # values use the historical default gain; negative values clamp to 0.
+        row_gain = max(
+            0.0,
+            float(payload.get("row_gain", 1.0) or 1.0),
+        )
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(
-            "row_gain must be a finite non-negative number"
-        ) from exc
-    if not math.isfinite(row_gain) or row_gain < 0.0:
-        raise ValueError("row_gain must be a finite non-negative number")
+        raise ValueError("row_gain must be numeric") from exc
+
 
     estimate = OrthogonalWarpEstimate(
         y_knots=tuple(float(v) for v in payload.get("y_knots", ())),
