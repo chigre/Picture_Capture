@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import math
 from operator import index as integer_index
 from typing import Literal, Sequence
@@ -157,13 +157,34 @@ class PreprocessCoordinateMap:
                     "source_size does not match the EXIF-oriented raw_source_size"
                 )
         transform = LayoutTransform() if layout_transform is None else layout_transform
+        # OutputCanvasInfo is frozen, but runtime typing does not prevent a
+        # mutable list in content_box. Normalize the enabled raster contract
+        # to integer tuples and detach it from the caller before publishing
+        # any mapping result.
+        if canvas is not None and not isinstance(canvas, OutputCanvasInfo):
+            raise CoordinateMappingUnavailable("canvas snapshot is malformed")
+        canvas_snapshot = deepcopy(canvas)
+        if canvas_snapshot is not None and canvas_snapshot.enabled:
+            canvas_size = _validated_size_pair(
+                (canvas_snapshot.width, canvas_snapshot.height),
+                "canvas dimensions",
+            )
+            canvas_box = _validated_box(
+                canvas_snapshot.content_box, "canvas content_box",
+            )
+            canvas_snapshot = replace(
+                canvas_snapshot,
+                width=canvas_size[0],
+                height=canvas_size[1],
+                content_box=canvas_box,
+            )
 
         object.__setattr__(self, "_analysis", snapshot)
         object.__setattr__(self, "source_size", size)
         object.__setattr__(self, "raw_source_size", raw_size)
         object.__setattr__(self, "exif_orientation", int(orientation))
         object.__setattr__(self, "layout_transform", transform)
-        object.__setattr__(self, "canvas", canvas)
+        object.__setattr__(self, "canvas", canvas_snapshot)
         object.__setattr__(
             self, "analysis_is_canonicalized", bool(analysis_is_canonicalized),
         )
