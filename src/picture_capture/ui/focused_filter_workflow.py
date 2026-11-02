@@ -107,7 +107,10 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
     if getattr(self, "_filter_scan_epoch_source_serial", None) != getattr(
         self, "_filter_scan_serial", None
     ):
-        return True
+        # A populated witness map is an active epoch contract, not a legacy
+        # helper call. If its owner serial is missing or stale, no source or
+        # ProjectState identity claim can be trusted; fail closed.
+        return False
     project = getattr(getattr(self, "parent", None), "project", None)
     epoch_project = getattr(self, "_filter_scan_epoch_project", None)
     # A scan epoch belongs to the exact ProjectState object that created it;
