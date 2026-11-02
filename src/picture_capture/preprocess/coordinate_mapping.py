@@ -751,6 +751,114 @@ class PreprocessCoordinateMap:
             )
         return result
 
+    def _orthogonal_stage_extrema(
+        self,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        fraction_start: float,
+        fraction_end: float,
+        stage_index: int,
+        axis: int,
+        *,
+        reverse: bool,
+    ) -> tuple[float, ...]:
+        """Find bounded local extrema of one stage-input coordinate on an edge.
+
+        Endpoint knot bracketing alone misses a tangential knot contact when
+        the stage-frame coordinate turns around between two spatial samples.
+        Probe its derivative inside each already-knot-partitioned interval and
+        bisect every observed sign change. The returned fractions become
+        explicit edge samples even when the extremum only touches a knot.
+        """
+        span = float(fraction_end) - float(fraction_start)
+        if span <= 1e-10:
+            return ()
+
+        def coordinate_at(fraction: float) -> float:
+            point = (
+                start[0] + (end[0] - start[0]) * fraction,
+                start[1] + (end[1] - start[1]) * fraction,
+            )
+            value = self._orthogonal_stage_input_point(
+                point,
+                stage_index,
+                reverse=reverse,
+            )[axis]
+            if not math.isfinite(value):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal stage edge became non-finite"
+                )
+            return float(value)
+
+        derivative_step = span * 1e-4
+
+        def derivative_at(fraction: float) -> float:
+            half = min(
+                derivative_step,
+                (fraction - fraction_start) * 0.5,
+                (fraction_end - fraction) * 0.5,
+            )
+            if half <= 1e-14:
+                raise CoordinateMappingUnavailable(
+                    "orthogonal stage extremum is numerically unresolved"
+                )
+            derivative = (
+                coordinate_at(fraction + half)
+                - coordinate_at(fraction - half)
+            ) / (2.0 * half)
+            if not math.isfinite(derivative):
+                raise CoordinateMappingUnavailable(
+                    "orthogonal stage derivative is non-finite"
+                )
+            return float(derivative)
+
+        probe_fractions = tuple(
+            fraction_start + span * ratio
+            for ratio in (0.001, 0.25, 0.5, 0.75, 0.999)
+        )
+        derivatives = tuple(
+            derivative_at(fraction) for fraction in probe_fractions
+        )
+        nonzero = tuple(
+            (fraction, derivative)
+            for fraction, derivative in zip(probe_fractions, derivatives)
+            if derivative != 0.0
+        )
+        extrema: set[float] = set()
+        for (left_start, left_derivative), (right_start, right_derivative) in zip(
+            nonzero,
+            nonzero[1:],
+        ):
+            if not (
+                (left_derivative < 0.0 < right_derivative)
+                or (right_derivative < 0.0 < left_derivative)
+            ):
+                continue
+
+            left = float(left_start)
+            right = float(right_start)
+            derivative_left = float(left_derivative)
+            for _ in range(48):
+                middle = (left + right) / 2.0
+                derivative_middle = derivative_at(middle)
+                if derivative_middle == 0.0:
+                    left = right = middle
+                    break
+                if (derivative_middle < 0.0) == (derivative_left < 0.0):
+                    left = middle
+                    derivative_left = derivative_middle
+                else:
+                    right = middle
+                if right - left <= 1e-10:
+                    break
+            root = (left + right) / 2.0
+            if (
+                fraction_start + 1e-10 < root
+                < fraction_end - 1e-10
+            ):
+                extrema.add(root)
+        return tuple(sorted(extrema))
+
     def _bisect_orthogonal_knot_crossing(
         self,
         start: tuple[float, float],
@@ -836,13 +944,13 @@ class PreprocessCoordinateMap:
         *,
         reverse: bool = False,
     ) -> tuple[tuple[float, float], ...]:
-        """Sample nonlinear edges and include exact saved-knot preimages.
+        """Sample nonlinear edges, including knot crossings and tangencies.
 
         Knot coordinates are not generally expressed in the polygon's input
-        frame: forward edges must be transformed up to each orthogonal stage,
-        while reverse edges must first undo canvas/crop offsets and later warp
-        stages. Root-find every bracketed knot crossing in that actual frame;
-        bounded spatial samples remain as coverage between the knots.
+        frame. Forward and reverse paths are evaluated in each actual stage
+        input frame. Spatial samples are bounded in every frame; observed
+        coordinate extrema are inserted before knot bracketing so a path that
+        only touches (or briefly crosses) a saved knot cannot evade validation.
         """
         vertices = tuple(self._point(point) for point in points)
         if len(vertices) < 2 or not self._orthogonal_step_cache:
@@ -912,17 +1020,6 @@ class PreprocessCoordinateMap:
             for stage_index, (estimate, _row_gain) in enumerate(
                 self._orthogonal_step_cache
             ):
-                stage_points = tuple(
-                    self._orthogonal_stage_input_point(
-                        (
-                            start[0] + (end[0] - start[0]) * fraction,
-                            start[1] + (end[1] - start[1]) * fraction,
-                        ),
-                        stage_index,
-                        reverse=reverse,
-                    )
-                    for fraction in base_fractions
-                )
                 knot_sets = (
                     (0, tuple(sorted(set(float(v) for v in estimate.x_knots)))),
                     (
@@ -935,6 +1032,52 @@ class PreprocessCoordinateMap:
                             )
                         ))),
                     ),
+                )
+
+                # Earlier-stage knot preimages must partition the path used
+                # to inspect every later stage. Also find local extrema of
+                # each coordinate that has saved knots; sign-changing
+                # derivatives expose tangential contacts with no value
+                # sign-change at the original spatial sample endpoints.
+                for axis, knots in knot_sets:
+                    if not knots:
+                        continue
+                    stage_fractions = sorted(fractions)
+                    for fraction_start, fraction_end in zip(
+                        stage_fractions,
+                        stage_fractions[1:],
+                    ):
+                        fractions.update(
+                            self._orthogonal_stage_extrema(
+                                start,
+                                end,
+                                fraction_start,
+                                fraction_end,
+                                stage_index,
+                                axis,
+                                reverse=reverse,
+                            )
+                        )
+                    if (
+                        len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS + 1
+                        or len(samples) + len(fractions)
+                        > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
+                    ):
+                        raise CoordinateMappingUnavailable(
+                            "orthogonal polygon edge exceeds the bounded sampling budget"
+                        )
+
+                stage_fractions = sorted(fractions)
+                stage_points = tuple(
+                    self._orthogonal_stage_input_point(
+                        (
+                            start[0] + (end[0] - start[0]) * fraction,
+                            start[1] + (end[1] - start[1]) * fraction,
+                        ),
+                        stage_index,
+                        reverse=reverse,
+                    )
+                    for fraction in stage_fractions
                 )
                 for axis, knots in knot_sets:
                     if not knots:
@@ -953,8 +1096,8 @@ class PreprocessCoordinateMap:
                             crossing = self._bisect_orthogonal_knot_crossing(
                                 start,
                                 end,
-                                base_fractions[index],
-                                base_fractions[index + 1],
+                                stage_fractions[index],
+                                stage_fractions[index + 1],
                                 value_start,
                                 value_end,
                                 knot,
@@ -965,14 +1108,15 @@ class PreprocessCoordinateMap:
                             if crossing is not None:
                                 fractions.add(crossing)
 
-            if (
-                len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS + 1
-                or len(samples) + len(fractions)
-                > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
-            ):
-                raise CoordinateMappingUnavailable(
-                    "orthogonal polygon edge exceeds the bounded sampling budget"
-                )
+                if (
+                    len(fractions) > _ORTHOGONAL_POLYGON_MAX_EDGE_STEPS + 1
+                    or len(samples) + len(fractions)
+                    > _ORTHOGONAL_POLYGON_MAX_TOTAL_SAMPLES
+                ):
+                    raise CoordinateMappingUnavailable(
+                        "orthogonal polygon edge exceeds the bounded sampling budget"
+                    )
+
             samples.extend(
                 (
                     start[0] + (end[0] - start[0]) * fraction,
