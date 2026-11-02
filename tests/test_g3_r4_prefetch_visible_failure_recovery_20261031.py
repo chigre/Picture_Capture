@@ -542,6 +542,62 @@ def test_old_prefetch_terminal_cannot_steal_rescheduled_identical_key(
     assert review._filter_prefetch_key is None
     assert list(review._filter_batch_render_cache) == [old_key]
 
+
+@pytest.mark.parametrize("stale_terminal", ("done", "failed"))
+@pytest.mark.parametrize("visible_batch", (False, True))
+def test_preterminal_cancelled_prefetch_same_key_cannot_steal_new_owner(
+    tmp_path, stale_terminal, visible_batch, capsys,
+):
+    """An old terminal must not inherit ownership when cancelled before first completion.
+
+    A source key is an input identity, not a dispatch identity. A UI/controller
+    may invalidate a queued worker and reissue the same source under the same
+    scan epoch before any old callback is delivered. Both callbacks then have
+    the same key, epoch, target index and a fresh terminal_claimed=False cell.
+    """
+    case = _case(tmp_path)
+    review = case.review
+    first_key = review._filter_prefetch_key
+    _key, old_worker, old_done, old_failed = case.workers[0]
+    old_payload = old_worker()
+    # Model a pre-terminal worker cancellation/replacement, not a completed
+    # dispatch. Keep the identical epoch, source bytes, SECTION and key.
+    review._filter_prefetch_key = None
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert len(case.workers) == 2
+    assert review._filter_prefetch_key == first_key
+    _key2, new_worker, new_done, new_failed = case.workers[1]
+    new_payload = new_worker()
+
+    if visible_batch:
+        review.filtered_batch_index = 1
+        case.workspace.append("等待当前批次裁剪")
+    before = (list(case.workspace), case.status.get())
+    if stale_terminal == "done":
+        old_done(old_payload)
+    else:
+        old_failed(OSError("PRIVATE_CANCELLED"), "PRIVATE_CANCELLED_TRACE")
+
+    # An old success must not write any crop cache; an old failure must not
+    # take the new owner's key or launch a direct-render retry.
+    assert review._filter_prefetch_key == first_key
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert (case.workspace, case.status.get()) == before
+    assert len(case.workers) == 2
+    assert "PRIVATE_CANCELLED" not in repr(capsys.readouterr())
+
+    new_done(new_payload)
+    assert review._filter_prefetch_key is None
+    assert list(review._filter_batch_render_cache) == [first_key]
+    assert len(case.applied) == int(visible_batch)
+    # Even later contradictory events from the cancelled dispatch stay inert.
+    old_done(old_payload)
+    old_failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE_TRACE")
+    assert list(review._filter_batch_render_cache) == [first_key]
+    assert len(case.applied) == int(visible_batch)
+    assert len(case.workers) == 2
+
 def test_prefetch_refused_by_closed_worker_queue_releases_key(tmp_path):
     """The real scheduler returns -1 when closing; this is not a started job."""
     case = _case(tmp_path)
