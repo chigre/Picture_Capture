@@ -1035,6 +1035,11 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
     if self._filter_prefetch_key == cache_key:
         return
     self._filter_prefetch_key = cache_key
+    # A crop source key/scan epoch is not a worker dispatch identity. A queued
+    # prefetch can be cancelled and reissued for exactly the same key before
+    # the old callback delivers its *first* terminal event.
+    dispatch_owner = object()
+    self._filter_prefetch_dispatch_owner = dispatch_owner
     worker_key = f"focused-filter-prefetch-{id(self)}"
     scan_epoch = getattr(self, "_filter_scan_serial", None)
     timing_session = getattr(self, "_focused_timing_session", None)
@@ -1079,9 +1084,11 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         if (
             scan_epoch != getattr(self, "_filter_scan_serial", None)
             or self._filter_prefetch_key != local_key
+            or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
         ):
             return
         terminal_claimed[0] = True
+        self._filter_prefetch_dispatch_owner = None
         self._filter_prefetch_key = None
         if not getattr(self, "_filter_rows_active", False):
             return
@@ -1120,9 +1127,13 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             return
         # A newer prefetch owns its own key; a stale callback has no right to
         # clear it, publish results or alter the current human-edit surface.
-        if self._filter_prefetch_key != local_key:
+        if (
+            self._filter_prefetch_key != local_key
+            or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
+        ):
             return
         terminal_claimed[0] = True
+        self._filter_prefetch_dispatch_owner = None
         self._filter_prefetch_key = None
         if (
             not getattr(self, "_filter_rows_active", False)
