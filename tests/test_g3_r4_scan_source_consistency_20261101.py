@@ -376,3 +376,97 @@ def test_completed_scan_rejects_same_root_same_pages_replaced_project_object(tmp
     assert review._filter_scan_failed is True
     assert review._filter_scan_complete is False
     assert "项目会话" in status.get() or "来源" in status.get()
+
+def test_inflight_render_rejects_replaced_project_object_before_scan_terminal(tmp_path):
+    """A same-path replacement cannot receive a crop from an unfinished epoch."""
+    review, deps, _initial_call, status, _indicator, pdic, cache, _section = _fixture(
+        tmp_path,
+    )
+    original_page = review.parent.project.images[0]
+    next_page = tmp_path / "002.png"
+    Image.new("RGB", (8, 8), "white").save(next_page)
+    next_pdic = next_page.with_suffix(".pdic")
+    next_pdic.write_bytes(b"synthetic-next-page-pdic")
+    next_cache = cache.parent / "002.json"
+    next_cache.write_text('{"review_candidates": []}', encoding="utf-8")
+    next_section = page_sections_read_path_for_image(next_page)
+    next_section.parent.mkdir(parents=True, exist_ok=True)
+    next_section.write_bytes(b"synthetic-next-page-section")
+
+    project = review.parent.project
+    project.images = [original_page, next_page]
+    review.parent._parse_page_spec = lambda _value: [0, 1]
+    pdic_by_page = {original_page: pdic, next_page: next_pdic}
+    deps.pdic_path = lambda page: pdic_by_page[page]
+
+    pages = [original_page, next_page]
+
+    def batch_snapshot(batch_index):
+        targets = [
+            dict(target)
+            for target in review.filtered_targets[
+                int(batch_index):int(batch_index) + 1
+            ]
+        ]
+        if not targets:
+            return None
+        witness = workflow.focused_crop_source_witness(pages, targets)
+        cache_key = (int(batch_index), ("synthetic-render-settings", witness))
+        return (
+            cache_key, targets, pages, None, 300, 300, 1.0, False,
+        )
+
+    review._filter_batch_snapshot = batch_snapshot
+    review._request_filter_batch_render = (
+        lambda: workflow._request_filter_batch_render(review, deps)
+    )
+    review._filter_batch_render_cache = {}
+    review._filter_prefetch_key = None
+    review.review_zoom_auto = False
+    review.review_zoom = 1.0
+    deps.ReviewWindow = SimpleNamespace(
+        _prepare_filter_batch_payload=lambda *_args: (
+            [object()], 1.0, [(1, 1)],
+        )
+    )
+    deps._format_layout_percent = lambda value: str(value)
+    rendered = []
+    review._render_filter_batch = lambda *_args: rendered.append(True)
+    review._reset_rows_scroll_top = lambda: None
+    review._schedule_filter_next_batch_preload = lambda: None
+
+    calls = []
+    review.parent._start_ui_worker = (
+        lambda *args: calls.append(args) or len(calls)
+    )
+    workflow.run_focused_filter(review, deps)
+
+    scan_key = f"focused-filter-scan-{id(review)}"
+    scan_call = next(args for args in calls if args[0] == scan_key)
+    _key, scan_worker, scan_done, _scan_failed = scan_call
+    scan_done(scan_worker())
+    assert review._filter_scan_complete is False
+    assert len(review.filtered_targets) == 1
+
+    render_key = f"focused-filter-render-{id(review)}"
+    render_call = next(args for args in calls if args[0] == render_key)
+    _key, render_worker, render_done, _render_failed = render_call
+    payload = render_worker()
+
+    # Equivalent root and page paths do not transfer ownership to a new
+    # ProjectState while the remainder of the original scan is still running.
+    replacement = SimpleNamespace(
+        root=project.root,
+        images=list(project.images),
+    )
+    assert replacement is not project
+    assert tuple(map(str, replacement.images)) == tuple(map(str, project.images))
+    review.parent.project = replacement
+    render_done(payload)
+
+    assert rendered == []
+    assert review._filter_scan_epoch_invalidated is True
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert review._filter_batch_render_cache == {}
+    assert "项目会话" in status.get() or "来源" in status.get()
