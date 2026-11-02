@@ -343,3 +343,36 @@ def test_refilter_refuses_unresolved_save_even_with_empty_edit_queue(
     workflow.run_focused_filter(review, deps)
     assert len(launches) == 1
     assert review._filter_scan_serial == previous_serial + 1
+
+
+def test_completed_scan_rejects_same_root_same_pages_replaced_project_object(tmp_path):
+    """A completed epoch remains owned by the exact ProjectState instance."""
+    review, deps, call, status, _indicator, *_ = _fixture(tmp_path)
+    _key, worker, done, _failed = call
+    done(worker())
+    assert review._filter_scan_complete is True
+
+    original_project = review.parent.project
+    replacement = SimpleNamespace(
+        root=original_project.root,
+        images=list(original_project.images),
+    )
+    assert replacement is not original_project
+    assert str(replacement.root) == str(original_project.root)
+    assert tuple(map(str, replacement.images)) == tuple(
+        map(str, original_project.images)
+    )
+    review.parent.project = replacement
+
+    def unexpected_snapshot(_index):
+        raise AssertionError(
+            "completed scan requested a new crop snapshot after ProjectState replacement"
+        )
+
+    review._filter_batch_snapshot = unexpected_snapshot
+    workflow._request_filter_batch_render(review, deps)
+
+    assert review._filter_scan_epoch_invalidated is True
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert "项目会话" in status.get() or "来源" in status.get()
