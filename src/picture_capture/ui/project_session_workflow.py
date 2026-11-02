@@ -549,6 +549,21 @@ def _load_project(
     if self.project is not None and root == Path(self.project.root).expanduser().resolve():
         self.status_var.set("当前项目已经打开；保留当前编辑状态，不执行后台重载。")
         return
+    # ReviewWindow is a non-modal Toplevel that owns scan/crop/save callbacks
+    # against the current ProjectState. Do not replace parent.project underneath
+    # it: close_review already coordinates pending edits, in-flight writes and
+    # uncertain outcomes, and destroys the window only after a safe close.
+    review_window = getattr(self, "review_window", None)
+    if review_window is not None:
+        try:
+            review_window_open = bool(review_window.winfo_exists())
+        except (tk.TclError, AttributeError):
+            review_window_open = False
+        if review_window_open:
+            self.status_var.set(
+                "请先关闭词条校对窗口并完成保存，再切换项目。"
+            )
+            return
     self._flush_deferred_page_save()
     for job_name in ("_page_meta_job", "_page_list_sort_job"):
         job = getattr(self, job_name, None)
