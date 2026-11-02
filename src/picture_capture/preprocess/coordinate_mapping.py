@@ -156,6 +156,8 @@ class PreprocessCoordinateMap:
                 raise ValueError(
                     "source_size does not match the EXIF-oriented raw_source_size"
                 )
+        if not isinstance(analysis_is_canonicalized, (bool, np.bool_)):
+            raise ValueError("analysis_is_canonicalized must be boolean")
         transform = LayoutTransform() if layout_transform is None else layout_transform
         # OutputCanvasInfo is frozen, but runtime typing does not prevent a
         # mutable list in content_box. Normalize the enabled raster contract
@@ -164,20 +166,27 @@ class PreprocessCoordinateMap:
         if canvas is not None and not isinstance(canvas, OutputCanvasInfo):
             raise CoordinateMappingUnavailable("canvas snapshot is malformed")
         canvas_snapshot = deepcopy(canvas)
-        if canvas_snapshot is not None and canvas_snapshot.enabled:
-            canvas_size = _validated_size_pair(
-                (canvas_snapshot.width, canvas_snapshot.height),
-                "canvas dimensions",
-            )
-            canvas_box = _validated_box(
-                canvas_snapshot.content_box, "canvas content_box",
-            )
+        if canvas_snapshot is not None:
+            if not isinstance(canvas_snapshot.enabled, (bool, np.bool_)):
+                raise ValueError("canvas enabled flag must be boolean")
             canvas_snapshot = replace(
                 canvas_snapshot,
-                width=canvas_size[0],
-                height=canvas_size[1],
-                content_box=canvas_box,
+                enabled=bool(canvas_snapshot.enabled),
             )
+            if canvas_snapshot.enabled:
+                canvas_size = _validated_size_pair(
+                    (canvas_snapshot.width, canvas_snapshot.height),
+                    "canvas dimensions",
+                )
+                canvas_box = _validated_box(
+                    canvas_snapshot.content_box, "canvas content_box",
+                )
+                canvas_snapshot = replace(
+                    canvas_snapshot,
+                    width=canvas_size[0],
+                    height=canvas_size[1],
+                    content_box=canvas_box,
+                )
 
         object.__setattr__(self, "_analysis", snapshot)
         object.__setattr__(self, "source_size", size)
