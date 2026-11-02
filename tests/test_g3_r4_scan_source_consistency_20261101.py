@@ -155,6 +155,43 @@ def test_scan_targets_carry_source_witness_and_reject_later_ocr_cache_drift(tmp_
     snapshot = workflow._filter_batch_snapshot(review, deps, 0)
     assert snapshot is None
 
+
+@pytest.mark.parametrize("replacement", ("project_root", "image_selection"))
+def test_scan_terminal_rejects_replaced_project_session(tmp_path, replacement):
+    """An old ReviewWindow scan must not publish after the main app switches projects.
+
+    ProjectSessionWorkflow updates parent.project while ReviewWindow is a
+    separate non-modal Toplevel. Captured old source files can remain byte
+    identical, so checking only those old files is not proof that this scan
+    still belongs to the active project session.
+    """
+    review, _deps, call, status, indicator, *_ = _fixture(tmp_path)
+    _key, worker, done, _failed = call
+    payload = worker()
+
+    if replacement == "project_root":
+        new_root = tmp_path / "replacement-project"
+        new_root.mkdir()
+        new_page = new_root / "001.png"
+        Image.new("RGB", (8, 8), "black").save(new_page)
+        review.parent.project = SimpleNamespace(root=new_root, images=[new_page])
+    else:
+        new_page = tmp_path / "002.png"
+        Image.new("RGB", (8, 8), "black").save(new_page)
+        review.parent.project = SimpleNamespace(root=tmp_path, images=[new_page])
+
+    # The old scan's source bytes remain unchanged. Only the active project
+    # root or selected page list has changed before its Tk terminal arrives.
+    done(payload)
+
+    assert review.filtered_targets == [], (
+        "a completed old-project scan published rows into the new project session"
+    )
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "不完整" in status.get()
+    assert "PRIVATE" not in repr((status.get(), indicator.get()))
+
 @pytest.mark.parametrize("mutation", ("pdic", "ocr", "section"))
 def test_completed_scan_rejects_later_no_hit_page_source_drift(tmp_path, mutation):
     review, deps, _initial_call, status, _indicator, pdic, cache, section = _fixture(tmp_path)
