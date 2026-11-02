@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from picture_capture.preprocess.coordinate_mapping import PreprocessCoordinateMap
+from picture_capture.preprocess.coordinate_mapping import (
+    CoordinateMappingUnavailable,
+    PreprocessCoordinateMap,
+)
 from picture_capture.preprocess.models import PreprocessAnalysis
 
 
@@ -96,3 +99,36 @@ def test_stage_extrema_finds_two_close_turns_between_coarse_derivative_probes(
         reverse=reverse,
     )
     assert extrema == pytest.approx((0.32, 0.37), abs=1e-6)
+
+
+@pytest.mark.parametrize("reverse", (False, True))
+def test_nonfinite_input_edge_length_is_refused_before_sampling(reverse):
+    """Finite individual XY values can overflow when the edge is subtracted."""
+    mapping = _mapping()
+    points = ((-1e308, 20.0), (1e308, 20.0), (0.0, 25.0))
+    with pytest.raises(CoordinateMappingUnavailable, match="edge length is non-finite"):
+        mapping._polygon_edge_samples(points, reverse=reverse)
+
+
+@pytest.mark.parametrize("reverse", (False, True))
+def test_nonfinite_stage_length_is_refused_before_sampling(monkeypatch, reverse):
+    """Stage coordinates can each be finite but their path length overflow."""
+    mapping = _mapping()
+
+    def stage_input(self, point, stage_index, *, reverse):
+        return (1e308 if point[0] < 0.5 else -1e308, 0.0)
+
+    monkeypatch.setattr(
+        PreprocessCoordinateMap, "_orthogonal_stage_input_point", stage_input,
+    )
+    with pytest.raises(CoordinateMappingUnavailable, match="stage edge length is non-finite"):
+        mapping._polygon_edge_samples(
+            ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0)), reverse=reverse,
+        )
+
+
+def test_regular_finite_polygon_remains_mappable():
+    mapping = _mapping()
+    points = ((1.0, 1.0), (2.0, 1.0), (1.0, 2.0))
+    assert mapping.source_to_output_polygon(points) is not None
+    assert mapping.output_to_source_polygon(points) is not None
