@@ -4,7 +4,7 @@
   "plan_version": "1.3.1",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-11-02T07:44:27.438Z",
+  "updated_at_utc": "2026-11-02T11:15:00Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/Picture_Capture",
   "starting_baseline": {
@@ -41,8 +41,8 @@
         "R7.1",
         "R7.3"
       ],
-      "note": "Sole Draft/Open/Unmerged #663. B7b/R7.3 enabled canvas width/height/content_box now strict integer raster snapshots and detached from external mutable lists. RED test commit f3cb33bc exposed 16 intended failures on Ubuntu Python 3.13; source fix 1e7d0541 has six-platform 6/6 plus Risk-tier/Risk-tier gate success, OCR 3/3. Documentation HEAD is newer; independent CodeQL and final exact-head gates still require verification. Synthetic E2 only. R7.3 remains in_progress; no persistence schema/writer or human record touched.",
-      "head_sha": "0c12bbf82a210ef3d01ba5ba8cd3f76c06d5ea7e"
+      "note": "Sole Draft/Open/Unmerged #663 at source/test HEAD 39aaa983. B7b/R7.3 includes strict canvas raster snapshots, stage-frame forward/reverse knot preimages, half-open crop boundary guard, malformed replay fail-closed validation, tangential knot-contact counterexamples, and malformed LayoutTransform kind rejection. Exact source/test CI 6/6 + Risk-tier/gate SUCCESS; OCR 3/3 SUCCESS. Documentation architecture check SKIPPED. Exact-head CodeQL not independently retrieved. EXIF audit confirms oriented-source frame; no production map construction callsite exists. Synthetic E2 only; no persistence schema/writer, original source XY, renderer, or human record changed.",
+      "head_sha": "39aaa983f858755f8d18ac0a4278c1d05d641f55"
     },
     "implementation_head_sha": "1e7d054185dd76bad42475396941a6de7d0562d0",
     "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
@@ -1086,7 +1086,7 @@
       "implementation_pr": "https://github.com/chigre/Picture_Capture/pull/663",
       "acceptance": "See CORE_QUALITY_UPGRADE_PLAN.md for per-unit DoD",
       "blocker": null,
-      "current_planning": "R7.3 read-only coordinate-map contract. Completed: source/actual-stage-frame knot preimages under projective/crop/canvas transforms, numerical half-open crop fail-closed tolerance, strict integer crop_box validation, EXIF source-size and malformed replay snapshot tests. Next independent work: strict OutputCanvasInfo integer snapshot validation and tangential/non-monotonic knot edge counterexamples; audit callsite EXIF metadata propagation. No persistence schema/writer or raster algorithm changes."
+      "current_planning": "R7.3 read-only coordinate-map contract. Completed: strict integer crop/canvas snapshots; detached canvas metadata; stage-frame forward/reverse knot preimages under projective/crop/canvas transforms; half-open crop fail-closed guard; strict applied-orthogonal replay; scalar and boolean flag validation; two constructed forward/reverse tangential knot-contact tests; malformed LayoutTransform kind fail-closed validation. EXIF audit confirms analysis, page UI and SECTION use the EXIF-oriented frame. No production PreprocessCoordinateMap construction callsite exists, so no production metadata propagation or UI wiring is claimed. No persistence schema/writer or raster algorithm changes. Next: bounded multiple-extrema/rapid-oscillation adversarial tests and fail-closed behavior; production integration requires separate design review."
     },
     "B8": {
       "units": [
@@ -3066,7 +3066,7 @@
       "No score weights, acceptance thresholds, arbitration policies, tie rules or diagnostics were changed."
     ]
   },
-  "implementation_head_sha": "d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b",
+  "implementation_head_sha": "39aaa983f858755f8d18ac0a4278c1d05d641f55",
   "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
   "g3_r4_2_post_terminal_no_hit_and_partial_save_20261101": {
     "status": "synthetic_E2_verified_exact_head",
@@ -3102,7 +3102,7 @@
     ],
     "no_benchmark_claim": true
   },
-  "last_test_evidence": "\n\nG3 R4.2 post-terminal no-hit and multi-page partial-save follow-up at exact source HEAD fd4f46b717de23c96014661ae28cedef51434788: test-first no-hit CI #41295513470; intermediate publication-boundary regression #41295775912; test-first partial-save CI #41296691853; conservative-state test CI #41297732941 exposed 28 cross-platform failures (including unbound `recovered`, legacy fake missing `filtered_targets`, and outdated save-failure text assertion). Final minimal source correction fd4f46b7. Exact-head CI #41298152181 six platform/Python jobs + Risk-tier + gate SUCCESS; OCR #41298152176 3/3 SUCCESS; CodeQL #41298149721 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Human E3/#483/#503 and real scan/save remain NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-01: R7.3 polygon-horizon RED #41307611949 then verified source afbc42a1: CI #41307851367 6/6, OCR #41307851371 3/3, CodeQL #41307849472 2/2. G3 uncertain launch RED #41308310346/#41308530086, native Tk smoke correction after RED #41308743285, green CI #41309027670; failed retry preflight RED #41309554723, verified source 023432f6: CI #41309765324 6/6, OCR #41309765320 3/3, CodeQL #41309762501 2/2. Final docs/test HEAD requires fresh gate verification. Windows R3 E3/#483/#503 and real scan/save NOT PERFORMED; R6/R8 DEFERRED.\n2026-11-01: G3 unresolved focused-save refilter/navigation. RED CI #41311186833 Ubuntu3.13 2 targeted fails, #41311282890 Ubuntu3.13 3 targeted fails; minimal fix eff2b7c8. Exact source-head CI #41311452549, OCR #41311452557, CodeQL and post-docs HEAD gates must be terminally verified. Windows human E3, #483 W1-W11, #503 manual Undo, real scans/save NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-02: verified historical 92afa633 native Tk opt-out rescan outcome: CI #41098513706 FAILURE on Windows/macOS/Ubuntu Python3.13 (native Tk smoke timeout), OCR #41098513714 3/3 SUCCESS, CodeQL #41098508919 2/2 SUCCESS. Follow-up smoke correction 24e78710 exact-head CI #41309027670 6/6, OCR #41309027659 3/3, CodeQL #41309024720 2/2 SUCCESS.\n\n2026-11-02: R7.3 projective point-horizon RED test-only 1d881ba0, CI #41329969235 all six platform/Python jobs failed the two intended forward/reverse pole assertions; Ubuntu3.13 2 failed / 5304 passed / 3 skipped. Minimal source fix 17c4507b replaces absolute denominator clamping in read-only coordinate mapping with a scale-relative 1e-12 cancellation guard shared by forward/inverse point mapping and polygon horizon checks. Exact source-head CI #41330338708 6/6 + Risk-tier/gate SUCCESS; OCR #41330338796 3/3 SUCCESS; CodeQL #41330336171 Python/Actions 2/2 SUCCESS. Additional canonical-layout and H[2,2]==0 positive controls plus architecture/roadmap checkpoint are in this docs commit; their own exact-head gates remain pending. Human E3/#483/#503 and real scans/save NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-02 B7b cross-owner source-XY integration: test commit 2e5cdbef; four canonical layouts, PDIC/PPP/SECTION source coordinates, homography/crop/canvas pixel parity, half-open boundaries, and byte-for-byte persistence immutability. Exact-head CI #41332835127 6/6 plus Risk-tier/gate SUCCESS; OCR #41332835149 3/3 SUCCESS; CodeQL #41332832231 Python/Actions 2/2 SUCCESS.\n\n2026-11-02 B7b orthogonal replay fail-closed RED: test-only 3a4d4672, CI #41333587702 all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs failed exactly the three intended missing/empty/incomplete-legacy replay assertions (Ubuntu3.13 3 failed/5323 passed/3 skipped). Minimal read-only coordinate-map fix 59edbb0b validates legacy knots, separator pairs, finite/monotonic knots and row-grid dimensions; rejects missing/incomplete applied stages; retains valid legacy and separator-only geometry. Exact source-head CI #41333905956 6/6 + Risk-tier/gate SUCCESS; OCR #41333906027 3/3 SUCCESS; CodeQL #41333902165 Python/Actions 2/2 SUCCESS.\n\n2026-11-02 B7b multi-pass orthogonal raster parity test commit 0b1aeff2: two sequential separator shifts (2px+1px) combined with homography, crop, centered canvas and all four canonical layouts; the actual Pillow rendered pixel matched the coordinate map, inverse point/polygon mapping round-tripped, and PDIC/PPP/SECTION/source image bytes remained unchanged. Exact final code/test HEAD CI #41334461268 6/6, Risk-tier SUCCESS, Risk-tier CI gate SUCCESS; OCR #41334461089 3/3 SUCCESS; CodeQL #41334459114 Analyze Python/Actions 2/2 SUCCESS. Ubuntu3.13/3.10 5328 passed,3 skipped; Windows/macOS Python3.13/3.10 5329 passed,2 skipped. Documentation architecture check SKIPPED, not PASS. R7.3 remains in_progress; no human E3, real scans or real save/reopen performed.\n\n2026-11-02 B7b/R7.3 nonlinear ROI knot preimages + crop/canvas contract. Test-only RED `a59a904bdbc2c4d2895a77bbc74a7c8490ca326b`, [CI #41344061364](https://github.com/chigre/Picture_Capture/actions/runs/41344061364): all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs failed the three intended fractional/boolean crop_box assertions; canvas+crop reverse-knot test passed. Stage-frame root-finding source `4b2a1cb1`, numerical half-open boundary correction `d589e318`, strict integer crop-box validation `d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b`. Exact source/test HEAD [CI #41344312511](https://github.com/chigre/Picture_Capture/actions/runs/41344312511) SUCCESS 6/6 + Risk-tier and Risk-tier CI gate; Ubuntu Python3.13/3.10 5352 passed/3 skipped, macOS Python3.13/3.10 5353 passed/2 skipped, Windows Python3.13 5353 passed/2 skipped and Python3.10 5352 passed/3 skipped. [OCR #41344312514](https://github.com/chigre/Picture_Capture/actions/runs/41344312514) 3/3 SUCCESS; [CodeQL #41344308665](https://github.com/chigre/Picture_Capture/actions/runs/41344308665) Analyze Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not counted as pass. R7.3 remains in_progress; synthetic E2 only, no human E3 or real scan.",
+  "last_test_evidence": "\n\nG3 R4.2 post-terminal no-hit and multi-page partial-save follow-up at exact source HEAD fd4f46b717de23c96014661ae28cedef51434788: test-first no-hit CI #41295513470; intermediate publication-boundary regression #41295775912; test-first partial-save CI #41296691853; conservative-state test CI #41297732941 exposed 28 cross-platform failures (including unbound `recovered`, legacy fake missing `filtered_targets`, and outdated save-failure text assertion). Final minimal source correction fd4f46b7. Exact-head CI #41298152181 six platform/Python jobs + Risk-tier + gate SUCCESS; OCR #41298152176 3/3 SUCCESS; CodeQL #41298149721 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED. Human E3/#483/#503 and real scan/save remain NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-01: R7.3 polygon-horizon RED #41307611949 then verified source afbc42a1: CI #41307851367 6/6, OCR #41307851371 3/3, CodeQL #41307849472 2/2. G3 uncertain launch RED #41308310346/#41308530086, native Tk smoke correction after RED #41308743285, green CI #41309027670; failed retry preflight RED #41309554723, verified source 023432f6: CI #41309765324 6/6, OCR #41309765320 3/3, CodeQL #41309762501 2/2. Final docs/test HEAD requires fresh gate verification. Windows R3 E3/#483/#503 and real scan/save NOT PERFORMED; R6/R8 DEFERRED.\n2026-11-01: G3 unresolved focused-save refilter/navigation. RED CI #41311186833 Ubuntu3.13 2 targeted fails, #41311282890 Ubuntu3.13 3 targeted fails; minimal fix eff2b7c8. Exact source-head CI #41311452549, OCR #41311452557, CodeQL and post-docs HEAD gates must be terminally verified. Windows human E3, #483 W1-W11, #503 manual Undo, real scans/save NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-02: verified historical 92afa633 native Tk opt-out rescan outcome: CI #41098513706 FAILURE on Windows/macOS/Ubuntu Python3.13 (native Tk smoke timeout), OCR #41098513714 3/3 SUCCESS, CodeQL #41098508919 2/2 SUCCESS. Follow-up smoke correction 24e78710 exact-head CI #41309027670 6/6, OCR #41309027659 3/3, CodeQL #41309024720 2/2 SUCCESS.\n\n2026-11-02: R7.3 projective point-horizon RED test-only 1d881ba0, CI #41329969235 all six platform/Python jobs failed the two intended forward/reverse pole assertions; Ubuntu3.13 2 failed / 5304 passed / 3 skipped. Minimal source fix 17c4507b replaces absolute denominator clamping in read-only coordinate mapping with a scale-relative 1e-12 cancellation guard shared by forward/inverse point mapping and polygon horizon checks. Exact source-head CI #41330338708 6/6 + Risk-tier/gate SUCCESS; OCR #41330338796 3/3 SUCCESS; CodeQL #41330336171 Python/Actions 2/2 SUCCESS. Additional canonical-layout and H[2,2]==0 positive controls plus architecture/roadmap checkpoint are in this docs commit; their own exact-head gates remain pending. Human E3/#483/#503 and real scans/save NOT PERFORMED; R6/R8 DEFERRED.\n\n2026-11-02 B7b cross-owner source-XY integration: test commit 2e5cdbef; four canonical layouts, PDIC/PPP/SECTION source coordinates, homography/crop/canvas pixel parity, half-open boundaries, and byte-for-byte persistence immutability. Exact-head CI #41332835127 6/6 plus Risk-tier/gate SUCCESS; OCR #41332835149 3/3 SUCCESS; CodeQL #41332832231 Python/Actions 2/2 SUCCESS.\n\n2026-11-02 B7b orthogonal replay fail-closed RED: test-only 3a4d4672, CI #41333587702 all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs failed exactly the three intended missing/empty/incomplete-legacy replay assertions (Ubuntu3.13 3 failed/5323 passed/3 skipped). Minimal read-only coordinate-map fix 59edbb0b validates legacy knots, separator pairs, finite/monotonic knots and row-grid dimensions; rejects missing/incomplete applied stages; retains valid legacy and separator-only geometry. Exact source-head CI #41333905956 6/6 + Risk-tier/gate SUCCESS; OCR #41333906027 3/3 SUCCESS; CodeQL #41333902165 Python/Actions 2/2 SUCCESS.\n\n2026-11-02 B7b multi-pass orthogonal raster parity test commit 0b1aeff2: two sequential separator shifts (2px+1px) combined with homography, crop, centered canvas and all four canonical layouts; the actual Pillow rendered pixel matched the coordinate map, inverse point/polygon mapping round-tripped, and PDIC/PPP/SECTION/source image bytes remained unchanged. Exact final code/test HEAD CI #41334461268 6/6, Risk-tier SUCCESS, Risk-tier CI gate SUCCESS; OCR #41334461089 3/3 SUCCESS; CodeQL #41334459114 Analyze Python/Actions 2/2 SUCCESS. Ubuntu3.13/3.10 5328 passed,3 skipped; Windows/macOS Python3.13/3.10 5329 passed,2 skipped. Documentation architecture check SKIPPED, not PASS. R7.3 remains in_progress; no human E3, real scans or real save/reopen performed.\n\n2026-11-02 B7b/R7.3 nonlinear ROI knot preimages + crop/canvas contract. Test-only RED `a59a904bdbc2c4d2895a77bbc74a7c8490ca326b`, [CI #41344061364](https://github.com/chigre/Picture_Capture/actions/runs/41344061364): all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs failed the three intended fractional/boolean crop_box assertions; canvas+crop reverse-knot test passed. Stage-frame root-finding source `4b2a1cb1`, numerical half-open boundary correction `d589e318`, strict integer crop-box validation `d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b`. Exact source/test HEAD [CI #41344312511](https://github.com/chigre/Picture_Capture/actions/runs/41344312511) SUCCESS 6/6 + Risk-tier and Risk-tier CI gate; Ubuntu Python3.13/3.10 5352 passed/3 skipped, macOS Python3.13/3.10 5353 passed/2 skipped, Windows Python3.13 5353 passed/2 skipped and Python3.10 5352 passed/3 skipped. [OCR #41344312514](https://github.com/chigre/Picture_Capture/actions/runs/41344312514) 3/3 SUCCESS; [CodeQL #41344308665](https://github.com/chigre/Picture_Capture/actions/runs/41344308665) Analyze Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not counted as pass. R7.3 remains in_progress; synthetic E2 only, no human E3 or real scan.\n\n2026-11-02 B7b/R7.3 tangential knot + malformed LayoutTransform + EXIF audit: RED `04e2e8a6` [CI #41433985246](https://github.com/chigre/Picture_Capture/actions/runs/41433985246) failed all six matrix jobs on unhashable list/dict kinds (Ubuntu Python3.10/3.13: 2 failed, 5417 passed, 3 skipped). Minimal source fix `39aaa983` rejects non-string kinds before set membership. Exact source/test CI [#41434426536](https://github.com/chigre/Picture_Capture/actions/runs/41434426536) 6/6 + Risk-tier/gate SUCCESS; OCR [#41434426792](https://github.com/chigre/Picture_Capture/actions/runs/41434426792) 3/3 SUCCESS. Counts: Ubuntu3.13 5419/3; macOS3.13 5420/2; Windows3.13 5420/2; Ubuntu3.10 5419/3; macOS3.10 5420/2; Windows3.10 5420/2. Documentation architecture check SKIPPED. Exact-head CodeQL not independently retrieved. Two constructed forward/reverse tangential contacts are covered; arbitrary multiple-extremum/high-frequency fields remain uncertified. EXIF audit confirms analysis/UI/SECTION use EXIF-oriented coordinates; no production PreprocessCoordinateMap callsite exists. Synthetic E2 only; no persistence schema/writer/source XY/renderer or human acceptance changed.",
   "r7_3_projective_polygon_horizon_20261101": {
     "status": "synthetic_E2_verified_at_source_head",
     "source_head": "afbc42a18d48a3944685ec182dac4b88816c6253",
@@ -3184,8 +3184,8 @@
     "docs_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41311650319",
     "documentation_architecture_check": "SKIPPED_NOT_COUNTED_AS_PASS"
   },
-  "last_completed_work_item": "R7_3_stage_frame_knot_preimages_canvas_offsets_and_strict_crop_box_synthetic_E2_VERIFIED_20261102",
-  "required_next_action": "Continue B7b/R7.3 read-only coordinate-contract coverage. Next, fail-first validate OutputCanvasInfo width/height/content_box integer snapshots and probe tangential or non-monotonic knot contacts that may evade bracketed root finding; audit actual coordinate-map construction callsites for raw-size/EXIF metadata propagation. Keep PDIC/PPP/SECTION persistence writers, schemas, original source XY, renderer defaults and experiment flags untouched. Do not claim mathematical certification for arbitrary pathological warp fields; preserve bounded fail-closed behavior and synthetic-only evidence.",
+  "last_completed_work_item": "R7_3_tangential_knot_malformed_layout_transform_and_exif_frame_audit_synthetic_E2_20261102",
+  "required_next_action": "Continue B7b/R7.3 read-only coordinate-contract review. The next bounded target is to probe multiple extrema/rapid coordinate oscillations inside a single already-partitioned orthogonal-stage interval; if the derivative search cannot resolve a path within its budget, fail closed rather than claim completeness. Preserve the EXIF-oriented source frame. No production PreprocessCoordinateMap callsite exists yet, so do not wire into UI or persistence without a separately reviewed consumer/ownership design. Exact-head CodeQL remains unverified; do not infer a pass. Keep R6 labels, R8 real scans and human W1-W11/E3/Undo deferred. Never change persistent writers/schemas or source XY without separately reviewed authority.",
   "g3_r4_2_optout_rescan_20261031": {
     "status": "historical_RED_superseded_by_native_Tk_smoke_correction",
     "test_head": "92afa633b86d05158cab695bdb05dd14b2719d1e",
@@ -3237,8 +3237,8 @@
     ],
     "next_recovery_point": "Run final docs/test HEAD CI/OCR/CodeQL/Risk-tier after this checkpoint; then continue B7b/R7.3 read-only SECTION/PDIC/PPP/ROI/crop source-coordinate contracts."
   },
-  "latest_verified_code_test_head_sha": "d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b",
-  "docs_checkpoint_parent_sha": "d87d83e3dc1dcf9b6ec8c39ff38041a438e90f9b",
+  "latest_verified_code_test_head_sha": "39aaa983f858755f8d18ac0a4278c1d05d641f55",
+  "docs_checkpoint_parent_sha": "39aaa983f858755f8d18ac0a4278c1d05d641f55",
   "r7_3_source_annotation_projection_20261102": {
     "status": "synthetic_E2_verified_at_exact_test_head",
     "test_head": "2e5cdbef44c06fff7b8d3370890966cbf03d812e",
@@ -3360,7 +3360,7 @@
     ],
     "limitations": [
       "Orthogonal inverse replay remains the existing bounded approximate inverse; no new exact inverse claim is made.",
-      "Knot root finding detects bracketed crossings over bounded spatial intervals; pathological multiple/tangential contacts without a sign change remain a follow-up adversarial test target.",
+      "The sampler now has two constructed forward/reverse tangential-contact regressions; arbitrary high-frequency or multiple-extremum warp fields are not mathematically certified and remain a bounded adversarial follow-up.",
       "The 1e-7 px upper-edge guard is a conservative numerical uncertainty band, not a change to persisted crop geometry.",
       "Synthetic E2 only; no real dictionary scan, real-project benchmark, Windows operator E3, or human acceptance."
     ],
@@ -3373,6 +3373,46 @@
       "#483 W1-W11",
       "#503 manual Undo/Redo",
       "real dictionary scan and real PDIC/PPP/SECTION/Profile/OCR save-reopen",
+      "R6 real-label learning",
+      "R8 real scan"
+    ]
+  },
+  "note": "B7b/R7.3: exact source/test HEAD 39aaa983 has CI #41434426536 six platform/Python jobs SUCCESS, Risk-tier and Risk-tier CI gate SUCCESS; OCR #41434426792 3/3 SUCCESS. Documentation architecture check SKIPPED, not PASS. CodeQL exact-head Python/Actions was not independently retrieved. Tangential forward/reverse knot contacts are now covered by bounded synthetic tests; malformed LayoutTransform list/dict kinds were RED on all six matrix jobs and fixed by validating string type before set membership. EXIF audit confirms analysis, UI page load and SECTION dimensions use EXIF-oriented pixels; no production PreprocessCoordinateMap construction callsite exists, so no production propagation or UI integration is claimed. Synthetic E2 only; no real scan or human acceptance. R7.3 remains in_progress; no schema/writer/render changes or human acceptance.",
+  "r7_3_malformed_transform_exif_audit_20261102": {
+    "status": "synthetic_E2_verified_at_exact_source_test_head",
+    "source_test_head_sha": "39aaa983f858755f8d18ac0a4278c1d05d641f55",
+    "malformed_transform_red_test_commit": "04e2e8a6bfa4c735962e6506c616b32abc69c4fe",
+    "malformed_transform_red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41433985246",
+    "malformed_transform_red_result": "all_six_Windows_macOS_Ubuntu_x_Python3.10_3.13_jobs_failed_on_two_unhashable_list_dict_transform_kind_cases; Ubuntu Python3.10 and Python3.13 each 2_failed_5417_passed_3_skipped",
+    "source_fix_commit": "39aaa983f858755f8d18ac0a4278c1d05d641f55",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41434426536",
+    "source_ci_result": "SUCCESS_6_OF_6_PLUS_RISK_TIER_AND_RISK_TIER_CI_GATE",
+    "test_counts": {
+      "Ubuntu Python 3.13": "5419 passed, 3 skipped",
+      "macOS Python 3.13": "5420 passed, 2 skipped",
+      "Windows Python 3.13": "5420 passed, 2 skipped",
+      "Ubuntu Python 3.10": "5419 passed, 3 skipped",
+      "macOS Python 3.10": "5420 passed, 2 skipped",
+      "Windows Python 3.10": "5420 passed, 2 skipped"
+    },
+    "ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41434426792",
+    "ocr_result": "SUCCESS_3_OF_3",
+    "documentation_architecture_check": "SKIPPED_NOT_COUNTED_AS_PASS",
+    "exact_head_codeql": "NOT_INDEPENDENTLY_RETRIEVED_DO_NOT_CLAIM_SUCCESS",
+    "exif_audit": [
+      "analyze_preprocess_page calls normalize_page_rgb before using source dimensions and deriving geometry",
+      "ui.controllers.page normalizes the opened page before loading/displaying PDIC and PPP annotations",
+      "persistence.page_sections uses ImageOps.exif_transpose dimensions for SECTION source-coordinate conversion"
+    ],
+    "coordinate_frame": "PreprocessCoordinateMap.source_size is the EXIF-oriented pixel frame; raw_source_size and exif_orientation validate dimensions and do not transform raw annotation XY",
+    "production_map_callsite": "NOT_FOUND_ON_PR_HEAD; no production metadata propagation or UI integration claimed",
+    "implementation_scope": "read-only coordinate map and LayoutTransform validation only; no PDIC/PPP/SECTION schema or writer, original source XY, raster renderer, OCR policy or experiment default changed",
+    "human_acceptance": "NOT_PERFORMED",
+    "deferred": [
+      "Windows R3 E3",
+      "#483 W1-W11",
+      "#503 manual Undo/Redo",
+      "real dictionary scan and PDIC/PPP/SECTION/Profile/OCR save-reopen",
       "R6 real-label learning",
       "R8 real scan"
     ]
