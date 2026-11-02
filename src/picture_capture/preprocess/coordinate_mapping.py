@@ -837,9 +837,18 @@ class PreprocessCoordinateMap:
                 )
             return float(derivative)
 
+        # Five derivative probes can alias two close extrema inside one
+        # stage interval (the derivative has the same sign at each probe).
+        # Use a fixed, bounded 1/32 grid to resolve that documented case.
+        # This is conservative sampling, not a proof against arbitrarily
+        # narrow oscillations or arbitrary composed nonlinear fields.
         probe_fractions = tuple(
             fraction_start + span * ratio
-            for ratio in (0.001, 0.25, 0.5, 0.75, 0.999)
+            for ratio in (
+                0.001,
+                *(index / 32.0 for index in range(1, 32)),
+                0.999,
+            )
         )
         derivatives = tuple(
             derivative_at(fraction) for fraction in probe_fractions
