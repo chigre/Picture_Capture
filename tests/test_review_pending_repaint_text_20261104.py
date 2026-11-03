@@ -41,7 +41,7 @@ def _short_crop_review():
         status_var=SimpleNamespace(set=notes.append),
     )
     review = SimpleNamespace(
-        parent=parent, _filter_rows_active=False,
+        parent=parent, _filter_rows_active=False, active_index=0,
         _rendered_page_stem="001",
         _review_render_original_words={id(entry): "saved-word"},
         _capture_simplified_edits=lambda _stem: None,
