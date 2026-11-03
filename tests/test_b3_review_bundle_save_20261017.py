@@ -404,3 +404,104 @@ def test_review_bridge_refuses_two_divergent_texts_after_main_model_ahead(tmp_pa
     assert widget.get() == "main-new"
     assert review.vars[0].get() == "review-new"
     assert b"old#" in pdic_path(page).read_bytes()
+
+
+class _EditableText:
+    def __init__(self, text):
+        self.text = text
+    def get(self):
+        return self.text
+    def set(self, value):
+        self.text = value
+    def delete(self, *_args):
+        self.text = ""
+    def insert(self, _pos, value):
+        self.text = value
+
+
+def _real_r3_two_view_fixture(tmp_path):
+    """Exercise production page lifecycle + editor + R3 paired file writer."""
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+    from picture_capture.proofreading.simplified_review import entry_key
+    from picture_capture.ui import review_page_lifecycle, review_simplified_workflow
+
+    page, entry, review = case(tmp_path)
+    app = review.parent
+    app.settings.review_zoom_percent = 100
+    app.settings.to_json = lambda *_a: None
+    app._foreground_batch_state = lambda *_a: "idle"
+    app._claim_page_for_manual_edit = lambda: True
+    app.entry_editor_bindings = []
+    app.review_window = review
+    app.redraw = lambda: None
+    review.winfo_exists = lambda: True
+    review.vars = [_EditableText("old")]
+    review.row_entries = [entry]
+    review.simplified_vars = [_EditableText("manual")]
+    review._simplified_display_from_value = lambda word, value, manual: value
+    review._capture_simplified_edits = lambda stem: review_simplified_workflow._capture_simplified_edits(
+        review, SimpleNamespace(simplified_entry_key=entry_key), stem,
+    )
+    review._commit_edits = lambda: commit_proofread_entries(review)
+    review._review_evidence_before_save = lambda: None
+    review._review_evidence_after_save = lambda _before: None
+    review._stored_review_zoom_percent = lambda: 100
+    deps = SimpleNamespace(settings_path=lambda root: root / "project-settings.json")
+    review.save = lambda **kwargs: review_page_lifecycle.save(review, deps, **kwargs)
+    return page, entry, review, app
+
+
+def test_real_r3_save_click_commits_both_original_and_simplified(tmp_path):
+    from picture_capture.proofreading.simplified_review import read_records
+    page, entry, review, app = _real_r3_two_view_fixture(tmp_path)
+    review.vars[0].set("校对界面人工新词")
+    assert review.save(redraw_main=False) is True
+    assert entry.word == "校对界面人工新词"
+    assert "校对界面人工新词" in pdic_path(page).read_text(encoding="utf-8")
+    row = read_records(simplified_review_path_for_image(page))["10,20"]
+    assert row["source_word"] == "校对界面人工新词"
+    assert row["text"] == "manual"
+    assert not _recovery_path(page).exists()
+
+
+def test_real_main_save_click_with_open_review_uses_paired_r3_transaction(tmp_path):
+    from picture_capture.ui import main_pdic_persistence
+    from picture_capture.proofreading.simplified_review import read_records
+    page, entry, review, app = _real_r3_two_view_fixture(tmp_path)
+    widget = _EditableText("主界面输入但尚未提交")
+    app.entry_editor_bindings = [(widget, entry)]
+    main_pdic_persistence.save_pdic(app, deps={
+        "tk": SimpleNamespace(TclError=RuntimeError),
+        "pdic_path": pdic_path,
+        "write_pdic": lambda *_a: pytest.fail("unpaired main file writer must not run"),
+    })
+    assert entry.word == widget.get()
+    assert review.vars[0].get() == widget.get()
+    assert widget.get() in pdic_path(page).read_text(encoding="utf-8")
+    assert read_records(simplified_review_path_for_image(page))["10,20"]["source_word"] == widget.get()
+    assert not _recovery_path(page).exists()
+
+
+def test_real_save_reopens_old_focusout_model_without_losing_main_input(tmp_path):
+    page, entry, review, app = _real_r3_two_view_fixture(tmp_path)
+    entry.word = "旧版已FocusOut尚未落盘"
+    widget = _EditableText(entry.word)
+    app.entry_editor_bindings = [(widget, entry)]
+    assert review.save(redraw_main=False) is True
+    assert entry.word == widget.get()
+    assert widget.get() in pdic_path(page).read_text(encoding="utf-8")
+    assert not _recovery_path(page).exists()
+
+
+def test_real_r3_conflicting_windows_refuse_and_preserve_both_inputs(tmp_path):
+    page, entry, review, app = _real_r3_two_view_fixture(tmp_path)
+    review.vars[0].set("校对界面不同版本")
+    widget = _EditableText("主界面不同版本")
+    app.entry_editor_bindings = [(widget, entry)]
+    before = pdic_path(page).read_bytes()
+    assert review.save(redraw_main=False) is False
+    assert entry.word == "old"
+    assert review.vars[0].get() == "校对界面不同版本"
+    assert widget.get() == "主界面不同版本"
+    assert pdic_path(page).read_bytes() == before
+    assert not _recovery_path(page).exists()
