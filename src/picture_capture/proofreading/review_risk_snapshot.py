@@ -185,7 +185,14 @@ def prioritized_focused_page_targets(
     risks: list[ReviewRisk] = []
     for row in original:
         try:
-            key = (int(row["x"]), int(row["y"]), str(row["original_word"]).strip())
+            x, y = row["x"], row["y"]
+            # A view target is not an authoritative source pixel until it
+            # uses genuine integers. Coercing 30.7, "30", or True can
+            # inherit another marker's attested risk and reorder its page.
+            # Fail closed for the whole queue, never partially annotate.
+            if type(x) is not int or type(y) is not int:
+                return original
+            key = (x, y, str(row["original_word"]).strip())
             sec, risk = risk_by_owner.get(key, ("", _UNKNOWN))
         except (KeyError, ValueError, TypeError):
             return original

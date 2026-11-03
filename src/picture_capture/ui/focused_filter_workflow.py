@@ -1651,7 +1651,9 @@ def _commit_filter_editor_value(self, deps: FocusedFilterDeps, index: int) -> No
         # StringVar.trace_add already committed this exact editor value.
         # A later KeyRelease / FocusOut must not reschedule an extra writer.
         return
-    target["current_word"] = value
+    # _queue_focused_change validates the page/XY before changing the
+    # displayed source target. Never publish this StringVar value ahead
+    # of a failed source-identity check.
     in_reference = value in set(self.parent._project_words)
     color = "#b3fddd" if in_reference else "#fce5e8"
     try:
