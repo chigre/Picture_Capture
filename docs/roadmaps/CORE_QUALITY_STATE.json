@@ -3697,5 +3697,26 @@
       "No filesystem multi-file CAS or atomic snapshot claim",
       "No real scan, accuracy, or performance benchmark"
     ]
+  },
+  "g3_r4_2_final_pdic_postwitness_20261103": {
+    "status": "RED_FIRST_GREEN_EXACT_SOURCE_HEAD_SYNTHETIC_E2_HUMAN_E3_DEFERRED",
+    "red_test_commit": "5cec99d063afde915e0e2edeeb79ee56e02f6872",
+    "red_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41607004651",
+    "red_evidence": "six OS/Python jobs FAILURE with two targeted DID NOT RAISE RuntimeError cases; Risk-tier CI gate FAILURE; Ubuntu 3.13 2 failed, 5447 passed, 3 skipped",
+    "fix_commit": "0a31856b36ff33b93a686a108b24ac69a9c82ea3",
+    "source_file": "src/picture_capture/proofreading/focused_pdic_updates.py",
+    "regression_file": "tests/test_g3_r4_final_pdic_readback_witness_20261103.py",
+    "fix": "Use the exact serialized eight-field PDIC byte snapshot and recheck disk bytes after the final image/SECTION witness; refuse confirmed save on drift, without rollback.",
+    "source_ci": "https://github.com/chigre/Picture_Capture/actions/runs/41607380209",
+    "source_ci_result": "SUCCESS 6/6 Windows/macOS/Ubuntu x Python 3.10/3.13, Risk-tier and gate SUCCESS, Ubuntu3.13 5449 passed/3 skipped",
+    "source_ocr": "https://github.com/chigre/Picture_Capture/actions/runs/41607380214",
+    "source_ocr_result": "SUCCESS 3/3",
+    "source_codeql": "https://github.com/chigre/Picture_Capture/actions/runs/41607374344",
+    "source_codeql_result": "SUCCESS Python/Actions 2/2",
+    "doc_architecture_check": "SKIPPED not PASS",
+    "architecture_audit": "docs/architecture/G3_R4_2_FINAL_PDIC_READBACK_WITNESS_20261103.md",
+    "limitations": "Optimistic discrete checks, not multi-file CAS; publication may already have occurred; no rollback; changes after the last check still possible.",
+    "human_acceptance": "NOT PERFORMED / DEFERRED: Windows R3 E3, #483 W1-W11, #503 human Undo/Redo, real dictionary scan and PDIC/PPP/SECTION/Profile/OCR save-reopen, R6 learning, R8 real scans.",
+    "documentation_head_gates": "PENDING until separately verified"
   }
 }
