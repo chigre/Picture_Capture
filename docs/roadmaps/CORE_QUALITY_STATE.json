@@ -4,7 +4,7 @@
   "plan_version": "1.3.1",
   "plan_path": "docs/roadmaps/CORE_QUALITY_UPGRADE_PLAN.md",
   "resume_path": "docs/roadmaps/CORE_QUALITY_RESUME.md",
-  "updated_at_utc": "2026-11-03T15:43:11.301Z",
+  "updated_at_utc": "2026-11-03T17:08:59.954Z",
   "authority": "GitHub live main, pull requests, commits and CI take precedence over checkpoint or chat memory",
   "repository": "chigre/PictureCapture",
   "starting_baseline": {
@@ -44,7 +44,7 @@
       "note": "G3 R4.2 project/ReviewWindow session lifecycle source/test HEAD 25d5cb46c38af10a831a31f7c8abc63eddc7bcb0. RED-first project-switch test 49d3401f (CI #41469931769: six OS/Python matrix jobs failed on the intended live-ReviewWindow assertion); minimal guard 9a608895. RED-first reverse-order open-review test bfc2412d (CI #41472574845: six matrix jobs failed on the intended project-load ownership assertion); minimal guard 5f2f5b00. Test-only UI wording assertion correction 25d5cb46. Exact source/test CI #41473874028: all six Windows/macOS/Ubuntu × Python3.10/3.13 jobs SUCCESS; Risk tier and Risk-tier CI gate SUCCESS. OCR #41473873904 3/3 SUCCESS; CodeQL #41473865458 Analyze Python/Actions 2/2 SUCCESS. Ubuntu3.13 5435 passed/3 skipped; macOS3.13 5436/2; Windows3.13 5435/3; Ubuntu3.10 5435/3; macOS3.10 5436/2; Windows3.10 5436/2. Native Tk thumbnail pixel/sort smoke passed in all six jobs. Documentation architecture check SKIPPED, not PASS. PR remains Draft/Open/Unmerged; main unchanged. Synthetic E2 only; no real scan or human E3.\n\nFollow-up after project/ReviewWindow guard: streaming render session identity guard b2b4aa9b; epoch witness serial mismatch fail-closed RED fc30ef6a → source fix 2fc347e3. Exact source/test CI #41505337297 six-platform SUCCESS + Risk-tier/gate; OCR #41505337406 3/3; CodeQL #41505327430 Python/Actions 2/2. Docs architecture check SKIPPED, not PASS. See docs/architecture/G3_R4_2_EPOCH_SERIAL_BINDING_FAIL_CLOSED_20261103.md. | G3 R4.2 final post-readback image/SECTION witness: RED test-only 636351b1, CI #41602730257 six matrix jobs failed on four expected cases; minimal source 8a0259b9, exact CI #41603256021 6/6 + Risk-tier/gate SUCCESS, OCR #41603256004 3/3, CodeQL #41603250733 2/2. Documentation architecture check SKIPPED. Human E3 DEFERRED. | 2026-11-03 G3 R4.2 focused PDIC exact integer source-XY/page-owner/empty batch guard: RED test-only e68d0559 CI #41610202553 six matrix failures on 10 expected cases; source/test b4ed2bad CI #41610298182 6/6 + Risk-tier/gate SUCCESS, OCR #41610298176 3/3, CodeQL #41610293695 Python/Actions 2/2 SUCCESS. Docs architecture check SKIPPED. Synthetic E2 only. Documentation SHA requires its own exact-head checks. | 2026-11-03 G3 R4.2 async crop/source provenance exact page index: RED test-only 650684ea CI #41612103458 six matrix failures (Ubuntu3.10 13 expected failures/5461 passed/3 skipped); source fix 8b2ac2cd CI #41612191423 6/6 plus Risk-tier/gate SUCCESS, OCR #41612191427 3/3, CodeQL #41612184011 Python/Actions 2/2; doc architecture SKIPPED. Synthetic only, no human E3; final docs HEAD separately gated. | 2026-11-03 G3 R4.2 scan target and active scan epoch exact page owner: test-only RED 35f84778 CI #41614641957 six platform/Python matrix jobs FAILURE (Ubuntu 3.13 24 expected failed/5477 passed/3 skipped), Risk-tier gate FAILED; minimal UI source 23150015 CI #41614879152 six jobs + Risk-tier/gate SUCCESS, Ubuntu3.13 5501 passed/3 skipped, OCR #41614879182 3/3, CodeQL #41614873974 Python/Actions 2/2. Documentation architecture check SKIPPED. Synthetic E2 only; documentation HEAD requires independently verified gates. | 2026-11-03 G3 R4.2 focused UI queue strict page/XY identity: RED test-only a40c7b7f5f1db6f5e9fd7869813c7b2bdf5c6e84 CI #41628494277: all six matrix FAILURE exactly 9 targeted invalid identity assertions (Ubuntu3.13 9 failed/5502 passed/3 skipped), RED Risk-tier gate FAILURE. Minimal source fix 00167584d552dbb58c5c341af3cf5661e1e55a1e: _queue_focused_change validates with existing exact-index helpers before human queue mutation; original integer cases preserved. Exact source CI #41629160886 six matrix 6/6 SUCCESS, Risk tier/gate SUCCESS, OCR #41629160918 three OS SUCCESS, CodeQL #41629155015 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS. Synthetic E2 only. Docs checkpoint exact-head gates independently required. | 2026-11-03 G3 R4.2 strict source XY in crop batch cache and offthread worker: RED test-only dbda31ebbd3f8bda4362ee09946c0de3c0ab5d23 CI #41631995853 six OS/Python matrix FAILURE on exactly 16 synthetic malformed source-identity assertions each (Ubuntu3.13 16 failed/5512 passed/3 skipped; Windows3.10 16 failed/5513 passed/2 skipped); RED Risk-tier CI gate FAILURE. Minimal UI source fix 929d65d5beb0d32795bb5ac4cd3bd90e488f1dd0 strict _source_page_index and _exact_page_coordinate in crop-cache signature and _prepare_filter_batch_payload; out-of-range page refusal, valid original image geometry unchanged. Exact source-head CI #41632643807 6/6 SUCCESS plus Risk-tier/gate, OCR #41632643864 3/3 SUCCESS, CodeQL #41632639670 Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS; synthetic E2 only; docs final SHA separately gated. | 2026-11-03 G3 R4.2 save ProjectState identity: test-only RED 3c3ceb4075f168efcf032bfd31f1e1f1ee430407 CI #41639594396, six matrix FAILURE each exactly 3 new expected assertions / valid control passes; RED gate FAILURE. source 71e49785dc12bdff5b096b1a4e67f0604fd9a81e CI #41640032284 6/6 SUCCESS Risk-tier/gate, OCR #41640032317 3/3, CodeQL Python/Actions 2/2 SUCCESS; fail closed before launch, worker preflight/per-page, after worker before UI reconciliation; original pending edits retained on replacement owner; no cross-file atomicity. | 2026-11-03 G3 R4.2 async crop callback ProjectState identity: test-only RED d262da23826a1981a79d02c04156949b74938507 CI #41641142156 six matrix FAILURE exactly 4 new expected assertions, two valid controls pass, gate FAILURE. Initial fix 1a935971804dd4512c5ab86c76832e1f92c3654a CI #41641665464 FAILURE architecture >100000-byte UI module (101022 bytes); extract-only 075348a9e27c8834f4afaee4ec9aac3171ef2a96 CI #41642099256 FAILURE existing scan invalidation regression, not a GREEN. Corrected final 5d8765124149515402a537316c553453d830bd97: leaf modules focused_crop_session_owner.py and focused_scan_source_owner.py, maintain existing invalidate-old-epoch behavior and reject stale prefetch/direct crop cache and UI publication. Exact source CI #41643198831 6/6 SUCCESS + Risk-tier/gate and architecture guard; OCR #41643198671 3/3 SUCCESS; CodeQL Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED (not PASS). Synthetic E2, no operator E3, real data, external atomicity or throughput/accuracy claim; docs HEAD needs own gates. | 2026-11-03 G3 R4.2 streamed tail failure/ready-prefix provenance: RED test-only 779031b3c003343e5cc616e01b3f06bd00a69452 extends tests/test_g3_r4_streaming_scan_failure_20261031.py with four synthetic PDIC/OCR/SECTION or same-root ProjectState replacement prefix-drift cases plus existing valid-prefix preservation control. RED CI #41651036164 all six Windows/macOS/Ubuntu × Python 3.10/3.13 matrix FAILURE solely on exactly four new assertions/job (Ubuntu3.13 4 failed/5538 passed/3 skipped; Windows3.10 4 failed/5539 passed/2 skipped), Risk-tier CI gate FAILURE. Minimal source 6c6ab74ae7970ed7061b60dd52945d006a3f67f6 adds seven lines only in focused_filter_workflow.py remainder_failed: check verify_scan_epoch_sources(start_position) before preserving ready partial rows, invalidate epoch on drift; original valid-prefix remainder-failure handling unchanged. Exact source CI #41652027345 six matrix 6/6 SUCCESS including architecture guard and Risk-tier/gate SUCCESS, OCR #41652027478 3/3 SUCCESS, CodeQL #41652019610 Python/Actions 2/2 SUCCESS; Documentation architecture check SKIPPED not PASS. Synthetic E2 only, no real scans/operator, no filesystem CAS/cross-file atomicity. Documentation HEAD exact checks required.",
       "head_sha": "4642f6cb481c9de78b30458b19fa55c496279e38"
     },
-    "implementation_head_sha": "4642f6cb481c9de78b30458b19fa55c496279e38",
+    "implementation_head_sha": "61d29a23a12c5bee56a7a3ded3e3544a88fe2e97",
     "latest_verified_main_sha": "ec20989ea8c026cca5337293e67850b6b6df30f2",
     "last_completed_work_item": "R4_2_tail_failure_ready_prefix_source_owner_RED_GREEN_E2_20261103",
     "blockers": [
@@ -3726,9 +3726,9 @@
     "red_ci_url": "https://github.com/chigre/PictureCapture/actions/runs/41665644553",
     "red_evidence": "Ubuntu Python3.13 and 3.10 each 4 intended failures from bool/integral-float row keys; all-matrix conclusion PENDING",
     "green_ci_url": "https://github.com/chigre/PictureCapture/actions/runs/41666027710",
-    "green_ci_status": "PENDING",
+    "green_ci_status": "FAILURE: attempts 1/3 cancelled macOS py3.13; attempt 2 native Tk in-flight reversion smoke failed; source SHA never accepted as standalone GREEN",
     "ocr_url": "https://github.com/chigre/PictureCapture/actions/runs/41666027649",
-    "ocr_status": "PENDING",
+    "ocr_status": "SUCCESS 3/3",
     "codeql_url": "https://github.com/chigre/PictureCapture/actions/runs/41666019492",
     "codeql_status": "SUCCESS 2/2 Python/Actions at source SHA",
     "documentation_architecture_check": "SKIPPED, not PASS",
@@ -3736,5 +3736,33 @@
     "privacy": "No private images, source dictionaries, PDIC/PPP/SECTION/Profile/OCR uploads",
     "human_acceptance": "Windows R3 E3, #483 W1-W11, #503 manual Undo/Redo, real scan/save-reopen NOT PERFORMED/DEFERRED",
     "invariants": "Do not claim OS CAS or rollback after publication; persistence/XY/write protocol unchanged"
+  },
+  "g3_r4_2_exact_risk_xy_and_tk_trace_20261104": {
+    "scope": "R4.2 opt-in provenance risk sorting exact original XY; Tk focused edit trace source owner before queue mutation",
+    "red1_test_sha": "6ac6eff0b1d57439fa59179c70b32a844d9d4d73",
+    "red1_ci": "https://github.com/chigre/PictureCapture/actions/runs/41680157583",
+    "red1_observed": "Ubuntu 3.13 10 intended failure / 5550 pass / 3 skip; no other new failures in checked job; cross-platform incomplete at authoring",
+    "red2_test_sha": "796f61ee4c340e3a391eb01422d598ddbc8d3c53",
+    "red2_ci": "https://github.com/chigre/PictureCapture/actions/runs/41680462020",
+    "red2_observed": "Ubuntu 3.13 19 intended failure (10 risk queue, 9 Tk editor prevalidation) / 5551 pass / 3 skip; valid controls pass; cross-platform incomplete at authoring",
+    "source_fix_sha": "61d29a23a12c5bee56a7a3ded3e3544a88fe2e97",
+    "source_files": [
+      "src/picture_capture/proofreading/review_risk_snapshot.py",
+      "src/picture_capture/ui/focused_filter_workflow.py"
+    ],
+    "test_files": [
+      "tests/test_g3_r4_focused_optin_risk_queue_20261030.py",
+      "tests/test_g3_r4_focused_queue_exact_source_identity_20261103.py"
+    ],
+    "green_ci": "https://github.com/chigre/PictureCapture/actions/runs/41680839943",
+    "green_ocr": "https://github.com/chigre/PictureCapture/actions/runs/41680839652",
+    "green_codeql": "https://github.com/chigre/PictureCapture/actions/runs/41680831854",
+    "green_e2_status": "PENDING precise HEAD six OS/Python + Risk-tier/gate; OCR three OS; CodeQL Python/Actions",
+    "fix": "Read-only opt-in risk queue requires genuine integer source x/y before attaching priority; invalid whole page queue returns unchanged. Native Tk editor trace no longer writes current_word ahead of strict queue owner validation; the guarded queue alone commits target state after validation.",
+    "source_evidence_scope": "Purely synthetic. Existing normal constructor emits integral coordinates; no observed real data corruption and no proven OCR accuracy change.",
+    "prior_source_ci_risk": "Source 4642f6cb CI #41666027710 concluded FAILURE after two macOS cancellations and one native Tk in-flight reversion smoke conflict; docs da229d2e CI #41666872954 ultimately passed 6/6 + gate. No inferred fix of native Tk concurrency root cause.",
+    "human_acceptance": "NOT PERFORMED: Windows R3 E3, #483 W1-W11, #503 operator Undo/Redo, real dictionary scan/PDIC/PPP/SECTION/Profile/OCR save-reopen; R6/R8 real data remain deferred",
+    "invariants": "No default-on ranking, PDIC/PPP/SECTION schema change, raster/source XY rewrite, automatic OCR/learning, private source upload, OS cross-file CAS or rollback claim",
+    "next_action": "Verify exact source and docs-HEAD gates. Investigate intermittent native Tk in-flight reversion only via reproducible synthetic trace; preserve PR Draft/unmerged and issues open."
   }
 }
