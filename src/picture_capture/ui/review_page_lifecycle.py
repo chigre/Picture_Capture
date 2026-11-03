@@ -115,6 +115,8 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     state = self.parent._foreground_batch_state(self.parent.current_index)
     if state == "processing":
         return True
+    from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    bridge_main_canvas_text_into_review(self)
     row_entries = self._bound_row_entries()
     word_dirty = any(
         i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
@@ -211,6 +213,8 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
     if state == "processing":
         self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
         return False
+    from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    bridge_main_canvas_text_into_review(self)
     if state == "pending":
         row_entries = self._bound_row_entries()
         word_dirty = any(

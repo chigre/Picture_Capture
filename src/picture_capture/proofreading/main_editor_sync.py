@@ -133,6 +133,60 @@ def reconcile_focused_save_to_main(
         reconcile_main_editors_after_review(app, confirmed)
     return conflicts
 
+
+def bridge_main_canvas_text_into_review(review: Any) -> int:
+    """Bring independently edited main Tk words into the paired R3 save.
+
+    Two live widgets may own the same Entry object without sharing their text
+    buffers. Check ALL live bindings before changing any ReviewWindow var:
+    divergent edits to the same word are a conflict, never a preference order.
+    A clean main buffer is not a signal to overwrite a newer review correction.
+    """
+    app = review.parent
+    page = getattr(app, "current_page", None)
+    if (
+        page is None
+        or getattr(review, "_filter_rows_active", False)
+        or getattr(review, "_rendered_page_stem", "") != page.stem
+    ):
+        return 0
+    bindings = tuple(getattr(app, "entry_editor_bindings", ()))
+    if not bindings:
+        return 0
+    rows = list(review._bound_row_entries())
+    vars = tuple(review.vars)
+    if len(rows) != len(vars) or len({id(x) for x in rows}) != len(rows):
+        raise RuntimeError("主界面与校对界面词条绑定不同步；请核对并重新打开校对页")
+    active = {id(row) for row in getattr(app, "entries", ())}
+    if any(id(row) not in active for row in rows):
+        raise RuntimeError("校对界面词条已失效；请先核对并刷新校对页面")
+    by_id = {id(entry): (entry, var) for entry, var in zip(rows, vars)}
+    changes = {}
+    for editor, entry in bindings:
+        if id(entry) not in active:
+            continue
+        try:
+            text = str(editor.get()).strip()
+        except (tk.TclError, RuntimeError) as exc:
+            raise RuntimeError("主界面编辑框暂不可读取；修改未保存，请重试") from exc
+        old = str(entry.word).strip()
+        if text == old:
+            continue
+        owner = by_id.get(id(entry))
+        if owner is None:
+            raise RuntimeError("主窗口有新文字，但校对行来源尚未就绪；请核对校对页面后重试")
+        review_text = str(owner[1].get()).strip()
+        if review_text not in (old, text):
+            raise RuntimeError("主界面与校对界面同时修改同一词条且内容不同；均已保留，请选择最终文字后保存")
+        prior = changes.get(id(entry))
+        if prior is not None and prior[1] != text:
+            raise RuntimeError("主窗口同一词条有多个不同编辑框内容；请核对后保存")
+        changes[id(entry)] = (owner[1], text)
+    for var, text in changes.values():
+        if str(var.get()).strip() != text:
+            var.set(text)
+    return len(changes)
+
 def commit_proofread_entries(review: Any) -> None:
     """Persist editor words by rendered Entry identity, then reconcile canvas."""
     # This entry point runs before app.save_pdic; a marker must block edits

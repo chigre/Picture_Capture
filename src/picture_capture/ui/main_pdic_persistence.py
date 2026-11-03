@@ -63,6 +63,33 @@ def save_pdic(self, silent: bool = False, sync_editors: bool = True, *, deps: di
             or _bytes_or_absent(pdic_path(self.current_page)) != pin[1]
         ):
             raise RuntimeError("R3 当前 PDIC 已被其他人修改，拒绝覆盖延迟校对")
+    # With an ordinary ReviewWindow open, the main and review text editors
+    # must share ONE guarded PDIC+simplified transaction. A direct main-only
+    # write would leave review's pinned companion source stale and the next
+    # review save could overwrite it or fail forever.
+    if sync_editors:
+        review = getattr(self, "review_window", None)
+        active_review = False
+        if review is not None:
+            try:
+                active_review = bool(review.winfo_exists())
+            except (AttributeError, tk.TclError):
+                active_review = False
+        if active_review and getattr(review, "_filter_rows_active", False):
+            if (
+                getattr(review, "_filter_save_running", False)
+                or getattr(review, "_filter_pending_changes", None)
+                or getattr(review, "_filter_save_uncertain_pages", None)
+                or getattr(review, "_filter_save_launch_failed", False)
+            ):
+                raise RuntimeError("筛选校对尚有未确认修改；请完成或核对筛选保存后再保存主界面")
+        elif (
+            active_review
+            and getattr(review, "_rendered_page_stem", None) == self.current_page.stem
+        ):
+            if review.save(redraw_main=False) is False:
+                raise RuntimeError("校对窗口拒绝保存，主界面文字仍保留；请核对后重试")
+            return
     # Commit live state; cancel any older queued checkbox snapshot.
     deferred_job = self.__dict__.get("_deferred_save_job")
     if deferred_job is not None:
