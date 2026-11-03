@@ -109,7 +109,26 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     """Commit review edits for the shared main-window autosave timer."""
     if getattr(self, "_filter_rows_active", False):
         self._flush_focused_changes_now()
-        return True
+        # A clean filtered-review view has no PDIC write to acknowledge.
+        # Return False so the shared main autosave timer can persist any
+        # independently edited main-canvas text. Previously this always
+        # returned True and silently consumed every main autosave tick.
+        unsettled = bool(
+            getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+            or getattr(self, "_filter_save_uncertain_pages", None)
+            or getattr(self, "_filter_save_launch_failed", False)
+        )
+        if unsettled:
+            # Never fall back to an ordinary main-canvas write while a
+            # focused transaction may still publish to that PDIC. That
+            # risks overwriting the human focused edit instead.
+            self.parent.status_var.set(
+                "筛选校对尚有未保存或未确认修改，本次自动保存尚未完成；"
+                "文字仍保留，请核对筛选写入后再次保存。"
+            )
+            return True
+        return False
     if not self.parent.project or not self.parent.current_page:
         return False
     state = self.parent._foreground_batch_state(self.parent.current_index)
