@@ -126,3 +126,18 @@ def test_clean_filtered_switch_to_single_still_works():
     assert review._filter_rows_active is False
     assert ("navigation", False) in calls
     assert any(isinstance(x, tuple) and x[0] == "render" for x in calls)
+
+
+def test_filtered_save_uncertain_only_with_empty_queue_still_refuses_navigation():
+    """A completed callback can still have a post-publication unknown state."""
+    from picture_capture.ui import review_page_lifecycle
+    statuses = []
+    review = SimpleNamespace(
+        _filter_rows_active=True, _filter_save_running=False,
+        _filter_pending_changes={}, _filter_save_uncertain_pages={0},
+        _filter_save_launch_failed=False,
+        _flush_focused_changes_now=lambda: None,
+        parent=SimpleNamespace(status_var=SimpleNamespace(set=statuses.append)),
+    )
+    assert review_page_lifecycle.save(review, None, redraw_main=False) is False
+    assert statuses
