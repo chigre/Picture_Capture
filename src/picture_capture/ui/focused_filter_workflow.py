@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from ..proofreading.review_timing import ReviewTimingSession
 from ..proofreading.focused_pdic_updates import _exact_page_coordinate
+from ..proofreading.focused_visible_owner import unique_focused_visible_targets
 from .readonly_worker_launch import dispatch_readonly_ui_worker
 from .focused_crop_session_owner import accept_crop_terminal
 from .focused_scan_source_owner import _focused_scan_target_source_signature
@@ -1825,33 +1826,6 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     dispatch_serial = int(getattr(self, "_filter_save_dispatch_serial", 0)) + 1
     self._filter_save_dispatch_serial = dispatch_serial
 
-    def exact_visible_point(target):
-        """Identify a displayed row without coercing source page or pixel XY."""
-        try:
-            return (
-                _source_page_index(target["page_index"]),
-                _exact_page_coordinate(target["x"]),
-                _exact_page_coordinate(target["y"]),
-            )
-        except (KeyError, TypeError, ValueError, RuntimeError, OverflowError):
-            return None
-
-    def unique_visible_targets():
-        """Only an unambiguous, genuinely integral Tk row may own a save."""
-        unique = {}
-        duplicates = set()
-        for target in getattr(self, "filtered_targets", ()):
-            point = exact_visible_point(target)
-            if point is None:
-                continue
-            if point in unique:
-                duplicates.add(point)
-            else:
-                unique[point] = target
-        for point in duplicates:
-            unique.pop(point, None)
-        return unique
-
     def restore_unwritten(committed: set[tuple[int, int, int]]) -> bool:
         """Requeue only unsaved snapshot entries, without erasing newer edits.
 
@@ -1861,7 +1835,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         """
         # Invalid or duplicated view rows cannot suppress recovery by
         # pretending to be the original user's explicit text reversion.
-        visible_targets = unique_visible_targets()
+        visible_targets = unique_focused_visible_targets(getattr(self, "filtered_targets", ()))
         recovered = False
         for page_index, changes in snapshot.items():
             for change in changes:
@@ -1891,7 +1865,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             (int(page_index), int(x), int(y)): str(word)
             for page_index, x, y, word in saved_rows
         }
-        for point, target in unique_visible_targets().items():
+        for point, target in unique_focused_visible_targets(getattr(self, "filtered_targets", ())).items():
             if point in saved_map:
                 target["original_word"] = saved_map[point]
         for page_index, changes in self._filter_pending_changes.items():
@@ -1904,7 +1878,7 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
 
         # A reversion made during the writer becomes a new edit relative to
         # the confirmed PDIC word. A newer queued value retains ownership.
-        for point, target in unique_visible_targets().items():
+        for point, target in unique_focused_visible_targets(getattr(self, "filtered_targets", ())).items():
             saved_word = saved_map.get(point)
             if saved_word is None or "current_word" not in target:
                 continue
@@ -1937,51 +1911,9 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     replacement["_focused_save_source_witness"] = source_witness
                 self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
 
-        current_index = getattr(self.parent, "current_index", None)
-        if current_index is not None:
-            try:
-                current_index = _source_page_index(current_index)
-            except (TypeError, ValueError, RuntimeError, OverflowError):
-                current_index = None
-        if current_index is not None:
-            current_saved = {
-                (x, y): word
-                for page_index, x, y, word in saved_rows
-                if int(page_index) == current_index
-            }
-            if current_saved:
-                # The main canvas is a second independently mutable view.
-                # Never update an aliased float/text/boolean coordinate or
-                # one of several ambiguous entries at the same source XY.
-                entries_by_xy = {}
-                ambiguous_xy = set()
-                for entry in getattr(self.parent, "entries", ()):
-                    try:
-                        point = (
-                            _exact_page_coordinate(entry.x),
-                            _exact_page_coordinate(entry.y),
-                        )
-                    except (TypeError, ValueError, RuntimeError, OverflowError):
-                        continue
-                    if point in entries_by_xy:
-                        ambiguous_xy.add(point)
-                    else:
-                        entries_by_xy[point] = entry
-                saved_entries = []
-                for point, entry in entries_by_xy.items():
-                    if point in ambiguous_xy:
-                        continue
-                    value = current_saved.get(point)
-                    if value is not None:
-                        entry.word = value
-                        entry.confidence = None
-                        entry.ocr_source = "manual"
-                        entry.final_engine = "manual"
-                        entry.manually_selected = True
-                        saved_entries.append(entry)
-                if saved_entries:
-                    from ..proofreading.main_editor_sync import reconcile_main_editors_after_review
-                    reconcile_main_editors_after_review(self.parent, saved_entries)
+        if saved_rows and getattr(self.parent, "current_index", None) is not None:
+            from ..proofreading.main_editor_sync import reconcile_focused_save_to_main
+            reconcile_focused_save_to_main(self.parent, saved_rows)
         return saved_map
 
     saved: list[tuple[int, int, int, str]] = []
