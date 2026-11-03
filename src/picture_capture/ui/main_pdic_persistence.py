@@ -190,6 +190,17 @@ def autosave_tick(self, *, deps: dict[str, Any]) -> None:
                         "其他页面内容已自动保存，但筛选校对文字未保存或未确认；"
                         "输入仍保留，请核对筛选保存后重试。"
                     )
+                elif (
+                    review is not None
+                    and not getattr(review, "_filter_rows_active", False)
+                    and getattr(review, "_r3_autosave_unconfirmed", False)
+                ):
+                    # A successful PPP polygon save does not prove that
+                    # a stale ordinary ReviewWindow text row was committed.
+                    self.status_var.set(
+                        "其他页面内容已自动保存，但校对文字未保存或未确认；"
+                        "输入仍保留，请核对校对页面后重试。"
+                    )
                 else:
                     self.status_var.set("已自动保存")
     except (OSError, RuntimeError, ValueError) as exc:

@@ -151,10 +151,12 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
             )
         )
     ):
+        self._r3_autosave_unconfirmed = True
         self.parent.status_var.set(
             "校对行绑定已变化，本次自动保存未确认；人工输入仍保留，请核对页面后重试。"
         )
         return True
+    self._r3_autosave_unconfirmed = False
     from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
     bridge_main_canvas_text_into_review(self)
     word_dirty = any(
