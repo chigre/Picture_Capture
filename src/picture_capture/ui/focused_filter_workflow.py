@@ -1798,6 +1798,42 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     # An unreadable/invalid project must never erase work on synchronous
     # setup failure; the caller's close coordinator refuses the exception.
     pages = list(project.images)
+
+    def save_session_is_current() -> bool:
+        """Require the scanned ProjectState owner for live focused saves.
+
+        Image/SECTION hashes alone do not prove that a replacement project
+        session owns a displayed correction. Legacy helper callers lacking
+        a scan-epoch ProjectState retain their existing ABI.
+        """
+        epoch_project = getattr(self, "_filter_scan_epoch_project", None)
+        if epoch_project is None:
+            return True
+        try:
+            return bool(
+                self.parent.project is project
+                and project is epoch_project
+                and not getattr(self, "_filter_scan_epoch_invalidated", False)
+                and getattr(self, "_filter_scan_epoch_source_serial", None)
+                == getattr(self, "_filter_scan_serial", None)
+                and str(project.root)
+                == str(getattr(self, "_filter_scan_epoch_project_root", None))
+                and tuple(str(page) for page in pages)
+                == tuple(str(page) for page in self._filter_scan_epoch_pages)
+                and tuple(str(page) for page in project.images)
+                == tuple(str(page) for page in pages)
+            )
+        except (OSError, ValueError, TypeError, AttributeError):
+            return False
+
+    if getattr(self, "_filter_rows_active", False) and not save_session_is_current():
+        # Refuse before clearing a human edit or scheduling a new writer.
+        self._filter_close_after_save = False
+        self.parent.status_var.set(
+            "筛选校对项目会话已变化，修改已保留；请重新核对原项目来源。"
+        )
+        return
+
     timing_session = getattr(self, "_focused_timing_session", None)
     save_seconds = [None]
     self._filter_pending_changes.clear()
@@ -1933,6 +1969,8 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         # Actual ReviewWindow filter mode has _filter_rows_active=True.
         # Keep legacy standalone helper/mock ABI intact outside filter mode.
         if getattr(self, "_filter_rows_active", False):
+            if not save_session_is_current():
+                raise RuntimeError("筛选校对项目会话已变化，拒绝保存")
             for page_index, changes in sorted(snapshot.items()):
                 expected = changes[0].get("_focused_save_source_witness")
                 if expected is None or any(
@@ -1944,6 +1982,13 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     )
                 verify_focused_save_source(pages[page_index], expected)
         for page_index, changes in sorted(snapshot.items()):
+            # Recheck immediately before each possible page publication.
+            # This is a best-effort session guard, not a filesystem CAS.
+            if (
+                getattr(self, "_filter_rows_active", False)
+                and not save_session_is_current()
+            ):
+                raise RuntimeError("筛选校对项目会话已变化，拒绝保存")
             page_outcomes[page_index] = "uncertain"
             try:
                 page_saved, page_conflicts = _apply_focused_review_page_updates(
@@ -1978,6 +2023,23 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             restore_unwritten(set())
             self.parent.status_var.set(
                 "筛选校对启动状态未确认，修改已保留；请核对文件后重试。"
+            )
+            return
+        if getattr(self, "_filter_rows_active", False) and not save_session_is_current():
+            # The writer may already have published against the former
+            # project. Never reconcile or close a replacement project's UI,
+            # or automatically replay a possibly committed correction.
+            self._filter_close_after_save = False
+            self._filter_save_uncertain_pages = (
+                set(getattr(self, "_filter_save_uncertain_pages", set()))
+                | {int(index) for index in snapshot}
+            )
+            self._filter_save_page_outcomes = {
+                int(index): "uncertain" for index in snapshot
+            }
+            restore_unwritten(set())
+            self.parent.status_var.set(
+                "保存回调时项目会话已变化，修改已保留且结果未自动确认；请核对原项目 PDIC。"
             )
             return
         saved, conflicts = payload
