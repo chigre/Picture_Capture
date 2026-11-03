@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from ..proofreading.review_timing import ReviewTimingSession
+from ..proofreading.focused_pdic_updates import _exact_page_coordinate
 from .readonly_worker_launch import dispatch_readonly_ui_worker
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
@@ -1695,8 +1696,20 @@ def _on_filter_key(self, deps: FocusedFilterDeps, event: tk.Event, index: int) -
 
 def _queue_focused_change(self, deps: FocusedFilterDeps, target: dict, value: str) -> None:
     tk = deps.tk
-    page_index = int(target["page_index"])
-    key = (int(target["x"]), int(target["y"]))
+    # Human edits must not inherit an unrelated page/marker through int()
+    # coercion of a fractional, textual, or boolean scan target.
+    # Validate before mutating the visible target or debounce queue.
+    try:
+        page_index = _source_page_index(target["page_index"])
+        key = (
+            _exact_page_coordinate(target["x"]),
+            _exact_page_coordinate(target["y"]),
+        )
+    except (KeyError, TypeError, ValueError, RuntimeError):
+        status = getattr(getattr(self, "parent", None), "status_var", None)
+        if status is not None:
+            status.set("筛选校对词条页码或原图 XY 坐标无效，拒绝保存此修改。")
+        return
     original = str(target.get("original_word") or "")
     clean = (
         str(value or "").replace("\r", " ").replace("\n", " ")
