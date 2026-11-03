@@ -108,3 +108,26 @@ def test_unchanged_review_word_does_not_create_pending_edits():
     assert capture_pending_review_words(
         [entry], [_Var("saved")], {id(entry): "saved"}, [entry],
     ) == {}
+
+
+@pytest.mark.parametrize("drift", ["same_entry_reworded", "new_entry_same_xy"])
+def test_source_drift_repaint_refuses_without_clearing_user_input(drift):
+    review, entry, typed, child, notes = _short_crop_review()
+    if drift == "same_entry_reworded":
+        entry.word = "external-modified"
+    else:
+        replacement = SimpleNamespace(word="saved-word", x=12, y=34)
+        review.parent.entries = [replacement]
+        review.parent._ordered_entries_reading_order = lambda: [replacement]
+    deps = SimpleNamespace(
+        tk=SimpleNamespace(TclError=RuntimeError),
+        Image=object(), font=object(),
+        _entry_font_spec=None, _review_editor_font_size=None,
+        resolve_content_font_family=None, _focused_review_is_single_character=None,
+        simplified_entry_key=None,
+    )
+    workspace.render_rows(review, deps, [object()])
+    assert not child.destroyed
+    assert review.vars == [typed]
+    assert typed.get() == "我尚未保存的词条"
+    assert any("未保存" in str(x) or "保持" in str(x) for x in notes)
