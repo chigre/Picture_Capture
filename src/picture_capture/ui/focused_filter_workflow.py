@@ -1038,7 +1038,7 @@ def _apply_filter_batch_payload(
         target["column_number"] = int(column_number)
         target["sequence_number"] = int(sequence_number)
         target["_focused_save_source_witness"] = focused_save_source_from_crop_witness(
-            source_witness, int(target["page_index"])
+            source_witness, target["page_index"]
         )
     if self.review_zoom_auto:
         self.review_zoom = max(0.01, float(effective_zoom))

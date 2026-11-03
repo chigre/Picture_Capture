@@ -6,6 +6,7 @@ it is not a source-time OCR attestation, a persisted schema, or an OS CAS.
 from __future__ import annotations
 
 from hashlib import sha256
+from operator import index as exact_index
 from pathlib import Path
 
 from ..persistence.project_storage import (
@@ -13,6 +14,16 @@ from ..persistence.project_storage import (
 )
 
 _CHUNK_SIZE = 1024 * 1024
+
+
+def _source_page_index(value: object) -> int:
+    """Require genuine integer page identity, without int() truncation."""
+    if isinstance(value, bool):
+        raise ValueError("focused crop page index must be an integer")
+    try:
+        return exact_index(value)
+    except TypeError as exc:
+        raise ValueError("focused crop page index must be an integer") from exc
 
 
 def _file_witness(path: Path, *, optional: bool) -> tuple[str, str, str]:
@@ -39,7 +50,7 @@ def focused_crop_source_witness(
     invalidate a crop. PDIC is required for any selected text source row.
     Do not hash unrelated pages or OCR caches for a normal crop.
     """
-    source_pages = sorted({int(target["page_index"]) for target in targets})
+    source_pages = sorted({_source_page_index(target["page_index"]) for target in targets})
     rows = []
     for page_index in source_pages:
         if not 0 <= page_index < len(pages):
@@ -65,9 +76,10 @@ def focused_save_source_from_crop_witness(
     try:
         if crop_witness[0] != "focused-crop-source-v1":
             return None
+        owner_index = _source_page_index(page_index)
         matches = [
             row for row in crop_witness[1]
-            if row[0] == int(page_index)
+            if row[0] == owner_index
         ]
         if len(matches) != 1:
             return None
