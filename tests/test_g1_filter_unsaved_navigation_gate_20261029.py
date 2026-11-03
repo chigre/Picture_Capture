@@ -141,3 +141,44 @@ def test_filtered_save_uncertain_only_with_empty_queue_still_refuses_navigation(
     )
     assert review_page_lifecycle.save(review, None, redraw_main=False) is False
     assert statuses
+
+
+def test_clean_focused_autosave_yields_to_main_canvas_writer():
+    """A clean *filtered* window must not consume a main-page autosave tick."""
+    from picture_capture.ui import review_page_lifecycle as lifecycle
+    notes, events = [], []
+    review = SimpleNamespace(
+        _filter_rows_active=True, _filter_save_running=False,
+        _filter_pending_changes={}, _filter_save_uncertain_pages=set(),
+        _filter_save_launch_failed=False,
+        _flush_focused_changes_now=lambda: events.append("flush"),
+        parent=SimpleNamespace(status_var=SimpleNamespace(set=notes.append)),
+    )
+    assert lifecycle.autosave_commit(review, None) is False
+    assert events == ["flush"]
+
+
+def test_unsettled_focused_autosave_does_not_claim_success_or_fallback_to_main():
+    """Pending or uncertain focused PDIC owns a different edit snapshot.
+
+    The shared timer must not write stale main canvas bytes; it must report
+    *not saved* so the operator can retry/reconcile without losing the text.
+    """
+    from picture_capture.ui import review_page_lifecycle as lifecycle
+    import pytest
+    @pytest.mark.parametrize("state", ["pending", "running", "uncertain", "launch_failed"])
+    def check(state):
+        notes = []
+        review = SimpleNamespace(
+            _filter_rows_active=True,
+            _filter_pending_changes={0: {(10, 20): {"new_word": "pending"}}} if state == "pending" else {},
+            _filter_save_running=(state == "running"),
+            _filter_save_uncertain_pages={0} if state == "uncertain" else set(),
+            _filter_save_launch_failed=(state == "launch_failed"),
+            _flush_focused_changes_now=lambda: None,
+            parent=SimpleNamespace(status_var=SimpleNamespace(set=notes.append)),
+        )
+        assert lifecycle.autosave_commit(review, None) is True
+        assert notes and ("未保存" in str(notes[-1]) or "未确认" in str(notes[-1]))
+    for state in ("pending", "running", "uncertain", "launch_failed"):
+        check(state)
