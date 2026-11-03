@@ -224,3 +224,35 @@ def test_shared_autosave_writer_respects_clean_or_unsettled_filtered_review():
         else:
             assert {"silent": True} in saves
         assert "rearmed" in saves
+
+
+def test_polygon_save_never_claims_filtered_human_text_also_saved():
+    """Partial PPP success must not hide pending PDIC text in the UI status."""
+    from picture_capture.ui import main_pdic_persistence, review_page_lifecycle
+    statuses, saves = [], []
+    review = SimpleNamespace(
+        _filter_rows_active=True, _filter_save_running=True,
+        _filter_pending_changes={0: {(10, 20): {"new_word": "unsaved"}}},
+        _filter_save_uncertain_pages=set(), _filter_save_launch_failed=False,
+        _flush_focused_changes_now=lambda: None,
+        winfo_exists=lambda: True,
+    )
+    app = SimpleNamespace(
+        autosave_job="old", autosave_var=Var(True),
+        _batch_active=False, project=object(),
+        current_page=Path("synthetic.png"), review_window=review,
+        _last_pdic_write_changed=False,
+        _save_normalized_ppp=lambda: True,  # PPP independently succeeded
+        save_pdic=lambda **kw: saves.append(("pdic", kw)),
+        toggle_autosave=lambda: saves.append("rearmed"),
+        status_var=SimpleNamespace(set=statuses.append),
+    )
+    review.parent = app
+    review.autosave_commit = lambda: review_page_lifecycle.autosave_commit(review, None)
+    main_pdic_persistence.autosave_tick(
+        app, deps={"tk": SimpleNamespace(TclError=RuntimeError)},
+    )
+    assert not any(isinstance(x, tuple) and x[0] == "pdic" for x in saves)
+    assert "未保存" in statuses[-1] or "未确认" in statuses[-1]
+    assert statuses[-1] != "已自动保存"
+    assert "rearmed" in saves
