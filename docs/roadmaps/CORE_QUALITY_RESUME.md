@@ -1,3 +1,15 @@
+## 2026-11-03 SGT｜G3 R4.2 final focused-save image/SECTION readback witness — six-platform RED → GREEN
+
+- **Live baseline:** main `ec20989ea8c026cca5337293e67850b6b6df30f2` unchanged; sole PR #663 remains Draft/Open/Unmerged, source/test HEAD `8a0259b9a5175b8f760838862963530e01f2b1db`; #503/#562/#483 Open, no unresolved review threads.
+- **Proven RED:** test-only `636351b14e805d4f05ac347b054e64ad413687a8` adds four synthetic readback-period source-drift cases (SECTION replaced/removed/created; image replaced) and two stable-source positive controls. [CI #41602730257](https://github.com/chigre/Picture_Capture/actions/runs/41602730257) failed **all six** platform/Python matrix jobs on exactly the four expected `DID NOT RAISE RuntimeError` cases; Ubuntu3.13 4 failed/5442 passed/3 skipped; Windows3.10 4 failed/5443 passed/2 skipped. RED gate is not PASS.
+- **Minimal fix:** `8a0259b9a5175b8f760838862963530e01f2b1db` adds a final `verify_focused_save_source` only after complete PDIC readback and serialized-field/XY comparisons; no writer rollback or schema change.
+- **Exact source/test HEAD:** [CI #41603256021](https://github.com/chigre/Picture_Capture/actions/runs/41603256021) **6/6 SUCCESS**, Risk-tier/gate SUCCESS; [OCR #41603256004](https://github.com/chigre/Picture_Capture/actions/runs/41603256004) **3/3 SUCCESS**; [CodeQL #41603250733](https://github.com/chigre/Picture_Capture/actions/runs/41603250733) Python/Actions **2/2 SUCCESS**. Documentation architecture check SKIPPED, not PASS. Documentation HEAD gates must be checked independently.
+- **Audit:** `docs/architecture/G3_R4_2_FINAL_POSTREADBACK_SOURCE_WITNESS_20261103.md`. Byte-witness checks are discrete, **not cross-file OS CAS**; a prior PDIC publication is not rolled back and uncertain edits remain pending for explicit inspection.
+- **NOT PERFORMED/DEFERRED:** Windows R3 E3, #483 W1–W11, #503 human Undo/Redo, real dictionary scans/PDIC/PPP/SECTION/Profile/OCR save-reopen, human acceptance, R6 real-label learning, R8 real scans. Synthetic E2 only; no real benchmark or acceleration/accuracy claim.
+- **Next:** verify final docs HEAD, then continue R4.2 bounded async epoch/SECTION/crop prefetch/save ownership. Windows thumbnail intermittent root cause remains UNCONFIRMED.
+
+---
+
 ## 2026-11-03 SGT｜G3 R4.2 streaming session identity + epoch serial binding — RED → GREEN, exact source/test HEAD verified
 
 - **Live baseline:** `main@ec20989ea8c026cca5337293e67850b6b6df30f2` unchanged; sole PR #663 remains **Draft / Open / Unmerged** at source/test HEAD `2fc347e3f806c5e2e961127fb2c5d83d191bf1df`. Issues #503/#562/#483 remain Open; no unresolved inline review threads.
