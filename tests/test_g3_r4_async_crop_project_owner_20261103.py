@@ -52,6 +52,7 @@ def _case(tmp_path: Path):
         canvas=SimpleNamespace(winfo_width=lambda: 700),
         status_var=status,
         _start_ui_worker=lambda *args: callbacks.append(args),
+        _invalidate_ui_worker=lambda _key: None,
     )
     review = SimpleNamespace(
         parent=parent,
@@ -64,6 +65,8 @@ def _case(tmp_path: Path):
         _filter_scan_epoch_source_witnesses={},
         _filter_scan_epoch_invalidated=False,
         _filter_scan_complete=True,
+        _filter_scan_failed=False,
+        filter_batch_var=_Status(),
         _filter_render_serial=0,
         _filter_batch_render_cache={},
         _filter_prefetch_key=None,
@@ -110,13 +113,16 @@ def test_old_prefetch_done_does_not_cache_under_replacement_project(tmp_path):
     _key, worker, done, failed = c.callbacks[0]
     payload = worker()
     c.parent.project = c.new
-    before_ui = (list(c.workspace), list(c.status.values))
 
     done(payload)
 
     assert c.review._filter_batch_render_cache == {}
     assert c.applies == []
-    assert (c.workspace, c.status.values) == before_ui
+    assert c.review._filter_scan_epoch_invalidated is True
+    assert c.review._filter_scan_failed is True
+    assert c.review._filter_scan_complete is False
+    assert any(("项目会话" in str(message) or "来源" in str(message))
+               for message in c.status.values)
 
 
 def test_old_prefetch_failed_does_not_retry_in_replacement_project(tmp_path):
@@ -125,13 +131,16 @@ def test_old_prefetch_failed_does_not_retry_in_replacement_project(tmp_path):
     c.review.filtered_batch_index = 1
     _key, worker, done, failed = c.callbacks[0]
     c.parent.project = c.new
-    before_ui = (list(c.workspace), list(c.status.values))
 
     failed(OSError("PRIVATE_SYNTHETIC_PATH"), "PRIVATE_TRACE")
 
     assert c.renders == []
     assert c.applies == []
-    assert (c.workspace, c.status.values) == before_ui
+    assert c.review._filter_scan_epoch_invalidated is True
+    assert c.review._filter_scan_failed is True
+    assert c.review._filter_scan_complete is False
+    assert any(("项目会话" in str(message) or "来源" in str(message))
+               for message in c.status.values)
 
 
 def test_old_direct_render_success_cannot_cache_or_apply_to_new_project(tmp_path):
@@ -140,13 +149,16 @@ def test_old_direct_render_success_cannot_cache_or_apply_to_new_project(tmp_path
     assert len(c.callbacks) == 1
     _key, worker, done, failed = c.callbacks[0]
     c.parent.project = c.new
-    before_ui = (list(c.workspace), list(c.status.values))
 
     done(([object()], 1.0, [(1, 1)]))
 
     assert c.review._filter_batch_render_cache == {}
     assert c.applies == []
-    assert (c.workspace, c.status.values) == before_ui
+    assert c.review._filter_scan_epoch_invalidated is True
+    assert c.review._filter_scan_failed is True
+    assert c.review._filter_scan_complete is False
+    assert any(("项目会话" in str(message) or "来源" in str(message))
+               for message in c.status.values)
 
 
 def test_old_direct_render_failure_cannot_clear_new_project_workspace(tmp_path):
@@ -155,13 +167,16 @@ def test_old_direct_render_failure_cannot_clear_new_project_workspace(tmp_path):
     assert len(c.callbacks) == 1
     _key, worker, done, failed = c.callbacks[0]
     c.parent.project = c.new
-    before_ui = (list(c.workspace), list(c.status.values))
 
     failed(OSError("PRIVATE_SYNTHETIC_PATH"), "PRIVATE_TRACE")
 
     assert c.review._filter_batch_render_cache == {}
     assert c.applies == []
-    assert (c.workspace, c.status.values) == before_ui
+    assert c.review._filter_scan_epoch_invalidated is True
+    assert c.review._filter_scan_failed is True
+    assert c.review._filter_scan_complete is False
+    assert any(("项目会话" in str(message) or "来源" in str(message))
+               for message in c.status.values)
 
 
 def test_same_session_prefetch_success_still_populates_expected_cache(tmp_path):

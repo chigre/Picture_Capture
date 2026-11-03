@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING
 from ..proofreading.review_timing import ReviewTimingSession
 from ..proofreading.focused_pdic_updates import _exact_page_coordinate
 from .readonly_worker_launch import dispatch_readonly_ui_worker
-from .focused_crop_session_owner import crop_session_is_current
+from .focused_crop_session_owner import accept_crop_terminal
+from .focused_scan_source_owner import _focused_scan_target_source_signature
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
     focused_scan_source_witness, verify_focused_save_source,
@@ -58,39 +59,6 @@ class FocusedFilterDeps:
     _entry_font_spec: object
     themed_display_image: object
     _apply_focused_review_page_updates: object
-
-
-def _focused_scan_target_source_signature(
-    targets: list[dict], pages: list, project_root, deps: FocusedFilterDeps,
-) -> tuple:
-    """Verify that visible scan targets still belong to their PDIC/OCR/SECTION inputs.
-
-    Legacy synthetic callers with no scan witness retain their old helper ABI;
-    real filter targets all carry a witness captured by scan_page().
-    """
-    expected_by_page = {}
-    missing_pages = set()
-    for target in targets:
-        page_index = _source_page_index(target["page_index"])
-        expected = target.get("_focused_scan_source_witness")
-        if expected is None:
-            missing_pages.add(page_index)
-            continue
-        if not 0 <= page_index < len(pages):
-            raise ValueError("focused scan page index out of range")
-        previous = expected_by_page.get(page_index)
-        if previous is not None and previous != expected:
-            raise RuntimeError("同一页面的重点筛选来源证明不一致")
-        expected_by_page[page_index] = expected
-    if missing_pages.intersection(expected_by_page):
-        raise RuntimeError("重点筛选行缺少一致的数据来源证明")
-    for page_index, expected in sorted(expected_by_page.items()):
-        page = pages[page_index]
-        cache_path = deps.ocr_cache_root(project_root) / f"{page.stem}.json"
-        verify_focused_scan_source(
-            page, deps.pdic_path(page), cache_path, expected,
-        )
-    return tuple(sorted(expected_by_page.items()))
 
 
 def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> bool:
@@ -1132,7 +1100,7 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             scan_epoch != getattr(self, "_filter_scan_serial", None)
             or self._filter_prefetch_key != local_key
             or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
-            or not crop_session_is_current(self)
+            or not accept_crop_terminal(self, _reject_active_filter_scan_epoch)
         ):
             return
         terminal_claimed[0] = True
@@ -1178,7 +1146,7 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         if (
             self._filter_prefetch_key != local_key
             or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
-            or not crop_session_is_current(self)
+            or not accept_crop_terminal(self, _reject_active_filter_scan_epoch)
         ):
             return
         terminal_claimed[0] = True
@@ -1386,7 +1354,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
             or int(self.filtered_batch_index) != int(local_index)
-            or not crop_session_is_current(self)
+            or not accept_crop_terminal(self, _reject_active_filter_scan_epoch)
         ):
             return
         # Consume this delivery even when a human edit currently blocks
@@ -1426,7 +1394,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
             or int(self.filtered_batch_index) != int(local_index)
-            or not crop_session_is_current(self)
+            or not accept_crop_terminal(self, _reject_active_filter_scan_epoch)
         ):
             return
         terminal_claimed[0] = True

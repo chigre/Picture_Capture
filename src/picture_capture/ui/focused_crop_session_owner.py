@@ -37,3 +37,14 @@ def crop_session_is_current(self) -> bool:
         return False
 
 
+
+def accept_crop_terminal(review, reject_stale_scan) -> bool:
+    """Only an owned crop terminal may run; invalidate a foreign scan.
+
+    The caller already checked its dispatch/scan serial before calling this
+    boundary. The supplied fail-closed handler remains in the UI owner.
+    """
+    if crop_session_is_current(review):
+        return True
+    reject_stale_scan(review)
+    return False
