@@ -129,6 +129,9 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     )
     dirty = word_dirty or simplified_dirty
     if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
+        self.parent.status_var.set(
+            "后台待处理页面未能取得人工编辑权限；当前输入未保存且仍保留，请停止处理后重试。"
+        )
         return True
     if not dirty:
         # A clean ReviewWindow has NOT saved a potentially dirty main-canvas
@@ -205,16 +208,34 @@ def _review_evidence_after_save(self, deps: ReviewPageDeps, previous: list[WordE
 
 
 def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
-    settings_path = deps.settings_path
     if getattr(self, "_filter_rows_active", False):
         self._flush_focused_changes_now()
-        return not (self._filter_save_running or self._filter_pending_changes)
+        unresolved = bool(
+            getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+            or getattr(self, "_filter_save_uncertain_pages", None)
+            or getattr(self, "_filter_save_launch_failed", False)
+        )
+        if unresolved:
+            self.parent.status_var.set(
+                "筛选校对仍有未确认的写入结果或未保存的人工修改；"
+                "禁止离开当前页面，请核对 PDIC 后显式重试。"
+            )
+        return not unresolved
+    settings_path = deps.settings_path
     state = self.parent._foreground_batch_state(self.parent.current_index)
     if state == "processing":
         self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
         return False
     from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
-    bridge_main_canvas_text_into_review(self)
+    try:
+        bridge_main_canvas_text_into_review(self)
+    except (OSError, RuntimeError, ValueError):
+        self.parent.status_var.set(
+            "主界面与校对窗口的文本或来源存在冲突，未保存；"
+            "两边的输入仍保留，请核对词条后重试。"
+        )
+        return False
     if state == "pending":
         row_entries = self._bound_row_entries()
         word_dirty = any(
@@ -235,14 +256,32 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
         if not self.parent._claim_page_for_manual_edit():
             return False
     from .review_transaction_actions import capture_review_before, record_review_after
-    transaction_before = capture_review_before(self)
-    evidence_before = self._review_evidence_before_save()
     from ..proofreading.save_safety import protect_review_pdic_commit
     from ..proofreading.review_bundle import commit_review_bundle
-    with protect_review_pdic_commit(self):
-        self._commit_edits()
-        commit_review_bundle(self, transaction_before)
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    try:
+        transaction_before = capture_review_before(self)
+        evidence_before = self._review_evidence_before_save()
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            commit_review_bundle(self, transaction_before)
+            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    except (OSError, RuntimeError, ValueError, UnicodeError):
+        # A real toolbar Save is a user action, not an internal log entry.
+        # Never claim success, clear a Tk edit or reveal a private source
+        # filename/word in the status or native error popup.
+        self.parent.status_var.set(
+            "校对文字未保存或写入结果未确认；输入仍在界面中，"
+            "请检查磁盘权限、恢复标记及项目来源后重试。"
+        )
+        if redraw_main:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "校对保存未完成",
+                "本次校对内容未能确认保存，输入未被清空；"
+                "请检查项目文件并重试，若存在恢复标记请先核对来源。",
+                parent=self,
+            )
+        return False
     self._review_evidence_after_save(evidence_before)
     record_review_after(self, transaction_before)
     if self.parent.project:

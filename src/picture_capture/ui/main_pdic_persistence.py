@@ -176,7 +176,9 @@ def autosave_tick(self, *, deps: dict[str, Any]) -> None:
     except (OSError, RuntimeError, ValueError) as exc:
         # In particular, never fall back to stale main-canvas buffers when
         # ReviewWindow's PDIC transaction failed.
-        self.status_var.set(f"自动保存失败，校对修改仍保留：{exc}")
+        self.status_var.set(
+            "自动保存未完成；文字仍保留在编辑框中，请核对校对窗口、项目来源及磁盘权限后重试。"
+        )
     finally:
         # Failed I/O must not silently disable the next autosave tick.
         self.toggle_autosave()
