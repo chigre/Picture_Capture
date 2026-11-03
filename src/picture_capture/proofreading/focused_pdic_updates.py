@@ -160,4 +160,10 @@ def apply_focused_review_page_updates(
             # Preserve the exception and the visible Tk corrections for
             # deliberate operator inspection and guarded explicit retry.
             raise RuntimeError(f"保存后坐标 {key} 的文本校验失败")
+    # PDIC readback and serialized-field checks can themselves race an
+    # external image/SECTION replacement. Never report verified success
+    # from a witness checked only before those reads. This is not a CAS
+    # and cannot undo a PDIC publication that already occurred.
+    if expected_source is not None:
+        verify_focused_save_source(page, expected_source)
     return planned, []
