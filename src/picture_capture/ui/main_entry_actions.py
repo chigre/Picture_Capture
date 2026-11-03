@@ -313,6 +313,48 @@ def update_entry(self, deps: MainEntryActionsDeps, entry: WordEntry, widget: tk.
             except tk.TclError:
                 pass
             return
+        # Modeless proofreading owns a paired PDIC+simplified R3 commit.
+        # Updating Entry.word here on FocusOut would make ReviewWindow's
+        # pre-commit disk/Entry snapshot fail before the save can start.
+        # Transfer the actual main Tk input to its same-Entry review editor,
+        # but leave the original Entry/PDIC unmodified until that commit.
+        review = getattr(self, "review_window", None)
+        active_review = False
+        if review is not None:
+            try:
+                active_review = bool(review.winfo_exists())
+            except (AttributeError, tk.TclError):
+                active_review = False
+        if active_review and getattr(review, "_filter_rows_active", False):
+            if (
+                getattr(review, "_filter_save_running", False)
+                or getattr(review, "_filter_pending_changes", None)
+                or getattr(review, "_filter_save_uncertain_pages", None)
+                or getattr(review, "_filter_save_launch_failed", False)
+            ):
+                self.status_var.set(
+                    "筛选校对的 PDIC 保存尚未确认；主窗口新文字仍保留在输入框，请先完成筛选保存。"
+                )
+                return
+        elif (
+            active_review and getattr(review, "_rendered_page_stem", "")
+            == getattr(getattr(self, "current_page", None), "stem", None)
+        ):
+            from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+            try:
+                staged = bridge_main_canvas_text_into_review(review)
+            except RuntimeError:
+                self.status_var.set(
+                    "主窗口与校对窗口的文字存在冲突或词条绑定已变化；"
+                    "两边输入均未清除，请核对后保存。"
+                )
+                return
+            if staged:
+                self._style_entry_editor(widget, entry, new_word)
+                self.status_var.set(
+                    "主窗口修改已暂存至校对窗口，尚未写入磁盘；请点击保存或等待自动保存。"
+                )
+                return
         entry.word = new_word
         # Manual text edits invalidate the OCR confidence for the word itself.
         entry.confidence = None
