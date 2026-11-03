@@ -140,3 +140,57 @@ def test_valid_display_owner_failed_save_restores_unsaved_edit():
     case.failed(RuntimeError("synthetic-failure"), "PRIVATE_SYNTHETIC_PATH")
     assert case.review._filter_pending_changes[0][(3, 4)] is case.change
     assert case.target["original_word"] == "old"
+
+
+@pytest.mark.parametrize("outcome", ["failure", "success"])
+def test_duplicate_visible_owner_never_claims_save_callback(outcome):
+    """A duplicated source XY cannot prove which Tk row owns this change."""
+    case = _case(visible_word="edited")
+    other = {
+        "page_index": 0, "x": 3, "y": 4,
+        "original_word": "old", "current_word": "old",
+    }
+    case.review.filtered_targets.append(other)
+    if outcome == "failure":
+        case.failed(RuntimeError("synthetic-failure"), "PRIVATE_SYNTHETIC_PATH")
+        assert case.review._filter_pending_changes[0][(3, 4)] is case.change
+    else:
+        case.done(([(0, 3, 4, "edited")], []))
+        assert case.review._filter_pending_changes == {}
+    assert case.target["original_word"] == "old"
+    assert other["original_word"] == "old"
+
+
+def test_duplicate_main_canvas_source_xy_never_updates_either_entry():
+    """A valid PDIC commit is not evidence for either ambiguous live Entry."""
+    first = SimpleNamespace(
+        x=3, y=4, word="first-old", confidence=0.6,
+        ocr_source="ocr", final_engine="ocr", manually_selected=False,
+    )
+    second = SimpleNamespace(
+        x=3, y=4, word="second-old", confidence=0.7,
+        ocr_source="ocr", final_engine="ocr", manually_selected=False,
+    )
+    case = _case(visible_word="edited", main_entry=first)
+    case.parent.entries.append(second)
+    case.done(([(0, 3, 4, "edited")], []))
+    assert case.target["original_word"] == "edited"
+    assert (first.word, second.word) == ("first-old", "second-old")
+    assert first.manually_selected is False
+    assert second.manually_selected is False
+
+
+@pytest.mark.parametrize("index", [0.0, "0", False, "invalid"])
+def test_nonintegral_or_noninteger_main_page_index_cannot_alias_saved_page(index):
+    """Cross-page main canvas synchronization requires a genuine page index."""
+    main = SimpleNamespace(
+        x=3, y=4, word="main-old", confidence=0.6,
+        ocr_source="ocr", final_engine="ocr", manually_selected=False,
+    )
+    case = _case(visible_word="edited", main_entry=main)
+    case.parent.current_index = index
+    case.done(([(0, 3, 4, "edited")], []))
+    assert case.target["original_word"] == "edited"
+    assert main.word == "main-old"
+    assert main.manually_selected is False
+    assert case.review._filter_pending_changes == {}
