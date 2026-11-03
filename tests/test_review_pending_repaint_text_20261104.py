@@ -63,7 +63,14 @@ def _short_crop_review():
 
 def test_short_async_crop_never_destroys_unsaved_review_text():
     review, entry, var, child, notes = _short_crop_review()
-    workspace.render_rows(review, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)), [])
+    deps = SimpleNamespace(
+        tk=SimpleNamespace(TclError=RuntimeError),
+        Image=object(), font=object(),
+        _entry_font_spec=None, _review_editor_font_size=None,
+        resolve_content_font_family=None, _focused_review_is_single_character=None,
+        simplified_entry_key=None,
+    )
+    workspace.render_rows(review, deps, [])
     assert not child.destroyed
     assert review.vars == [var]
     assert var.get() == "我尚未保存的词条"
