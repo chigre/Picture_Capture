@@ -14,7 +14,7 @@ from .readonly_worker_launch import dispatch_readonly_ui_worker
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
     focused_scan_source_witness, verify_focused_save_source,
-    verify_focused_scan_source,
+    verify_focused_scan_source, _source_page_index,
 )
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ def _focused_scan_target_source_signature(
     expected_by_page = {}
     missing_pages = set()
     for target in targets:
-        page_index = int(target["page_index"])
+        page_index = _source_page_index(target["page_index"])
         expected = target.get("_focused_scan_source_witness")
         if expected is None:
             missing_pages.add(page_index)
@@ -132,12 +132,17 @@ def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> b
         # While the scan is streaming, chunk terminals own the expensive
         # byte-level prefix verification. Every UI publication boundary still
         # enforces the cheap session/root/page identity checks above.
+        # Even while results are streaming, an invalid witness-map page
+        # cannot inherit a real page through int() truncation. This is a
+        # cheap identity-only check; content hashes stay at chunk terminals.
+        for source_index in witnesses:
+            page_index = _source_page_index(source_index)
+            if not 0 <= page_index < len(pages):
+                return False
         if not getattr(self, "_filter_scan_complete", False):
             return True
         for page_index, expected in sorted(witnesses.items()):
-            page_index = int(page_index)
-            if not 0 <= page_index < len(pages):
-                return False
+            page_index = _source_page_index(page_index)
             page = pages[page_index]
             cache = deps.ocr_cache_root(project_root) / f"{page.stem}.json"
             verify_focused_scan_source(
