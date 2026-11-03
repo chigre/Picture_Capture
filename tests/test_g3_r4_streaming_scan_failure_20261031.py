@@ -153,6 +153,64 @@ def test_remainder_error_is_explicitly_terminal_without_losing_first_batch(tmp_p
     assert review._filter_rows_active is True
 
 
+@pytest.mark.parametrize("drift", ("pdic", "ocr", "section", "project"))
+def test_remainder_failure_invalidates_changed_already_scanned_prefix(
+    tmp_path, drift, capsys,
+):
+    """A failed tail cannot preserve an old prefix whose source has changed.
+
+    The first page has already produced a visible complete batch. While the
+    second page's worker fails, a foreign actor changes a first-page source
+    or replaces ProjectState with an equal-root/equal-pages object. Retain
+    human edits but invalidate the old scan completeness/preview ownership.
+    """
+    from picture_capture.persistence.project_storage import (
+        page_sections_read_path_for_image,
+    )
+
+    review, status, indicator, failed, workspace = _stream_fixture(tmp_path)
+    page = tmp_path / "001.png"
+    original_rows = list(review.filtered_targets)
+    human = {"new_word": "human-synthetic-correction"}
+    review._filter_pending_changes = {0: {(13, 27): human}}
+    previous_workspace = list(workspace)
+
+    if drift == "pdic":
+        page.with_suffix(".pdic").write_bytes(b"synthetic-pdic-REPLACED")
+    elif drift == "ocr":
+        cache = tmp_path / "unused-ocr-dir" / "001.json"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text('{"review_candidates": []}', encoding="utf-8")
+    elif drift == "section":
+        section = page_sections_read_path_for_image(page)
+        section.parent.mkdir(parents=True, exist_ok=True)
+        section.write_bytes(b"synthetic-section-REPLACED")
+    else:
+        project = review.parent.project
+        review.parent.project = SimpleNamespace(
+            root=project.root, images=list(project.images),
+        )
+        assert review.parent.project is not project
+
+    failed(
+        OSError("PRIVATE_REMAINDER_FAILURE_PATH"),
+        "TRACE_PRIVATE_REMAINDER_FAILURE",
+    )
+
+    assert review._filter_scan_epoch_invalidated is True, (
+        "a tail failure cannot preserve an already-scanned changed source"
+    )
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert review._filter_pending_changes[0][(13, 27)] is human
+    assert review.filtered_targets == original_rows
+    assert workspace == previous_workspace
+    assert "来源" in status.get() or "会话" in status.get()
+    assert "PRIVATE_" not in repr(
+        (status.get(), indicator.get(), capsys.readouterr())
+    )
+
+
 def test_stale_remainder_failure_cannot_poison_new_epoch(tmp_path):
     review, status, indicator, failed, workspace = _stream_fixture(tmp_path)
     review._filter_scan_serial += 1
