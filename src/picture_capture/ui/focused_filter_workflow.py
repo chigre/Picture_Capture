@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from ..proofreading.review_timing import ReviewTimingSession
 from ..proofreading.focused_pdic_updates import _exact_page_coordinate
 from .readonly_worker_launch import dispatch_readonly_ui_worker
+from .focused_crop_session_owner import crop_session_is_current
 from ..proofreading.focused_crop_source_fingerprint import (
     focused_crop_source_witness, focused_save_source_from_crop_witness,
     focused_scan_source_witness, verify_focused_save_source,
@@ -90,36 +91,6 @@ def _focused_scan_target_source_signature(
             page, deps.pdic_path(page), cache_path, expected,
         )
     return tuple(sorted(expected_by_page.items()))
-
-
-def _focused_async_crop_project_owned(self) -> bool:
-    """Check cheap ProjectState and scan-epoch ownership for crop callbacks.
-
-    Content byte witnesses remain at worker and publication boundaries.
-    This does not hash PDIC/OCR/SECTION on every prefetch completion, and
-    legacy helper mocks without an epoch witness map keep their ABI.
-    """
-    if getattr(self, "_filter_scan_epoch_source_witnesses", None) is None:
-        return True
-    project = getattr(getattr(self, "parent", None), "project", None)
-    owner = getattr(self, "_filter_scan_epoch_project", None)
-    if project is None or project is not owner:
-        return False
-    if (
-        getattr(self, "_filter_scan_epoch_invalidated", False)
-        or getattr(self, "_filter_scan_epoch_source_serial", None)
-        != getattr(self, "_filter_scan_serial", None)
-    ):
-        return False
-    try:
-        return bool(
-            str(project.root)
-            == str(getattr(self, "_filter_scan_epoch_project_root", None))
-            and tuple(str(page) for page in project.images)
-            == tuple(str(page) for page in self._filter_scan_epoch_pages)
-        )
-    except (OSError, ValueError, TypeError, AttributeError):
-        return False
 
 
 def _verify_active_filter_scan_epoch_sources(self, deps: FocusedFilterDeps) -> bool:
@@ -1161,7 +1132,7 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
             scan_epoch != getattr(self, "_filter_scan_serial", None)
             or self._filter_prefetch_key != local_key
             or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
-            or not _focused_async_crop_project_owned(self)
+            or not crop_session_is_current(self)
         ):
             return
         terminal_claimed[0] = True
@@ -1207,7 +1178,7 @@ def _schedule_filter_next_batch_preload(self, deps: FocusedFilterDeps) -> None:
         if (
             self._filter_prefetch_key != local_key
             or getattr(self, "_filter_prefetch_dispatch_owner", None) is not dispatch_owner
-            or not _focused_async_crop_project_owned(self)
+            or not crop_session_is_current(self)
         ):
             return
         terminal_claimed[0] = True
@@ -1415,7 +1386,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
             or int(self.filtered_batch_index) != int(local_index)
-            or not _focused_async_crop_project_owned(self)
+            or not crop_session_is_current(self)
         ):
             return
         # Consume this delivery even when a human edit currently blocks
@@ -1455,7 +1426,7 @@ def _request_filter_batch_render(self, deps: FocusedFilterDeps) -> None:
             or scan_epoch != getattr(self, "_filter_scan_serial", None)
             or not getattr(self, "_filter_rows_active", False)
             or int(self.filtered_batch_index) != int(local_index)
-            or not _focused_async_crop_project_owned(self)
+            or not crop_session_is_current(self)
         ):
             return
         terminal_claimed[0] = True
