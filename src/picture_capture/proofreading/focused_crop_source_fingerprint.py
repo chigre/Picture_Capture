@@ -79,7 +79,9 @@ def focused_save_source_from_crop_witness(
         owner_index = _source_page_index(page_index)
         matches = [
             row for row in crop_witness[1]
-            if row[0] == owner_index
+            # A bool or integral float compares equal to an int in Python,
+            # but cannot own a crop row or authorize a later PDIC save.
+            if _source_page_index(row[0]) == owner_index
         ]
         if len(matches) != 1:
             return None
