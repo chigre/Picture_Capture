@@ -177,6 +177,24 @@ def prioritized_focused_page_targets(
     original = list(targets)
     if not enabled or not original:
         return original
+    # The attestation is for the *passed page*, not arbitrary rows whose
+    # integer XY happen to match that page. Refuse a whole mixed/stale page
+    # before any I/O or risk annotation. The live scan creates these three
+    # owner fields together; page_stem was optional in older test adapters.
+    source_page = Path(page)
+    owner_index = original[0].get("page_index") if isinstance(original[0], dict) else None
+    if (
+        type(owner_index) is not int
+        or any(
+            not isinstance(row, dict)
+            or type(row.get("page_index")) is not int
+            or row["page_index"] != owner_index
+            or row.get("page_name") != source_page.name
+            or ("page_stem" in row and row["page_stem"] != source_page.stem)
+            for row in original
+        )
+    ):
+        return original
     risk_by_owner = _snapshot(project_root, page, cache_path, pdic_path)
     if not risk_by_owner:
         return original
