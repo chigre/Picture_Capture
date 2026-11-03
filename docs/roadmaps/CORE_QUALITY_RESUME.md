@@ -1,3 +1,15 @@
+## 2026-11-04 JST — User-reported main/Review text cannot save: R3 source/GUI repair and repaint guard
+
+- **Live:** main `ec20989ea8c026cca5337293e67850b6b6df30f2` unchanged; only [Draft PR #663](https://github.com/chigre/PictureCapture/pull/663), code source `9a55f08ab6c488bbfdab739e42b79b2a5d2adbce`. Code is still **unmerged**, not deployed to user.
+- **Real source defect:** ordinary ReviewWindow commit changed `Entry.word` before simplifying/validating companion source_word. Actual production `commit_proofread_entries` + R3 bundled disk readback tests now cover both existing/missing sidecars. RED 98cd207c [CI #41695531672](https://github.com/chigre/PictureCapture/actions/runs/41695531672); source fixed in b9dfc16a.
+- **Second defect:** main FocusOut mutated Entry ahead of R3 base; two separately editable UI buffers could diverge and autosave skip one. RED f45dee83; fixes in 4ff040b4, e8e63c25, 3b1e0111 (only unique PDIC XY and disk byte re-read authorizes old-model rebase). Neither user text is discarded when they conflict.
+- **Third defect:** Review repaint cleared unsaved original-word inputs before checking crop cardinality. New `review_pending_text.py` + `review_workspace_workflow.py` protect typing buffers before destructive redraw; same-owner retained, stale-source repaint refused (GREEN 9645d939, tests 4ee0b387/26ae4833/9a55f08a).
+- **Failure safety:** toolbar Save and autosave display privacy-safe failure/no-save status, R4 focused uncertain outcome refuses page navigation; did not relax PDIC source pins, R3 transaction recovery or default-OFF evidence. No real files ever sent/uploaded.
+- **CI:** Intermediate 1fd9dd52 Ubuntu/WIN 3.13 and 3.10 SUCCESS, macOS pending. Latest source [CI #41700755299](https://github.com/chigre/PictureCapture/actions/runs/41700755299), [OCR #41700755494](https://github.com/chigre/PictureCapture/actions/runs/41700755494), [CodeQL #41700748120](https://github.com/chigre/PictureCapture/actions/runs/41700748120) **PENDING** at this checkpoint. Never call PR ready, R3 E3, Windows W1–W11 or real save/reopen verified without actual evidence.
+- **Next:** confirm fixed HEAD gates, repair sourced failures, then user Windows human E3 and real-project reproduction; do not start unrelated P0–P4 or test deletion.
+
+---
+
 ## 2026-11-04 JST | G3 R4.2 exact save callback and risk page owner (RED-first source chain; exact source/doc gates PENDING)
 
 - **Live:** main `ec20989ea8c026cca5337293e67850b6b6df30f2` unchanged; only [Draft PR #663](https://github.com/chigre/PictureCapture/pull/663) branch `refactor/562-retire-root-image-utils-20261024`, Open/Draft/Unmerged. #503/#562/#483 OPEN; no Ready, merge, issue closure or parallel production PR.
