@@ -81,7 +81,7 @@ def test_autosave_detects_unreported_simplified_editor_change(tmp_path, monkeypa
     review, visible, events = make_review(tmp_path)
     fake_commits(monkeypatch, events)
     # Unchanged visible text must not cause a needless write.
-    assert review_page_lifecycle.autosave_commit(review, None) is True
+    assert review_page_lifecycle.autosave_commit(review, None) is False
     assert events == []
     # Modify the live Tk text WITHOUT a key/clipboard callback.
     visible.set("人工改词")
@@ -93,7 +93,7 @@ def test_autosave_detects_unreported_simplified_editor_change(tmp_path, monkeypa
 def test_autosave_does_not_rewrite_untouched_manual_simplified(tmp_path, monkeypatch):
     review, _visible, events = make_review(tmp_path, manual=True)
     fake_commits(monkeypatch, events)
-    assert review_page_lifecycle.autosave_commit(review, None) is True
+    assert review_page_lifecycle.autosave_commit(review, None) is False
     assert events == []
 
 

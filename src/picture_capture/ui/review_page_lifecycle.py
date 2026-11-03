@@ -129,7 +129,9 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
         return True
     if not dirty:
-        return True
+        # A clean ReviewWindow has NOT saved a potentially dirty main-canvas
+        # Entry widget. Let the shared autosave coordinator persist main text.
+        return False
     from .review_transaction_actions import capture_review_before, record_review_after
     transaction_before = capture_review_before(self)
     evidence_before = self._review_evidence_before_save()

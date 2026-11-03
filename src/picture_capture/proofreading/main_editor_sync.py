@@ -141,10 +141,37 @@ def commit_proofread_entries(review: Any) -> None:
     page = getattr(review.parent, "current_page", None)
     if page is not None and _marker_present(_recovery_path(page)):
         raise RuntimeError("Unresolved R3 transaction; refusing editor commit")
+    bound = list(review._bound_row_entries())
+    if len(bound) != len(review.vars):
+        raise RuntimeError("R3 校对编辑行数已变化，拒绝丢失尚未保存的文字")
     live_ids = {id(entry) for entry in review.parent.entries}
-    for entry, var in zip(review._bound_row_entries(), review.vars):
-        if id(entry) not in live_ids:
+    if any(id(entry) not in live_ids for entry in bound):
+        raise RuntimeError("R3 校对词条已被重新加载，请保留输入并重新核对来源")
+
+    # Capture simplified Tk edits while Entry.word STILL denotes the original
+    # pinned PDIC word. Previously changing Entry.word first made
+    # source_word_conflicts() reject this very human rename, preventing the
+    # paired PDIC+simplified transaction from ever saving.
+    stem = getattr(review, "_rendered_page_stem", "")
+    plans = [(entry, str(entry.word), var.get().strip())
+             for entry, var in zip(bound, review.vars)]
+    review._capture_simplified_edits(stem)
+    records_fn = getattr(review, "_simplified_page_records", None)
+    records = records_fn(stem) if stem and callable(records_fn) else None
+    updates = []
+    for entry, old, new in plans:
+        if old == new or records is None:
             continue
-        entry.word = var.get().strip()
-    review._capture_simplified_edits(getattr(review, "_rendered_page_stem", ""))
-    reconcile_main_editors_after_review(review.parent, review._bound_row_entries())
+        # Only an exact original headword source may follow a legitimate
+        # same-Entry rename. Never adopt a foreign manual record by XY alone.
+        key = f"{int(entry.x)},{int(entry.y)}"
+        record = records.get(key)
+        if record is not None:
+            if not isinstance(record, dict) or record.get("source_word") != old:
+                raise RuntimeError("R3 简体副本来源词条与校对原词不符，拒绝覆盖人工记录")
+            updates.append((record, new))
+    for record, new in updates:
+        record["source_word"] = new
+    for entry, _old, new in plans:
+        entry.word = new
+    reconcile_main_editors_after_review(review.parent, bound)
