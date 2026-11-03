@@ -5,6 +5,7 @@ Synthetic OCR and generated image only. No user scans or verified labels.
 from __future__ import annotations
 
 from dataclasses import replace
+import pytest
 import json
 
 from PIL import Image
@@ -156,3 +157,55 @@ def test_view_integration_is_off_without_intent_and_uses_existing_worker_epoch()
     assert "prioritized_focused_page_targets" in scan
     assert "_filter_scan_serial" in scan
     assert "if serial != self._filter_scan_serial" in scan
+
+
+@pytest.mark.parametrize(
+    ("coordinate", "malformed"),
+    [
+        ("x", "30"), ("y", "35"),
+        ("x", 30.0), ("y", 35.0),
+        ("x", 30.7), ("y", 35.7),
+        ("x", True), ("y", False),
+        ("x", 1.0), ("y", 1.0),
+    ],
+)
+def test_malformed_review_source_xy_never_inherits_ranked_witness(
+    tmp_path, coordinate, malformed,
+):
+    """Fail closed without guessing or reordering the source page identity.
+
+    The witness, PDIC, image and OCR candidate are independently synthetic and
+    genuinely attested.  Only the *view target* source pixel type is invalid.
+    A float/bool/text coordinate cannot become an integer source marker by
+    coercion; even other valid rows cannot be ranked in the resulting mixed
+    invalid queue, because that would hide the malformed target's owner.
+    """
+    fixture = _page(tmp_path)
+    project, page, cache, pdic, targets = fixture
+    assert publish_review_risk_witnesses(
+        project_root=project, page=page, cache_path=cache, pdic_path=pdic,
+    ) == 4
+    targets[0][coordinate] = malformed
+    before = list(targets)
+    result = _run(fixture, enabled=True)
+    assert result == before
+    assert all(actual is original for actual, original in zip(result, before))
+    assert all("review_risk_tier" not in row for row in result)
+
+
+def test_exact_integer_review_source_xy_still_uses_verified_priority(tmp_path):
+    """Positive control: retain existing stable opt-in behavior for true ints."""
+    fixture = _page(tmp_path)
+    project, page, cache, pdic, targets = fixture
+    assert publish_review_risk_witnesses(
+        project_root=project, page=page, cache_path=cache, pdic_path=pdic,
+    ) == 4
+    assert all(type(t["x"]) is int and type(t["y"]) is int for t in targets)
+    result = _run(fixture, enabled=True)
+    assert [row["original_word"] for row in result] == [
+        "word1", "word3", "word0", "word2",
+    ]
+    assert [row["review_risk_tier"] for row in result] == [
+        "priority", "priority", "normal", "normal",
+    ]
+    assert all("review_risk_tier" not in row for row in targets)
