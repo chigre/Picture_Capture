@@ -104,7 +104,11 @@ def test_autosave_error_keeps_edits_and_always_reschedules():
         toggle_autosave=lambda:seen.append("rescheduled"))
     app.PictureCaptureApp.autosave_tick(fake)
     assert fake.autosave_job is None
-    assert "自动保存失败" in seen[0] and "disk full" in seen[0]
+    # Native error text can carry private project paths or human words;
+    # the user sees a stable, actionable failure without raw exception data.
+    assert "自动保存失败" in seen[0]
+    assert "文字仍保留" in seen[0] and "重试" in seen[0]
+    assert "disk full" not in seen[0]
     assert seen[-1]=="rescheduled"
 
 
