@@ -159,3 +159,43 @@ def test_noop_review_autosave_falls_through_to_main_pdic_writer():
     main_pdic_persistence.autosave_tick(app, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)))
     assert ("pdic", {"silent": True}) in calls
     assert ("rearm",) in calls
+
+
+def test_main_editor_text_is_folded_into_clean_review_autosave(tmp_path, monkeypatch):
+    """Main text edited while ReviewWindow is open must enter the paired R3 save."""
+    review, _simplified, events = make_review(tmp_path)
+    fake_commits(monkeypatch, events)
+    entry = review.parent.entries[0]
+    main_widget = Var("主窗口新词")
+    review.parent.entry_editor_bindings = [(main_widget, entry)]
+    assert review_page_lifecycle.autosave_commit(review, None) is True
+    assert review.vars[0].get() == "主窗口新词"
+    assert events == ["commit", "bundle"]
+
+
+def test_simultaneously_modified_same_word_refuses_without_losing_either_input(tmp_path, monkeypatch):
+    """Divergent editors must keep both user values, never choose by focus."""
+    import pytest
+    review, _simplified, events = make_review(tmp_path)
+    fake_commits(monkeypatch, events)
+    entry = review.parent.entries[0]
+    main_widget = Var("主窗口版本")
+    review.parent.entry_editor_bindings = [(main_widget, entry)]
+    review.vars[0].set("校对窗口版本")
+    with pytest.raises(RuntimeError, match="(冲突|同时|同一词条|不同)"):
+        review_page_lifecycle.autosave_commit(review, None)
+    assert review.vars[0].get() == "校对窗口版本"
+    assert main_widget.get() == "主窗口版本"
+    assert events == []
+
+
+def test_main_and_review_same_new_word_save_once(tmp_path, monkeypatch):
+    """Identical input in two editors is one correction, not a conflict."""
+    review, _simplified, events = make_review(tmp_path)
+    fake_commits(monkeypatch, events)
+    entry = review.parent.entries[0]
+    review.parent.entry_editor_bindings = [(Var("一致修改"), entry)]
+    review.vars[0].set("一致修改")
+    assert review_page_lifecycle.autosave_commit(review, None) is True
+    assert review.vars[0].get() == "一致修改"
+    assert events == ["commit", "bundle"]

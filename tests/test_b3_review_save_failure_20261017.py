@@ -159,3 +159,53 @@ def test_autosave_review_failure_keeps_review_owner_and_rearms():
     assert calls == ["rearmed"]
     assert fake.review_window is review
     assert any("自动保存失败" in value for value in status)
+
+
+def test_main_save_with_open_review_uses_paired_review_transaction(tmp_path, monkeypatch):
+    """Manual main Save must not bypass R3 companion source ownership."""
+    from picture_capture.ui import main_pdic_persistence as persistence
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"synthetic-only")
+    recorded = []
+    review = SimpleNamespace(
+        winfo_exists=lambda: True,
+        _filter_rows_active=False,
+        _rendered_page_stem=page.stem,
+        save=lambda **kw: recorded.append(("review", kw)) or True,
+    )
+    app = SimpleNamespace(
+        project=SimpleNamespace(images=[page]),
+        current_page=page, image=SimpleNamespace(width=100),
+        review_window=review, _batch_active=False,
+    )
+    deps = {
+        "tk": SimpleNamespace(TclError=RuntimeError),
+        "pdic_path": pdic_path,
+        "write_pdic": lambda *_a: pytest.fail("ordinary main PDIC write bypassed review bundle"),
+    }
+    persistence.save_pdic(app, deps=deps)
+    assert recorded == [("review", {"redraw_main": False})]
+
+
+def test_main_save_refuses_uncertain_focused_review_before_pdic_write(tmp_path):
+    """A pending focused writer is still allowed to own the same PDIC file."""
+    from picture_capture.ui import main_pdic_persistence as persistence
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"synthetic-only")
+    review = SimpleNamespace(
+        winfo_exists=lambda: True, _filter_rows_active=True,
+        _filter_save_running=True,
+        _filter_pending_changes={0: {(2, 3): {"new_word": "unsaved"}}},
+    )
+    app = SimpleNamespace(
+        project=SimpleNamespace(images=[page]),
+        current_page=page, image=SimpleNamespace(width=100),
+        review_window=review, _batch_active=False,
+    )
+    deps = {
+        "tk": SimpleNamespace(TclError=RuntimeError),
+        "pdic_path": pdic_path,
+        "write_pdic": lambda *_a: pytest.fail("main wrote across focused edit"),
+    }
+    with pytest.raises(RuntimeError, match="(筛选|正在|未完成|冲突)"):
+        persistence.save_pdic(app, deps=deps)
