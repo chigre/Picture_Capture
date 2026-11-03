@@ -1781,6 +1781,8 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
     # An unreadable/invalid project must never erase work on synchronous
     # setup failure; the caller's close coordinator refuses the exception.
     pages = list(project.images)
+    from ..proofreading.main_editor_sync import capture_focused_main_canvas_snapshot
+    main_canvas_before = capture_focused_main_canvas_snapshot(self.parent)
 
     def save_session_is_current() -> bool:
         """Require the scanned ProjectState owner for live focused saves.
@@ -1911,10 +1913,13 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                     replacement["_focused_save_source_witness"] = source_witness
                 self._filter_pending_changes.setdefault(page_index, {})[row_key] = replacement
 
-        if saved_rows and getattr(self.parent, "current_index", None) is not None:
+        canvas_conflicts = []
+        if saved_rows:
             from ..proofreading.main_editor_sync import reconcile_focused_save_to_main
-            reconcile_focused_save_to_main(self.parent, saved_rows)
-        return saved_map
+            canvas_conflicts = reconcile_focused_save_to_main(
+                self.parent, saved_rows, canvas_before=main_canvas_before,
+            )
+        return saved_map, canvas_conflicts
 
     saved: list[tuple[int, int, int, str]] = []
     page_outcomes: dict[int, str] = {}
@@ -2004,11 +2009,11 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
         _record_focused_timing(
             self, timing_session, "save", save_seconds[0], len(saved),
         )
-        saved_map = reconcile_committed_rows(saved)
+        saved_map, canvas_conflicts = reconcile_committed_rows(saved)
         # Successful per-page writes are only reconciled after the entire
         # worker returns. If a later page fails, the batch remains uncertain.
         recovered = restore_unwritten(set(saved_map))
-        if conflicts or recovered:
+        if conflicts or recovered or canvas_conflicts:
             self._filter_close_after_save = False
 
         if conflicts:
@@ -2017,6 +2022,13 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
                 "以下词条的 PDIC 坐标已变化或存在歧义，因此未写入：\n\n"
                 + "\n".join(conflicts[:20])
                 + ("\n…" if len(conflicts) > 20 else ""),
+                parent=self,
+            )
+        if canvas_conflicts:
+            messagebox.showwarning(
+                "主窗口存在较新的人工修改",
+                "筛选校对的 PDIC 写入已确认，但主窗口词条或编辑框在保存期间"
+                "发生变化；未覆盖主窗口中的较新内容。请核对后手动处理。",
                 parent=self,
             )
         settled_pages = {
@@ -2031,8 +2043,9 @@ def _flush_focused_changes(self, deps: FocusedFilterDeps) -> None:
             f"筛选校对已保存 {len(saved)} 条修改"
             + (f"；{len(conflicts)} 条冲突" if conflicts else "")
             + ("；尚有未确认修改，请核对后重试" if recovered else "")
+            + ("；主窗口存在较新编辑，未覆盖" if canvas_conflicts else "")
         )
-        if self._filter_pending_changes and not conflicts and not recovered:
+        if self._filter_pending_changes and not conflicts and not recovered and not canvas_conflicts:
             # Newer edits after a successful write can be serialized next.
             self._filter_save_job = self.after(1, self._flush_focused_changes)
         elif self._filter_close_after_save and not self._filter_pending_changes:

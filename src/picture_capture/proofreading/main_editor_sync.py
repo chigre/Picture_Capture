@@ -33,34 +33,95 @@ def reconcile_main_editors_after_review(app: Any, rendered_entries: list[Any]) -
 
 
 
-def reconcile_focused_save_to_main(
-    app: Any, saved_rows: list[tuple[int, int, int, str]],
-) -> None:
-    """Update exactly one current-page canvas Entry per confirmed PDIC XY.
+def capture_focused_main_canvas_snapshot(app: Any):
+    """Capture main Entry/widget ownership on Tk before a focused writer starts.
 
-    A ReviewWindow save result is not authority to modify stale, duplicated
-    or implicitly coerced canvas source coordinates. UI widget synchronization
-    remains at this canonical main-editor ownership boundary.
+    A source XY only identifies a marker on disk, not the current editor
+    revision. Keep object references transiently in the save callback; never
+    serialize this snapshot or use it to infer persistent Entry identity.
     """
+    index = getattr(app, "current_index", None)
+    if index is None:
+        return None
+    try:
+        page_index = _source_page_index(index)
+    except (TypeError, ValueError, RuntimeError, OverflowError):
+        return None
+    bindings = tuple(getattr(app, "entry_editor_bindings", ()))
+    observed = {}
+    for point, entry in unique_canvas_source_entries(getattr(app, "entries", ())).items():
+        buffers = []
+        for editor, owner in bindings:
+            if owner is not entry:
+                continue
+            try:
+                buffers.append((editor, str(editor.get())))
+            except (tk.TclError, RuntimeError):
+                buffers = None
+                break
+        observed[point] = (entry, str(entry.word), None if buffers is None else tuple(buffers))
+    return page_index, observed
+
+
+def reconcile_focused_save_to_main(
+    app: Any, saved_rows: list[tuple[int, int, int, str]], *, canvas_before,
+) -> list[tuple[int, int]]:
+    """Update a main Entry only if its pre-dispatch word and widgets are intact.
+
+    A confirmed PDIC write is not permission to replace an independent,
+    newer main-canvas human edit. Report conflicting XY for operator review;
+    never rewrite a foreign widget or Entry under an aliased source point.
+    """
+    if canvas_before is None:
+        return []
     current_index = getattr(app, "current_index", None)
     if current_index is None:
-        return
+        return []
     try:
         page_owner = _source_page_index(current_index)
     except (TypeError, ValueError, RuntimeError, OverflowError):
-        return
+        return []
+    before_page, before_entries = canvas_before
+    if before_page != page_owner:
+        return []
     current_saved = {
         (x, y): word for page_index, x, y, word in saved_rows
         if int(page_index) == page_owner
     }
     if not current_saved:
-        return
+        return []
+    bindings = tuple(getattr(app, "entry_editor_bindings", ()))
     confirmed = []
+    conflicts = []
     for point, entry in unique_canvas_source_entries(
         getattr(app, "entries", ())
     ).items():
         word = current_saved.get(point)
         if word is None:
+            continue
+        before = before_entries.get(point)
+        if before is None or entry is not before[0] or str(entry.word) != before[1]:
+            conflicts.append(point)
+            continue
+        earlier_buffers = before[2]
+        if earlier_buffers is None:
+            conflicts.append(point)
+            continue
+        live_editors = tuple(editor for editor, owner in bindings if owner is entry)
+        if len(live_editors) != len(earlier_buffers):
+            conflicts.append(point)
+            continue
+        try:
+            unchanged = all(
+                editor is prior_editor
+                and old_text == before[1]
+                and str(editor.get()) == old_text
+                for editor, (prior_editor, old_text) in zip(live_editors, earlier_buffers)
+            )
+        except (tk.TclError, RuntimeError):
+            unchanged = False
+        if not unchanged:
+            conflicts.append(point)
             continue
         entry.word = word
         entry.confidence = None
@@ -70,6 +131,7 @@ def reconcile_focused_save_to_main(
         confirmed.append(entry)
     if confirmed:
         reconcile_main_editors_after_review(app, confirmed)
+    return conflicts
 
 def commit_proofread_entries(review: Any) -> None:
     """Persist editor words by rendered Entry identity, then reconcile canvas."""
