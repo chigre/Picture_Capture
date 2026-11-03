@@ -134,12 +134,32 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     state = self.parent._foreground_batch_state(self.parent.current_index)
     if state == "processing":
         return True
+    # A partial async repaint, an obsolete page or reloaded Entry objects
+    # cannot acknowledge a ReviewWindow autosave. A True refusal blocks the
+    # shared main timer from writing stale buffers over the same PDIC.
+    row_entries = self._bound_row_entries()
+    live_entries = getattr(self.parent, "entries", None)
+    rendered_stem = getattr(self, "_rendered_page_stem", None)
+    if (
+        len(row_entries) != len(self.vars)
+        or (rendered_stem is not None and rendered_stem != self.parent.current_page.stem)
+        or (
+            live_entries is not None and (
+                len(row_entries) != len(live_entries)
+                or len({id(row) for row in row_entries}) != len(row_entries)
+                or {id(row) for row in row_entries} != {id(row) for row in live_entries}
+            )
+        )
+    ):
+        self.parent.status_var.set(
+            "校对行绑定已变化，本次自动保存未确认；人工输入仍保留，请核对页面后重试。"
+        )
+        return True
     from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
     bridge_main_canvas_text_into_review(self)
-    row_entries = self._bound_row_entries()
     word_dirty = any(
-        i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
-        for i in range(min(len(self.vars), len(row_entries)))
+        self.vars[i].get().strip() != row_entries[i].word
+        for i in range(len(self.vars))
     )
     current_stem = self.parent.current_page.stem
     simplified_dirty = (
