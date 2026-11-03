@@ -182,3 +182,45 @@ def test_unsettled_focused_autosave_does_not_claim_success_or_fallback_to_main()
         assert notes and ("未保存" in str(notes[-1]) or "未确认" in str(notes[-1]))
     for state in ("pending", "running", "uncertain", "launch_failed"):
         check(state)
+
+
+def test_shared_autosave_writer_respects_clean_or_unsettled_filtered_review():
+    """Exercise actual shared main timer with filter window still open.
+
+    Clean filtered state must allow main PDIC publication; unresolved filtered
+    state must not fall back to a potentially stale main-canvas writer.
+    """
+    from picture_capture.ui import main_pdic_persistence, review_page_lifecycle
+    for pending in (False, True):
+        saves, messages = [], []
+        review = SimpleNamespace(
+            _filter_rows_active=True,
+            _filter_save_running=False,
+            _filter_pending_changes={0: {(10, 20): {"new_word": "pending"}}} if pending else {},
+            _filter_save_uncertain_pages=set(),
+            _filter_save_launch_failed=False,
+            _flush_focused_changes_now=lambda: None,
+            winfo_exists=lambda: True,
+        )
+        app = SimpleNamespace(
+            autosave_job="old", autosave_var=Var(True),
+            _batch_active=False, project=object(),
+            current_page=Path("synthetic.png"),
+            review_window=review,
+            _last_pdic_write_changed=False,
+            _save_normalized_ppp=lambda: False,
+            save_pdic=lambda **kwargs: saves.append(kwargs),
+            toggle_autosave=lambda: saves.append("rearmed"),
+            status_var=SimpleNamespace(set=messages.append),
+        )
+        review.parent = app
+        review.autosave_commit = lambda: review_page_lifecycle.autosave_commit(review, None)
+        main_pdic_persistence.autosave_tick(
+            app, deps={"tk": SimpleNamespace(TclError=RuntimeError)},
+        )
+        if pending:
+            assert {"silent": True} not in saves
+            assert any("未保存" in text or "未确认" in text for text in messages)
+        else:
+            assert {"silent": True} in saves
+        assert "rearmed" in saves
