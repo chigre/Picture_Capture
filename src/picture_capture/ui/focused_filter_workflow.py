@@ -678,6 +678,13 @@ def run_focused_filter(self, deps: FocusedFilterDeps) -> None:
             ):
                 return
             remaining_terminal_claimed[0] = True
+            # A tail failure does not entitle the UI to preserve a stale
+            # already-completed prefix. Revalidate known scanned pages and
+            # the exact ProjectState owner before keeping those rows visible.
+            # This read-only terminal witness is not an OS-level CAS.
+            if not verify_scan_epoch_sources(start_position):
+                _reject_active_filter_scan_epoch(self)
+                return
             # Only fully scanned batches may remain available; no failed
             # chunk is published and no visible human edit is discarded.
             # Do not surface exception strings containing project paths.
