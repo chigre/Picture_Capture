@@ -352,3 +352,55 @@ def test_live_review_rename_refuses_stale_companion_owner_before_pdic_mutation(t
     assert pdic_path(page).read_bytes() == original_pdic
     assert entry.word == "old"
     assert record["source_word"] == "foreign-owner"
+
+
+def test_review_bridge_repairs_preexisting_main_focusout_model_ahead(tmp_path):
+    """A main FocusOut may have changed Entry.word BEFORE PDIC publication.
+
+    Exact disk old-word ownership allows staging that newer value in the
+    Review editor and temporarily restoring the model to its saved baseline
+    so R3 snapshot_review can authorize the paired commit. No disk write here.
+    """
+    from picture_capture.proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    page, entry, review = case(tmp_path)
+    class V:
+        def __init__(self, value):
+            self.value = value
+        def get(self):
+            return self.value
+        def set(self, value):
+            self.value = value
+    review.vars = [V("old")]
+    widget = V("main-focusout-new")
+    entry.word = "main-focusout-new"
+    review.parent.entry_editor_bindings = [(widget, entry)]
+    assert bridge_main_canvas_text_into_review(review) == 1
+    assert review.vars[0].get() == "main-focusout-new"
+    assert widget.get() == "main-focusout-new"
+    assert entry.word == "old"
+    assert [e.word for e in __import__(
+        "picture_capture.io.formats", fromlist=["read_pdic"]
+    ).read_pdic(pdic_path(page))] == ["old"]
+
+
+def test_review_bridge_refuses_two_divergent_texts_after_main_model_ahead(tmp_path):
+    """An old disk baseline is not permission to discard a review correction."""
+    from picture_capture.proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    page, entry, review = case(tmp_path)
+    class V:
+        def __init__(self, value):
+            self.value = value
+        def get(self):
+            return self.value
+        def set(self, value):
+            self.value = value
+    review.vars = [V("review-new")]
+    entry.word = "main-new"
+    widget = V("main-new")
+    review.parent.entry_editor_bindings = [(widget, entry)]
+    with pytest.raises(RuntimeError, match="(冲突|同时|不同|来源)"):
+        bridge_main_canvas_text_into_review(review)
+    assert entry.word == "main-new"
+    assert widget.get() == "main-new"
+    assert review.vars[0].get() == "review-new"
+    assert b"old#" in pdic_path(page).read_bytes()
