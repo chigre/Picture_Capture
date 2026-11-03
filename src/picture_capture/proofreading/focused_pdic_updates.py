@@ -140,9 +140,12 @@ def apply_focused_review_page_updates(
             word, str(x), str(y), f"{x_pct:g}", f"{y_pct:g}",
             *page_links,
         ])
+    # Keep the exact byte snapshot used for the eight-field comparison.
+    # A later source witness may run while another writer changes PDIC.
+    published_bytes = target_path.read_bytes()
     published_fields = [
         line.split("#")
-        for line in target_path.read_text(encoding="utf-8-sig").splitlines()
+        for line in published_bytes.decode("utf-8-sig").splitlines()
         if line.strip()
     ]
     if published_fields != expected_fields:
@@ -166,4 +169,8 @@ def apply_focused_review_page_updates(
     # and cannot undo a PDIC publication that already occurred.
     if expected_source is not None:
         verify_focused_save_source(page, expected_source)
+    # Recheck the published PDIC bytes after the final image/SECTION witness,
+    # which itself may overlap a foreign PDIC edit. No rollback or cross-file CAS.
+    if disk_bytes() != published_bytes:
+        raise RuntimeError("保存后 PDIC 复核期间已变化，拒绝确认保存")
     return planned, []
