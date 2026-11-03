@@ -764,7 +764,30 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         self._request_render_rows(focus_index=self.active_index)
         return
     current_stem = self.parent.current_page.stem if self.parent.current_page else ""
+    if not self.parent.image:
+        return
+    # Validate crop cardinality BEFORE destroying the previous editors.
+    # An async crop from an earlier layout generation cannot clear human text.
+    ordered = self.parent._ordered_entries_reading_order()
+    if len(preloaded_crops) < len(ordered):
+        self._request_render_rows(focus_index=self.active_index)
+        return
+    pending_original_words = {}
     if self._rendered_page_stem and self._rendered_page_stem == current_stem:
+        from ..proofreading.review_pending_text import capture_pending_review_words
+        try:
+            pending_original_words = capture_pending_review_words(
+                getattr(self, "row_entries", ()),
+                getattr(self, "vars", ()),
+                getattr(self, "_review_render_original_words", {}),
+                getattr(self.parent, "entries", ()),
+            )
+        except RuntimeError:
+            self.parent.status_var.set(
+                "校对原词尚有未保存输入且页面来源无法确认；"
+                "保持现有编辑框，请先保存或核对后再刷新切片。"
+            )
+            return
         self._capture_simplified_edits(self._rendered_page_stem)
     # Pending height-switch jobs belong to the outgoing rendered rows.
     for job in getattr(self, "_review_crop_height_jobs", {}).values():
@@ -788,12 +811,6 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
     self._rendered_page_stem = current_stem
     self.__dict__.pop("_r3_simplified_capture_blocked", None)
     simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
-    if not self.parent.image:
-        return
-    ordered = self.parent._ordered_entries_reading_order()
-    if len(preloaded_crops) < len(ordered):
-        self._request_render_rows(focus_index=self.active_index)
-        return
     self._review_display_crops = list(preloaded_crops)
     self._review_row_pictures.clear()
     words = self.parent._project_words if self.parent.project else set()
@@ -812,7 +829,7 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         )
         self.thumbnails.append(photo)
         self._review_row_pictures.append(picture)
-        var = tk.StringVar(value=entry.word)
+        var = tk.StringVar(value=pending_original_words.get(id(entry), entry.word))
         # Review zoom changes only the cropped line image.  Text-entry font
         # size is a user setting and remains fixed while zooming the image.
         editor_font_size = _review_editor_font_size(self.parent.settings)
@@ -988,6 +1005,12 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         if saved_simplified is None:
             simplified_records[simplified_key] = materialized_record
             self._simplified_dirty_pages.add(current_stem)
+    # Base words are from the still-owned Entry objects, NOT unsaved Tk
+    # text. This makes later same-page redraws distinguish a human edit
+    # from an externally mutated Entry during an in-flight worker.
+    self._review_render_original_words = {
+        id(entry): str(entry.word) for entry in ordered
+    }
     self.rows.columnconfigure(0, weight=1)
     self._update_title()
     self._refresh_editor_ocr_compare()
