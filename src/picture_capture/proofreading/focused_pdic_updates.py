@@ -2,12 +2,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from operator import index as exact_index
 from typing import TYPE_CHECKING
 
 from .focused_crop_source_fingerprint import verify_focused_save_source
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+def _exact_page_coordinate(value: object) -> int:
+    """Only true integer source pixels can identify a PDIC marker."""
+    if isinstance(value, bool):
+        raise RuntimeError("筛选校对原图 XY 坐标必须是整数，拒绝保存")
+    try:
+        return exact_index(value)
+    except TypeError as exc:
+        # int(value) silently truncates floats and parses text, which can
+        # retarget an edit to a different, otherwise valid marker.
+        raise RuntimeError("筛选校对原图 XY 坐标必须是整数，拒绝保存") from exc
 
 
 @dataclass(frozen=True)
@@ -23,6 +36,28 @@ def apply_focused_review_page_updates(
     page: Path, pages: list[Path], page_index: int, changes: list[dict], *, deps: FocusedPdicDeps,
 ) -> tuple[list[tuple[int, int, int, str]], list[str]]:
     """Apply filtered-review edits using exact original-image X/Y only."""
+    if not changes:
+        # An empty edit batch must not normalize or republish a PDIC file.
+        return [], []
+    if isinstance(page_index, bool):
+        raise RuntimeError("筛选校对页码无效或页面归属不一致，拒绝保存")
+    try:
+        owner_index = exact_index(page_index)
+    except TypeError as exc:
+        raise RuntimeError("筛选校对页码无效或页面归属不一致，拒绝保存") from exc
+    if not (0 <= owner_index < len(pages)) or page != pages[owner_index]:
+        raise RuntimeError("筛选校对页码无效或页面归属不一致，拒绝保存")
+    for change in changes:
+        change_index = change.get("page_index", owner_index)
+        if isinstance(change_index, bool):
+            raise RuntimeError("筛选校对词条页面归属不一致，拒绝保存")
+        try:
+            matches_page = exact_index(change_index) == owner_index
+        except TypeError:
+            matches_page = False
+        if not matches_page:
+            raise RuntimeError("筛选校对词条页面归属不一致，拒绝保存")
+    page_index = owner_index
     pdic_path = deps.pdic_path
     read_pdic = deps.read_pdic
     replace = deps.replace
@@ -61,7 +96,10 @@ def apply_focused_review_page_updates(
     planned: list[tuple[int, int, int, str]] = []
     conflicts: list[str] = []
     for change in changes:
-        x, y = int(change["x"]), int(change["y"])
+        x, y = (
+            _exact_page_coordinate(change["x"]),
+            _exact_page_coordinate(change["y"]),
+        )
         original_word = str(change.get("original_word") or "")
         new_word = (
             str(change.get("new_word") or "")
