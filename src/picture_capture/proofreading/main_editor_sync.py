@@ -182,9 +182,77 @@ def bridge_main_canvas_text_into_review(review: Any) -> int:
         if prior is not None and prior[1] != text:
             raise RuntimeError("主窗口同一词条有多个不同编辑框内容；请核对后保存")
         changes[id(entry)] = (owner[1], text)
+    # Older UI sessions could already have mutated Entry.word on a main
+    # FocusOut before their shared autosave was dispatched. R3 rightly
+    # refuses snapshot_review if the model no longer matches the PDIC.
+    # Recover this precise case only when the original ReviewWindow text is
+    # independently confirmed by the on-disk, unique original-image XY.
+    # A real review edit (disk matches Entry, not Review var) stays untouched.
+    # Divergent main/review edits fail closed without clearing either field.
+    ahead = []
+    for entry, var in zip(rows, vars):
+        if id(entry) in changes:
+            continue
+        main_word, review_word = str(entry.word).strip(), str(var.get()).strip()
+        if main_word == review_word:
+            continue
+        attached = [editor for editor, owner in bindings if owner is entry]
+        if len(attached) != 1:
+            continue
+        try:
+            widget_text = str(attached[0].get()).strip()
+        except (tk.TclError, RuntimeError) as exc:
+            raise RuntimeError("主窗口编辑框状态无法核对，文字未保存") from exc
+        if widget_text == main_word:
+            ahead.append((entry, var, attached[0], main_word, review_word))
+    restores = []
+    if ahead:
+        from ..io.formats import pdic_path, read_pdic
+        from .focused_pdic_updates import _exact_page_coordinate
+        path = pdic_path(page)
+        try:
+            old_bytes = path.read_bytes()
+            disk_rows = read_pdic(path)
+            if path.read_bytes() != old_bytes:
+                raise RuntimeError("校对时 PDIC 来源发生变化")
+            disk_owner = {}
+            for disk_entry in disk_rows:
+                xy = (
+                    _exact_page_coordinate(disk_entry.x),
+                    _exact_page_coordinate(disk_entry.y),
+                )
+                if xy in disk_owner:
+                    raise RuntimeError("PDIC 重复原图坐标，无法确认保存来源")
+                disk_owner[xy] = str(disk_entry.word).strip()
+            for entry, var, editor, main_word, review_word in ahead:
+                xy = (
+                    _exact_page_coordinate(entry.x),
+                    _exact_page_coordinate(entry.y),
+                )
+                on_disk = disk_owner.get(xy)
+                if on_disk == review_word and on_disk != main_word:
+                    restores.append((entry, on_disk))
+                    changes[id(entry)] = (var, main_word)
+                elif on_disk == main_word:
+                    # This is an ordinary ReviewWindow-only edit.
+                    continue
+                else:
+                    raise RuntimeError(
+                        "主窗口与校对窗口存在不一致的文字版本；不能确定原图词条来源"
+                    )
+                if (
+                    str(entry.word).strip() != main_word
+                    or str(var.get()).strip() != review_word
+                    or str(editor.get()).strip() != main_word
+                ):
+                    raise RuntimeError("编辑器在来源核对过程中发生变化，请重新核对")
+        except (OSError, ValueError, TypeError, UnicodeError) as exc:
+            raise RuntimeError("原始 PDIC 来源无法验证，输入未保存，请核对后重试") from exc
     for var, text in changes.values():
         if str(var.get()).strip() != text:
             var.set(text)
+    for entry, old_word in restores:
+        entry.word = old_word
     return len(changes)
 
 def commit_proofread_entries(review: Any) -> None:
