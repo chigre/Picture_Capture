@@ -60,3 +60,62 @@ def test_valid_integral_focused_target_still_queues_normal_edit():
     assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "edit"
     assert review._filter_pending_changes[0][(3, 4)]["x"] == 3
     assert scheduled == [160]
+
+
+@pytest.mark.parametrize(("field", "invalid"), [
+    ("page_index", 0.9), ("page_index", "0"), ("page_index", False),
+    ("x", 3.9), ("x", "3"), ("x", True),
+    ("y", 4.9), ("y", "4"), ("y", False),
+])
+def test_editor_trace_invalid_source_identity_does_not_change_target(field, invalid):
+    """An invalid StringVar trace must not mutate target/current_word first.
+
+    Calling the guarded queue directly is insufficient: native Tk invokes
+    the editor commit adapter, which previously changed current_word before
+    the exact-page/XY queue validator could refuse the malformed identity.
+    """
+    review, deps, scheduled = _review()
+    target = {
+        "page_index": 0, "x": 3, "y": 4,
+        "original_word": "old", "current_word": "old",
+    }
+    target[field] = invalid
+    status = []
+    review.parent = SimpleNamespace(
+        _project_words=[], status_var=SimpleNamespace(set=status.append),
+    )
+    review.filter_vars = [SimpleNamespace(get=lambda: "edited")]
+    review.filter_editors = [SimpleNamespace(configure=lambda **_kw: None)]
+    review._filter_current_batch_targets = [target]
+    review._queue_focused_change = lambda row, value: focused._queue_focused_change(
+        review, deps, row, value,
+    )
+
+    focused._commit_filter_editor_value(review, deps, 0)
+
+    assert target["current_word"] == "old"
+    assert target["original_word"] == "old"
+    assert review._filter_pending_changes == {}
+    assert scheduled == []
+    assert any("拒绝保存" in text for text in status)
+
+
+def test_editor_trace_valid_source_identity_still_changes_and_queues():
+    review, deps, scheduled = _review()
+    target = {
+        "page_index": 0, "x": 3, "y": 4,
+        "original_word": "old", "current_word": "old",
+    }
+    review.parent = SimpleNamespace(_project_words=[])
+    review.filter_vars = [SimpleNamespace(get=lambda: "edited")]
+    review.filter_editors = [SimpleNamespace(configure=lambda **_kw: None)]
+    review._filter_current_batch_targets = [target]
+    review._queue_focused_change = lambda row, value: focused._queue_focused_change(
+        review, deps, row, value,
+    )
+
+    focused._commit_filter_editor_value(review, deps, 0)
+
+    assert target["current_word"] == "edited"
+    assert review._filter_pending_changes[0][(3, 4)]["new_word"] == "edited"
+    assert scheduled == [160]
