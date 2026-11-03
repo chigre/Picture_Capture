@@ -134,9 +134,11 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
         )
         return True
     if not dirty:
-        # A clean ReviewWindow has NOT saved a potentially dirty main-canvas
-        # Entry widget. Let the shared autosave coordinator persist main text.
-        return False
+        # The main-canvas buffers have already been reconciled above.
+        # If either view really changed, bridge_main_canvas_text_into_review
+        # staged the new text and dirty is True. A genuinely unchanged review
+        # may now safely consume this no-op without a redundant PDIC write.
+        return True
     from .review_transaction_actions import capture_review_before, record_review_after
     transaction_before = capture_review_before(self)
     evidence_before = self._review_evidence_before_save()

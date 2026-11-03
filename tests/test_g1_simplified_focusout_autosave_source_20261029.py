@@ -129,12 +129,13 @@ def test_simplified_editor_has_focusout_fallback_binding():
     assert 'simplified_editor.bind("<FocusOut>"' in source
 
 
-def test_clean_review_does_not_consume_shared_autosave_for_main_canvas(tmp_path):
-    """A clean ReviewWindow cannot claim that main-canvas unsaved text was saved."""
+def test_clean_review_autosave_noop_only_after_main_editor_check(tmp_path):
+    """Main text is checked by the bridge before an unchanged review is no-op."""
     review, _visible, events = make_review(tmp_path)
-    fake_commits_event = events
-    assert review_page_lifecycle.autosave_commit(review, None) is False
-    assert fake_commits_event == []
+    assert review_page_lifecycle.autosave_commit(review, None) is True
+    assert events == []
+    # A changed main widget must stop the same clean-Review no-op path;
+    # it is staged into the R3 bundle by the paired regression below.
 
 
 def test_noop_review_autosave_falls_through_to_main_pdic_writer():
