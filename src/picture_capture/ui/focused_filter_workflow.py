@@ -876,25 +876,28 @@ def _filter_batch_snapshot(self, deps: FocusedFilterDeps, batch_index: int):
     available_width = max(240, self._review_image_area_width())
     review_zoom_auto = bool(self.review_zoom_auto)
     review_zoom = max(0.01, float(self.review_zoom))
-    target_signature = tuple(
-        (
-            int(target["page_index"]),
-            int(target["x"]),
-            int(target["y"]),
-            str(target.get("original_word") or ""),
-        )
-        for target in targets
-    )
-    # A prefetched crop from a previous image/PDIC/SECTION revision must
-    # never be reused just because the source XY, text or Tk zoom is the same.
-    # Use actual source bytes, not mutable size/mtime metadata. This is a
-    # volatile readback, not an OS-level multi-file atomic snapshot.
+    # Validate the actual page/XY identity before deriving a crop cache key:
+    # int() truncation can alias an unrelated source marker's thumbnail.
+    # A malformed target must not publish a snapshot or crash the Tk caller.
     try:
+        target_signature = tuple(
+            (
+                _source_page_index(target["page_index"]),
+                _exact_page_coordinate(target["x"]),
+                _exact_page_coordinate(target["y"]),
+                str(target.get("original_word") or ""),
+            )
+            for target in targets
+        )
+        # A prefetched crop from a previous image/PDIC/SECTION revision must
+        # never be reused just because the source XY, text or Tk zoom is the same.
+        # Use actual source bytes, not mutable size/mtime metadata. This is a
+        # volatile readback, not an OS-level multi-file atomic snapshot.
         scan_source_signature = _focused_scan_target_source_signature(
             targets, pages, project.root, deps,
         )
         source_witness = focused_crop_source_witness(pages, targets)
-    except (OSError, ValueError, IndexError, RuntimeError):
+    except (OSError, ValueError, IndexError, RuntimeError, KeyError, TypeError):
         return None
     render_signature = (
         target_signature,
@@ -933,7 +936,13 @@ def _prepare_filter_batch_payload(
     display_meta: list[tuple[int, int]] = []
     page_cache: dict[int, tuple[Image.Image, object, list[WordEntry]]] = {}
     for target in targets:
-        page_index = int(target["page_index"])
+        # The off-Tk worker is an independent crop boundary. Do not map a
+        # malformed page/XY token onto a valid marker, even for direct calls.
+        page_index = _source_page_index(target["page_index"])
+        if not 0 <= page_index < len(pages):
+            raise ValueError("focused crop page index out of range")
+        target_x = _exact_page_coordinate(target["x"])
+        target_y = _exact_page_coordinate(target["y"])
         if page_index not in page_cache:
             page = pages[page_index]
             with Image.open(page) as opened:
@@ -949,8 +958,8 @@ def _prepare_filter_batch_payload(
         review_settings, geometry = context
         matches = [
             i for i, entry in enumerate(ordered)
-            if int(entry.x) == int(target["x"])
-            and int(entry.y) == int(target["y"])
+            if int(entry.x) == target_x
+            and int(entry.y) == target_y
         ]
         if len(matches) > 1:
             preferred = [
