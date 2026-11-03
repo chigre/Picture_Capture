@@ -127,3 +127,35 @@ def test_simplified_editor_has_focusout_fallback_binding():
         / "src/picture_capture/ui/review_workspace_workflow.py"
     ).read_text(encoding="utf-8")
     assert 'simplified_editor.bind("<FocusOut>"' in source
+
+
+def test_clean_review_does_not_consume_shared_autosave_for_main_canvas(tmp_path):
+    """A clean ReviewWindow cannot claim that main-canvas unsaved text was saved."""
+    review, _visible, events = make_review(tmp_path)
+    fake_commits_event = events
+    assert review_page_lifecycle.autosave_commit(review, None) is False
+    assert fake_commits_event == []
+
+
+def test_noop_review_autosave_falls_through_to_main_pdic_writer():
+    """Check the ACTUAL shared timer, not merely the review return value."""
+    from picture_capture.ui import main_pdic_persistence
+    calls = []
+    review = SimpleNamespace(
+        winfo_exists=lambda: True,
+        autosave_commit=lambda: False,
+    )
+    app = SimpleNamespace(
+        autosave_var=SimpleNamespace(get=lambda: True),
+        autosave_job="old", _batch_active=False,
+        project=object(), current_page=Path("synthetic.png"),
+        review_window=review,
+        _last_pdic_write_changed=False,
+        save_pdic=lambda **kw: calls.append(("pdic", kw)),
+        _save_normalized_ppp=lambda: False,
+        toggle_autosave=lambda: calls.append(("rearm",)),
+        status_var=SimpleNamespace(set=lambda v: calls.append(("status", v))),
+    )
+    main_pdic_persistence.autosave_tick(app, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)))
+    assert ("pdic", {"silent": True}) in calls
+    assert ("rearm",) in calls

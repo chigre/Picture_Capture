@@ -282,3 +282,73 @@ def test_missing_pin_does_not_allow_a_prepopulated_legacy_cache_to_be_saved(tmp_
     assert entry.word == "old"
     assert path.read_bytes() == before
     assert not _recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("existing_sidecar", [False, True])
+@pytest.mark.parametrize("manual", [False, True])
+def test_live_review_word_rename_rebases_simplified_source_and_commits_pdic(
+    tmp_path, existing_sidecar, manual,
+):
+    """Use the REAL production editor commit; not the fixture's pre-rebased stub.
+
+    A normal headword rename must be allowed to move the matching companion
+    record's source_word with the paired R3 bundle. The old on-disk sidecar
+    is independently verified against the OLD PDIC before any publication.
+    """
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+    from picture_capture.proofreading.simplified_review import entry_key, read_records
+    from picture_capture.ui import review_simplified_workflow as simpl_workflow
+
+    page, entry, review = case(tmp_path)
+    sidecar = simplified_review_path_for_image(page)
+    record = review._simplified_page_cache[page.stem]["10,20"]
+    record["manual"] = manual
+    record["text"] = "human-locked" if manual else "auto-old"
+    if existing_sidecar:
+        _seed_existing_sidecar(page, review)
+        # The existing sidecar has authentic pre-edit ownership.
+        assert read_records(sidecar)["10,20"]["source_word"] == "old"
+    review.row_entries = [entry]
+    review.simplified_vars = [SimpleNamespace(get=lambda: record["text"])]
+    review._simplified_display_from_value = (
+        lambda word, text, is_manual: text
+    )
+    review._capture_simplified_edits = lambda stem: simpl_workflow._capture_simplified_edits(
+        review, SimpleNamespace(simplified_entry_key=entry_key), stem,
+    )
+    review._commit_edits = lambda: commit_proofread_entries(review)
+    before = snapshot_review(review)
+    assert before is not None
+    with protect_review_pdic_commit(review):
+        review._commit_edits()
+        commit_review_bundle(review, before)
+    assert entry.word == "new"
+    assert read_records(sidecar)["10,20"]["source_word"] == "new"
+    assert read_records(sidecar)["10,20"]["text"] == (
+        "human edited text" if existing_sidecar else ("human-locked" if manual else "auto-old")
+    )
+    assert pdic_path(page).read_bytes().startswith(b"new#")
+    assert not _recovery_path(page).exists()
+
+
+def test_live_review_rename_refuses_stale_companion_owner_before_pdic_mutation(tmp_path):
+    """Do not relabel a different human correction at a coincident XY."""
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+    from picture_capture.proofreading.simplified_review import entry_key
+    from picture_capture.ui import review_simplified_workflow as simpl_workflow
+
+    page, entry, review = case(tmp_path)
+    record = review._simplified_page_cache[page.stem]["10,20"]
+    record["source_word"] = "foreign-owner"
+    review.row_entries = [entry]
+    review.simplified_vars = [SimpleNamespace(get=lambda: "human")]
+    review._simplified_display_from_value = lambda w, v, m: v
+    review._capture_simplified_edits = lambda stem: simpl_workflow._capture_simplified_edits(
+        review, SimpleNamespace(simplified_entry_key=entry_key), stem,
+    )
+    original_pdic = pdic_path(page).read_bytes()
+    with pytest.raises(RuntimeError, match="(来源|原词|归属|简体)"):
+        commit_proofread_entries(review)
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert entry.word == "old"
+    assert record["source_word"] == "foreign-owner"
