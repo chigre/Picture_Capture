@@ -156,7 +156,7 @@ def test_noop_review_autosave_falls_through_to_main_pdic_writer():
         toggle_autosave=lambda: calls.append(("rearm",)),
         status_var=SimpleNamespace(set=lambda v: calls.append(("status", v))),
     )
-    main_pdic_persistence.autosave_tick(app, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)))
+    main_pdic_persistence.autosave_tick(app, deps={"tk": SimpleNamespace(TclError=RuntimeError)})
     assert ("pdic", {"silent": True}) in calls
     assert ("rearm",) in calls
 
