@@ -199,3 +199,79 @@ def test_unmodified_canvas_snapshot_still_reconciles_verified_focused_save():
     assert main_entry.word == "focused-saved"
     assert editor.get() == "focused-saved"
     assert main_entry.manually_selected is True
+
+
+def test_main_focusout_review_stage_waits_for_paired_save():
+    """FocusOut must not mutate Entry.word before R3 snapshot_review reads PDIC.
+
+    The main canvas has a live unsaved StringVar while ordinary ReviewWindow
+    is open. Stage its word into the matching ReviewWindow editor so the
+    next explicit/autosave can commit the PDIC+companion transaction together.
+    """
+    from picture_capture.ui import main_entry_actions
+    entry = SimpleNamespace(
+        x=10, y=20, word="old", candidate_id="", confidence=0.8,
+        ocr_source="ocr", final_engine="ocr", manually_selected=False,
+    )
+    widget = Editor("主界面输入")
+    review_var = SimpleNamespace(value="old")
+    review_var.get = lambda: review_var.value
+    review_var.set = lambda value: setattr(review_var, "value", value)
+    review = SimpleNamespace(
+        _rendered_page_stem="001", _filter_rows_active=False,
+        winfo_exists=lambda: True, vars=[review_var],
+        _bound_row_entries=lambda: [entry],
+    )
+    statuses = []
+    app = SimpleNamespace(
+        current_page=Path("001.png"), current_index=0,
+        entries=[entry], entry_editor_bindings=[(widget, entry)],
+        review_window=review, _claim_page_for_manual_edit=lambda: True,
+        _style_entry_editor=lambda *a, **kw: None,
+        status_var=SimpleNamespace(set=statuses.append),
+        _write_manual_override=lambda *a, **kw:
+            pytest.fail("manual sidecar must wait for paired save"),
+    )
+    review.parent = app
+    main_entry_actions.update_entry(
+        app, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)),
+        entry, widget,
+    )
+    assert entry.word == "old"
+    assert review_var.get() == "主界面输入"
+    assert widget.get() == "主界面输入"
+    assert entry.manually_selected is False
+    assert statuses and any("待保存" in text or "校对" in text for text in statuses)
+
+
+def test_main_focusout_conflicting_review_text_preserves_both_buffers():
+    """Don't adopt a different ReviewWindow correction by the same XY."""
+    from picture_capture.ui import main_entry_actions
+    entry = SimpleNamespace(
+        x=10, y=20, word="old", candidate_id="", confidence=0.8,
+        ocr_source="ocr", final_engine="ocr", manually_selected=False,
+    )
+    widget = Editor("主窗口不同修改")
+    review_var = SimpleNamespace(get=lambda: "校对窗口不同修改")
+    review = SimpleNamespace(
+        _rendered_page_stem="001", _filter_rows_active=False,
+        winfo_exists=lambda: True, vars=[review_var],
+        _bound_row_entries=lambda: [entry],
+    )
+    statuses = []
+    app = SimpleNamespace(
+        current_page=Path("001.png"), entries=[entry],
+        entry_editor_bindings=[(widget, entry)], review_window=review,
+        _claim_page_for_manual_edit=lambda: True,
+        _style_entry_editor=lambda *a, **kw: None,
+        status_var=SimpleNamespace(set=statuses.append),
+    )
+    review.parent = app
+    main_entry_actions.update_entry(
+        app, SimpleNamespace(tk=SimpleNamespace(TclError=RuntimeError)),
+        entry, widget,
+    )
+    assert entry.word == "old"
+    assert widget.get() == "主窗口不同修改"
+    assert review_var.get() == "校对窗口不同修改"
+    assert statuses
