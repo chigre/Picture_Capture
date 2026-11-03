@@ -172,7 +172,26 @@ def autosave_tick(self, *, deps: dict[str, Any]) -> None:
                 self.save_pdic(silent=True)
             polygon_changed = False if self._batch_active else self._save_normalized_ppp()
             if self._last_pdic_write_changed or polygon_changed:
-                self.status_var.set("已自动保存")
+                # PPP saving does not prove the human PDIC was published.
+                # The filtered callback can still be in flight or uncertain
+                # even when a separate polygon save succeeded.
+                focused_unsettled = bool(
+                    review is not None
+                    and getattr(review, "_filter_rows_active", False)
+                    and (
+                        getattr(review, "_filter_save_running", False)
+                        or getattr(review, "_filter_pending_changes", None)
+                        or getattr(review, "_filter_save_uncertain_pages", None)
+                        or getattr(review, "_filter_save_launch_failed", False)
+                    )
+                )
+                if focused_unsettled:
+                    self.status_var.set(
+                        "其他页面内容已自动保存，但筛选校对文字未保存或未确认；"
+                        "输入仍保留，请核对筛选保存后重试。"
+                    )
+                else:
+                    self.status_var.set("已自动保存")
     except (OSError, RuntimeError, ValueError) as exc:
         # In particular, never fall back to stale main-canvas buffers when
         # ReviewWindow's PDIC transaction failed.
