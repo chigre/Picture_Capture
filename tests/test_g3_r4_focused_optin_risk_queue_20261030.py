@@ -209,3 +209,52 @@ def test_exact_integer_review_source_xy_still_uses_verified_priority(tmp_path):
         "priority", "priority", "normal", "normal",
     ]
     assert all("review_risk_tier" not in row for row in targets)
+
+
+@pytest.mark.parametrize(("field", "invalid"), [
+    ("page_index", 0.0),
+    ("page_index", "0"),
+    ("page_index", False),
+    ("page_index", True),
+    ("page_index", 1),
+    ("page_name", "002.png"),
+    ("page_name", ""),
+    ("page_name", None),
+    ("page_stem", "002"),
+])
+def test_optin_risk_source_page_owner_does_not_inherit_other_page_witness(
+    tmp_path, field, invalid,
+):
+    """An attested *page* cannot rank a foreign or nonintegral view row.
+
+    Real scans construct page_index, page_name and page_stem together. Here
+    only the displayed target metadata is corrupted after software-owned
+    synthetic OCR/PDIC origin publication; no real project files are used.
+    """
+    fixture = _page(tmp_path)
+    project, page, cache, pdic, targets = fixture
+    assert publish_review_risk_witnesses(
+        project_root=project, page=page, cache_path=cache, pdic_path=pdic,
+    ) == 4
+    targets[0][field] = invalid
+    before = [dict(row) for row in targets]
+    result = _run(fixture, enabled=True)
+    assert result == targets
+    assert all(actual is original for actual, original in zip(result, targets))
+    assert targets == before
+    assert all("review_risk_tier" not in row for row in result)
+    assert all("review_risk_reasons" not in row for row in result)
+
+
+def test_verified_page_owner_still_opted_in_and_default_remains_off(tmp_path):
+    fixture = _page(tmp_path)
+    project, page, cache, pdic, targets = fixture
+    assert publish_review_risk_witnesses(
+        project_root=project, page=page, cache_path=cache, pdic_path=pdic,
+    ) == 4
+    assert [row["original_word"] for row in _run(fixture, enabled=True)] == [
+        "word1", "word3", "word0", "word2",
+    ]
+    assert all(row["page_index"] == 0 for row in targets)
+    assert all(row["page_name"] == page.name for row in targets)
+    assert all("review_risk_tier" not in row for row in _run(fixture, enabled=False))
