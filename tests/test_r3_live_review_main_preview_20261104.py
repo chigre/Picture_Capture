@@ -162,3 +162,128 @@ def test_auto_simplified_preview_keeps_frozen_source_until_original_commit():
     assert records["10,20"]["source_word"] == "新词"
     assert records["10,20"]["text"] == "新词"
     assert records["10,20"]["manual"] is False
+
+
+@pytest.mark.parametrize("foreign_sidecar_race", [False, True])
+def test_live_main_preview_real_pdic_sidecar_save_and_foreign_race(
+    tmp_path, foreign_sidecar_race,
+):
+    """Real production serializers/paired writer, synthetic file bytes only.
+
+    A Review edit must paint the main editor NOW but both PDIC and simplified
+    records change only under a verified bundled save. A foreign sidecar write
+    between snapshot and commit must preserve every original/human byte and
+    both unsaved Tk buffers, with no fake save success.
+    """
+    from picture_capture.io.formats import pdic_path, write_pdic, read_pdic
+    from picture_capture.models import Entry
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    from picture_capture.proofreading.simplified_review import write_records, read_records
+    from picture_capture.proofreading import transactions, review_bundle, save_safety
+
+    page = tmp_path / "000001.png"
+    original_image = b"pure synthetic immutable page witness"
+    page.write_bytes(original_image)
+    row = Entry("原词", 10, 20)
+    write_pdic(pdic_path(page), [row], 100, (page.stem, "@", "@"))
+    sidecar = simplified_review_path_for_image(page)
+    disk_records = {
+        "10,20": {
+            "x": 10, "y": 20, "source_word": "原词",
+            "text": "原詞", "manual": False,
+        },
+    }
+    write_records(sidecar, page.stem, disk_records)
+    original_pdic = pdic_path(page).read_bytes()
+    original_sidecar = sidecar.read_bytes()
+    canvas, status = Editor("原词"), Var("")
+    app = SimpleNamespace(
+        current_page=page, current_index=0,
+        entries=[row], image=SimpleNamespace(width=100),
+        project=SimpleNamespace(root=tmp_path, images=[page]),
+        settings=SimpleNamespace(proofreading_event_capture=False),
+        entry_editor_bindings=[(canvas, row)],
+        _batch_active=False, _pending_manual_override_payload=None,
+        ocr_review_candidates=[], status_var=status,
+        _manual_selection_path=lambda: tmp_path / "human-selection.json",
+        _paddle_cache_path=lambda: tmp_path / "synthetic-ocr.json",
+        _sort_entries_reading_order=lambda: None,
+        pages_tuple=lambda: (page.stem, "@", "@"),
+        _flush_pending_manual_override=lambda: None,
+        _flush_proofreading_candidate_evidence=lambda: None,
+        _flush_proofreading_add_evidence=lambda: None,
+        _refresh_word_fill_check_from_line_count=lambda *a, **kw: None,
+        _update_page_row=lambda *a, **kw: None,
+    )
+    deps = SimpleNamespace(
+        simplified_entry_key=lambda x, y: f"{x},{y}",
+        simplify_text=lambda original: original,
+    )
+    records = {key: dict(record) for key, record in disk_records.items()}
+    review = SimpleNamespace(
+        parent=app, row_entries=[row], vars=[Var("原词")],
+        simplified_vars=[Var("原詞")],
+        simplified_actual_values=["原詞"],
+        simplified_manual_flags=[False],
+        simplified_auto_refresh_flags=[True],
+        _rendered_page_stem=page.stem, _filter_rows_active=False,
+        _simplified_dirty_pages=set(), active_index=-1,
+        _simplified_page_cache={page.stem: records},
+        _r3_simplified_source_bytes={
+            page.stem: (sidecar.resolve(), original_sidecar),
+        },
+        _simplified_page_records=lambda stem: records,
+        _auto_simplified_value=lambda original, fallback=None: original,
+        _simplified_display_from_value=lambda original, actual, manual:
+            simplified._simplified_display_from_value(
+                deps, original, actual, manual,
+            ),
+        _refresh_cc_simplified_comparison=lambda index: None,
+    )
+    review._bound_row_entries = lambda: [row]
+    review._capture_simplified_edits = lambda stem: simplified._capture_simplified_edits(
+        review, deps, stem,
+    )
+    main_editor_sync.bind_review_word_preview(review, 0)
+    review.vars[0].set("校对词")
+    simplified._refresh_simplified_for_index(review, deps, 0)
+    assert canvas.get() == "校对词"
+    assert row.word == "原词"
+    assert pdic_path(page).read_bytes() == original_pdic
+    assert sidecar.read_bytes() == original_sidecar
+    assert records["10,20"]["source_word"] == "原词"
+    source = transactions.snapshot_review(review, allow_evidence=True)
+    assert source is not None
+
+    if foreign_sidecar_race:
+        # Another writer owns this new human correction. Never replace it,
+        # retry stale snapshots, or acknowledge the local pending input.
+        foreign = {
+            "10,20": {
+                "x": 10, "y": 20, "source_word": "原词",
+                "text": "other independent human correction", "manual": True,
+            }
+        }
+        write_records(sidecar, page.stem, foreign)
+        foreign_bytes = sidecar.read_bytes()
+        with pytest.raises(RuntimeError, match="指纹|来源|变化"):
+            with save_safety.protect_review_pdic_commit(review):
+                main_editor_sync.commit_proofread_entries(review)
+                review_bundle.commit_review_bundle(review, source)
+        assert pdic_path(page).read_bytes() == original_pdic
+        assert sidecar.read_bytes() == foreign_bytes
+        assert row.word == "原词"
+        assert review.vars[0].get() == canvas.get() == "校对词"
+    else:
+        with save_safety.protect_review_pdic_commit(review):
+            main_editor_sync.commit_proofread_entries(review)
+            review_bundle.commit_review_bundle(review, source)
+        assert read_pdic(pdic_path(page))[0].word == "校对词"
+        assert read_records(sidecar)["10,20"] == {
+            "x": 10, "y": 20, "source_word": "校对词",
+            "text": "校对词", "manual": False,
+        }
+        assert row.word == review.vars[0].get() == canvas.get() == "校对词"
+
+    assert page.read_bytes() == original_image
+    assert not transactions._marker_present(transactions._recovery_path(page))
