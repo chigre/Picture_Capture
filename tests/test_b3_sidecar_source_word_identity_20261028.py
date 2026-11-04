@@ -412,3 +412,99 @@ def test_detached_sidecar_confirmed_noop_save_does_not_trap_next_page(
     assert not tx._marker_present(tx._recovery_path(page))
     if not unreported_simplified_edit:
         assert "简体" in app.status_var.get()
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
+    tmp_path, explicit,
+):
+    """Screenshot-shaped synthetic case: PDIC '司衡#', old human source '司衡'.
+
+    An explicit ordinary ReviewWindow Save/Next must be able to commit a
+    verified correction to '司衡' without modifying prior manual JSON bytes,
+    warning that an old manual note may now match again. The background
+    autosave is NOT a user decision to rejoin a detached manual sidecar.
+    """
+    from picture_capture.proofreading import main_editor_sync
+    page, path, entry, app, review = case(tmp_path)
+    entry.word = "司衡#"
+    write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
+    records = read_records(path)
+    records["10,20"].update(
+        source_word="司衡", text="原先人工简体记录", manual=True,
+    )
+    write_records(path, page.stem, records)
+    review._simplified_page_cache[page.stem] = records
+    review._r3_simplified_source_bytes[page.stem] = (
+        path.resolve(), path.read_bytes(),
+    )
+    source_before = pdic_path(page).read_bytes()
+    sidecar_before = path.read_bytes()
+
+    class MainCanvas:
+        def __init__(self):
+            self.text = "司衡#"
+        def get(self):
+            return self.text
+        def delete(self, a, b):
+            self.text = ""
+        def insert(self, a, t):
+            self.text = t
+
+    class ReviewVar:
+        def __init__(self, text):
+            self.text = text
+            self.callbacks = []
+        def get(self):
+            return self.text
+        def set(self, text):
+            self.text = text
+            for callback in tuple(self.callbacks):
+                callback("var", "", "write")
+        def trace_add(self, mode, callback):
+            assert mode == "write"
+            self.callbacks.append(callback)
+
+    canvas = MainCanvas()
+    app.entry_editor_bindings = [(canvas, entry)]
+    review.vars[0] = ReviewVar("司衡#")
+    review.simplified_actual_values[0] = "⚠来源词条不一致，请核对原词"
+    review.simplified_vars[0].set("⚠来源词条不一致，请核对原词")
+    review.simplified_manual_flags[0] = True
+    review.simplified_auto_refresh_flags[0] = False
+    review._capture_simplified_edits = lambda stem: workflow._capture_simplified_edits(
+        review,
+        SimpleNamespace(simplified_entry_key=lambda x, y: f"{x},{y}"),
+        stem,
+    )
+    main_editor_sync.bind_review_word_preview(review, 0)
+    review.vars[0].set("司衡")
+    assert canvas.get() == "司衡"
+    assert entry.word == "司衡#"
+    assert pdic_path(page).read_bytes() == source_before
+    frozen = tx.snapshot_review(review, allow_evidence=True)
+    assert frozen is not None
+    review.__dict__["_r3_detached_original_save_source"] = frozen
+    if explicit:
+        review.__dict__["_r3_explicit_detached_source_rejoin"] = frozen
+    try:
+        if explicit:
+            with protect_review_pdic_commit(review):
+                main_editor_sync.commit_proofread_entries(review)
+                bundle.commit_review_bundle(review, frozen)
+            assert read_pdic(pdic_path(page))[0].word == "司衡"
+            assert "核对" in app.status_var.get() or "人工" in app.status_var.get()
+        else:
+            with pytest.raises(RuntimeError, match="来源|原词|归属"):
+                with protect_review_pdic_commit(review):
+                    main_editor_sync.commit_proofread_entries(review)
+                    bundle.commit_review_bundle(review, frozen)
+            assert pdic_path(page).read_bytes() == source_before
+            assert entry.word == "司衡#"
+            assert review.vars[0].get() == canvas.get() == "司衡"
+    finally:
+        review.__dict__.pop("_r3_detached_original_save_source", None)
+        review.__dict__.pop("_r3_explicit_detached_source_rejoin", None)
+    assert path.read_bytes() == sidecar_before
+    assert read_records(path)["10,20"]["text"] == "原先人工简体记录"
+    assert not tx._marker_present(tx._recovery_path(page))
