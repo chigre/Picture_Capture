@@ -53,8 +53,10 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
             raise RuntimeError("R3 同一原图坐标出现多个词条")
         after_words[xy] = str(entry.word)
         changed |= str(entry.word) != old[0]
-    if not changed:
-        raise RuntimeError("R3 没有新的原词校对修改，旧简体来源词条仍不匹配")
+    # A confirmed no-op must be allowed so ReviewWindow can navigate after
+    # a prior PDIC-only original-word save. It cannot grant permission to
+    # rebind or rewrite a detached human record; all UI/byte checks below
+    # still apply, and the canonical PDIC proposal must remain byte-identical.
 
     stale = []
     for row in saved.values():
@@ -159,6 +161,13 @@ def commit_review_bundle(review: Any, source) -> None:
             target_sidecar, page.stem,
             [(entry.word, entry.x, entry.y) for entry in app.entries],
         )
+    if detached_sidecar and all(
+        str(entry.word) == str(word)
+        for entry, word, _x, _y in source.entries
+    ) and target_pdic != source.pdic_bytes:
+        raise RuntimeError(
+            "R3 原词无变化但 PDIC 序列化不同，拒绝空保存改写来源"
+        )
     changes = [
         (role, former, latter)
         for role, former, latter in (
@@ -227,6 +236,7 @@ def commit_review_bundle(review: Any, source) -> None:
         app.status_var.set(f"校对文件已提交，附属状态刷新失败：{exc}")
     if detached_sidecar:
         app.status_var.set(
-            "原词 PDIC 已保存；历史简体人工副本来源不一致，原始字节完整保留，"
+            ("原词 PDIC 已保存；" if changes else "本页文字无变化，未重复写盘；")
+            + "历史简体人工副本来源不一致，原始字节完整保留，"
             "未关联到新词条，请另行核对。"
         )
