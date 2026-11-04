@@ -359,9 +359,15 @@ def test_reported_stale_human_sidecar_preserved_while_new_original_is_saved(tmp_
     assert source is not None
     assert source.simplified_bytes == old_sidecar
     assert source.entries[0][1] == "current-from-prior-pdic-save"
-    with protect_review_pdic_commit(review):
-        commit_proofread_entries(review)
-        bundle.commit_review_bundle(review, source)
+    # Reproduce the real ReviewWindow protected-save source lease.
+    # A bare direct helper call must still reject stale ownership.
+    review.__dict__["_r3_detached_original_save_source"] = source
+    try:
+        with protect_review_pdic_commit(review):
+            commit_proofread_entries(review)
+            bundle.commit_review_bundle(review, source)
+    finally:
+        review.__dict__.pop("_r3_detached_original_save_source", None)
     assert pdic_path(page).read_bytes() != prior_pdic
     assert read_pdic(pdic_path(page))[0].word == "new-current-human-correction"
     assert path.read_bytes() == old_sidecar

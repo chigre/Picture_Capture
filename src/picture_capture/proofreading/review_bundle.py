@@ -30,6 +30,8 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
     rebound, normalized, deleted or published. Any uncertain Tk input or new
     matching source_word still fails closed.
     """
+    if review.__dict__.get("_r3_detached_original_save_source") is not source:
+        raise RuntimeError("R3 来源词条未由当前原词保存事务确认")
     validate_source_for_rewrite(source.simplified_bytes, page.stem)
     saved = read_records(simplified)
     if records != saved or page.stem in review._simplified_dirty_pages:
@@ -52,7 +54,7 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         after_words[xy] = str(entry.word)
         changed |= str(entry.word) != old[0]
     if not changed:
-        raise RuntimeError("R3 没有新的原词校对修改，拒绝绕过旧简体来源检查")
+        raise RuntimeError("R3 没有新的原词校对修改，旧简体来源词条仍不匹配")
 
     stale = []
     for row in saved.values():

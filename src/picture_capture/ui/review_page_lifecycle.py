@@ -189,10 +189,14 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     evidence_before = self._review_evidence_before_save()
     from ..proofreading.save_safety import protect_review_pdic_commit
     from ..proofreading.review_bundle import commit_review_bundle
-    with protect_review_pdic_commit(self):
-        self._commit_edits()
-        commit_review_bundle(self, transaction_before)
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    self.__dict__["_r3_detached_original_save_source"] = transaction_before
+    try:
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            commit_review_bundle(self, transaction_before)
+            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    finally:
+        self.__dict__.pop("_r3_detached_original_save_source", None)
     self._review_evidence_after_save(evidence_before)
     record_review_after(self, transaction_before)
     return True
@@ -308,10 +312,14 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
     try:
         transaction_before = capture_review_before(self)
         evidence_before = self._review_evidence_before_save()
-        with protect_review_pdic_commit(self):
-            self._commit_edits()
-            commit_review_bundle(self, transaction_before)
-            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+        self.__dict__["_r3_detached_original_save_source"] = transaction_before
+        try:
+            with protect_review_pdic_commit(self):
+                self._commit_edits()
+                commit_review_bundle(self, transaction_before)
+                self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+        finally:
+            self.__dict__.pop("_r3_detached_original_save_source", None)
     except (OSError, RuntimeError, ValueError, UnicodeError):
         # A real toolbar Save is a user action, not an internal log entry.
         # Never claim success, clear a Tk edit or reveal a private source
