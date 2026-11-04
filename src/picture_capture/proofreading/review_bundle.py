@@ -34,7 +34,17 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         raise RuntimeError("R3 来源词条未由当前原词保存事务确认")
     validate_source_for_rewrite(source.simplified_bytes, page.stem)
     saved = read_records(simplified)
-    if records != saved or page.stem in review._simplified_dirty_pages:
+    # A newly rendered row with NO saved sidecar entry gets an automatic
+    # OpenCC preview. The preview must neither block a safe PDIC-only edit
+    # nor authorize rewriting the older detached HUMAN sidecar. Every saved
+    # key/value must remain exact; verify each new key against the frozen
+    # PDIC Entry, generated value, current Tk display and auto-only flags.
+    if any(records.get(key) != value for key, value in saved.items()):
+        raise RuntimeError("R3 旧简体副本或尚未保存的简体输入不能与原词独立提交")
+    auto_seeds = {
+        key: value for key, value in records.items() if key not in saved
+    }
+    if not auto_seeds and page.stem in review._simplified_dirty_pages:
         raise RuntimeError("R3 旧简体副本或尚未保存的简体输入不能与原词独立提交")
 
     old_by_id = {id(entry): (str(word), int(x), int(y))
@@ -42,6 +52,48 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
     if len(old_by_id) != len(source.entries) or len(review.parent.entries) != len(old_by_id):
         raise RuntimeError("R3 原词行集合改变，旧简体副本不可独立保留")
     before_words = {(x, y): word for word, x, y in old_by_id.values()}
+    if auto_seeds:
+        bound = tuple(review._bound_row_entries())
+        auto_flags = tuple(getattr(review, "simplified_auto_refresh_flags", ()))
+        manuals = tuple(getattr(review, "simplified_manual_flags", ()))
+        actuals = tuple(getattr(review, "simplified_actual_values", ()))
+        if not all(len(items) == len(bound)
+                   for items in (auto_flags, manuals, actuals)):
+            raise RuntimeError("R3 自动简体预览缺少完整行归属，拒绝独立提交")
+        proved = set()
+        for index, row in enumerate(bound):
+            old = old_by_id.get(id(row))
+            if old is None:
+                raise RuntimeError("R3 自动简体预览的原词来源已失效")
+            old_word, x, y = old
+            key = f"{x},{y}"
+            if key not in auto_seeds:
+                continue
+            candidate = auto_seeds[key]
+            # The row must have been absent from the original sidecar, and
+            # must still be a true never-saved automatic seed. A KeyRelease,
+            # paste or IME correction is never silently discarded as auto.
+            if (not auto_flags[index] or manuals[index]
+                    or not isinstance(candidate, dict)
+                    or set(candidate) != {"x", "y", "source_word", "text", "manual"}
+                    or type(candidate["x"]) is not int
+                    or type(candidate["y"]) is not int
+                    or candidate["x"] != x or candidate["y"] != y
+                    or candidate["source_word"] != old_word
+                    or candidate["manual"] is not False):
+                raise RuntimeError("R3 自动简体缓存来源或人工状态无法验证")
+            try:
+                generated = review._auto_simplified_value(old_word)
+            except (OSError, RuntimeError, TypeError, ValueError, UnicodeError) as exc:
+                raise RuntimeError("R3 自动简体预览不能复核") from exc
+            if (actuals[index] != generated
+                    or candidate["text"] != (
+                        "" if generated is None else str(generated)
+                    )):
+                raise RuntimeError("R3 自动简体缓存不是原词的可验证预览")
+            proved.add(key)
+        if proved != set(auto_seeds):
+            raise RuntimeError("R3 自动简体缓存包含其他页面或未知坐标")
     after_words = {}
     changed = False
     for entry in review.parent.entries:
@@ -110,7 +162,7 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         )
         if shown != str(expected).strip():
             raise RuntimeError("R3 简体编辑框仍有未确认输入，拒绝丢弃")
-    return True
+    return len(auto_seeds)
 
 
 def commit_review_bundle(review: Any, source) -> None:
@@ -144,6 +196,7 @@ def commit_review_bundle(review: Any, source) -> None:
     # PDIC row identity. Pending editor word changes are legitimate, but an
     # already stale human correction at the same source pixel is not.
     detached_sidecar = False
+    unpersisted_auto_seeds = 0
     try:
         validate_source_word_binding(
             source.simplified_bytes, page.stem,
@@ -152,9 +205,10 @@ def commit_review_bundle(review: Any, source) -> None:
     except RuntimeError as error:
         if str(error) != "R3 简体记录来源词条与 PDIC 原图坐标不一致，拒绝覆盖":
             raise
-        detached_sidecar = _detached_sidecar_allows_original_only(
+        unpersisted_auto_seeds = _detached_sidecar_allows_original_only(
             review, source, page, simplified, records,
         )
+        detached_sidecar = True
     if not sources_match():
         raise RuntimeError("R3 简体来源验证期间文件变化，拒绝保存")
 
@@ -258,14 +312,18 @@ def commit_review_bundle(review: Any, source) -> None:
     except (OSError, RuntimeError, ValueError) as exc:
         app.status_var.set(f"校对文件已提交，附属状态刷新失败：{exc}")
     if detached_sidecar:
+        auto_notice = (
+            "本页新增的自动简体仅为预览，未写入旧人工文件。"
+            if unpersisted_auto_seeds else ""
+        )
         if review.__dict__.get("_r3_explicit_detached_source_rejoin") is source:
             app.status_var.set(
                 "已按人工明确确认更新原词；旧人工简体副本原始字节完整保留，"
-                "来源重新匹配，请核对简体内容。"
+                "来源重新匹配，请核对简体内容。" + auto_notice
             )
         else:
             app.status_var.set(
                 ("原词 PDIC 已保存；" if changes else "本页文字无变化，未重复写盘；")
                 + "历史简体人工副本来源不一致，原始字节完整保留，"
-                "未关联到新词条，请另行核对。"
+                "未关联到新词条，请另行核对。" + auto_notice
             )
