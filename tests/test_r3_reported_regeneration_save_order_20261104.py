@@ -115,3 +115,49 @@ def test_pending_edit_permission_refusal_keeps_review_unconfirmed(monkeypatch):
     assert review._r3_autosave_unconfirmed is True
     assert "未保存" in status.get()
     assert review.vars[0].get() == "new"
+
+
+
+def test_click_regenerate_displays_current_text_even_when_old_sidecar_detached():
+    """User-requested button behavior: textbox -> OpenCC preview, never disk first.
+
+    A previously manual source at the same source XY is neither copied to
+    another word nor used to veto rendering. It stays byte-for-byte in the
+    human cache until a separate, protected save is explicitly authorized.
+    """
+    review, row, cache, events, deps = setup_regeneration()
+    review.vars[0].set("司衡")
+    row.word = "司衡＃"
+    cache["10,20"] = {
+        "x": 10, "y": 20, "source_word": "司衡",
+        "text": "既有人工简体", "manual": True,
+    }
+    old_manual = dict(cache["10,20"])
+    review.simplified_manual_flags[0] = True
+    review.simplified_actual_values[0] = "既有人工简体"
+    review.simplified_vars[0].set("⚠来源词条不一致，请核对原词")
+    def must_not_save(*a, **kw):
+        events.append("UNEXPECTED_SAVE")
+        raise AssertionError("regeneration button must not save PDIC")
+    review.save = must_not_save
+    review._persist_simplified_page = lambda stem: must_not_save()
+    simplified.regenerate_simplified_current_page(review, deps)
+    assert review.simplified_vars[0].get() == "simplified:司衡"
+    assert review.simplified_actual_values[0] == "simplified:司衡"
+    assert row.word == "司衡＃"
+    assert cache["10,20"] == old_manual
+    assert events == []
+    assert "未保存" in review.parent.status_var.get()
+
+
+def test_regenerate_without_original_disk_commit_stages_preview_to_paired_save():
+    review, row, cache, events, deps = setup_regeneration()
+    review._persist_simplified_page = lambda stem: events.append("BAD_SEPARATE_WRITE")
+    simplified.regenerate_simplified_current_page(review, deps)
+    assert review.simplified_vars[0].get() == "simplified:new"
+    assert row.word == "old"
+    assert cache["10,20"]["source_word"] == "old"
+    assert cache["10,20"]["text"] == "simplified:new"
+    assert "synthetic" in review._simplified_dirty_pages
+    assert events == []
+    assert "未保存" in review.parent.status_var.get()
