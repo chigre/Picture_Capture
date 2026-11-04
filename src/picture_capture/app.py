@@ -1249,7 +1249,25 @@ class ReviewWindow(tk.Toplevel):
         return _review_simplified._refresh_all_simplified(self, _review_simplified_deps())
 
     def regenerate_simplified_current_page(self) -> None:
-        return _review_simplified.regenerate_simplified_current_page(self, _review_simplified_deps())
+        # GUI action boundary: a stale/manual simplified source or failed disk
+        # publication must still fail closed, but must not escape into Tk's
+        # unhandled callback traceback. Both visible human text buffers remain
+        # in place; the guarded workflow restores its own tentative preview.
+        deps = _review_simplified_deps()
+        try:
+            return _review_simplified.regenerate_simplified_current_page(self, deps)
+        except (OSError, RuntimeError, ValueError, UnicodeError):
+            self.parent.status_var.set(
+                "重新简体化未完成；原词与人工简体输入仍保留，"
+                "请核对来源词条及磁盘状态后重试。"
+            )
+            deps.messagebox.showerror(
+                "重新简体化未完成",
+                "原词或简体副本来源未能确认，未覆盖人工数据。"
+                "请先保存、核对相关词条后重试。",
+                parent=self,
+            )
+            return None
 
     def _apply_simplified_visibility(self) -> None:
         return _review_simplified._apply_simplified_visibility(self, _review_simplified_deps())
