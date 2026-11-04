@@ -295,3 +295,77 @@ def test_independent_sidecar_healthy_same_word_reaches_journal_and_commits(
     assert read_records(path)["90,90"]["text"] == "old orphan human text"
     assert pdic_path(page).read_bytes() is not None
     assert not tx._marker_present(tx._recovery_path(page))
+
+
+def test_reported_unsaved_original_regenerates_with_real_pdic_pair_then_sidecar(tmp_path):
+    """Real serializers + real guarded bundle + separate regenerate, no scans."""
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+    page, path, entry, app, review = case(tmp_path)
+    app.project.images = [page]
+    app._claim_page_for_manual_edit = lambda: True
+    review.vars[0].set("corrected")
+    review._capture_simplified_edits = lambda stem: None
+    review._commit_edits = lambda: commit_proofread_entries(review)
+
+    def save_original(*, redraw_main=True):
+        assert redraw_main is False
+        before = tx.snapshot_review(review)
+        assert before is not None
+        with protect_review_pdic_commit(review):
+            review._commit_edits()
+            bundle.commit_review_bundle(review, before)
+        return True
+
+    review.save = save_original
+    persist_deps = SimpleNamespace(
+        simplified_review_path_for_image=simplified_review_path_for_image,
+        write_simplified_records=write_records,
+    )
+    review._persist_simplified_page = lambda stem: workflow._persist_simplified_page(
+        review, persist_deps, stem,
+    )
+    deps = SimpleNamespace(
+        simplified_entry_key=lambda x, y: f"{x},{y}",
+        simplify_text=lambda word: "auto:" + word,
+        messagebox=SimpleNamespace(showerror=lambda *a, **kw: None),
+    )
+    workflow.regenerate_simplified_current_page(review, deps)
+    assert read_pdic(pdic_path(page))[0].word == "corrected"
+    assert read_records(path)["10,20"] == {
+        "x": 10, "y": 20, "source_word": "corrected",
+        "text": "auto:corrected", "manual": False,
+    }
+    assert read_records(path)["90,90"]["text"] == "old orphan human text"
+    assert not tx._marker_present(tx._recovery_path(page))
+    assert "已重新简体化" in app.status_var.get()
+
+
+def test_reported_stale_human_sidecar_preserved_while_new_original_is_saved(tmp_path):
+    """An already-detached human correction is not a veto of PDIC-only text.
+
+    Leave its bytes EXACTLY unchanged; never transfer it by shared XY to a
+    different current word. The operator can reconcile old data separately.
+    """
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+    page, path, entry, app, review = case(tmp_path)
+    entry.word = "current-from-prior-pdic-save"
+    write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
+    review.vars[0].set("new-current-human-correction")
+    review._capture_simplified_edits = lambda stem: None
+    review._has_unreported_simplified_input = lambda: False
+    old_sidecar = path.read_bytes()
+    prior_pdic = pdic_path(page).read_bytes()
+    source = tx.snapshot_review(review)
+    assert source is not None
+    assert source.simplified_bytes == old_sidecar
+    assert source.entries[0][1] == "current-from-prior-pdic-save"
+    with protect_review_pdic_commit(review):
+        commit_proofread_entries(review)
+        bundle.commit_review_bundle(review, source)
+    assert pdic_path(page).read_bytes() != prior_pdic
+    assert read_pdic(pdic_path(page))[0].word == "new-current-human-correction"
+    assert path.read_bytes() == old_sidecar
+    assert read_records(path)["10,20"]["source_word"] == "old"
+    assert read_records(path)["10,20"]["text"] == "a human correction"
+    assert not tx._marker_present(tx._recovery_path(page))
+    assert "简体" in app.status_var.get()
