@@ -518,3 +518,107 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
     assert path.read_bytes() == sidecar_before
     assert read_records(path)["10,20"]["text"] == "原先人工简体记录"
     assert not tx._marker_present(tx._recovery_path(page))
+
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("action", ["save", "next"])
+def test_ordinary_review_save_requires_actual_operator_confirmation_for_detached_human_rejoin(
+    tmp_path, monkeypatch, confirmed, action,
+):
+    """Screenshot-shaped GUI save/next: no hidden re-association by auto-save.
+
+    If a corrected original again equals the older MANUAL source at the same
+    fixed XY, the real user must explicitly confirm rejoining that unchanged
+    human JSON. Cancel keeps PDIC and human bytes, all Tk input and the page.
+    """
+    import tkinter.messagebox as messagebox
+    from picture_capture.ui import review_page_lifecycle as lifecycle
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+
+    page, path, entry, app, review = case(tmp_path)
+    entry.word = "司衡＃"
+    write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
+    records = read_records(path)
+    records["10,20"].update(source_word="司衡", text="历史人工保留", manual=True)
+    write_records(path, page.stem, records)
+    review._simplified_page_cache[page.stem] = records
+    review._r3_simplified_source_bytes[page.stem] = (
+        path.resolve(), path.read_bytes(),
+    )
+    app.settings.review_zoom_percent = 100
+    app.settings.to_json = lambda path: None
+    app._foreground_batch_state = lambda index: "idle"
+    app.redraw = lambda: None
+    navigation = []
+    app.change_page = lambda delta, **kw: navigation.append((delta, kw))
+    review._take_prefetched_page = lambda target: None
+    review._stored_review_zoom_percent = lambda: 100
+    review._review_evidence_before_save = lambda: None
+    review._review_evidence_after_save = lambda before: None
+    review._commit_edits = lambda: commit_proofread_entries(review)
+    review._capture_simplified_edits = lambda stem: None
+    review.vars[0].set("司衡")
+    review.simplified_actual_values[0] = "历史人工保留"
+    review.simplified_vars[0].set("历史人工保留")
+    review.simplified_manual_flags[0] = True
+    review._simplified_dirty_pages.clear()
+
+    decisions = []
+    monkeypatch.setattr(
+        messagebox, "askyesno",
+        lambda *a, **kw: decisions.append((a, kw)) or confirmed,
+    )
+    # A cancelled explicit action must not show an unrelated generic
+    # "saved" message, nor leak private words/paths to the modal.
+    monkeypatch.setattr(
+        messagebox, "showerror",
+        lambda *a, **kw: (_ for _ in ()).throw(
+            AssertionError("declined confirmation must not show a second error")
+        ),
+    )
+    deps = SimpleNamespace(settings_path=lambda root: root / "settings.json")
+    prior_pdic, prior_sidecar = pdic_path(page).read_bytes(), path.read_bytes()
+    if action == "next":
+        review.save = lambda *, redraw_main=True: lifecycle.save(
+            review, deps, redraw_main=redraw_main,
+        )
+        lifecycle.change_page(review, SimpleNamespace(), 1)
+    else:
+        result = lifecycle.save(review, deps, redraw_main=True)
+        assert result is confirmed
+    assert len(decisions) == 1
+    assert all("司衡" not in repr(x) and str(tmp_path) not in repr(x)
+               for x in decisions)
+    assert path.read_bytes() == prior_sidecar
+    assert read_records(path)["10,20"]["text"] == "历史人工保留"
+    if confirmed:
+        assert read_pdic(pdic_path(page))[0].word == "司衡"
+        assert not tx._marker_present(tx._recovery_path(page))
+        assert ("人工" in app.status_var.get() or "核对" in app.status_var.get())
+        assert bool(navigation) is (action == "next")
+    else:
+        assert pdic_path(page).read_bytes() == prior_pdic
+        assert entry.word == "司衡＃"
+        assert review.vars[0].get() == "司衡"
+        assert navigation == []
+
+
+def test_r3_save_failure_reason_is_actionable_and_never_leaks_path_or_word():
+    """The current catch-all popup masks the real blocker in a live session."""
+    from picture_capture.ui import review_page_lifecycle as lifecycle
+    examples = [
+        (RuntimeError(
+            "R3 简体记录来源词条与 PDIC 原图坐标不一致，拒绝覆盖 private_word"
+        ), "R3-SOURCE"),
+        (RuntimeError(
+            "R3 存在其他事务恢复标记或页面已改变 /very/private/data"
+        ), "R3-RECOVERY"),
+        (OSError("C:/private/secret.pdic permission denied"), "R3-IO"),
+        (RuntimeError("R3 无可信的本页保存快照，拒绝覆盖"), "R3-SNAPSHOT"),
+    ]
+    for error, code in examples:
+        reason = lifecycle._safe_review_save_failure(error)
+        assert code in reason
+        assert "private" not in reason and "secret" not in reason
+        assert "/" not in reason and "\\\\" not in reason
