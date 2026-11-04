@@ -63,10 +63,33 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         xy = (int(row["x"]), int(row["y"]))
         if xy in before_words and str(row["source_word"]) != before_words[xy]:
             stale.append((xy, str(row["source_word"])))
-    if not stale or any(after_words.get(xy) == foreign_word for xy, foreign_word in stale):
-        # In particular, do not create a new accidental match to an old
-        # human correction at the same pixel after a user word rename.
-        raise RuntimeError("R3 旧简体记录可能重新归属其他词条，拒绝独立提交")
+    if not stale:
+        raise RuntimeError("R3 没有已确认的历史简体来源冲突，拒绝跳过绑定检查")
+    rejoining = [(xy, foreign_word) for xy, foreign_word in stale
+                 if after_words.get(xy) == foreign_word]
+    if rejoining:
+        # Matching an old sidecar word again would silently resurrect its
+        # historical manual correction. Never do this during autosave or a
+        # normal Save. A distinct explicit, frozen-source operator decision
+        # must authorize EXACTLY this rejoin (not an arbitrary XY match).
+        if review.__dict__.get("_r3_explicit_detached_source_rejoin") is not source:
+            raise RuntimeError("R3 旧简体记录可能重新归属其他词条，需要人工明确确认")
+        old_words = {(int(x), int(y)): word for word, x, y
+                     in ((word, x, y) for _entry, word, x, y in source.entries)}
+        matching_rows = {
+            (int(row["x"]), int(row["y"])): row for row in saved.values()
+            if (int(row["x"]), int(row["y"])) in dict(rejoining)
+        }
+        if any(
+            old_words.get(xy) == foreign or
+            not isinstance(matching_rows.get(xy), dict) or
+            not bool(matching_rows[xy].get("manual"))
+            for xy, foreign in rejoining
+        ):
+            raise RuntimeError("R3 旧简体来源不满足原词变更及人工记录确认条件")
+    # Even an explicitly rejoined record is byte-for-byte preserved in the
+    # target human sidecar; the only permitted disk write is an owned PDIC.
+
 
     bound = tuple(review._bound_row_entries())
     words = tuple(getattr(review, "vars", ()))
@@ -235,8 +258,14 @@ def commit_review_bundle(review: Any, source) -> None:
     except (OSError, RuntimeError, ValueError) as exc:
         app.status_var.set(f"校对文件已提交，附属状态刷新失败：{exc}")
     if detached_sidecar:
-        app.status_var.set(
-            ("原词 PDIC 已保存；" if changes else "本页文字无变化，未重复写盘；")
-            + "历史简体人工副本来源不一致，原始字节完整保留，"
-            "未关联到新词条，请另行核对。"
-        )
+        if review.__dict__.get("_r3_explicit_detached_source_rejoin") is source:
+            app.status_var.set(
+                "已按人工明确确认更新原词；旧人工简体副本原始字节完整保留，"
+                "来源重新匹配，请核对简体内容。"
+            )
+        else:
+            app.status_var.set(
+                ("原词 PDIC 已保存；" if changes else "本页文字无变化，未重复写盘；")
+                + "历史简体人工副本来源不一致，原始字节完整保留，"
+                "未关联到新词条，请另行核对。"
+            )
