@@ -170,6 +170,10 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     )
     dirty = word_dirty or simplified_dirty
     if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
+        # The caller consumes True to prevent a competing main-canvas write.
+        # PPP may then save independently: its success is NOT proof that these
+        # review words were committed. Keep the warning across both paths.
+        self._r3_autosave_unconfirmed = True
         self.parent.status_var.set(
             "后台待处理页面未能取得人工编辑权限；当前输入未保存且仍保留，请停止处理后重试。"
         )

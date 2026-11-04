@@ -376,6 +376,30 @@ def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None
             or [var.get().strip() for var in self.vars] != originals):
         return
 
+    # An edited original-word Tk buffer is not yet the PDIC word. Persist
+    # it through the existing paired PDIC + human-sidecar transaction BEFORE
+    # running the independent simplified-only writer. Otherwise the proposed
+    # regenerated source_word cannot match the still-old on-disk PDIC.
+    if any(str(entry.word) != original for entry, original in zip(row_entries, originals)):
+        try:
+            original_saved = bool(self.save(redraw_main=False))
+        except (OSError, RuntimeError, ValueError, UnicodeError):
+            original_saved = False
+        if not original_saved:
+            self.parent.status_var.set(
+                "校对原词尚未保存；重新简体化已取消，输入仍保留，请核对原词后重试。"
+            )
+            return
+        confirmed_rows = _owned_rendered_simplified_rows(self)
+        if (confirmed_rows is None or len(confirmed_rows) != count
+                or any(a is not b for a, b in zip(row_entries, confirmed_rows))
+                or [var.get().strip() for var in self.vars] != originals
+                or any(str(entry.word) != original for entry, original in zip(confirmed_rows, originals))):
+            self.parent.status_var.set(
+                "原词保存后的行或文本来源已变化，未重新简体化；请核对校对窗口。"
+            )
+            return
+
     stem = self._rendered_page_stem
     records = self._simplified_page_records(stem)
     if any(source_word_conflicts(
