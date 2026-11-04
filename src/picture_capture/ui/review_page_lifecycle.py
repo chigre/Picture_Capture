@@ -266,7 +266,7 @@ def _safe_review_save_failure(error: Exception) -> str:
     if "恢复标记" in message or "recovery" in message or "inflight" in message:
         return "R3-RECOVERY：检测到未完成写入的恢复标记，需先核对来源"
     if "无可信" in message or "快照" in message or "snapshot" in message:
-        return "R3-SNAPSHOT：当前页 PDIC/窗口行未建立可信保存快照，请核对来源"
+        return "R3-SNAPSHOT：当前页 PDIC 与窗口行未建立可信保存快照，请核对来源"
     if ("来源" in message or "归属" in message or "人工" in message
             or "source" in message):
         return "R3-SOURCE：原词与历史简体来源不一致，需核对或明确确认"
@@ -282,9 +282,16 @@ def _r3_current_edit_rejoins_manual_source(self, source) -> bool:
     fingerprints, manual source bytes, row ownership and a separate consent
     lease for any rejoin. Never mutate or inspect private words in diagnostics.
     """
-    if (source is None or not source.simplified_bytes
-            or source.page != getattr(self.parent, "current_page", None)
-            or getattr(self, "_rendered_page_stem", "") != source.page.stem):
+    pinned_bytes = getattr(source, "simplified_bytes", None)
+    pinned_page = getattr(source, "page", None)
+    # Older or incomplete synthetic snapshots must not raise out of the
+    # toolbar Save callback. Returning False leaves the normal guarded
+    # transaction responsible for validating the source and refusing unsafe
+    # writes, rather than inventing an operator rejoin decision.
+    if (not pinned_bytes or pinned_page is None
+            or pinned_page != getattr(self.parent, "current_page", None)
+            or getattr(self, "_rendered_page_stem", "") != pinned_page.stem):
+
         return False
     import json
     try:

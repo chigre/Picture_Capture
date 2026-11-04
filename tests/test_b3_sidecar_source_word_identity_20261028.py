@@ -588,8 +588,18 @@ def test_ordinary_review_save_requires_actual_operator_confirmation_for_detached
         result = lifecycle.save(review, deps, redraw_main=True)
         assert result is confirmed
     assert len(decisions) == 1
-    assert all("司衡" not in repr(x) and str(tmp_path) not in repr(x)
-               for x in decisions)
+    # Only the modal title/body are user-visible. Tk's parent kwarg is the
+    # live review instance (and necessarily owns private rows/paths); its
+    # repr is NOT shown in the dialog. Still assert strictly against the
+    # actual visible payload, on both Save and Next-page actions.
+    assert all(
+        "司衡" not in repr((args, {k: v for k, v in kwargs.items()
+                                if k != "parent"}))
+        and str(tmp_path) not in repr(
+            (args, {k: v for k, v in kwargs.items() if k != "parent"})
+        )
+        for args, kwargs in decisions
+    )
     assert path.read_bytes() == prior_sidecar
     assert read_records(path)["10,20"]["text"] == "历史人工保留"
     if confirmed:
