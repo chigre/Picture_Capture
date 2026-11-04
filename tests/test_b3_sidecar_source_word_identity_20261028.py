@@ -375,3 +375,40 @@ def test_reported_stale_human_sidecar_preserved_while_new_original_is_saved(tmp_
     assert read_records(path)["10,20"]["text"] == "a human correction"
     assert not tx._marker_present(tx._recovery_path(page))
     assert "简体" in app.status_var.get()
+
+
+@pytest.mark.parametrize("unreported_simplified_edit", [False, True])
+def test_detached_sidecar_confirmed_noop_save_does_not_trap_next_page(
+    tmp_path, unreported_simplified_edit,
+):
+    """Actual R3 bundle: navigation after a saved rename must not require
+    overwriting a preexisting detached human sidecar. A NEW unsaved simplified
+    Tk edit must still block a false no-op.
+    """
+    page, path, entry, app, review = case(tmp_path)
+    entry.word = "previously-saved-new-original"
+    write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
+    review.vars[0].set(entry.word)
+    review._commit_edits = lambda: None
+    if unreported_simplified_edit:
+        review.simplified_vars[0].set("new yet-unsaved human simplified edit")
+    prior_pdic = pdic_path(page).read_bytes()
+    prior_sidecar = path.read_bytes()
+    source = tx.snapshot_review(review)
+    assert source is not None
+    review.__dict__["_r3_detached_original_save_source"] = source
+    try:
+        if unreported_simplified_edit:
+            with pytest.raises(RuntimeError, match="简体|未确认|输入"):
+                with protect_review_pdic_commit(review):
+                    bundle.commit_review_bundle(review, source)
+        else:
+            with protect_review_pdic_commit(review):
+                bundle.commit_review_bundle(review, source)
+    finally:
+        review.__dict__.pop("_r3_detached_original_save_source", None)
+    assert pdic_path(page).read_bytes() == prior_pdic
+    assert path.read_bytes() == prior_sidecar
+    assert not tx._marker_present(tx._recovery_path(page))
+    if not unreported_simplified_edit:
+        assert "简体" in app.status_var.get()
