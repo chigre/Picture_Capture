@@ -632,3 +632,73 @@ def test_r3_save_failure_reason_is_actionable_and_never_leaks_path_or_word():
         assert code in reason
         assert "private" not in reason and "secret" not in reason
         assert "/" not in reason and "\\\\" not in reason
+
+
+@pytest.mark.parametrize("seed_state", ["pure_auto", "unsaved_human_text", "forged_manual"])
+def test_detached_manual_sidecar_with_unpersisted_auto_seed_is_not_a_human_edit(
+    tmp_path, seed_state,
+):
+    """R3 screenshot-shaped two-row E2: a detached historic manual record and
+    a separate never-saved automatic OpenCC seed coexist on this page.
+
+    The new automatically generated row is not a user's edit and cannot veto
+    a verified original-word-only save forever. The old human sidecar MUST
+    stay byte-exact and the automatic seed MUST NOT silently be published to
+    that sidecar. A genuine unsaved human field or forged manual cache still
+    refuses without writing either canonical file.
+    """
+    from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
+
+    page, sidecar, old, app, review = case(tmp_path)
+    old.word = "current OCR original"
+    fresh = Entry("new unseeded original", 30, 40)
+    app.entries.append(fresh)
+    review.row_entries.append(fresh)
+    review.vars.append(Var(fresh.word))
+    auto = "auto-new-unseeded-original"
+    review.simplified_vars.append(Var(auto))
+    review.simplified_actual_values.append(auto)
+    review.simplified_manual_flags.append(False)
+    review.simplified_auto_refresh_flags.append(True)
+    review.simplified_editors.append(object())
+    review._simplified_page_cache[page.stem]["30,40"] = {
+        "x": 30, "y": 40, "source_word": fresh.word,
+        "text": auto, "manual": seed_state == "forged_manual",
+    }
+    review._simplified_dirty_pages.add(page.stem)
+    if seed_state == "unsaved_human_text":
+        review.simplified_vars[1].set("my new unconfirmed human correction")
+    review._auto_simplified_value = lambda word, fallback=None: (
+        auto if word == fresh.word else fallback
+    )
+    write_pdic(pdic_path(page), app.entries, 100, ("synthetic", "@", "@"))
+    initial_pdic, initial_sidecar = pdic_path(page).read_bytes(), sidecar.read_bytes()
+    assert read_records(sidecar)["10,20"]["source_word"] == "old"
+    assert "30,40" not in read_records(sidecar)
+    review.vars[0].set("current corrected original")
+    review._capture_simplified_edits = lambda stem: None
+    review._commit_edits = lambda: commit_proofread_entries(review)
+    source = tx.snapshot_review(review)
+    assert source is not None
+    review.__dict__["_r3_detached_original_save_source"] = source
+    try:
+        if seed_state == "pure_auto":
+            with protect_review_pdic_commit(review):
+                review._commit_edits()
+                bundle.commit_review_bundle(review, source)
+            assert read_pdic(pdic_path(page))[0].word == "current corrected original"
+            assert pdic_path(page).read_bytes() != initial_pdic
+            assert sidecar.read_bytes() == initial_sidecar
+            assert "30,40" not in read_records(sidecar)
+            assert "简体" in app.status_var.get()
+        else:
+            with pytest.raises(RuntimeError, match="简体|人工|输入|缓存|来源"):
+                with protect_review_pdic_commit(review):
+                    review._commit_edits()
+                    bundle.commit_review_bundle(review, source)
+            assert pdic_path(page).read_bytes() == initial_pdic
+            assert sidecar.read_bytes() == initial_sidecar
+            assert review.vars[0].get() == "current corrected original"
+        assert not tx._marker_present(tx._recovery_path(page))
+    finally:
+        review.__dict__.pop("_r3_detached_original_save_source", None)
