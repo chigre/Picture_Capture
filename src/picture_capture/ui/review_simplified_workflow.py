@@ -96,14 +96,19 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
         manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
         actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
         display = self.simplified_vars[i].get().strip()
-        expected = self._simplified_display_from_value(entry.word, actual, False)
+        # Compare against the user's LIVE original-word Tk input. The
+        # Entry.word still names the frozen PDIC source until the paired
+        # commit: using it here mislabels an automatic "√" preview as a
+        # manual override after an ordinary headword correction.
+        original = self.vars[i].get().strip()
+        expected = self._simplified_display_from_value(original, actual, False)
         if not manual and display != expected:
             manual = True
             if i < len(self.simplified_manual_flags):
                 self.simplified_manual_flags[i] = True
             self._simplified_dirty_pages.add(stem)
         if manual:
-            actual = entry.word if display == "√" else display
+            actual = original if display == "√" else display
             if i < len(self.simplified_actual_values):
                 self.simplified_actual_values[i] = actual
         records[key] = {
@@ -337,7 +342,10 @@ def _refresh_simplified_for_index(self, deps: ReviewSimplifiedDeps, index: int) 
         return
     self._simplified_page_records(stem)[simplified_entry_key(entry.x, entry.y)] = {
         "x": int(entry.x), "y": int(entry.y),
-        "source_word": original, "text": "" if actual is None else str(actual),
+        # Keep the *current pinned PDIC* word until commit_proofread_entries
+        # transfers this exact Entry's live edit into a paired transaction.
+        # A simplified UI preview must never invent a new disk source owner.
+        "source_word": entry.word, "text": "" if actual is None else str(actual),
         "manual": False,
     }
     self._simplified_dirty_pages.add(stem)

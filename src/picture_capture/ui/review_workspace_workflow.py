@@ -990,6 +990,10 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         self.vars.append(var); self.row_entries.append(entry); self.editors.append(editor); self.editor_frames.append(editor_frame)
         self._review_crop_single_flags.append(_focused_review_is_single_character(var.get()))
         var.trace_add("write", lambda *_args, i=index: self._schedule_review_crop_height_update(i))
+        # Preview original-word edits on the main canvas immediately without
+        # touching Entry.word/PDIC before the source-pinned paired save.
+        from ..proofreading.main_editor_sync import bind_review_word_preview
+        bind_review_word_preview(self, index)
         self.simplified_vars.append(simplified_var); self.simplified_editors.append(simplified_editor)
         self.simplified_search_buttons.append(simplified_search_button)
         self.simplified_actual_values.append(simplified_actual)

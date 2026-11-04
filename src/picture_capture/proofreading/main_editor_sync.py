@@ -14,6 +14,87 @@ from .focused_crop_source_fingerprint import _source_page_index
 from .focused_visible_owner import unique_canvas_source_entries
 
 
+def bind_review_word_preview(review: Any, index: int) -> None:
+    """Mirror a ReviewWindow original-word edit into the live main Tk widget.
+
+    This is ONLY a visual preview. Entry.word and the pinned PDIC source stay
+    unchanged until the existing paired ReviewWindow transaction commits.
+    Never take ownership of an independently edited main canvas buffer.
+    """
+    rows = getattr(review, "row_entries", ())
+    vars = getattr(review, "vars", ())
+    app = getattr(review, "parent", None)
+    page = getattr(app, "current_page", None)
+    project = getattr(app, "project", None)
+    if (app is None or page is None or project is None
+            or not 0 <= index < len(rows) or index >= len(vars)):
+        return
+    entry = rows[index]
+    var = vars[index]
+    original_word = str(entry.word)
+    last_preview: list[str | None] = [None]
+
+    def on_change(*_args):
+        if (getattr(review, "_filter_rows_active", False)
+                or getattr(review, "_rendered_page_stem", None) != page.stem
+                or getattr(app, "current_page", None) != page
+                or getattr(app, "project", None) is not project):
+            return
+        current_rows = getattr(review, "row_entries", ())
+        current_vars = getattr(review, "vars", ())
+        live = getattr(app, "entries", ())
+        if (index >= len(current_rows) or index >= len(current_vars)
+                or current_rows[index] is not entry or current_vars[index] is not var
+                or len(current_rows) != len(live)
+                or sum(row is entry for row in live) != 1
+                or str(entry.word) not in (original_word, last_preview[0])):
+            return
+        bindings = [
+            widget for widget, owner in tuple(
+                getattr(app, "entry_editor_bindings", ())
+            ) if owner is entry
+        ]
+        # An absent/duplicated canvas editor is NOT permission to replace a
+        # possibly newer user input or a different widget binding.
+        if len(bindings) != 1:
+            return
+        widget = bindings[0]
+        requested = str(var.get())
+        try:
+            current = str(widget.get())
+            if current == requested:
+                last_preview[0] = requested
+                return
+            allowed = (str(entry.word), last_preview[0])
+            if current not in allowed:
+                app.status_var.set(
+                    "主界面与校对窗口存在不同的未保存文字；两份输入均保留，"
+                    "请核对后再保存。"
+                )
+                return
+            widget.delete(0, "end")
+            widget.insert(0, requested)
+            if str(widget.get()) != requested:
+                raise RuntimeError("main canvas preview readback differs")
+        except (tk.TclError, RuntimeError, ValueError):
+            app.status_var.set(
+                "主窗口预览未能确认；校对输入仍保留且尚未保存，请核对后重试。"
+            )
+            return
+        last_preview[0] = requested
+        # This is deliberately not a save acknowledgement. Do not mask a
+        # pending failure/unconfirmed status merely because the preview drew.
+        prior = str(app.status_var.get())
+        if not any(token in prior for token in (
+            "失败", "未确认", "未完成", "冲突", "拒绝",
+        )):
+            app.status_var.set(
+                "校对原词已在主界面同步显示，尚未保存到 PDIC。"
+            )
+
+    var.trace_add("write", on_change)
+
+
 def reconcile_main_editors_after_review(app: Any, rendered_entries: list[Any]) -> None:
     """Update only widgets whose Entry object was saved by ReviewWindow."""
     saved_ids = {id(entry) for entry in rendered_entries}
