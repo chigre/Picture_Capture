@@ -362,6 +362,7 @@ def _stage_regenerate_from_live_textboxes(self, deps, row_entries, originals, re
     """Stage only an UNSAVED Tk preview. No disk write or human re-binding."""
     simplified_entry_key = deps.simplified_entry_key
     stem = self._rendered_page_stem
+    count = len(row_entries)
     previous_display = [var.get() for var in self.simplified_vars]
     previous_actual = list(self.simplified_actual_values)
     previous_manual = list(self.simplified_manual_flags)
