@@ -1,8 +1,7 @@
 """Regression for reported ReviewWindow save/re-simplify failures (synthetic only).
 
-A new original headword must reach the paired PDIC save before a separate
-simplified-sidecar regeneration writes its new source_word. The pending autosave
-refusal must remain visible even if a later PPP save succeeds.
+Regeneration now computes from the current Tk textboxes without disk writes.
+The following paired Save still guards PDIC/source identity and human bytes.
 """
 from __future__ import annotations
 
@@ -69,28 +68,29 @@ def setup_regeneration():
     return review, row, cache, events, deps
 
 
-def test_regenerate_saves_pending_original_before_simplified_sidecar():
+def test_regenerate_displays_live_words_without_preemptive_disk_write():
     review, row, cache, events, deps = setup_regeneration()
     simplified.regenerate_simplified_current_page(review, deps)
-    assert events == ["save_original", "persist_simplified"]
-    assert row.word == "new"
-    assert cache["10,20"]["source_word"] == "new"
-    assert cache["10,20"]["manual"] is False
+    assert events == []
+    assert row.word == "old"
+    assert cache["10,20"] == {
+        "x": 10, "y": 20, "source_word": "old",
+        "text": "simplified:new", "manual": False,
+    }
     assert review.simplified_vars[0].get() == "simplified:new"
+    assert "synthetic" in review._simplified_dirty_pages
+    assert "尚未保存" in review.parent.status_var.get()
 
 
-def test_regenerate_refuses_to_publish_if_original_save_failed():
+def test_regenerate_preview_does_not_depend_on_failing_original_save():
     review, row, cache, events, deps = setup_regeneration()
-    def refused(*, redraw_main=True):
-        events.append("save_refused")
-        return False
-    review.save = refused
+    review.save = lambda **kw: events.append("UNEXPECTED_DISK_SAVE")
     simplified.regenerate_simplified_current_page(review, deps)
-    assert events == ["save_refused"]
+    assert events == []
     assert row.word == "old"
     assert cache["10,20"]["source_word"] == "old"
-    assert review.simplified_vars[0].get() == "old simplified"
-    assert "已重新简体化" not in review.parent.status_var.get()
+    assert review.simplified_vars[0].get() == "simplified:new"
+    assert "尚未保存" in review.parent.status_var.get()
 
 
 def test_pending_edit_permission_refusal_keeps_review_unconfirmed(monkeypatch):

@@ -418,7 +418,7 @@ def test_detached_sidecar_confirmed_noop_save_does_not_trap_next_page(
 def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
     tmp_path, explicit,
 ):
-    """Screenshot-shaped synthetic case: PDIC '司衡#', old human source '司衡'.
+    """Screenshot-shaped synthetic case: PDIC '司衡＃', old human source '司衡'.
 
     An explicit ordinary ReviewWindow Save/Next must be able to commit a
     verified correction to '司衡' without modifying prior manual JSON bytes,
@@ -427,7 +427,7 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
     """
     from picture_capture.proofreading import main_editor_sync
     page, path, entry, app, review = case(tmp_path)
-    entry.word = "司衡#"
+    entry.word = "司衡＃"
     write_pdic(pdic_path(page), [entry], 100, ("synthetic", "@", "@"))
     records = read_records(path)
     records["10,20"].update(
@@ -443,7 +443,7 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
 
     class MainCanvas:
         def __init__(self):
-            self.text = "司衡#"
+            self.text = "司衡＃"
         def get(self):
             return self.text
         def delete(self, a, b):
@@ -467,7 +467,7 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
 
     canvas = MainCanvas()
     app.entry_editor_bindings = [(canvas, entry)]
-    review.vars[0] = ReviewVar("司衡#")
+    review.vars[0] = ReviewVar("司衡＃")
     review.simplified_actual_values[0] = "⚠来源词条不一致，请核对原词"
     review.simplified_vars[0].set("⚠来源词条不一致，请核对原词")
     review.simplified_manual_flags[0] = True
@@ -480,7 +480,7 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
     main_editor_sync.bind_review_word_preview(review, 0)
     review.vars[0].set("司衡")
     assert canvas.get() == "司衡"
-    assert entry.word == "司衡#"
+    assert entry.word == "司衡＃"
     assert pdic_path(page).read_bytes() == source_before
     frozen = tx.snapshot_review(review, allow_evidence=True)
     assert frozen is not None
@@ -500,7 +500,7 @@ def test_exact_old_sidecar_source_corrected_with_explicit_manual_review_save(
                     main_editor_sync.commit_proofread_entries(review)
                     bundle.commit_review_bundle(review, frozen)
             assert pdic_path(page).read_bytes() == source_before
-            assert entry.word == "司衡#"
+            assert entry.word == "司衡＃"
             assert review.vars[0].get() == canvas.get() == "司衡"
     finally:
         review.__dict__.pop("_r3_detached_original_save_source", None)
