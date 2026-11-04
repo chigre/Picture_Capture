@@ -251,12 +251,12 @@ def test_focusout_and_simplified_key_cannot_reassign_old_human_record(tmp_path):
     assert not review._simplified_dirty_pages
 
 
-def test_regeneration_refuses_old_manual_source_word_without_saving(tmp_path):
+def test_regeneration_old_detached_human_source_previews_without_disk_write(tmp_path):
+    """Old human sidecar stays untouched; current textbox still converts."""
     page, path, entry, app, review = case(tmp_path)
     entry.word = "new OCR word"
     review.vars[0].set("new OCR word")
-    errors = []
-    writes = []
+    errors, writes = [], []
     app._claim_page_for_manual_edit = lambda: True
     review._simplified_page_records = lambda stem: review._simplified_page_cache[stem]
     review._persist_simplified_page = lambda stem: writes.append(stem)
@@ -267,12 +267,16 @@ def test_regeneration_refuses_old_manual_source_word_without_saving(tmp_path):
         messagebox=SimpleNamespace(showerror=lambda *a, **kw: errors.append(a)),
     )
     before = dict(review._simplified_page_cache[page.stem]["10,20"])
+    old_sidecar = path.read_bytes()
     workflow.regenerate_simplified_current_page(review, deps)
-    assert errors and not writes
+    assert not errors and not writes
     assert review._simplified_page_cache[page.stem]["10,20"] == before
-    assert review.simplified_manual_flags == [True]
-    assert not review._simplified_dirty_pages
-
+    assert path.read_bytes() == old_sidecar
+    assert review.simplified_vars[0].get() == "auto:new OCR word"
+    assert review.simplified_actual_values[0] == "auto:new OCR word"
+    assert review.simplified_manual_flags == [False]
+    assert page.stem in review._simplified_dirty_pages
+    assert "尚未保存" in app.status_var.get()
 
 def test_independent_sidecar_healthy_same_word_reaches_journal_and_commits(
     tmp_path, monkeypatch,
@@ -297,7 +301,7 @@ def test_independent_sidecar_healthy_same_word_reaches_journal_and_commits(
     assert not tx._marker_present(tx._recovery_path(page))
 
 
-def test_reported_unsaved_original_regenerates_with_real_pdic_pair_then_sidecar(tmp_path):
+def test_reported_unsaved_original_regenerates_then_explicitly_saves_real_pair(tmp_path):
     """Real serializers + real guarded bundle + separate regenerate, no scans."""
     from picture_capture.proofreading.main_editor_sync import commit_proofread_entries
     page, path, entry, app, review = case(tmp_path)
@@ -329,7 +333,13 @@ def test_reported_unsaved_original_regenerates_with_real_pdic_pair_then_sidecar(
         simplify_text=lambda word: "auto:" + word,
         messagebox=SimpleNamespace(showerror=lambda *a, **kw: None),
     )
+    old_pdic = pdic_path(page).read_bytes()
+    old_sidecar = path.read_bytes()
     workflow.regenerate_simplified_current_page(review, deps)
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert path.read_bytes() == old_sidecar
+    assert review.simplified_vars[0].get() == "auto:corrected"
+    assert review.save(redraw_main=False) is True
     assert read_pdic(pdic_path(page))[0].word == "corrected"
     assert read_records(path)["10,20"] == {
         "x": 10, "y": 20, "source_word": "corrected",
@@ -337,7 +347,7 @@ def test_reported_unsaved_original_regenerates_with_real_pdic_pair_then_sidecar(
     }
     assert read_records(path)["90,90"]["text"] == "old orphan human text"
     assert not tx._marker_present(tx._recovery_path(page))
-    assert "已重新简体化" in app.status_var.get()
+    assert "尚未保存" in app.status_var.get()
 
 
 def test_reported_stale_human_sidecar_preserved_while_new_original_is_saved(tmp_path):

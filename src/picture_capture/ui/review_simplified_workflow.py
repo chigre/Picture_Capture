@@ -358,43 +358,10 @@ def _refresh_all_simplified(self, deps: ReviewSimplifiedDeps) -> None:
         self._refresh_simplified_for_index(index)
 
 
-def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None:
-    """Force OpenCC regeneration for every simplified headword on the current page."""
-    messagebox = deps.messagebox
+def _stage_regenerate_from_live_textboxes(self, deps, row_entries, originals, regenerated, records, detached):
+    """Stage only an UNSAVED Tk preview. No disk write or human re-binding."""
     simplified_entry_key = deps.simplified_entry_key
-    simplify_text = deps.simplify_text
-    row_entries = _owned_rendered_simplified_rows(self)
-    if row_entries is None:
-        return
-    count = len(row_entries)
-    originals = [self.vars[index].get().strip() for index in range(count)]
-    regenerated = [simplify_text(original) for original in originals]
-    if any(value is None for value in regenerated):
-        messagebox.showerror(
-            "重新简体化",
-            "OpenCC不可用，未覆盖本页已有的简体化结果。",
-            parent=self,
-        )
-        return
-    # Re-simplify is a local TEXTBOX preview. Claim/write PDIC only on Save.
-    fresh = _owned_rendered_simplified_rows(self)
-    if (fresh is None or any(a is not b for a, b in zip(row_entries, fresh))
-            or len(fresh) != count
-            or [var.get().strip() for var in self.vars] != originals):
-        return
-
-    # OpenCC output is based solely on current original-word Tk text. A
-    # historical sidecar source_word can veto a later write, NOT displaying
-    # a new preview. Never mutate a detached human record by pixel identity.
     stem = self._rendered_page_stem
-    records = self._simplified_page_records(stem)
-    detached = any(source_word_conflicts(
-        records.get(simplified_entry_key(entry.x, entry.y)), entry.word,
-    ) for entry in row_entries)
-    # A source-pinned persist may refuse a third-party human edit. Freeze the
-    # entire visible/manual/cache state BEFORE changing anything, so a failed
-    # whole-page regeneration cannot leave OpenCC results masquerading as saved
-    # manual corrections. Keep unrelated cached rows and existing dirty state.
     previous_display = [var.get() for var in self.simplified_vars]
     previous_actual = list(self.simplified_actual_values)
     previous_manual = list(self.simplified_manual_flags)
@@ -485,6 +452,184 @@ def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None
         f"已按当前原词文本框重新简体化 {count} 条（仅预览，尚未保存）；"
         + ("旧人工简体记录来源不一致，原记录保留，保存前需核对。"
            if detached else "请点击【保存】提交。")
+    )
+
+
+def regenerate_simplified_current_page(self, deps: ReviewSimplifiedDeps) -> None:
+    """Force OpenCC regeneration for every simplified headword on the current page."""
+    messagebox = deps.messagebox
+    simplified_entry_key = deps.simplified_entry_key
+    simplify_text = deps.simplify_text
+    row_entries = _owned_rendered_simplified_rows(self)
+    if row_entries is None:
+        return
+    count = len(row_entries)
+    originals = [self.vars[index].get().strip() for index in range(count)]
+    regenerated = [simplify_text(original) for original in originals]
+    if any(value is None for value in regenerated):
+        messagebox.showerror(
+            "重新简体化",
+            "OpenCC不可用，未覆盖本页已有的简体化结果。",
+            parent=self,
+        )
+        return
+    # The source-pinned legacy path is retained when disk and editors agree.
+    # If original-word Tk text is unsaved OR a legacy human sidecar is detached,
+    # the button is still allowed to regenerate from textboxes, but MAY ONLY
+    # stage an unsaved preview. Disk writes stay under explicit Save.
+    stem = self._rendered_page_stem
+    records = self._simplified_page_records(stem)
+    detached = any(source_word_conflicts(
+        records.get(simplified_entry_key(entry.x, entry.y)), entry.word,
+    ) for entry in row_entries)
+    unsaved_original = any(
+        str(entry.word) != word
+        for entry, word in zip(row_entries, originals)
+    )
+    if detached or unsaved_original:
+        if not self.parent._claim_page_for_manual_edit():
+            return
+        fresh = _owned_rendered_simplified_rows(self)
+        if (fresh is None or len(fresh) != count
+                or any(a is not b for a, b in zip(row_entries, fresh))
+                or [var.get().strip() for var in self.vars] != originals):
+            return
+        return _stage_regenerate_from_live_textboxes(
+            self, deps, row_entries, originals, regenerated, records, detached,
+        )
+
+    if not self.parent._claim_page_for_manual_edit():
+        return
+    fresh = _owned_rendered_simplified_rows(self)
+    if (fresh is None or any(a is not b for a, b in zip(row_entries, fresh))
+            or len(fresh) != count
+            or [var.get().strip() for var in self.vars] != originals):
+        return
+
+    # An edited original-word Tk buffer is not yet the PDIC word. Persist
+    # it through the existing paired PDIC + human-sidecar transaction BEFORE
+    # running the independent simplified-only writer. Otherwise the proposed
+    # regenerated source_word cannot match the still-old on-disk PDIC.
+    if any(str(entry.word) != original for entry, original in zip(row_entries, originals)):
+        try:
+            original_saved = bool(self.save(redraw_main=False))
+        except (OSError, RuntimeError, ValueError, UnicodeError):
+            original_saved = False
+        if not original_saved:
+            self.parent.status_var.set(
+                "校对原词尚未保存；重新简体化已取消，输入仍保留，请核对原词后重试。"
+            )
+            return
+        confirmed_rows = _owned_rendered_simplified_rows(self)
+        if (confirmed_rows is None or len(confirmed_rows) != count
+                or any(a is not b for a, b in zip(row_entries, confirmed_rows))
+                or [var.get().strip() for var in self.vars] != originals
+                or any(str(entry.word) != original for entry, original in zip(confirmed_rows, originals))):
+            self.parent.status_var.set(
+                "原词保存后的行或文本来源已变化，未重新简体化；请核对校对窗口。"
+            )
+            return
+
+    stem = self._rendered_page_stem
+    records = self._simplified_page_records(stem)
+    if any(source_word_conflicts(
+        records.get(simplified_entry_key(entry.x, entry.y)), entry.word,
+    ) for entry in row_entries):
+        messagebox.showerror(
+            "重新简体化",
+            "本页原词与简体来源不一致，已拒绝覆盖，请核对旧人工数据。",
+            parent=self,
+        )
+        return
+    # A source-pinned persist may refuse a third-party human edit. Freeze the
+    # entire visible/manual/cache state BEFORE changing anything, so a failed
+    # whole-page regeneration cannot leave OpenCC results masquerading as saved
+    # manual corrections. Keep unrelated cached rows and existing dirty state.
+    previous_display = [var.get() for var in self.simplified_vars]
+    previous_actual = list(self.simplified_actual_values)
+    previous_manual = list(self.simplified_manual_flags)
+    previous_auto = list(getattr(self, "simplified_auto_refresh_flags", ()))
+    was_dirty = stem in self._simplified_dirty_pages
+    proposals = [
+        (simplified_entry_key(entry.x, entry.y), {
+            "x": int(entry.x), "y": int(entry.y),
+            "source_word": original, "text": str(actual), "manual": False,
+        }, self._simplified_display_from_value(original, actual, False))
+        for entry, original, actual in zip(row_entries, originals, regenerated)
+    ]
+    previous_records = {
+        key: (key in records, records.get(key)) for key, _, _ in proposals
+    }
+    # Edits to unrelated source-coordinate rows may arrive synchronously
+    # through a Tk callback while a protected persistence attempt runs.
+    untouched_rows = {
+        key: value for key, value in records.items()
+        if key not in previous_records
+    }
+    try:
+        for index, (key, proposed_record, display) in enumerate(proposals):
+            self.simplified_actual_values[index] = regenerated[index]
+            self.simplified_manual_flags[index] = False
+            if index < len(previous_auto):
+                self.simplified_auto_refresh_flags[index] = False
+            self.simplified_vars[index].set(display)
+            records[key] = proposed_record
+        self._simplified_dirty_pages.add(stem)
+        self._persist_simplified_page(stem)
+    except Exception:
+        # Do not erase a newer local edit if a synchronous Tk callback changed
+        # it while persistence ran. Restore only values still owned by this
+        # regeneration, and retain dirty state if any rollback is uncertain.
+        restored = True
+        for index, (key, proposed_record, display) in enumerate(proposals):
+            current_actual = self.simplified_actual_values[index]
+            if current_actual == regenerated[index]:
+                self.simplified_actual_values[index] = previous_actual[index]
+            elif current_actual != previous_actual[index]:
+                restored = False
+            current_manual = self.simplified_manual_flags[index]
+            if current_manual is False:
+                self.simplified_manual_flags[index] = previous_manual[index]
+            elif current_manual != previous_manual[index]:
+                restored = False
+            if index < len(previous_auto):
+                current_auto = self.simplified_auto_refresh_flags[index]
+                if current_auto is False:
+                    self.simplified_auto_refresh_flags[index] = previous_auto[index]
+                elif current_auto != previous_auto[index]:
+                    restored = False
+            current_display = self.simplified_vars[index].get()
+            if current_display == display:
+                try:
+                    self.simplified_vars[index].set(previous_display[index])
+                except Exception:
+                    restored = False
+            elif current_display != previous_display[index]:
+                restored = False
+            existed, original_record = previous_records[key]
+            if records.get(key) == proposed_record:
+                if existed:
+                    records[key] = original_record
+                else:
+                    records.pop(key, None)
+            elif (key in records) != existed or (
+                existed and records[key] != original_record
+            ):
+                # A different/newer cache entry must not be overwritten.
+                restored = False
+        if {
+            key: value for key, value in records.items()
+            if key not in previous_records
+        } != untouched_rows:
+            restored = False
+        if not was_dirty and restored:
+            self._simplified_dirty_pages.discard(stem)
+        else:
+            self._simplified_dirty_pages.add(stem)
+        raise
+    self._refresh_cc_simplified_comparison(self.active_index)
+    self.parent.status_var.set(
+        f"已重新简体化当前页：{self.parent.current_page.name}｜覆盖 {count} 条简体结果"
     )
 
 
