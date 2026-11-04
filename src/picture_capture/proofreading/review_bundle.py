@@ -18,8 +18,72 @@ from .transactions import (
     _stage_recovery, _snapshot_sources_match,
 )
 from .simplified_review import (
-    validate_source_for_rewrite, validate_source_word_binding, write_records,
+    validate_source_for_rewrite, validate_source_word_binding, read_records,
+    write_records,
 )
+
+
+def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simplified: Path, records: dict) -> bool:
+    """Permit a source-pinned PDIC edit WITHOUT touching detached human JSON.
+
+    The old manual sidecar is already mismatched BEFORE this edit. It is never
+    rebound, normalized, deleted or published. Any uncertain Tk input or new
+    matching source_word still fails closed.
+    """
+    validate_source_for_rewrite(source.simplified_bytes, page.stem)
+    saved = read_records(simplified)
+    if records != saved or page.stem in review._simplified_dirty_pages:
+        raise RuntimeError("R3 旧简体副本或尚未保存的简体输入不能与原词独立提交")
+
+    old_by_id = {id(entry): (str(word), int(x), int(y))
+                 for entry, word, x, y in source.entries}
+    if len(old_by_id) != len(source.entries) or len(review.parent.entries) != len(old_by_id):
+        raise RuntimeError("R3 原词行集合改变，旧简体副本不可独立保留")
+    before_words = {(x, y): word for word, x, y in old_by_id.values()}
+    after_words = {}
+    changed = False
+    for entry in review.parent.entries:
+        old = old_by_id.get(id(entry))
+        if old is None or (int(entry.x), int(entry.y)) != old[1:]:
+            raise RuntimeError("R3 校对行或原图坐标归属改变，拒绝独立提交")
+        xy = old[1:]
+        if xy in after_words:
+            raise RuntimeError("R3 同一原图坐标出现多个词条")
+        after_words[xy] = str(entry.word)
+        changed |= str(entry.word) != old[0]
+    if not changed:
+        raise RuntimeError("R3 没有新的原词校对修改，拒绝绕过旧简体来源检查")
+
+    stale = []
+    for row in saved.values():
+        xy = (int(row["x"]), int(row["y"]))
+        if xy in before_words and str(row["source_word"]) != before_words[xy]:
+            stale.append((xy, str(row["source_word"])))
+    if not stale or any(after_words.get(xy) == foreign_word for xy, foreign_word in stale):
+        # In particular, do not create a new accidental match to an old
+        # human correction at the same pixel after a user word rename.
+        raise RuntimeError("R3 旧简体记录可能重新归属其他词条，拒绝独立提交")
+
+    bound = tuple(review._bound_row_entries())
+    words = tuple(getattr(review, "vars", ()))
+    displayed = tuple(getattr(review, "simplified_vars", ()))
+    actuals = tuple(getattr(review, "simplified_actual_values", ()))
+    manuals = tuple(getattr(review, "simplified_manual_flags", ()))
+    if not all(len(items) == len(bound) for items in (words, displayed, actuals, manuals)):
+        raise RuntimeError("R3 校对文字控件尚未完整绑定，拒绝独立提交")
+    if {id(row) for row in bound} != set(old_by_id):
+        raise RuntimeError("R3 可见校对行不是当前磁盘来源")
+    for i, row in enumerate(bound):
+        original = str(words[i].get()).strip()
+        if original != str(row.word).strip():
+            raise RuntimeError("R3 原词还有尚未提交的编辑输入")
+        shown = str(displayed[i].get()).strip()
+        expected = review._simplified_display_from_value(
+            original, actuals[i], bool(manuals[i]),
+        )
+        if shown != str(expected).strip():
+            raise RuntimeError("R3 简体编辑框仍有未确认输入，拒绝丢弃")
+    return True
 
 
 def commit_review_bundle(review: Any, source) -> None:
@@ -52,10 +116,18 @@ def commit_review_bundle(review: Any, source) -> None:
     # Compare original sidecar source_word against the *frozen pre-edit*
     # PDIC row identity. Pending editor word changes are legitimate, but an
     # already stale human correction at the same source pixel is not.
-    validate_source_word_binding(
-        source.simplified_bytes, page.stem,
-        [(word, x, y) for _entry, word, x, y in source.entries],
-    )
+    detached_sidecar = False
+    try:
+        validate_source_word_binding(
+            source.simplified_bytes, page.stem,
+            [(word, x, y) for _entry, word, x, y in source.entries],
+        )
+    except RuntimeError as error:
+        if str(error) != "R3 简体记录来源词条与 PDIC 原图坐标不一致，拒绝覆盖":
+            raise
+        detached_sidecar = _detached_sidecar_allows_original_only(
+            review, source, page, simplified, records,
+        )
     if not sources_match():
         raise RuntimeError("R3 简体来源验证期间文件变化，拒绝保存")
 
@@ -68,18 +140,23 @@ def commit_review_bundle(review: Any, source) -> None:
         write_pdic(
             proposal_pdic, app.entries, int(app.image.width), app.pages_tuple(),
         )
-        write_records(
-            proposal_sidecar, page.stem, records,
-        )
+        if not detached_sidecar:
+            write_records(proposal_sidecar, page.stem, records)
         target_pdic = proposal_pdic.read_bytes()
-        target_sidecar = proposal_sidecar.read_bytes()
+        # A detached, preexisting human sidecar is explicitly excluded from
+        # this proposal. Its exact old bytes remain the sole saved version.
+        target_sidecar = (
+            source.simplified_bytes if detached_sidecar
+            else proposal_sidecar.read_bytes()
+        )
     # New serialized human records must describe the *post-edit* Entry.
     # This must happen while files are still proposals, before the first
     # recoverable canonical file publication.
-    validate_source_word_binding(
-        target_sidecar, page.stem,
-        [(entry.word, entry.x, entry.y) for entry in app.entries],
-    )
+    if not detached_sidecar:
+        validate_source_word_binding(
+            target_sidecar, page.stem,
+            [(entry.word, entry.x, entry.y) for entry in app.entries],
+        )
     changes = [
         (role, former, latter)
         for role, former, latter in (
@@ -146,3 +223,8 @@ def commit_review_bundle(review: Any, source) -> None:
             app._update_page_row(app.current_index)
     except (OSError, RuntimeError, ValueError) as exc:
         app.status_var.set(f"校对文件已提交，附属状态刷新失败：{exc}")
+    if detached_sidecar:
+        app.status_var.set(
+            "原词 PDIC 已保存；历史简体人工副本来源不一致，原始字节完整保留，"
+            "未关联到新词条，请另行核对。"
+        )

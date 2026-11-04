@@ -289,8 +289,15 @@ def commit_proofread_entries(review: Any) -> None:
         key = f"{int(entry.x)},{int(entry.y)}"
         record = records.get(key)
         if record is not None:
-            if not isinstance(record, dict) or record.get("source_word") != old:
-                raise RuntimeError("R3 简体副本来源词条与校对原词不符，拒绝覆盖人工记录")
+            if not isinstance(record, dict):
+                raise RuntimeError("R3 简体副本来源记录无效，拒绝覆盖人工记录")
+            if record.get("source_word") != old:
+                # A legacy sidecar may already belong to an earlier PDIC
+                # headword at this XY. Do NOT rebind its human correction.
+                # The paired disk writer separately requires its exact bytes
+                # to remain untouched, no pending simplified edit and a
+                # genuine original-word change before allowing PDIC-only save.
+                continue
             updates.append((record, new))
     for record, new in updates:
         record["source_word"] = new
