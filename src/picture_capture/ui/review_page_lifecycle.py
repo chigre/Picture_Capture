@@ -258,6 +258,75 @@ def _review_evidence_after_save(self, deps: ReviewPageDeps, previous: list[WordE
         )
 
 
+def _safe_review_save_failure(error: Exception) -> str:
+    """Privacy-safe, ACTIONABLE error code; never interpolate user paths/text."""
+    if isinstance(error, OSError):
+        return "R3-IO：文件写入或磁盘权限失败，请检查目标目录与磁盘空间"
+    message = str(error)
+    if "恢复标记" in message or "recovery" in message or "inflight" in message:
+        return "R3-RECOVERY：检测到未完成写入的恢复标记，需先核对来源"
+    if "无可信" in message or "快照" in message or "snapshot" in message:
+        return "R3-SNAPSHOT：当前页 PDIC/窗口行未建立可信保存快照，请核对来源"
+    if ("来源" in message or "归属" in message or "人工" in message
+            or "source" in message):
+        return "R3-SOURCE：原词与历史简体来源不一致，需核对或明确确认"
+    if "简体" in message or "未确认" in message or "输入" in message:
+        return "R3-PENDING：存在未确认的简体或原词输入，不允许丢弃"
+    return "R3-UNKNOWN：本次写入未得到确认，请检查原词、恢复标记及磁盘权限"
+
+
+def _r3_current_edit_rejoins_manual_source(self, source) -> bool:
+    """Detect ONLY a frozen XY-owned old manual source matched by new Tk text.
+
+    This probe does not grant authority. The bundle still checks exact file
+    fingerprints, manual source bytes, row ownership and a separate consent
+    lease for any rejoin. Never mutate or inspect private words in diagnostics.
+    """
+    if (source is None or not source.simplified_bytes
+            or source.page != getattr(self.parent, "current_page", None)
+            or getattr(self, "_rendered_page_stem", "") != source.page.stem):
+        return False
+    import json
+    try:
+        rows = tuple(self._bound_row_entries())
+        vars = tuple(self.vars)
+        if len(rows) != len(vars):
+            return False
+        old = {
+            id(entry): (str(word), int(x), int(y))
+            for entry, word, x, y in source.entries
+        }
+        if len(old) != len(source.entries) or {id(row) for row in rows} != set(old):
+            return False
+        pending = {
+            (old[id(row)][1], old[id(row)][2]):
+            (old[id(row)][0], str(var.get()).strip())
+            for row, var in zip(rows, vars)
+        }
+        if len(pending) != len(rows):
+            return False
+        document = json.loads(source.simplified_bytes.decode("utf-8"))
+        records = document.get("entries")
+        if not isinstance(records, list):
+            return False
+        return any(
+            isinstance(record, dict)
+            and record.get("manual") is True
+            and (
+                int(record["x"]), int(record["y"])
+            ) in pending
+            and str(record.get("source_word")) != pending[
+                (int(record["x"]), int(record["y"]))
+            ][0]
+            and str(record.get("source_word")) == pending[
+                (int(record["x"]), int(record["y"]))
+            ][1]
+            for record in records
+        )
+    except (AttributeError, TypeError, ValueError, KeyError, UnicodeError):
+        return False
+
+
 def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
     if getattr(self, "_filter_rows_active", False):
         self._flush_focused_changes_now()
@@ -314,26 +383,49 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
         evidence_before = self._review_evidence_before_save()
         self.__dict__["_r3_detached_original_save_source"] = transaction_before
         try:
+            if _r3_current_edit_rejoins_manual_source(self, transaction_before):
+                # Never re-associate historical human text during autosave,
+                # background scans or an implicit callback. Only a toolbar
+                # Save or a user-initiated Next-page may ask for consent.
+                interactive = bool(redraw_main or self.__dict__.get(
+                    "_r3_navigation_explicit_save", False,
+                ))
+                if interactive:
+                    from tkinter import messagebox
+                    confirmed = bool(messagebox.askyesno(
+                        "确认历史简体来源",
+                        "当前原词的修改将与已有的人工简体记录重新对应。"
+                        "旧人工简体文字和文件字节不会改变。"
+                        "是否明确确认重新关联并保存原词？",
+                        parent=self,
+                    ))
+                    if not confirmed:
+                        self.parent.status_var.set(
+                            "已取消历史简体重新关联；原词未保存，当前输入仍保留。"
+                        )
+                        return False
+                    self.__dict__["_r3_explicit_detached_source_rejoin"] = (
+                        transaction_before
+                    )
             with protect_review_pdic_commit(self):
                 self._commit_edits()
                 commit_review_bundle(self, transaction_before)
                 self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
         finally:
             self.__dict__.pop("_r3_detached_original_save_source", None)
-    except (OSError, RuntimeError, ValueError, UnicodeError):
-        # A real toolbar Save is a user action, not an internal log entry.
-        # Never claim success, clear a Tk edit or reveal a private source
-        # filename/word in the status or native error popup.
+            self.__dict__.pop("_r3_explicit_detached_source_rejoin", None)
+    except (OSError, RuntimeError, ValueError, UnicodeError) as error:
+        # Only fixed diagnostic classes go to the UI. Do not print exception
+        # arguments, filenames, user words or machine paths.
+        reason = _safe_review_save_failure(error)
         self.parent.status_var.set(
-            "校对文字未保存或写入结果未确认；输入仍在界面中，"
-            "请检查磁盘权限、恢复标记及项目来源后重试。"
+            f"校对保存未完成：{reason}；原词输入仍保留，请核对后重试。"
         )
         if redraw_main:
             from tkinter import messagebox
             messagebox.showerror(
                 "校对保存未完成",
-                "本次校对内容未能确认保存，输入未被清空；"
-                "请检查项目文件并重试，若存在恢复标记请先核对来源。",
+                f"{reason}\n本次输入未被清空；请核对后重试。",
                 parent=self,
             )
         return False
@@ -576,7 +668,14 @@ def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
     # The parent is told that the current PDIC has already been saved, which
     # also prevents stale main-canvas Entry widgets from overwriting the
     # newer proofreading text during navigation.
-    if self.save(redraw_main=False) is False:
+    # A Next-page click is an explicit operator action; unlike background
+    # autosave it may request informed consent to rejoin an old manual record.
+    self.__dict__["_r3_navigation_explicit_save"] = True
+    try:
+        saved = self.save(redraw_main=False)
+    finally:
+        self.__dict__.pop("_r3_navigation_explicit_save", None)
+    if saved is False:
         return
     preloaded = self._take_prefetched_page(target)
     self.parent.change_page(
