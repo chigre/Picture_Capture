@@ -137,6 +137,11 @@ def test_detached_old_manual_sidecar_allows_only_untouched_auto_marker(
             workflow._simplified_display_from_value(None, word, text, manual),
     )
     review.__dict__["_r3_detached_original_save_source"] = source
+    # This is the real post-commit cache: commit_proofread_entries has
+    # source-pinned this unchanged automatic value to the new original,
+    # while the historic human sidecar on disk must stay intact.
+    proposed = {key: dict(row) for key, row in saved.items()}
+    proposed["30,40"]["source_word"] = "校订乙"
     monkeypatch.setattr(
         review_bundle, "validate_source_for_rewrite", lambda *_args: None,
     )
@@ -149,12 +154,12 @@ def test_detached_old_manual_sidecar_allows_only_untouched_auto_marker(
         with pytest.raises(RuntimeError, match="未确认输入"):
             review_bundle._detached_sidecar_allows_original_only(
                 review, source, page, Path("sidecar.json"),
-                {key: dict(row) for key, row in saved.items()},
+                proposed,
             )
     else:
         assert review_bundle._detached_sidecar_allows_original_only(
             review, source, page, Path("sidecar.json"),
-            {key: dict(row) for key, row in saved.items()},
+            proposed,
         ) == 0
     assert saved["10,20"]["text"] == "不允许重新关联的人工简体"
     assert saved["10,20"]["source_word"] == "旧历史词"
