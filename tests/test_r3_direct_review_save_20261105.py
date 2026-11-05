@@ -145,3 +145,61 @@ def test_direct_writer_can_repeat_save_without_legacy_r3_source_prompt(tmp_path)
     direct_review_save.direct_save_review(review)
     assert read_pdic(pdic_path(page))[0].word == "新詞"
     assert read_records(sidecar)["10,20"]["text"] == "新简体"
+
+
+@pytest.mark.parametrize("injection", ["after_record_read", "after_pdic_publish"])
+def test_direct_save_rejects_late_foreign_manual_sidecar_revision(
+    tmp_path, monkeypatch, injection,
+):
+    """A newer HUMAN sidecar revision must not be replaced by a stale proposal.
+
+    Both mutations are purely synthetic: once during record reading, once
+    after this direct writer publishes PDIC but before its sidecar write.
+    The original and simplified input text must remain visible for retry.
+    """
+    page, sidecar, row, review = case(tmp_path)
+    pdic_before = pdic_path(page).read_bytes()
+    externally_saved = {}
+
+    def foreign_human_write():
+        write_records(sidecar, page.stem, {
+            "10,20": {
+                "x": 10, "y": 20, "source_word": "独立历史来源",
+                "text": "外部人工修订", "manual": True,
+            }
+        })
+        externally_saved["bytes"] = sidecar.read_bytes()
+
+    if injection == "after_record_read":
+        original_reader = direct_review_save.read_records
+
+        def race_after_record_read(path):
+            snapshot = original_reader(path)
+            foreign_human_write()
+            return snapshot
+
+        monkeypatch.setattr(
+            direct_review_save, "read_records", race_after_record_read,
+        )
+    else:
+        original_publisher = direct_review_save._publish
+
+        def race_after_pdic_publish(path, content):
+            result = original_publisher(path, content)
+            if path == pdic_path(page) and "bytes" not in externally_saved:
+                foreign_human_write()
+            return result
+
+        monkeypatch.setattr(
+            direct_review_save, "_publish", race_after_pdic_publish,
+        )
+
+    with pytest.raises(OSError):
+        direct_review_save.direct_save_review(review)
+
+    assert "bytes" in externally_saved
+    assert sidecar.read_bytes() == externally_saved["bytes"]
+    assert pdic_path(page).read_bytes() == pdic_before
+    assert row.word == "原詞"
+    assert review.vars[0].get() == "新詞"
+    assert review.simplified_vars[0].get() == "新简体"
