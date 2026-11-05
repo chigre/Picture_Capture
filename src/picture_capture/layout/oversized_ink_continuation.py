@@ -75,6 +75,14 @@ def _separate_left_edge_entry_rows(
     entry_modes = list(getattr(column, "entry_modes", ()) or ())
     if body_mode is None or not entry_modes:
         return False
+    # Require repeated, independently observed lane families. A single
+    # punctuation mark or illustration fragment is not proof of an entry lane.
+    row_count = len(getattr(column, "lines", ()) or ())
+    support_floor = max(3, round(row_count * .08))
+    if int(getattr(body_mode, "support", 0) or 0) < support_floor:
+        return False
+    if max(int(getattr(mode, "support", 0) or 0) for mode in entry_modes) < support_floor:
+        return False
     body_x = float(getattr(body_mode, "center", 0.0) or 0.0)
     entry_x = min(float(getattr(mode, "center", 0.0) or 0.0) for mode in entry_modes)
     if body_x - entry_x < max(15.0, .38 * reference):
