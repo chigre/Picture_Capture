@@ -34,13 +34,41 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         raise RuntimeError("R3 来源词条未由当前原词保存事务确认")
     validate_source_for_rewrite(source.simplified_bytes, page.stem)
     saved = read_records(simplified)
+    # The normal original-word commit synchronizes a SAME-Entry automatic
+    # record's in-memory source_word with its new PDIC word, even when a
+    # different historical human record on this page is detached. That
+    # source-only cache update is not a human simplified edit. Permit it for
+    # an exact, already-saved automatic record while leaving the entire
+    # detached historical sidecar byte-for-byte untouched.
+    frozen_by_xy = {
+        (int(x), int(y)): (entry, str(word))
+        for entry, word, x, y in source.entries
+    }
+    live_by_id = {id(entry): entry for entry in review.parent.entries}
+    if (len(frozen_by_xy) != len(source.entries)
+            or len(live_by_id) != len(review.parent.entries)):
+        raise RuntimeError("R3 校对原词来源重复，拒绝独立提交")
+    for key, persisted in saved.items():
+        proposal = records.get(key)
+        if proposal == persisted:
+            continue
+        xy = (int(persisted["x"]), int(persisted["y"]))
+        frozen = frozen_by_xy.get(xy)
+        live = None if frozen is None else live_by_id.get(id(frozen[0]))
+        new_word = "" if live is None else str(live.word)
+        if (not isinstance(proposal, dict)
+                or persisted.get("manual") is not False
+                or frozen is None or live is not frozen[0]
+                or (int(live.x), int(live.y)) != xy
+                or persisted.get("source_word") != frozen[1]
+                or new_word == frozen[1]
+                or proposal != dict(persisted, source_word=new_word)):
+            raise RuntimeError(
+                "R3 旧简体副本或尚未保存的简体输入不能与原词独立提交"
+            )
     # A newly rendered row with NO saved sidecar entry gets an automatic
-    # OpenCC preview. The preview must neither block a safe PDIC-only edit
-    # nor authorize rewriting the older detached HUMAN sidecar. Every saved
-    # key/value must remain exact; verify each new key against the frozen
-    # PDIC Entry, generated value, current Tk display and auto-only flags.
-    if any(records.get(key) != value for key, value in saved.items()):
-        raise RuntimeError("R3 旧简体副本或尚未保存的简体输入不能与原词独立提交")
+    # OpenCC preview. Verify any new automatic seed against the frozen
+    # PDIC Entry and Tk display before a PDIC-only commit.
     auto_seeds = {
         key: value for key, value in records.items() if key not in saved
     }
