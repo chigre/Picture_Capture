@@ -87,3 +87,74 @@ def test_real_simplified_edit_remains_manual_and_dirty():
         "text": "人工简体", "manual": True,
     }
     assert row.word == "原詞"
+
+
+@pytest.mark.parametrize("automatic_display, should_reject", [
+    ("√", False),
+    ("未确认人工简体修改", True),
+])
+def test_detached_old_manual_sidecar_allows_only_untouched_auto_marker(
+    monkeypatch, automatic_display, should_reject,
+):
+    """R3-PENDING must not block an ordinary original-only Save due to √.
+
+    A stale historical manual record stays byte-for-byte untouched; any
+    new simplified textbox input is still rejected by the same safety guard.
+    """
+    from picture_capture.proofreading import review_bundle
+
+    page = Path("synthetic.png")
+    historical = SimpleNamespace(word="校订甲", x=10, y=20)
+    automatic = SimpleNamespace(word="校订乙", x=30, y=40)
+    source = SimpleNamespace(
+        simplified_bytes=b"frozen-original-sidecar",
+        entries=[
+            (historical, "原詞甲", 10, 20),
+            (automatic, "原詞乙", 30, 40),
+        ],
+    )
+    saved = {
+        "10,20": {
+            "x": 10, "y": 20, "source_word": "旧历史词",
+            "text": "不允许重新关联的人工简体", "manual": True,
+        },
+        "30,40": {
+            "x": 30, "y": 40, "source_word": "原詞乙",
+            "text": "原詞乙", "manual": False,
+        },
+    }
+    rows = [historical, automatic]
+    review = SimpleNamespace(
+        parent=SimpleNamespace(entries=rows),
+        vars=[Value("校订甲"), Value("校订乙")],
+        simplified_vars=[Value("⚠来源词条不一致，请核对原词"),
+                         Value(automatic_display)],
+        simplified_actual_values=["⚠来源词条不一致，请核对原词", "原詞乙"],
+        simplified_manual_flags=[True, False],
+        _simplified_dirty_pages=set(),
+        _bound_row_entries=lambda: rows,
+        _simplified_display_from_value=lambda word, text, manual:
+            workflow._simplified_display_from_value(None, word, text, manual),
+    )
+    review.__dict__["_r3_detached_original_save_source"] = source
+    monkeypatch.setattr(
+        review_bundle, "validate_source_for_rewrite", lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        review_bundle, "read_records", lambda _path: {
+            key: dict(row) for key, row in saved.items()
+        },
+    )
+    if should_reject:
+        with pytest.raises(RuntimeError, match="未确认输入"):
+            review_bundle._detached_sidecar_allows_original_only(
+                review, source, page, Path("sidecar.json"),
+                {key: dict(row) for key, row in saved.items()},
+            )
+    else:
+        assert review_bundle._detached_sidecar_allows_original_only(
+            review, source, page, Path("sidecar.json"),
+            {key: dict(row) for key, row in saved.items()},
+        ) == 0
+    assert saved["10,20"]["text"] == "不允许重新关联的人工简体"
+    assert saved["10,20"]["source_word"] == "旧历史词"
