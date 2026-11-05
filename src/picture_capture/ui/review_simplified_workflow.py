@@ -96,13 +96,21 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
         manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
         actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
         display = self.simplified_vars[i].get().strip()
-        # Compare against the user's LIVE original-word Tk input. The
-        # Entry.word still names the frozen PDIC source until the paired
-        # commit: using it here mislabels an automatic "√" preview as a
-        # manual override after an ordinary headword correction.
+        # An untouched automatic preview can reflect either the frozen
+        # rendered original or the freshly typed (not yet persisted) original.
+        # Compare both exact display witnesses; otherwise a rename alone
+        # misclassifies "√" or its old preview as a HUMAN correction.
+        # Keep the source_word conflict guard and exact row ownership above.
         original = self.vars[i].get().strip()
-        expected = self._simplified_display_from_value(original, actual, False)
-        if not manual and display != expected:
+        live_expected = self._simplified_display_from_value(
+            original, actual, False,
+        )
+        frozen_expected = self._simplified_display_from_value(
+            str(entry.word).strip(), actual, False,
+        )
+        if not manual and display not in {
+            str(live_expected).strip(), str(frozen_expected).strip(),
+        }:
             manual = True
             if i < len(self.simplified_manual_flags):
                 self.simplified_manual_flags[i] = True
