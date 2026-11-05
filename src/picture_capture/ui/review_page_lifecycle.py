@@ -156,7 +156,9 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
             "校对行绑定已变化，本次自动保存未确认；人工输入仍保留，请核对页面后重试。"
         )
         return True
-    self._r3_autosave_unconfirmed = False
+    # A failure at ANY later stage must keep the review text unconfirmed.
+    # Clear this only after an unchanged no-op or a verified R3 bundle.
+    self._r3_autosave_unconfirmed = True
     from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
     bridge_main_canvas_text_into_review(self)
     word_dirty = any(
@@ -183,6 +185,7 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
         # If either view really changed, bridge_main_canvas_text_into_review
         # staged the new text and dirty is True. A genuinely unchanged review
         # may now safely consume this no-op without a redundant PDIC write.
+        self._r3_autosave_unconfirmed = False
         return True
     from .review_transaction_actions import capture_review_before, record_review_after
     transaction_before = capture_review_before(self)
@@ -199,6 +202,7 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
         self.__dict__.pop("_r3_detached_original_save_source", None)
     self._review_evidence_after_save(evidence_before)
     record_review_after(self, transaction_before)
+    self._r3_autosave_unconfirmed = False
     return True
 
 
