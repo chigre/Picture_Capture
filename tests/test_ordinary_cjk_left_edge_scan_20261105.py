@@ -34,8 +34,8 @@ def test_proven_body_indent_preserves_two_independent_cjk_headwords(
     second = SimpleNamespace(role="entry", y0=101, y1=164, first_x=entry_x)
     column = SimpleNamespace(
         left=20, right=440, lines=[first, second],
-        body_mode=SimpleNamespace(center=body_x),
-        entry_modes=[SimpleNamespace(center=entry_x)],
+        body_mode=SimpleNamespace(center=body_x, support=35),
+        entry_modes=[SimpleNamespace(center=entry_x, support=50)],
     )
     layout = SimpleNamespace(
         ordinary_line_height=reference, body_top=0, indent_type="body",
