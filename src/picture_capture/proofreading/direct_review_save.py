@@ -53,6 +53,10 @@ def direct_save_review(review: Any) -> bool:
     ]
     path = pdic_path(page)
     sidecar = simplified_review_path_for_image(page)
+    # Pin file bytes BEFORE reading/parsing sidecar records. A foreign human
+    # edit during the read must never become an implicitly accepted baseline.
+    old_pdic = _bytes_or_absent(path)
+    old_sidecar = _bytes_or_absent(sidecar)
     records = read_records(sidecar)
     manual_flags = list(getattr(review, "simplified_manual_flags", ()))
     actuals = list(getattr(review, "simplified_actual_values", ()))
@@ -75,8 +79,6 @@ def direct_save_review(review: Any) -> bool:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     sidecar.parent.mkdir(parents=True, exist_ok=True)
-    old_pdic = _bytes_or_absent(path)
-    old_sidecar = _bytes_or_absent(sidecar)
     # Serialize both proposals before changing either destination.
     with TemporaryDirectory(prefix="pc-review-save-") as directory:
         proposal_pdic = Path(directory) / "proposed.pdic"
@@ -94,8 +96,21 @@ def direct_save_review(review: Any) -> bool:
             (sidecar, old_sidecar, new_sidecar),
         ) if old != new
     ]
+    # This is a preflight, not an OS-level CAS: reject known foreign revisions
+    # before this attempt modifies any destination. Recheck each role just
+    # before publishing, including the sidecar after the PDIC publication.
+    if (_bytes_or_absent(path) != old_pdic
+            or _bytes_or_absent(sidecar) != old_sidecar):
+        raise OSError("校对来源在准备写盘期间改变；未保存，请核对后重试")
+    attempted = []
     try:
         for dest, old, new in changes:
+            if _bytes_or_absent(dest) != old:
+                raise OSError("校对来源在写盘期间改变；未保存，请核对后重试")
+            # A publisher can raise after replacing the destination; mark it
+            # attempted before calling it, but never roll back an unattempted
+            # foreign sidecar revision.
+            attempted.append((dest, old, new))
             _publish(dest, new)
             if _bytes_or_absent(dest) != new:
                 raise OSError("校对文件写盘后读取不一致")
@@ -104,7 +119,7 @@ def direct_save_review(review: Any) -> bool:
         # rolled back. Only restore exact bytes written by THIS attempt;
         # never overwrite a different third-party revision.
         rollback_ok = True
-        for dest, old, new in reversed(changes):
+        for dest, old, new in reversed(attempted):
             try:
                 current = _bytes_or_absent(dest)
                 if current == old:
