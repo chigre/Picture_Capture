@@ -156,6 +156,20 @@ def autosave_commit(self, deps: ReviewPageDeps) -> bool:
             "校对行绑定已变化，本次自动保存未确认；人工输入仍保留，请核对页面后重试。"
         )
         return True
+    # A live simplified editor may be mid-rebind even if original rows are
+    # already complete. Missing simplified provenance is NOT a clean no-op:
+    # otherwise PPP success can mask human text that was never committed.
+    # Real ReviewWindow has simplified_vars; legacy original-only test doubles
+    # without that column retain their existing mock ABI.
+    if row_entries and getattr(self, "simplified_vars", None) is not None:
+        from .review_simplified_workflow import _owned_rendered_simplified_rows
+        if _owned_rendered_simplified_rows(self) is None:
+            self._r3_autosave_unconfirmed = True
+            self.parent.status_var.set(
+                "简体校对行尚未完整绑定，本次自动保存未确认；"
+                "文字仍保留，请页面刷新后重试。"
+            )
+            return True
     # A failure at ANY later stage must keep the review text unconfirmed.
     # Clear this only after an unchanged no-op or a verified R3 bundle.
     self._r3_autosave_unconfirmed = True
