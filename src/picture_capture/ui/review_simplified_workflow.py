@@ -91,8 +91,6 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
     records = self._simplified_page_records(stem)
     for i, entry in enumerate(rendered_entries):
         key = simplified_entry_key(entry.x, entry.y)
-        if source_word_conflicts(records.get(key), entry.word):
-            continue
         manual = bool(self.simplified_manual_flags[i]) if i < len(self.simplified_manual_flags) else False
         actual = self.simplified_actual_values[i] if i < len(self.simplified_actual_values) else None
         display = self.simplified_vars[i].get().strip()
@@ -123,28 +121,12 @@ def _capture_simplified_edits(self, deps: ReviewSimplifiedDeps, page_stem: str |
 
 
 def _persist_simplified_page(self, deps: ReviewSimplifiedDeps, page_stem: str | None = None) -> None:
-    simplified_review_path_for_image = deps.simplified_review_path_for_image
+    """Persist the visible columns directly, including regenerated simplified text."""
     stem = str(page_stem or (self.parent.current_page.stem if self.parent.current_page else ""))
-    if not stem or not self.parent.project:
+    if not stem:
         return
-    page = next((item for item in self.parent.project.images if item.stem == stem), None)
-    if (page is None or self.parent.current_page != page
-            or getattr(self, "_rendered_page_stem", "") != stem):
-        raise RuntimeError("R3 不是当前校对页面，拒绝简体副本写入")
-    records = self._simplified_page_records(stem)
-    path = simplified_review_path_for_image(page)
-    pinned = self.__dict__.get("_r3_simplified_source_bytes", {}).get(stem)
-    if pinned is None or pinned[0] != path.resolve():
-        raise RuntimeError("R3 无可信简体人工副本来源，拒绝覆盖")
-    from ..proofreading.simplified_review import guarded_write_records
-    committed = guarded_write_records(
-        page, path, stem, records, pinned[1],
-        writer=deps.write_simplified_records,
-    )
-    self.__dict__["_r3_simplified_source_bytes"][stem] = (
-        path.resolve(), committed,
-    )
-    self._simplified_dirty_pages.discard(stem)
+    if not self.save(redraw_main=False):
+        raise RuntimeError("校对简体文字尚未写入文件，请重试")
 
 
 def _simplified_query_for_index(self, deps: ReviewSimplifiedDeps, index: int) -> str:
@@ -281,23 +263,13 @@ def on_simplified_key(self, deps: ReviewSimplifiedDeps, _event: tk.Event, index:
         # into a manual override merely because a KeyRelease event occurred.
         if value == expected:
             return
-    if source_word_conflicts(
-        self._simplified_page_records(self._rendered_page_stem).get(
-            simplified_entry_key(entry.x, entry.y),
-        ), entry.word,
-    ):
-        return
     if not self.parent._claim_page_for_manual_edit():
         return
     fresh = _owned_rendered_simplified_rows(self)
     if (fresh is None or fresh[index] is not entry
             or self.vars[index].get().strip() != original_word
             or self.simplified_vars[index].get().strip() != value
-            or source_word_conflicts(
-                self._simplified_page_records(self._rendered_page_stem).get(
-                    simplified_entry_key(entry.x, entry.y),
-                ), entry.word,
-            )):
+):
         return
     actual = original_word if value == "√" else value
     stem = self._rendered_page_stem
@@ -338,12 +310,6 @@ def _refresh_simplified_for_index(self, deps: ReviewSimplifiedDeps, index: int) 
     self.simplified_vars[index].set(self._simplified_display_from_value(original, actual, False))
     stem = self._rendered_page_stem
     entry = rows[index]
-    if source_word_conflicts(
-        self._simplified_page_records(stem).get(
-            simplified_entry_key(entry.x, entry.y),
-        ), entry.word,
-    ):
-        return
     self._simplified_page_records(stem)[simplified_entry_key(entry.x, entry.y)] = {
         "x": int(entry.x), "y": int(entry.y),
         # Keep the *current pinned PDIC* word until commit_proofread_entries
