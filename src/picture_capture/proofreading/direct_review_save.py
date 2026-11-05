@@ -94,21 +94,27 @@ def direct_save_review(review: Any) -> bool:
             (sidecar, old_sidecar, new_sidecar),
         ) if old != new
     ]
-    completed = []
     try:
         for dest, old, new in changes:
             _publish(dest, new)
-            completed.append((dest, old, new))
             if _bytes_or_absent(dest) != new:
                 raise OSError("校对文件写盘后读取不一致")
     except Exception:
+        # Even a publisher that raises AFTER replacing a file must be
+        # rolled back. Only restore exact bytes written by THIS attempt;
+        # never overwrite a different third-party revision.
         rollback_ok = True
-        for dest, old, new in reversed(completed):
+        for dest, old, new in reversed(changes):
             try:
-                if _bytes_or_absent(dest) != new:
-                    rollback_ok = False
+                current = _bytes_or_absent(dest)
+                if current == old:
                     continue
-                _publish(dest, old)
+                if current == new:
+                    _publish(dest, old)
+                    if _bytes_or_absent(dest) != old:
+                        rollback_ok = False
+                else:
+                    rollback_ok = False
             except Exception:
                 rollback_ok = False
         if not rollback_ok:
@@ -132,6 +138,10 @@ def direct_save_review(review: Any) -> bool:
         if i < len(review.simplified_manual_flags):
             key = f"{int(rows[i].x)},{int(rows[i].y)}"
             review.simplified_manual_flags[i] = bool(records[key]["manual"])
+    # Once saved, a new automatic preview becomes a persisted value and
+    # must not be silently regenerated on the next original-word keystroke.
+    for i in range(len(getattr(review, "simplified_auto_refresh_flags", ()))):
+        review.simplified_auto_refresh_flags[i] = False
     review._simplified_dirty_pages.discard(page.stem)
     app._last_pdic_write_changed = old_pdic != new_pdic
 
