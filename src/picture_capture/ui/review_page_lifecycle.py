@@ -188,9 +188,19 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
         self.parent.status_var.set("后台任务尚未释放当前页，请停止处理后保存。")
         return False
 
+    # Existing optional evidence and Undo history are best-effort metadata.
+    # Their old source validation must NEVER prevent a human textbox save.
     try:
-        # Logging is optional and NEVER controls permission to Save.
         evidence_before = self._review_evidence_before_save()
+    except (OSError, RuntimeError, ValueError, TypeError, UnicodeError):
+        evidence_before = None
+    try:
+        from .review_transaction_actions import capture_review_before
+        history_before = capture_review_before(self)
+    except (OSError, RuntimeError, ValueError, TypeError, UnicodeError):
+        history_before = None
+
+    try:
         from ..proofreading.direct_review_save import direct_save_review
         direct_save_review(self)
         self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
@@ -208,7 +218,16 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
             )
         return False
 
-    self._review_evidence_after_save(evidence_before)
+    try:
+        self._review_evidence_after_save(evidence_before)
+    except (OSError, RuntimeError, ValueError, TypeError, UnicodeError):
+        pass
+    if history_before is not None:
+        try:
+            from .review_transaction_actions import record_review_after
+            record_review_after(self, history_before)
+        except (OSError, RuntimeError, ValueError, TypeError, UnicodeError):
+            pass
     if self.parent.project:
         try:
             self.parent.settings.to_json(
