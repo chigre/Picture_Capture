@@ -22,6 +22,7 @@ from .step_trace import LayoutStepTrace
 # obtain physical policy/layout through the explicit composition boundary.
 from .composition import infer_composed_physical_page_layout as infer_dictionary_page_layout
 from .physical_indent import (
+    _reconcile_cross_column_body_indent,
     _suppress_display_head_duplicate_entries,
     normalize_layout_roles,
 )
@@ -279,6 +280,7 @@ def _resolve_directional_body_lanes(layout: Any) -> None:
         column.body_mode = desired_body
         column.entry_modes = list(entry_modes)
 
+    _reconcile_cross_column_body_indent(layout)
     _suppress_display_head_duplicate_entries(layout)
 
 

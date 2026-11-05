@@ -644,6 +644,100 @@ def _suppress_display_head_duplicate_entries(layout: Any) -> None:
             line.role = "body"
 
 
+
+def _reconcile_cross_column_body_indent(layout: Any) -> None:
+    """Use independently repeated across-column evidence for entry-only columns.
+
+    A column with no inward continuation lane does not prove its aligned text
+    is body.  Override the per-column dominant-body default *only* when at
+    least two columns independently show a matching, well-separated inward
+    continuation and the predominant outer line starts align across columns.
+    This never infers polarity for a single uncontrasted column in isolation.
+    """
+    if str(getattr(layout, "indent_type", "")) != "body":
+        return
+    columns = list(getattr(layout, "columns", ()) or ())
+    if len(columns) < 2:
+        return
+
+    reference = max(8.0, float(getattr(layout, "ordinary_line_height", 0.0) or 0.0))
+    aligned_tolerance = max(6.0, min(12.0, reference * 0.25))
+    near_outer = max(8.0, min(12.0, reference * 0.28))
+    deep_indent = max(18.0, reference * 0.65)
+
+    anchors: list[Any] = []
+    witnesses: list[tuple[Any, float]] = []
+    for column in columns:
+        modes = list(getattr(column, "indent_modes", ()) or ())
+        if not modes:
+            return
+        anchor = max(modes, key=lambda mode: (_support(mode), -abs(_center(mode))))
+        if _support(anchor) < 3:
+            return
+        # Do not recast a genuinely inset dominant BODY as an outer ENTRY:
+        # an independently repeated outer lane is already present.
+        if any(
+            _support(mode) >= 2 and _center(mode) < _center(anchor) - near_outer
+            for mode in modes
+        ):
+            return
+        anchors.append(anchor)
+        deep_modes = [
+            mode for mode in modes
+            if _center(mode) - _center(anchor) >= deep_indent
+        ]
+        if deep_modes:
+            inward = max(
+                deep_modes, key=lambda mode: (_support(mode), -abs(_center(mode))),
+            )
+            witnesses.append((inward, _center(inward) - _center(anchor)))
+
+    # A single stray ink fragment or a single column's wrap is not enough
+    # to change the roles of otherwise uncontrasted columns.
+    if len(witnesses) < 2 or sum(_support(mode) for mode, _ in witnesses) < 3:
+        return
+    anchor_centers = [_center(mode) for mode in anchors]
+    if max(anchor_centers) - min(anchor_centers) > 2.0 * aligned_tolerance:
+        return
+    offsets = [distance for _, distance in witnesses]
+    if max(offsets) - min(offsets) > max(9.0, reference * 0.30):
+        return
+
+    for column, anchor in zip(columns, anchors):
+        modes = list(getattr(column, "indent_modes", ()) or ())
+        # Preserve every separate physical mode. Nearby outer lanes may be
+        # line-start jitter, not different semantic classes.
+        outer = [
+            mode for mode in modes
+            if abs(_center(mode) - _center(anchor)) <= near_outer
+        ]
+        outer_ids = {id(mode) for mode in outer}
+        for mode in outer:
+            mode.role = "entry"
+            for line in list(getattr(mode, "lines", ()) or ()):
+                line.role = "entry"
+
+        inward = [
+            mode for mode in modes
+            if id(mode) not in outer_ids
+            and _center(mode) - _center(anchor) >= deep_indent
+        ]
+        for mode in inward:
+            mode.role = "body"
+            for line in list(getattr(mode, "lines", ()) or ()):
+                line.role = "body"
+
+        column.entry_modes = [
+            mode for mode in modes if str(getattr(mode, "role", "")) == "entry"
+        ]
+        # An entry-only column has NO measured body anchor: assigning its
+        # entry family to body would reproduce the original false conclusion.
+        column.body_mode = (
+            max(inward, key=lambda mode: (_support(mode), -abs(_center(mode))))
+            if inward else None
+        )
+
+
 def normalize_layout_roles(layout: Any) -> Any:
     """Rebuild final entry/body roles from physical-indent lanes only."""
     indent_type = str(getattr(layout, "indent_type", "body") or "body")
@@ -662,6 +756,7 @@ def normalize_layout_roles(layout: Any) -> Any:
     reference_arg = reference if reference > 0 else None
     for column in list(getattr(layout, "columns", []) or []):
         assign_binary_roles(column, indent_type, reference_arg)
+    _reconcile_cross_column_body_indent(layout)
     _suppress_display_head_duplicate_entries(layout)
     return layout
 
