@@ -72,7 +72,10 @@ def _split_tall_run(
 ) -> list[tuple[int, int]]:
     height = int(y1 - y0)
     ref = max(6.0, float(reference))
-    if height <= ref * 1.70:
+    # Joined neighbouring printed rows are often ~1.8x the normal height.
+    # Try a *valley-backed* split before the older 1.9x acceptance ceiling;
+    # a solid oversized character still stays intact without a real valley.
+    if height <= ref * 1.62:
         return [(int(y0), int(y1))]
 
     lo = max(y0 + 2, int(round(y0 + ref * 0.62)))
@@ -195,7 +198,7 @@ def projection_line_runs(
             _split_tall_run(
                 y0, y1, row_ink, threshold, ref, debug=debug,
             )
-            if height > maximum_single
+            if height > ref * 1.62
             else [(y0, y1)]
         )
         for part0, part1 in parts:
