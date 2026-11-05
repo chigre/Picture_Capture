@@ -157,8 +157,17 @@ def _detached_sidecar_allows_original_only(review: Any, source, page: Path, simp
         if original != str(row.word).strip():
             raise RuntimeError("R3 原词还有尚未提交的编辑输入")
         shown = str(displayed[i].get()).strip()
+        manual = bool(manuals[i])
+        # An untouched automatic "√" was rendered against the PRE-EDIT
+        # original. Rechecking it against the newly committed original would
+        # falsely mark this display token as unsaved simplified human input,
+        # blocking ordinary Save with R3-PENDING on detached-history pages.
+        # A real manual simplified value still must match its live display;
+        # neither the detached historical sidecar nor any human text is
+        # rewritten by this original-only path.
+        display_source = original if manual else old_by_id[id(row)][0]
         expected = review._simplified_display_from_value(
-            original, actuals[i], bool(manuals[i]),
+            display_source, actuals[i], manual,
         )
         if shown != str(expected).strip():
             raise RuntimeError("R3 简体编辑框仍有未确认输入，拒绝丢弃")
