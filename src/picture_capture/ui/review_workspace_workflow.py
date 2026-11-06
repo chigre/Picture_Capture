@@ -807,6 +807,18 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
                 "保持现有编辑框，请先保存或核对后再刷新切片。"
             )
             return
+        # The simplified capture helper returns silently when a partial Tk
+        # redraw has no provable row owner. Continuing below would destroy the
+        # human text buffers despite that failed provenance check.
+        # Initial/legacy views with no simplified editors may still render.
+        if getattr(self, "simplified_vars", ()):
+            from .review_simplified_workflow import _owned_rendered_simplified_rows
+            if _owned_rendered_simplified_rows(self) is None:
+                self.parent.status_var.set(
+                    "简体校对行绑定尚未确认，拒绝刷新切片；"
+                    "人工文字仍保留，请核对后重试。"
+                )
+                return
         self._capture_simplified_edits(self._rendered_page_stem)
     # Pending height-switch jobs belong to the outgoing rendered rows.
     for job in getattr(self, "_review_crop_height_jobs", {}).values():
