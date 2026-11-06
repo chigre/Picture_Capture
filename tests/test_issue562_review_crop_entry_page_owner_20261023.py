@@ -127,10 +127,12 @@ def test_stale_prefetch_is_consumed_but_rejected():
         _prefetch_lock=threading.Lock(),
         _prefetched_pages={0: {"project_root": "root", "signature": ("old",)}},
         _page_prefetch_signature=lambda page: ("new",),
+        _review_prefetch_key=lambda: ("synthetic-render-owner",),
     )
     assert page._take_prefetched_page(view, SimpleNamespace(), 0) is None
     assert view._prefetched_pages == {}
-    view._prefetched_pages[0] = {"project_root": "root", "signature": ("new",), "review_crops": []}
+    view._prefetched_pages[0] = {"project_root": "root", "signature": ("new",),
+                                 "review_key": ("synthetic-render-owner",), "review_crops": []}
     assert page._take_prefetched_page(view, SimpleNamespace(), 0)["review_crops"] == []
 
 
