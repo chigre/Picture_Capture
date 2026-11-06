@@ -681,9 +681,17 @@ def _schedule_adjacent_preload(self, deps: ReviewPageDeps) -> None:
                             )
                             self._prefetched_pages.pop(stale, None)
 
-        threading.Thread(
-            target=worker, name=f"ReviewPrefetch-{page.stem}", daemon=True
-        ).start()
+        # Optional prefetch must not disrupt the active ReviewWindow if the
+        # OS cannot start another background thread. No worker ran, so its
+        # finally cleanup cannot release this index; permit the next request
+        # to retry and continue launching other adjacent pages.
+        try:
+            threading.Thread(
+                target=worker, name=f"ReviewPrefetch-{page.stem}", daemon=True
+            ).start()
+        except (RuntimeError, OSError):
+            with self._prefetch_lock:
+                self._prefetch_inflight.discard(index)
 
 
 def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
