@@ -34,7 +34,7 @@ def _fixture(tmp_path):
         _prefetched_pages={},
     )
     review._prefetch_path_signature = lambda path: lifecycle._prefetch_path_signature(
-        review, deps, path
+        deps, path
     )
     review._page_prefetch_signature = lambda image: lifecycle._page_prefetch_signature(
         review, deps, image
