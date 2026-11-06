@@ -372,6 +372,21 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
     if state == "processing":
         self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
         return False
+    # A pending page's clean/no-op fast path bypasses the guarded bundle.
+    # Never acknowledge (or navigate away from) partially rebound simplified
+    # widgets merely because their dirty callback has not yet been delivered.
+    # Match the R3 autosave owner gate; legacy original-only views still work.
+    if state == "pending" and self._bound_row_entries() and getattr(
+        self, "simplified_vars", None
+    ) is not None:
+        from .review_simplified_workflow import _owned_rendered_simplified_rows
+        if _owned_rendered_simplified_rows(self) is None:
+            self._r3_autosave_unconfirmed = True
+            self.parent.status_var.set(
+                "简体校对行尚未完整绑定，显式保存未确认；"
+                "人工输入仍保留，请核对页面后重试。"
+            )
+            return False
     from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
     try:
         bridge_main_canvas_text_into_review(self)
