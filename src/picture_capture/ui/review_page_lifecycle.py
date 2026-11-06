@@ -5,6 +5,7 @@ No import of the heavyweight app module; original Tk callback signatures remain.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -508,6 +509,26 @@ def _prefetch_path_signature(deps: ReviewPageDeps, path: Path) -> tuple[bool, in
         return False, 0, 0
 
 
+def _prefetch_section_content_digest(path: Path) -> bytes | None | object:
+    """Pin SECTION content even when an external copy preserves size/mtime.
+
+    A missing SECTION is a legitimate empty reading-order source. A present
+    but unreadable one must not produce a stable cache-validation witness.
+    Stream bytes in bounded chunks instead of loading an arbitrary sidecar
+    into memory; this is a signature, not an atomic file transaction.
+    """
+    try:
+        digest = sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(65536), b""):
+                digest.update(chunk)
+        return digest.digest()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return object()
+
+
 def _page_prefetch_signature_for(cls, deps: ReviewPageDeps, project_root: Path, page: Path) -> tuple:
     json = deps.json
     ocr_cache_root = deps.ocr_cache_root
@@ -525,7 +546,8 @@ def _page_prefetch_signature_for(cls, deps: ReviewPageDeps, project_root: Path, 
         cls._prefetch_path_signature(cache),
         # SECTION controls the cached Entry reading order. Its resolved path
         # also changes when a canonical sidecar supersedes a migrated copy.
-        (str(section_path), cls._prefetch_path_signature(section_path)),
+        (str(section_path), cls._prefetch_path_signature(section_path),
+         _prefetch_section_content_digest(section_path)),
     )
 
 
