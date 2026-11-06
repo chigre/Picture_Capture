@@ -712,11 +712,30 @@ def _request_render_rows(
             return
         if not self.parent.current_page or self.parent.current_page.stem != result_stem:
             return
+        current_entries = self.parent._ordered_entries_reading_order()
         current_signature = tuple(
             (id(entry), int(entry.x), int(entry.y), str(entry.word))
-            for entry in self.parent._ordered_entries_reading_order()
+            for entry in current_entries
         )
         if current_signature != result_signature:
+            self._request_render_rows(focus_index=self._review_render_focus_index)
+            return
+        # Entry.word is the committed model value, not the human's current Tk
+        # buffer. Crops were measured using editor_texts before this worker
+        # launched; a newer unsaved input can require a different crop height.
+        # Preserve that input and rebuild instead of painting stale pixels.
+        try:
+            current_visible = {
+                id(entry): var.get()
+                for entry, var in zip(self._bound_row_entries(), self.vars)
+            }
+            current_editor_texts = tuple(
+                current_visible.get(id(entry), entry.word)
+                for entry in current_entries
+            )
+        except (tk.TclError, RuntimeError):
+            current_editor_texts = None
+        if current_editor_texts != editor_texts:
             self._request_render_rows(focus_index=self._review_render_focus_index)
             return
         if requested_auto_zoom:
