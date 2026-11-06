@@ -540,6 +540,8 @@ def _take_prefetched_page(self, deps: ReviewPageDeps, index: int) -> dict | None
         return None
     if payload.get("signature") != self._page_prefetch_signature(page):
         return None
+    if payload.get("review_key") != self._review_prefetch_key():
+        return None
     return payload
 
 
