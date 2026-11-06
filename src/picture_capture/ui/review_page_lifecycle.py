@@ -513,13 +513,19 @@ def _page_prefetch_signature_for(cls, deps: ReviewPageDeps, project_root: Path, 
     ocr_cache_root = deps.ocr_cache_root
     ppp_read_path_for_image = deps.ppp_read_path_for_image
     pdic_path = deps.pdic_path
+    from ..persistence.project_storage import page_sections_read_path_for_image
+
     cache = ocr_cache_root(project_root) / f"{page.stem}.json"
     ppp = ppp_read_path_for_image(page)
+    section_path = page_sections_read_path_for_image(page)
     return (
         cls._prefetch_path_signature(page),
         cls._prefetch_path_signature(pdic_path(page)),
         cls._prefetch_path_signature(ppp),
         cls._prefetch_path_signature(cache),
+        # SECTION controls the cached Entry reading order. Its resolved path
+        # also changes when a canonical sidecar supersedes a migrated copy.
+        (str(section_path), cls._prefetch_path_signature(section_path)),
     )
 
 
