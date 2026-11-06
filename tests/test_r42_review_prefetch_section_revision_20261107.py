@@ -23,6 +23,7 @@ def _fixture(tmp_path):
     page = tmp_path / "synthetic.png"
     Image.new("RGB", (100, 120), "white").save(page)
     deps = SimpleNamespace(
+        json=SimpleNamespace(),
         ocr_cache_root=lambda root: root / "QT" / "PaddleOCR",
         ppp_read_path_for_image=lambda image: image.with_suffix(".ppp"),
         pdic_path=lambda image: image.with_suffix(".pdic"),
