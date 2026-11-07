@@ -112,9 +112,12 @@ def test_review_delete_only_attempts_capture_after_successful_save():
     start = code.index("def delete_review_entry(")
     end = code.index("\ndef _save_digit_map(", start)
     block = code[start:end]
-    assert block.index("self.parent.save_pdic(silent=True, sync_editors=False)") < block.index(
+    assert block.index("commit_review_bundle(self, transaction_before)") < block.index(
         "capture_saved_review_deletion("
     )
+    assert "protect_review_pdic_commit" in block
+    assert "self.parent.save_pdic(silent=True, sync_editors=False)" not in block
+    assert "self._persist_simplified_page(self._rendered_page_stem)" not in block
     assert "proofreading_event_capture" in block
     assert "capture_failed = True" in block
 
@@ -233,7 +236,9 @@ def test_review_rename_capture_hooks_follow_both_save_paths():
     ).read_text(encoding="utf-8")
     assert "_stage_recovery(page, changes, rollback_required=True)" in bundle
     assert "_rollback_failed_publish(page)" in bundle
-    assert "_bytes_or_absent(owned[role]) != new" in bundle
+    assert "if not sources_match(published):" in bundle
+    assert "published[role] = new" in bundle
+    assert "_snapshot_sources_match(source, published=published)" in bundle
     assert "proofreading_event_capture" in review
 
 
@@ -327,13 +332,15 @@ def _pdic_save_regions():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
     helper = (root / "proofreading/deferred_save.py").read_text(encoding="utf-8")
+    pdic_owner = (root / "ui/main_pdic_persistence.py").read_text(encoding="utf-8")
+    assert "_main_pdic_persistence.save_pdic(" in app
     wrapper = app[app.index("    def _flush_deferred_page_save("):]
     wrapper = wrapper[:wrapper.index("\n    def ")]
     # The GUI remains a thin call-time adapter to the same persistence API.
     assert "flush_deferred_page_save(self, write_pdic=write_pdic, pdic_path=pdic_path)" in wrapper
     regions = []
     for source, method, indentation, prefix in (
-        (app, "save_pdic(", "    ", "self."),
+        (pdic_owner, "save_pdic(", "", "self."),
         (helper, "flush_deferred_page_save(", "", "app."),
     ):
         start = source.index(indentation + "def " + method)

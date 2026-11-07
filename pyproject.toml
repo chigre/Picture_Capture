@@ -28,7 +28,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 picture-capture = "picture_capture.bootstrap.application:main"
-picture-capture-cli = "picture_capture.cli:main"
+picture-capture-cli = "picture_capture.bootstrap.cli:main"
 
 [tool.uv]
 required-version = ">=0.11"

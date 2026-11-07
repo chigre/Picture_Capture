@@ -304,7 +304,7 @@ def test_single_click_ref_defaults_use_character_height_plus_row_spacing(tmp_pat
 
 
 def test_ref_sample_crop_uses_gui_exif_transposed_coordinates(tmp_path):
-    from picture_capture.image_utils import normalize_page_rgb
+    from picture_capture.preprocess.analysis_image import normalize_page_rgb
 
     page = tmp_path / "rotated.jpg"
     data = np.full((100, 150, 3), (242, 242, 242), dtype=np.uint8)

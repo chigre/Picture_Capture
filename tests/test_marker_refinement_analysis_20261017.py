@@ -24,7 +24,7 @@ def test_explicit_refine_uses_selected_per_page_layout_without_ocr_or_denoise(
     monkeypatch, tmp_path,
 ):
     from picture_capture.design import layout_policy as dictionary_page_layout_policy
-    from picture_capture import image_utils
+    from picture_capture.preprocess import analysis_image as image_utils
     settings = AppSettings()
     settings.analysis_denoise_enabled = True
     settings.ordinary_auto_layout = True

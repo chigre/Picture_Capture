@@ -15,6 +15,7 @@ import re
 import unicodedata
 
 from ..models import AppSettings
+from .engine_quality_scoring import EngineQualityFeatures, score_engine_quality
 
 if TYPE_CHECKING:
     from ..processing import Geometry
@@ -419,36 +420,39 @@ def _pair_with_lens_candidates(
 
 def _engine_quality(
     deps: OcrPairingDeps, pair: dict[str, Any], prefix: str) -> float:
+    """Preserve the historical call-time dependency/facade and source conversions.
+
+    The snapshot is immutable, contains only primitive score inputs, and never
+    holds pair/feature dictionaries, OCR objects, pixels or mutable repair lists.
+    """
     accepted = pair.get(f"{prefix}_accepted") is True
     score = float(pair.get(f"{prefix}_score") or 0.0)
     conf = float(pair.get(f"{prefix}_conf") or 0.0)
     features = pair.get(f"{prefix}_features", {}) or {}
     repairs = pair.get(f"{prefix}_repairs", []) or []
-    q = score + 2.0 * conf + (1.0 if accepted else 0.0)
-    if features.get("structural_cue"):
-        q += 1.0
-    if features.get("strong_visual_fallback"):
-        q += 0.35
-    if features.get("peer_typography_match"):
-        q += 0.30
     boundary = pair.get(f"{prefix}_image_boundary_match", {}) or {}
-    if isinstance(boundary, dict) and boundary:
+    boundary_present = isinstance(boundary, dict) and bool(boundary)
+    boundary_strength = 0.0
+    if boundary_present:
         try:
             boundary_strength = max(
                 0.0, min(1.0, float(boundary.get("strength") or 0.0))
             )
         except (TypeError, ValueError):
             boundary_strength = 0.0
-        # Boundary detection is independent of OCR recognition and parser
-        # semantics. Reward a mutually matched blank->ink transition modestly;
-        # it should break close ties, not overpower a strong semantic mismatch.
-        q += 0.20 + 0.35 * boundary_strength
-    if features.get("forced_accept"):
-        q += 1.2
-    if features.get("forced_reject"):
-        q -= 5.0
-    q -= min(0.9, 0.08 * len(repairs))
-    return q
+    return score_engine_quality(EngineQualityFeatures(
+        accepted=accepted,
+        score=score,
+        confidence=conf,
+        structural_cue=bool(features.get("structural_cue")),
+        strong_visual_fallback=bool(features.get("strong_visual_fallback")),
+        peer_typography_match=bool(features.get("peer_typography_match")),
+        boundary_present=boundary_present,
+        boundary_strength=boundary_strength,
+        forced_accept=bool(features.get("forced_accept")),
+        forced_reject=bool(features.get("forced_reject")),
+        repair_count=len(repairs),
+    ))
 
 
 def _stable_candidate_id(

@@ -118,8 +118,10 @@ def test_compact_font_is_limited_to_page_range_and_zoom_percent_field():
     assert '"PC.Workspace80.Treeview"' not in scope
     app_source = (Path(__file__).resolve().parents[1] / "src" /
                   "picture_capture" / "app.py").read_text(encoding="utf-8")
-    assert 'self.compact_page_font.configure(size=compact_size)' in app_source
-    assert 'round(base_size * 0.9)' in app_source
+    startup = (Path(__file__).resolve().parents[1] / 'src/picture_capture/ui/main_app_initialization.py').read_text(encoding='utf-8')
+    assert '_main_app_initialization.initialize_main_app(' in app_source
+    assert 'self.compact_page_font.configure(size=compact_size)' in startup
+    assert 'round(base_size * 0.9)' in startup
     assert 'max(1, viewport - 2), app.compact_page_font.measure' in source
     assert '"PC.Workspace80.TButton", "PC.SimplePage.TButton"' in scope
 
@@ -162,4 +164,6 @@ def test_compact_layout_has_page_list_under_page_icon_and_no_outer_scroll():
     assert 'slot.grid()' in source and 'slot.grid_remove()' in source
     assert 'self.sidebar_scrollbar.pack(side="right", fill="y")' not in app_source
     assert 'app.sidebar_scrollbar.pack(side="right", fill="y")' not in source
-    assert 'self.page_scroll.grid(row=0, column=1, sticky="ns")' in app_source
+    owner = (Path(__file__).resolve().parents[1] / "src/picture_capture/ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in app_source
+    assert 'self.page_scroll.grid(row=0, column=1, sticky="ns")' in owner

@@ -16,7 +16,7 @@ from PIL import Image
 
 from ..appearance import themed_display_image
 from ...io.formats import pdic_path, read_pdic, read_ppp
-from ...image_utils import normalize_page_rgb
+from ...preprocess.analysis_image import normalize_page_rgb
 from ...preprocess.image_metadata_status import image_dpi
 from ...persistence.page_sections import read_page_sections
 from ...persistence.project_storage import ocr_cache_root, ppp_read_path_for_image
@@ -179,12 +179,14 @@ class PageController:
                 target,
                 current_already_saved=current_already_saved,
             )
-        app.load_page(
+        changed = app.load_page(
             target,
             preloaded=preloaded,
             skip_current_save=current_already_saved,
         )
-        return True
+        # Older app/test adapters returned None on successful loading.
+        # Only an explicit False indicates refusal to leave the dirty page.
+        return changed is not False
 
 
 __all__ = ["PageController"]

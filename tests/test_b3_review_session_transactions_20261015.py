@@ -1,6 +1,7 @@
 """R3: conservative same-window undo/redo of committed PDIC-only text edits."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -84,9 +85,23 @@ def test_two_saved_edits_replay_without_row_index_matching(tmp_path):
     review.vars.reverse()
     assert history.undo(review)
     assert {r.word for r in rows} == {"ONE", "two"}
+    # Until actual ReviewWindow redraw, the old widgets still own the
+    # previous reversed row bindings. Do not make one widget silently
+    # take another Entry's value merely to let a second Undo proceed.
+    assert [var.get() for var in review.vars] == ["two", "ONE"]
+    assert history.undo(review) is False
+    assert len(history.undo_stack) == 1
+    assert len(history.redo_stack) == 1
+    # The ordinary UI coordinator requests a full row repaint after every
+    # committed replay. Model that explicit rebind, not an implicit index
+    # reassignment of the old StringVars.
+    review.vars = [Var(row.word) for row in rows]
     assert history.undo(review)
     assert {r.word for r in rows} == {"one", "two"}
-    assert history.redo(review) and history.redo(review)
+    review.vars = [Var(row.word) for row in rows]
+    assert history.redo(review)
+    review.vars = [Var(row.word) for row in rows]
+    assert history.redo(review)
     assert {r.word for r in rows} == {"ONE", "TWO"}
 
 
@@ -846,3 +861,259 @@ def test_single_file_write_then_raise_undo_restores_before_state(tmp_path, monke
     assert review.vars[0].get() == "ONE"
     assert len(history.undo_stack) == 1
     assert not module._recovery_path(page).exists()
+
+
+@pytest.mark.parametrize("source", ["pdic", "manual", "ocr", "section", "profile"])
+def test_undo_refuses_source_drift_during_recovery_marker_stage(
+    tmp_path, monkeypatch, source,
+):
+    """No staged ordinary Undo may overwrite a later human/source version."""
+    from picture_capture.persistence.project_storage import (
+        page_sections_path_for_image, profile_path,
+    )
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    assert history.record(*_save_words(page, rows, review, "ONE", "two"))
+    committed = pdic_path(page).read_bytes()
+    drift_path = {
+        "pdic": pdic_path(page),
+        "manual": tmp_path / "manual_selection.json",
+        "ocr": tmp_path / "cache.json",
+        "section": page_sections_path_for_image(page),
+        "profile": profile_path(tmp_path),
+    }[source]
+    human_bytes = b"independent-human-or-source-version"
+    stage = module._stage_recovery
+
+    def stage_then_external_edit(*args, **kwargs):
+        marker = stage(*args, **kwargs)
+        drift_path.parent.mkdir(parents=True, exist_ok=True)
+        drift_path.write_bytes(human_bytes)
+        return marker
+
+    monkeypatch.setattr(module, "_stage_recovery", stage_then_external_edit)
+    assert not history.undo(review)
+    assert drift_path.read_bytes() == human_bytes
+    assert rows[0].word == "ONE"
+    assert review.vars[0].get() == "ONE"
+    assert len(history.undo_stack) == 1
+    if source == "pdic":
+        # A third-party PDIC version cannot be auto-reconciled as old/new.
+        assert module._recovery_path(page).exists()
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert pdic_path(page).read_bytes() == committed
+        assert not module._recovery_path(page).exists()
+
+
+def test_undo_refuses_human_simplified_edit_between_two_file_writes(
+    tmp_path, monkeypatch,
+):
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    page, rows, review = _case(tmp_path)
+    simplified = simplified_review_path_for_image(page)
+    simplified.parent.mkdir(parents=True, exist_ok=True)
+    simplified.write_bytes(b'{"entries":[]}')
+    before = snapshot_review(review)
+    rows[0].word = "ONE"
+    write_pdic(pdic_path(page), rows, 120, ("synthetic", "@", "@"))
+    review.vars[0].set("ONE")
+    simplified.write_bytes(b'{"entries":[{"text":"saved"}]}')
+    after = snapshot_review(review)
+    history = ReviewSessionHistory()
+    assert history.record(before, after)
+    committed = pdic_path(page).read_bytes()
+    human_bytes = b"human-edited-simplified-after-first-publish"
+    publish = module._publish
+
+    def race_after_pdic(path, data):
+        result = publish(path, data)
+        if path == pdic_path(page) and data == before.pdic_bytes:
+            simplified.write_bytes(human_bytes)
+        return result
+
+    monkeypatch.setattr(module, "_publish", race_after_pdic)
+    assert not history.undo(review)
+    # A conflicting human sidecar makes the whole bundle unresolved. The
+    # rollback policy intentionally leaves the already-landed PDIC target
+    # in place instead of silently treating a partial rollback as complete.
+    assert pdic_path(page).read_bytes() == before.pdic_bytes
+    assert pdic_path(page).read_bytes() != committed
+    assert simplified.read_bytes() == human_bytes
+    assert rows[0].word == "ONE"
+    assert module._recovery_path(page).exists()
+    assert not module.recover_pending_for_page(page)
+
+
+def test_candidate_bundle_refuses_human_manual_edit_after_pdic_publication(
+    tmp_path, monkeypatch,
+):
+    page, rows, review, override, _cache = _manual_owned_case(tmp_path)
+    before = snapshot_review(review)
+    assert before is not None
+    target_pdic = before.pdic_bytes.replace(b"one", b"ONE")
+    human_bytes = b"third-party-manual-choice"
+    publish = module._publish
+
+    def race_after_pdic(path, data):
+        result = publish(path, data)
+        if path == pdic_path(page) and data == target_pdic:
+            override.write_bytes(human_bytes)
+        return result
+
+    monkeypatch.setattr(module, "_publish", race_after_pdic)
+    with pytest.raises(RuntimeError, match="source drift"):
+        module.publish_owned_review_bundle(
+            before, pdic_bytes=target_pdic,
+            manual_bytes=b'{"overrides":{"candidate":{"selected":false}}}',
+            simplified_bytes=before.simplified_bytes,
+        )
+    # Preserve the mixed on-disk state for explicit recovery; a third-party
+    # manual override prevents claiming that the PDIC rollback completed.
+    assert pdic_path(page).read_bytes() == target_pdic
+    assert override.read_bytes() == human_bytes
+    assert [row.word for row in rows] == ["one", "two"]
+    assert module._recovery_path(page).exists()
+    assert not module.recover_pending_for_page(page, manual_path=override)
+
+
+@pytest.mark.parametrize("damage", [
+    "missing_before", "missing_after", "missing_both", "boolean_version",
+])
+def test_r3_incomplete_journal_keeps_quarantine(tmp_path, damage):
+    """A syntactically valid but incomplete recovery intent is never trusted."""
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    published = original.replace(b"one", b"ONE")
+    assert published != original
+    marker = module._stage_recovery(page, [
+        ("pdic", original, published),
+    ])
+    module._publish(pdic_path(page), published)
+    document = json.loads(marker.read_text(encoding="utf-8"))
+    if damage in {"missing_before", "missing_both"}:
+        del document["files"][0]["before"]
+    if damage in {"missing_after", "missing_both"}:
+        del document["files"][0]["after"]
+    if damage == "boolean_version":
+        document["version"] = True  # bool is an int subclass in Python.
+    marker.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="R3 recovery"):
+        module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == published
+    assert marker.is_file()  # Manual intervention, never silent unquarantine.
+
+
+@pytest.mark.parametrize("operation", ["restart_recovery", "failed_live_publish"])
+@pytest.mark.parametrize("tamper", ["rollback_policy", "owned_file_intent"])
+def test_r3_journal_replacement_quarantines_after_parse(
+    tmp_path, monkeypatch, operation, tamper,
+):
+    """A peer's new intent must not be combined with our old file list."""
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    target = original.replace(b"one", b"ONE")
+    assert target != original
+    marker = module._stage_recovery(page, [
+        ("pdic", original, target),
+    ], rollback_required=True)
+    module._publish(pdic_path(page), target)
+    verified = module._verified_recovery
+
+    def change_journal_after_parse(*args, **kwargs):
+        result = verified(*args, **kwargs)
+        doc = json.loads(marker.read_text(encoding="utf-8"))
+        if tamper == "rollback_policy":
+            doc["rollback_required"] = False
+        else:
+            doc["files"][0]["before"] = module._encode(b"wrong-owner-data")
+        marker.write_text(json.dumps(doc), encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(module, "_verified_recovery", change_journal_after_parse)
+    if operation == "restart_recovery":
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert not module._rollback_failed_publish(page)
+    assert pdic_path(page).read_bytes() == target
+    assert marker.is_file()
+    assert not module.snapshot_review(_review)
+
+
+@pytest.mark.parametrize("operation", ["restart_recovery", "failed_live_publish"])
+@pytest.mark.parametrize("tamper", ["rollback_policy", "owned_file_intent"])
+def test_r3_journal_replacement_during_first_rollback_stops_next_file(
+    tmp_path, monkeypatch, operation, tamper,
+):
+    """Do not finish an old transaction or erase a newly changed marker."""
+    from picture_capture.persistence.project_storage import simplified_review_path_for_image
+    page, _rows, _review = _case(tmp_path)
+    companion = simplified_review_path_for_image(page)
+    companion.parent.mkdir(parents=True, exist_ok=True)
+    old_companion, new_companion = b"manual-old", b"manual-new"
+    companion.write_bytes(old_companion)
+    old_pdic = pdic_path(page).read_bytes()
+    new_pdic = old_pdic.replace(b"one", b"ONE")
+    marker = module._stage_recovery(page, [
+        ("pdic", old_pdic, new_pdic),
+        ("simplified", old_companion, new_companion),
+    ], rollback_required=True)
+    module._publish(pdic_path(page), new_pdic)
+    module._publish(companion, new_companion)
+    actual_publish = module._publish
+
+    def replace_journal_after_first_file(path, data):
+        actual_publish(path, data)
+        if path == pdic_path(page) and data == old_pdic:
+            doc = json.loads(marker.read_text(encoding="utf-8"))
+            if tamper == "rollback_policy":
+                doc["rollback_required"] = False
+            else:
+                doc["files"][1]["after"] = module._encode(b"other-owned-version")
+            marker.write_text(json.dumps(doc), encoding="utf-8")
+
+    monkeypatch.setattr(module, "_publish", replace_journal_after_first_file)
+    if operation == "restart_recovery":
+        assert not module.recover_pending_for_page(page)
+    else:
+        assert not module._rollback_failed_publish(page)
+    assert pdic_path(page).read_bytes() == old_pdic
+    assert companion.read_bytes() == new_companion
+    assert marker.is_file()
+
+
+def test_r3_untouched_marker_recovery_preserves_complete_after_state(tmp_path):
+    page, _rows, _review = _case(tmp_path)
+    original = pdic_path(page).read_bytes()
+    target = original.replace(b"one", b"ONE")
+    marker = module._stage_recovery(page, [
+        ("pdic", original, target),
+    ], rollback_required=False)
+    module._publish(pdic_path(page), target)
+    assert module.recover_pending_for_page(page)
+    assert pdic_path(page).read_bytes() == target
+    assert not marker.exists()
+
+
+def test_plain_undo_redo_discards_stale_simplified_cache_and_origin_pin(tmp_path):
+    """Restoring disk bytes must force the next Tk render to re-pin that version."""
+    page, rows, review = _case(tmp_path)
+    history = ReviewSessionHistory()
+    before, after = _save_words(page, rows, review, "ONE", "two")
+    assert history.record(before, after)
+    review._simplified_page_cache = {page.stem: {"10,20": {
+        "x": 10, "y": 20, "source_word": "ONE", "text": "stale manual",
+        "manual": True,
+    }}}
+    review._r3_simplified_source_bytes = {page.stem: (
+        page.with_suffix(".review.json"), b"stale source bytes",
+    )}
+    assert history.undo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes
+    review._simplified_page_cache[page.stem] = {"10,20": {"source_word": "one"}}
+    review._r3_simplified_source_bytes[page.stem] = (page, b"old")
+    assert history.redo(review)
+    assert page.stem not in review._simplified_page_cache
+    assert page.stem not in review._r3_simplified_source_bytes

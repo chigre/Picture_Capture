@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from picture_capture import image_preprocessing as facade
+from picture_capture.preprocess import pipeline as facade
 from picture_capture.models import AppSettings
 from picture_capture.preprocess import orthogonal_policy, replay
 from picture_capture.preprocess.geometry import HorizontalAlignmentAudit
@@ -29,7 +29,7 @@ PURE_NAMES = (
 def test_pure_functions_have_one_body_and_historical_pickle_identity(name):
     fn = getattr(orthogonal_policy, name)
     assert getattr(facade, name) is fn
-    assert fn.__module__ == "picture_capture.image_preprocessing"
+    assert fn.__module__ == "picture_capture.preprocess.pipeline"
     assert pickle.loads(pickle.dumps(fn)) is fn
     assert Path(fn.__code__.co_filename).resolve() == Path(orthogonal_policy.__file__).resolve()
 
@@ -49,7 +49,7 @@ def test_leaf_first_import_does_not_initialize_facade_gui_or_paddle(module):
     script = f"""
 import importlib, sys
 importlib.import_module('picture_capture.preprocess.{module}')
-for name in ('picture_capture.image_preprocessing', 'picture_capture.app', 'paddle', 'paddleocr'):
+for name in ('picture_capture.preprocess.pipeline', 'picture_capture.app', 'paddle', 'paddleocr'):
     assert name not in sys.modules, name
 """
     subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)

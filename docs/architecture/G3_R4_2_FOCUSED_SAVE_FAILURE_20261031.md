@@ -1,0 +1,17 @@
+# G3 R4.2 — Focused-review background-save error disclosure (2026-10-31)
+
+## Exact owner and failure surface
+
+The physical UI callback owner is `src/picture_capture/ui/focused_filter_workflow.py`, function `_flush_focused_changes` (background `failed` callback). The existing worker delegates PDIC updates to `proofreading/focused_pdic_updates.py` with exact original-image X/Y and guarded PDIC publication. On an `OSError` or failed guarded update the old UI callback **printed the raw worker traceback and displayed `str(exc)`** in both the Tk status and modal. Exception strings can include private local project paths/headwords, unlike the newly redacted scan/crop errors. This is a diagnostic-output disclosure, not evidence of a PDIC corruption or OCR accuracy defect.
+
+## Observed red-first evidence and bounded fix
+
+- Test-first `070bf0b6a84b2e1d7587d58aed09827b6bfd6e5f`: `tests/test_g3_r4_focused_save_failure_redaction_20261031.py` uses a synthetic PDIC byte fixture and a failing callback. Two cases cover a normal rejected save and a newer edit at the **same** page/XY arriving while the first writer is active. Both assert that pending human edits survive, a later edit wins, close-on-save resets, original target source text and PDIC bytes remain unchanged, and neither stdout/stderr, Tk status nor modal displays a private-path sentinel.
+- [Red-first CI #41166900396](https://github.com/chigre/Picture_Capture/actions/runs/41166900396): runner logs on **Ubuntu Python 3.13 and macOS Python 3.13 show exactly two new expected failures each** at the final redaction assertion. The unmodified callback exposed the sentinel in the status, dialog and traceback. Ubuntu reported 4,994 passed / 3 skipped / 2 failed; macOS reported 4,995 passed / 2 skipped / 2 failed. The old red test commit is **not** an accepted green gate.
+- Source fix `066fc62da163526dc5bd7ba4f4e3a8f49517f622` removes raw exception/traceback output from this callback, replacing it with a generic explicit failure/retry message. `restore_unwritten` and the ownership precedence for newer pending edits are untouched. No worker signature, R3 writer, original XY, PDIC/PPP/SECTION/Profile/OCR schema, source images, or default-OFF settings changed.
+
+## Automated checks and residual gates
+
+At this checkpoint, exact source [CI #41166937906](https://github.com/chigre/Picture_Capture/actions/runs/41166937906) is still running across Windows/macOS/Ubuntu × Python 3.10/3.13 plus Risk-tier; do **not** claim full E2 until every required job concludes. Source [OCR Smoke #41166937853](https://github.com/chigre/Picture_Capture/actions/runs/41166937853) **completed success 3/3**. Separate [CodeQL / PR #41166933385](https://github.com/chigre/Picture_Capture/actions/runs/41166933385) had Actions success, Python still running. Re-evaluate **the latest docs commit's own exact-head** checks separately; older SHA results cannot be transplanted.
+
+No operator test was performed on real scanned dictionary pages: Windows R3 E3, [#483](https://github.com/chigre/Picture_Capture/issues/483) W1–W11, [#503](https://github.com/chigre/Picture_Capture/issues/503) complex Undo/Redo, G3 R4.2 operator acceptance, full PDIC/PPP/SECTION/Profile GUI parity remain **NOT PERFORMED**. R6 human labels and R8 real scans are **DEFERRED**. PR #663 remains sole Draft/Open/Unmerged and main unchanged; never mark Ready or merge based only on synthetic E2.

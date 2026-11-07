@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 from ..design import page_design as base
-from ..entry_classification import register_layout_line_classification
+from ..proofreading.classification import register_layout_line_classification
 from ..illustration.detection import _rle_components
 from ..models import Entry
 

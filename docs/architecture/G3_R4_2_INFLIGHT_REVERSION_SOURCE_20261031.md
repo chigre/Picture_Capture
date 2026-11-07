@@ -1,0 +1,42 @@
+# G3 R4.2 — in-flight human reversion retains displayed source ownership (2026-10-31)
+
+## Failure mode and bounded production fix
+
+When a focused-review editor changes `old → edit-1`, the first asynchronous save may begin while the user immediately returns the visible text to `old`. The usual Tk `_queue_focused_change` removes the now-equal-to-original pending row, but the older background PDIC write may still complete `edit-1`. In `focused_filter_workflow._flush_focused_changes.done`, this is recognized: `old` must be requeued as a **new correction against the just-committed `edit-1`**.
+
+Before this patch, that callback reconstructed `{page_index, x, y, original_word, new_word}` without `_focused_save_source_witness`. Because the current live filtered-save worker requires an already accepted image/SECTION witness on every row, a later write could fail closed and leave the valid reversion uncommitted. That is an **inspection-identified interaction risk**; it is not evidence of a real human failure.
+
+Production patch `a6c791ffc3c5e565dd5330865c76e42d8d6046b8` changes only the success callback's synthesized reversion: carry the `_focused_save_source_witness` from the **displayed row target** into the new queued correction if present. Never mint a witness by reading image or SECTION at save time. An absent witness **still fails closed**; if image/SECTION changes after the first commit, the existing SHA-256 guard rejects the second write. PDIC writer, 8-field format, original integer X/Y, R3 transaction, OCR, Profile, settings, multi-page preflight and fail-closed policy are unchanged.
+
+## Synthetic E2 test paths
+
+`tests/test_g3_r4_focused_save_source_ownership_20261031.py` now adds:
+
+1. **Return to original while first worker in flight.** First worker saves `edit-1`, visible `current_word` is `old`, no newer queue entry. Actual `done(worker())` must synthesize a correction `edit-1 → old` with exactly the original image/SECTION display witness, schedule the follow-up, and allow a second PDIC write to reach `old` without changing X/Y.
+2. **A later SECTION byte change after the first commit.** Even with retained original witness, mutate SECTION contents to the same length and restore its mtime, then run the second worker. It must reject the stale witness **before a second PDIC publication**; keep the unsaved `old` edit and show a generic, path-free error.
+3. **A different newer in-flight correction.** When `edit-2` is queued while `edit-1` is still saving, its owned witness must survive `done`, its original-word guard must advance to `edit-1`, and the second legitimate write must commit `edit-2`. The older callback must not replace or drop it.
+
+Tests operate on an 8×8 synthetic BMP, synthetic PDIC and SECTION in pytest temp directories. A `SimpleNamespace` double intercepts async dispatch and applies the real worker/done/failed callbacks deterministically. They are **not** native Tk tests or human Windows E3 and do not use real dictionary words/images.
+
+## Test-credibility warning (important)
+
+The initial test-only `4dd5b75ae20c5f0e40dc19bc54d5c3aa69a9b307` [CI #41176545296](https://github.com/chigre/Picture_Capture/actions/runs/41176545296) showed **3 failures on Ubuntu Python 3.13**, but all three were `AttributeError: SimpleNamespace missing _flush_focused_changes` while the test tried to schedule a follow-up after a completed write. This is **not a valid red-first demonstration** of the production missing-witness bug; the test fixture failed prematurely. The source fix `a6c791ffc3c5e565dd5330865c76e42d8d6046b8` was committed before a valid red reproduction. Test fixture correction `a99eeae5fff80872db47378ede438e7cbf0c9024` bound the actual flow callback on two cases; [CI #41176710789](https://github.com/chigre/Picture_Capture/actions/runs/41176710789) then exposed one still-missing mock callback in the SECTION drift case. `737a6f4dbee6b5d5ac7c98de3460e06bc679f060` completes all three fixture bindings. Do not describe either initial red as a proven production regression or claim a test-first successful red/green chain.
+
+**At document authoring**, corrected-source [CI #41176916072](https://github.com/chigre/Picture_Capture/actions/runs/41176916072), [OCR #41176916110](https://github.com/chigre/Picture_Capture/actions/runs/41176916110) and [PR/CodeQL #41176913318](https://github.com/chigre/Picture_Capture/actions/runs/41176913318) were awaiting final verification. This documentation commit **also changes HEAD**: do not call E2 complete until exact-head Windows/macOS/Ubuntu Python 3.10/3.13 CI **6/6 + Risk-tier gate**, OCR **3/3**, CodeQL Python+Actions **2/2**, zero unresolved reviews, Draft PR and unchanged main are independently verified. A conditionally skipped Documentation architecture check is not a passed job.
+
+## Scope boundary and unfinished work
+
+These tests prove narrow synthetic async queue/source invariants, not real GUI IME, real TIFF latency, native OS cross-file atomic transaction or an authorized Windows operator's dictionary save. Real Windows R3 E3, [#483](https://github.com/chigre/Picture_Capture/issues/483) W1–W11, [#503](https://github.com/chigre/Picture_Capture/issues/503) complex Undo/Redo, real G3 crop/source XY verification and large-page fingerprint timing remain **NOT PERFORMED**. R6 human labels and R8 real scans **DEFERRED**. Sole [Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663) stays Open/Unmerged; main unchanged; no issue closure, merge, Ready, or uploading private project data.
+
+## 2026-10-31 — real Tk synthetic in-flight reversion with two physical PDIC writes
+
+The unit callback regression above is now additionally exercised **through the actual ReviewWindow/Tk StringVar and background worker on all three CI OS**, without a real scanned dictionary. Test-only source `1c45f308f29064161ea8d850af10825ff43d07ca` extends the existing `scripts/gui_g3_focused_controls_smoke.py` after its prior stale-SECTION refusal and positive retry.
+
+- Use the already displayed, source-witness-bound synthetic row. Save a byte-for-byte PDIC baseline and keep original image, PPP, SECTION and settings baselines.
+- Interpose **only** the app-level `_apply_focused_review_page_updates` call-time patchpoint with a bounded `threading.Event` gate. The first *real* background worker reaches the save path but blocks before the physical PDIC writer. Verify the initial PDIC was not written prematurely.
+- While that worker is blocked, write the original saved word through the **actual Tk `StringVar` trace** and check the old pending entry is removed; then release the worker. The first save publishes the old snapshot, the real completion callback synthesizes the reversion using the accepted crop source witness, and a second real background save restores the user's displayed word.
+- Require the two observed worker payloads to be precisely `synthetic-inflight-write` then `synthetic-native-retried`; after both complete, disk PDIC bytes must equal the original baseline, the live main-window Entry and original integer X/Y must match, and image/PPP/SECTION/settings remain unchanged. The gate is released in `finally`, has a 30-second cap and runs only in an ephemeral synthetic project.
+
+This closes the E2 gap between the new unit callback tests and real UI/worker scheduling. It does not prove human IME behavior, physical device response time or OS multi-file atomicity. At documentation authoring, source [CI #41177444432](https://github.com/chigre/Picture_Capture/actions/runs/41177444432) had **macOS Python3.13 5,027 passed/2 skipped and native G3 in-flight reversion smoke OK**, while Windows/Linux and Python3.10 jobs were pending; [OCR #41177444434](https://github.com/chigre/Picture_Capture/actions/runs/41177444434) was **3/3 SUCCESS**, [CodeQL #41177440534](https://github.com/chigre/Picture_Capture/actions/runs/41177440534) Python completion pending. This docs checkpoint **creates a new HEAD**, so all exact-head full 6OS/Python, Risk-tier gate, OCR 3OS, CodeQL 2/2, PR state and review threads still require independent verification; a conditionally skipped Documentation architecture check is not success.
+
+**Not performed:** real Windows operator R3 E3, G3 real dictionary crop/source XY/manual text save-reopen/large-image latency, #483 W1–W11, #503 Undo/Redo; R6 human labels, R8 real scan evidence deferred. Single PR #663 remains Draft/Open/Unmerged and main unchanged.

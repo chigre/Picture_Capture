@@ -988,5 +988,5 @@ class PreprocessAnalysis:
 
 
 # Preserve the historical public class module path for pickle/debug compatibility.
-OutputCanvasInfo.__module__ = "picture_capture.image_preprocessing"
-PreprocessAnalysis.__module__ = "picture_capture.image_preprocessing"
+OutputCanvasInfo.__module__ = "picture_capture.preprocess.pipeline"
+PreprocessAnalysis.__module__ = "picture_capture.preprocess.pipeline"

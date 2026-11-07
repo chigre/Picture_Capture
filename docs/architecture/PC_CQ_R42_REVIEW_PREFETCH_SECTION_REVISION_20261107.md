@@ -1,0 +1,23 @@
+# PC-CQ R4.2 — SECTION sidecar revision must invalidate ReviewWindow prefetch (2026-11-07)
+
+## Genuine source gap / reachable owner
+
+In `src/picture_capture/ui/review_page_lifecycle.py`, background `_schedule_adjacent_preload` reads `read_page_sections(page_path)` and uses SECTION to `sort_entries_reading_order`. Both worker acceptance and `_take_prefetched_page` compare `_page_prefetch_signature_for`; before this fix its only witnesses were image, PDIC, PPP and OCR cache. A SECTION rewrite, removal or first creation could therefore leave a stale cached Entry reading order despite unchanged other sidecars. SECTION has canonical and migrated read paths, and read-path selection can change independently from source image.
+
+## Genuine failure-first reproducible synthetic evidence
+
+- Test-only HEAD [`6d3cbc50fe07c4801fdc9833b8a848ee3aa9e6e2`](https://github.com/chigre/PictureCapture/commit/6d3cbc50fe07c4801fdc9833b8a848ee3aa9e6e2), new `tests/test_r42_review_prefetch_section_revision_20261107.py`. Synthetic RGB image, SECTION v2 serializer in pytest temp project, three negative tests (rewrite/remove/create) and one unchanged-cache positive test. No user project/images, real OCR, network or scan.
+- [RED CI #42252371662](https://github.com/chigre/PictureCapture/actions/runs/42252371662) Ubuntu Python 3.13: **3 intended SECTION assertions failed / 5750 passed / 3 skipped**. Real assertion failure, not exception from incomplete fixture; unchanged positive control passed.
+- Earlier test-only commits `c05e7f892bee3031ea97287521eeeef010dc3fd0`, `27601890a989b4dfe52e4d2277cb159bc3ca07e9`, and `8d014ac172a59a76956709408bbe964aa59db066` used incomplete synthetic method/dependency bindings and their AttributeErrors are explicitly **NOT accepted RED evidence**. Fixture corrected without deleting or relaxing intended assertions.
+
+## Minimal source repair / distinct exact-source verification
+
+- [Source `b29cfe64627d9fe7e272366062f3c620de524c84`](https://github.com/chigre/PictureCapture/commit/b29cfe64627d9fe7e272366062f3c620de524c84): only `src/picture_capture/ui/review_page_lifecycle.py`; add the **resolved SECTION read-sidecar path** plus its (exists,size,mtime_ns) metadata to prefetch signature. This catches canonical-vs-migrated path switches and normal SECTION revisions at worker acceptance and cached-page consumption. Leaves actual SECTION format, source XY, crop pixels, and protected disk publication unchanged.
+- [Exact-source CI #42252870443](https://github.com/chigre/PictureCapture/actions/runs/42252870443): **5/6 matrix SUCCESS at this checkpoint**: Windows 3.10/3.13, Ubuntu 3.10/3.13 and macOS 3.13. **macOS 3.10 QUEUED, NOT PASS**. Risk tier SUCCESS, **Risk-tier CI gate pending**. Ubuntu3.13 **5753 passed / 3 skipped**. Documentation architecture check **SKIPPED, not PASS**.
+- [Exact-source OCR #42252870089](https://github.com/chigre/PictureCapture/actions/runs/42252870089) 3/3 Windows/macOS/Ubuntu **SUCCESS**.
+- [Exact-source CodeQL #42252861701](https://github.com/chigre/PictureCapture/actions/runs/42252861701) Python/Actions 2/2 **SUCCESS**.
+- This document creates another distinct HEAD; its own exact-head gates MUST be checked independently. If original macOS job is cancelled by a newer HEAD, record it as CANCELLED rather than success. Do not call full GREEN before all required jobs pass.
+
+## Boundaries and next recovery action
+
+SECTION prefetch signature uses metadata, not byte-exact content CAS or an OS-level atomic transaction; no adversarial same-size/same-mtime resistance claimed. This is synthetic E2 cache ownership, **not real dictionary/PDIC/PPP/SECTION/Profile/OCR save-reopen**, benchmark, GUI operator validation or actual OCR quality. Manual Windows R3 E3, #483 W1–W11, #503 human Undo/Redo, real scans, R6 learning and R8 scans are NOT PERFORMED/DEFERRED. Experiments OFF. main unchanged; only #663 Open/Draft/Unmerged. **Next: Read LIVE main and sole Open/Draft/Unmerged PR #663 branch HEAD. FIRST verify the latest DOCUMENTATION checkpoint SHA's exact six Windows/macOS/Ubuntu x Python3.10/3.13 CI + Risk-tier/gate, OCR Windows/macOS/Ubuntu and dynamic CodeQL Python/Actions. Separately inspect unfinished SOURCE b29cfe64627d9fe7e272366062f3c620de524c84 CI #42252870443 macOS Python3.10 QUEUED and Risk-tier gate pending at checkpoint; never inherit 5/6 partial result as full GREEN. If cancelled due newer docs commit, record CANCELLED (not PASS), rely only on docs HEAD own complete gates. Read logs for any failure. Then investigate NEW reachable R3 ordinary Review/main text owner or R4.2 async/callback/SECTION stale source with fresh synthetic RED-first. No merge/Ready/force/parallel PR; no real scans or human E3/W1-W11.**

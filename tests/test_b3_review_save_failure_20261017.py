@@ -159,3 +159,118 @@ def test_autosave_review_failure_keeps_review_owner_and_rearms():
     assert calls == ["rearmed"]
     assert fake.review_window is review
     assert any("自动保存失败" in value for value in status)
+
+
+def test_main_save_with_open_review_uses_paired_review_transaction(tmp_path, monkeypatch):
+    """Manual main Save must not bypass R3 companion source ownership."""
+    from picture_capture.ui import main_pdic_persistence as persistence
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"synthetic-only")
+    recorded = []
+    review = SimpleNamespace(
+        winfo_exists=lambda: True,
+        _filter_rows_active=False,
+        _rendered_page_stem=page.stem,
+        save=lambda **kw: recorded.append(("review", kw)) or True,
+    )
+    app = SimpleNamespace(
+        project=SimpleNamespace(images=[page]),
+        current_page=page, image=SimpleNamespace(width=100),
+        review_window=review, _batch_active=False,
+    )
+    deps = {
+        "tk": SimpleNamespace(TclError=RuntimeError),
+        "pdic_path": pdic_path,
+        "write_pdic": lambda *_a: pytest.fail("ordinary main PDIC write bypassed review bundle"),
+    }
+    persistence.save_pdic(app, deps=deps)
+    assert recorded == [("review", {"redraw_main": False})]
+
+
+def test_main_save_refuses_uncertain_focused_review_before_pdic_write(tmp_path):
+    """A pending focused writer is still allowed to own the same PDIC file."""
+    from picture_capture.ui import main_pdic_persistence as persistence
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"synthetic-only")
+    review = SimpleNamespace(
+        winfo_exists=lambda: True, _filter_rows_active=True,
+        _filter_save_running=True,
+        _filter_pending_changes={0: {(2, 3): {"new_word": "unsaved"}}},
+    )
+    app = SimpleNamespace(
+        project=SimpleNamespace(images=[page]),
+        current_page=page, image=SimpleNamespace(width=100),
+        review_window=review, _batch_active=False,
+    )
+    deps = {
+        "tk": SimpleNamespace(TclError=RuntimeError),
+        "pdic_path": pdic_path,
+        "write_pdic": lambda *_a: pytest.fail("main wrote across focused edit"),
+    }
+    with pytest.raises(RuntimeError, match="(筛选|正在|未完成|冲突)"):
+        persistence.save_pdic(app, deps=deps)
+
+
+def test_review_toolbar_save_failure_returns_false_keeps_input(tmp_path, monkeypatch):
+    """Save-button I/O refusal must not escape Tk unreported or clear human text."""
+    from picture_capture.ui import review_page_lifecycle as owner
+    from picture_capture.ui import review_transaction_actions
+    from picture_capture.proofreading import review_bundle, save_safety
+    from contextlib import nullcontext
+
+    page = tmp_path / "synthetic.png"
+    page.write_bytes(b"synthetic")
+    entry = Entry("old", 10, 20)
+    word = Var("unsaved typed text")
+    statuses = []
+    parent = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path), current_page=page,
+        current_index=0, entries=[entry],
+        settings=SimpleNamespace(review_zoom_percent=100, to_json=lambda *_: None),
+        status_var=SimpleNamespace(set=statuses.append),
+        _foreground_batch_state=lambda _i: "idle",
+    )
+    review = SimpleNamespace(
+        parent=parent, _filter_rows_active=False, _rendered_page_stem="synthetic",
+        vars=[word], _simplified_dirty_pages=set(),
+        _bound_row_entries=lambda: [entry],
+        _review_evidence_before_save=lambda: None,
+        _commit_edits=lambda: None,
+    )
+    monkeypatch.setattr(review_transaction_actions, "capture_review_before", lambda *_: object())
+    monkeypatch.setattr(save_safety, "protect_review_pdic_commit", lambda *_: nullcontext())
+    monkeypatch.setattr(
+        review_bundle, "commit_review_bundle",
+        lambda *_: (_ for _ in ()).throw(OSError("SYNTHETIC_PRIVATE_FILENAME")),
+    )
+    result = owner.save(
+        review, SimpleNamespace(settings_path=lambda root: root / "settings.json"),
+        redraw_main=False,
+    )
+    assert result is False
+    assert word.get() == "unsaved typed text"
+    assert entry.word == "old"
+    assert statuses and any("未保存" in value or "失败" in value for value in statuses)
+    assert "SYNTHETIC_PRIVATE_FILENAME" not in str(statuses)
+
+
+def test_autosave_claim_refusal_explains_unsaved_review_input(tmp_path):
+    from picture_capture.ui import review_page_lifecycle as owner
+    statuses = []
+    entry = Entry("old", 10, 20)
+    review = SimpleNamespace(
+        parent=SimpleNamespace(
+            project=SimpleNamespace(root=tmp_path), current_page=tmp_path / "synthetic.png",
+            current_index=0, entries=[entry],
+            _foreground_batch_state=lambda _i: "pending",
+            _claim_page_for_manual_edit=lambda: False,
+            status_var=SimpleNamespace(set=statuses.append),
+        ),
+        vars=[Var("typed and not saved")],
+        _filter_rows_active=False,
+        _simplified_dirty_pages=set(),
+        _bound_row_entries=lambda: [entry],
+    )
+    assert owner.autosave_commit(review, None) is True
+    assert any("未保存" in text for text in statuses)
+    assert review.vars[0].get() == "typed and not saved"

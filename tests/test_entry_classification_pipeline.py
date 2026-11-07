@@ -6,7 +6,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
-from picture_capture.entry_classification import (
+from picture_capture.proofreading.classification import (
     apply_classification_sidecar,
     classification_sidecar_path,
     classified_entry_crop_height,
@@ -237,18 +237,26 @@ def test_review_and_marker_ocr_are_wired_to_canonical_classification():
     import picture_capture.processing_core as processing_core
     import picture_capture.proofreading.entry_classification_ui as review
 
+    from picture_capture.ocr import ordinary_marker_crop, ordinary_marker_text_enrichment
+
     marker_ocr_source = Path(processing_core.__file__).read_text(encoding="utf-8")
+    crop_owner_source = Path(ordinary_marker_crop.__file__).read_text(encoding="utf-8")
+    marker_ocr_owner_source = Path(ordinary_marker_text_enrichment.__file__).read_text(encoding="utf-8")
     app_source = Path(app_module.__file__).read_text(encoding="utf-8")
     review_source = Path(review.__file__).read_text(encoding="utf-8")
 
     # Marker OCR still uses structural classification, while proofreading
     # uses the actual editor text length and deliberately ignores classification.
-    assert "entry_ocr_crop_box(" in marker_ocr_source
-    assert "resolve_entry_ocr_row_metrics(" in marker_ocr_source
-    assert 'meta.entry_scale == "oversized"' in marker_ocr_source
-    review_start = app_source.index("def _review_line_box(")
-    review_end = app_source.index("\ndef _apply_focused_review_page_updates", review_start)
-    review_line_box = app_source[review_start:review_end]
+    assert "_ordinary_marker_crop.ordinary_marker_local_crop(" in marker_ocr_source
+    assert "entry_ocr_crop_box(" in crop_owner_source
+    assert "_ordinary_marker_text_enrichment.ocr_existing_entry_words_from_markers_impl(" in marker_ocr_source
+    assert "resolve_entry_ocr_row_metrics(" in marker_ocr_owner_source
+    assert 'meta.entry_scale == "oversized"' in crop_owner_source
+    from picture_capture.ui import review_crop_geometry
+    assert "_review_crop_geometry._review_line_box(" in app_source
+    review_source_owner = Path(review_crop_geometry.__file__).read_text(encoding="utf-8")
+    review_start = review_source_owner.index("def _review_line_box(")
+    review_line_box = review_source_owner[review_start:]
     assert "classified_entry_crop_height(" not in review_line_box
     assert "_focused_review_is_single_character(displayed_text)" in review_line_box
     assert "entry_regular_crop_height" in review_line_box

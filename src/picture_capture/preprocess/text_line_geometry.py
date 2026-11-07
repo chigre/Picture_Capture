@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.detection import infer_layout_from_boxes
 from ..models import AppSettings
 from .geometry import horizontal_column_rows, polygon_boxes

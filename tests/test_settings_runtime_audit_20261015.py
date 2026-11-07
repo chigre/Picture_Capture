@@ -37,7 +37,9 @@ def test_shared_y_shift_limit_persists_and_is_in_dedicated_tab(tmp_path):
 
 def test_help_panel_has_initial_wraplength():
     source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    label = source[source.index("help_body = ttk.Label("):]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in source
+    owner = (ROOT / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
+    label = owner[owner.index("help_body = ttk.Label("):]
     assert "wraplength=300" in label[:300]
 
 
@@ -151,9 +153,8 @@ def test_invalid_typed_separator_values_rejected_before_gui_save():
 
 def test_help_panel_has_real_scroll_region_and_live_wrapping():
     source = (ROOT / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    panel = source.split("    def _scrollable_settings_page(", 1)[1].split(
-        "    def _settings_intro(", 1
-    )[0]
+    assert "_interactive_settings_panels.scrollable_settings_page(" in source
+    panel = (ROOT / "src/picture_capture/ui/settings/interactive_panels.py").read_text(encoding="utf-8")
     assert "help_canvas = tk.Canvas(help_view" in panel
     assert 'orient="vertical", command=help_canvas.yview' in panel
     assert "scrollregion=cv.bbox(" in panel

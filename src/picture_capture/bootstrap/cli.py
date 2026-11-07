@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+from PIL import Image, ImageOps
+
+from .core import build_core_services
+
+
+# CLI is a real application entrypoint. Prepare the same non-GUI runtime contract
+# as GUI and spawn workers before importing formats/processing callables by value.
+build_core_services()
+
+from ..io.formats import pdic_path, read_pdic, read_ppp, write_pdic
+from ..preprocess.analysis_image import normalize_page_rgb
+from ..models import ProjectState
+from ..paddle_headwords import HEADWORD_FILTER_RULES_FILENAME
+from ..crop.settings import load_crop_settings
+from ..crop.export_output import normalize_project_crop_widths
+from ..persistence.project_storage import (
+    ppp_read_path_for_image, headword_filter_rules_path, ocr_cache_root, profile_path as project_profile_path,
+    qt_root, replace_rules_path,
+)
+from ..persistence.page_sections import read_page_sections
+from ..processing import (
+    append_crop_log,
+    detect_entries,
+    export_ocred,
+    load_replace_rules,
+    ocr_entries,
+    ocr_existing_entry_words_from_markers,
+    sort_entries_reading_order,
+    derive_geometry,
+    split_single_lines,
+    split_whole_entries,
+)
+
+
+def _pages(project: ProjectState, name: str | None) -> list[Path]:
+    if not name:
+        return project.images
+    matches = [page for page in project.images if page.name == name or page.stem == name]
+    if not matches:
+        raise ValueError(f"项目中没有页面：{name}")
+    return matches
+
+
+def _neighbors(project: ProjectState, page: Path) -> tuple[str, str, str]:
+    index = project.images.index(page)
+    previous = project.images[index - 1].stem if index > 0 else "@"
+    following = project.images[index + 1].stem if index + 1 < len(project.images) else "@"
+    return page.stem, previous, following
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Picture Capture Python restoration")
+    parser.add_argument("project", type=Path, help="包含扫描页和 wordslist.txt 的项目目录")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("inspect", help="列出项目和兼容文件")
+    for name, help_text in [
+        ("autodraw", "自动检测词条并写入 .pdic"),
+        ("ocr", "OCR 现有 .pdic 中的词条"),
+        ("split-lines", "导出词条所在行"),
+        ("split-whole", "导出完整词条内容"),
+    ]:
+        command = sub.add_parser(name, help=help_text)
+        command.add_argument("--page", help="只处理指定文件名或不带扩展名的页")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        project = ProjectState.open(args.project)
+        if args.command == "inspect":
+            print(f"目录: {project.root}")
+            print(f"页面: {len(project.images)}")
+            print(f"词表: {len(project.words)}")
+            print(f"已有 PDIC: {sum(pdic_path(page).exists() for page in project.images)}")
+            print(f"OCR 语言: {project.settings.ocr_language}")
+            return 0
+
+        pages = _pages(project, args.page)
+        crop_config = None
+        if args.command == "split-whole":
+            crop_config = load_crop_settings(project.root, project.settings)
+        for number, page in enumerate(pages, 1):
+            with Image.open(page) as opened:
+                image = normalize_page_rgb(opened)
+            if args.command == "autodraw":
+                cache_path = (
+                    ocr_cache_root(project.root) / f"{page.stem}.json"
+                    if project.settings.detection_method in {"paddleocr", "combined"} else None
+                )
+                page_index = project.images.index(page)
+                sections = read_page_sections(page)
+                entries, _ = detect_entries(
+                    image, project.settings, paddle_cache_path=cache_path,
+                    paddle_filter_rules_path=headword_filter_rules_path(project.root, HEADWORD_FILTER_RULES_FILENAME),
+                    profile_page_index=page_index,
+                    page_sections=sections,
+                )
+                fill_stats = None
+                if project.settings.detection_method == "combined":
+                    original_coords = [(int(entry.x), int(entry.y)) for entry in entries]
+                    entries, fill_stats = ocr_existing_entry_words_from_markers(
+                        image,
+                        entries,
+                        project.settings,
+                        load_replace_rules(replace_rules_path(project.root)),
+                        profile_page_index=page_index,
+                        page_sections=sections,
+                        profile_path=project_profile_path(project.root),
+                        only_blank=True,
+                    )
+                    if [(int(entry.x), int(entry.y)) for entry in entries] != original_coords:
+                        raise RuntimeError("融合画线自动补字不得修改任何画线坐标")
+                write_pdic(pdic_path(page), entries, image.width, _neighbors(project, page))
+                fill_text = (
+                    f"，普通救漏补字 {int(fill_stats.get('filled', 0))} 条"
+                    if fill_stats else ""
+                )
+                print(
+                    f"[{number}/{len(pages)}] {page.name}: "
+                    f"{len(entries)} 个标记{fill_text}"
+                )
+                continue
+
+            entries = read_pdic(pdic_path(page))
+            if not entries:
+                print(f"[{number}/{len(pages)}] {page.name}: 无 PDIC 标记，跳过")
+                continue
+            if args.command == "ocr":
+                rules = load_replace_rules(replace_rules_path(project.root))
+                texts = ocr_entries(
+                    image, entries, project.settings, rules,
+                    page_sections=read_page_sections(page),
+                )
+                for entry, text in zip(entries, texts):
+                    entry.word = text
+                export_ocred(qt_root(project.root) / f"{page.stem}.OCRed", texts)
+                write_pdic(pdic_path(page), entries, image.width, _neighbors(project, page))
+                print(f"[{number}/{len(pages)}] {page.name}: OCR {len(texts)} 个词条")
+            elif args.command == "split-lines":
+                records = split_single_lines(page, entries, project.settings, qt_root(project.root) / "PSW")
+                append_crop_log(project.root, records)
+                print(f"[{number}/{len(pages)}] {page.name}: 导出 {len(records)} 张单行图")
+            elif args.command == "split-whole":
+                assert crop_config is not None
+                special = crop_config.get("special_pages", {}).get(page.stem, {})
+                records = split_whole_entries(
+                    page, entries, project.settings, qt_root(project.root) / "PWW",
+                    top_y=int(special.get("top_y", crop_config["general_top_y"])),
+                    bottom_y=int(special.get("bottom_y", crop_config["general_bottom_y"])),
+                    polygons=read_ppp(ppp_read_path_for_image(page)),
+                    entry_left_padding=int(crop_config["entry_left_padding_x"]),
+                    entry_right_padding=int(crop_config["entry_right_padding_x"]),
+                    integrate_illustrations=bool(crop_config["integrate_illustrations"]),
+                    profile_page_index=project.images.index(page),
+                    transparent_background=bool(crop_config["entry_transparent_background"]),
+                )
+                append_crop_log(project.root, records)
+                print(f"[{number}/{len(pages)}] {page.name}: 导出 {len(records)} 张词条图")
+        if crop_config is not None:
+            normalized = normalize_project_crop_widths(project.root, crop_config)
+            print(f"宽度标准化：{normalized['target_width']} px，补齐词条 {normalized['entries_padded']} 张")
+        return 0
+    except Exception as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

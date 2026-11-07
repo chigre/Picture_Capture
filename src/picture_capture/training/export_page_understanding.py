@@ -9,7 +9,7 @@ import json
 from PIL import Image
 
 from ..layout.generic_block_roles import generic_entry_candidates
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..layout.illustration_mask import mask_large_illustrations_for_layout
 from ..persistence.page_sections import read_page_sections
 from ..layout.page_understanding import page_understanding_diagnostics

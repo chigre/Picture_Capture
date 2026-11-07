@@ -1,6 +1,9 @@
 # Picture_Capture 核心质量与校对效率升级：总计划（PC-CQ-20261014）
 
-> 状态：**规划已固化；尚未开始生产代码升级**。版本：1.1.0。起草：2026-10-14。  
+> **2026-11-01 · v1.3.2 执行状态同步版（权威当前入口）**：以 [全库静态架构复审](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md) 为新基线。#503 R3 与 #562 模块化统一由 **[Draft PR #663](https://github.com/chigre/Picture_Capture/pull/663)** 推进；旧 #664 已 Closed/Unmerged、代码历史并入 #663。B4/R4.2 的来源一致性与无命中页扫描已完成 synthetic E2；B5/R5.1+R5.2 评分与 q 纯函数 parity 已完成 synthetic E2。**人工 R3/#503 与 R2/#483 尚未执行，R6 标签训练和 R8/PR-B 仍受数据/用户授权约束；任何自动化通过不得代替真人验收。** B4 仍在处理 post-terminal 来源变化与保存协调的剩余风险，具体以 STATE/RESUME 为准。
+
+
+> 状态：**计划目标已固化；B4/R4.2 synthetic E2 已完成主要来源保护，B5/R5.1+R5.2 synthetic E2 已验证；B4 残余风险继续审计，B6 因可靠标签缺失而 blocked**。版本：1.3.2。起草：2026-10-14；执行状态更新：2026-11-01。  
 > 此文档定义目标、依赖和验收合同；同目录的 CORE_QUALITY_STATE.json 是机器可读执行检查点；CORE_QUALITY_RESUME.md 是跨会话恢复入口。  
 > 原始评估依据：用户提供的《Picture_Capture 核心功能改进思考.md》；经过对 GitHub main 的源码再核查，以下内容**不是逐字采纳原评估**，明确标注了补充/纠正后的设计判断。
 
@@ -171,15 +174,22 @@
 - **继续口令**：详见 CORE_QUALITY_RESUME.md；新的会话应直接读取 GitHub 文件，无需引用本聊天或依赖内存。
 - **保守资源使用**：不连续轮询 CI；CI 运行未完成时报告 URL 与状态，不假装在后台继续。若执行环境缺 OCR 或真实扫描数据，只做受支持的测试并注明限制。
 
-## 6. 当前立即执行目标（唯一激活单元）
+## 6. 当前执行目标（v1.3.1，2026-11-01；取代 2026-10-28 的执行入口）
 
-**B0 / R0.1 已随 #479 合并**：待 main 合并后 CI 通过再标记 verified，之后 active_batch=B1。B1 可把 R0.2、R1.1、R1.2、R1.3 的验证设施放在一个主题 PR（如风险过大则先更新 STATE 并拆成 B1a/B1b）。不同时启动 B2，也不启动 PR-B。
+**唯一活跃工程 PR = [#663](https://github.com/chigre/Picture_Capture/pull/663)，Draft / Open / Unmerged**；同时承载 #503 R3 事务安全与 #562 模块架构。2026-10-28 双父合并 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac` 保留了已关闭未合并的 #664 全部历史，**不得再次开启独立 #503 实施 PR**。每小时自动推进也只允许写入 #663；禁止并发覆写同一 owner。
 
-建议新 PR 标题：**fix(ocr): invalidate resume checkpoints when detection dependencies change [PC-CQ/R0.1]**。
+**历史证据，不需重做：** B0/R0、B1/R1 已经过往 main 合并和 CI 验证；B2/R2 工程增量已合并、真人 #483 W1–W11 尚未验收；B3/R3 通过 #542 合并基础工程且 synthetic CI 已过，但当前 #503 安全收口和真人交互未完成。旧节所列「再启动 #479 / 从 B0 开始 / 建一个新 PR」从本版起**作废，仅保留于 Git 历史**。
 
-B0 验收：R0.1 对应三平台 CI、GitHub 合并及最新 main CI 成功；若 CI 未成功，停在 B0。B1 验收：R0.2、R1.1、R1.2、R1.3 各项 DoD 均完成、默认生产识别行为不变、完整 CI 通过。
+**2026-11-01 执行入口（v1.3.1）：** B4/R4.1+R4.2 已在 #663 source HEAD `fd4f46b717de23c96014661ae28cedef51434788` 完成 synthetic E2；B5/R5.1+R5.2 继续保持 synthetic E2 verified。B6/R6 因缺少授权、可靠且来源一致的人工标签仍 blocked，不训练、不 shadow。B7a/R7.1–R7.2 因没有代表性授权 profiling 仍 blocked，不做性能优化或加速声明。**下一独立可执行工作包为 B7b/R7.3 坐标合同**：只读审计 source → canonical → transformed 映射与 SECTION/PDIC/PPP/ROI/crop round-trip；不改持久化 schema、原图坐标或保存写入流程。R3 的 Windows E3、#483 W1–W11、#503 人工 Undo/Redo 继续 NOT PERFORMED；R8 继续由用户延期。
+
+**基线证据**（不自动沿用到后续 HEAD）：`66ad88c276b6965c075eeb72583b42dd0aa7f3ac`，[六平台 CI #40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) **completed/success 6/6**；[OCR Smoke #40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) **completed/success 3/3**。合成 CI 不能替代真人扫描与 R3 人工验收；后续提交均需核查**其自身最新 HEAD**。
+
+**交付节奏**：一个活跃 Draft PR 内按审计报告 G0–G6 设**内部工作包**，每包标识开始/结束 SHA、文件 owner、反例测试、CI 与 blocked 项；不可用 711 个提交、551 个改动文件的大汇总替代分包审查。R6 因人工可靠标签不足条件阻塞；R7 须实测瓶颈；R8 用户延后。不得自动合并 main、标 Ready、关闭 #503/#562 或偷偷改变真实扫描授权。
 
 ## 7. 文档变更记录
+
+- **2026-11-01 v1.3.1**：根据 #663 实时 HEAD 完成 G3 R4.2 post-terminal no-hit epoch 与 multi-page partial-save uncertainty；B4/B5 synthetic E2 已验证。B6 与 B7a 按人工标签/真实 profiling 依赖保持 blocked；允许独立推进 B7b/R7.3 只读坐标合同。保留全部原 R0–R8 DoD 与人工/真实扫描门禁。
+- **2026-10-28 v1.3.0**：以 #663 合并后的 Git tree、真实代码边界及 fixed-head CI 重审 R0–R8；取代旧 B0 入口为 #503/#562 唯一 Draft PR，定义 G0–G6 内部交付、优先级、人工验收与条件阻塞。旧 R0–R8 DoD 保留，不凭目录迁移宣称 R5/R6/R7 完成。详细见 `docs/audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md`。
 
 - 2026-10-15 v1.2.0：用户明确授权 R2/B2 人工验收暂缓、继续 B3/R3；仅修改阶段门槛，不宣称 B2 verified，不更动原有数据与真实扫描延后原则。
 
@@ -187,3 +197,7 @@ B0 验收：R0.1 对应三平台 CI、GitHub 合并及最新 main CI 成功；�
 - 1.0.0 / 2026-10-14：从用户评估文件与源码复核制定；修正“score 与 q 同一门槛”“特征级即完整扫描基准”“字节预算绝对为零”“人工覆盖可直接当金标”等不准确判断；继承 #475–#477；新增跨会话状态机制；延后真实扫描 PR-B；初始激活 R0.1。
 
 - 1.1.0 / 2026-10-14：根据用户要求采用同主题打包 PR（约 2–4 个关联子任务），新增 B0–B8 批次、独立子任务验收与安全拆包条件；#479 已合并但 R0.1 仍须 main CI 通过才 verified。
+
+## 8. 本版架构审计与追溯
+
+[2026-10-28 全库代码清点、子系统风险审计与 G0–G6 交付矩阵](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md)。该审计只确认 main 与 PR 的 Git tree 静态事实、选定关键 owner 和合成 CI；未对所有函数逐行形式验证，真实 Windows 字典操作和新 HEAD 的 CI 必须另行登记。

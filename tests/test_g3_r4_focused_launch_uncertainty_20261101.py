@@ -1,0 +1,168 @@
+"""G3/R4.2: a failed scheduler handoff may have already published pages.
+
+All data is disposable synthetic PNG plus an injected no-I/O page writer.
+This tests UI ownership, not real PDIC writes or operator acceptance.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+
+from PIL import Image
+
+from picture_capture.proofreading.focused_crop_source_fingerprint import (
+    focused_save_source_witness,
+)
+from picture_capture.ui import focused_filter_workflow as workflow
+
+
+class _Status:
+    def __init__(self):
+        self.messages = []
+
+    def set(self, value):
+        self.messages.append(value)
+
+
+def test_post_dispatch_launch_exception_requires_explicit_retry(tmp_path: Path):
+    pages = [tmp_path / "001.png", tmp_path / "002.png"]
+    for page in pages:
+        Image.new("RGB", (8, 8), "white").save(page)
+    pending = {}
+    targets = []
+    for index, page in enumerate(pages):
+        x, y = index + 10, index + 20
+        witness = focused_save_source_witness(page)
+        pending[index] = {
+            (x, y): {
+                "page_index": index, "x": x, "y": y,
+                "original_word": f"old-{index}",
+                "new_word": f"human-{index}",
+                "_focused_save_source_witness": witness,
+            }
+        }
+        targets.append({
+            "page_index": index, "x": x, "y": y,
+            "original_word": f"old-{index}",
+            "current_word": f"human-{index}",
+            "_focused_save_source_witness": witness,
+        })
+
+    attempted = []
+    dispatched = []
+    status = _Status()
+    review = SimpleNamespace(
+        parent=SimpleNamespace(
+            project=SimpleNamespace(images=pages), status_var=status,
+        ),
+        _filter_rows_active=True,
+        filtered_targets=targets,
+        _filter_pending_changes=pending,
+        _filter_save_job=None,
+        _filter_save_running=False,
+        _filter_close_after_save=True,
+        _focused_timing_session=None,
+        _filter_save_dispatch_serial=0,
+    )
+    deps = SimpleNamespace(
+        tk=SimpleNamespace(TclError=RuntimeError),
+        _apply_focused_review_page_updates=lambda _page, _pages, index, changes: (
+            attempted.append(index) or [
+                (index, int(change["x"]), int(change["y"]), change["new_word"])
+                for change in changes
+            ],
+            [],
+        ),
+        messagebox=SimpleNamespace(
+            showerror=lambda *a, **kw: None,
+            showwarning=lambda *a, **kw: None,
+        ),
+    )
+
+    def dispatch_then_throw(_key, worker, _done, _failed, **_kw):
+        # The worker may complete page-level publication before a scheduler
+        # detects a handoff error. Neither a returned payload nor the
+        # exception can prove which pages are already durable on disk.
+        worker()
+        raise OSError("PRIVATE_SYNTHETIC_HANDOFF_FAILURE")
+
+    review.parent._start_ui_worker = dispatch_then_throw
+    workflow._flush_focused_changes(review, deps)
+
+    assert attempted == [0, 1]
+    assert not review._filter_save_running
+    assert not review._filter_close_after_save
+    assert review._filter_save_launch_failed is True
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert [item["original_word"] for item in targets] == ["old-0", "old-1"]
+    assert getattr(review, "_filter_save_uncertain_pages", set()) == {0, 1}
+
+    # A timer-triggered attempt must not retry the ambiguous page writes.
+    review.parent._start_ui_worker = (
+        lambda *a, **kw: dispatched.append((a, kw))
+    )
+    workflow._flush_focused_changes(review, deps)
+    assert dispatched == []
+    assert set(review._filter_pending_changes) == {0, 1}
+
+    # Closing the ReviewWindow is not informed consent to replay a batch
+    # whose worker may already have published one or more page files.
+    from picture_capture.ui.review_close_actions import close_review
+
+    review._flush_focused_changes = lambda: workflow._flush_focused_changes(
+        review, deps,
+    )
+    review._flush_focused_changes_now = (
+        lambda: workflow._flush_focused_changes_now(review, deps)
+    )
+    finished = []
+    review._finish_close_review = lambda: finished.append(True)
+    close_review(review, showerror=lambda *a, **kw: None)
+    assert dispatched == []
+    assert not finished
+    assert not review._filter_close_after_save
+    assert set(review._filter_pending_changes) == {0, 1}
+
+    # Navigating to another batch is NOT informed consent to replay an
+    # ambiguous save. It must preserve the current batch and pending edits.
+    review._filter_available_target_count = lambda: len(review.filtered_targets)
+    review._focused_batch_size = lambda: 1
+    review.filtered_batch_index = 0
+    workflow.change_filter_batch(review, deps, 1)
+    assert dispatched == [], "batch navigation must never trigger uncertain retry"
+    assert review.filtered_batch_index == 0
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert "核对" in status.messages[-1]
+
+    # Only the real explicit retry action may launch again after PDIC review.
+    workflow._flush_focused_changes_now(review, deps)
+    assert len(dispatched) == 1
+    assert review._filter_save_running is True
+    assert review._filter_save_launch_failed is False
+    assert review._filter_pending_changes == {}
+
+    # An explicit retry can fail during the all-page source preflight,
+    # before any new writer invocation. That failure does not resolve the
+    # earlier ambiguous publication; uncertainty must remain sticky.
+    _key, worker, _done, failed = dispatched[0][0]
+    pages[0].write_bytes(b"synthetic-source-drift-after-uncertain-launch")
+    try:
+        worker()
+    except Exception as exc:
+        failed(exc, "PRIVATE_SYNTHETIC_PREFLIGHT_TRACE")
+    else:
+        raise AssertionError("source-drift retry must refuse to write")
+
+    assert attempted == [0, 1], "preflight must reject before new writes"
+    assert review._filter_save_uncertain_pages == {0, 1}
+    assert review._filter_save_page_outcomes == {
+        0: "uncertain", 1: "uncertain",
+    }, "a rejected preflight cannot prove an old write was never committed"
+    assert set(review._filter_pending_changes) == {0, 1}
+    assert not review._filter_save_running
+    assert not review._filter_close_after_save
+    assert "PRIVATE_" not in " ".join(status.messages)
+
+    # The failed retry must not silently arm another timer-driven save.
+    workflow._flush_focused_changes(review, deps)
+    assert len(dispatched) == 1

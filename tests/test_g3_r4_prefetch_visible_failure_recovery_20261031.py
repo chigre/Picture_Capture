@@ -1,0 +1,748 @@
+"""G3 R4.2: failed next-batch crop prefetch must not strand its visible UI.
+
+All images and image/PDIC/SECTION source witnesses are disposable 8x8 synthetic
+BMP/sidecars. Fail-first test: no private image or real Windows E3 evidence.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from PIL import Image
+
+from picture_capture.persistence.project_storage import (
+    page_sections_read_path_for_image, pdic_path_for_image,
+)
+from picture_capture.ui import focused_filter_workflow as workflow
+
+
+@dataclass
+class Settings:
+    character_height: int = 18
+
+
+class Var:
+    def __init__(self, value=""):
+        self.value = value
+
+    def set(self, value):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+
+def _case(tmp_path):
+    images = []
+    targets = []
+    for i in (1, 2):
+        page = tmp_path / f"{i:03d}.bmp"
+        Image.new("RGB", (8, 8), "black").save(page)
+        pdic = pdic_path_for_image(page)
+        pdic.parent.mkdir(parents=True, exist_ok=True)
+        pdic.write_bytes(f"old#3#4#1#1#{i:03d}#@#@\n".encode("utf-8"))
+        section = page_sections_read_path_for_image(page)
+        section.parent.mkdir(parents=True, exist_ok=True)
+        section.write_bytes(b'{"revision":"A"}')
+        images.append(page)
+        targets.append({
+            "page_index": i - 1, "x": 3, "y": 4,
+            "original_word": "old", "current_word": "old",
+        })
+
+    workers, workspaces, applied = [], [], []
+    status = Var("existing")
+    review = SimpleNamespace(
+        parent=SimpleNamespace(
+            project=SimpleNamespace(root=tmp_path, images=images),
+            settings=Settings(),
+            canvas=SimpleNamespace(winfo_width=lambda: 700),
+            status_var=status,
+            _start_ui_worker=lambda *args: workers.append(args),
+        ),
+        _filter_rows_active=True,
+        _filter_scan_serial=71,
+        _filter_render_serial=2,
+        _filter_scan_complete=True,
+        filtered_batch_index=0,
+        filtered_targets=targets,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _filter_save_running=False,
+        _filter_pending_changes={},
+        _focused_timing_session=None,
+        review_zoom_auto=False,
+        review_zoom=1.0,
+        _focused_batch_size=lambda: 1,
+        _filter_available_target_count=lambda: 2,
+        _review_image_area_width=lambda: 640,
+        _update_filter_batch_indicator=lambda: None,
+        _set_filter_navigation=lambda _enabled: None,
+        _clear_review_workspace=lambda message: workspaces.append(message),
+        _apply_filter_batch_payload=lambda *args: applied.append(args),
+    )
+    deps = SimpleNamespace(
+        replace=replace,
+        ReviewWindow=SimpleNamespace(
+            _prepare_filter_batch_payload=lambda *_a: ([object()], 1.0, [(1, 1)]),
+        ),
+    )
+    review._filter_batch_snapshot = lambda index: workflow._filter_batch_snapshot(
+        review, deps, index
+    )
+    review._cache_filter_batch_payload = lambda key, payload: workflow._cache_filter_batch_payload(
+        review, deps, key, payload
+    )
+    review._request_filter_batch_render = lambda: workflow._request_filter_batch_render(
+        review, deps
+    )
+    workflow._schedule_filter_next_batch_preload(review, deps)
+    assert len(workers) == 1
+    assert workers[0][0].startswith("focused-filter-prefetch-")
+    return SimpleNamespace(
+        review=review, deps=deps, workers=workers,
+        workspace=workspaces, applied=applied, status=status,
+        images=images,
+    )
+
+
+def _same_size_replace(path, data):
+    before = path.stat()
+    assert len(data) == before.st_size
+    path.write_bytes(data)
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert path.stat().st_size == before.st_size
+    assert path.stat().st_mtime_ns == before.st_mtime_ns
+
+
+def test_failed_prefetch_after_navigation_recovers_via_new_owned_render(tmp_path, capsys):
+    case = _case(tmp_path)
+    review = case.review
+    frozen_key = review._filter_prefetch_key
+    # A human already clicked Next while N+1 was still prefetching.
+    review.filtered_batch_index = 1
+    case.workspace.append("下一批已在后台预生成，即将显示…")
+    failed = case.workers[0][3]
+    failed(OSError("PRIVATE_PREFETCH_SOURCE"), "TRACE_PRIVATE_PREFETCH_SOURCE")
+    # The old code silently leaves the waiting workspace stranded.
+    assert review._filter_prefetch_key is None
+    assert len(case.workers) == 2
+    key, render_worker, render_done, _render_failed = case.workers[1]
+    assert key.startswith("focused-filter-render-")
+    assert review._filter_batch_snapshot(1)[0] == frozen_key
+    render_done(render_worker())
+    assert len(case.applied) == 1
+    assert case.applied[0][0] == 1
+    assert case.applied[0][1] == frozen_key
+    assert "PRIVATE_PREFETCH_SOURCE" not in repr(capsys.readouterr())
+
+
+def test_same_failed_callback_delivers_at_most_one_current_batch_recovery(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    failed = case.workers[0][3]
+    failed(OSError("one"), "PRIVATE_TRACE")
+    failed(OSError("duplicate"), "PRIVATE_TRACE")
+    assert len(case.workers) == 2
+
+
+@pytest.mark.parametrize("source", ("image", "pdic", "section"))
+def test_prefetch_failure_after_source_byte_drift_refuses_automatic_rebuild(
+    tmp_path, source, capsys,
+):
+    case = _case(tmp_path)
+    review = case.review
+    stale_key = review._filter_prefetch_key
+    review.filtered_batch_index = 1
+    page = case.images[1]
+    if source == "image":
+        replacement = tmp_path / "replacement.bmp"
+        Image.new("RGB", (8, 8), "red").save(replacement)
+        _same_size_replace(page, replacement.read_bytes())
+    elif source == "pdic":
+        _same_size_replace(
+            pdic_path_for_image(page),
+            b"new#3#4#1#1#002#@#@\n",
+        )
+    else:
+        _same_size_replace(
+            page_sections_read_path_for_image(page),
+            b'{"revision":"B"}',
+        )
+    assert review._filter_batch_snapshot(1)[0] != stale_key
+    case.workers[0][3](
+        OSError("PRIVATE_DISK_PATH"), "TRACE_PRIVATE_DISK_PATH"
+    )
+    # Fail closed: no crop from a new or old source is silently installed.
+    assert len(case.workers) == 1
+    assert case.applied == []
+    assert review._filter_prefetch_key is None
+    assert "重新筛选" in case.status.get()
+    assert "PRIVATE_DISK_PATH" not in repr(case.status.get())
+    assert "PRIVATE_DISK_PATH" not in repr(capsys.readouterr())
+
+
+def test_stale_epoch_prefetch_failure_cannot_rerender_or_clear_new_epoch(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_scan_serial += 1
+    case.review._filter_prefetch_key = ("new-epoch",)
+    case.status.set("new scan")
+    case.workers[0][3](OSError("PRIVATE_OLD"), "PRIVATE_OLD")
+    assert len(case.workers) == 1
+    assert case.review._filter_prefetch_key == ("new-epoch",)
+    assert case.status.get() == "new scan"
+
+
+def test_prefetch_failure_with_human_pending_changes_never_clears_editors(
+    tmp_path, capsys,
+):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_pending_changes = {1: {(3, 4): {"new_word": "human"}}}
+    case.workspace.append("HUMAN_VISIBLE_EDITOR")
+    case.workers[0][3](OSError("PRIVATE_PENDING"), "PRIVATE_PENDING")
+    assert len(case.workers) == 1
+    assert case.workspace == ["HUMAN_VISIBLE_EDITOR"]
+    assert case.review._filter_pending_changes[1][(3, 4)]["new_word"] == "human"
+    assert "PRIVATE_PENDING" not in repr(capsys.readouterr())
+
+
+def test_prefetch_failure_for_no_longer_selected_batch_remains_silent(tmp_path):
+    case = _case(tmp_path)
+    case.workers[0][3](OSError("not-visible"), "PRIVATE_TRACE")
+    assert len(case.workers) == 1
+    assert case.review._filter_prefetch_key is None
+    assert case.status.get() == "existing"
+
+
+@pytest.mark.parametrize("source", ("image", "pdic", "section"))
+def test_successful_prefetch_cannot_publish_drifted_source(
+    tmp_path, source, capsys,
+):
+    """A successful worker result is not evidence that its source is current."""
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    stale_key = case.review._filter_prefetch_key
+    # Worker finished under the original source. Drift occurs before Tk done.
+    payload = case.workers[0][1]()
+    page = case.images[1]
+    if source == "image":
+        replacement = tmp_path / "replacement.bmp"
+        Image.new("RGB", (8, 8), "red").save(replacement)
+        _same_size_replace(page, replacement.read_bytes())
+    elif source == "pdic":
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+    else:
+        _same_size_replace(
+            page_sections_read_path_for_image(page), b'{"revision":"B"}',
+        )
+    assert case.review._filter_batch_snapshot(1)[0] != stale_key
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(payload)
+    assert case.review._filter_prefetch_key is None
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "重新筛选" in case.status.get()
+    assert "PRIVATE" not in repr(case.status.get())
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_successful_old_key_callback_cannot_steal_new_prefetch(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_prefetch_key = ("new-owner",)
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(worker())
+    assert case.review._filter_prefetch_key == ("new-owner",)
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert case.status.get() == "existing"
+
+
+def test_successful_prefetch_does_not_overwrite_outstanding_human_edit(tmp_path):
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    human = {1: {(3, 4): {"new_word": "human"}}}
+    case.review._filter_pending_changes = human
+    case.workspace.append("HUMAN_VISIBLE_EDITOR")
+    _worker_name, worker, done, _failed = case.workers[0]
+    done(worker())
+    assert case.applied == []
+    assert case.workspace == ["HUMAN_VISIBLE_EDITOR"]
+    assert case.review._filter_pending_changes is human
+    assert human[1][(3, 4)]["new_word"] == "human"
+
+
+def test_prefetch_worker_detects_source_change_during_crop(tmp_path):
+    """Worker must not label a different PDIC as the initial cache key."""
+    case = _case(tmp_path)
+    page = case.images[1]
+    old_prepare = case.deps.ReviewWindow._prepare_filter_batch_payload
+
+    def prepare_with_drift(*args):
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+        return old_prepare(*args)
+
+    case.deps.ReviewWindow._prepare_filter_batch_payload = prepare_with_drift
+    _worker_name, worker, _done, _failed = case.workers[0]
+    with pytest.raises((OSError, ValueError)):
+        worker()
+
+
+def _direct_case(tmp_path):
+    """Start an owned visible direct render with disposable real source sidecars."""
+    case = _case(tmp_path)
+    case.review.filtered_batch_index = 1
+    case.review._filter_prefetch_key = None
+    case.review._request_filter_batch_render()
+    assert len(case.workers) == 2
+    assert case.workers[1][0].startswith("focused-filter-render-")
+    return case
+
+
+@pytest.mark.parametrize("source", ("image", "pdic", "section"))
+def test_direct_render_success_does_not_cache_source_drift(
+    tmp_path, source, capsys,
+):
+    case = _direct_case(tmp_path)
+    review = case.review
+    old_key = review._filter_batch_snapshot(1)[0]
+    _key, worker, done, _failed = case.workers[1]
+    payload = worker()  # Crop finished before disk changes and delayed Tk done.
+    page = case.images[1]
+    if source == "image":
+        replacement = tmp_path / "replacement.bmp"
+        Image.new("RGB", (8, 8), "red").save(replacement)
+        _same_size_replace(page, replacement.read_bytes())
+    elif source == "pdic":
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+    else:
+        _same_size_replace(
+            page_sections_read_path_for_image(page), b'{"revision":"B"}',
+        )
+    assert review._filter_batch_snapshot(1)[0] != old_key
+    done(payload)
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "重新筛选" in case.status.get()
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_direct_render_worker_rejects_source_drift_while_cropping(tmp_path):
+    case = _direct_case(tmp_path)
+    page = case.images[1]
+    original = case.deps.ReviewWindow._prepare_filter_batch_payload
+
+    def produce_after_drift(*args):
+        _same_size_replace(
+            pdic_path_for_image(page), b"new#3#4#1#1#002#@#@\n",
+        )
+        return original(*args)
+
+    case.deps.ReviewWindow._prepare_filter_batch_payload = produce_after_drift
+    with pytest.raises((OSError, ValueError)):
+        case.workers[1][1]()
+    assert case.review._filter_batch_render_cache == {}
+
+
+@pytest.mark.parametrize("pending", ("edit", "save"))
+def test_direct_render_success_does_not_overwrite_human_or_inflight_save(
+    tmp_path, pending,
+):
+    case = _direct_case(tmp_path)
+    _key, worker, done, _failed = case.workers[1]
+    payload = worker()
+    if pending == "edit":
+        edits = {1: {(3, 4): {"new_word": "human"}}}
+        case.review._filter_pending_changes = edits
+    else:
+        case.review._filter_save_running = True
+    case.workspace.append("HUMAN_EDITOR")
+    done(payload)
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert case.review._filter_batch_render_cache == {}
+    if pending == "edit":
+        assert case.review._filter_pending_changes is edits
+        assert edits[1][(3, 4)]["new_word"] == "human"
+
+
+@pytest.mark.parametrize("pending", ("edit", "save"))
+def test_direct_render_failure_does_not_clear_human_or_inflight_save(
+    tmp_path, pending, capsys,
+):
+    case = _direct_case(tmp_path)
+    if pending == "edit":
+        edits = {1: {(3, 4): {"new_word": "human"}}}
+        case.review._filter_pending_changes = edits
+    else:
+        case.review._filter_save_running = True
+    case.workspace.append("HUMAN_EDITOR")
+    case.workers[1][3](OSError("PRIVATE_PAGE"), "PRIVATE_TRACE")
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert case.status.get() == "existing"
+    if pending == "edit":
+        assert case.review._filter_pending_changes is edits
+    assert "PRIVATE" not in repr(capsys.readouterr())
+
+
+def test_direct_cached_payload_cannot_repaint_pending_human_edit(tmp_path):
+    case = _direct_case(tmp_path)
+    valid_key = case.review._filter_batch_snapshot(1)[0]
+    case.review._filter_batch_render_cache[valid_key] = (
+        [object()], 1.0, [(1, 1)],
+    )
+    edits = {1: {(3, 4): {"new_word": "human"}}}
+    case.review._filter_pending_changes = edits
+    case.workspace.append("HUMAN_EDITOR")
+    case.review._request_filter_batch_render()
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+    assert edits[1][(3, 4)]["new_word"] == "human"
+
+
+def test_direct_render_stable_source_still_publishes_once(tmp_path):
+    case = _direct_case(tmp_path)
+    valid_key = case.review._filter_batch_snapshot(1)[0]
+    _key, worker, done, _failed = case.workers[1]
+    done(worker())
+    assert list(case.review._filter_batch_render_cache) == [valid_key]
+    assert len(case.applied) == 1
+    assert case.applied[0][0:2] == (1, valid_key)
+
+
+def test_direct_render_old_serial_success_cannot_publish(tmp_path):
+    case = _direct_case(tmp_path)
+    previous_key, old_worker, old_done, _old_failed = case.workers[1]
+    assert previous_key.startswith("focused-filter-render-")
+    case.review._request_filter_batch_render()
+    assert len(case.workers) == 3
+    old_done(old_worker())
+    assert case.review._filter_batch_render_cache == {}
+    assert case.applied == []
+
+
+@pytest.mark.parametrize(
+    "sequence", ("done_then_failed", "failed_then_done", "done_twice", "failed_twice"),
+)
+def test_direct_render_terminal_callback_is_consumed_exactly_once(
+    tmp_path, sequence, capsys,
+):
+    """One accepted job cannot deliver contradictory/duplicate Tk outcomes."""
+    case = _direct_case(tmp_path)
+    review = case.review
+    _name, worker, done, failed = case.workers[1]
+    payload = worker()
+    if sequence.startswith("done"):
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_RENDER"), "PRIVATE_TRACE")
+    after_first_cache = dict(review._filter_batch_render_cache)
+    after_first_applied = list(case.applied)
+    after_first_workspace = list(case.workspace)
+    after_first_status = case.status.get()
+
+    if sequence.endswith("failed") or sequence == "failed_twice":
+        failed(OSError("PRIVATE_RENDER_LATE"), "PRIVATE_TRACE_LATE")
+    else:
+        done(payload)
+
+    assert review._filter_batch_render_cache == after_first_cache
+    assert case.applied == after_first_applied
+    assert case.workspace == after_first_workspace
+    assert case.status.get() == after_first_status
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("first", ("done", "failed"))
+def test_direct_terminal_ignored_for_human_edit_cannot_reactivate_later(
+    tmp_path, first, capsys,
+):
+    """A duplicate delivered after a user edit is later saved stays invalid."""
+    case = _direct_case(tmp_path)
+    review = case.review
+    _name, worker, done, failed = case.workers[1]
+    payload = worker()
+    edits = {1: {(3, 4): {"new_word": "human"}}}
+    review._filter_pending_changes = edits
+    case.workspace.append("HUMAN_EDITOR")
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_RENDER"), "PRIVATE_TRACE")
+    assert case.applied == []
+    assert case.workspace[-1] == "HUMAN_EDITOR"
+
+    # A later UI lifecycle resolves the correction, but *this* old job has
+    # already delivered a terminal event and cannot become active again.
+    review._filter_pending_changes = {}
+    before = (dict(review._filter_batch_render_cache),
+              list(case.workspace), case.status.get())
+    done(payload)
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE")
+    assert case.applied == []
+    assert review._filter_batch_render_cache == before[0]
+    assert case.workspace == before[1]
+    assert case.status.get() == before[2]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_old_prefetch_terminal_cannot_steal_rescheduled_identical_key(
+    tmp_path, first, late, capsys,
+):
+    """Same epoch and source key does not confer ownership of a new worker."""
+    case = _case(tmp_path)
+    review = case.review
+    old_key = review._filter_prefetch_key
+    _name, old_worker, old_done, old_failed = case.workers[0]
+    payload = old_worker()
+    if first == "done":
+        old_done(payload)
+        # Eviction makes a new prefetch for exactly the same source legitimate.
+        assert old_key in review._filter_batch_render_cache
+        review._filter_batch_render_cache.clear()
+    else:
+        # Not the visible batch; a normal failure just releases the key.
+        old_failed(OSError("PRIVATE_OLD"), "PRIVATE_TRACE")
+    assert review._filter_prefetch_key is None
+
+    # A new worker can own the same key without a new scan epoch.
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert len(case.workers) == 2
+    assert review._filter_prefetch_key == old_key
+    if late == "done":
+        old_done(payload)
+    else:
+        old_failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE_TRACE")
+    assert review._filter_prefetch_key == old_key
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert case.status.get() == "existing"
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+    # Only the actual new owner's completion is allowed to publish the crop.
+    _new_name, new_worker, new_done, _new_failed = case.workers[1]
+    new_done(new_worker())
+    assert review._filter_prefetch_key is None
+    assert list(review._filter_batch_render_cache) == [old_key]
+
+
+@pytest.mark.parametrize("stale_terminal", ("done", "failed"))
+@pytest.mark.parametrize("visible_batch", (False, True))
+def test_preterminal_cancelled_prefetch_same_key_cannot_steal_new_owner(
+    tmp_path, stale_terminal, visible_batch, capsys,
+):
+    """An old terminal must not inherit ownership when cancelled before first completion.
+
+    A source key is an input identity, not a dispatch identity. A UI/controller
+    may invalidate a queued worker and reissue the same source under the same
+    scan epoch before any old callback is delivered. Both callbacks then have
+    the same key, epoch, target index and a fresh terminal_claimed=False cell.
+    """
+    case = _case(tmp_path)
+    review = case.review
+    first_key = review._filter_prefetch_key
+    _key, old_worker, old_done, old_failed = case.workers[0]
+    old_payload = old_worker()
+    # Model a pre-terminal worker cancellation/replacement, not a completed
+    # dispatch. Keep the identical epoch, source bytes, SECTION and key.
+    review._filter_prefetch_key = None
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert len(case.workers) == 2
+    assert review._filter_prefetch_key == first_key
+    _key2, new_worker, new_done, new_failed = case.workers[1]
+    new_payload = new_worker()
+
+    if visible_batch:
+        review.filtered_batch_index = 1
+        case.workspace.append("等待当前批次裁剪")
+    before = (list(case.workspace), case.status.get())
+    if stale_terminal == "done":
+        old_done(old_payload)
+    else:
+        old_failed(OSError("PRIVATE_CANCELLED"), "PRIVATE_CANCELLED_TRACE")
+
+    # An old success must not write any crop cache; an old failure must not
+    # take the new owner's key or launch a direct-render retry.
+    assert review._filter_prefetch_key == first_key
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert (case.workspace, case.status.get()) == before
+    assert len(case.workers) == 2
+    assert "PRIVATE_CANCELLED" not in repr(capsys.readouterr())
+
+    new_done(new_payload)
+    assert review._filter_prefetch_key is None
+    assert list(review._filter_batch_render_cache) == [first_key]
+    assert len(case.applied) == int(visible_batch)
+    # Even later contradictory events from the cancelled dispatch stay inert.
+    old_done(old_payload)
+    old_failed(OSError("PRIVATE_LATE"), "PRIVATE_LATE_TRACE")
+    assert list(review._filter_batch_render_cache) == [first_key]
+    assert len(case.applied) == int(visible_batch)
+    assert len(case.workers) == 2
+
+def test_prefetch_refused_by_closed_worker_queue_releases_key(tmp_path):
+    """The real scheduler returns -1 when closing; this is not a started job."""
+    case = _case(tmp_path)
+    review = case.review
+    case.workers[0][3](OSError("synthetic failure"), "synthetic")
+    assert review._filter_prefetch_key is None
+    review.parent._start_ui_worker = lambda *args: -1
+    workflow._schedule_filter_next_batch_preload(review, case.deps)
+    assert review._filter_prefetch_key is None
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+
+
+def test_direct_crop_refused_by_closed_worker_queue_reports_failure(tmp_path):
+    """A rejected direct crop must not leave an indefinite loading view."""
+    case = _case(tmp_path)
+    review = case.review
+    review.filtered_batch_index = 1
+    review._filter_prefetch_key = None
+    review.parent._start_ui_worker = lambda *args: -1
+    review._request_filter_batch_render()
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "失败" in case.workspace[-1] or "重试" in case.workspace[-1]
+    assert "失败" in case.status.get() or "重试" in case.status.get()
+
+@pytest.mark.parametrize("phase", ("prefetch", "direct"))
+def test_crop_scheduler_exception_before_worker_handoff_is_generic(
+    tmp_path, phase, capsys,
+):
+    case = _case(tmp_path)
+    review = case.review
+    if phase == "prefetch":
+        case.workers[0][3](OSError("prior"), "prior")
+    else:
+        review._filter_prefetch_key = None
+        review.filtered_batch_index = 1
+
+    def refused(*_args):
+        raise OSError("synthetic_private_scheduler_path")
+
+    review.parent._start_ui_worker = refused
+    if phase == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+        assert review._filter_prefetch_key is None
+    else:
+        review._request_filter_batch_render()
+        assert "失败" in case.workspace[-1] or "重试" in case.workspace[-1]
+    assert review._filter_batch_render_cache == {}
+    assert case.applied == []
+    assert "synthetic_private_scheduler_path" not in repr(case.status.get())
+    assert "synthetic_private_scheduler_path" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("mode", ("prefetch", "direct"))
+@pytest.mark.parametrize("early", ("done", "failed"))
+@pytest.mark.parametrize("refusal", ("minus_one", "raises"))
+def test_crop_launch_inline_terminal_requires_acknowledgement(
+    tmp_path, capsys, mode, early, refusal,
+):
+    """G3 R4.2: an unacknowledged launch cannot publish a crop or UI terminal.
+
+    Synthetic image/PDIC/SECTION bytes and a deliberately adversarial
+    synchronous launcher, not a claim about real Tk callback ordering.
+    """
+    case = _case(tmp_path)
+    review = case.review
+    review._filter_prefetch_key = None
+    case.workers.clear()
+    if mode == "direct":
+        review.filtered_batch_index = 1
+    attempts, before_ack = [], []
+    private_error = "PRIVATE_CROP_LAUNCH_C:/dictionary/headword.pdic"
+
+    def schedule(key, worker, done, failed):
+        attempts.append(key)
+        # Refused visible retry after a refused N+1 prefetch is legitimate
+        # but must not produce a crop or turn into an endless retry.
+        if mode == "prefetch" and key.startswith("focused-filter-render-"):
+            return -1
+        assert key.startswith(f"focused-filter-{mode if mode == 'prefetch' else 'render'}-")
+        if mode == "prefetch":
+            review.filtered_batch_index = 1
+        if early == "done":
+            done(worker())
+        else:
+            failed(OSError(private_error), private_error)
+        before_ack.append((
+            len(case.applied),
+            len(review._filter_batch_render_cache),
+            len(attempts),
+            tuple(case.workspace),
+        ))
+        if refusal == "raises":
+            raise RuntimeError(private_error)
+        return -1
+
+    review.parent._start_ui_worker = schedule
+    if mode == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+    else:
+        workflow._request_filter_batch_render(review, case.deps)
+
+    assert len(before_ack) == 1
+    applied, cached, calls_before_ack, workspace_before_ack = before_ack[0]
+    assert applied == 0 and cached == 0
+    if mode == "prefetch":
+        assert calls_before_ack == 1, "no reentrant direct render before launch acknowledgement"
+        assert review._filter_prefetch_key is None
+    else:
+        assert workspace_before_ack[-1] == "正在异步生成本批切词行…"
+    assert case.applied == []
+    assert review._filter_batch_render_cache == {}
+    assert "PRIVATE_CROP_LAUNCH" not in repr(
+        (case.workspace, case.status.get(), capsys.readouterr())
+    )
+
+
+@pytest.mark.parametrize("mode", ("prefetch", "direct"))
+def test_crop_inline_success_normal_launch_still_publishes_once(tmp_path, mode):
+    """Successful synchronous compatibility shims remain supported."""
+    case = _case(tmp_path)
+    review = case.review
+    review._filter_prefetch_key = None
+    case.workers.clear()
+    if mode == "direct":
+        review.filtered_batch_index = 1
+
+    def schedule(key, worker, done, failed):
+        assert key.startswith(
+            "focused-filter-prefetch-" if mode == "prefetch"
+            else "focused-filter-render-"
+        )
+        if mode == "prefetch":
+            review.filtered_batch_index = 1
+        payload = worker()
+        done(payload)
+        # Only a normally returned launch can certify this early terminal.
+        return None
+
+    review.parent._start_ui_worker = schedule
+    if mode == "prefetch":
+        workflow._schedule_filter_next_batch_preload(review, case.deps)
+    else:
+        workflow._request_filter_batch_render(review, case.deps)
+
+    assert len(case.applied) == 1
+    assert len(review._filter_batch_render_cache) == 1

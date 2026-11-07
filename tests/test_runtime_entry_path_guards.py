@@ -119,7 +119,15 @@ def test_gui_composition_no_longer_installs_ocr_guard_and_actions_call_it_static
     ).read_text(encoding="utf-8")
     app = (root / "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
 
-    assert controller.count("guard_ocr_action_selection(app)") >= 2
+    direct = (
+        root / "src/picture_capture/ui/detection_direct_actions.py"
+    ).read_text(encoding="utf-8")
+    selected = (
+        root / "src/picture_capture/ui/detection_selected_scope_actions.py"
+    ).read_text(encoding="utf-8")
+    assert controller.count("ocr_engine_guard=guard_ocr_action_selection") >= 4
+    assert direct.count("if not ocr_engine_guard(app):") == 2
+    assert "if not ocr_engine_guard(app):" in selected
     owner_source = (root / "src/picture_capture/ui/selected_marker_actions.py").read_text(encoding="utf-8")
     existing_marker_action = owner_source.split("def ocr_ordinary_lines_text_selected_scope(", 1)[1]
     assert "guard_ocr_action_selection(self)" in existing_marker_action
@@ -200,8 +208,19 @@ def test_gui_composition_no_longer_installs_ordinary_action_runtime():
         / "controllers"
         / "detection.py"
     ).read_text(encoding="utf-8")
-    assert 'app.settings.detection_method = "left_edge"' in controller_source
-    assert 'app._detect_pages(indices, method="left_edge", force_refresh=False)' in controller_source
+    selected_scope_source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "picture_capture"
+        / "ui"
+        / "detection_selected_scope_actions.py"
+    ).read_text(encoding="utf-8")
+    assert "return run_selected_draw_action(" in controller_source
+    assert 'method="left_edge"' in controller_source
+    assert 'if method == "left_edge":' in selected_scope_source
+    assert "ordinary_settings_guard(app)" in selected_scope_source
+    assert "app.settings.detection_method = method" in selected_scope_source
+    assert "app._detect_pages(indices, method=method, force_refresh=force_refresh)" in selected_scope_source
 
 
 def test_spawn_worker_is_static_top_level_pickleable_without_gui_mutation():
@@ -293,7 +312,10 @@ def test_static_spawn_worker_preserves_worker_services_contract(tmp_path, monkey
 def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     root = Path(__file__).resolve().parents[1]
     worker = _worker_composition_source()
-    job = inspect.getsource(processing_module.detect_entries_job)
+    from picture_capture.detection import ordinary_page_job
+    facade = inspect.getsource(processing_module.detect_entries_job)
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in facade
+    job = inspect.getsource(ordinary_page_job.detect_entries_job_impl)
 
     assert "core_services = build_core_services()" in worker
     assert "install_pdic_classification(formats)" not in worker
@@ -307,7 +329,7 @@ def test_spawn_worker_uses_core_owned_sidecar_pdic_composition():
     assert "finalize_layout_column_drift(" in policy
     assert "install_layout_rows_persistence_runtime()" not in worker
 
-    assert "from .bootstrap.worker import build_worker_services" in job
+    assert "from ..bootstrap.worker import build_worker_services" in job
     assert "services = build_worker_services()" in job
     assert "with services.capture_layout_rows(" in job
     assert "formats.write_pdic(" in job

@@ -8,7 +8,9 @@ from PIL import Image
 
 import picture_capture.ui.controllers.detection as detection_module
 from picture_capture.models import AppSettings, Entry
+from picture_capture.io.formats import read_pdic as real_read_pdic, write_pdic as real_write_pdic
 from picture_capture.ui.controllers.detection import DetectionController
+from picture_capture.ocr.text_io import export_ocred as real_export_ocred
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -394,6 +396,10 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
     prompts: list[tuple] = []
 
     def fake_read_pdic(path):
+        # Preflight starts from synthetic source markers. After batch save,
+        # the new post-commit check must observe the real disk PDIC instead.
+        if Path(path).exists():
+            return real_read_pdic(path)
         return [Entry(word="", x=4, y=10)] if Path(path).stem == "001" else []
 
     monkeypatch.setattr(detection_module, "read_pdic", fake_read_pdic)
@@ -426,18 +432,21 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
         lambda _image, _entries, _settings, _rules, **_kwargs: ["alpha"],
     )
     monkeypatch.setattr(detection_module, "qt_root", lambda _root: tmp_path / "qt")
+    def record_export(path, texts):
+        exports.append((path, list(texts)))
+        real_export_ocred(path, texts)
+
     monkeypatch.setattr(
         detection_module,
         "export_ocred",
-        lambda path, texts: exports.append((path, list(texts))),
+        record_export,
     )
-    monkeypatch.setattr(
-        detection_module,
-        "write_pdic",
-        lambda path, entries, width, pages: writes.append(
-            (path, [entry.word for entry in entries], width, pages)
-        ),
-    )
+    def record_write_pdic(path, entries, width, pages):
+        writes.append((path, [entry.word for entry in entries], width, pages))
+        # Keep the controller spy, but honor the real persistence contract.
+        return real_write_pdic(path, entries, width, pages)
+
+    monkeypatch.setattr(detection_module, "write_pdic", record_write_pdic)
 
     DetectionController(app).batch_ocr()
 
@@ -456,6 +465,9 @@ def test_batch_ocr_preserves_filter_worker_persistence_and_done(tmp_path, monkey
     assert writes and writes[0][1] == ["alpha"]
     assert writes[0][2] == 80
     assert writes[0][3] == ("0", "@", "@")
+    assert [(e.word, e.x, e.y) for e in real_read_pdic(writes[0][0])] == [
+        ("alpha", 4, 10),
+    ]
 
     done(1, 1, False, [1], None)
 
@@ -506,10 +518,13 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "DetectionController" in imports
-    assert "self.detection_controller = DetectionController(self)" in app
-    assert app.index("self.detection_controller = DetectionController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.detection_controller = DetectionController(self)" in startup
+    assert startup.index("self.detection_controller = DetectionController(self)") < startup.index("self._build_ui()")
     assert "def _detection_controller_for_call(" in app
-    assert 'self.__dict__.get("detection_controller")' in app
+    assert '"detection_controller", DetectionController' in app
+    assert "_controller_lifecycle.get_or_create_controller(" in app
 
     expected = {
         "auto_detect_current": "auto_detect_current",
@@ -529,7 +544,12 @@ def test_detection_controller_wiring_preserves_app_methods_and_static_guard_seam
     # Phase 12L keeps the guard as a normal action-boundary preflight.
     assert "def guard_ocr_action_selection(" in ocr_guard
     assert "setattr(app_class, method_name, guarded)" not in ocr_guard
-    assert controller.count("guard_ocr_action_selection(app)") >= 2
+    direct_actions = (
+        ROOT / "src/picture_capture/ui/detection_direct_actions.py"
+    ).read_text(encoding="utf-8")
+    assert controller.count("ocr_engine_guard=guard_ocr_action_selection") >= 4
+    assert direct_actions.count("if not ocr_engine_guard(app):") >= 2
+    assert "setattr(app_class, method_name, guarded)" not in direct_actions
 
     # Phase 5A retires only the method monkey patch; the shared ordinary
     # quick-settings helper remains reusable by postproduction paths.

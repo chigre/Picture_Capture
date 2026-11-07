@@ -5,6 +5,7 @@ No import of the heavyweight app module; original Tk callback signatures remain.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -83,39 +84,140 @@ def _finish_close_review(self, deps: ReviewPageDeps) -> None:
     self.parent.redraw()
 
 
+def _has_unreported_simplified_input(self) -> bool:
+    """Detect live text edits even when Tk emits no KeyRelease/Paste callback.
+
+    This is a read-only gate; the existing guarded commit performs the actual
+    source binding, PDIC/manual and simplified-sidecar verification.
+    A stale/destroyed row must never be rebound by a numeric index.
+    """
+    from .review_simplified_workflow import _owned_rendered_simplified_rows
+
+    rows = _owned_rendered_simplified_rows(self)
+    if rows is None:
+        return False
+    for index, _entry in enumerate(rows):
+        actual = self.simplified_actual_values[index]
+        manual = bool(self.simplified_manual_flags[index])
+        original = self.vars[index].get().strip()
+        expected = self._simplified_display_from_value(original, actual, manual)
+        if self.simplified_vars[index].get().strip() != expected:
+            return True
+    return False
+
+
 def autosave_commit(self, deps: ReviewPageDeps) -> bool:
     """Commit review edits for the shared main-window autosave timer."""
     if getattr(self, "_filter_rows_active", False):
         self._flush_focused_changes_now()
-        return True
+        # A clean filtered-review view has no PDIC write to acknowledge.
+        # Return False so the shared main autosave timer can persist any
+        # independently edited main-canvas text. Previously this always
+        # returned True and silently consumed every main autosave tick.
+        unsettled = bool(
+            getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+            or getattr(self, "_filter_save_uncertain_pages", None)
+            or getattr(self, "_filter_save_launch_failed", False)
+        )
+        if unsettled:
+            # Never fall back to an ordinary main-canvas write while a
+            # focused transaction may still publish to that PDIC. That
+            # risks overwriting the human focused edit instead.
+            self.parent.status_var.set(
+                "筛选校对尚有未保存或未确认修改，本次自动保存尚未完成；"
+                "文字仍保留，请核对筛选写入后再次保存。"
+            )
+            return True
+        return False
     if not self.parent.project or not self.parent.current_page:
         return False
     state = self.parent._foreground_batch_state(self.parent.current_index)
     if state == "processing":
         return True
+    # A partial async repaint, an obsolete page or reloaded Entry objects
+    # cannot acknowledge a ReviewWindow autosave. A True refusal blocks the
+    # shared main timer from writing stale buffers over the same PDIC.
     row_entries = self._bound_row_entries()
+    live_entries = getattr(self.parent, "entries", None)
+    rendered_stem = getattr(self, "_rendered_page_stem", None)
+    if (
+        len(row_entries) != len(self.vars)
+        or (rendered_stem is not None and rendered_stem != self.parent.current_page.stem)
+        or (
+            live_entries is not None and (
+                len(row_entries) != len(live_entries)
+                or len({id(row) for row in row_entries}) != len(row_entries)
+                or {id(row) for row in row_entries} != {id(row) for row in live_entries}
+            )
+        )
+    ):
+        self._r3_autosave_unconfirmed = True
+        self.parent.status_var.set(
+            "校对行绑定已变化，本次自动保存未确认；人工输入仍保留，请核对页面后重试。"
+        )
+        return True
+    # A live simplified editor may be mid-rebind even if original rows are
+    # already complete. Missing simplified provenance is NOT a clean no-op:
+    # otherwise PPP success can mask human text that was never committed.
+    # Real ReviewWindow has simplified_vars; legacy original-only test doubles
+    # without that column retain their existing mock ABI.
+    if row_entries and getattr(self, "simplified_vars", None) is not None:
+        from .review_simplified_workflow import _owned_rendered_simplified_rows
+        if _owned_rendered_simplified_rows(self) is None:
+            self._r3_autosave_unconfirmed = True
+            self.parent.status_var.set(
+                "简体校对行尚未完整绑定，本次自动保存未确认；"
+                "文字仍保留，请页面刷新后重试。"
+            )
+            return True
+    # A failure at ANY later stage must keep the review text unconfirmed.
+    # Clear this only after an unchanged no-op or a verified R3 bundle.
+    self._r3_autosave_unconfirmed = True
+    from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    bridge_main_canvas_text_into_review(self)
     word_dirty = any(
-        i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
-        for i in range(min(len(self.vars), len(row_entries)))
+        self.vars[i].get().strip() != row_entries[i].word
+        for i in range(len(self.vars))
     )
     current_stem = self.parent.current_page.stem
-    simplified_dirty = current_stem in self._simplified_dirty_pages
+    simplified_dirty = (
+        current_stem in self._simplified_dirty_pages
+        or _has_unreported_simplified_input(self)
+    )
     dirty = word_dirty or simplified_dirty
     if state == "pending" and dirty and not self.parent._claim_page_for_manual_edit():
+        # The caller consumes True to prevent a competing main-canvas write.
+        # PPP may then save independently: its success is NOT proof that these
+        # review words were committed. Keep the warning across both paths.
+        self._r3_autosave_unconfirmed = True
+        self.parent.status_var.set(
+            "后台待处理页面未能取得人工编辑权限；当前输入未保存且仍保留，请停止处理后重试。"
+        )
         return True
     if not dirty:
+        # The main-canvas buffers have already been reconciled above.
+        # If either view really changed, bridge_main_canvas_text_into_review
+        # staged the new text and dirty is True. A genuinely unchanged review
+        # may now safely consume this no-op without a redundant PDIC write.
+        self._r3_autosave_unconfirmed = False
         return True
     from .review_transaction_actions import capture_review_before, record_review_after
     transaction_before = capture_review_before(self)
     evidence_before = self._review_evidence_before_save()
     from ..proofreading.save_safety import protect_review_pdic_commit
     from ..proofreading.review_bundle import commit_review_bundle
-    with protect_review_pdic_commit(self):
-        self._commit_edits()
-        commit_review_bundle(self, transaction_before)
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    self.__dict__["_r3_detached_original_save_source"] = transaction_before
+    try:
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            commit_review_bundle(self, transaction_before)
+            self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    finally:
+        self.__dict__.pop("_r3_detached_original_save_source", None)
     self._review_evidence_after_save(evidence_before)
     record_review_after(self, transaction_before)
+    self._r3_autosave_unconfirmed = False
     return True
 
 
@@ -175,14 +277,125 @@ def _review_evidence_after_save(self, deps: ReviewPageDeps, previous: list[WordE
         )
 
 
+def _safe_review_save_failure(error: Exception) -> str:
+    """Privacy-safe, ACTIONABLE error code; never interpolate user paths/text."""
+    if isinstance(error, OSError):
+        return "R3-IO：文件写入或磁盘权限失败，请检查目标目录与磁盘空间"
+    message = str(error)
+    if "恢复标记" in message or "recovery" in message or "inflight" in message:
+        return "R3-RECOVERY：检测到未完成写入的恢复标记，需先核对来源"
+    if "无可信" in message or "快照" in message or "snapshot" in message:
+        return "R3-SNAPSHOT：当前页 PDIC 与窗口行未建立可信保存快照，请核对来源"
+    if ("来源" in message or "归属" in message or "人工" in message
+            or "source" in message):
+        return "R3-SOURCE：原词与历史简体来源不一致，需核对或明确确认"
+    if "简体" in message or "未确认" in message or "输入" in message:
+        return "R3-PENDING：存在未确认的简体或原词输入，不允许丢弃"
+    return "R3-UNKNOWN：本次写入未得到确认，请检查原词、恢复标记及磁盘权限"
+
+
+def _r3_current_edit_rejoins_manual_source(self, source) -> bool:
+    """Detect ONLY a frozen XY-owned old manual source matched by new Tk text.
+
+    This probe does not grant authority. The bundle still checks exact file
+    fingerprints, manual source bytes, row ownership and a separate consent
+    lease for any rejoin. Never mutate or inspect private words in diagnostics.
+    """
+    pinned_bytes = getattr(source, "simplified_bytes", None)
+    pinned_page = getattr(source, "page", None)
+    # Older or incomplete synthetic snapshots must not raise out of the
+    # toolbar Save callback. Returning False leaves the normal guarded
+    # transaction responsible for validating the source and refusing unsafe
+    # writes, rather than inventing an operator rejoin decision.
+    if (not pinned_bytes or pinned_page is None
+            or pinned_page != getattr(self.parent, "current_page", None)
+            or getattr(self, "_rendered_page_stem", "") != pinned_page.stem):
+
+        return False
+    import json
+    try:
+        rows = tuple(self._bound_row_entries())
+        vars = tuple(self.vars)
+        if len(rows) != len(vars):
+            return False
+        old = {
+            id(entry): (str(word), int(x), int(y))
+            for entry, word, x, y in source.entries
+        }
+        if len(old) != len(source.entries) or {id(row) for row in rows} != set(old):
+            return False
+        pending = {
+            (old[id(row)][1], old[id(row)][2]):
+            (old[id(row)][0], str(var.get()).strip())
+            for row, var in zip(rows, vars)
+        }
+        if len(pending) != len(rows):
+            return False
+        document = json.loads(source.simplified_bytes.decode("utf-8"))
+        records = document.get("entries")
+        if not isinstance(records, list):
+            return False
+        return any(
+            isinstance(record, dict)
+            and record.get("manual") is True
+            and (
+                int(record["x"]), int(record["y"])
+            ) in pending
+            and str(record.get("source_word")) != pending[
+                (int(record["x"]), int(record["y"]))
+            ][0]
+            and str(record.get("source_word")) == pending[
+                (int(record["x"]), int(record["y"]))
+            ][1]
+            for record in records
+        )
+    except (AttributeError, TypeError, ValueError, KeyError, UnicodeError):
+        return False
+
+
 def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
-    settings_path = deps.settings_path
     if getattr(self, "_filter_rows_active", False):
         self._flush_focused_changes_now()
-        return not (self._filter_save_running or self._filter_pending_changes)
+        unresolved = bool(
+            getattr(self, "_filter_save_running", False)
+            or getattr(self, "_filter_pending_changes", None)
+            or getattr(self, "_filter_save_uncertain_pages", None)
+            or getattr(self, "_filter_save_launch_failed", False)
+        )
+        if unresolved:
+            self.parent.status_var.set(
+                "筛选校对仍有未确认的写入结果或未保存的人工修改；"
+                "禁止离开当前页面，请核对 PDIC 后显式重试。"
+            )
+        return not unresolved
+    settings_path = deps.settings_path
     state = self.parent._foreground_batch_state(self.parent.current_index)
     if state == "processing":
         self.parent.status_var.set("当前页正在后台处理，校对窗口保持只读，未写入 PDIC。")
+        return False
+    # A pending page's clean/no-op fast path bypasses the guarded bundle.
+    # Never acknowledge (or navigate away from) partially rebound simplified
+    # widgets merely because their dirty callback has not yet been delivered.
+    # Match the R3 autosave owner gate; legacy original-only views still work.
+    if state == "pending" and self._bound_row_entries() and getattr(
+        self, "simplified_vars", None
+    ) is not None:
+        from .review_simplified_workflow import _owned_rendered_simplified_rows
+        if _owned_rendered_simplified_rows(self) is None:
+            self._r3_autosave_unconfirmed = True
+            self.parent.status_var.set(
+                "简体校对行尚未完整绑定，显式保存未确认；"
+                "人工输入仍保留，请核对页面后重试。"
+            )
+            return False
+    from ..proofreading.main_editor_sync import bridge_main_canvas_text_into_review
+    try:
+        bridge_main_canvas_text_into_review(self)
+    except (OSError, RuntimeError, ValueError):
+        self.parent.status_var.set(
+            "主界面与校对窗口的文本或来源存在冲突，未保存；"
+            "两边的输入仍保留，请核对词条后重试。"
+        )
         return False
     if state == "pending":
         row_entries = self._bound_row_entries()
@@ -190,7 +403,12 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
             i < len(row_entries) and self.vars[i].get().strip() != row_entries[i].word
             for i in range(len(self.vars))
         )
-        simplified_dirty = bool(self.parent.current_page and self.parent.current_page.stem in self._simplified_dirty_pages)
+        simplified_dirty = bool(
+            self.parent.current_page and (
+                self.parent.current_page.stem in self._simplified_dirty_pages
+                or _has_unreported_simplified_input(self)
+            )
+        )
         dirty = word_dirty or simplified_dirty
         if not dirty:
             # Browsing a pending page must not accidentally reserve it.
@@ -199,14 +417,59 @@ def save(self, deps: ReviewPageDeps, *, redraw_main: bool = True) -> bool:
         if not self.parent._claim_page_for_manual_edit():
             return False
     from .review_transaction_actions import capture_review_before, record_review_after
-    transaction_before = capture_review_before(self)
-    evidence_before = self._review_evidence_before_save()
     from ..proofreading.save_safety import protect_review_pdic_commit
     from ..proofreading.review_bundle import commit_review_bundle
-    with protect_review_pdic_commit(self):
-        self._commit_edits()
-        commit_review_bundle(self, transaction_before)
-        self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+    try:
+        transaction_before = capture_review_before(self)
+        evidence_before = self._review_evidence_before_save()
+        self.__dict__["_r3_detached_original_save_source"] = transaction_before
+        try:
+            if _r3_current_edit_rejoins_manual_source(self, transaction_before):
+                # Never re-associate historical human text during autosave,
+                # background scans or an implicit callback. Only a toolbar
+                # Save or a user-initiated Next-page may ask for consent.
+                interactive = bool(redraw_main or self.__dict__.get(
+                    "_r3_navigation_explicit_save", False,
+                ))
+                if interactive:
+                    from tkinter import messagebox
+                    confirmed = bool(messagebox.askyesno(
+                        "确认历史简体来源",
+                        "当前原词的修改将与已有的人工简体记录重新对应。"
+                        "旧人工简体文字和文件字节不会改变。"
+                        "是否明确确认重新关联并保存原词？",
+                        parent=self,
+                    ))
+                    if not confirmed:
+                        self.parent.status_var.set(
+                            "已取消历史简体重新关联；原词未保存，当前输入仍保留。"
+                        )
+                        return False
+                    self.__dict__["_r3_explicit_detached_source_rejoin"] = (
+                        transaction_before
+                    )
+            with protect_review_pdic_commit(self):
+                self._commit_edits()
+                commit_review_bundle(self, transaction_before)
+                self.parent.settings.review_zoom_percent = self._stored_review_zoom_percent()
+        finally:
+            self.__dict__.pop("_r3_detached_original_save_source", None)
+            self.__dict__.pop("_r3_explicit_detached_source_rejoin", None)
+    except (OSError, RuntimeError, ValueError, UnicodeError) as error:
+        # Only fixed diagnostic classes go to the UI. Do not print exception
+        # arguments, filenames, user words or machine paths.
+        reason = _safe_review_save_failure(error)
+        self.parent.status_var.set(
+            f"校对保存未完成：{reason}；原词输入仍保留，请核对后重试。"
+        )
+        if redraw_main:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "校对保存未完成",
+                f"{reason}\n本次输入未被清空；请核对后重试。",
+                parent=self,
+            )
+        return False
     self._review_evidence_after_save(evidence_before)
     record_review_after(self, transaction_before)
     if self.parent.project:
@@ -246,18 +509,45 @@ def _prefetch_path_signature(deps: ReviewPageDeps, path: Path) -> tuple[bool, in
         return False, 0, 0
 
 
+def _prefetch_section_content_digest(path: Path) -> bytes | None | object:
+    """Pin SECTION content even when an external copy preserves size/mtime.
+
+    A missing SECTION is a legitimate empty reading-order source. A present
+    but unreadable one must not produce a stable cache-validation witness.
+    Stream bytes in bounded chunks instead of loading an arbitrary sidecar
+    into memory; this is a signature, not an atomic file transaction.
+    """
+    try:
+        digest = sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(65536), b""):
+                digest.update(chunk)
+        return digest.digest()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return object()
+
+
 def _page_prefetch_signature_for(cls, deps: ReviewPageDeps, project_root: Path, page: Path) -> tuple:
     json = deps.json
     ocr_cache_root = deps.ocr_cache_root
     ppp_read_path_for_image = deps.ppp_read_path_for_image
     pdic_path = deps.pdic_path
+    from ..persistence.project_storage import page_sections_read_path_for_image
+
     cache = ocr_cache_root(project_root) / f"{page.stem}.json"
     ppp = ppp_read_path_for_image(page)
+    section_path = page_sections_read_path_for_image(page)
     return (
         cls._prefetch_path_signature(page),
         cls._prefetch_path_signature(pdic_path(page)),
         cls._prefetch_path_signature(ppp),
         cls._prefetch_path_signature(cache),
+        # SECTION controls the cached Entry reading order. Its resolved path
+        # also changes when a canonical sidecar supersedes a migrated copy.
+        (str(section_path), cls._prefetch_path_signature(section_path),
+         _prefetch_section_content_digest(section_path)),
     )
 
 
@@ -292,6 +582,8 @@ def _take_prefetched_page(self, deps: ReviewPageDeps, index: int) -> dict | None
     if payload.get("project_root") != str(self.parent.project.root):
         return None
     if payload.get("signature") != self._page_prefetch_signature(page):
+        return None
+    if payload.get("review_key") != self._review_prefetch_key():
         return None
     return payload
 
@@ -432,9 +724,17 @@ def _schedule_adjacent_preload(self, deps: ReviewPageDeps) -> None:
                             )
                             self._prefetched_pages.pop(stale, None)
 
-        threading.Thread(
-            target=worker, name=f"ReviewPrefetch-{page.stem}", daemon=True
-        ).start()
+        # Optional prefetch must not disrupt the active ReviewWindow if the
+        # OS cannot start another background thread. No worker ran, so its
+        # finally cleanup cannot release this index; permit the next request
+        # to retry and continue launching other adjacent pages.
+        try:
+            threading.Thread(
+                target=worker, name=f"ReviewPrefetch-{page.stem}", daemon=True
+            ).start()
+        except (RuntimeError, OSError):
+            with self._prefetch_lock:
+                self._prefetch_inflight.discard(index)
 
 
 def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
@@ -446,7 +746,15 @@ def change_page(self, deps: ReviewPageDeps, delta: int) -> None:
     # The parent is told that the current PDIC has already been saved, which
     # also prevents stale main-canvas Entry widgets from overwriting the
     # newer proofreading text during navigation.
-    self.save(redraw_main=False)
+    # A Next-page click is an explicit operator action; unlike background
+    # autosave it may request informed consent to rejoin an old manual record.
+    self.__dict__["_r3_navigation_explicit_save"] = True
+    try:
+        saved = self.save(redraw_main=False)
+    finally:
+        self.__dict__.pop("_r3_navigation_explicit_save", None)
+    if saved is False:
+        return
     preloaded = self._take_prefetched_page(target)
     self.parent.change_page(
         delta, preloaded=preloaded, current_already_saved=True, async_allowed=False

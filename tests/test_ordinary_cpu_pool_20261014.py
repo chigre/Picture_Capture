@@ -135,11 +135,10 @@ def test_cpu_only_constructor_incompatibility_must_abort_not_attempt_gpu(monkeyp
 def test_cpu_only_pool_gui_dispatch_keeps_gpu_experiment_mutually_exclusive():
     src = (
         Path(__file__).resolve().parents[1] / "src"
-        / "picture_capture" / "app.py"
+        / "picture_capture" / "ui" / "detection_batch_execution.py"
     ).read_text(encoding="utf-8")
-    a = src.index("    def _detect_pages(")
-    b = src.index("\n    def clear_entries(", a)
-    part = src[a:b]
+    a = src.index("def detect_pages(")
+    part = src[a:]
     assert "and not cpu_pool" in part
     assert "elif cpu_pool and cpu_pool_workers > 1:" in part
     assert "cpu_ordinary_page_job," in part

@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from picture_capture import image_preprocessing as api
+from picture_capture.preprocess import pipeline as api
 from picture_capture.models import AppSettings
 from picture_capture.preprocess.source_evidence import collect_source_geometry_evidence
 from picture_capture.preprocess.text_line_geometry import TextLineGeometryAnalysis
@@ -53,7 +53,7 @@ def test_leaf_first_import_has_no_facade_gui_or_paddle():
     subprocess.run([sys.executable, "-c", """
 import sys
 from picture_capture.preprocess.source_evidence import SourceGeometryEvidence
-assert 'picture_capture.image_preprocessing' not in sys.modules
+assert 'picture_capture.preprocess.pipeline' not in sys.modules
 assert 'picture_capture.app' not in sys.modules
 assert 'paddle' not in sys.modules
 """], check=True)

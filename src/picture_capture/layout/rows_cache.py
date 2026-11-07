@@ -523,7 +523,7 @@ def resolve_physical_rows_layout(
     # unusual title geometry or damaged columns make fixed/Profile geometry
     # implausible.  Semantic evidence still is not needed by the caller, but the
     # reliable Layout Core owns the robust per-page geometry detector.
-    from ..image_utils import build_analysis_image
+    from ..preprocess.analysis_image import build_analysis_image
     from .core_understanding import understand_layout_core
 
     analysis = build_analysis_image(image, settings)

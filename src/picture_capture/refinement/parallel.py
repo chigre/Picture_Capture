@@ -122,7 +122,7 @@ def refine_page_job(image_path: str, settings: AppSettings, page_index: int,
     """Compute on one page in a Windows-spawned worker. NEVER write any file."""
     page = Path(image_path)
     from ..io.formats import read_pdic, pdic_path
-    from ..image_utils import normalize_page_rgb
+    from ..preprocess.analysis_image import normalize_page_rgb
     from ..processing_core import refine_existing_entries
     from .analysis import (
         reset_refinement_layout_audit, read_refinement_layout_audit,

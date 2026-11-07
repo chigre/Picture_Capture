@@ -5,7 +5,7 @@ from __future__ import annotations
 These helpers own EXIF orientation, white-backed alpha compositing and the
 historical uint8 local ink predicate. They never resize, deskew, mutate source
 scans, construct OCR engines or apply higher-level denoising policy.
-The public image_utils facade re-exports the exact function objects.
+The shared analysis_image owner re-exports the exact function objects.
 """
 
 import numpy as np

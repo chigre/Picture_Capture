@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..ocr_channel import (
     OcrChannelPlan, OcrChannelSession, OcrTextChoice,
     choose_ocr_text, resolve_ocr_channel_plan,

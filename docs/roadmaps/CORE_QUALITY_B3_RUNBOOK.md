@@ -1,3 +1,177 @@
+## 2026-10-29｜G1 人工 candidate choice / 同词头多位置失败矩阵（仅 E2）
+
+**原根因与红灯：** `apply_candidate_choice` 在校验 OCR 数值、保存
+PDIC 前立即写入 manual_selection；`set_candidate_selected` 在兄弟
+选择全部暂存前改变 Entry、checkbox。红灯提交
+`b036c68ef1c6cb9ba8c918c98210e6962e9e6e3b`，
+[Ubuntu 失败 CI #40750612646](https://github.com/chigre/Picture_Capture/actions/runs/40750612646)
+记录新注入 **7 failed / 4722 passed / 3 skipped**；不能将历史红灯洗白。
+旧 V2.8.18 原始 Y 兼容用例还暴露按邻近 XY 在旧兄弟未移除前误认
+目标 Entry 的风险，因而使用严格 candidate_id owner，来源不明拒绝。
+
+**同一 UI owner + 一组测试：**
+`ui/review_selection_workflow.py`、
+`tests/test_g1_candidate_choice_position_switch_transaction_20261029.py`；
+旧原始 Y fixture 坚持真实组切换和 Entry/candidate/checkbox identity。
+标准场景：坏 OCR y/confidence/score；PDIC 写前磁盘满；
+位置兄弟 override 首次成功第二次失败；来源被第三方插入；
+计时调度异常；真实 candidate_id 不唯一或邻近 XY 冲突；
+合法位置切换两条人工决策一起暂存、正常人工 OCR 选择保存
+PDIC+manual；PDIC 已落盘却抛异常时暂停写入不自动回退；
+PDIC 写后人工 sidecar 被改写则保留第三方字节、隔离等待人工；
+未提交 checkbox 不可加入 ReviewWindow 保存 Undo 历史。
+检查所有错误场景时的 PDIC/manual 字节、候选对象 identity、
+Entry、checkbox、待保存队列和 Evidence。只记录合成 E2。
+
+**尚待 E3:** 真人 Windows 字典页候选/20 步 Undo/Redo、Redo 分叉、
+FocusOut/自动保存、跨页关闭重开、PDIC/PPP/SECTION、source X/Y
+与 crop roundtrip；#483 W1–W11 仍 NOT PERFORMED。不得把源字节
+乐观检查宣称跨文件 OS CAS、断电原子事务、节时/性能或真实精度提升。
+#663 仍唯一 Draft，#503/#562 Open。**CI 结果取最新 GitHub HEAD，
+不可复用本节或先前 HEAD。**
+
+---
+
+## 2026-10-29｜G1 manual_selection：首次 exact-head CI 兼容测试合同返修
+
+- HEAD `f0bbd51949520cb8c23af2f68f0ffa3fc14a602d` [CI #40731357381](https://github.com/chigre/Picture_Capture/actions/runs/40731357381)：六平台 Job 均报告同一旧用例 `tests/test_core.py::test_v2818_clicking_original_y_checkbox_switches_entry_in_one_action` 的单条失败，其他每个平台约 4700 条测试通过。该用例通过 `PictureCaptureApp.__new__` 创建没有 `project/current_page` 的假对象；新安全合同必须在修改 Entry/checkbox 前验证本页 `manual_selection` 原始来源，所以正确拒绝了假对象。Risk-tier gate 因测试失败未通过；首次红灯保留。
+- 只更新历史测试夹具：使用 `tmp_path` 项目和合成页面，将测试从无来源 UI 改为有合法来源的同一交互；保留原始 Y 一键切换、checkbox 状态、Entry Y 与候选身份的全部断言。**不放宽生产来源预检**，新 HEAD 六平台、Risk-tier、OCR 3 OS、CodeQL 重新执行。
+- 该失败不代表真实 Windows 字典人工 E3；该验收继续 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-29｜G1 checkbox/manual_selection 人工决策来源字节完整性
+
+- 真实数据损坏路径：`ui/review_selection_workflow._read_manual_overrides` 旧逻辑在 `*_manual_selection.json` JSON 损坏时返回 `{"version":1,"overrides":{}}`；checkbox 或手动 OCR 选择随后将空表写回，**已有人工选择会被清空**。另外 `_flush_pending_manual_override` 旧逻辑不比较点击时的磁盘原始字节；延迟期间另一位校对者的决定可能被覆盖。
+- 本包只改一个物理 UI owner + 候选删除的同一人工所有权边界：严格拒绝损坏/重复 JSON 字段、NaN、错误页/版本、非法 `overrides`；绑定每个待提交 page/path 的完整原始字节指纹，多次 checkbox 编辑共享该来源，跨页先按原页独立安全 flush；落盘前再次复核版本并使用单文件原子替换，失败时保留 pending 状态。checkbox、位置切换和显式人工词条选择在修改 Entry/checkbox 前完成来源预检。若现有候选人工记录含未知独立注释，保留旧文件、拒绝由 candidate delete 或新 checkbox 覆盖。
+- `tests/test_b3_manual_selection_source_pin_20261029.py` + 历史 owner/候选删除用例验证失败和正常路径；架构记录 `docs/architecture/R3_G1_MANUAL_SELECTION_ORIGIN_AND_CHECKBOX_20261029.md`。
+- 仅是单文件乐观版本核验，**不等于**跨进程 OS CAS、多文件系统原子事务或断电保证。PDIC 可能先于延迟 manual_selection 成功，来源冲突会拒绝后者并要求人工核对。新 HEAD CI、OCR、CodeQL 必须完成后才报告结果。真实 Windows 词典、candidate checkbox、20 Undo/Redo、FocusOut、PDIC/PPP/SECTION 重开、source crop、#483 W1–W11 全部 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 source_word 原图归属：第二轮 CI 的注入阶段校正
+
+- HEAD `be76035cb363017ad8497e53869e983c14ea8046` 的 [CI #40706851786](https://github.com/chigre/Picture_Capture/actions/runs/40706851786) Ubuntu 4,676 passed、1 failed：唯一失败是新测试在来源校验已经拒绝之后仍假设“日志建立后”注入器已执行，外部 PDIC 注入未发生。旧 Tk 回滚模拟修复已通过。
+- 不是人工字节被覆盖：sidecar 原始字节未动，PDIC 保留原值；但单靠拒绝无法证明注入阶段。把第二个竞态改为**简体预览已生成后、最终 PDIC readback 时**注入第三方 PDIC 修改，显式断言注入触发且不建立恢复日志。另新增健康保存的正向对照：来源词匹配时必须真正调用原 R3 O_EXCL 日志并完成更新。保留原“预览序列化器中途注入”覆盖。
+- 生产源码、原图 X/Y、source_word 严格拒绝与 Undo/Redo 缓存清理均未放宽。下一 HEAD 必须重新完整六平台/Risk-tier/OCR/CodeQL；真人 E3 仍 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 source_word/X-Y 身份工作包：首次 CI 失败与同包测试合同修复
+
+- 源码提交 HEAD `e7d3a5def11ec41c31a9314d648a2a275b1c92b0` 的 [CI #40705467706](https://github.com/chigre/Picture_Capture/actions/runs/40705467706) 首次 Ubuntu/macOS 常规分别 5 个失败（其中 4 个旧 Tk 模拟失去新要求的 `source_word` 或 `Entry.word`，所以正常被 fail-closed 拒绝，故障注入逻辑未触发；另 1 条新竞态测试把提前拒绝误判为已完成发布阶段）。
+- 保留旧测试及 Tk 回滚断言、补齐完整模拟归属；新竞态改为在**成功建立 R3 独占恢复日志之后、sidecar 正式发布之前**改写 PDIC，从而核验原始人工作业不会被覆盖。生产端 `source_word` 归属验证、PDIC raw byte 固定、Undo/Redo pin 清理均不削弱。
+- 必须在修复后的 exact HEAD 完整重跑六平台 CI、Risk-tier、OCR 3 OS、CodeQL。首次 CI 失败保留证据；人工作业 E3、OS 原子 CAS 与 #483 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 原图 X/Y 与 source_word 同一人工校对归属 + Undo 缓存重新绑定
+
+- 具体数据归属风险：`review_workspace_workflow.render_rows` 旧代码按 source X/Y 直接取回人工简体记录，但没有验证其 `source_word` 与当前 PDIC 词条的对应关系。OCR 或第三方人工在原像素位置替换词条后，旧人工文字可能被错误显示为新词条的已保存校对。失配的简体旧记录保持原字节，不自动纠正、迁移或删除。
+- 同一纵向修复：`simplified_review.source_word_conflicts` 和 `validate_source_word_binding` 核验源词身份；普通成对写盘验证 pre-edit snapshot 的来源词和 post-edit proposal 的新词；独立简体写盘读取并固定 PDIC 原始字节、在预览后/恢复标记后/发布后复核，防止第三方中途替换同坐标原词。来源不符立即拒绝，不借用一个位置相同就重新绑定人工文字。
+- GUI 渲染源冲突使用显式“⚠来源词条不一致”占位提示，禁用该简体字段；FocusOut、KeyRelease、自动重算和整页重新简体化不覆盖冲突行。正常匹配和过去无对应 PDIC 的孤立旧侧记录允许保留，无自动迁移；确需归属调整应有人工作业核实。
+- 普通和 OCR candidate Undo/Redo 成功恢复文件后，除了移除过期简体缓存，还移除绑定它的来源 byte pin，下一次页面绘制才可从已恢复版本重新建立可信归属。
+- 新回归 `tests/test_b3_sidecar_source_word_identity_20261028.py`（正常/冲突、目标错误、同坐标重绑定、PDIC 发布竞态、旧 Tk 按键/FocusOut/整页重算、孤立人工记录），并扩展两套既有 Undo/Redo 回归。架构记录 `docs/architecture/R3_G1_SOURCE_WORD_PIXEL_OWNER_AND_HISTORY_RELOAD_20261028.md`。
+- 此时只有既有 baseline CI 6/6、OCR 3/3、CodeQL 2/2；新 HEAD 仍需完整验证。真实 Windows 人工词典、候选 checkbox、20 步 Undo/Redo、PDIC/PPP/SECTION 保存重开、crop 原图坐标、R2 #483 W1–W11 继续 OPEN / NOT PERFORMED。OS 原子 CAS 与断电保证不成立。
+
+---
+
+## 2026-10-28｜G1 普通校对成对保存：缓存来源与人工 JSON 无损合同
+
+- 生产缺口：`snapshot_review` 只证明**快照创建时**的 sidecar 磁盘字节，`review_bundle.commit_review_bundle` 却直接用本窗口较早缓存的行来覆盖它。如果另一校对者修改 sidecar 在快照之前（而缓存读取在修改之前），所有已有的后续字节复核仍可通过，导致第三方人工文字丢失。
+- 在成对保存前要求缓存原始路径及原始字节 pin 与冻结磁盘快照一致，并再次比对磁盘内容；没有来源 pin 即 fail-closed。健康的首次缓存加载会自动建立 pin，成功提交后更新 pin；不更改 Tk/主窗口公开接口。
+- 第二类关联风险：UI 的 `read_records` 为展示而容忍重复 X/Y、重复字段、未知人工字段和损坏 JSON，写盘规范化会静默丢弃这些数据。将无损源 JSON 验证集中到 `simplified_review.validate_source_for_rewrite`，供普通 PDIC+simplified bundle 与独立简体安全写盘共同调用；允许标准格式，拒绝来源不明确数据，不自动删除/迁移人工字段。
+- 回归在 `tests/test_b3_review_bundle_save_20261017.py`：快照前外部同一行／其他行／删除、重复坐标和字段、非数值/布尔坐标、未知人工元数据、丢字段/错误页、正常兼容保存及缺失 pin。文档见 `docs/architecture/R3_G1_REVIEW_BUNDLE_SIDECAR_ORIGIN_AND_SEMANTIC_LOSS_20261028.md`。
+- 新提交 exact-head 六平台 CI、Risk-tier、OCR3 OS、CodeQL 尚待实际完成；跨文件 OS CAS/断电持久性与真实 Windows 候选/Undo×20/Redo×20/PDIC/PPP/SECTION/source XY/crop/#483 W1–W11 **OPEN / NOT PERFORMED**。
+
+---
+
+## 2026-10-28｜G1 普通词条删除：首次 CI 合同修复
+
+- HEAD `e3e3bee776d7d72cadac9c35dacd78c0bd84fd8d` 的六平台 CI [#40696349131](https://github.com/chigre/Picture_Capture/actions/runs/40696349131) 首个 Ubuntu Job 报 12 个失败：9 个新故障/正常场景因错误相对导入 `ui.review_bundle` 而无法进入测试主体；另 3 个历史静态用例仍要求旧的直接 `save_pdic`、按值 `entries.remove` 和未跟踪跨文件人工作业来源的读回条件。
+- 仅纠正 `..proofreading.review_bundle` 所有权导入；更新历史静态测试为**保留**并要求成对提交、原对象身份删除、逐角色来源核验，且继续保持 R3 原有恢复日志。保留初次 CI 失败记录，不误称已通过。
+- 新 HEAD 必须完整验证六平台、Risk-tier gate、OCR 3 OS、CodeQL，若新故障注入揭示生产问题仍在本包返修。真实 Windows E3、PDIC/PPP/SECTION/crop、候选×20 Undo/Redo 和 R2 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 非候选删除的 PDIC＋简体副本整体事务
+
+- 证实源码顺序风险：`ui/review_entry_actions.delete_review_entry` 旧逻辑先从内存移除 Entry，再 `save_pdic` 写盘，最后独立 `_persist_simplified_page`；如果来源字节在后者被外部人工修改，PDIC 已删但 sidecar 仍保留该词条，Undo/历史无法完整记录。
+- 改为先冻结 R3 当前页唯一来源、验证 Entry 属于当前页面，借用已存在的 `protect_review_pdic_commit` 和 `commit_review_bundle`：在内存准备更改后一次提交 PDIC＋simplified 角色，全部成功才更新画布、删除操作历史和日志；失败时由既有安全上下文恢复内存（仅限原 PDIC 可证实未变）或保留恢复标记隔离。仍支持同时保存其他行尚未提交的文字，不把旧 UI 编辑器缓冲覆盖 PDIC。
+- `review_bundle` 复用原有 `_snapshot_sources_match`，每次角色发表前后复核预期源字节及只读 OCR/manual/SECTION/Profile；两次写入之间的新人工简体字节不能被第二次文件提交覆盖。成功时更新本页 simplified 来源 pin，避免同一窗口后续误认自身保存为第三方修改。
+- 成组回归：`tests/test_b3_plain_review_delete_bundle_20261028.py`；旧静态保存顺序测试同步验证成对提交。文件 owner、边界和恢复剩余风险见 `docs/architecture/R3_G1_PLAIN_DELETE_PAIRED_BUNDLE_AND_INTERWRITE_GUARD_20261028.md`。当前 HEAD CI 尚待执行，不得冒充绿色。
+- 真正 Windows 词典、checkbox、Undo/Redo×20、PDIC/PPP/SECTION 关窗重开、原图 X/Y/crop、#483 W1–W11 均 OPEN / NOT PERFORMED；R8 PR-B 仍用户延后。
+
+---
+
+## 2026-10-28｜G1 整页重新简体化：重复 Windows 3.13 Tcl 宿主环境失败与测试合同隔离
+
+- 源码工作包 HEAD `4371c027f8781e288b60bb63bbea025ea6caf0b3` 的 CI [#40692254312](https://github.com/chigre/Picture_Capture/actions/runs/40692254312) attempt 1/2 均 Windows 3.13 单条 `test_settings_help_legacy_cleanup_20261013.py::test_state_initialization_requires_no_visual_widgets_and_binds_traces_once` 的 `tk.Tcl()` 初始化失败：托管解释器不能读取 `init.tcl`；4637 passed、1 failed、2 skipped，其他五平台全成功。首次和重试均保留为失败证据。
+- 该测试只检查不创建视觉小部件时的 quick-state 初始化、变量数量、首建 trace 和二次调用不重复 trace；改为可验证 `get/set/trace_add` 的纯状态变量替身。真实 `scripts/gui_smoke.py`、PDIC/PPP Tk 重开、B2/R3 Tk smoke **全部保留且不标 skip**。其所在 Windows 3.13 Job 仍需跑完这些真实 Tk 步骤才能通过。
+- 此处不是借机跳过 Tk；新提交需 exact-head 完整六平台 CI、Risk-tier gate、OCR Smoke 3 OS、CodeQL 均成功才算工程验证。真实用户词典 E3 依旧 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 整页重新简体化失败时的人工 UI/缓存回滚
+
+- 高价值缺陷：`regenerate_simplified_current_page` 原先先覆盖整个页面的简体 Tk 字段、actual、manual/auto 标记和 X/Y sidecar 缓存，再调用已加固的 `_persist_simplified_page`。当另一校对者在读取后修改磁盘 sidecar，受保护写盘会拒绝，但没有自动还原页面显示与内存人工结果。
+- 同一 owner 内冻结所有对应 Entry 的显示值、实际值、人工/自动标记、原始 sidecar 缓存行和 dirty 状态；成功后保持原流程；写盘失败或中途 Tk 更新失败时，仅回滚仍与本次重新生成目标完全匹配的本地值，避免覆盖同步回调产生的新人工输入，必要时保持 dirty。不改变来源校验、R3 O_EXCL、候选/PDIC/SECTION/PPP、原图坐标或 GUI 方法签名。
+- 回归：`tests/test_b3_simplified_rendered_owner_20261028.py` 增加保存异常、半页 Tk 更新失败、同回调中较新人工输入；`tests/test_b3_simplified_sidecar_source_pin_20261028.py` 增加真实 sidecar 字节外部修改后的拒绝与 UI 回滚以及正常整页落盘的组合测试。细节见 `docs/architecture/R3_G1_SIMPLIFIED_REGENERATE_FAILED_COMMIT_ROLLBACK_20261028.md`。
+- 最终 exact-head CI 6 平台 / Risk-tier / OCR 3 OS / CodeQL 均需复核。真实 Windows 用户词典、候选 checkbox、20 步 Undo/Redo、FocusOut/重新打开、PDIC/PPP/SECTION/crop 和 R2 W1–W11 仍 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 简体 sidecar 来源锁定首次 CI 反馈及本包修复
+
+- 首次 HEAD `3789709121bea206b0934537624c7cbe377a84a4` 的 CI #40675528437 出现 3 个失败：过期页 FocusOut 在校验 Entry/page 身份前访问注入依赖，以及两个旧静态测试仍检查不安全的直接写盘符号。过期回调改为先拒绝、再解析依赖；静态测试改为核验共享受保护 writer（并保留 monkeypatch writer 注入）。不削弱原始字节比对、O_EXCL 恢复标记。
+- 最新修复必须在新的精确 HEAD 重跑完整六平台、Risk-tier、OCR、CodeQL；第一次失败保留。真人 Windows E3 及跨进程原子 CAS 仍不通过/未验证。
+
+---
+
+## 2026-10-28｜G1 简体人工副本外部修改保护与两条写盘路径统一
+
+- 缓存建立时记录 sidecar 的原始字节并复核，独立保存前二次比对。第三方人工编辑、外部删除、不可无损解析来源、缺失历史绑定均拒绝旧缓存覆盖。
+- `simplified_review.guarded_write_records`：用生产序列化器制作预览文件，冻结来源、建立 R3 O_EXCL 恢复标记、提交后回读；错误时按 R3 意图尝试回滚或保留隔离。此协议并非跨进程文件系统原子 CAS。
+- 主窗口删除词条的简体副本路径不再在 ReviewWindow 保存失败后降级成原始写盘；无窗口路径也使用来源复核。FocusOut/旧 Tk 行的捕获只接受当前页且身份完整的渲染 Entry。
+- 新行为及故障注入：`tests/test_b3_simplified_sidecar_source_pin_20261028.py`；架构边界：`docs/architecture/R3_G1_SIMPLIFIED_SIDECAR_SOURCE_PIN_20261028.md`。不改变 PDIC/PPP/SECTION、简体 JSON schema、公有 GUI 函数签名、OCR 仲裁权重或默认排序。
+- 新 HEAD 的六平台、Risk-tier、OCR 3 OS、CodeQL 尚需实际 CI 复核；真人 Windows 词典、候选、20 步 Undo/Redo、FocusOut/保存重开及 R2 W1–W11 依然 **OPEN / NOT PERFORMED**。
+
+---
+
+## 2026-10-28｜G1/G2 首轮 CI 的测试合同修复（非生产保护降级）
+
+- 旧源码 HEAD `dec92473a088b472623a4af69ddb559a8d2027a7` 的 CI #40668995327 在 macOS Python 3.10 上出现 3 个失败：两个历史 mock 缺少可信当前页/渲染行/live Entry 绑定，另一个把简体显示符号 `√` 错写为真实转换内容。已只修测试 fixture/断言并记录首次失败；**不删测试、不放宽生产身份校验**。
+- 新修复提交必须重新触发六平台/Risk-tier/OCR 及 CodeQL。真人 Windows 扫描和人工校对仍 NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1/G2 简体校对稳定 Entry/X-Y 归属批次（精确 HEAD CI 待验证）
+
+- 工作包以 `ui/review_simplified_workflow.py` 为唯一生产 owner：Keys、剪贴板延迟回调、自动刷新、整页重新简体化都以当前页面和已渲染 `row_entries` 的 Entry 对象及原图坐标为准，不再从当下排序列表行号推断归属。来源跨页/排序后的旧 Tk 回调、绑定缺失/重复或半渲染严格拒绝；不改变公共 ReviewWindow 签名、持久化格式、原图 X/Y。
+- `tests/test_b3_simplified_rendered_owner_20261028.py` 成组验证实际坐标键、重排序、伪旧 widget、FocusOut 前延迟粘贴、异步页面变化、部分渲染、重复行与坐标、正常刷新及整页再生成。详见 `docs/architecture/R3_G1_SIMPLIFIED_RENDERED_ENTRY_PIXEL_OWNER_20261028.md`。
+- 本批代码提交后必须用**新精确 HEAD** 六平台/py3.10、OCR 3 OS、Risk-tier 和 CodeQL 核验；旧 CI 不可替代。真人 Windows 词典、R3 20 步 Undo/Redo、PDIC/PPP/SECTION/crop 重开及 R2 W1-W11 仍 OPEN / NOT PERFORMED。
+
+---
+
+## 2026-10-28｜G1 侧写 JSON 重复键拒绝：人工校对字节保护（非真人验收）
+
+- 单一 Draft [PR #663](https://github.com/chigre/Picture_Capture/pull/663) 中，源码包 `f8065fc125ff0fa8addc80a8213734a2aeae6e0f`：`proofreading/candidate_delete.py` 对 manual_selection 和 simplified JSON 的**所有层级重复键**、非标准 NaN/Infinity 常量 fail-closed，防止 Python 默认解析吞掉其他候选/其他行的人工作业字段后重写整个 sidecar。
+- `tests/test_b3_candidate_owned_deletion_20261015.py` 新增 **8** 组反例；拒绝时 PDIC/manual/simplified 原始字节、Entry、candidate.selected、checkbox 和 Tk 行为均不变。保留原有效侧写和候选 Undo/Redo 回归。详细根因与界限见 [G1 JSON 审计](../../docs/architecture/R3_G1_DUPLICATE_JSON_SIDECAR_20261028.md)。
+- 源码 HEAD [CI 40662405403](https://github.com/chigre/Picture_Capture/actions/runs/40662405403) 在本次状态提交时 Windows 作业仍在运行；Ubuntu 3.13 **4578 passed, 3 skipped**，三平台 [OCR Smoke 40662405192](https://github.com/chigre/Picture_Capture/actions/runs/40662405192) **3/3 success**，独立 [CodeQL 40662399852](https://github.com/chigre/Picture_Capture/actions/runs/40662399852) Python/Actions success。**此状态/文档提交将生成新 HEAD，必须重新核其完整 CI**。
+- 真实 Windows 人工候选、20步 Undo/Redo、FocusOut、PDIC/PPP/SECTION、原图裁剪和 #483 W1–W11 均 **NOT PERFORMED**。不是跨文件 OS 原子性证明；#503/#562 不关闭，PR 不合并、不转 Ready。
+
+## 2026-10-28｜G1 批量修复：候选归属与侧写溯源（新一批，不是 R3 人工验收）
+
+新增 [G1 候选删除归属/冲突矩阵](../architecture/R3_G1_CANDIDATE_ID_SIDECAR_PROVENANCE_BATCH_20261028.md)：修复一个 candidate_id 被两个 Entry 认领、同坐标简体条目属于另一个来源词、简体 JSON 页面/格式错误、manual_selection 已保存但 selected/word 不一致时的误删风险。要求在**任何磁盘/Tk/Undo 修改前** fail-closed；合法旧版候选 selected 缺省、已有人工选中与 Delete→Undo→Redo 三文件字节一致仍被保留。新增 19 个参数化/端到端回归场景。此工作包代码已提交但必须查看**最新 HEAD** CI，未通过不得把 G1/B3/真实 Windows 人工验收标 completed。
+
+## 2026-10-28｜R3 v1.3.0 最新范围/人机验收（取代旧「当前 PR #519/#542」入口）
+
+工程主交付 #542 已合并 main；**新增安全收口由唯一 Draft PR [#663](https://github.com/chigre/Picture_Capture/pull/663)** 承载 #503 与 #562。旧 #664 已 Closed / Unmerged、其提交并入双父 HEAD `66ad88c276b6965c075eeb72583b42dd0aa7f3ac`。这版确证合成 [CI #40559523622](https://github.com/chigre/Picture_Capture/actions/runs/40559523622) 6/6 与 [OCR Smoke #40559523187](https://github.com/chigre/Picture_Capture/actions/runs/40559523187) 3/3；仅对应旧 HEAD。重要保护已存在：R3 marker O_EXCL 独占、非普通标记拒绝、逐文件 before/after 恢复核验、候选提交后再更新 UI、同会话最多20步 Undo/Redo；**并非全程跨进程原子双/三文件事务**。
+
+**真人 Windows 手工验收仍 NOT PERFORMED**：实际有版权授权的词典页上逐项验证候选 checkbox / 唯一 candidate_id、删除与撤销重做、保存后的 manual_selection / PDIC / 简体副本精确回读、重复 Undo×20/Redo×20、改写后 redo 清空、FocusOut/自动保存、翻页/关窗/重新打开、临时恢复标记故障、原图 X/Y 以及 PPP/SECTION/crop parity。每项保留输入 SHA、操作、预期与实际字节/UI；真实页不可用时只可记录 BLOCKED，不得用 Tk 合成 CI 冒称 PASSED。详细参阅 [全库复审和 G1–G6 路线](../audits/WHOLE_CODE_AND_ROADMAP_REAUDIT_20261028.md)。
+
+---
+
 ## 2026-10-17｜main postmerge CI 最终结果：成功（Windows runner 重试后）
 
 - R3 #542 已合并主干 `e12a9db4cc9199069e93d2c3ef12df97fcafd403`。该 SHA [postmerge CI 39013602419](https://github.com/chigre/Picture_Capture/actions/runs/39013602419) 在第一次 Windows hosted Tcl `init.tcl` 初始化异常后，**attempt 2 重跑失败 Windows 作业成功，最终四平台 SUCCESS**；[main CodeQL 39013601837](https://github.com/chigre/Picture_Capture/actions/runs/39013601837) SUCCESS。首次失败不能冒充未发生；是已记录的运行器异常。

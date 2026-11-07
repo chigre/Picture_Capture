@@ -263,10 +263,9 @@ def test_light_and_dark_range_controls_use_identical_geometry(monkeypatch):
     assert radios[1].options["fg"] == "#f1f1f1"
     assert field.options["insertbackground"] == "#f1f1f1"
     assert button.options["bg"] == "#353940"
+    from picture_capture.ui import appearance_resolution
     assert "refresh_compact_range_appearance(self)" in (
-        __import__("inspect").getsource(
-            __import__("picture_capture.app", fromlist=["PictureCaptureApp"]).PictureCaptureApp
-        )
+        __import__("inspect").getsource(appearance_resolution.apply_resolved_appearance)
     )
 
 
@@ -282,7 +281,9 @@ def test_header_buttons_are_compact_in_both_themes_and_preserve_preprocess_lock(
     assert 'font="TkDefaultFont", anchor="center", justify="center"' in source
     assert 'bd=0, relief="flat", highlightthickness=0, padx=3, pady=1' in source
     assert 'button._pc_skip_classic_appearance = True' in source
-    assert 'refresh_compact_header_buttons(self)' in app_src
+    appearance_src = (SRC / 'appearance_resolution.py').read_text(encoding='utf-8')
+    assert '_appearance_resolution.apply_resolved_appearance(' in app_src
+    assert 'refresh_compact_header_buttons(self)' in appearance_src
     assert 'if isinstance(widget, ttk.Widget):' in preprocess_src
     assert 'old_state = widget.cget("state")' in preprocess_src
 

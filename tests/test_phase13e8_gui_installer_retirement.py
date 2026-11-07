@@ -19,7 +19,7 @@ def test_gui_bootstrap_uses_explicit_composition_without_layout_installers():
 
 
 def test_spawn_compatibility_installer_is_not_deleted_by_gui_cutover():
-    source = (ROOT / "processing.py").read_text(encoding="utf-8")
+    source = (ROOT / "processing/__init__.py").read_text(encoding="utf-8")
     assert "def _ensure_layout_runtime()" in source
     assert "install_robust_line_starts()" in source
     assert "install_physical_indent_inference()" in source

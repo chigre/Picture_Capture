@@ -172,7 +172,9 @@ def test_profile_setup_does_not_auto_apply_unverified_height() -> None:
     from picture_capture.profile.layout_bootstrap import apply_profile_ink_height_suggestion
 
     source = Path(wizard.__file__).read_text(encoding="utf-8")
-    assert "height_note = apply_profile_ink_height_suggestion(aggregate, estimates)" in source
+    owner = Path(wizard.__file__).with_name("wizard_sample_analysis.py").read_text(encoding="utf-8")
+    assert "_wizard_sample_analysis.finish_analysis(" in source
+    assert "height_note = apply_profile_ink_height_suggestion(aggregate, estimates)" in owner
 
     aggregate = {"character_height": 17}
     notice = apply_profile_ink_height_suggestion(aggregate, [])

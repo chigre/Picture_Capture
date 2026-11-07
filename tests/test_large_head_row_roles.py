@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from picture_capture.entry_classification import get_layout_line_classification
+from picture_capture.proofreading.classification import get_layout_line_classification
 from picture_capture.models import Entry
 from picture_capture.ordinary.evidence_fusion import promote_evidence_to_layout_roles
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from ..entry_classification import get_layout_line_classification
+from ..proofreading.classification import get_layout_line_classification
 from .local_indent_visualization import drift_corrected_indent_blocks
 
 

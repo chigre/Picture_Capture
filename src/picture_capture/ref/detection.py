@@ -13,7 +13,7 @@ import uuid
 import numpy as np
 from PIL import Image, ImageOps
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 
 from ..io.formats import pdic_path, read_pdic
 from ..persistence.page_sections import read_page_sections

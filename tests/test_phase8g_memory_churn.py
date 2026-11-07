@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageFilter
 
-from picture_capture import image_utils, processing
+from picture_capture.preprocess import analysis_image as image_utils
+from picture_capture import processing
 from picture_capture.models import AppSettings, Entry
 
 

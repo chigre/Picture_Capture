@@ -28,8 +28,10 @@ def test_performance_controls_are_inline_in_settings_center_not_environment_cent
     app = (source / "app.py").read_text(encoding="utf-8")
     env = (source / "ui/environment_center.py").read_text(encoding="utf-8")
     ui = (source / "ui/settings/inference_performance.py").read_text(encoding="utf-8")
-    assert '(performance_tab, "性能测试与诊断")' in app
-    assert "build_inference_performance_group(self, performance_page)" in app
+    dialog_init = (source / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in app
+    assert '(performance_tab, "性能测试与诊断")' in dialog_init
+    assert "build_inference_performance_group(self, performance_page)" in dialog_init
     assert '"画线性能设置"' not in env
     assert "_open_inference_settings" not in env
     for name in ("paddle_device", "paddle_mkldnn", "paddle_cpu_workers"):

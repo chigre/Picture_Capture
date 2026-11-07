@@ -75,7 +75,7 @@ def test_migrated_consumers_do_not_import_legacy_full_understanding():
 
 
 def test_remaining_installers_are_explicit_compatibility_boundary():
-    processing = (PACKAGE / "processing.py").read_text(encoding="utf-8")
+    processing = (PACKAGE / "processing/__init__.py").read_text(encoding="utf-8")
     bootstrap = (PACKAGE / "bootstrap" / "gui.py").read_text(encoding="utf-8")
     assert "def _ensure_layout_runtime()" in processing
     assert "install_physical_indent_inference()" in processing

@@ -4,10 +4,16 @@ from pathlib import Path
 
 
 def test_processing_routes_ordinary_to_layout_only_fast_path() -> None:
-    source = Path("src/picture_capture/processing.py").read_text(encoding="utf-8")
+    facade = Path("src/picture_capture/processing/__init__.py").read_text(encoding="utf-8")
+    source = Path("src/picture_capture/detection/page_pipeline.py").read_text(encoding="utf-8")
+    assert "return _page_pipeline.detect_entries_impl(" in facade
     assert "ordinary_mode = method not in" in source
     assert "layout_only=ordinary_mode" in source
-    assert "from .layout.core_understanding import understand_layout_core" in source
+    assert "_current_page_understanding.understand_page_current(" in facade
+    assert "_understand_page_current(" in source
+    owner = Path("src/picture_capture/layout/current_page.py").read_text(encoding="utf-8")
+    assert "from .core_understanding import understand_layout_core" in owner
+    assert "if layout_only:" in owner
 
 
 def test_layout_visualization_uses_layout_only_fast_path() -> None:

@@ -1502,3 +1502,1696 @@ PDIC publication, and edit locks; existing-marker OCR keeps original X/Y
 and count, retains manual text, and saves the foreground editor before
 dispatch. Physical owner/test ratchets and real scan GUI acceptance remain
 separate from synthetic CI.
+
+
+## Issue #562 — remove root shared image-analysis facade (2026-10-24)
+
+The **15 → 14** root Python count reduction moves the implementation from
+`image_utils.py` into `preprocess/analysis_image.py`; it deletes the former
+module instead of adding a root compatibility shim. Internal Layout/OCR/UI/
+training/tests and scripts use the canonical import path. The single EXIF,
+alpha-white-backed and signed-ink predicate owner remains
+`preprocess/page_pixels.py` and is re-exported by function-object identity
+from analysis_image. The adaptive speck removal policy/metadata and
+source-pixel coordinate contract remain unchanged. No class/pickle model
+identity is relocated. The obsolete Python import
+`picture_capture.image_utils` is intentionally retired; external source
+importers must use `picture_capture.preprocess.analysis_image`. Architecture
+ratchets verify deletion, canonical owner, no duplicated pixel implementations,
+and root-file count <=14. Full six-platform CI/CodeQL and real scanned-page
+comparison are separate release gates.
+
+
+## #562 PR #663 continuation — two physical module relocations
+
+Following 15→14 for image analysis, `entry_classification.py` is moved into
+`proofreading/classification.py` with the complete registry, manual override
+sidecar lock and JSON-v1 transaction. `image_preprocessing.py` moves to
+`preprocess/pipeline.py` with patchable whole-page preprocessing methods
+intact; persisted model types remain in `preprocess/models.py`. Root count
+falls 14→12, no root shims; in-repository callers/tests use canonical imports.
+External Python imports need migration. `training_export.py` remains as the
+verified pickle identity of ZIP functions/exceptions; do not retire it without
+checking older archives or creating an explicit compatibility solution.
+
+
+## #562 PR #663 continuation — bootstrap executable owners (12 → 10)
+
+Migrate the entire real non-GUI CLI to `bootstrap/cli.py`, point the
+unchanged installed `picture-capture-cli` command at that function, and
+physically move the legacy launcher helpers into `bootstrap/launcher.py`.
+Do not add any root import shims. Existing `run.py`, `python -m picture_capture`
+and GUI installer entry continue to call `bootstrap/application.py` unchanged.
+Retire the two Python import paths for external direct callers; use canonical
+`picture_capture.bootstrap.cli` / `picture_capture.bootstrap.launcher`.
+The root count is ratcheted to 10. Retain root modules with historical
+pickle identities, core-mirroring, and main Tk app ABI for later explicit audit.
+
+
+## Issue #562 — Round 70: batch existing-PDIC OCR page ownership (2026-10-25)
+
+The single-page worker body that reads existing PDIC markers, normalizes source
+RGB, applies page/template/SECTION reading geometry, fills OCR text, and
+publishes the OCRed sidecar followed by PDIC has moved physically from
+`ui/controllers/detection.py` to `ocr/batch_existing_entries.py`.
+The Tk controller still exclusively owns consent, current editor flushing,
+foreground PDIC edit permissions, project page selection, worker scheduling,
+completion status and reload. A call-time dependency map retains legacy
+monkeypatch hooks, including Windows spawn-worker behavior; source entry X/Y,
+OCRed-before-PDIC publication order and original failure propagation are
+unchanged. Tests characterize both the physical owner and the real worker
+through the existing controller test. No schema or root compatibility shim
+changed. Full six-platform CI and real dictionary scan acceptance remain
+independent; the latter is NOT PASSED, and PR #663 must stay Draft.
+
+
+## Issue #562 — Round 71: current-page detection worker (2026-10-25)
+
+The actual image-open/normalize, ordinary/OCR/combined inference and
+combined-mode blank-text fill now belong to
+`detection/current_page_worker.py` rather than the Tk
+`ui/controllers/detection.py` callback closure. The controller continues
+to snapshot settings and existing markers, own batch scheduling and cancellation,
+check the project/page identity before applying results, merge selected columns,
+sort, update OCR review quality and redraw the GUI.
+
+The worker retains call-time injection of the original processing, mask,
+replace-rules, OCR and profile hooks; no new root shim, pickled class or
+persisted schema changed. Combined mode must reject any alteration to entry
+source X/Y during OCR text fill. Unit tests cover each detection method,
+argument/source mask semantics and the hard coordinate invariant, while
+existing controller tests continue to cover batch/done callback behavior.
+Round 70 OCRed/PDIC publication ownership remains in
+`ocr/batch_existing_entries.py`; this worker performs **no publication**.
+CI and real dictionary-page human acceptance are separate; keep PR #663
+Draft until the latter is explicitly completed.
+
+
+## Issue #562 — Round 72: live detection-source tests and Tk result ownership (2026-10-26)
+
+Retarget two original-image mask / combined-OCR source contracts to the
+canonical `detection/current_page_worker.py` owner rather than the former
+controller closure, without dropping the original-image source path,
+`only_blank=True` text fill or strict source-coordinate guard.
+
+The current-page post-worker completion logic now lives physically in
+`ui/detection_current_page_result.py`. The detection controller retains
+captured page/settings identity, cancel/error worker callbacks and live,
+patchable column/geometry/OCR-cache dependencies; the result owner checks
+project **identity**, current page, cancelled/error/empty results before any
+editor state mutation. It preserves selected-column-only replacement, reading
+order, OCR candidate refresh, UI redraw and exact combined fill/status text.
+The pure inference worker never publishes GUI or PDIC state, and no root shim
+or persisted format changes. New behavioral tests cover cancellation/errors,
+stale project/page, clicked-column preservation and combined OCR status.
+This remains synthetic regression evidence: full-resolution real-scan human
+acceptance is NOT PASSED. PR #663 remains Draft and unmerged.
+
+
+## Issue #562 — Round 73: existing-PDIC batch OCR UI flow ownership (2026-10-26)
+
+The full `DetectionController.batch_ocr` action body has been physically moved
+to `ui/batch_ocr_flow.py`, leaving the stable controller API as a thin adapter.
+The UI flow now owns eligible-PDIC page selection, saved-perspective guard,
+user confirmation, current editor text flush, settings snapshot, foreground
+page edit permissions, page worker scheduling, and completion/reload status.
+It delegates all actual OCR page decode, text fill and OCRed/PDIC publication
+to `ocr/batch_existing_entries.py` (Round 70). Controller globals are resolved
+lazily on both UI dispatch and worker invocation to preserve the original
+monkeypatch seams for tests and GUI integrations.
+
+Round 73 regression coverage verifies no-op for active jobs or no eligible
+pages, confirmation cancellation without editor mutation, editor flush order,
+foreground edit policy, worker live-dependency lookup, stopped/error
+completion, and no page reload during foreground proofreading. The original
+PDIC batch editing ownership static assertion now points to the canonical
+flow module. This change does not modify OCR inference, original image X/Y,
+PDIC/PPP/SECTION schema, or Tk public method names.
+
+Synthetic/automated acceptance is not a substitute for the independent
+real-dictionary-scan visual gate, which remains NOT PASSED; PR #663 stays Draft.
+
+
+## Issue #562 — Round 74: selected-page detection action dispatch (2026-10-26)
+
+The shared user-action sequence for the ordinary, PaddleOCR and combined
+**selected-page** draw buttons now belongs physically to
+`ui/detection_selected_scope_actions.py`. The public methods in
+`ui/controllers/detection.py` remain the exact same legacy entrypoints and
+inject live ordinary quick-settings and OCR-engine validation hooks.
+
+The shared owner retains the historical execution order: validate usable OCR
+selection before project/quick-settings checks, validate the selected-page
+scope before any drawing-mode mutation, then save settings and dispatch the
+selected indices with the correct mode and refresh flag. Ordinary drawing
+stays independent of OCR-engine availability; neither an invalid OCR engine
+configuration nor a malformed selected range may start detection or change
+the stored mode. The historical direct `run_ocr_draw(scope, ...)` and
+`paddle_detect_current(...)` APIs remain separately guarded and unchanged.
+
+Tests exercise all three dispatch modes, guard short-circuit behavior, invalid
+selected ranges, refresh on/off, and stable controller method ownership.
+No PDIC/PPP/SECTION schema, source pixel coordinates, OCR execution algorithm,
+pickled identity or root compatibility shim is modified. Six-platform CI and
+real dictionary scan visual signoff remain separate; the manual gate is NOT
+PASSED, and PR #663 remains Draft.
+
+
+## Issue #562 — Round 75: CI source-contract repair and current-page setup owner (2026-10-26)
+
+Round 74's six-platform failure originated in a stale source-location assertion:
+`tests/test_runtime_entry_path_guards.py` expected ordinary selected-page
+drawing implementation directly inside `ui/controllers/detection.py` after
+Round 74 moved it to `ui/detection_selected_scope_actions.py`. The
+assertion now verifies both the legacy controller adapter and its physical
+implementation (ordinary guard, drawing mode assignment and dispatch).
+Production drawing semantics were not modified to satisfy that test.
+
+The current-page draw action's busy/project/geometry/PPP guards, immutable
+worker-bound settings and source-page/SECTION/unsaved-PDIC snapshots, plus OCR
+cache and rules-path selection, now live in
+`ui/detection_current_page_setup.py`. The controller still owns the original
+Tk entrypoint and closure workers, dispatches to
+`detection/current_page_worker.py` and publishes through
+`ui/detection_current_page_result.py`. Dependencies resolve from the
+controller module at call time so existing tests and plugins can still patch
+its original functions. A dataclass snapshot is local to the UI flow; no
+existing pickle class identity or PDIC/PPP/SECTION serialization changes.
+Tests cover the original guard order, abort without editor writes, source X/Y,
+section copy, OCR cache/rules selection and no cache for ordinary drawing.
+
+Latest CI must be independently verified before reporting PASS. Real scanned
+dictionary pages are still required for visual signoff; that manual gate is
+NOT PASSED, and PR #663 remains Draft/unmerged.
+
+
+## Issue #562 — Round 76: current-page detection orchestration owner (2026-10-26)
+
+The full current-page detection task orchestration now belongs physically to
+`ui/detection_current_page_flow.py`. The stable
+`DetectionController.auto_detect_current` method is an adapter that supplies
+its live module dependency resolver. The new owner obtains
+`ui/detection_current_page_setup.py`'s validated snapshot, builds the
+one-page job and completion callbacks, keeps mode-specific task labels and
+OCR quality-refresh selection, and schedules the original `_start_batch_task`
+entrypoint. It executes the canonical
+`detection/current_page_worker.py` during processing and publishes through
+`ui/detection_current_page_result.py` only after the latter rechecks
+project/page identity and cancellation/error state. All controller module
+patchpoints (detect_entries, OCR fill, geometry/column selection, masks and
+image decode) are **resolved again at worker/callback invocation time**.
+This preserves historical monkeypatch-based integration behavior without
+adding Tk imports, root files or compatibility facades.
+
+Round 71, 72 and 75 source-contract tests now follow their physical
+implementation owners rather than asserting that orchestration remains in the
+controller. New direct flow tests verify mode-specific labels, selected page
+and source snapshot propagation, OCR cache and SECTION arguments, deferred
+dependency lookup, and refusal without worker dispatch. Existing native Tk
+roundtrip, current-page controller, original-X/Y and cross-platform suites
+remain required. The real dictionary scanned-image manual gate is still
+OPEN / NOT PASSED; PR #663 stays Draft/unmerged.
+
+
+## Issue #562 — Round 77: legacy direct detection actions (2026-10-26)
+
+Following Round 76's current-page orchestration extraction, the three
+historical direct actions `paddle_detect_current`,
+`batch_auto_detect` and `run_ocr_draw(scope, force_refresh)` now delegate
+to `ui/detection_direct_actions.py`. The canonical Tk
+`ui/controllers/detection.py` retains all public method names and injects
+the live `guard_ocr_action_selection` entrypoint at call time. The new owner
+keeps the original ordering (OCR engine preflight, project/quick-settings
+guards, explicit current/all scope, mode selection, detector dispatch).
+Invalid scopes/engines never mutate the stored mode or run inference; the
+all-pages ordinary/combined batch path does not implicitly save settings.
+Direct unit tests and existing controller tests protect these differences,
+including `paddle_detect_current`'s sync/save/current action contract.
+
+The Round 76 six-platform CI initially failed only on two stale code-location
+assertions that expected worker dispatch/scheduling inside the legacy
+controller. Those regression source contracts now check the actual flow owner
+as well as the public adapter. No OCR algorithm, PDIC/PPP/SECTION schema,
+original-image XY, pickle class identity, native Tk binding, or root shim
+changed. The real dictionary-page human scan gate remains OPEN / NOT PASSED,
+and PR #663 must stay Draft.
+
+
+## Issue #562 — Round 78: project-bound existing-PDIC OCR completion (2026-10-26)
+
+`ui/batch_ocr_completion.py` now physically owns the existing-PDIC batch
+OCR completion/UI publication callback. It only updates status or reloads
+the current page if the active project is **identically the project object**
+captured when the batch was scheduled. The page worker is deliberately still
+allowed to finish saving its captured original project's OCRed and PDIC output;
+its completion callback cannot reload or overwrite UI status in a newly opened
+project. Original foreground proofreading behavior is preserved: never force
+a page reload while `_batch_foreground_pages` is enabled.
+
+In `ui/batch_ocr_flow.py`, the project is captured before eligible PDIC
+enumeration and before the native modal confirmation. The post-confirmation
+identity check prevents an unrelated newly opened project's unsaved editor
+content from being synchronized/saved or being scheduled with stale page
+indices when the modal Tk event loop permits a project switch. No new
+format, root compatibility wrapper or OCR inference path is introduced.
+Round 78 tests cover project changes during confirmation, stale completion
+(including stop and foreground flags), original-project success/status and
+historical PDIC edit permissions. Full multi-platform CI is required; the
+independent real scanned-dictionary-page gate remains MANUAL GATE OPEN /
+NOT PASSED. PR #663 is Draft and must not be merged.
+
+
+## Issue #562 — Round 79: batch OCR one-to-one integrity and OCRed atomicity (2026-10-26)
+
+The `ocr/batch_existing_entries.py` publication boundary now refuses OCR
+output whose text count differs from the number of existing PDIC entries.
+Previously a plain `zip(entries, texts)` could silently retain stale words
+or discard extra OCR strings, then save PDIC and OCRed with differing
+cardinalities. The check raises before mutating entries or publishing either
+artifact and preserves existing source-image marker X/Y.
+
+The canonical legacy `ocr/text_io.export_ocred` now writes OCRed sidecars
+through the pre-existing `io.formats.write_text_atomic` helper instead of
+`Path.write_text`. It retains the original `NNN|`backtick`word` line
+format, UTF-8 encoding and processing facade identity; a temporary file is
+flushed and atomically replaced on the same filesystem, and the helper
+cleans temporary files if the replace fails. The old OCRed destination remains
+intact on failure; parent directories are created if missing.
+
+This is single-file atomicity, **not** a claim of a cross-file transaction
+between OCRed and PDIC. Existing output ordering and PDIC's canonical
+`write_pdic` API remain unchanged. New tests cover OCR under-/over-count,
+source marker preservation, output format, nested directory creation and
+injected atomic replacement failures. Cross-platform CI and independent
+human visual real-scan acceptance remain required. The latter is NOT PASSED,
+and PR #663 remains Draft/unmerged.
+
+
+## Issue #562 — Round 80: compensating OCRed rollback on PDIC failure (2026-10-26)
+
+The existing-PDIC batch OCR page worker now delegates its paired sidecar
+publication to `ocr/batch_publication.py`. Publication retains the original
+**OCRed then PDIC** order and the canonical injectable `export_ocred` and
+`write_pdic` functions, preserving existing tests and caller behavior.
+Before exporting, the publisher snapshots exact prior OCRed bytes (or records
+its absence). If the individually atomic PDIC writer raises, it restores
+the previous OCRed bytes using a same-directory temporary file, fsync and
+atomic `os.replace`, or removes the newly created sidecar. It re-raises the
+original PDIC exception on successful compensation. If compensation itself
+fails, a combined error reports **both** PDIC and OCRed rollback failures;
+temporary restore files are removed. If the OCRed exporter fails first,
+PDIC is never invoked.
+
+The original page's X/Y marker values, PDIC structure, OCRed backtick format,
+and word-count parity check from Round 79 are unchanged. Behavior and fault
+injection tests cover success, original bytes preservation including BOM/CRLF,
+new sidecar cleanup, an export error, rollback error, and a real single-page
+worker with an injected PDIC writer failure.
+
+**Important limitation:** compensation only covers catchable runtime errors.
+Process termination, power loss in between the two publications, another
+writer racing the batch, or a failed rollback cannot be treated as a
+cross-file atomic transaction. Existing R3 PDIC transaction markers are
+respected through `write_pdic`; no direct overwrite of PDIC is introduced.
+Multi-platform CI and the separate real scanned-dictionary human gate remain
+required; manual signoff remains OPEN / NOT PASSED, and PR #663 stays Draft.
+
+
+## Issue #562 — Round 81: protect against PDIC post-commit exceptions (2026-10-26)
+
+Round 80's compensating `ocr/batch_publication.py` recovery now snapshots
+the **existing PDIC bytes** before OCRed publication and rereads PDIC if
+the PDIC writer raises. The authoritative writer uses atomic replacement,
+but failure can still surface after bytes have committed (for example,
+post-commit edit-clock/bookkeeping). Blindly restoring only OCRed in that case
+would make the two published artifacts diverge.
+
+The recovery therefore restores OCRed **only if PDIC bytes are unchanged**.
+If PDIC has changed despite the exception, it leaves OCRed as published and
+raises a clear ambiguous-commit diagnostic with the original exception as its
+cause, rather than claiming rollback. If the post-error PDIC cannot be read,
+it also declines an OCRed-only rollback and reports that verification failed.
+This is a safe failure policy, not proof that PDIC matches OCRed after a
+noncanonical/partial external writer; manual inspection or project recovery
+may still be needed.
+
+Direct fault-injection tests cover a synthetic post-commit failure,
+`io.formats.write_pdic` successfully swapping bytes but failing during
+bookkeeping, PDIC originally absent, PDIC unchanged on failed write,
+and a noncanonical partial writer. The tests retain the earlier
+R3 transaction marker and byte-exact OCRed compensation coverage.
+Cross-platform CI and OCR platform smoke must both pass independently,
+and the real scanned dictionary-image manual gate remains NOT PASSED.
+PR #663 remains Draft and unmerged.
+
+
+## Issue #562 — Round 82: post-commit OCRed exporter fault compensation (2026-10-26)
+
+The paired existing-PDIC OCR publisher at
+`ocr/batch_publication.py` now also handles a failure in the **first**
+publication stage: a custom `export_ocred` callable might successfully
+atomically replace the .OCRed sidecar, then throw from a downstream hook.
+Previously this error correctly prevented `write_pdic` but could leave a
+new OCRed beside the still-old PDIC. After an exporter exception, the
+publisher now reads the current OCRed bytes and, if they differ from the
+pre-export snapshot, atomically restores the exact old bytes or removes
+a newly created sidecar. An exporter failure with unchanged OCRed re-raises
+its original error without unnecessary file replacement.
+
+If the post-error OCRed bytes cannot be read, the code reports ambiguous
+publication without attempting PDIC or blind rollback. If compensation
+fails, it reports both exporter and restore errors. Existing guards against
+ambiguous **PDIC** post-commit failures (Round 81) remain intact: never
+restore only OCRed when PDIC has changed. This is a catchable-exception
+best-effort guarantee, **not** atomic publication across two files;
+power loss and external concurrency are still outside this contract.
+
+Direct fault-injection tests cover OCRed originally absent, exact old bytes
+including BOM/CRLF, export failure before replacement, export failure after
+replacement, restore failure, unreadable sidecar and the real page worker's
+PDIC-not-written response to export failure. Original image X/Y positions,
+PDIC/PPP/SECTION serialization, text line format, OCR engine calls and
+legacy monkeypatch seams remain unchanged. Six-platform CI and platform
+smoke remain necessary, and real scanned-dictionary human signoff is
+OPEN / NOT PASSED; PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 83: CI source test repair and concurrent PDIC edit guard (2026-10-26)
+
+Round 82's initial CI regression was a **stale source-order assertion** in
+`tests/test_issue562_batch_ocr_commit_ambiguity_round81_20261026.py`. A
+new Round 82 exporter-exception compensation path correctly appears before
+the PDIC error handler, so the test incorrectly compared the PDIC guard
+against an OCRed rollback in an unrelated earlier exception branch. The
+test now isolates the PDIC error handler before enforcing its guard-before-
+rollback invariant; no runtime safety behavior was reversed.
+
+The existing-PDIC OCR page worker also now snapshots the exact on-disk
+PDIC bytes **before reading its entries and performing OCR**. Once inference
+returns, but *before changing entry words or publishing either OCRed or PDIC*,
+it checks the file bytes again. A change (including appearance or deletion
+of a PDIC file) raises a clear conflict error, protecting corrections made
+by another project window/process during the potentially long OCR job.
+This is defense in depth over the Tk foreground batch page-claim protocol;
+it preserves the existing original-image X/Y marker semantics, read-pdic
+sorting, OCR cardinality, and canonical paired publication sequence.
+
+Fault-injection tests cover external PDIC rewrite with new words/coordinates,
+deletion, newly created PDIC, output untouched on conflicts and successful
+normal publication without interference. The check is **optimistic**, not
+a filesystem transaction or exclusive lock: external modification between
+the final verification and PDIC write is still theoretically possible.
+Automated CI and OCR platform smoke remain independent gates; real-scanned
+dictionary human visual acceptance remains OPEN/NOT PASSED. PR #663 stays
+Draft and unmerged.
+
+
+## Issue #562 — Round 84: verify PDIC identity across sidecar publication (2026-10-26)
+
+Round 83 captured PDIC bytes before OCR and checked them at the end of
+inference, refusing stale batches after manual edits. Round 84 carries that
+snapshot into `ocr/batch_publication.publish_existing_pdic_ocr` as an optional
+`expected_pdic_bytes` argument. The paired publisher checks the original
+worker snapshot against freshly read PDIC bytes **before exporting OCRed**.
+It then reads PDIC again **after OCRed export but before writing PDIC**.
+If an external editor replaces, removes or creates PDIC during the export,
+the publisher compensates OCRed to its exact previous bytes (or removes a
+new sidecar), and refuses to overwrite the newer manual PDIC content.
+An OCRed compensation failure is reported explicitly.
+
+The optional snapshot keeps the historical direct publishing API functional
+while protecting worker calls with the stronger expectation. Both checks
+preserve existing OCRed-then-PDIC ordering, canonical output writers,
+original X/Y marker coordinates, OCR byte-exact rollback and legacy
+monkeypatch entrypoints. Unit tests model manual edits interleaved inside
+`export_ocred`, pre-existing / newly created / removed PDIC, old OCRed
+bytes with BOM/CRLF, correct uncontended commits, direct API compatibility
+and failed compensation.
+
+**Remaining limit:** these checks cannot prevent a different process from
+altering PDIC in the tiny interval after the final comparison and before
+the canonical PDIC writer; there is no cross-process compare-and-swap or
+two-file atomic transaction. No claim of full concurrency safety or scan
+acceptance is made. Require full six-platform CI plus OCR Smoke, and retain
+the real scanned-dictionary manual gate OPEN / NOT PASSED. PR #663 remains
+Draft and unmerged.
+
+
+## Issue #562 — Round 85: repair six-platform CI and pre-write verification recovery (2026-10-26)
+
+The Round 84 HEAD `dc771f8` passed OCR Platform Smoke but **failed all
+six CI platform jobs**. Their logs showed one shared regression:
+`test_failed_pdic_verification_never_reverts_only_ocred` still injected a
+read failure on the second PDIC read. Round 84 had introduced a second read
+*before* invoking the PDIC writer, so the test accidentally exercised the
+pre-write guard rather than the original Round 81 post-writer ambiguous
+commit. The fault injection now targets the third read, preserving the
+essential Round 81 rule: when a writer may have committed and PDIC cannot be
+verified, **never** roll back OCRed alone.
+
+A separate data-integrity improvement closes the earlier pre-write failure
+path: if OCRed export succeeds but PDIC cannot be read for the newly added
+pre-write version check, the PDIC writer has **not** run. The publisher now
+attempts byte-exact compensation of OCRed (or deletes a newly created
+sidecar), then raises a clear diagnostic with the verification error as its
+cause. If compensation fails, it reports both errors explicitly and requires
+manual recovery. This does not claim anything about a concurrent external
+writer; two-file atomicity is still unavailable.
+
+Fault-injection tests cover missing/existing PDIC, missing/existing OCRed
+(including BOM/CRLF), failed pre-write read, writer never invoked, exact
+rollback, and rollback failure. The existing post-writer ambiguity test
+continues to verify that the new OCRed is retained when PDIC status cannot
+be established after the writer has raised. No original-image coordinates,
+PPP/SECTION data, OCR text format, Windows spawn/Tk seams, or canonical
+PDIC writer semantics were changed.
+
+Six-platform CI and OCR Platform Smoke are independent required gates.
+Real scanned-dictionary manual acceptance remains **OPEN / NOT PASSED**;
+PR #663 stays **Draft / unmerged**.
+
+
+## Issue #562 — Round 86: preserve OCRed proofreading during batch inference (2026-10-26)
+
+The earlier optimistic conflict guard protected **PDIC** against manual
+edits made during a long-running existing-marker OCR worker. It did not
+protect the independently editable **OCRed** sidecar: a user could correct
+OCRed from another process while inference was running, then the worker
+would overwrite those newer corrections even though PDIC had not changed.
+
+The existing-PDIC page worker now captures the exact OCRed bytes (or
+absence) **before OCR inference**, alongside its PDIC snapshot. It passes
+`expected_ocred_bytes` into the paired publisher. Before exporting OCRed
+or saving PDIC, publication compares the current sidecar bytes to the
+worker's snapshot; a difference (rewrite, deletion, or creation) rejects
+both writes and preserves the manual sidecar. The argument is optional,
+so existing direct calls to `publish_existing_pdic_ocr` retain their
+previous behavior. The existing PDIC pre/post-export guards, canonical
+writers, byte-exact compensating rollback and original-image X/Y
+coordinates remain unchanged.
+
+Fault-injection tests cover OCRed replacement with byte-distinct BOM/CRLF,
+deletion, creation during the worker's OCR callback, zero batch publication
+calls on conflicts, unchanged PDIC, successful commits with originally
+present/absent OCRed and preserved marker X/Y, and a direct publisher
+snapshot conflict. This is an optimistic byte comparison, **not** an
+exclusive cross-process lock: same-byte rewrites are not distinguished,
+and a writer can still race after the comparison. An unrelated process
+editing OCRed during the short export/rollback window is not transactionally
+protected. Full six-platform CI and OCR Platform Smoke remain mandatory;
+real scanned-dictionary manual acceptance stays **OPEN / NOT PASSED**,
+and PR #663 remains **Draft / unmerged**.
+
+Round 86's first six-platform CI attempt found a **test fixture setup**
+regression: the canonical PDIC writer had already created the `QT` directory,
+so one direct-publisher test's `mkdir(parents=True)` raised `FileExistsError`
+before exercising the guard. The fixture now uses `exist_ok=True`; no
+production code was weakened. This failure is recorded separately from the
+subsequent CI rerun, whose final status must be checked on the new HEAD.
+
+
+## Issue #562 — Round 87: protect OCRed edits during export and failed-PDIC compensation (2026-10-26)
+
+Round 86 protected OCRed against edits made **during OCR inference**.
+Round 87 extends protection into the shorter paired-publication interval.
+The existing-PDIC worker supplies the canonical expected OCRed bytes
+generated by the shared `ocr.text_io.render_ocred_text` serializer; this
+function is also used by the actual `export_ocred` writer, avoiding a
+second independent format definition. If the bytes on disk after export
+differ from that expectation (including a manual edit made within an
+export callback), publication **refuses PDIC save and does not revert the
+ambiguous OCRed**. Legacy direct publisher callers can omit this
+additional expectation, retaining their previous API behavior.
+
+The paired publisher also captures the exported sidecar bytes, checks
+again after the PDIC pre-write read, and refuses a stale PDIC save if an
+external editor changed OCRed in that interval. If PDIC saving fails
+without changing PDIC, or if the post-export PDIC check fails, OCRed
+compensation first verifies that OCRed still matches the publisher's
+own exported snapshot. A differing sidecar is left intact and a
+diagnostic requests manual recovery instead of overwriting new
+proofreading. Normal uncontended failure still restores exact prior
+OCRed bytes (including BOM/CRLF or original absence).
+
+Fault-injection tests exercise a manual OCRed rewrite during PDIC
+verification, a rewrite during failed PDIC saving, an edit within the
+export callback, a paired PDIC+OCRed edit, normal compensation and
+successful publication with unchanged source X/Y marker coordinates.
+The real batch worker wiring is exercised, not only the direct publisher.
+
+**Limits:** optimistic byte comparison is not an atomic compare-and-swap.
+External edits can still race after the final comparison, same-byte
+rewrites are invisible, and the two files are not a single transaction.
+An exporter that raises before its normal return is still governed by
+the existing best-effort rollback semantics. No real scanned-dictionary
+acceptance is claimed: manual gate **OPEN / NOT PASSED**; PR #663 remains
+**Draft / unmerged**. Require latest-HEAD six-platform CI and OCR
+Platform Smoke before describing the round as verified.
+
+
+## Issue #562 — Round 88: repair Round 87 six-platform CI regression (2026-10-26)
+
+The Round 87 CI on HEAD `b32f084` **failed on all six jobs** (both
+Python versions on Windows/macOS/Ubuntu); OCR Platform Smoke passed.
+Logs identified two distinct regressions:
+
+1. `expected_exported_ocred_bytes` was computed from LF-only UTF-8, but
+   the canonical `write_text_atomic` uses text mode, which publishes CRLF
+   on Windows. The post-export integrity guard consequently rejected valid
+   Windows OCRed output. The OCR leaf now calls `render_ocred_bytes` from
+   `ocr/text_io.py`, which matches the legacy text-mode writer's platform
+   newline translation without changing existing OCRed file format.
+2. Two historical controller/page tests monkeypatched `export_ocred` to
+   a **no-op spy**, which no longer satisfies the real byte-integrity
+   contract. Their spies now record the call *and* invoke the real exporter.
+   Two source-shape assertions from Rounds 81/85 were also updated to
+   check the guarded rollback helper and a stable verification-phase
+   anchor, without weakening the runtime safety tests.
+
+New Round 88 tests compare the canonical byte renderer against actual
+atomic export on the current platform, exercise UTF-8/non-ASCII text,
+ensure a no-op exporter is rejected before PDIC publication, and verify
+uncontended publication preserves original PDIC X/Y pixel coordinates.
+The new check does not bypass conflict detection, does not normalize
+user-owned OCRed bytes, and does not change the Windows legacy output
+format. Full six-platform CI and three-platform OCR Smoke are required
+on the new HEAD before declaring the regression resolved.
+
+**Outstanding:** OCRed/PDIC is still a best-effort two-file publication,
+not an atomic cross-process transaction. Real scanned-dictionary manual
+acceptance remains **OPEN / NOT PASSED**; PR #663 stays **Draft**, unmerged.
+
+
+## Issue #562 — Round 89: export-error OCRed ownership guard (2026-10-26)
+
+The Round 87 optimistic rollback guard protected OCRed edits made **after**
+the exporter returned successfully. The exporter-exception branch still
+restored old OCRed bytes unconditionally after observing a changed sidecar.
+A patched exporter or post-export hook could atomically publish the batch
+sidecar, allow an external proofreader to edit it, and then raise; the old
+exception handler would silently erase that newer manual OCRed edit.
+
+`ocr/batch_publication.publish_existing_pdic_ocr` now applies the worker's
+canonical `expected_exported_ocred_bytes` on the **exporter failure path**.
+If disk OCRed differs from both its pre-export snapshot and the expected
+batch bytes, the publisher reports an ownership conflict and **does not**
+rollback the unknown sidecar or start PDIC publication. If disk OCRed matches
+the batch's expected bytes, rollback uses
+`_restore_ocred_if_unchanged` to check again immediately before restoring
+exact old bytes (including BOM/CRLF), or removing a newly created sidecar.
+A failed compensation remains an explicit error. Direct legacy calls that
+omit expected bytes keep best-effort compensation with the additional
+pre-restore recheck; they cannot attribute arbitrary content to the exporter.
+
+Round 89 fault-injection coverage: existing/absent OCRed, external edit
+inside an exporter that raises, exporter raises after its own atomic write,
+unexpected noncanonical exporter bytes, interleaved manual edit between
+exception inspection and compensation, legacy direct API, and the real
+existing-marker worker with original image-pixel X/Y preserved. No PDIC
+write is permitted on these error paths.
+
+**Boundary:** byte comparisons are optimistic, not cross-process locks or
+two-file transactions. An edit after the final check can still race with
+replace/unlink; identical-byte external writes cannot be distinguished.
+The Windows 3.10 Tcl `init.tcl` initialization failure seen on the
+preceding HEAD is a separate CI environment issue; its failed job was
+rerun and must be judged by its final outcome, not assumed green.
+Six-platform CI and OCR Smoke must be checked on the final Round 89 HEAD.
+The first Round 89 six-platform CI attempt exposed a stale Round 79
+source-text assertion expecting an unguarded `_restore_ocred_bytes` call.
+That test now checks for the guarded compensation and canonical-byte
+ownership check instead; the first attempt is not counted as passing.
+Real scanned-dictionary manual acceptance remains OPEN / NOT PASSED;
+PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 90: SECTION source version protects batch OCR reading order (2026-10-26)
+
+The existing-PDIC batch OCR worker now snapshots the **resolved SECTION
+read-path and exact bytes** before OCR inference. This is essential because
+SECTION defines the page's reading lanes and marker sort order even when the
+PDIC marker bytes remain unchanged. Managed-v2 projects can also switch from
+a migrated QT SECTION fallback to a canonical SECTION file: a path change
+is a conflict even if the two files have identical bytes.
+
+The worker passes a `verify_section_source` callback to the paired OCRed /
+PDIC publisher. The publisher invokes it **before OCRed export** and **after
+OCRed export but before PDIC save**. A stale SECTION rejects the page. If the
+SECTION changed during export, the publisher attempts to restore OCRed to
+its exact previous bytes; if OCRed has since been manually edited, the
+existing guarded compensation refuses to overwrite the new edit and
+reports both the SECTION conflict and failed compensation. No stale PDIC
+save is started. The optional callback preserves legacy direct publisher
+calls and existing Windows-spawn/Tk dependency injection.
+
+`tests/test_issue562_batch_section_snapshot_round90_20261026.py` covers
+SECTION create/edit/remove during inference, source-path switch with equal
+bytes, edit during OCRed export, simultaneous OCRed manual edit during final
+validation, byte-exact OCRed restoration (including BOM/CRLF), unchanged
+reading lanes and original marker X/Y coordinates.
+
+**Limitations:** optimistic path/byte checks cannot provide cross-process
+atomic compare-and-swap. An external writer may still race after the last
+check, and byte-identical replacement is not detectable. The two output
+files still do not share a filesystem transaction. Full six-platform CI
+and three-platform OCR Smoke are required on the exact new HEAD; real
+scanned-dictionary manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance
+remains **OPEN / NOT PASSED**. PR #663 stays Draft and unmerged.
+
+
+## Issue #562 — Round 91: source-image content identity across batch OCR (2026-10-26)
+
+Round 90 guarded SECTION path/bytes, PDIC and OCRed, but the actual source
+scan could still be replaced or removed while an existing-marker OCR worker
+was running. This could silently publish OCR text decoded from stale pixels
+into a PDIC whose X/Y coordinates refer to a different image.
+
+`ocr/batch_existing_entries.py` now fingerprints the **original image file
+bytes** using streaming SHA-256 (1 MiB chunks, no full-image RAM copy).
+It checks the fingerprint immediately after image decode, then uses the
+existing paired publisher's `validate_page_context` callback to recheck
+**before OCRed export** and **after export before PDIC save**. The callback
+continues to validate the resolved SECTION source path and exact bytes.
+A replaced or deleted source image rejects the stale page. If the image
+changes during OCRed export, existing guarded compensation restores only
+the worker-owned OCRed bytes and never overwrites a concurrent manual
+OCRed correction. No stale PDIC write is started.
+
+`tests/test_issue562_batch_source_image_snapshot_round91_20261026.py`
+covers same-length BMP pixel rewrites, removal during inference, replacement
+during decode, replacement inside OCRed export with old/missing sidecars,
+simultaneous manual OCRed edits, and normal SECTION-aware publication with
+unchanged original X/Y marker coordinates. Round 90's source-structure
+assertion now expects the combined page-source validation callback; its
+SECTION behavior tests remain intact. This change does not alter legacy
+PPP/PDIC/OCRed formats, the Windows-spawn dependency map, or Tk ownership.
+
+**Boundaries:** four streaming reads add image I/O but avoid holding another
+scan copy in memory. Byte-identical rewrites are not distinguishable, and
+a change after the final check can still race with PDIC publication.
+SHA-256 is an identity check, not a cross-process lock or a two-file
+transaction. Six-platform CI and three-platform OCR Smoke must pass on
+the exact Round 91 HEAD before claiming verification. Real scanned-dictionary
+manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance stays **OPEN / NOT PASSED**;
+PR #663 remains **Draft**, unmerged.
+
+
+## Issue #562 — Round 92: fix final SECTION fault-injection timing after image guard (2026-10-26)
+
+Round 91's new post-image-decode `verify_page_sources()` added an
+intentional early SECTION validation before OCR inference. That changed
+the count of SECTION file reads in the Round 90 failure-injection test:
+snapshot (1), post-decode (2), pre-export (3), and final pre-PDIC (4).
+The existing test injected a manual OCRed edit plus SECTION replacement
+on read 3, so it correctly failed **before** OCRed export, rather than
+exercising the intended final publication compensation path. The exact
+Round 91 HEAD failed all six CI matrix jobs on that stale test assertion,
+while OCR Platform Smoke succeeded.
+
+The regression now injects on read 4, retaining its explicit assertions
+that the newer human OCRed edit survives, no PDIC save occurs, and the
+combined SECTION-conflict/rollback-refusal error is reported. A new
+parameterized fault-injection test changes SECTION only on that final
+validation, with both an existing BOM/CRLF OCRed sidecar and an absent
+sidecar. It verifies exact restoration/removal of OCRed, preservation of
+the unchanged PDIC, preservation of the external SECTION edit, and no
+temporary sidecar leak. This fixes a test scheduling mismatch rather
+than weakening production page-source checks.
+
+**Still open:** image, SECTION, PDIC and OCRed checks remain optimistic;
+no cross-process compare-and-swap or two-file atomic commit is promised.
+Full six-platform CI and OCR Platform Smoke must be checked for the new
+HEAD. PR #663 remains Draft and unmerged; real scanned-dictionary manual
+acceptance stays **OPEN / NOT PASSED**.
+
+
+## Issue #562 — Round 93: detect OCRed edits after successful PDIC save (2026-10-26)
+
+The existing-marker OCR publisher already compared OCRed immediately before
+calling `write_pdic`, but a second window/process could change or remove the
+sidecar **during** a successful PDIC writer callback. Previously the publisher
+returned success without noticing that the committed PDIC and OCRed no longer
+represented the same OCR batch.
+
+`ocr/batch_publication.py` now reads OCRed once more **after a successful
+PDIC save** and compares its exact bytes with the just-exported sidecar.
+A changed/removed sidecar raises an explicit **PDIC already committed,
+OCRed modified** conflict. A read/permission error also raises an explicit
+ambiguous-state error. Crucially, the publisher does **not** roll back
+either file at this point: PDIC may already be committed, and an OCRed
+manual edit must not be overwritten. Normal export-before-PDIC ordering,
+source X/Y coordinates, existing fault compensation and Windows/Tk worker
+dependency injection remain unchanged.
+
+`tests/test_issue562_ocred_post_pdic_commit_round93_20261026.py`
+exercises an OCRed rewrite or deletion interleaved after the real PDIC
+writer commits, a post-commit OCRed read failure, a normal commit preserving
+original pixel coordinates, and the actual existing-PDIC worker path.
+It asserts the conflict is reported, the latest human OCRed content is
+preserved, and the committed PDIC is not unsafely rolled back.
+
+**Remaining limits:** this is *detection*, not an atomic transaction. A
+writer may still race after the post-save read, byte-identical external
+writes cannot be distinguished, and a conflict can leave a pair requiring
+manual recovery. This change does not claim full concurrency safety.
+Six-platform CI and OCR Platform Smoke must be checked on the exact new
+HEAD. PR #663 remains **Draft / unmerged**, and real scanned-dictionary
+manual GUI/edit/PDIC/PPP/save-reopen/crop acceptance remains
+**OPEN / NOT PASSED**.
+
+
+## Issue #562 — Round 94: detect page-source edits during committed PDIC saves (2026-10-26)
+
+Round 93 checked OCRed bytes after successful PDIC publication, but the
+`validate_page_context` callback (resolved SECTION source path + bytes and
+streamed original-image SHA-256) was only called **before** the PDIC writer.
+A concurrent external edit to SECTION or the scan **inside** a successful
+`write_pdic` callback could leave OCR text and source pixel coordinates
+stale while the batch incorrectly returned success.
+
+`ocr/batch_publication.py` now invokes the existing page-source validator
+a third time **after PDIC save and the post-save OCRed check**. A SECTION
+rewrite/source switch, same-size image pixel rewrite, scan removal or source
+read failure is reported explicitly as **PDIC already saved; page-source
+provenance changed or cannot be verified**. This is a detection-only
+post-commit conflict: neither PDIC nor OCRed is rolled back independently,
+and external SECTION/image edits are left intact for human recovery. The
+optional callback and dependency injection remain backward-compatible with
+legacy direct callers and Windows spawn/Tk. Normal PDIC/OCRed serialization,
+PPP/SECTION formats and source X/Y marker coordinates are unchanged.
+
+`tests/test_issue562_postcommit_page_source_round94_20261026.py`
+injects real SECTION and image edits/deletion from the PDIC writer through
+the actual existing-PDIC worker, and exercises post-save validator errors,
+normal third validation, committed PDIC and OCRed preservation, X/Y
+coordinates and non-rollback behavior.
+
+**Limitations:** an extra streaming source-image hash adds I/O after each
+successful page save. Post-commit checks are optimistic and cannot detect
+a byte-identical rewrite, changes after the final read, or guarantee an
+atomic multi-file transaction. Detected conflicts can require manual
+recovery. Full six-platform CI and three-platform OCR Smoke are required
+on the exact Round 94 HEAD before declaring success. PR #663 remains
+**Draft / unmerged**; real scanned-dictionary manual acceptance remains
+**OPEN / NOT PASSED**.
+
+Round 94 first CI attempt exposed a stale Round 90 source-structure assertion
+that required exactly two page-context checks. Four completed Linux/macOS
+matrix jobs failed only that assertion (the new behavior tests passed);
+the remaining matrix jobs were still running at inspection. The assertion
+now verifies the **three** intended checkpoints in order: before OCRed
+export, after export/before PDIC, and after successful PDIC. This is a test
+expectation update, not a relaxation of production guards. The follow-up
+commit requires fresh six-platform CI and OCR Smoke verification.
+
+
+## Issue #562 — Round 95: revalidate sidecars after final provenance check (2026-10-26)
+
+The Round 94 page-source callback streams the original scan to verify its
+SHA-256 and rereads SECTION. That check can take significant time on large
+scans. Previously the publisher checked OCRed and PDIC **before** this
+callback, then wrote PDIC immediately after it returned. A second editor
+could therefore replace either sidecar *during the last source check* and
+the worker might overwrite a newer PDIC or accept a newer OCRed silently.
+
+`ocr/batch_publication.py` now performs an additional **PDIC then OCRed**
+exact-byte comparison immediately after the final pre-save
+`validate_page_context()` returns. If PDIC changed, it refuses to call the
+PDIC writer and compensates only the worker-owned OCRed export. If OCRed
+also changed, the guarded compensation refuses to overwrite the human edit.
+If OCRed alone changed, the writer is skipped and the newer OCRed is left
+untouched. A final PDIC read failure is reported explicitly and triggers
+guarded OCRed compensation; an unreadable final OCRed is not blindly
+rolled back. The optional callback is unchanged and old direct callers
+without it retain their existing behavior.
+
+`tests/test_issue562_precommit_revalidation_round95_20261026.py`
+injects a PDIC edit, OCRed edit, combined edit and PDIC read failure
+*during the final page-context check*, with both missing and existing
+BOM/CRLF OCRed originals. It also covers uncontended X/Y coordinate
+preservation, all three provenance checks and legacy direct invocation.
+
+**Still open:** the last comparison and filesystem replacement are not
+atomic; non-cooperating external writers and crashes can still leave
+inconsistent files. No cross-process locking or atomic multi-file
+transaction is claimed. Require fresh exact-HEAD six-platform CI and
+three-OS OCR Platform Smoke before accepting this round. Keep PR #663
+**Draft / unmerged** and real dictionary-page GUI/OCR/PDIC/PPP/save-reopen
+manual acceptance **OPEN / NOT PASSED**.
+
+### Round 96 (2026-10-26): post-commit OCRed recheck after provenance hashing
+
+- `ocr/batch_publication.py` now re-reads the exported OCRed bytes **after** the final post-commit SECTION/source-image verification. A large scan hash can take long enough for another window to edit or delete OCRed after the previous post-PDIC check. Detect the late conflict instead of returning false success.
+- The new guard reports a distinct error on changed/missing OCRed or an unreadable OCRed sidecar. PDIC has already been committed: **do not** independently roll back PDIC or overwrite the externally edited OCRed. Original PDIC X/Y coordinates and OCRed serialization remain unchanged.
+- `tests/test_issue562_postcommit_ocred_recheck_round96_20261026.py` injects edits, deletion, and read denial during the third page-context check, plus the uncontended success path. The tests assert byte preservation, committed PDIC coordinates, and no single-sided compensation.
+- This is a **detection** improvement, not an atomic multi-file transaction. A writer can still race after the last check; byte-equal rewrites are invisible. Cross-process locking and crash recovery require separate design and Windows spawn/Tk compatibility review. Real dictionary scan acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 97 (2026-10-26): post-commit PDIC recheck after source hashing
+
+- `ocr/batch_publication.py` snapshots the committed PDIC immediately after
+  its writer returns and rechecks the exact bytes after the final SECTION /
+  original-image hash and OCRed recheck. Late PDIC replacement, deletion or
+  read failure now reports an explicit already-committed conflict, rather
+  than a false success. Neither PDIC nor OCRed is rolled back independently.
+- `tests/test_issue562_postcommit_pdic_recheck_round97_20261026.py`
+  injects late PDIC replacement/deletion, final read denial, missing committed
+  PDIC and initial snapshot read denial, plus normal X/Y and OCRed-byte checks.
+- The extra reads are conditional on the existing page-context callback,
+  preserving legacy direct-call sequencing and Windows spawn/Tk boundaries.
+  This is optimistic detection, not atomic commit: edits before the initial
+  snapshot, byte-identical writes and changes after the final read can escape.
+  Exact-HEAD six-platform CI and OCR Smoke still require verification.
+  PR #663 remains **Draft / unmerged**; real dictionary-scan manual
+  acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 98 (2026-10-26): repair legacy batch-OCR writer spies after Round 97
+
+- Exact Round 97 HEAD `672ed89d931c68624653cb4eba52b51ae0b8d17b`:
+  six-platform CI **failed** (all six matrix jobs) while OCR Platform Smoke
+  **passed** (Windows/macOS/Ubuntu). Two pre-existing tests
+  (`test_issue562_batch_ocr_page_owner_round70_20261025.py` and
+  `test_ui_detection_controller.py`) used `write_pdic` spies that recorded
+  arguments but never wrote a PDIC file. The new post-commit guard correctly
+  rejects a writer reporting success without a committed file. This is a
+  test-double contract violation, not grounds to weaken production checks.
+- Both spies now delegate to the real PDIC serializer after recording calls.
+  Behavioral assertions read the persisted PDIC back to verify OCR words,
+  source X/Y pixel coordinates and page-link fields. The missing-PDIC
+  fault-injection case remains covered separately by the Round 97 suite.
+- Require fresh exact-HEAD six-platform CI and OCR Platform Smoke before
+  claiming success. No schema or source-coordinate change. PR #663 stays
+  **Draft / unmerged**; representative real dictionary-scan acceptance stays
+  **OPEN / NOT PASSED**.
+
+
+### Round 99 (2026-10-26): eliminate needless OCRed rollback writes
+
+- The guarded OCRed compensator in `ocr/batch_publication.py` still reads
+  the current sidecar and rejects unexpected bytes. When the original and
+  published snapshots are **identical** (including both absent), it now
+  returns without calling the atomic restorer. Previously this no-op path
+  could unnecessarily replace an identical file or unlink an absent one;
+  an external editor writing immediately after the guard's read could
+  lose their edit to that avoidable mutation.
+- `tests/test_issue562_noop_ocred_compensation_round99_20261026.py`
+  injects external writes after the version read for both existing and
+  absent sidecars, verifies the changed-current rejection path, byte-exact
+  BOM/CRLF restoration for a genuine export change, and a failed PDIC
+  writer after an identical OCRed export. Original PDIC X/Y coordinates
+  and persisted bytes remain unchanged on that failure.
+- This closes only the **no-op** compensation race; genuine rollback still
+  has a read-to-replace/unlink TOCTOU window. No cross-process lock or
+  multi-file atomic transaction is claimed. Windows spawn/Tk boundaries
+  and PPP/SECTION schemas are unchanged. Exact-HEAD six-platform CI and
+  three-platform OCR Smoke are required. PR #663 remains **Draft / unmerged**;
+  real scanned-dictionary acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 100 (2026-10-26): revalidate SECTION after source-image hashing
+
+- `ocr/batch_existing_entries.py` now checks the resolved SECTION path and
+  exact bytes **again after** computing the original scan SHA-256. The existing
+  page-source callback previously checked SECTION first, then hashed the
+  image. For large scans, an external editor could replace/remove SECTION
+  *during* the hash and leave the validator reporting success even though
+  OCR used the old reading lanes. This extra check applies to both the
+  pre-commit and post-commit callbacks, without changing the PDIC/PPP/SECTION
+  formats, OCR text, source-pixel X/Y coordinates, or Windows spawn/Tk paths.
+- `tests/test_issue562_section_hash_window_round100_20261026.py` injects
+  SECTION replacement/deletion immediately after the hash, at both the
+  pre-PDIC and post-PDIC checkpoints. It verifies pre-commit OCRed byte-exact
+  compensation, preservation of external SECTION changes, no premature PDIC
+  commit, explicit post-commit conflict reporting without one-sided rollback,
+  original X/Y coordinates and the uncontended five-hash success path.
+- **Limitations:** this narrows a real SECTION-vs-hash TOCTOU window but does
+  not implement cross-process locking or a multi-file atomic transaction.
+  Concurrent byte-identical rewrites, post-final-check edits and crashes
+  remain outside the guarantee. Require exact-HEAD six-platform CI and
+  three-OS OCR Platform Smoke; keep PR #663 **Draft / unmerged** and the real
+  dictionary scan/manual GUI/save-reopen gate **OPEN / NOT PASSED**.
+
+
+### Round 101 (2026-10-26): recheck OCRed ownership after rollback staging
+
+- `ocr/batch_publication.py` now stages and fsyncs the original OCRed bytes
+  before performing a **second exact-byte ownership check immediately before
+  os.replace**. The earlier check in `_restore_ocred_if_unchanged` remains,
+  but a concurrent human correction can land while the temporary file is
+  written or fsynced. A changed sidecar is preserved and reported rather than
+  overwritten; the rollback temporary file is removed on every path.
+- For an OCRed sidecar that did not exist before the worker, the compensator
+  similarly rechecks the published bytes immediately before unlinking. Direct
+  legacy calls to `_restore_ocred_bytes(path, previous)` remain supported,
+  and a genuinely unchanged export still requires no rollback mutation.
+- `tests/test_issue562_rollback_stage_recheck_round101_20261026.py`
+  injects manual edits during rollback fsync and between the initial read
+  and unlink, including a real failed-PDIC publication path. It verifies
+  manual OCRed preservation, exact BOM/CRLF restoration when uncontended,
+  no leaked temporary files and unchanged PDIC source X/Y coordinates.
+- **Limits:** this reduces a genuine read-to-replace/unlink race but does
+  **not** provide atomic compare-and-swap, a cross-process transaction,
+  protection against non-cooperating writes after the last check, or
+  crash-safe two-file recovery. Require exact-HEAD six-platform CI and
+  Windows/macOS/Ubuntu OCR Platform Smoke. Keep PR #663 **Draft / unmerged**;
+  representative real dictionary-page GUI/OCR/PDIC/PPP/save-reopen manual
+  acceptance remains **OPEN / NOT PASSED**.
+
+- **First CI failure / repair:** the Round 101 initial six-platform run
+  exposed one Round 85 test double that monkeypatched
+  `_restore_ocred_bytes` with a positional-only `lambda *_args`. The new
+  guarded rollback passes `expected_current` by keyword, so the spy raised
+  `TypeError` instead of its intended injected `OSError("rollback denied")`.
+  The test double now accepts `**_kwargs` and still raises the same injected
+  error. Production ownership checks were **not** weakened. Verify the new
+  exact HEAD in six-platform CI and OCR Smoke before claiming success.
+
+### Round 102 (2026-10-26): verify persisted PDIC records after writer success
+
+- The existing post-commit guard in `ocr/batch_publication.py` detects a
+  **missing** PDIC, but a writer callback that silently returns without
+  changing an **existing** PDIC could still report success. OCRed would
+  contain the new OCR result while PDIC retained old marker text.
+- `ocr/batch_existing_entries.py` now reads the committed PDIC before
+  reporting page success and compares row count/order, sanitized OCR text,
+  original source-pixel X/Y coordinates and all three page-link fields with
+  the requested records. It reports a read/parse failure or mismatch
+  explicitly. Since PDIC publication has already returned, it does **not**
+  attempt a dangerous one-sided OCRed rollback.
+- `tests/test_issue562_pdic_persisted_records_round102_20261026.py`
+  uses the real page worker and serializers to inject a silently no-op
+  writer against a pre-existing PDIC, wrong word, wrong X coordinate,
+  wrong page link and malformed PDIC, plus a normal save/reopen success.
+  It checks unchanged source-image/SECTION, the newly published OCRed
+  bytes, retained original PDIC for the no-op case and no rollback temps.
+- This is post-commit **detection**, not atomic cross-file publication or
+  automatic recovery. The final read can race with non-cooperating writers;
+  an error after a successful writer requires human inspection. No change
+  to PDIC/PPP/SECTION schema, pixel-coordinate math, Windows spawn or Tk
+  ownership. Exact-HEAD six-platform CI and three-platform OCR Smoke must
+  be checked. PR #663 remains **Draft / unmerged**; real scanned-dictionary
+  manual GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
+
+- **Initial CI failure and repair:** first Round 102 CI
+  `https://github.com/chigre/Picture_Capture/actions/runs/40329119013`
+  failed in the Ubuntu 3.13 test job: two older test doubles
+  (`test_issue562_batch_ocr_page_owner_round70_20261025.py` and
+  `test_ui_detection_controller.py`) returned the synthetic *pre-save*
+  markers even after the real writer had persisted new PDIC rows. The new
+  verification correctly rejected those stale read results. Both test
+  doubles now use their synthetic entries only when PDIC is absent and
+  delegate to the real parser once PDIC exists. No production guard was
+  relaxed. The follow-up exact-HEAD CI is pending verification.
+
+### Round 103 (2026-10-26): detect OCRed changes during persisted-PDIC reopen
+
+- Round 102 introduced a post-save PDIC record read to verify actual
+  persisted words, source-image X/Y pixels, row order and page links. That
+  parser can be slow; a proofreader could edit or delete OCRed *during*
+  this final read, after the publication helper's last OCRed version check.
+  Previously the page worker could report success with mismatched sidecars.
+- `ocr/batch_existing_entries.py` now reads OCRed **after** the persisted
+  PDIC record comparison and requires the exact canonical bytes rendered
+  from this OCR job. Missing, modified or unreadable OCRed is reported
+  explicitly. Because PDIC is already committed, no unilateral rollback
+  or overwrite of human changes is attempted.
+- `tests/test_issue562_ocred_during_pdic_reopen_round103_20261026.py`
+  injects an external BOM/CRLF edit, deletion and read denial at the
+  second (post-commit) PDIC read, plus a successful uncontended reopen.
+  It checks persisted marker text, original pixel X/Y, page links,
+  original scan/SECTION and absence of leaked rollback temporaries.
+- **Boundary:** this is another optimistic last-read guard, **not** a
+  cross-process lock, atomic multi-file transaction or crash recovery.
+  Changes after the final read, byte-identical rewrites and non-cooperating
+  writers remain possible. Windows spawn/Tk behavior and PDIC/PPP/SECTION
+  schemas are unchanged. Exact-HEAD six-platform CI and three-platform
+  OCR Platform Smoke must be checked before calling this round green.
+  PR #663 remains **Draft / unmerged**; real dictionary-scan manual
+  GUI/OCR/PDIC/PPP/save-reopen acceptance stays **OPEN / NOT PASSED**.
+
+### Round 104 (2026-10-26): protect PDIC byte identity across post-save record parsing
+
+- Round 102 verifies persisted PDIC records after the writer returns. A
+  long-running parser can return the original correct rows even if another
+  process replaces or deletes PDIC before the worker finishes verification.
+  Comparing parsed words/X/Y/page links alone could incorrectly report
+  success for an already-replaced on-disk file.
+- `ocr/batch_existing_entries.py` now snapshots the full PDIC bytes just
+  before reopening the saved records and compares them again immediately
+  after validating the parsed rows. Missing/unreadable PDIC and changed
+  bytes are explicit post-commit conflicts. OCRed is **not** rolled back
+  independently, and external PDIC edits are preserved.
+- `tests/test_issue562_pdic_during_reopen_round104_20261026.py`
+  injects a manual PDIC replacement, deletion and read denial *after* the
+  post-save parser returns, plus a normal save/reopen control. It checks
+  original image-pixel X/Y and page links, unchanged scan/SECTION, canonical
+  OCRed persistence, and absence of rollback temporary files.
+- **Boundary:** optimistic before/after file-version checks are not an
+  atomic cross-process transaction; a writer can still race after the last
+  check or perform byte-identical rewrites. No PDIC/PPP/SECTION schema,
+  Windows spawn/Tk, or OCR model behavior changes. Check exact-HEAD six-
+  platform CI and OCR Platform Smoke before marking this round verified.
+  PR #663 must remain **Draft / unmerged**; representative real dictionary
+  scan/edit/save/reopen manual acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 105 (2026-10-26): verify saved PDIC percentage/index fields
+
+- The Round 102 post-save check reopens PDIC with `read_pdic`, which
+  intentionally ignores columns 4/5 (X/Y percentages) and tolerates surplus
+  columns. A faulty writer can therefore persist correct words, original
+  X/Y pixels and page links while silently corrupting the downstream PicDic
+  index percentages. This is a data-integrity failure, not a coordinate
+  transformation request.
+- `ocr/batch_existing_entries.py` now compares all eight serialized PDIC
+  columns against the existing `write_pdic` contract, including the
+  image-width-based percentage formula and `:g` formatting. It decodes
+  the **same post-save byte snapshot** already protected by the Round 104
+  before/after parse checks, rather than reading an additional race-prone
+  version. It reports mismatch without unilateral OCRed compensation.
+- `tests/test_issue562_pdic_percent_fields_round105_20261026.py` injects
+  wrong X%, wrong Y%, nonnumeric %, extra column, wrong width and an
+  uncontended real-writer control. Checks original pixel X/Y, unchanged
+  source scan/SECTION, OCRed persistence and absence of rollback temps.
+- This verifies committed bytes; it is **not** a cross-process CAS or
+  crash-safe two-file transaction. Final-check races and non-cooperating
+  writers remain. Six-platform CI and three-OS OCR Smoke require exact-HEAD
+  confirmation. PR #663 stays **Draft / unmerged** and representative real
+  dictionary-page manual GUI/OCR/PDIC/PPP/save-reopen acceptance remains
+  **OPEN / NOT PASSED**.
+
+### Round 106 (2026-10-26): detect late source edits during persisted PDIC verification
+
+- The publisher validates SECTION and source-image bytes after PDIC write,
+  but the page worker subsequently reopens and validates all persisted PDIC
+  fields. An external editor can change SECTION or replace/remove the original
+  scan during that potentially slow record parse. Previously the worker could
+  return success despite now-stale reading lanes or original-pixel provenance.
+- `ocr/batch_existing_entries.py` now calls the existing full page-source
+  validator **after** persisted PDIC rows and OCRed bytes are verified. It
+  checks canonical SECTION path/bytes and streamed original-image SHA-256,
+  including a second SECTION check after hashing. Late edits/read errors
+  produce an explicit post-commit conflict. Already committed PDIC/OCRed
+  are not rolled back independently; external source edits are preserved.
+- `tests/test_issue562_source_during_pdic_reopen_round106_20261026.py`
+  injects SECTION modification/removal and same-size original-image
+  replacement/removal from the post-save PDIC parser, plus a normal control.
+  It verifies committed OCR text, original X/Y pixels, page associations,
+  external edits and no leaked OCRed rollback temporary files.
+- **Boundary:** this is another optimistic provenance check, not an atomic
+  cross-process transaction or crash recovery mechanism. The final-read
+  race and byte-identical rewrites remain possible. No PDIC/PPP/SECTION
+  schema, Windows spawn/Tk or OCR engine behavior is changed. Verify
+  exact-HEAD six-platform CI and three-OS OCR smoke before claiming success.
+  PR #663 remains **Draft / unmerged**. Real scanned dictionary-page manual
+  GUI/OCR/PDIC/PPP/save-reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 108 (2026-10-27): sidecar race during final source hash
+
+- The final source-image/SECTION provenance check can be slow. After it returns,
+  the existing-PDIC OCR worker now rechecks committed PDIC and canonical OCRed
+  bytes, reporting concurrent replacement/removal without one-sided rollback.
+- Fault-injection regression `test_issue562_sidecar_during_final_hash_round108_20261027.py`
+  injects PDIC/OCRed replacement and deletion inside the final image hash,
+  preserving external changes and original pixel coordinates on the control.
+- This remains optimistic byte comparison, **not** cross-process atomic commit,
+  CAS, or crash recovery. Windows spawn/Tk and persisted schemas are unchanged.
+  PR #663 remains Draft/unmerged; real dictionary scanning manual acceptance
+  remains **OPEN / NOT PASSED**.
+
+### Round 108 CI follow-up (2026-10-26): missing-sidecar diagnostic assertion
+
+- The initial Round 108 regression fixture created an already-existing QT directory without `exist_ok=True`; fixed in `a062bff`. The next six-platform CI run exposed two test-only diagnostic mismatches: a removed PDIC/OCRed is reported as a failed post-hash read, whereas a replaced sidecar is reported as a byte-version conflict. The assertions now explicitly distinguish both paths while continuing to require an error, preservation of external changes, and no unilateral rollback.
+- Neither correction weakens production validation or changes persistence formats. Exact-head six-platform CI and OCR Platform Smoke must be confirmed after the test correction; Draft PR #663 and real-page manual acceptance remain unchanged.
+
+### Round 109 (2026-10-27): freeze intended PDIC fields across writer callbacks
+
+- The batch worker previously compared reloaded PDIC records and canonical
+  eight-field rows against live Entry objects *after* invoking a patchable
+  exporter/PDIC writer. An in-place callback mutation could redefine the
+  expected result, silently accepting a wrong marker text or original-pixel
+  coordinate (or falsely rejecting a correct write).
+- `ocr/batch_existing_entries.py` now snapshots intended word/X/Y fields in
+  independent value objects before publication, and uses those values for
+  both persisted-record and serialized-row verification. The actual writer
+  still receives the historical Entry objects; no schema/API changes.
+- `tests/test_issue562_writer_mutation_snapshot_round109_20261027.py`
+  injects mutations before and after writing PDIC and checks the normal path.
+  The before-write mismatch must be rejected without a one-sided OCRed rollback;
+  the after-write mutation must not cause a false mismatch.
+- This protects against mutable callbacks, not concurrent filesystem CAS or
+  process crash. Six-platform CI and OCR smoke require exact-HEAD validation.
+  PR #663 remains Draft/unmerged; real dictionary-page GUI acceptance is
+  **OPEN / NOT PASSED**.
+
+### Round 110 (2026-10-27): post-SECTION-read provenance guard
+
+- `ocr/batch_existing_entries.py` verifies canonical SECTION path/bytes and
+  original-image SHA-256 immediately after the patchable SECTION reader,
+  before sorting and OCR inference. A reader that returns stale lanes while
+  editing SECTION or replacing the source scan is rejected without publishing
+  either PDIC or OCRed.
+- `tests/test_issue562_section_reader_provenance_round110_20261027.py`
+  injects SECTION rewrite/deletion, same-size scan replacement and control
+  success, asserting inference is not called and original sidecars survive.
+- This adds an optimistic guard, not cross-process locking or atomicity.
+  Keep PR #663 Draft/unmerged; manual real dictionary-page GUI scan and
+  save/reopen acceptance remain **OPEN / NOT PASSED**.
+
+### Round 111 (2026-10-27): fix six-platform CI regression from Round 110
+
+- Round 110's extra source-image SHA-256 checkpoint shifted historical
+  fault-injection hash counts, causing nine CI failures despite successful
+  OCR Platform Smoke. Preserve the original image-hash checkpoint order and
+  perform a lightweight `verify_section_source()` immediately after the
+  patchable SECTION reader instead. This detects stale SECTION path/bytes
+  without altering image-hash fault injection or postcommit behavior.
+- The immediate reader guard covers SECTION edits/removal; source-image
+  replacement remains protected at the existing subsequent image-hash
+  checkpoints, not at this exact early point. This is not atomic locking.
+- PR #663 remains Draft and unmerged; real dictionary GUI acceptance remains
+  **OPEN / NOT PASSED**.
+
+### Round 112 (2026-10-27): restore final pre-PDIC rollback fault injection
+
+- CI on Round 111 HEAD `3bf490b` reported 4304 passing, one failing:
+  the Round 90 test injected an external OCRed/SECTION edit on SECTION read
+  #6, which is now the pre-export check because Round 110 added a new
+  post-reader SECTION check. That correctly rejects before publication, but
+  no longer exercises the intended post-export rollback-conflict path.
+- Both Round 90 final pre-PDIC fault-injection cases now inject at SECTION
+  read #7, preserving their original behavioral assertions: concurrent
+  human OCRed bytes survive, PDIC is unchanged, and the rollback-conflict
+  diagnostic remains visible. The unchanged new reader guard remains active.
+- This is a test timing correction, not a claim of cross-process atomicity.
+  PR #663 stays Draft/unmerged; real GUI acceptance remains OPEN/NOT PASSED.
+
+### Round 113 (2026-10-27): exporter-failure PDIC ownership guard
+
+- In `ocr/batch_publication.py`, when a patchable OCRed exporter raises,
+  compare PDIC bytes with its pre-export snapshot **before** compensating
+  OCRed. If PDIC was replaced/deleted (or cannot be read), refuse one-sided
+  rollback and require manual reconciliation. An unchanged PDIC preserves
+  the existing byte-exact OCRed compensation behavior.
+- Fault injection in `test_issue562_exporter_failure_pdic_race_round113_20261027.py`
+  covers PDIC replacement, deletion and unchanged control, asserting the
+  PDIC writer is never called and no rollback temp file leaks.
+- This is optimistic conflict detection, not cross-process atomicity.
+  Draft PR #663 remains unmerged; real dictionary GUI acceptance is
+  **OPEN / NOT PASSED**.
+
+### Round 114 (2026-10-27): failed-export inspection race
+
+- A failed OCRed export now rechecks PDIC immediately before the OCRed
+  compensation attempt, closing the stale PDIC-snapshot window during
+  OCRed inspection. If PDIC was replaced/removed, retain both latest disk
+  states and refuse OCRed-only rollback; unchanged control still restores
+  the original OCRed bytes and rethrows the export error.
+- `tests/test_issue562_export_rollback_pdic_race_round114_20261027.py`
+  injects PDIC replacement/removal during the OCRed read after the first
+  failed-export PDIC check. No PDIC writer is invoked.
+- The guard is optimistic, not an atomic cross-process CAS. Draft PR #663
+  remains unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 115 (2026-10-27): compensation preflight read failure
+
+- Added a fault-injection regression for a `PermissionError` on the third
+  PDIC read (the final failed-export compensation preflight). The worker
+  must retain the newly exported OCRed bytes rather than rolling back a
+  potentially mismatched pair, leave PDIC unchanged, and never call its
+  writer. This covers the read-error branch introduced in Round 114.
+- No new production change in this round; cross-process atomicity and
+  process-crash recovery remain outside the optimistic guard. PR #663 stays
+  Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 116 (2026-10-27): immutable OCRed expectation across exporter callbacks
+
+- `ocr/batch_existing_entries.py` now freezes the canonical OCRed byte
+  expectation and recognized entry count before invoking the patchable
+  exporter/writer. An exporter may correctly publish OCRed and then mutate
+  its input `texts` list; post-save checks and the reported count must
+  continue to use the original OCR result, not mutable callback state.
+- `tests/test_issue562_mutable_export_texts_round116_20261027.py`
+  exercises exporter clearing, replacing or appending OCR texts *after*
+  correctly writing OCRed, plus an unchanged control. It checks the
+  persisted PDIC text, original pixel coordinates, canonical OCRed bytes
+  and returned count. Publication still rejects an exporter whose disk
+  output differs from the frozen expected bytes.
+- This does not add cross-process atomicity or replace manual GUI
+  acceptance; Draft PR #663 stays unmerged, real dictionary-page scan/
+  edit/save/reopen acceptance remains **OPEN / NOT PASSED**.
+
+### Round 117 (2026-10-27): publication callback argument isolation
+
+- Existing-PDIC OCR now supplies a separate text-list copy and shallow
+  `Entry` copies to the publication helper. A patchable OCRed exporter
+  mutating its text-list argument cannot change the worker's intended
+  count/content or the subsequent PDIC writer inputs. Preserve the original
+  `Entry` class for legacy writer and Tk integration compatibility.
+- `tests/test_issue562_export_callback_isolation_round117_20261027.py`
+  checks an exporter that mutates the list after saving OCRed, ensuring
+  persisted PDIC text, source-pixel coordinates and page count remain correct.
+- The original writer callback can still mutate its own copies, and final
+  persisted-byte validation remains necessary. This is not a cross-process
+  transaction. PR #663 remains Draft/unmerged; real dictionary GUI acceptance
+  **OPEN / NOT PASSED**.
+
+### Round 118 (2026-10-27): ambiguous PDIC read after successful OCRed export
+
+- If OCRed export returns successfully but the subsequent PDIC read raises
+  `OSError` (including `PermissionError`), PDIC ownership is unknown:
+  an external editor or a patchable exporter may have replaced its bytes.
+  The publication helper now **does not revert OCRed alone** and does not
+  invoke the PDIC writer. It retains both on-disk files for explicit manual
+  reconciliation, consistent with other ambiguous-commit failure paths.
+- `tests/test_issue562_pdic_inspection_failure_round118_20261027.py`
+  injects the PDIC read fault on the post-export inspection, with PDIC
+  either unchanged or replaced during export. Both cases must preserve
+  exported OCRed and current PDIC, avoid the PDIC writer, and leave no
+  compensation temp file.
+- This is conservative recovery under indeterminate ownership, **not**
+  atomic two-file publication. Cooperative locking / cross-process CAS and
+  crash recovery remain open. PR #663 stays Draft/unmerged; physical GUI
+  dictionary scan, edit, save and reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 119 (2026-10-27): CI regression reconciliation for conservative recovery
+
+- Six-platform CI for Round 118 exposed six legacy Round 85 test failures on
+  Ubuntu default Python (4,313 passing). Those assertions still required an
+  OCRed-only rollback when the post-export PDIC read raises `PermissionError`,
+  contradicting the safer Round 118 behavior that treats PDIC ownership as
+  unknown. The production change is retained; the old test is revised to
+  require **preservation of exported OCRed and existing PDIC**, no PDIC writer,
+  and no attempted compensation. It covers both originally present/absent
+  PDIC and OCRed. The source-level guard assertion now explicitly rejects
+  a unilateral rollback in this ambiguous read-error branch.
+- The original Round 85 file name remains for traceability. The Round 118
+  failure-injection test additionally covers a PDIC replacement during export.
+  No assertion of a fully transactional two-file commit is made. PR #663
+  remains Draft/unmerged; real dictionary GUI acceptance **OPEN / NOT PASSED**.
+
+### Round 120 (2026-10-27): original PDIC pixel-coordinate ownership at callback boundaries
+
+- `ocr/batch_existing_entries.py` snapshots a multiset of original PDIC
+  marker (X,Y) pixel coordinates immediately after loading the records.
+  The SECTION-aware sorter may **reorder** these entries, but may not drop,
+  add or move markers. This is validated before calling OCR.
+- After sorting, the ordered X/Y sequence is frozen again. OCR callbacks
+  may provide recognized text but may not change marker coordinates or
+  reorder the entry list. Violations stop the page **before** either OCRed
+  export or PDIC publication, preserving existing on-disk data.
+- `tests/test_issue562_marker_coordinates_round120_20261027.py`
+  fault-injects sort-time coordinate changes and dropped markers, OCR-time
+  coordinate changes and entry reordering, plus a positive test proving a
+  genuine coordinate-preserving SECTION sorter reorder remains valid.
+- The guards are in memory and do not alter the existing source-image hash,
+  SECTION-read or PDIC-read checkpoint counts used by older fault tests.
+  They cannot prevent external disk writes or a post-check race. Draft PR
+  #663 remains unmerged; real dictionary GUI acceptance remains
+  **OPEN / NOT PASSED**.
+
+### Round 121 (2026-10-27): cross-platform fixture recovery for original-coordinate guards
+
+- Exact-HEAD six-platform CI for Round 120 failed five cases in
+  `tests/test_issue562_marker_coordinates_round120_20261027.py` with
+  `FileExistsError` / Windows `WinError 183`. The canonical PDIC writer
+  creates the `QT` directory, so the test fixtures cannot assume it is
+  absent when creating the OCRed sidecar.
+- Both fixtures now use `mkdir(exist_ok=True)` and retain their original
+  assertions for coordinate mutation, dropped markers, OCR reordering,
+  legal sort reordering, byte-exact sidecar preservation and pixel coordinates.
+  No production behavior was changed in this correction.
+- OCR Platform Smoke on the failing HEAD was green, but six-platform CI was
+  **failed**, not passed; only the new HEAD's checks can establish recovery.
+  PR #663 remains Draft/unmerged. Manual dictionary GUI scan, proofread,
+  save and reopen acceptance is **OPEN / NOT PASSED**.
+
+### Round 122 (2026-10-27): pre-export page-context race guard
+
+- Baseline HEAD `dcada9f0651afc0e9a7bb78da65b96e03e4d0983` was confirmed **green** for six-platform CI and three-platform OCR Platform Smoke before this change.
+- `src/picture_capture/ocr/batch_publication.py` now re-reads PDIC and OCRed **after** the potentially slow SECTION/source-image validation and **before** invoking the OCRed exporter. A concurrent manual sidecar edit during source-image hashing previously could be overwritten by OCRed export, and a subsequent compensation could restore the older pre-hash version. Changes or unreadable sidecars now abort before touching either artifact.
+- `tests/test_issue562_batch_preexport_context_race_round122_20261027.py` fault-injects PDIC/OCRed edits for initially existing/missing sidecars, permission failures during the post-context read, and an unchanged-context success path. Legacy callers with no context validator retain the old read/callback sequence.
+- This narrows an optimistic concurrency window, **not** a filesystem-level compare-and-swap or multi-file transaction. Non-cooperating writers can still race after the final check; process termination, crash consistency, and durable two-file commit remain unresolved. PR #663 stays Draft/unmerged. Real dictionary scan, manual correction, save and reopen acceptance stays **OPEN / NOT PASSED**.
+
+### Round 123 (2026-10-27): ambiguous final pre-commit PDIC inspection
+
+- Verified baseline Round 122 HEAD `f2e25229f29de07d8b3868b4e678bf8b034a873c`:
+  six-platform CI #40417710849 and OCR Platform Smoke #40417710738
+  both completed successfully before this round.
+- `src/picture_capture/ocr/batch_publication.py` previously attempted an
+  OCRed-only rollback when the **final** PDIC read, after the second
+  potentially slow SECTION/source-image validator, raised `OSError`.
+  This is unsafe: a concurrent editor may have replaced PDIC while the
+  validator ran, and an unreadable PDIC does not establish ownership.
+  The branch now preserves both on-disk versions, refuses the PDIC writer,
+  and reports an indeterminate pair requiring manual reconciliation.
+- `tests/test_issue562_final_pdic_inspection_round123_20261027.py`
+  injects `PermissionError` on that exact fourth PDIC read, covering
+  prior OCRed present/absent and concurrent PDIC unchanged/replaced. It
+  asserts that newly exported OCRed and latest PDIC survive unchanged,
+  no writer runs, and no rollback temp file is left behind.
+- This corrects one ambiguous failure branch, **not** cross-process atomic
+  publication, cooperative locking or process-crash recovery. PR #663
+  remains Draft/unmerged. Real dictionary GUI scan, proofread, save and
+  reopen acceptance remains **OPEN / NOT PASSED**.
+
+
+### Round 124 (2026-10-27): PDIC-save-failure compensation race
+
+- A failed PDIC writer can leave the original PDIC intact at the first error
+  inspection, but a different process may update PDIC while the compensating
+  OCRed temp file is being staged and fsynced. A single pre-staging check was
+  insufficient: restoring old OCRed after that PDIC edit could mismatch the
+  pair. This round adds a **second PDIC byte-version check immediately before**
+  the rollback `os.replace` or `unlink`. An unreadable or changed PDIC
+  refuses the one-sided rollback, preserves the exported OCRed and latest PDIC,
+  and reports manual-recovery guidance.
+- The optional verification callback preserves existing direct-restorer
+  signatures and no-conflict rollback semantics. The new Round 124 tests
+  inject PDIC replacement during fsync, deletion-path races, late PDIC read
+  failure, and successful old/absent OCRed compensation. No new UI/spawn
+  imports or serialization changes.
+- This remains **optimistic**, not a cross-process compare-and-swap or
+  crash-safe two-file transaction: a non-cooperating writer may race between
+  the final read and filesystem mutation. PR #663 remains Draft/unmerged.
+  Real dictionary scan, human proofread, save and reopen acceptance remains
+  **OPEN / NOT PASSED**; synthetic regression tests are not that gate.
+- Verify the exact Round 124 HEAD's six-platform CI and OCR Platform Smoke
+  before treating this change as passing. Never inherit prior HEAD results.
+
+### Round 125 (2026-10-27): failed OCRed export rollback staging PDIC race
+
+- Baseline Round 124 HEAD `5947fce4a0f491770d7220e88ec7849133ce68be`:
+  six-platform CI #40430877017 and OCR Platform Smoke #40430877054
+  both completed successfully before this change.
+- When an OCRed exporter publishes a sidecar and subsequently raises,
+  `batch_publication.py` already checked PDIC before compensation, but
+  unlike the PDIC-save-failure path it did **not** recheck PDIC after
+  byte-exact OCRed rollback temp staging/fsync (or immediately before
+  unlink of a newly created OCRed). An external editor could change PDIC
+  during that interval and the stale one-sided compensation could run.
+- The failed-export branch now passes a PDIC-version verification callback
+  to `_restore_ocred_if_unchanged`. The callback checks exact bytes just
+  before `os.replace` or `unlink`; a changed, removed, or unreadable PDIC
+  rejects compensation and preserves the latest disk versions for manual
+  reconciliation. The original exporter error is still propagated after
+  successful no-conflict compensation. The PDIC writer is never called.
+- `tests/test_issue562_failed_export_rollback_stage_round125_20261027.py`
+  adds six fault-injection/positive cases: existing/new OCRed, a concurrent
+  PDIC edit during rollback staging/deletion, a late PDIC read error, and
+  uncontended exact-byte restoration. Tests assert no orphan rollback temp.
+- This is an optimistic last-read guard, **not** cross-process CAS or a
+  crash-safe dual-file transaction. PR #663 remains Draft/unmerged; real
+  dictionary GUI scan, human proofreading, save and reopen acceptance stays
+  **OPEN / NOT PASSED**. Verify this exact HEAD's six-platform CI and OCR
+  Platform Smoke before claiming the round passed.
+
+### Round 126 (2026-10-27): failed SECTION/source validation cannot roll back OCRed over newer PDIC
+
+- Baseline Round 125 HEAD `c6970bd9d3d9b5e761f7c8f378d2a8267d2a564c`:
+  six-platform CI #40436747175 and OCR Platform Smoke #40436747169
+  were both completed successfully before this change.
+- The second `validate_page_context()` runs **after OCRed export** and can
+  hash a large source image. If it raises due to a changed SECTION/image,
+  a separate proofreader may also have updated PDIC during validation.
+  Previously the exception handler restored OCRed without rechecking PDIC;
+  that could pair an old OCRed with the newer PDIC.
+- The failed-page-context branch now checks PDIC's exact pre-export byte
+  snapshot before compensation and supplies a second PDIC ownership check
+  immediately before the compensating `os.replace` or `unlink`. A changed,
+  removed or unreadable PDIC refuses the one-sided rollback and preserves
+  both on-disk versions for explicit reconciliation. The PDIC writer is not
+  invoked on this path. Uncontended SECTION/image failure still restores
+  old OCRed exactly (or deletes a newly exported sidecar).
+- `tests/test_issue562_context_rollback_pdic_race_round126_20261027.py`
+  adds 13 parameterized behavioral/fault-injection cases: PDIC replaced or
+  removed during validation, late read denial, edits during rollback fsync
+  or before unlink, no-conflict exact restoration, unchanged-export no-op
+  compensation and normal publication.
+- This does **not** establish a cross-process atomic compare-and-swap,
+  two-file transaction, power-loss recovery or ABA resistance. Last-read
+  races remain possible; no manual GUI acceptance is implied. PR #663
+  remains Draft/Open/Unmerged; real dictionary scan, human proofread, save
+  and reopen acceptance remains **OPEN / NOT PASSED**. Only the latest
+  HEAD's completed six-platform CI and OCR Platform Smoke can validate
+  this round.
+
+### Round 127 (2026-10-27): preserve both sidecars when PDIC ownership is lost before commit
+
+- Verified Round 126 HEAD `aa9896d667bad1b26f0a53156f8116385641087b`: six-platform CI `40443019356` and three-platform OCR Smoke `40443019336` both completed successfully.
+- Closed two pre-commit compensation hazards in `ocr/batch_publication.py`: when PDIC changes during OCRed export, or during the second SECTION/source-image validation, the publisher no longer rolls back OCRed alone. It refuses PDIC publication and preserves both observed disk versions for manual reconciliation. The earlier rollback could replace a sidecar associated with the newly edited PDIC, even if OCRed was still byte-equal to this worker's export at the first inspection.
+- `test_issue562_pdic_conflict_no_compensation_round127_20261027.py` injects both races for existing and newly created OCRed, combined human PDIC/OCRed edits during validation, and an uncontended success path. The tests explicitly fail if a compensation helper is invoked on a PDIC ownership conflict. Updated the Round 84 and Round 95 behavior assertions to the conservative recovery policy.
+- Scope: this is **not** a cross-process atomic CAS, a durable two-file transaction, or process/power-loss recovery. PDIC can still change after the last optimistic read, and a pair already modified externally requires manual inspection. PR #663 stays Draft/open/unmerged. Real dictionary scan, human proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
+
+### Round 128 (2026-10-27): OCRed rollback temp-cleanup error provenance
+
+- Baseline Round 127 HEAD `b741257a38890e1d8238141dea6ccdf3560cfd66`:
+  six-platform CI #40448288152 and OCR Platform Smoke #40448288426
+  both completed successfully before this change.
+- `src/picture_capture/ocr/batch_publication.py` previously used a
+  `finally: temp_path.unlink(missing_ok=True)` after staging and replacing
+  a compensating OCRed file. If `os.fsync`, the last ownership guard, or
+  `os.replace` failed **and** deleting the rollback temp also raised,
+  cleanup could mask the original failure. A successful `os.replace`
+  unnecessarily attempted to unlink its already-moved temp pathname.
+- The rollback helper now transfers temp-path ownership on successful
+  `os.replace`, and only attempts cleanup on exceptional exits. If
+  cleanup also fails, it reports **both** the original rollback error and
+  the cleanup error, retaining the original exception as `__cause__`.
+  Interrupted `BaseException` paths retain their original signal.
+- `tests/test_issue562_ocred_rollback_cleanup_round128_20261027.py`
+  fault-injects failed replace, failed fsync, failed PDIC ownership guard
+  combined with denied temp cleanup; a normal successful restoration; and
+  end-to-end PDIC-save failure with rollback/cleanup double failure.
+  These tests assert original PDIC/OCRed bytes remain visible, failure
+  provenance is retained, and any orphan temp is explicitly detectable.
+- This does **not** provide crash-safe cleanup, cross-process CAS, a
+  durable dual-file transaction, or resolution of post-check external
+  writes. Temp files left after denied cleanup require manual inspection.
+  PR #663 stays Draft/open/unmerged. Real dictionary scan, manual
+  proofreading, save and reopen acceptance stays **OPEN / NOT PASSED**.
+  Validate this exact HEAD's completed six-platform CI and OCR Smoke
+  before declaring the round green.
+
+### Round 129 (2026-10-27): distinguish committed OCRed rollback from post-mutation exceptions
+
+- Baseline Round 128 HEAD `98a6843fc4a9f7015b88635653dc61370dfadbce`:
+  six-platform CI #40454083959 and OCR Platform Smoke #40454083974
+  both completed successfully before this round.
+- A filesystem wrapper may finish `os.replace(temp, OCRed)` or
+  `Path.unlink(OCRed)` and **then** raise. Previously the rollback helper
+  reported a failed compensation even though OCRed had already been restored
+  or removed. For replacement, the exception path also treated the moved
+  staging pathname as though it still belonged to the worker.
+- On a replacement exception, the helper now checks that the staging
+  pathname is absent **and** the OCRed destination contains the exact old
+  bytes. Only when both hold does it recognize completed compensation.
+  For a deletion exception, absence of OCRed likewise counts as the
+  completed target state. It never retries a destructive mutation.
+  An extant temp, unexpected OCRed bytes, or an unreadable post-error state
+  preserves the error (or reports indeterminate completion). An external
+  edit observed after a post-mutation error is not overwritten.
+- `tests/test_issue562_rollback_post_mutation_errors_round129_20261027.py`
+  adds ten parameterized filesystem/fault-injection cases: replace/unlink
+  exceptions before and after mutation, subsequent human edits, unreadable
+  verification, and end-to-end PDIC-save errors after a completed OCRed
+  compensation. The original PDIC-save failure remains the reported failure
+  when compensation is confirmed complete.
+- This establishes **observed final-state recovery**, not provenance of
+  which process caused the change: an external writer can mimic old bytes
+  or race after inspection. There is still no cross-process CAS, durable
+  two-file transaction, process/power-loss recovery or atomic ABA guard.
+  PR #663 remains Draft/Open/Unmerged. Real dictionary scan, human
+  proofreading, save and reopen acceptance remains **OPEN / NOT PASSED**.
+  Only completed CI and OCR Smoke on the final HEAD can validate the round.
+
+### Round 130 (2026-10-27): verify OCRed compensation after normal filesystem returns
+
+- Baseline Round 129 HEAD `61fe5bb1a27f8180f98a20b0c76d266ae6c383aa`:
+  six-platform CI #40459600289 and OCR Platform Smoke #40459600138
+  both completed successfully before this change.
+- `src/picture_capture/ocr/batch_publication.py` already inspected
+  `os.replace`/`Path.unlink` when those operations **raised** after
+  mutating OCRed. A different failure remained: a faulty filesystem wrapper
+  or test adapter could return **normally without doing the requested
+  mutation**, or an external writer could change the target before the
+  caller observed it. The rollback helper would then report success while
+  the old OCRed had not actually been restored or removed.
+- After a normally returning `unlink`, verify that OCRed is absent.
+  After a normally returning `os.replace`, verify that the staging
+  pathname is gone **and** OCRed contains the exact original bytes.
+  Unproven compensation raises a recovery error; an unmoved staging file
+  is cleaned through the existing exception cleanup path. No destructive
+  operation is retried against a possibly newer human edit.
+- `tests/test_issue562_ocred_rollback_success_verification_round130_20261027.py`
+  adds six parameterized filesystem/fault-injection cases: no-op replace
+  and unlink, a foreign edit immediately after successful replace/unlink,
+  and end-to-end PDIC-save failure with no-op compensation. Tests assert
+  that the exported sidecar is preserved when rollback did not happen,
+  PDIC is unchanged, both errors are reported, and no rollback temp remains.
+- This is a **post-operation observed-state check**, not proof of writer
+  identity, a cross-process atomic CAS, or crash-safe two-file commit.
+  A non-cooperating writer can still race after inspection; a matching
+  byte pattern does not prove provenance. PR #663 stays Draft/open/unmerged.
+  Real dictionary GUI scan, human proofreading, save and reopen acceptance
+  remains **OPEN / NOT PASSED**. Validate the exact final HEAD's six-platform
+  CI and OCR Platform Smoke before claiming success.
+
+### Round 131 (2026-10-27): verify PDIC ownership after completed OCRed compensation
+
+- Baseline Round 130 HEAD `e5406c55562b78819ed937fedc9415e626f6618f`:
+  six-platform CI #40465636794 and OCR Platform Smoke #40465636849
+  both completed successfully before this change.
+- `ocr/batch_publication.py:_restore_ocred_if_unchanged` previously
+  verified PDIC only **before** the compensating OCRed `os.replace` or
+  `unlink`. A filesystem adapter can complete that operation and then
+  change PDIC (or make it unreadable) before returning. The caller could
+  then report only the original export/PDIC/SECTION error, incorrectly
+  implying the old two-file pair had been recovered.
+- After a *real* OCRed restoration or deletion, re-run the existing
+  PDIC ownership callback. If it fails, report that OCRed compensation
+  has already completed but the PDIC pair is now changed/indeterminate.
+  Preserve both observed disk files; **never retry** a destructive
+  rollback. An unchanged OCRed sidecar remains a no-op without a new
+  mutation/verification callback.
+- `tests/test_issue562_post_rollback_pdic_ownership_round131_20261027.py`
+  adds 12 cross-product fault-injection cases (PDIC-save error,
+  OCRed-export error, SECTION context error × restore/delete × changed/
+  unreadable PDIC), two normal compensation cases asserting both PDIC
+  checks, and a no-op case. It checks exact sidecar bytes, no repeat
+  mutation, no orphan rollback temp and conservative error reporting.
+- This detects only changes visible at the final optimistic check. It
+  does not implement atomic CAS, a durable OCRed/PDIC two-file transaction,
+  writer provenance, or process/power-loss recovery; a foreign write can
+  still race afterward. PR #663 remains Draft/Open/Unmerged. Real
+  dictionary scan, human proofreading, save and reopen acceptance is
+  **OPEN / NOT PASSED**. Review completed exact-HEAD six-platform CI and
+  OCR Platform Smoke before claiming the new round passed.
+
+### Round 132 (2026-10-27): retain primary and compensation failure chains
+
+- Verified baseline exact HEAD `f23cab08e0778095a095b36a66749fd4ac90438d`:
+  six-platform CI #40472126753 completed **SUCCESS** (6/6; risk gate
+  successful), OCR Platform Smoke #40472126747 completed **SUCCESS** (3/3).
+- `ocr/batch_publication.py:publish_existing_pdic_ocr` previously used
+  `raise ... from context_error` when a SECTION validator failed *and*
+  compensating OCRed restoration failed. This made the original SECTION
+  failure the explicit exception cause, hiding the more important rollback
+  failure from programmatic traceback/cause inspection. Other publication
+  routes had a rollback cause but retained the primary exception only as
+  formatted text.
+- The three failure routes (OCRed export, SECTION/source context, PDIC save)
+  now preserve both original exception objects on the raised `RuntimeError`
+  as `publication_error` and `rollback_error`. All three explicitly chain
+  from `rollback_error`, preserving its nested PDIC ownership/permission
+  cause while keeping the original export/SECTION/PDIC exception available
+  for diagnostics. Existing Chinese error text and the success/no-op
+  compensation behavior are unchanged.
+- `tests/test_issue562_compensation_exception_chain_round132_20261027.py`
+  adds 12 real-sidecar fault-injection combinations (three failure routes,
+  replace/unlink compensation, and late PDIC edit/read denial). It checks
+  original exception identity, explicit cause chain, exact disk bytes,
+  absence of duplicate destructive rollback and temp-file leaks.
+- This improves failure reporting, **not** atomicity or durability.
+  Non-cooperating writers can still race after the last optimistic read;
+  cross-process CAS, two-file crash-safe commit and power-loss recovery
+  remain unresolved. PR #663 must stay Draft/Open/unmerged. Real scanned
+  dictionary-page GUI, proofreading, save/reopen acceptance is still
+  **OPEN / NOT PASSED**; do not substitute synthetic CI.
+- Verify **both** new exact-head CI and OCR Platform Smoke to completion
+  before reporting this round as green.
+
+### Round 133 (2026-10-27): preserve ambiguous PDIC ownership-read diagnostics
+
+- Baseline exact HEAD `5f27e361d91e41b1a8abd859237f057aff4d40cc`:
+  six-platform CI #40479077409 **SUCCESS** (6/6; risk gate success),
+  OCR Platform Smoke #40479077387 **SUCCESS** (3/3).
+- When OCRed export raised and the subsequent PDIC ownership read failed,
+  the original exporter exception was previously lost from the raised
+  exception object. Conversely, when PDIC save raised and its post-error
+  ownership read failed, the read exception was only formatted into text
+  and not available as the explicit exception cause.
+- `ocr/batch_publication.py` now attaches `publication_error` (the original
+  export/save failure) and `verification_error` (the exact PDIC read failure)
+  to the resulting `RuntimeError`, with `__cause__` pointing to the
+  verification error. Existing conservative no-unilateral-rollback behavior
+  and Chinese user-facing error messages are retained.
+- `tests/test_issue562_uncertain_pdic_diagnostics_round133_20261027.py`
+  injects read denial after export or save failure, for both existing and
+  newly created OCRed files (four combinations), and asserts both exception
+  identities, no rollback or duplicate PDIC write, unchanged PDIC bytes,
+  preserved exported OCRed bytes, and no rollback temp artifacts.
+- This change improves recovery diagnostics, **not** two-file atomicity,
+  crash consistency or cross-process CAS. An unreadable PDIC may already
+  have changed. Do not infer successful compensation from the absence of a
+  second write.
+- PR #663 remains **Draft/Open/unmerged**. Representative real dictionary
+  scan, manual proofreading, save/reopen acceptance remains
+  **OPEN / NOT PASSED**. Review new exact-head six-platform CI and OCR
+  Platform Smoke before reporting this round as green.
+
+### Round 134 (2026-10-27): retain failed-export OCRed read diagnostics
+
+- Baseline exact HEAD `0e7a66de984b7423a6fd7acb301b08166c9b9ac6`: six-platform CI #40486489712
+  **SUCCESS** (6/6 and risk-tier gate), OCR Platform Smoke #40486489877
+  **SUCCESS** (3/3); documentation architecture check skipped.
+- After an OCRed exporter raised, a subsequent OCRed ownership read could
+  also raise (for example, permission denial). Previously the resulting
+  RuntimeError was explicitly chained only to the exporter, and the exact
+  OCRed read exception was unavailable through `verification_error`.
+- The failed-export OCRed read branch now retains both
+  `publication_error` (original exporter exception) and
+  `verification_error` (exact OCRed read exception), with the read error
+  as `__cause__`. Existing Chinese diagnostics and conservative behavior
+  are retained: no PDIC save and no OCRed-only rollback without ownership.
+- `tests/test_issue562_unreadable_ocred_diagnostics_round134_20261027.py`
+  injects the second OCRed read failure across four combinations of
+  existing/absent sidecar and exporter write/no-write. It checks exception
+  identity, byte preservation, no PDIC write, no compensation and no temp.
+- This is diagnostic recovery hardening, not cross-process atomic CAS or a
+  crash-safe OCRed/PDIC transaction. The true sidecar state remains uncertain
+  when the ownership read fails; manual reconciliation may be required.
+- PR #663 stays **Draft/Open/unmerged**. Representative real dictionary
+  scan, proofreading, save/reopen acceptance stays **OPEN / NOT PASSED**.
+  Verify both new exact-head workflows before reporting success.
+
+### Round 135 (2026-10-27): fail closed when the final pre-PDIC OCRed read is denied
+
+- Baseline exact HEAD `daf594194b936f651e77bd5f9d4d4ec8c5adeada`:
+  six-platform CI #40494422649 **SUCCESS** (6/6; risk-tier gate success),
+  OCR Platform Smoke #40494422910 **SUCCESS** (3/3); architecture
+  documentation check skipped.
+- Owner: `ocr/batch_publication.py:publish_existing_pdic_ocr`, called from
+  `ocr/batch_existing_entries.py` by the existing-PDIC batch OCR flow.
+  OCRed is the auxiliary text sidecar; PDIC remains the marker source of
+  truth. No serialization or UI contract changes.
+- The post-export OCRed read can succeed, then the subsequent PDIC ownership
+  check may take time, and the **last OCRed read before PDIC save** may fail.
+  Previously that `OSError` escaped without identifying the unverified
+  OCRed/PDIC pair or exposing a stable `verification_error` attribute.
+- The last-read failure now raises a contextual `RuntimeError` chained to
+  the original read exception, retaining it as `verification_error`.
+  Neither PDIC publication nor an OCRed-only rollback is attempted when
+  the latest OCRed ownership cannot be established.
+- `tests/test_issue562_ocred_pre_pdic_read_failure_round135_20261027.py`
+  injects the third OCRed read denial in four combinations of old OCRed
+  present/absent and exporter write/no-write. It verifies the exact
+  exception identity/cause, no PDIC writer or rollback, byte-exact disk
+  preservation and no compensation temp artifacts.
+- This is a conservative diagnostic boundary, not cross-process atomic
+  CAS. A non-cooperating writer can still change files after the final
+  successful read; crash-safe two-file commit and power-loss recovery
+  remain unresolved. PR #663 remains **Draft/Open/unmerged**; real scanned
+  dictionary manual GUI/OCR/PDIC/PPP/SECTION save/reopen acceptance remains
+  **OPEN / NOT PASSED**. Verify the new exact-head CI and OCR Smoke
+  separately before claiming a pass.
+
+
+### Round 147 (2026-10-27): verify postcommit PDIC for no-validator OCR batch callers
+
+- Exact pre-change PR HEAD `85b0ef9ee07912fb7cbc7d9d42537cd8d82b9d0e` had six-platform CI [40547867122](https://github.com/chigre/Picture_Capture/actions/runs/40547867122) **SUCCESS 6/6** and OCR Platform Smoke [40547867098](https://github.com/chigre/Picture_Capture/actions/runs/40547867098) **SUCCESS 3/3**. These results do not validate Round 147; check new exact-head workflows separately.
+- Owner: `ocr/batch_publication.py:publish_existing_pdic_ocr`. Existing-PDIC batch OCR publishes OCRed first, then PDIC. The optional `validate_page_context` checks SECTION/source-image provenance, but legacy/direct callers may omit it. Previously the post-writer PDIC read and late PDIC recheck were conditional on that callback; a writer that returned normally after deleting PDIC, or a concurrent PDIC change during the post-writer OCRed read, could be reported as a clean pair.
+- After the writer returns, **all callers** now read back PDIC and require it to exist. No-validator callers additionally re-read PDIC after the postcommit OCRed check. Missing/unreadable or changed PDIC refuses success **without reverting either already-published file**. Read-denial diagnostics retain the original exception via `verification_error`. Existing validator-enabled call order and final provenance checks remain unchanged.
+- Regression: `tests/test_issue562_no_validator_postcommit_pdic_round147_20261027.py` covers silent PDIC removal, first/final postcommit PDIC read failure, concurrent replace/delete during the OCRed read, and normal no-validator publication. These are synthetic real-filesystem fault injections, not actual scanned-page acceptance.
+- Limitation: exact intended PDIC output bytes are not available to this owner, so a writer that silently leaves a *valid but stale* PDIC file unchanged cannot be distinguished by these checks. Optimistic readbacks are **not** cross-process CAS/locking or power-loss-atomic OCRed+PDIC commit. Real scanned dictionary GUI/OCR/PDIC/PPP/SECTION/crop/export manual gate stays **OPEN / NOT PASSED**. PR #663 must stay **Draft / Open / Unmerged**.

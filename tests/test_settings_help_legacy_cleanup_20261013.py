@@ -100,19 +100,43 @@ def test_crop_input_controls_dispatch_distinct_right_panel_explanations():
     assert recorded[0] != recorded[1]
 
 
-def test_state_initialization_requires_no_visual_widgets_and_binds_traces_once():
-    import tkinter as tk
+def test_state_initialization_requires_no_visual_widgets_and_binds_traces_once(monkeypatch):
     from picture_capture.models import AppSettings
+    from picture_capture.ui import quick_state
     from picture_capture.ui.quick_state import (
         QUICK_FIELD_TYPES, QUICK_BOOLEAN_FIELDS, QUICK_COLOR_FIELDS,
         initialize_quick_state,
     )
 
-    interp = tk.Tcl()  # No display server / Tk widgets required.
+    # This is a pure quick-state/trace ownership contract, not a Tcl runtime
+    # integration test. Hosted Windows Python 3.13 may intermittently fail
+    # reading its own init.tcl; real Tcl/Tk stays covered by the separate
+    # Windows/macOS GUI and managed-project smoke jobs.
+    class TraceVariable:
+        def __init__(self, master=None, value=None):
+            self.master = master
+            self.value = value
+            self.traces = []
+        def get(self):
+            return self.value
+        def set(self, value):
+            self.value = value
+            for callback in tuple(self.traces):
+                callback("variable", "index", "write")
+        def trace_add(self, mode, callback):
+            assert mode == "write"
+            self.traces.append(callback)
+
+    class TraceBoolean(TraceVariable):
+        def get(self):
+            return bool(self.value)
+        def set(self, value):
+            super().set(bool(value))
+
+    monkeypatch.setattr(quick_state.tk, "StringVar", TraceVariable)
+    monkeypatch.setattr(quick_state.tk, "BooleanVar", TraceBoolean)
     calls = []
     app = SimpleNamespace(
-        tk=interp.tk,
-        _root=lambda: interp,
         settings=AppSettings(),
         _quick_percent_parameter_changed=lambda key: calls.append(("percent", key)),
         _quick_pixel_parameter_changed=lambda key: calls.append(("pixel", key)),

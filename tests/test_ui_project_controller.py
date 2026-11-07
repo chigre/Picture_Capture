@@ -236,10 +236,12 @@ def test_project_controller_wiring_keeps_picture_capture_app_compatibility_metho
 
     imports = app[: app.index("class PictureCaptureApp")]
     assert "ProjectController" in imports
-    assert "self.project_controller = ProjectController(self)" in app
-    assert app.index("self.project_controller = ProjectController(self)") < app.index("self._build_ui()")
+    startup = (ROOT / "src/picture_capture/ui/main_app_initialization.py").read_text(encoding="utf-8")
+    assert "_main_app_initialization.initialize_main_app(" in app
+    assert "self.project_controller = ProjectController(self)" in startup
+    assert startup.index("self.project_controller = ProjectController(self)") < startup.index("self._build_ui()")
     assert "def _project_controller_for_call(" in app
-    assert 'self.__dict__.get("project_controller")' in project_session
+    assert 'get_or_create_controller(self, "project_controller", deps.ProjectController)' in project_session
 
     expected = {
         "_choose_new_project_image_suffix": "choose_new_project_image_suffix",

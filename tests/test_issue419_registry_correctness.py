@@ -6,7 +6,7 @@ import threading
 from types import SimpleNamespace
 import weakref
 
-from picture_capture import entry_classification as cls
+from picture_capture.proofreading import classification as cls
 from picture_capture.project import recent_projects
 from picture_capture.models import Entry
 

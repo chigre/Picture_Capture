@@ -80,7 +80,7 @@ def test_critical_paths_full_even_on_import_only_change():
               "src/picture_capture/runtime/environment.py",
               "src/picture_capture/bootstrap/worker.py",
               "src/picture_capture/page_sections.py",
-              "src/picture_capture/image_utils.py",
+              "src/picture_capture/preprocess/analysis_image.py",
               "src/picture_capture/geometry/layout_transform.py",
               "src/picture_capture/refinement/parallel.py",
               "src/picture_capture/refinement/separator_y.py",

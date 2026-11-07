@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from . import detector_legacy as _legacy
-from ..image_utils import build_analysis_image, normalize_page_rgb
+from ..preprocess.analysis_image import build_analysis_image, normalize_page_rgb
 
 for _name in dir(_legacy):
     if _name.startswith("__") or _name == "detect_layout_parameters":

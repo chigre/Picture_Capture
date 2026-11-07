@@ -21,7 +21,9 @@ class LayoutTransform:
     kind: LayoutTransformKind = "identity"
 
     def __post_init__(self) -> None:
-        if self.kind not in {"identity", "mirror_x", "rotate_ccw90", "rotate_cw90"}:
+        if not isinstance(self.kind, str) or self.kind not in {
+            "identity", "mirror_x", "rotate_ccw90", "rotate_cw90",
+        }:
             raise ValueError(f"Unsupported layout transform: {self.kind}")
 
     def canonical_size(self, source_size: tuple[int, int]) -> tuple[int, int]:

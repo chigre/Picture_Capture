@@ -131,29 +131,35 @@ def test_crop_width_lives_in_postproduction_and_reuses_live_float_setting():
     assert QUICK_FIELD_TYPES["right_ratio"] is float
     assert QUICK_FIELD_TYPES["crop_width_percent"] is float
     app = (BASE / "app.py").read_text(encoding="utf-8")
-    assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in app
+    quick_owner = (BASE / "ui/quick_settings_apply.py").read_text(encoding="utf-8")
+    assert "_quick_settings_apply.apply_quick_settings(" in app
+    assert 'if name == "right_ratio" and not 1 <= float(value) <= 100:' in quick_owner
 
 
 def test_review_right_panel_opens_only_reference_list_by_default():
     source = (BASE / "app.py").read_text(encoding="utf-8")
     review_source = (BASE / "ui/review_workspace_workflow.py").read_text(encoding="utf-8")
-    start = source.index("self.review_right_section_expanded = {")
-    end = source.index("self._review_right_sections:", start)
-    initial = source[start:end]
+    init_source = (BASE / "ui/review_window_initialization.py").read_text(encoding="utf-8")
+    assert "_review_window_initialization.initialize_review_window(" in source
+    start = init_source.index("self.review_right_section_expanded = {")
+    end = init_source.index("self._review_right_sections:", start)
+    initial = init_source[start:end]
     assert 'value=(key == "reference")' in initial
     assert '("display", "digit", "accent", "ocr", "network", "reference")' in initial
     assert 'value=(key not in {"digit", "accent"})' not in initial
     assert 'right, "reference", "参考词表",' in review_source
     assert 'fill="both", expand=True, pady=(0, 0)' in review_source
+    events_source = (BASE / "ui/review_layout_events.py").read_text(encoding="utf-8")
     assert 'def _toggle_review_right_section(self, key: str)' in source
-    assert 'body.pack_forget()' in source
-    assert 'body.pack(fill="both", expand=True)' in source
+    assert "_review_layout_events._toggle_review_right_section(" in source
+    assert 'body.pack_forget()' in events_source
+    assert 'body.pack(fill="both", expand=True)' in events_source
 
 
 def test_layout_autodetect_button_reuses_seven_field_range_detector():
     source = Path(compact_layout_profile_menu.__file__).read_text(encoding="utf-8")
     app_source = (BASE / "app.py").read_text(encoding="utf-8")
-    process = (BASE / "processing_core.py").read_text(encoding="utf-8")
+    process = (BASE / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     parent = source.index('auto_row = row()')
     checkbox = source.index('text="使用自动版面参数"', parent)
     button = source.index('text="自动检测", command=app.detect_layout_current', parent)

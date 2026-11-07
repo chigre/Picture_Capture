@@ -55,7 +55,7 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
         ROOT / "src" / "picture_capture" / "bootstrap" / "gui.py"
     ).read_text(encoding="utf-8")
     launcher = (
-        ROOT / "src" / "picture_capture" / "launcher.py"
+        ROOT / "src" / "picture_capture" / "bootstrap" / "launcher.py"
     ).read_text(encoding="utf-8")
 
     assert "from .gui import prepare_gui_application" in application
@@ -63,8 +63,9 @@ def test_gui_composition_is_owned_by_bootstrap_and_launcher_is_only_a_facade() -
     assert "def prepare_gui_application()" in gui
     assert "install_ui_terminology()" not in gui
     assert "install_spawn_detection_runtime" not in gui
-    assert "from .bootstrap.application import build_application" in launcher
-    assert "from .bootstrap.application import main as bootstrap_main" in launcher
+    assert "from .application import build_application" in launcher
+    assert "from .application import main as bootstrap_main" in launcher
+    assert not (ROOT / "src" / "picture_capture" / "launcher.py").exists()
     assert "install_ui_terminology()" not in launcher
     assert "install_spawn_detection_runtime" not in launcher
 
@@ -95,11 +96,15 @@ def test_spawn_detection_routes_through_worker_composition_root() -> None:
         ROOT / "src" / "picture_capture" / "bootstrap" / "worker.py"
     ).read_text(encoding="utf-8")
     processing = (
-        ROOT / "src" / "picture_capture" / "processing.py"
+        ROOT / "src" / "picture_capture" / "processing/__init__.py"
     ).read_text(encoding="utf-8")
 
     assert "from .worker import WorkerServices, build_worker_services" in bootstrap_init
     assert "def build_worker_services()" in worker
-    assert "from .bootstrap.worker import build_worker_services" in processing
-    assert "services = build_worker_services()" in processing
+    ordinary_job = (
+        ROOT / "src" / "picture_capture" / "detection" / "ordinary_page_job.py"
+    ).read_text(encoding="utf-8")
+    assert "return _ordinary_page_job.detect_entries_job_impl(" in processing
+    assert "from ..bootstrap.worker import build_worker_services" in ordinary_job
+    assert "services = build_worker_services()" in ordinary_job
     assert "install_spawn_detection_runtime" not in processing

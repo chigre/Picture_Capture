@@ -73,7 +73,9 @@ def test_new_project_ui_exposes_defaults_and_existing_volume_source():
     gui = (root / "app.py").read_text(encoding="utf-8")
     project_session = (root / "ui/project_session_workflow.py").read_text(encoding="utf-8")
     controller = (root / "ui/controllers/project.py").read_text(encoding="utf-8")
-    assert "_project_templates.add_default_button(footer, self)" in gui
+    settings_init = (root / "ui/settings/dialog_initialization.py").read_text(encoding="utf-8")
+    assert "_settings_dialog_initialization.initialize_settings_dialog(" in gui
+    assert "_project_templates.add_default_button(footer, self)" in settings_init
     assert "_project_templates.apply_parameters_to_project(project, parameter_template_root)" in project_session
     assert 'title="选择要复制参数的已有项目目录"' in controller
     assert '"parameter_template_root": template_root' in controller

@@ -55,7 +55,7 @@ def test_prepared_analysis_reuse_is_opt_in_and_pixel_identical(monkeypatch):
     import numpy as np
     from PIL import Image
     from types import SimpleNamespace
-    from picture_capture.image_utils import build_analysis_image
+    from picture_capture.preprocess.analysis_image import build_analysis_image
 
     arr = np.full((45, 37, 3), 255, dtype=np.uint8)
     arr[10:30, 12:15] = 0

@@ -99,16 +99,20 @@ def test_no_auxiliary_only_export_when_no_real_entry():
 def test_preview_and_real_export_use_same_crop_planner():
     root = Path(__file__).resolve().parents[1] / "src" / "picture_capture"
     app = (root / "app.py").read_text(encoding="utf-8")
-    core = (root / "processing_core.py").read_text(encoding="utf-8")
+    core = (root / "runtime/processing_core_runtime.py").read_text(encoding="utf-8")
     owner = (root / "crop" / "page_workflow.py").read_text(encoding="utf-8")
-    assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in app
+    illustration_owner = (root / "crop" / "illustration_export.py").read_text(encoding="utf-8")
+    canvas_owner = (root / "ui" / "main_canvas_render_workflow.py").read_text(encoding="utf-8")
+    assert "_main_canvas_render._current_page_crop_plan(" in app
+    assert "auxiliary_lines=list(self._auxiliary_edits.lines)" in canvas_owner
     # Crop planning and export are now physically owned by crop/page_workflow.
     # Verify that both public entry points compose this same canonical owner.
     assert "pieces = partition_entry_pieces(" in owner
     assert "auxiliary_gaps=auxiliary_gaps" in owner
     assert "return _page_workflow.build_page_crop_plan(" in core
     assert "return _page_workflow.split_whole_entries(" in core
-    assert owner.count('read_auxiliary_lines(image_path)') + core.count(
+    assert '_illustration_export.split_illustrations_impl(' in core
+    assert owner.count('read_auxiliary_lines(image_path)') + illustration_owner.count(
         'read_auxiliary_lines(image_path)'
     ) >= 2
     assert '"auxiliary-overlay"' in (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
@@ -174,7 +178,9 @@ def test_shift_click_routing_and_direct_delete_chip_are_wired():
     source = (root / "app.py").read_text(encoding="utf-8")
     controller = (root / "ui" / "auxiliary_line_controller.py").read_text(encoding="utf-8")
     pointer_source = (root / "ui/canvas_pointer_workflow.py").read_text(encoding="utf-8")
-    assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in source
+    owner = (root / "ui/main_workspace_build.py").read_text(encoding="utf-8")
+    assert "_main_workspace_build.build_ui(" in source
+    assert 'self.canvas.bind("<Shift-Button-1>", self.canvas_left_click)' in owner
     assert 'self._auxiliary_controller.delete_at_chip(x, y)' in pointer_source
     assert 'self._auxiliary_controller.add(x, y)' in pointer_source
     assert 'not self._section_editing and not self.polygon_draw_var.get()' in pointer_source

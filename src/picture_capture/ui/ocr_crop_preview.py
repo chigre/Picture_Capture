@@ -11,7 +11,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from ..entry_classification import get_entry_classification
+from ..proofreading.classification import get_entry_classification
 from ..ocr.entry_crop import (
     entry_ocr_crop_box,
     resolve_entry_ocr_row_metrics,

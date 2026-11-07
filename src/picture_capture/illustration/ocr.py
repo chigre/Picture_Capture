@@ -15,7 +15,7 @@ from PIL import Image
 
 from .entries import IllustratedEntry, make_entry
 from .profile import effective_ocr_roi, tesseract_languages, languages
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 from ..ocr_channel import OcrChannelSession
 from ..ref.ocr import local_ref_ocr_plan
 

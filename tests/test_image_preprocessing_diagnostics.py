@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from picture_capture import image_preprocessing
+from picture_capture.preprocess import pipeline as image_preprocessing
 from picture_capture.preprocess import constants as image_preprocessing_constants
 from picture_capture.preprocess import reporting as image_preprocessing_reporting
 
@@ -37,7 +37,7 @@ def test_phase7r_preprocessing_constants_keep_stable_old_module_aliases() -> Non
 def test_phase7r_diagnostic_export_keeps_historical_wrapper_path() -> None:
     assert (
         image_preprocessing.export_diagnostic_json.__module__
-        == "picture_capture.image_preprocessing"
+        == "picture_capture.preprocess.pipeline"
     )
 
 
@@ -78,5 +78,5 @@ def test_phase7r_reporting_owner_has_no_runtime_back_import() -> None:
     source = Path(image_preprocessing_reporting.__file__).read_text(
         encoding="utf-8"
     )
-    assert "from .image_preprocessing import" not in source
-    assert "import picture_capture.image_preprocessing" not in source
+    assert "from .preprocess.pipeline import" not in source
+    assert "import picture_capture.preprocess.pipeline" not in source

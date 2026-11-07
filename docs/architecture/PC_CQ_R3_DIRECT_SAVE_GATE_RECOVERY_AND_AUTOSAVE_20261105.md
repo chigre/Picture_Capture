@@ -1,0 +1,32 @@
+# PC-CQ / R3 — direct-save gate recovery and autosave exception truth (2026-11-05)
+
+## Ownership and ground truth
+Canonical repository `chigre/PictureCapture`; main `ec20989ea8c026cca5337293e67850b6b6df30f2`. Only development pull request [#663](https://github.com/chigre/PictureCapture/pull/663), Draft / Open / Unmerged, branch `refactor/562-retire-root-image-utils-20261024`. This document is a synthetic E2 engineering checkpoint and is **not** human R3 E3 acceptance.
+
+## Exact CI regression and safe restoration
+A one-commit integration from [#665](https://github.com/chigre/PictureCapture/pull/665) yielded source HEAD [`f6b1fdfa12d87c816a24a54fb9aa1c9998bc290f`](https://github.com/chigre/PictureCapture/commit/f6b1fdfa12d87c816a24a54fb9aa1c9998bc290f), replacing guarded R3 ReviewWindow saves with `direct_review_save`. [CI #42005854999](https://github.com/chigre/PictureCapture/actions/runs/42005854999) FAILED: Ubuntu Python3.10 59 failed / 5652 passed / 3 skipped, including tests proving detached human sidecar identity, refused conflicting visible input, foreign writer preservation, autosave truth and Undo/evidence hooks. These are genuine guard regressions, not an excuse to delete or change old tests.
+
+Fast-forward source [`1c42e06e4bae4a78e42ec6feeb80065e81775173`](https://github.com/chigre/PictureCapture/commit/1c42e06e4bae4a78e42ec6feeb80065e81775173) restored exactly four historically GREEN modules:
+- `src/picture_capture/proofreading/review_bundle.py`
+- `src/picture_capture/ui/review_page_lifecycle.py`
+- `src/picture_capture/ui/review_simplified_workflow.py`
+- `src/picture_capture/ui/review_workspace_workflow.py`
+
+The two newly introduced direct-save synthetic test files and the module itself were retained for isolation; no test skipped, weakened, deleted or xfailed. This first fix's [CI #42006797460](https://github.com/chigre/PictureCapture/actions/runs/42006797460) reduced macOS3.13 to four new-test failures / 5708 passed / 2 skipped, revealing two narrow legitimate automatic-text cases rather than reopening the 59 regressions.
+
+Follow-up source [`3ad4f9424a2394d70f8a7c16fd3bccf95de1d84f`](https://github.com/chigre/PictureCapture/commit/3ad4f9424a2394d70f8a7c16fd3bccf95de1d84f) leaves guarded ownership intact while accepting frozen/live automatic simplified display witnesses and a strictly SAME-Entry, already-saved automatic record's source_word-only in-memory update with detached historic HUMAN sidecar byte-exact. **Its exact HEAD gates were verified:** [CI #42007346302](https://github.com/chigre/PictureCapture/actions/runs/42007346302) six OS/Python jobs and Risk tier/gate SUCCESS, Ubuntu Python3.13 5711 passed / 3 skipped; [OCR #42007346636](https://github.com/chigre/PictureCapture/actions/runs/42007346636) three OS SUCCESS; [CodeQL #42007340749](https://github.com/chigre/PictureCapture/actions/runs/42007340749) Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED, not PASS.
+
+## New independent R3 autosave failure: RED-first
+Previous guarded `review_page_lifecycle.autosave_commit` cleared `_r3_autosave_unconfirmed` **before** bridging main Tk text or obtaining a trusted snapshot/bundle commit. If any of these threw, an independent later successful PPP save could display `已自动保存` although original ReviewWindow text was never confirmed.
+
+Test-only [`02c34bbb7fcd307575c1966461dc70dc214ddc8f`](https://github.com/chigre/PictureCapture/commit/02c34bbb7fcd307575c1966461dc70dc214ddc8f) added `tests/test_r3_autosave_exception_unconfirmed_20261105.py` with three exception cases (bridge/snapshot/bundle), PPP-only success follow-on and a positive verified clean no-op. [RED CI #42008192926](https://github.com/chigre/PictureCapture/actions/runs/42008192926) Ubuntu Python3.13 confirmed **exactly 3 intended failures / 5712 passed / 3 skipped**; Ubuntu Python3.10 independently had the same three intended failures. Only the new failure tests failed.
+
+Minimal source [`d12c66bfdb5f73814031a185f3e3629b58e4ac63`](https://github.com/chigre/PictureCapture/commit/d12c66bfdb5f73814031a185f3e3629b58e4ac63) changes `src/picture_capture/ui/review_page_lifecycle.py` only: mark unconfirmed before bridge, and clear only after verified clean no-op or successful protected R3 save. There is no change to R3 persistence schema, source XY, publishing protocol, opt-in defaults or test expectations. [Exact-source CI #42008767678](https://github.com/chigre/PictureCapture/actions/runs/42008767678) Ubuntu Python3.13 shows **5715 passed / 3 skipped**, architecture guard, wheel and F821 success. The six OS/Python and Risk-tier gate must be read in their final state (never treat IN_PROGRESS as PASS). [OCR #42008768039](https://github.com/chigre/PictureCapture/actions/runs/42008768039) 3/3 SUCCESS; [dynamic CodeQL #42008761948](https://github.com/chigre/PictureCapture/actions/runs/42008761948) Python/Actions 2/2 SUCCESS. Documentation architecture check SKIPPED.
+
+## Remaining safety inventory
+- `proofreading/direct_review_save.py` is retained from #665 but the restored guarded ReviewWindow lifecycle does not dispatch to it. Treat it as an unaccepted **candidate**, not as proven production save or evidence that bypassing R3 is safe. Next focused synthetic audit: the direct writer reads old PDIC/sidecar bytes and proposes file writes but has no guaranteed current-byte prepublication check; test a foreign human sidecar write **after** snapshot and **before** publish. Do not claim filesystem CAS, cross-file atomicity, or foreign-byte rollback.
+- R4.2 queue: source-bound async epoch/worker/callback and SECTION/crop prefetch/save consistent writes; don't reopen prior focused PDIC second witness absent a new counterexample.
+- Open issues #503/#562/#483. Human Windows R3 E3, #483 W1–W11, #503 human Undo/Redo, actual dictionary/PDIC/PPP/SECTION/Profile/OCR scan/save/reopen, R6 real labels and R8 real scan all **NOT PERFORMED / DEFERRED**. No private data, auto learning or experiments enabled.
+
+## One-command-equivalent next hourly instruction
+**Read live #663 HEAD and exact-head CI/OCR/CodeQL first**, then inspect `docs/roadmaps/CORE_QUALITY_STATE.json` and `CORE_QUALITY_RESUME.md`; resolve current gate failures before code edits. After source gates finish, use a fresh synthetic test-only RED to verify the previously unwired direct saver cannot overwrite a changed external human sidecar, or advance R4.2 independent source-owner defect. Keep one Draft PR, no force push, merge, Ready, issue closure, or real operator tasks.

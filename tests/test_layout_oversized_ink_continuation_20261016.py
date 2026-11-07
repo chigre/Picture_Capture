@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
 
-from picture_capture.entry_classification import register_layout_line_classification
+from picture_capture.proofreading.classification import register_layout_line_classification
 from picture_capture.layout.oversized_ink_continuation import (
     suppress_oversized_ink_continuation,
 )

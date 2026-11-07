@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..proofreading.simplified_review import source_word_conflicts
+
 if TYPE_CHECKING:
     import tkinter as tk
     from PIL import Image
@@ -152,6 +154,33 @@ def _build(self, deps: ReviewWorkspaceDeps) -> None:
         filter_row2, from_=1, to=500, increment=1, width=6,
         textvariable=self.focused_batch_size_var, style="PCR.Compact.TSpinbox",
     ).pack(side="left")
+    filter_risk_row = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
+    filter_risk_row.pack(fill="x", pady=(3, 0))
+    ttk.Checkbutton(
+        filter_risk_row,
+        text="本次筛选：已核验来源的高风险优先（默认关闭）",
+        variable=self.focused_risk_priority_var,
+    ).pack(side="left")
+    ttk.Checkbutton(
+        filter_risk_row,
+        text="下次 OCR 批量画线记录来源证明（需重新识别，默认关闭）",
+        variable=self.focused_risk_capture_var,
+    ).pack(side="left", padx=(9, 0))
+    ttk.Label(
+        filter_risk_row, text="勾选变化后请点击「筛选」生效。"
+    ).pack(side="left", padx=(7, 0))
+    filter_timing_row = ttk.Frame(self.focused_panel_body, style="PCR.Surface.TFrame")
+    filter_timing_row.pack(fill="x", pady=(3, 0))
+    ttk.Checkbutton(
+        filter_timing_row,
+        text="记录本次筛选阶段耗时（仅本地内存，不保存文字；默认关闭）",
+        variable=self.focused_timing_var,
+    ).pack(side="left")
+    ttk.Label(
+        filter_timing_row,
+        textvariable=self.focused_timing_summary_var,
+        wraplength=650, justify="left",
+    ).pack(side="left", padx=(10, 0))
     # Main review strip: vertical previous/next buttons flank the scrollable rows.
     strip = ttk.Frame(left, style="PCR.Surface.TFrame")
     strip.pack(fill="both", expand=True, padx=(4, 4), pady=(0, 4))
@@ -681,13 +710,51 @@ def _request_render_rows(
         if requested_auto_zoom != bool(self.review_zoom_auto):
             self._request_render_rows(focus_index=self._review_render_focus_index)
             return
+        # A crop belongs to the exact geometry inputs captured at dispatch.
+        # The worker may finish after manual zoom, viewport or settings change;
+        # never paint those stale pixels over the current human editors.
+        try:
+            geometry_stale = (
+                int(self.parent.current_index) != page_index
+                or replace(self.parent.settings) != settings
+                or max(1, int(self.parent.canvas.winfo_width())) != viewer_width
+                or self._review_image_area_width() != auto_image_area_width
+                or (
+                    not requested_auto_zoom
+                    and max(0.01, float(self.review_zoom)) != review_zoom
+                )
+            )
+        except (tk.TclError, RuntimeError, ValueError, TypeError):
+            return
+        if geometry_stale:
+            self._request_render_rows(focus_index=self._review_render_focus_index)
+            return
         if not self.parent.current_page or self.parent.current_page.stem != result_stem:
             return
+        current_entries = self.parent._ordered_entries_reading_order()
         current_signature = tuple(
             (id(entry), int(entry.x), int(entry.y), str(entry.word))
-            for entry in self.parent._ordered_entries_reading_order()
+            for entry in current_entries
         )
         if current_signature != result_signature:
+            self._request_render_rows(focus_index=self._review_render_focus_index)
+            return
+        # Entry.word is the committed model value, not the human's current Tk
+        # buffer. Crops were measured using editor_texts before this worker
+        # launched; a newer unsaved input can require a different crop height.
+        # Preserve that input and rebuild instead of painting stale pixels.
+        try:
+            current_visible = {
+                id(entry): var.get()
+                for entry, var in zip(self._bound_row_entries(), self.vars)
+            }
+            current_editor_texts = tuple(
+                current_visible.get(id(entry), entry.word)
+                for entry in current_entries
+            )
+        except (tk.TclError, RuntimeError):
+            current_editor_texts = None
+        if current_editor_texts != editor_texts:
             self._request_render_rows(focus_index=self._review_render_focus_index)
             return
         if requested_auto_zoom:
@@ -709,15 +776,42 @@ def _request_render_rows(
                 return
         except tk.TclError:
             return
+        # The background-job generation guard rejects superseded requests,
+        # but a page or geometry can change *before* replacement dispatch.
+        # A terminal failure from those old crop inputs must not overwrite the
+        # current page's status or claim ownership of its visible editor rows.
+        try:
+            if (
+                self.parent.project is not project
+                or self.parent.current_page != page
+                or int(self.parent.current_index) != page_index
+                or replace(self.parent.settings) != settings
+                or bool(self.review_zoom_auto) != requested_auto_zoom
+                or self._review_image_area_width() != auto_image_area_width
+                or max(1, int(self.parent.canvas.winfo_width())) != viewer_width
+                or (
+                    not requested_auto_zoom
+                    and max(0.01, float(self.review_zoom)) != review_zoom
+                )
+            ):
+                return
+        except (tk.TclError, RuntimeError, ValueError, TypeError, AttributeError):
+            return
         self.parent.status_var.set(f"校对裁剪生成失败：{exc}")
         if not self.rows.winfo_children():
             ttk.Label(
                 self.rows, text=f"校对裁剪生成失败：{exc}",
             ).grid(row=0, column=0, sticky="ew", padx=8, pady=20)
 
-    self.parent._start_ui_worker(
-        self._review_render_worker_key, worker, done, failed,
-    )
+    # A failed constructor/start or Tk scheduling attempt has no async
+    # callback. Surface this failure without destroying existing editors;
+    # the user may explicitly request the crops again after the failure.
+    try:
+        self.parent._start_ui_worker(
+            self._review_render_worker_key, worker, done, failed,
+        )
+    except (OSError, RuntimeError, tk.TclError) as exc:
+        failed(exc, "")
 
 
 def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Image] | None = None) -> None:
@@ -735,7 +829,42 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         self._request_render_rows(focus_index=self.active_index)
         return
     current_stem = self.parent.current_page.stem if self.parent.current_page else ""
+    if not self.parent.image:
+        return
+    # Validate crop cardinality BEFORE destroying the previous editors.
+    # An async crop from an earlier layout generation cannot clear human text.
+    ordered = self.parent._ordered_entries_reading_order()
+    if len(preloaded_crops) < len(ordered):
+        self._request_render_rows(focus_index=self.active_index)
+        return
+    pending_original_words = {}
     if self._rendered_page_stem and self._rendered_page_stem == current_stem:
+        from ..proofreading.review_pending_text import capture_pending_review_words
+        try:
+            pending_original_words = capture_pending_review_words(
+                getattr(self, "row_entries", ()),
+                getattr(self, "vars", ()),
+                getattr(self, "_review_render_original_words", {}),
+                getattr(self.parent, "entries", ()),
+            )
+        except RuntimeError:
+            self.parent.status_var.set(
+                "校对原词尚有未保存输入且页面来源无法确认；"
+                "保持现有编辑框，请先保存或核对后再刷新切片。"
+            )
+            return
+        # The simplified capture helper returns silently when a partial Tk
+        # redraw has no provable row owner. Continuing below would destroy the
+        # human text buffers despite that failed provenance check.
+        # Initial/legacy views with no simplified editors may still render.
+        if getattr(self, "simplified_vars", ()):
+            from .review_simplified_workflow import _owned_rendered_simplified_rows
+            if _owned_rendered_simplified_rows(self) is None:
+                self.parent.status_var.set(
+                    "简体校对行绑定尚未确认，拒绝刷新切片；"
+                    "人工文字仍保留，请核对后重试。"
+                )
+                return
         self._capture_simplified_edits(self._rendered_page_stem)
     # Pending height-switch jobs belong to the outgoing rendered rows.
     for job in getattr(self, "_review_crop_height_jobs", {}).values():
@@ -759,12 +888,6 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
     self._rendered_page_stem = current_stem
     self.__dict__.pop("_r3_simplified_capture_blocked", None)
     simplified_records = self._simplified_page_records(current_stem) if current_stem else {}
-    if not self.parent.image:
-        return
-    ordered = self.parent._ordered_entries_reading_order()
-    if len(preloaded_crops) < len(ordered):
-        self._request_render_rows(focus_index=self.active_index)
-        return
     self._review_display_crops = list(preloaded_crops)
     self._review_row_pictures.clear()
     words = self.parent._project_words if self.parent.project else set()
@@ -783,7 +906,7 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         )
         self.thumbnails.append(photo)
         self._review_row_pictures.append(picture)
-        var = tk.StringVar(value=entry.word)
+        var = tk.StringVar(value=pending_original_words.get(id(entry), entry.word))
         # Review zoom changes only the cropped line image.  Text-entry font
         # size is a user setting and remains fixed while zooming the image.
         editor_font_size = _review_editor_font_size(self.parent.settings)
@@ -863,8 +986,14 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         )
         simplified_key = simplified_entry_key(entry.x, entry.y)
         saved_simplified = simplified_records.get(simplified_key)
+        source_conflict = source_word_conflicts(saved_simplified, entry.word)
         saved_manual = bool(saved_simplified.get("manual", False)) if saved_simplified else False
         saved_text = str(saved_simplified.get("text", "")) if saved_simplified is not None else None
+        if source_conflict:
+            # Never display an old human correction as this PDIC word merely
+            # because another Entry reused the original pixel coordinate.
+            saved_manual = True
+            saved_text = "⚠来源词条不一致，请核对原词"
         # v2.12.11: once a simplified record exists on disk, its text is the
         # source of truth on reopen, regardless of whether it was originally
         # generated by OpenCC or manually edited.  OpenCC is only used to
@@ -889,6 +1018,10 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
             row=0, column=2, sticky="nsew", padx=(6, 0),
             ipady=max(0, int(self.parent.settings.review_entry_vertical_padding)),
         )
+        if source_conflict:
+            simplified_editor.configure(
+                state="disabled", disabledforeground="#8b1a1a",
+            )
         simplified_search_button = tk.Button(
             editor_frame, text="网查", width=4, takefocus=False,
             relief="flat", bd=0, padx=2, pady=0, cursor="hand2",
@@ -924,6 +1057,8 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         simplified_editor.bind("<<Paste>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
         simplified_editor.bind("<<Cut>>", lambda _e, i=index: self._claim_simplified_clipboard_edit(i))
         simplified_editor.bind("<KeyRelease>", lambda e, i=index: self.on_simplified_key(e, i))
+        # IME/text-service and native menu edits may not emit KeyRelease.
+        simplified_editor.bind("<FocusOut>", lambda e, i=index: self.on_simplified_key(e, i))
         simplified_editor.bind("<Return>", lambda _e, i=index: self.focus_index(i + 1))
         for widget in (picture, sequence_label, crop_row, delete_button, editor_frame, editor, simplified_editor, simplified_search_button):
             widget.bind("<MouseWheel>", self.scroll_rows)
@@ -932,6 +1067,10 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         self.vars.append(var); self.row_entries.append(entry); self.editors.append(editor); self.editor_frames.append(editor_frame)
         self._review_crop_single_flags.append(_focused_review_is_single_character(var.get()))
         var.trace_add("write", lambda *_args, i=index: self._schedule_review_crop_height_update(i))
+        # Preview original-word edits on the main canvas immediately without
+        # touching Entry.word/PDIC before the source-pinned paired save.
+        from ..proofreading.main_editor_sync import bind_review_word_preview
+        bind_review_word_preview(self, index)
         self.simplified_vars.append(simplified_var); self.simplified_editors.append(simplified_editor)
         self.simplified_search_buttons.append(simplified_search_button)
         self.simplified_actual_values.append(simplified_actual)
@@ -947,6 +1086,12 @@ def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Ima
         if saved_simplified is None:
             simplified_records[simplified_key] = materialized_record
             self._simplified_dirty_pages.add(current_stem)
+    # Base words are from the still-owned Entry objects, NOT unsaved Tk
+    # text. This makes later same-page redraws distinguish a human edit
+    # from an externally mutated Entry during an in-flight worker.
+    self._review_render_original_words = {
+        id(entry): str(entry.word) for entry in ordered
+    }
     self.rows.columnconfigure(0, weight=1)
     self._update_title()
     self._refresh_editor_ocr_compare()
@@ -968,6 +1113,17 @@ def _change_review_mode(self, deps: ReviewWorkspaceDeps) -> None:
         self.parent.status_var.set("已选择筛选模式；设置条件后点击【筛选】才会刷新工作区。")
         return
     self._flush_focused_changes_now()
+    if getattr(self, "_filter_rows_active", False) and (
+        self._filter_save_running or self._filter_pending_changes
+    ):
+        # The save was scheduled asynchronously, not committed. Preserve
+        # its visible editor rows and their original page/XY ownership until
+        # completion; a failed worker restores pending edits for retry.
+        self.review_mode_var.set("filter")
+        self.parent.status_var.set(
+            "筛选校对修改尚未保存完成，暂不能切换单页模式。"
+        )
+        return
     self._filter_rows_active = False
     self._set_filter_navigation(False)
     self.parent._invalidate_ui_worker(f"focused-filter-scan-{id(self)}")

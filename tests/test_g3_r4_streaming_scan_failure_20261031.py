@@ -1,0 +1,542 @@
+"""R4.2 synthetic streaming failures must not look like a running or complete scan.
+
+No real dictionary pages, OCR cache, human evidence or persistence writes.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from picture_capture.ui import focused_filter_workflow as workflow
+
+
+class Var:
+    def __init__(self, value):
+        self.value = value
+        self.writes = []
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+        self.writes.append(value)
+
+
+def _stream_fixture(
+    tmp_path, *, before_first_done=False, first_page_error=False,
+    second_page_error=True, first_launch_fault=None,
+    remainder_launch_fault=None,
+):
+    pages = [tmp_path / "001.png", tmp_path / "002.png"]
+    for page in pages:
+        page.with_suffix(".pdic").write_bytes(b"synthetic-pdic-source")
+    calls, workspace = [], []
+    status, indicator = Var(""), Var("")
+
+    def dispatch(*args):
+        calls.append(args)
+        fault = first_launch_fault if len(calls) == 1 else remainder_launch_fault
+        if fault == "refuse":
+            return -1  # Real scheduler closed-worker refusal, no callbacks.
+        if fault is not None:
+            _name, worker, done, failed = args
+            action = fault.removesuffix("_ack")
+            if action == "done":
+                done(worker())
+            elif action == "failed":
+                failed(OSError("PRIVATE_LAUNCH_CALLBACK"), "PRIVATE_TRACE")
+            elif action != "raise":
+                raise AssertionError("invalid fixture fault")
+            # An accepted synchronous callback must be delivered only after
+            # _start_ui_worker returns. A rejected one is never published.
+            if not fault.endswith("_ack"):
+                raise OSError("PRIVATE_LAUNCH_UNACKNOWLEDGED")
+
+    parent = SimpleNamespace(
+        project=SimpleNamespace(root=tmp_path, images=pages),
+        current_page=pages[0],
+        status_var=status,
+        settings=SimpleNamespace(character_height=18),
+        _project_words=[],
+        _parse_page_spec=lambda _: [0, 1],
+        _invalidate_ui_worker=lambda _: None,
+        _start_ui_worker=dispatch,
+    )
+    review = SimpleNamespace(
+        parent=parent,
+        _filter_rows_active=True,
+        _filter_save_running=False,
+        _filter_pending_changes={},
+        _filter_scan_serial=10,
+        _filter_render_serial=4,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _review_render_worker_key="review-initial",
+        review_mode_var=Var("filter"),
+        filter_batch_var=indicator,
+        focused_page_range_var=Var("1-2"),
+        focused_include_mismatch_var=Var(False),
+        focused_include_characters_var=Var(False),
+        focused_exclude_single_var=Var(False),
+        focused_exclude_reference_var=Var(False),
+        focused_risk_priority_var=Var(False),
+        focused_timing_var=Var(False),
+        focused_characters_var=Var(""),
+        focused_batch_size_var=Var("1"),
+        review_ocr_compare_var=Var("fusion"),
+        OCR_COMPARE_LABEL_TO_KEY={"fusion": "fusion"},
+        _persist_focused_filter_settings=lambda: None,
+        _set_filter_navigation=lambda enabled: None,
+        _focused_batch_size=lambda: 1,
+        _filter_available_target_count=lambda: len(review.filtered_targets),
+        _clear_review_workspace=lambda message: workspace.append(message),
+        _update_title=lambda: None,
+        _update_filter_batch_indicator=lambda: None,
+        _request_filter_batch_render=lambda: None,
+        _schedule_filter_next_batch_preload=lambda: None,
+    )
+    def read_pdic(path):
+        if path.stem == "001" and first_page_error:
+            raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
+        if path.stem == "002" and second_page_error:
+            raise OSError("PRIVATE_PATH_DO_NOT_EXPOSE")
+        return [SimpleNamespace(word="fixture", x=13, y=27)]
+
+    deps = SimpleNamespace(
+        messagebox=SimpleNamespace(showerror=lambda *a, **kw: None),
+        _focused_review_character_tokens=lambda _: (),
+        read_pdic=read_pdic,
+        pdic_path=lambda page: page.with_suffix(".pdic"),
+        ocr_cache_root=lambda root: root / "unused-ocr-dir",
+        json=json,
+        _focused_review_is_single_character=lambda _: False,
+        _candidate_for_entry_from_list=lambda *a, **kw: None,
+        _candidate_word_for_ocr_source=lambda *a: "",
+        _review_similarity_key=lambda text: text,
+    )
+    workflow.run_focused_filter(review, deps)
+    if first_launch_fault == "done_ack":
+        assert len(calls) == 2
+        return review, status, indicator, calls, workspace
+    assert len(calls) == 1
+    first_key, first_worker, first_done, _ = calls[0]
+    assert first_key.startswith("focused-filter-scan-")
+    if before_first_done:
+        return review, status, indicator, calls, workspace
+    first_done(first_worker())
+    assert len(calls) == 2
+    assert len(review.filtered_targets) == 1
+    rest_key, rest_worker, rest_done, rest_failed = calls[1]
+    assert rest_key.startswith("focused-filter-scan-rest-")
+    with pytest.raises(OSError):
+        rest_worker()
+    return review, status, indicator, rest_failed, workspace
+
+
+def test_remainder_error_is_explicitly_terminal_without_losing_first_batch(tmp_path):
+    review, status, indicator, failed, workspace = _stream_fixture(tmp_path)
+    previous_targets = list(review.filtered_targets)
+    previous_workspace = list(workspace)
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "")
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in status.get()
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in indicator.get()
+    assert review.filtered_targets == previous_targets
+    assert workspace == previous_workspace
+    assert review._filter_rows_active is True
+
+
+@pytest.mark.parametrize("drift", ("pdic", "ocr", "section", "project"))
+def test_remainder_failure_invalidates_changed_already_scanned_prefix(
+    tmp_path, drift, capsys,
+):
+    """A failed tail cannot preserve an old prefix whose source has changed.
+
+    The first page has already produced a visible complete batch. While the
+    second page's worker fails, a foreign actor changes a first-page source
+    or replaces ProjectState with an equal-root/equal-pages object. Retain
+    human edits but invalidate the old scan completeness/preview ownership.
+    """
+    from picture_capture.persistence.project_storage import (
+        page_sections_read_path_for_image,
+    )
+
+    review, status, indicator, failed, workspace = _stream_fixture(tmp_path)
+    page = tmp_path / "001.png"
+    original_rows = list(review.filtered_targets)
+    human = {"new_word": "human-synthetic-correction"}
+    review._filter_pending_changes = {0: {(13, 27): human}}
+    previous_workspace = list(workspace)
+
+    if drift == "pdic":
+        page.with_suffix(".pdic").write_bytes(b"synthetic-pdic-REPLACED")
+    elif drift == "ocr":
+        cache = tmp_path / "unused-ocr-dir" / "001.json"
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text('{"review_candidates": []}', encoding="utf-8")
+    elif drift == "section":
+        section = page_sections_read_path_for_image(page)
+        section.parent.mkdir(parents=True, exist_ok=True)
+        section.write_bytes(b"synthetic-section-REPLACED")
+    else:
+        project = review.parent.project
+        review.parent.project = SimpleNamespace(
+            root=project.root, images=list(project.images),
+        )
+        assert review.parent.project is not project
+
+    failed(
+        OSError("PRIVATE_REMAINDER_FAILURE_PATH"),
+        "TRACE_PRIVATE_REMAINDER_FAILURE",
+    )
+
+    assert review._filter_scan_epoch_invalidated is True, (
+        "a tail failure cannot preserve an already-scanned changed source"
+    )
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert review._filter_pending_changes[0][(13, 27)] is human
+    assert review.filtered_targets == original_rows
+    assert workspace == previous_workspace
+    assert "来源" in status.get() or "会话" in status.get()
+    assert "PRIVATE_" not in repr(
+        (status.get(), indicator.get(), capsys.readouterr())
+    )
+
+
+def test_stale_remainder_failure_cannot_poison_new_epoch(tmp_path):
+    review, status, indicator, failed, workspace = _stream_fixture(tmp_path)
+    review._filter_scan_serial += 1
+    review._filter_scan_failed = False
+    status.set("new scan running")
+    indicator.set("new batch")
+    failed(OSError("stale PRIVATE_PATH_DO_NOT_EXPOSE"), "")
+    assert review._filter_scan_failed is False
+    assert status.get() == "new scan running"
+    assert indicator.get() == "new batch"
+
+
+def test_initial_worker_failure_is_incomplete_and_redacts_private_paths(tmp_path, capsys):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, first_page_error=True
+    )
+    _, first_worker, _first_done, first_failed = calls[0]
+    with pytest.raises(OSError, match="PRIVATE_PATH_DO_NOT_EXPOSE"):
+        first_worker()
+    first_failed(
+        OSError("PRIVATE_PATH_DO_NOT_EXPOSE"),
+        "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE",
+    )
+    assert review._filter_scan_failed is True
+    assert review._filter_scan_complete is False
+    assert review.filtered_targets == []
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    assert all(
+        "PRIVATE_PATH_DO_NOT_EXPOSE" not in str(item)
+        for item in (status.get(), indicator.get(), *workspace)
+    )
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_initial_failure_after_filter_mode_exit_does_not_erase_new_view(tmp_path, capsys):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True
+    )
+    initial_failed = calls[0][3]
+    review._filter_rows_active = False
+    status.set("new review mode")
+    indicator.set("new view")
+    previous_workspace = list(workspace)
+    initial_failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "PRIVATE_TRACE")
+    assert status.get() == "new review mode"
+    assert indicator.get() == "new view"
+    assert workspace == previous_workspace
+    assert review._filter_scan_failed is False
+    assert review._filter_scan_complete is False
+    assert "PRIVATE_TRACE" not in capsys.readouterr().out
+
+
+def _render_failure_fixture():
+    calls, workspace = [], []
+    status = Var("unchanged")
+    parent = SimpleNamespace(
+        status_var=status,
+        _start_ui_worker=lambda *args: calls.append(args),
+    )
+    review = SimpleNamespace(
+        parent=parent,
+        _filter_rows_active=True,
+        filtered_targets=[{"page_index": 0, "x": 10, "y": 20}],
+        filtered_batch_index=0,
+        _filter_scan_serial=70,
+        _filter_render_serial=4,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _filter_available_target_count=lambda: 1,
+        _focused_batch_size=lambda: 1,
+        _set_filter_navigation=lambda enabled: None,
+        _update_filter_batch_indicator=lambda: None,
+        _filter_batch_snapshot=lambda index: (
+            (index, ("geometry",)), [], [], None, 300, 250, 1.0, False,
+        ),
+        _clear_review_workspace=lambda message: workspace.append(message),
+    )
+    workflow._request_filter_batch_render(
+        review, SimpleNamespace(ReviewWindow=object())
+    )
+    assert len(calls) == 1
+    return review, status, workspace, calls[0][3]
+
+
+def test_stale_crop_render_failure_cannot_mutate_new_scan_epoch(capsys):
+    review, status, workspace, failed = _render_failure_fixture()
+    current_workspace = list(workspace)
+    review._filter_scan_serial += 1
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert workspace == current_workspace
+    assert status.get() == "unchanged"
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_current_crop_render_error_does_not_publish_private_path(capsys):
+    review, status, workspace, failed = _render_failure_fixture()
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert "失败" in workspace[-1] or "重试" in workspace[-1]
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in workspace[-1]
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in status.get()
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+def test_crop_prefetch_failure_is_silent_and_retriable(capsys):
+    calls = []
+    review = SimpleNamespace(
+        parent=SimpleNamespace(_start_ui_worker=lambda *args: calls.append(args)),
+        _filter_rows_active=True,
+        filtered_batch_index=0,
+        _filter_scan_serial=22,
+        _focused_timing_session=None,
+        _filter_batch_render_cache={},
+        _filter_prefetch_key=None,
+        _filter_batch_snapshot=lambda index: (
+            (index, ("synthetic-source",)), [], [], None, 300, 250, 1.0, False,
+        ),
+    )
+    workflow._schedule_filter_next_batch_preload(
+        review, SimpleNamespace(ReviewWindow=object())
+    )
+    assert len(calls) == 1
+    assert review._filter_prefetch_key is not None
+    failed = calls[0][3]
+    failed(OSError("PRIVATE_PATH_DO_NOT_EXPOSE"), "TRACE_PRIVATE_PATH_DO_NOT_EXPOSE")
+    assert review._filter_prefetch_key is None
+    assert "PRIVATE_PATH_DO_NOT_EXPOSE" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_first_scan_terminal_single_owner_preserves_current_epoch_ui(
+    tmp_path, first, late, capsys,
+):
+    """Duplicate first-chunk callback must not republish/erase ready scan."""
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+    )
+    _key, worker, done, failed = calls[0]
+    payload = worker()
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_FIRST_FAIL"), "PRIVATE_FIRST_TRACE")
+    initial_targets = list(review.filtered_targets)
+    initial_calls = len(calls)
+    initial_workspace = list(workspace)
+    initial_status = status.get()
+    initial_indicator = indicator.get()
+    initial_status_writes = len(status.writes)
+    initial_indicator_writes = len(indicator.writes)
+    initial_failed = review._filter_scan_failed
+    if late == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_FIRST_LATE"), "PRIVATE_FIRST_TRACE_LATE")
+    assert review.filtered_targets == initial_targets
+    assert len(calls) == initial_calls
+    assert workspace == initial_workspace
+    assert status.get() == initial_status
+    assert indicator.get() == initial_indicator
+    assert len(status.writes) == initial_status_writes
+    assert len(indicator.writes) == initial_indicator_writes
+    assert review._filter_scan_failed == initial_failed
+    assert "PRIVATE_FIRST_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize(
+    "first,late", (
+        ("done", "done"), ("done", "failed"),
+        ("failed", "done"), ("failed", "failed"),
+    ),
+)
+def test_remaining_scan_terminal_single_owner_preserves_ready_batches(
+    tmp_path, first, late, capsys,
+):
+    """Remainder completion/failure is one-shot, never a replay."""
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+    )
+    _first_key, first_worker, first_done, _first_failed = calls[0]
+    first_done(first_worker())
+    assert len(calls) == 2
+    _key, worker, done, failed = calls[1]
+    payload = worker()
+    if first == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_REMAIN_FAIL"), "PRIVATE_REMAIN_TRACE")
+    initial_targets = list(review.filtered_targets)
+    initial_calls = len(calls)
+    initial_status = status.get()
+    initial_indicator = indicator.get()
+    initial_status_writes = len(status.writes)
+    initial_indicator_writes = len(indicator.writes)
+    initial_failed = review._filter_scan_failed
+    initial_complete = review._filter_scan_complete
+    initial_workspace = list(workspace)
+    if late == "done":
+        done(payload)
+    else:
+        failed(OSError("PRIVATE_REMAIN_LATE"), "PRIVATE_REMAIN_TRACE_LATE")
+    assert review.filtered_targets == initial_targets
+    assert len(calls) == initial_calls
+    assert status.get() == initial_status
+    assert indicator.get() == initial_indicator
+    assert len(status.writes) == initial_status_writes
+    assert len(indicator.writes) == initial_indicator_writes
+    assert review._filter_scan_failed == initial_failed
+    assert review._filter_scan_complete == initial_complete
+    assert workspace == initial_workspace
+    assert "PRIVATE_REMAIN_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("early", ("done", "failed", "raise"))
+def test_first_scan_inline_callback_then_launch_exception_is_not_accepted(
+    tmp_path, early, capsys,
+):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+        first_launch_fault=early,
+    )
+    assert len(calls) == 1
+    assert review.filtered_targets == []
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (list(workspace), list(status.writes), list(indicator.writes))
+    _name, worker, done, failed = calls[0]
+    done(worker())
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE_LATE")
+    assert review.filtered_targets == []
+    assert review._filter_scan_complete is False
+    assert list(workspace) == before[0]
+    assert list(status.writes) == before[1]
+    assert list(indicator.writes) == before[2]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("early", ("done", "failed", "raise"))
+def test_remaining_scan_inline_callback_then_launch_exception_keeps_first_batch(
+    tmp_path, early, capsys,
+):
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False,
+        remainder_launch_fault=early,
+    )
+    _key, worker, done, _failed = calls[0]
+    done(worker())
+    assert len(calls) == 2
+    assert len(review.filtered_targets) == 1
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (
+        list(review.filtered_targets), list(workspace),
+        list(status.writes), list(indicator.writes),
+    )
+    _name, rest_worker, rest_done, rest_failed = calls[1]
+    rest_done(rest_worker())
+    rest_failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE_LATE")
+    assert review.filtered_targets == before[0]
+    assert list(workspace) == before[1]
+    assert list(status.writes) == before[2]
+    assert list(indicator.writes) == before[3]
+    assert "PRIVATE_" not in repr(capsys.readouterr())
+
+
+@pytest.mark.parametrize("phase", ("initial", "remainder"))
+def test_acknowledged_inline_scan_completion_is_delivered_after_handoff(
+    tmp_path, phase,
+):
+    """The launch guard must not drop a genuinely acknowledged inline result."""
+    kwargs = {"first_launch_fault": "done_ack"} if phase == "initial" else {
+        "remainder_launch_fault": "done_ack",
+    }
+    review, status, _indicator, calls, _workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False, **kwargs,
+    )
+    if phase == "initial":
+        # The first result is accepted and dispatches the second page once.
+        assert len(calls) == 2
+        assert len(review.filtered_targets) == 1
+        assert not review._filter_scan_complete
+        _name, worker, done, _failed = calls[1]
+        done(worker())
+    else:
+        _name, worker, done, _failed = calls[0]
+        done(worker())
+        assert len(calls) == 2
+    assert len(review.filtered_targets) == 2
+    assert review._filter_scan_complete is True
+    assert review._filter_scan_failed is False
+    assert "筛选完成" in status.get()
+
+
+@pytest.mark.parametrize("phase", ("initial", "remainder"))
+def test_closed_ui_worker_refusal_is_terminal_not_acknowledged(tmp_path, phase):
+    """-1 never registers callbacks; scanning must fail, not wait forever."""
+    kwargs = {"first_launch_fault": "refuse"} if phase == "initial" else {
+        "remainder_launch_fault": "refuse",
+    }
+    review, status, indicator, calls, workspace = _stream_fixture(
+        tmp_path, before_first_done=True, second_page_error=False, **kwargs,
+    )
+    if phase == "remainder":
+        _key, worker, done, _failed = calls[0]
+        done(worker())
+    assert len(calls) == (1 if phase == "initial" else 2)
+    assert len(review.filtered_targets) == (0 if phase == "initial" else 1)
+    assert review._filter_scan_complete is False
+    assert review._filter_scan_failed is True
+    assert "失败" in status.get() or "中断" in status.get()
+    assert "失败" in indicator.get() or "中断" in indicator.get()
+    before = (list(review.filtered_targets), list(workspace),
+              list(status.writes), list(indicator.writes))
+    _name, _worker, done, failed = calls[-1]
+    done(([], 0, 2))
+    failed(OSError("PRIVATE_LATE"), "PRIVATE_TRACE")
+    assert list(review.filtered_targets) == before[0]
+    assert list(workspace) == before[1]
+    assert list(status.writes) == before[2]
+    assert list(indicator.writes) == before[3]

@@ -67,11 +67,14 @@ def test_public_adaptive_refiner_injects_shared_fallback(monkeypatch) -> None:
 
 
 def test_existing_pdic_refinement_reaches_shared_api() -> None:
+    from picture_capture.refinement import existing_entry_positions
     source = inspect.getsource(processing_core._refine_existing_entries_with_geometry)
-    assert "from .paddle_headwords import refine_separator_y" in source
-    assert "refine_separator_y(" in source
-    assert "from .refinement.top_edge import refine_existing_marker_to_ink_top" in source
-    assert "refine_existing_marker_to_ink_top(" in source
+    owner = inspect.getsource(existing_entry_positions.refine_existing_entries_with_geometry_impl)
+    assert "_existing_entry_positions.refine_existing_entries_with_geometry_impl(" in source
+    assert "from ..paddle_headwords import refine_separator_y" in owner
+    assert "refine_separator_y(" in owner
+    assert "from .top_edge import refine_existing_marker_to_ink_top" in owner
+    assert "refine_existing_marker_to_ink_top(" in owner
     assert paddle_headwords.refine_separator_y is shared_y.refine_separator_y
 
 
@@ -79,8 +82,11 @@ def test_layout_materialization_uses_shared_y_adapter() -> None:
     # Entry classification is now attached inside the canonical materializer,
     # so its separator-Y contract no longer depends on installer order.
     source = Path(processing.__file__).read_text(encoding="utf-8")
-    assert "refined_layout_entry_y_by_line(" in source
-    assert 'getattr(line, "role"' in source
+    owner = Path(processing.__file__).resolve().parents[1] / "ordinary/layout_roles.py"
+    physical = owner.read_text(encoding="utf-8")
+    assert "refine_entry_y=refined_layout_entry_y_by_line" in source
+    assert "refine_entry_y(" in physical
+    assert 'getattr(line, "role"' in physical
 
 
 def test_layout_adapter_refines_only_entry_rows(monkeypatch) -> None:

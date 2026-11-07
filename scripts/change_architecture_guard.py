@@ -36,6 +36,14 @@ def violations_in_source(source: str, path: str) -> list[str]:
                 errors.append(f"{path}:{node.lineno}: new module imports GUI shell")
             if node.level == 1 and node.module is None and any(a.name == "app" for a in node.names):
                 errors.append(f"{path}:{node.lineno}: new module imports GUI shell")
+    # The two original public facade modules have intentionally moved from
+    # root .py files to same-name package __init__.py files. Their *existing*
+    # assignment mirror must remain installed at import time for monkeypatch
+    # compatibility. Do not allow this for any other new module or call.
+    historical_facades = {
+        "src/picture_capture/processing/__init__.py",
+        "src/picture_capture/paddle_headwords/__init__.py",
+    }
     # Only module-scope statements: nested function bodies are not import-time side effects.
     top_level = list(tree.body)
     for node in top_level:
@@ -47,6 +55,18 @@ def violations_in_source(source: str, path: str) -> list[str]:
             if isinstance(func, ast.Name) and (
                 func.id == "setattr" or func.id.startswith("install_")
             ):
+                is_historical_mirror = (
+                    path in historical_facades
+                    and func.id == "install_core_assignment_mirror"
+                    and len(call.args) == 2
+                    and all(
+                        isinstance(arg, ast.Name) and arg.id == expected
+                        for arg, expected in zip(call.args, ("__name__", "_core"))
+                    )
+                    and not call.keywords
+                )
+                if is_historical_mirror:
+                    continue
                 errors.append(
                     f"{path}:{node.lineno}: module-level {func.id} call; "
                     "wire dependencies explicitly at call time"

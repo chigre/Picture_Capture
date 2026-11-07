@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from picture_capture import image_preprocessing as facade
+from picture_capture.preprocess import pipeline as facade
 from picture_capture.layout.detection import LayoutEstimate
 from picture_capture.models import AppSettings
 from picture_capture.preprocess import content_bounds, deskew
@@ -31,7 +31,7 @@ def test_callable_keeps_historical_import_and_pickle_identity(name):
     owner = content_bounds if name == "_smooth_1d" else deskew
     fn = getattr(owner, name)
     assert getattr(facade, name) is fn
-    assert fn.__module__ == "picture_capture.image_preprocessing"
+    assert fn.__module__ == "picture_capture.preprocess.pipeline"
     assert pickle.loads(pickle.dumps(fn)) is fn
     assert Path(fn.__code__.co_filename).resolve() == Path(owner.__file__).resolve()
 
@@ -50,7 +50,7 @@ def test_leaf_first_import_has_no_facade_gui_or_native_model_initialization(modu
     script = f"""
 import importlib, sys
 importlib.import_module('picture_capture.preprocess.{module}')
-for name in ('picture_capture.image_preprocessing', 'picture_capture.app', 'paddle', 'paddleocr'):
+for name in ('picture_capture.preprocess.pipeline', 'picture_capture.app', 'paddle', 'paddleocr'):
     assert name not in sys.modules, name
 """
     subprocess.run([sys.executable, "-c", script], check=True, capture_output=True, text=True)
@@ -149,7 +149,8 @@ def test_preprocessing_size_guard_normalizes_crlf_and_still_rejects_growth(tmp_p
     spec.loader.exec_module(guard)
     source_path = Path(facade.__file__).resolve()
     canonical = source_path.read_text(encoding="utf-8").encode("utf-8")
-    windows = tmp_path / "image_preprocessing.py"
+    windows = tmp_path / "preprocess/pipeline.py"
+    windows.parent.mkdir(parents=True, exist_ok=True)
     windows.write_bytes(canonical.replace(b"\n", b"\r\n"))
     assert windows.stat().st_size > guard.MAX_PREPROCESS_FACADE_BYTES
     assert guard._normalized_source_size(windows) == len(canonical) <= guard.MAX_PREPROCESS_FACADE_BYTES
@@ -165,5 +166,9 @@ def test_preprocessing_size_guard_normalizes_crlf_and_still_rejects_growth(tmp_p
     monkeypatch.setattr(guard, "_normalized_source_size", normalized)
     assert guard.collect_violations() == []
     assert len(reads) >= 2  # Oversized baseline and the new extraction ratchet.
-    windows.write_bytes(canonical + b"# actual source growth" * 10)
+    # The moved pipeline is shorter, so fixed-size synthetic growth can stay
+    # below the unchanged limit. Always cross the actual byte ceiling.
+    growth = b"# actual source growth"
+    extra = (guard.MAX_PREPROCESS_FACADE_BYTES - len(canonical)) // len(growth) + 2
+    windows.write_bytes(canonical + growth * extra)
     assert any("preprocessing facade regressed beyond extracted owners" in v for v in guard.collect_violations())

@@ -13,7 +13,7 @@ import tempfile
 
 from PIL import Image
 
-from ..image_utils import normalize_page_rgb
+from ..preprocess.analysis_image import normalize_page_rgb
 
 
 def find_tesseract(executable: str = "tesseract") -> str | None:

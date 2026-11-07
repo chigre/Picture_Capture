@@ -3,9 +3,11 @@ from __future__ import annotations
 """OCR text cleanup rules and legacy .OCRed text persistence."""
 
 from pathlib import Path
+import os
 import re
 
 from ..models import read_noncomment_lines
+from ..io.formats import write_text_atomic
 
 
 def load_replace_rules(path: Path) -> list[tuple[str, str, str]]:
@@ -36,11 +38,23 @@ def process_ocr_text(
     return text.lower() if lowercase else text
 
 
+def render_ocred_text(texts: list[str]) -> str:
+    """Canonical legacy OCRed text, shared by exporter and version checks."""
+    return "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts))
+
+
+def render_ocred_bytes(texts: list[str]) -> bytes:
+    """Serialize OCRed exactly as the legacy text-mode writer does.
+
+    Windows text-mode writes translate LF to CRLF. The publication guard
+    must compare actual bytes, not the platform-independent logical text.
+    """
+    return render_ocred_text(texts).replace("\n", os.linesep).encode("utf-8")
+
+
 def export_ocred(path: Path, texts: list[str]) -> None:
-    path.write_text(
-        "".join(f"{i:03d}|`{text}\n" for i, text in enumerate(texts)),
-        encoding="utf-8",
-    )
+    """Atomically replace OCRed sidecars; never expose a partial text file."""
+    write_text_atomic(path, render_ocred_text(texts), encoding="utf-8")
 
 
 def import_ocred(path: Path) -> list[str]:

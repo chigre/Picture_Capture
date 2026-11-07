@@ -112,9 +112,9 @@ def test_project_setting_defaults_off_and_is_explained(tmp_path):
 
 def test_force_refresh_bypasses_resume_but_can_write_a_new_checkpoint():
     source = (Path(__file__).resolve().parents[1] /
-              "src" / "picture_capture" / "app.py").read_text(encoding="utf-8")
-    start = source.index("        def worker(index:", source.index("    def _detect_pages("))
-    end = source.index("        def done(", start)
+              "src" / "picture_capture" / "ui" / "detection_batch_execution.py").read_text(encoding="utf-8")
+    start = source.index("    def worker(index:", source.index("def detect_pages("))
+    end = source.index("    def done(", start)
     worker = source[start:end]
     # A user-requested forced refresh must never be satisfied by yesterday's
     # otherwise-identical successful checkpoint.

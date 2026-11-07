@@ -24,7 +24,6 @@ MAX_PROCESSING_CORE_FACADE_BYTES = 144_300
 OVERSIZED_MODULE_BASELINE = {
     "app.py": 784_737,
     "paddle_headwords_core.py": 364_070,
-    "image_preprocessing.py": 150_818,
     "profile/setup.py": 174_009,
     "processing_core.py": 158_561,
 }
@@ -44,7 +43,7 @@ MODULE_CLASS_PROXY_MARKER = "sys.modules[__name__].__class__"
 # Phase 9A centralizes the retained public compatibility mechanism instead of
 # duplicating dynamic namespace/proxy implementations in each facade. Phase 9C
 # ratchets that boundary so no third production module can adopt the mechanism.
-FACADE_COMPAT_USERS = ("processing.py", "paddle_headwords.py")
+FACADE_COMPAT_USERS = ("processing/__init__.py", "paddle_headwords/__init__.py")
 FACADE_NAMESPACE_CALL = "publish_core_namespace(globals(), _core)"
 FACADE_MIRROR_CALL = "install_core_assignment_mirror(__name__, _core)"
 
@@ -427,6 +426,14 @@ def collect_violations() -> list[str]:
             if signature not in mirror_source:
                 violations.append(f"canonical facade compatibility implementation missing: {signature}")
 
+    # Historical public facade paths remain stable but their physical modules
+    # are packages rather than root Python files.
+    for name in ("processing", "paddle_headwords"):
+        if (PACKAGE_ROOT / (name + ".py")).exists():
+            violations.append(f"retired root facade returned: {name}.py")
+        if not (PACKAGE_ROOT / name / "__init__.py").is_file():
+            violations.append(f"historical public facade package missing: {name}")
+
     facade_compat_users_now: set[str] = set()
     for path in _python_files():
         rel = path.relative_to(PACKAGE_ROOT).as_posix()
@@ -457,14 +464,14 @@ def collect_violations() -> list[str]:
                 f"evidence_fusion import-time core mutation returned: {marker}"
             )
 
-    processing_source = (PACKAGE_ROOT / "processing.py").read_text(encoding="utf-8")
+    processing_source = (PACKAGE_ROOT / "processing/__init__.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_PROCESSING_CORE_ASSIGNMENTS:
         if marker in processing_source:
             violations.append(
                 f"processing import-time core mutation returned: {marker}"
             )
 
-    paddle_source = (PACKAGE_ROOT / "paddle_headwords.py").read_text(encoding="utf-8")
+    paddle_source = (PACKAGE_ROOT / "paddle_headwords/__init__.py").read_text(encoding="utf-8")
     for marker in FORBIDDEN_PADDLE_CORE_ASSIGNMENTS:
         if marker in paddle_source:
             violations.append(
@@ -717,8 +724,8 @@ def collect_violations() -> list[str]:
     elif "root = Path(__file__).resolve().parents[1]" not in resume_owner.read_text(encoding="utf-8"):
         violations.append("OCR resume must fingerprint the whole package")
     root_py_count = sum(1 for item in PACKAGE_ROOT.glob("*.py") if item.is_file())
-    if root_py_count > 15:
-        violations.append(f"root Python module count regressed: {root_py_count} > 15")
+    if root_py_count > 5:
+        violations.append(f"root Python module count regressed: {root_py_count} > 5")
     for marker in FORBIDDEN_LAYOUT_VISUALIZATION_MUTATIONS:
         if marker in layout_visualization_source:
             violations.append(
@@ -829,7 +836,7 @@ def collect_violations() -> list[str]:
             violations.append(f"canonical preprocessing owner missing: {canonical}")
 
     # Deskew primitives/content frames have one physical owner, not root copies.
-    preprocess_facade = PACKAGE_ROOT / "image_preprocessing.py"
+    preprocess_facade = PACKAGE_ROOT / "preprocess/pipeline.py"
     preprocess_source = preprocess_facade.read_text(encoding="utf-8")
     for owner, routines in {
         "deskew.py": ("_normalize_half_turn", "_weighted_median", "estimate_skew_from_polygons",
@@ -2001,7 +2008,7 @@ def collect_violations() -> list[str]:
     # #562: full multi-engine OCR page orchestration, review, and compact
     # cache persistence is canonical in the leaf; legacy core only dispatches.
     page_detection_owner = PACKAGE_ROOT / "ocr/page_detection.py"
-    page_detection_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    page_detection_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not page_detection_owner.is_file():
         violations.append("canonical page-wide OCR orchestration owner missing")
     else:
@@ -2043,7 +2050,7 @@ def collect_violations() -> list[str]:
     # CJK visual fallback and diagnostic report owner. Keep live core patch
     # seams and avoid a hidden second implementation or heavyweight import.
     candidate_filter_owner = PACKAGE_ROOT / "ocr/candidate_filter.py"
-    candidate_filter_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    candidate_filter_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not candidate_filter_owner.is_file():
         violations.append("complete OCR candidate filter owner missing")
     else:
@@ -2086,7 +2093,7 @@ def collect_violations() -> list[str]:
     # #562: move the entire verified oversized CJK recovery chain and
     # all three marker-Y refinement paths to one canonical OCR owner.
     recovery_owner = PACKAGE_ROOT / "ocr/cjk_recovery.py"
-    recovery_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    recovery_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not recovery_owner.is_file():
         violations.append("canonical local CJK OCR recovery and refinement owner missing")
     else:
@@ -2136,7 +2143,7 @@ def collect_violations() -> list[str]:
     # #562: visual marker/cjk pixel evidence belongs to one canonical OCR
     # owner. Preserve core compatibility functions and their call-time patches.
     visual_evidence_owner = PACKAGE_ROOT / "ocr/visual_evidence.py"
-    visual_evidence_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    visual_evidence_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not visual_evidence_owner.is_file():
         violations.append("canonical OCR visual marker and CJK evidence owner missing")
     else:
@@ -2184,7 +2191,7 @@ def collect_violations() -> list[str]:
     # #562: the full OCR matching/voting/position chain must stay in one
     # import-light canonical owner. Core signatures and live patch seams stay.
     pairing_owner = PACKAGE_ROOT / "ocr/pairing_arbitration.py"
-    pairing_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    pairing_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not pairing_owner.is_file():
         violations.append("canonical multi-engine OCR pairing/arbitration owner missing")
     else:
@@ -2229,7 +2236,7 @@ def collect_violations() -> list[str]:
     # report now share one canonical import-light OCR leaf. Keep call-time public
     # patch seams and never move model/pickle types into implementation leaves.
     ocr_review_owner = PACKAGE_ROOT / "ocr/review_finalization.py"
-    ocr_review_core = PACKAGE_ROOT / "paddle_headwords_core.py"
+    ocr_review_core = PACKAGE_ROOT / "ocr/headword_core_runtime.py"
     if not ocr_review_owner.is_file():
         violations.append("canonical OCR review finalization owner missing")
     else:
@@ -2379,11 +2386,26 @@ def collect_violations() -> list[str]:
     if not (PACKAGE_ROOT / "ocr/channel_legacy.py").is_file():
         violations.append("canonical OCR-channel bridge owner missing")
 
+    # Phase 19: old OCR core has one lazy alias package, not a root file.
+    paddle_bridge = PACKAGE_ROOT / "paddle_headwords_core/__init__.py"
+    if (PACKAGE_ROOT / "paddle_headwords_core.py").exists():
+        violations.append("retired root paddle_headwords_core.py reintroduced")
+    if not paddle_bridge.is_file() or "_sys.modules[__name__] = _canonical" not in paddle_bridge.read_text(encoding="utf-8"):
+        violations.append("historical paddle_headwords_core identity bridge missing")
+
     # #562: complete whole-entry plan/link/export/atomic-publication workflow
     # belongs to the import-light crop owner. Keep historical model identities
     # and root public function adapters, not algorithm copies.
     crop_workflow = PACKAGE_ROOT / "crop/page_workflow.py"
-    crop_core = PACKAGE_ROOT / "processing_core.py"
+    crop_core = PACKAGE_ROOT / "runtime/processing_core_runtime.py"
+    core_bridge = PACKAGE_ROOT / "processing_core/__init__.py"
+    if (PACKAGE_ROOT / "processing_core.py").exists():
+        violations.append("retired root processing_core.py reintroduced")
+    if not core_bridge.is_file() or (
+        "_sys.modules[__name__] = _canonical"
+        not in core_bridge.read_text(encoding="utf-8")
+    ):
+        violations.append("historical processing_core import identity bridge missing")
     if not crop_workflow.is_file():
         violations.append("canonical whole-entry crop workflow owner missing")
     else:
@@ -2448,27 +2470,111 @@ def collect_violations() -> list[str]:
         if "from .ocr.text_arbitration import channel_text_key, choose_ocr_text" not in facade_source:
             violations.append("OCR channel stopped exporting canonical text arbitration")
 
-    # Issue #562: keep EXIF/alpha/source-space ink predicates in one
-    # preprocess owner, with unchanged function-object exports from image_utils.
+    # Enforce retired root imports across code/tests, including strings the
+    # GitHub code-search index may not surface. Only executable AST imports.
+    retired_imports = {
+        "picture_capture.entry_classification",
+        "picture_capture.image_preprocessing",
+    }
+    for scan_root in (PACKAGE_ROOT, PACKAGE_ROOT.parents[1] / "tests",
+                      PACKAGE_ROOT.parents[1] / "scripts"):
+        if not scan_root.is_dir():
+            continue
+        for scan_path in scan_root.rglob("*.py"):
+            if scan_path == Path(__file__):
+                continue
+            try:
+                imported_tree = ast.parse(scan_path.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue  # independent compilation check reports syntax errors
+            for node in ast.walk(imported_tree):
+                if isinstance(node, ast.Import):
+                    if any(alias.name in retired_imports for alias in node.names):
+                        violations.append(f"retired module import: {scan_path}")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in retired_imports:
+                        violations.append(f"retired from-import: {scan_path}")
+                    if node.module == "picture_capture" and any(
+                        alias.name in {"entry_classification", "image_preprocessing"}
+                        for alias in node.names
+                    ):
+                        violations.append(f"retired package import: {scan_path}")
+                    if node.module in {"entry_classification", "image_preprocessing"} and node.level:
+                        violations.append(f"retired relative import: {scan_path}")
+
+    # Native GUI and console entry wrappers belong to the bootstrap package.
+    for former, owner, signature in (
+        ("launcher.py", "bootstrap/launcher.py", "def prepare_app_module("),
+        ("cli.py", "bootstrap/cli.py", "def main("),
+    ):
+        if (PACKAGE_ROOT / former).exists():
+            violations.append(f"retired root entry returned: {former}")
+        owner_file = PACKAGE_ROOT / owner
+        if not owner_file.is_file():
+            violations.append(f"canonical bootstrap owner missing: {owner}")
+        elif signature not in owner_file.read_text(encoding="utf-8"):
+            violations.append(f"canonical bootstrap entrypoint missing: {signature}")
+    pyproject = PACKAGE_ROOT.parents[1] / "pyproject.toml"
+    if pyproject.is_file() and 'picture-capture-cli = "picture_capture.bootstrap.cli:main"' not in pyproject.read_text(encoding="utf-8"):
+        violations.append("installed CLI script must route to canonical bootstrap entry")
+
+    # Issue #562: relocate both public functional owners without root shims.
+    for old, new in (
+        ("entry_classification.py", "proofreading/classification.py"),
+        ("image_preprocessing.py", "preprocess/pipeline.py"),
+    ):
+        if (PACKAGE_ROOT / old).exists():
+            violations.append(f"retired root owner returned: {old}")
+        if not (PACKAGE_ROOT / new).is_file():
+            violations.append(f"canonical owner missing: {new}")
+    classification = PACKAGE_ROOT / "proofreading/classification.py"
+    if classification.is_file():
+        code = classification.read_text(encoding="utf-8")
+        for required in ("class EntryClassification:", "def install_pdic_classification(",
+                         "def write_classification_sidecar(", "_SIDECAR_TRANSACTION_LOCK"):
+            if required not in code:
+                violations.append(f"classification transaction owner missing: {required}")
+    # Same patchable public preprocessing functions; only physical location changed.
+    canonical_preprocess = PACKAGE_ROOT / "preprocess/pipeline.py"
+    if canonical_preprocess.is_file() and "def analyze_preprocess_page(" not in canonical_preprocess.read_text(encoding="utf-8"):
+        violations.append("canonical preprocess pipeline entrypoint missing")
+
+    # Issue #562: root image_utils retired; EXIF/alpha ink has exactly one leaf
+    # and shared denoise analysis belongs to the canonical preprocess package.
     pixel_owner = PACKAGE_ROOT / "preprocess/page_pixels.py"
-    image_facade = PACKAGE_ROOT / "image_utils.py"
-    if not pixel_owner.is_file():
-        violations.append("preprocess page pixel primitives owner missing")
+    analysis_owner = PACKAGE_ROOT / "preprocess/analysis_image.py"
+    if (PACKAGE_ROOT / "image_utils.py").exists():
+        violations.append("retired root image_utils.py returned")
+    if not pixel_owner.is_file() or not analysis_owner.is_file():
+        violations.append("canonical preprocessing page pixel/analysis owner missing")
     else:
-        owner_source = pixel_owner.read_text(encoding="utf-8")
-        facade_source = image_facade.read_text(encoding="utf-8")
+        pixel_source = pixel_owner.read_text(encoding="utf-8")
+        analysis_source = analysis_owner.read_text(encoding="utf-8")
         for pixel_fn in ("normalize_page_rgb", "_box_sum", "_generic_analysis_ink"):
-            if f"def {pixel_fn}(" not in owner_source:
+            if f"def {pixel_fn}(" not in pixel_source:
                 violations.append(f"page pixel owner missing {pixel_fn}")
-            if f"def {pixel_fn}(" in facade_source:
+            if f"def {pixel_fn}(" in analysis_source:
                 violations.append(f"duplicate page pixel implementation: {pixel_fn}")
-        if "from .preprocess.page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in facade_source:
-            violations.append("image_utils lost stable page pixel re-exports")
+        if "from .page_pixels import normalize_page_rgb, _box_sum, _generic_analysis_ink" not in analysis_source:
+            violations.append("analysis image owner lost canonical pixel function identity")
+        if "def build_analysis_image(" not in analysis_source:
+            violations.append("shared image analysis function missing")
+        for source_path in PACKAGE_ROOT.rglob("*.py"):
+            if source_path == analysis_owner:
+                continue
+            source_text = source_path.read_text(encoding="utf-8")
+            if re.search(r"(?m)^\s*(?:from\s+(?:picture_capture\.|\.+)|import\s+picture_capture\.)image_utils\b|^\s*from\s+picture_capture\s+import\s+image_utils\b", source_text):
+                violations.append(f"retired image_utils import remains: {source_path.relative_to(PACKAGE_ROOT)}")
 
     # Issue #562: training candidate/PDIC linkage is source-space aware and
     # has one physical owner; keep its historic root import for consumers.
     gt_owner = PACKAGE_ROOT / "training/ground_truth_matching.py"
-    training_entry = PACKAGE_ROOT / "training_export.py"
+    training_entry = PACKAGE_ROOT / "training/export_runtime.py"
+    training_bridge = PACKAGE_ROOT / "training_export/__init__.py"
+    if (PACKAGE_ROOT / "training_export.py").is_file():
+        violations.append("retired root training_export.py returned")
+    if not training_bridge.is_file() or "_sys.modules[__name__] = _canonical" not in training_bridge.read_text(encoding="utf-8"):
+        violations.append("training export historical module identity bridge missing")
     if not gt_owner.is_file():
         violations.append("training ground-truth matching owner missing")
     else:
@@ -2478,13 +2584,13 @@ def collect_violations() -> list[str]:
             violations.append("canonical training matcher implementation missing")
         if "def _candidate_ground_truth_link(" in entry_source:
             violations.append("training matcher implementation duplicated at root")
-        if "from .training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
+        if "from ..training.ground_truth_matching import _candidate_ground_truth_link" not in entry_source:
             violations.append("training legacy matcher export disconnected")
 
     # Issue #562: project-context snapshot and v2 manifest serialization have
     # one import-light training owner behind the historical root API.
     manifest_owner = PACKAGE_ROOT / "training/manifest_v2.py"
-    legacy_export = PACKAGE_ROOT / "training_export.py"
+    legacy_export = PACKAGE_ROOT / "training/export_runtime.py"
     if not manifest_owner.is_file():
         violations.append("training v2 manifest/context canonical owner missing")
     else:
@@ -2495,7 +2601,7 @@ def collect_violations() -> list[str]:
                 violations.append(f"training v2 canonical owner missing {name}")
             if f"def {name}(" in legacy_source:
                 violations.append(f"training v2 implementation duplicated at root: {name}")
-        if "from .training.manifest_v2 import (" not in legacy_source:
+        if "from ..training.manifest_v2 import (" not in legacy_source:
             violations.append("legacy training exporter lost canonical manifest/context re-exports")
         if "TRAINING_EXPORT_FORMAT" not in manifest_source:
             violations.append("training v2 canonical format marker missing")
@@ -2503,7 +2609,7 @@ def collect_violations() -> list[str]:
     # Issue #562: the training archive publisher has a single physical owner,
     # with the historical public module exporting the *same* class and callable.
     zip_owner = PACKAGE_ROOT / "training/zip_publish.py"
-    legacy_training = PACKAGE_ROOT / "training_export.py"
+    legacy_training = PACKAGE_ROOT / "training/export_runtime.py"
     if not zip_owner.is_file():
         violations.append("canonical training ZIP publish owner missing")
     else:
@@ -2517,7 +2623,7 @@ def collect_violations() -> list[str]:
             violations.append("duplicate root training ZIP cancellation exception")
         if "def make_training_zip(" in training_source:
             violations.append("duplicate root training ZIP publisher")
-        if "from .training.zip_publish import TrainingExportCancelled, make_training_zip" not in training_source:
+        if "from ..training.zip_publish import TrainingExportCancelled, make_training_zip" not in training_source:
             violations.append("legacy training ZIP publisher aliases disconnected")
         if 'TrainingExportCancelled.__module__ = "picture_capture.training_export"' not in zip_source:
             violations.append("training ZIP exception legacy pickle identity lost")

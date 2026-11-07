@@ -2,6 +2,7 @@
 import inspect
 
 from picture_capture import processing
+from picture_capture.ordinary import layout_roles as ordinary_layout_roles
 from picture_capture.refinement import separator_y as separator_y_refinement
 
 
@@ -12,7 +13,10 @@ def test_refiner_exposes_optional_diagnostics_without_changing_default_signature
 
 
 def test_layout_materializer_forwards_diagnostics_without_changing_normal_path():
-    source = inspect.getsource(processing._ordinary_entries_from_layout_roles)
+    source = inspect.getsource(ordinary_layout_roles.materialize_layout_role_entries)
+    facade = inspect.getsource(processing._ordinary_entries_from_layout_roles)
+    assert "diagnostics=diagnostics" in facade
+    assert "refine_entry_y=refined_layout_entry_y_by_line" in facade
     assert "diagnostics=diagnostics" in source
     assert "canonical_y = int(refined_y_by_line.get(" in source
 
@@ -28,6 +32,9 @@ def test_replay_preserves_raw_refinement_and_clamp_separately():
 
 
 def test_replay_has_dedicated_y_refinement_stage():
-    source = inspect.getsource(processing.detect_entries)
+    from picture_capture.detection import page_pipeline
+    facade = inspect.getsource(processing.detect_entries)
+    assert "return _page_pipeline.detect_entries_impl(" in facade
+    source = inspect.getsource(page_pipeline.detect_entries_impl)
     assert "separator_y_per_line" in source
     assert "横线 Y 精修诊断（逐条）" in source

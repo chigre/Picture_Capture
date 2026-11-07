@@ -168,36 +168,51 @@ def delete_review_entry(self, deps: ReviewEntryDeps, index: int) -> str:
         except (OSError, ValueError, TypeError):
             prior_pdic_rows = None
 
-    # Capture before mutating shared Entry objects or saving the PDIC.
-    # OCR-linked deletion changes manual-selection ownership and will
-    # intentionally be refused by the R3 transaction classifier.
+    # A non-candidate deletion owns the same PDIC+simplified byte bundle as
+    # a normal ReviewWindow save. Sequential save_pdic then sidecar write is
+    # unsafe: a refused second write would leave a committed deletion in PDIC.
     from .review_transaction_actions import capture_review_before, record_review_after
+    from ..proofreading.review_bundle import commit_review_bundle
+    from ..proofreading.save_safety import protect_review_pdic_commit
     transaction_before = capture_review_before(self)
-    self._commit_edits()
     entry = row_entries[int(index)]
-    deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
-    deleted_candidate_id = str(entry.candidate_id or "")
-    candidate_id_unique = (
-        bool(deleted_candidate_id)
-        and sum(
-            str(row.get("candidate_id", "")) == deleted_candidate_id
-            for row in getattr(self.parent, "ocr_review_candidates", ())
-            if isinstance(row, dict)
-        ) == 1
-    )
-    simplified_key = simplified_entry_key(entry.x, entry.y)
-    rendered_stem = getattr(self, "_rendered_page_stem", "")
-    if rendered_stem and hasattr(self, "_simplified_page_cache"):
-        self._simplified_page_records(rendered_stem).pop(simplified_key, None)
-        self._simplified_dirty_pages.add(rendered_stem)
-
-    if entry in self.parent.entries:
-        self.parent.entries.remove(entry)
-    self.parent._sort_entries_reading_order()
+    if (transaction_before is None
+            or getattr(self, "_filter_rows_active", False)
+            or getattr(self, "_rendered_page_stem", "") != self.parent.current_page.stem
+            or sum(row is entry for row in self.parent.entries) != 1
+            or str(getattr(entry, "candidate_id", "") or "")):
+        self.parent.status_var.set(
+            "普通词条删除未执行：来源/行绑定不可信，请保存并重新打开当前页核对。"
+        )
+        return "break"
+    deleted_candidate_id = ""
+    candidate_id_unique = False
+    try:
+        with protect_review_pdic_commit(self):
+            self._commit_edits()
+            if sum(row is entry for row in self.parent.entries) != 1:
+                raise RuntimeError("R3 删除期间 Entry 归属发生变化")
+            deleted_identity = (str(entry.word), int(entry.x), int(entry.y))
+            simplified_key = simplified_entry_key(entry.x, entry.y)
+            rendered_stem = self._rendered_page_stem
+            if hasattr(self, "_simplified_page_cache"):
+                self._simplified_page_records(rendered_stem).pop(simplified_key, None)
+                self._simplified_dirty_pages.add(rendered_stem)
+            self.parent.entries[:] = [
+                row for row in self.parent.entries if row is not entry
+            ]
+            self.parent._sort_entries_reading_order()
+            commit_review_bundle(self, transaction_before)
+    except (OSError, ValueError, RuntimeError):
+        # protect_review_pdic_commit restores the shared Entry model and
+        # simplified cache only if the saved PDIC remained unchanged. Any
+        # unresolved R3 marker must quarantine later writes.
+        self.parent.status_var.set(
+            "普通词条删除失败：已保护原始人工校对文件；"
+            "如恢复标记仍存在，请先重新加载核对，勿重复删除。"
+        )
+        return "break"
     self.parent.clear_review_entry_highlight()
-    # Do not sync stale main-canvas Entry widgets back into the shared model:
-    # the proofreading text above is the newest source of truth.
-    self.parent.save_pdic(silent=True, sync_editors=False)
     capture_failed = False
     if prior_pdic_rows is not None:
         try:
@@ -215,8 +230,8 @@ def delete_review_entry(self, deps: ReviewEntryDeps, index: int) -> str:
             # PDIC and manual overrides were saved successfully. Evidence
             # errors must neither undo that save nor silently claim success.
             capture_failed = True
-    if getattr(self, "_rendered_page_stem", "") and hasattr(self, "_simplified_page_cache"):
-        self._persist_simplified_page(self._rendered_page_stem)
+    # commit_review_bundle has already published both file roles as a
+    # recoverable unit, so never perform a second independent sidecar save.
     # The soon-to-be-rebuilt ReviewWindow rows still reference the old
     # widgets; read the true saved parent.entries to classify this one
     # committed deletion, then rebuild widgets for the restored identities.
