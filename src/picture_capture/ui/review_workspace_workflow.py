@@ -710,6 +710,25 @@ def _request_render_rows(
         if requested_auto_zoom != bool(self.review_zoom_auto):
             self._request_render_rows(focus_index=self._review_render_focus_index)
             return
+        # A crop belongs to the exact geometry inputs captured at dispatch.
+        # The worker may finish after manual zoom, viewport or settings change;
+        # never paint those stale pixels over the current human editors.
+        try:
+            geometry_stale = (
+                int(self.parent.current_index) != page_index
+                or replace(self.parent.settings) != settings
+                or max(1, int(self.parent.canvas.winfo_width())) != viewer_width
+                or self._review_image_area_width() != auto_image_area_width
+                or (
+                    not requested_auto_zoom
+                    and max(0.01, float(self.review_zoom)) != review_zoom
+                )
+            )
+        except (tk.TclError, RuntimeError, ValueError, TypeError):
+            return
+        if geometry_stale:
+            self._request_render_rows(focus_index=self._review_render_focus_index)
+            return
         if not self.parent.current_page or self.parent.current_page.stem != result_stem:
             return
         current_entries = self.parent._ordered_entries_reading_order()
