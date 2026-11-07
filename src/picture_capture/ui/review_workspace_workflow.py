@@ -776,15 +776,42 @@ def _request_render_rows(
                 return
         except tk.TclError:
             return
+        # The background-job generation guard rejects superseded requests,
+        # but a page or geometry can change *before* replacement dispatch.
+        # A terminal failure from those old crop inputs must not overwrite the
+        # current page's status or claim ownership of its visible editor rows.
+        try:
+            if (
+                self.parent.project is not project
+                or self.parent.current_page != page
+                or int(self.parent.current_index) != page_index
+                or replace(self.parent.settings) != settings
+                or bool(self.review_zoom_auto) != requested_auto_zoom
+                or self._review_image_area_width() != auto_image_area_width
+                or max(1, int(self.parent.canvas.winfo_width())) != viewer_width
+                or (
+                    not requested_auto_zoom
+                    and max(0.01, float(self.review_zoom)) != review_zoom
+                )
+            ):
+                return
+        except (tk.TclError, RuntimeError, ValueError, TypeError, AttributeError):
+            return
         self.parent.status_var.set(f"校对裁剪生成失败：{exc}")
         if not self.rows.winfo_children():
             ttk.Label(
                 self.rows, text=f"校对裁剪生成失败：{exc}",
             ).grid(row=0, column=0, sticky="ew", padx=8, pady=20)
 
-    self.parent._start_ui_worker(
-        self._review_render_worker_key, worker, done, failed,
-    )
+    # A failed constructor/start or Tk scheduling attempt has no async
+    # callback. Surface this failure without destroying existing editors;
+    # the user may explicitly request the crops again after the failure.
+    try:
+        self.parent._start_ui_worker(
+            self._review_render_worker_key, worker, done, failed,
+        )
+    except (OSError, RuntimeError, tk.TclError) as exc:
+        failed(exc, "")
 
 
 def render_rows(self, deps: ReviewWorkspaceDeps, preloaded_crops: list[Image.Image] | None = None) -> None:
